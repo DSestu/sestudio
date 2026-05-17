@@ -86,6 +86,17 @@ class JobStore:
             logger.info("Cancelled job %s (%s)", job_id, job.episode_name)
         return True
 
+    def clear_terminal(self) -> int:
+        """Remove done/failed/cancelled jobs from the store. Returns count removed."""
+        terminal = {"done", "failed", "cancelled"}
+        with self._lock:
+            to_remove = [jid for jid, j in self._jobs.items() if j.status in terminal]
+            for jid in to_remove:
+                del self._jobs[jid]
+                self._cancel_events.pop(jid, None)
+        logger.info("Cleared %d terminal jobs", len(to_remove))
+        return len(to_remove)
+
     def get(self, job_id: str) -> DownloadJob | None:
         with self._lock:
             return self._jobs.get(job_id)

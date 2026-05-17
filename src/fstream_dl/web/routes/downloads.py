@@ -131,6 +131,13 @@ async def get_downloads(request: Request) -> list[dict[str, Any]]:
     return [_job_to_dict(j) for j in store.all_jobs()]
 
 
+@router.delete("/downloads")
+async def clear_history(request: Request) -> dict[str, Any]:
+    store = request.app.state.job_store
+    count = store.clear_terminal()
+    return {"cleared": count}
+
+
 @router.delete("/downloads/{job_id}")
 async def cancel_download(job_id: str, request: Request) -> dict[str, Any]:
     store = request.app.state.job_store
@@ -161,7 +168,7 @@ async def job_progress(job_id: str, request: Request) -> StreamingResponse:
                 "error": job.error,
             })
             yield f"data: {payload}\n\n"
-            if job.status in ("done", "failed"):
+            if job.status in ("done", "failed", "cancelled"):
                 break
             await asyncio.sleep(0.5)
 

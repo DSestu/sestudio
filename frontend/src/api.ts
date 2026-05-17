@@ -107,6 +107,11 @@ export async function cancelJob(id: string): Promise<void> {
   if (!res.ok) throw new Error(`Cancel failed: ${res.status}`)
 }
 
+export async function clearHistory(): Promise<void> {
+  const res = await fetch(`${BASE}/downloads`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Clear failed: ${res.status}`)
+}
+
 export async function getJobs(): Promise<DownloadJob[]> {
   const res = await fetch(`${BASE}/downloads`)
   if (!res.ok) throw new Error('Jobs fetch failed')
@@ -122,7 +127,7 @@ export function subscribeJobProgress(
   es.onmessage = (e) => {
     const data = JSON.parse(e.data)
     onEvent(data)
-    if (data.status === 'done' || data.status === 'failed') {
+    if (data.status === 'done' || data.status === 'failed' || data.status === 'cancelled') {
       es.close()
       onDone()
     }

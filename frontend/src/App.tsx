@@ -154,7 +154,11 @@ export default function App() {
         </div>
       )}
 
-      <DownloadQueue refreshTrigger={downloadTick} skippedJobs={skippedJobs} />
+      <DownloadQueue
+        refreshTrigger={downloadTick}
+        skippedJobs={skippedJobs}
+        onClearHistory={() => setSkippedJobs([])}
+      />
 
       {pendingItems && (
         <ConfirmDownloadModal
