@@ -29,17 +29,23 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
   const [error, setError] = useState<string | null>(null)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
+  const [activeLang, setActiveLang] = useState(lang)
 
   useEffect(() => {
     setLoading(true)
-    getSeason(card.page_url, lang)
+    setError(null)
+    getSeason(card.page_url, activeLang)
       .then(d => {
         setDetail(d)
         setChecked(new Set(d.episodes.map(e => e.number)))
+        // If current lang not available, switch to first available
+        if (d.available_langs.length > 0 && !d.available_langs.includes(activeLang)) {
+          setActiveLang(d.available_langs[0])
+        }
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
-  }, [card.page_url, lang])
+  }, [card.page_url, activeLang])
 
   function toggleEpisode(num: number) {
     setChecked(prev => {
@@ -148,9 +154,13 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
                   </span>
                   <div className="flex gap-1">
                     {detail.available_langs.map(l => (
-                      <span key={l} className={`text-xs px-1.5 py-0.5 rounded font-mono uppercase ${l === lang ? 'bg-violet-600 text-white' : 'bg-zinc-700 text-zinc-400'}`}>
+                      <button
+                        key={l}
+                        onClick={e => { e.stopPropagation(); setActiveLang(l) }}
+                        className={`text-xs px-1.5 py-0.5 rounded font-mono uppercase transition-colors ${l === activeLang ? 'bg-violet-600 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600 hover:text-white'}`}
+                      >
                         {l}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -200,9 +210,13 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
               <div className="space-y-3">
                 <div className="flex gap-1 mb-3">
                   {detail.available_langs.map(l => (
-                    <span key={l} className={`text-xs px-1.5 py-0.5 rounded font-mono uppercase ${l === lang ? 'bg-violet-600 text-white' : 'bg-zinc-700 text-zinc-400'}`}>
+                    <button
+                      key={l}
+                      onClick={() => setActiveLang(l)}
+                      className={`text-xs px-1.5 py-0.5 rounded font-mono uppercase transition-colors ${l === activeLang ? 'bg-violet-600 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600 hover:text-white'}`}
+                    >
                       {l}
-                    </span>
+                    </button>
                   ))}
                 </div>
                 {detail.episodes.map(ep => (
