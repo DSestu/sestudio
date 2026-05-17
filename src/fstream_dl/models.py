@@ -10,6 +10,7 @@ class SeasonCard:
     poster_url: str
     page_url: str
     is_film: bool = False
+    is_anime: bool = False
 
 
 @dataclass

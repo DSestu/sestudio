@@ -35,6 +35,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     )
 
     app.state.live_domain = live_domain or "https://fstream.top"
+    app.state.anime_domain = "https://french-manga.net"
     app.state.job_store = JobStore(provider_registry=_PROVIDERS)
 
     app.include_router(search.router, prefix="/api")

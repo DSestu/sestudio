@@ -55,7 +55,12 @@ def _fetch_available_langs(url: str) -> list[str]:
             return []
         base = "/".join(str(page.url).split("/")[:3])
         eps_resp = client.get(f"{base}/data/eps_{news_id}.txt", headers={"Referer": url})
+        if eps_resp.status_code == 404:
+            eps_resp = client.get(
+                f"{base}/engine/ajax/manga_episodes_api.php?id={news_id}",
+                headers={"Referer": url, "X-Requested-With": "XMLHttpRequest"},
+            )
         eps_resp.raise_for_status()
     data: dict[str, object] = eps_resp.json()
-    lang_keys = [k for k in data if k not in ("info",) and isinstance(data[k], dict)]
+    lang_keys = [k for k in data if k not in ("info", "alt_titles") and isinstance(data[k], dict)]
     return sorted(lang_keys)

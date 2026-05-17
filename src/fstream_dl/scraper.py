@@ -24,14 +24,23 @@ _NEWSID_RE = re.compile(r"/(\d+)-")
 _YEAR_RE = re.compile(r"\s*\(\d{4}\)\s*$")
 
 
-def search_seasons(query: str, base_url: str) -> list[SeasonCard]:
-    """Search fstream for content matching *query* via the AJAX endpoint."""
-    search_url = f"{base_url}/engine/ajax/search.php"
-    logger.debug("Searching: POST %s query=%r", search_url, query)
+def _search_one(query: str, base_url: str, *, is_anime: bool = False) -> list[SeasonCard]:
+    """Search a single domain and return SeasonCard list."""
     with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
+        # Resolve the final URL (some domains redirect to a versioned subdomain)
+        head = client.get(base_url)
+        resolved_origin = "/".join(str(head.url).split("/")[:3])
+
+        search_url = f"{resolved_origin}/engine/ajax/search.php"
+        logger.debug("Searching: POST %s query=%r", search_url, query)
         resp = client.post(
             search_url,
             data={"query": query, "search_start": "0", "full_search": "0", "result_from": "1"},
+            headers={
+                "Referer": f"{resolved_origin}/",
+                "Origin": resolved_origin,
+                "X-Requested-With": "XMLHttpRequest",
+            },
         )
         resp.raise_for_status()
 
@@ -44,7 +53,10 @@ def search_seasons(query: str, base_url: str) -> list[SeasonCard]:
         if not m_url:
             continue
         rel_url = m_url.group(1)
-        page_url = f"{base_url}{rel_url}"
+        if rel_url.startswith("http"):
+            page_url = rel_url
+        else:
+            page_url = f"{resolved_origin}{rel_url}"
 
         m_id = _NEWSID_RE.search(rel_url)
         newsid = m_id.group(1) if m_id else ""
@@ -59,7 +71,7 @@ def search_seasons(query: str, base_url: str) -> list[SeasonCard]:
         m_season = SEASON_RE.search(title)
         season_number = int(m_season.group(1)) if m_season else 0
         series_name = SEASON_RE.split(title)[0].rstrip(" -").strip() if m_season else title
-        is_film = not bool(m_season)
+        is_film = not bool(m_season) and not is_anime
 
         cards.append(SeasonCard(
             newsid=newsid,
@@ -69,9 +81,21 @@ def search_seasons(query: str, base_url: str) -> list[SeasonCard]:
             poster_url=poster_url,
             page_url=page_url,
             is_film=is_film,
+            is_anime=is_anime,
         ))
 
-    logger.debug("Search returned %d cards for %r", len(cards), query)
+    logger.debug("Search returned %d cards for %r (anime=%s)", len(cards), query, is_anime)
+    return cards
+
+
+def search_seasons(query: str, base_url: str, anime_domain: str | None = None) -> list[SeasonCard]:
+    """Search fstream (and optionally the anime domain) for content matching *query*."""
+    cards = _search_one(query, base_url, is_anime=False)
+    if anime_domain:
+        try:
+            cards += _search_one(query, anime_domain, is_anime=True)
+        except Exception as exc:
+            logger.warning("Anime search failed for %r: %s", query, exc)
     return cards
 
 
@@ -92,6 +116,10 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
 
         logger.debug("Fetching episode data: %s", eps_url)
         eps_resp = client.get(eps_url, headers={"Referer": url})
+        if eps_resp.status_code == 404:
+            manga_url = f"{base_origin}/engine/ajax/manga_episodes_api.php?id={news_id}"
+            logger.debug("eps txt 404, trying manga API: %s", manga_url)
+            eps_resp = client.get(manga_url, headers={"Referer": url, "X-Requested-With": "XMLHttpRequest"})
         eps_resp.raise_for_status()
 
     data: dict[str, dict[str, object]] = eps_resp.json()

@@ -6,6 +6,7 @@ export interface SeasonCard {
   poster_url: string
   page_url: string
   is_film: boolean
+  is_anime: boolean
 }
 
 export interface EpisodeDetail {

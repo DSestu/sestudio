@@ -22,6 +22,8 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail 
                 ? 'border-violet-500'
                 : card.is_film
                 ? 'border-blue-700 hover:border-blue-500'
+                : card.is_anime
+                ? 'border-rose-700 hover:border-rose-500'
                 : 'border-yellow-700 hover:border-yellow-500'
             }`}
           >
@@ -62,6 +64,10 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail 
                 <div className="flex items-center gap-1 mt-1">
                   {card.is_film ? (
                     <span className="text-xs bg-blue-800 text-blue-200 rounded px-1">Film</span>
+                  ) : card.is_anime ? (
+                    <span className="text-xs bg-rose-900 text-rose-300 rounded px-1">
+                      Anime S{String(card.season_number).padStart(2, '0')}
+                    </span>
                   ) : (
                     <span className="text-xs bg-orange-900 text-orange-300 rounded px-1">
                       S{String(card.season_number).padStart(2, '0')}
