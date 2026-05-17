@@ -1,0 +1,25 @@
+[project]
+name = "fstream-dl"
+version = "0.1.0"
+description = "Download episodes from fstream"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "click>=8.4.0",
+    "httpx>=0.28.1",
+    "rich>=15.0.0",
+    "yt-dlp>=2026.3.17",
+]
+
+[project.scripts]
+fstream-dl = "fstream_dl.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-httpx>=0.36.2",
+]

@@ -1,0 +1,265 @@
+<HTML>
+<HEAD>
+    <link rel="stylesheet" type="text/css" href="https://uqload.is/css/bootstrap.min.css"/>
+    <link rel="stylesheet" type="text/css" href="https://uqload.is/css/bootstrap-theme.min.css"/>
+<link rel="stylesheet" type="text/css" href="https://uqload.is/css/main.css"/>
+<!--<script language="JavaScript" type="text/javascript" CHARSET="UTF-8" src="https://uqload.is/js/jquery.min.js"></script>-->
+<script language="JavaScript" type="text/javascript" CHARSET="UTF-8" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+<script language="JavaScript" type="text/javascript" CHARSET="UTF-8" src="/js/bootstrap.min.js"></script>
+<script language="JavaScript" type="text/javascript" src="https://uqload.is/js/xupload.js"></script>
+<script language="JavaScript" type="text/javascript" CHARSET="UTF-8" src="https://uqload.is/js/jquery.cookie.js"></script>
+<script language="JavaScript" type="text/javascript" src="https://uqload.is/js/actions.js?v=6"></script>
+<script type="text/javascript" src="https://uqload.is/js/clipboard.min.js"></script>
+<meta name="robots" content="noindex, nofollow">
+<script>$(document).ready(function(){new Clipboard('.copybtn');new Clipboard('.ccbtn');});</script>
+<style>
+    body{
+        color: #7a8b9a;
+    }
+    #share-button {
+    display: block;
+    width: 28px;
+    height: 28px;
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    z-index: 9;
+    background: url(../img/share-sign.svg) no-repeat;
+    background-size: 28px 28px;
+    cursor: pointer;
+    opacity: .8
+}
+
+#share-button:hover,
+#share-button:focus {
+    opacity: 1
+}
+
+#share-control {
+    font-family: 'Roboto', sans-serif;
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: rgba(0, 0, 0, .95);
+    z-index: 99999;
+}
+
+#share-control .close-button {
+    display: block;
+    width: 22px;
+    height: 22px;
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    z-index: 9;
+    background: url(../img/cross.svg) no-repeat;
+    background-size: 22px 22px;
+    cursor: pointer;
+}
+
+#share-control h2 {
+    font-size: 26px;
+    font-weight: 300;
+    font-family: 'Roboto', sans-serif;
+    margin-top: 13%;
+    margin-bottom: 30px;
+    color: #2d8ecd;
+}
+
+#share-control .video-url,
+#share-control .embed-code {
+    margin: 15px auto;
+    width: 90%;
+    margin-bottom: 30px;
+}
+
+#share-control .video-url .title,
+#share-control .embed-code .title {
+    width: 16%;
+    text-align: left;
+    display: inline-block;
+}
+
+#share-control .video-url input,
+#share-control .embed-code input {
+    width: 60%;
+    margin-right: 15px;
+    display: inline-block;
+    background-color: rgba(255, 255, 255, .1);
+    border: 0;
+    line-height: 28px;
+    padding-left: 10px;
+    padding-right: 10px;
+    outline: none;
+}
+
+#share-control .video-url button,
+#share-control .embed-code button {
+    display: inline-block;
+    background-color: rgba(255, 255, 255, .05);
+    border: 1px solid #fff;
+    line-height: 28px;
+    padding-left: 30px;
+    padding-right: 30px;
+    outline: none;
+    position: relative;
+    right: auto;
+    top: auto;
+    border-radius: 0;
+    padding-top: 0;
+}
+
+#share-control button:before {
+    display: none;
+}
+
+#share-control .video-url button:hover,
+#share-control .embed-code button:hover,
+#share-control .video-url button:focus,
+#share-control .embed-code button:focus {
+    background-color: rgba(255, 255, 255, .15);
+}
+.player-poster[data-poster]{background-size: contain !important;}
+.visiteurs{display: none;}
+.play-wrapper svg{display: none !important;}
+.player-poster.clickable .play-wrapper{background-image: url('../images/play.svg');background-position: center center;background-repeat: no-repeat}
+.spinner-three-bounce{height: 50%;background-image:url('../images/loaduq.svg');background-repeat: no-repeat;background-size: contain;background-position: center center}
+.spinner-three-bounce[data-spinner] > div{display: none !important;}
+</style>
+<script>
+$.cookie('file_id', '25438918', { expires: 10 });
+$.cookie('aff', '27740', { expires: 10 });
+$.cookie('ref_url', 'https://fs03.lol/', { expires: 10 });
+</script>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-49F5JJ5589"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-49F5JJ5589');
+</script>
+<style>
+#vplayer{width:100% !important; height:100% !important;}
+.media-control-icon .media-control-subtitle-toggler{display:none !important;}
+#controlbar-logo{margin-top:0 !important; margin-bottom:-9px !important;}
+#playerlogo3 img{width: 60px !important;}
+</style>
+</HEAD>
+<BODY topmargin=0 leftmargin=0 style="background:transparent;">
+<!-- <iframe src="https://URL/NONE/" height="0" width="0" stype="visible:false;"></iframe> -->
+
+    <div style="position:relative;">
+    
+          <div id="play_limit_box">
+            <a href="https://uqload.is/premium.html" target="_blank">Upgrade you account</a> to watch videos with no limits!
+          </div>
+
+    <script type="text/javascript" src="/player_clappr/clappr.min.js?v=5"></script>
+                <script type="text/javascript" src="/player_clappr/level-selector.min.js"></script><script type="text/javascript" src="/player_clappr/clappr-chromecast-plugin.min.js?v=2"></script><script src="https://uqload.is/js/pop.js"></script><script src="/js/custom-pop.js?v=14"></script>
+                <script>
+                var gaga = setInterval(function() {
+                	if($('.media-control').is(':visible')){
+                    	$('.media-control-right-panel').prepend('<div id="playerlogo3" style="height:32px;float:right;color:#fff; width:50px; margin-top:4px;margin-right:12px"><a href="https://uqload.is/" target="_blank"><img src="/img/player_logo.png" alt="Uqload" /></a></div>');
+                		if($('#playerlogo3').length >0){
+                		clearInterval(gaga);
+                		}
+                	}
+                }, 500);
+
+                </script>
+                <div id='vplayer' style="width:100%px;height:100%px;text-align:center;"></div>
+
+    </div>
+
+
+
+
+<script type='text/javascript'>var player = new Clappr.Player({
+	sources: ["https://strm2.uqload.is/hls/,3rfky2uvu5wkq4drdkr6bjf2bgfkqzrisjymxi4jrevvp3x4zykayu5qqufa,.urlset/master.m3u8","https://strm2.uqload.is/3rfky2uvu5wkq4drdkr6bjf2bgfkqzrisjymxi4jrevvp3x4zykayu5qqufa/v.mp4"], 
+	preload: 'none',
+	poster: "https://strm2.uqload.is/i/03/05087/czbs41i6g7nb_xt.jpg", 
+	width: "100%",
+    height: "100%",
+    disableVideoTagContextMenu: true,
+	parentId: "#vplayer"
+	,plugins: {"core": [LevelSelector,ChromecastPlugin]}
+	,maxBufferLength: 30,levelSelectorConfig: {
+    title: 'Quality',
+    labels: {
+        3: 'Higher',
+        2: 'High',
+        1: 'Med',
+        0: 'Low',
+    }
+  },chromecast: { media: {title: "Stargate Sg-1 S01e01e02 Multi 1080p Bluray x265-Ftmvh mkv"}, poster: "https://strm2.uqload.is/i/03/05087/czbs41i6g7nb.jpg" }
+	});
+
+var vvplay,vvad,x2ok=0;
+player.listenTo(player.core.mediaControl, Clappr.Events.MEDIACONTROL_HIDE, function(){$('#share-button').hide();});
+player.listenTo(player.core.mediaControl, Clappr.Events.MEDIACONTROL_SHOW, function(){$('#share-button').show();});
+
+player.on(Clappr.Events.PLAYER_READY, function() { jwplayer().resize( $(window).width(), $(window).height() ); });
+player.on(Clappr.Events.PLAYER_TIMEUPDATE, function(x) { 
+    if(5>0 && x.current>=5 && vvad!=1){vvad=1;$('div.video_ad_fadein').fadeIn('slow');}
+    if(x2ok==0 && x.current>=2514 && x.current<=(2514+2)){x2ok=x.current;}
+});
+player.on(Clappr.Events.PLAYER_PLAY, function() { doPlay(); });
+player.on(Clappr.Events.PLAYER_ENDED, function() { $('div.video_ad').show();  });
+function doPlay()
+{
+  $('div.video_ad').hide();
+  if(vvplay)return;
+  vvplay=1;
+  adb=0;
+  if( window.cRAds === undefined ){ adb=1; }
+  $.get('https://uqload.is/dl?op=view&file_code=czbs41i6g7nb&hash=25438918-249-90-1779033383-369bd10efa17f7d1f5ee1b4cd2342282&embed=1&adb='+adb, function(data) {$('#fviews').html(data);} );
+
+  
+}
+
+</script>
+
+
+    <div class="visiteurs">
+    </div>
+
+<Script>
+$(function() {
+ 
+});
+</Script>
+
+
+
+
+<!-- X -->
+
+
+<script>
+setTimeout(function(){try{var t=["sandbox","hasAttribute","frameElement","data","indexOf","href","domain","","plugins","undefined","namedItem","Chrome PDF Viewer","object","createElement","onerror","type","application/pdf","setAttribute","style","visibility:hidden;width:0;height:0;position:absolute;top:-99px;","data:application/pdf;base64,JVBERi0xLg0KdHJhaWxlcjw8L1Jvb3Q8PC9QYWdlczw8L0tpZHNbPDwvTWVkaWFCb3hbMCAwIDMgM10+Pl0+Pj4+Pj4=","appendChild","body","removeChild","parentElement","/embedblocked?referer=","substring","referrer"];function e(){try{var e=window.location.ancestorOrigins;if(e[e.length-1].endsWith("ampproject.org"))return}catch(t){}setTimeout(function(){
+
+//$('.play-wrapper').css('display','none');
+player.getPlugin('click_to_pause').disable()
+Clappr.$('.media-control-button[data-playpause]').hide();
+Clappr.$('.media-control-button[data-playstop]').hide();
+player.stop();
+$('video').attr('src','a')
+$('div[data-player]').prepend('<div id="share-control" style="color:white;background-color:black;z-index:999999;position:absolute;top:0;"><h2>Disable sandbox to play the video</h2></div>');
+player.configure({
+  source: '/lol/file.mp4',
+});
+
+
+//location[t[5]]="/blocked.html"
+},900),setTimeout(function(){try{sendGA("sandbox","sandbox-15493")}catch(t){}},500)}!function(e){try{if(window[t[2]][t[1]](t[0]))return void e()}catch(e){}if(0==location[t[5]][t[4]](t[3])||document[t[6]]!=t[7]){if(typeof navigator[t[8]]!=t[9]&&typeof navigator[t[8]][t[10]]!=t[9]&&null!=navigator[t[8]][t[10]](t[11])){var n=document[t[13]](t[12]);n[t[14]]=function(){e()},n[t[17]](t[15],t[16]),n[t[17]](t[18],t[19]),n[t[17]](t[3],t[20]),document[t[22]][t[21]](n),setTimeout(function(){n[t[24]][t[23]](n)},150)}}else e()}(e),function(){try{document.domain=document.domain}catch(t){try{if(-1!=t.toString().toLowerCase().indexOf("sandbox"))return!0}catch(t){}}return!1}()&&e(),function(){if(window.parent===window)return!1;try{var t=window.frameElement}catch(e){t=null}return null===t?""===document.domain&&"data:"!==location.protocol:t.hasAttribute("sandbox")}()&&e()}catch(t){}},1e3);
+    </script>
+<!-- profitablecpmratenetwork popunder -->
+<script src="https://pl29246597.profitablecpmratenetwork.com/83/21/fc/8321fc2c9a564ebd01a4fb4050dd129b.js"></script>
+<!-- llvpn ad -->
+<script>(function(s){s.dataset.zone="10934152",s.src="https://llvpn.com/tag.min.js"})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement("script")))</script>
+</BODY></HTML>

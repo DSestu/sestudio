@@ -1,0 +1,129 @@
+import logging
+import sys
+from pathlib import Path
+
+import click
+from rich.console import Console
+from rich.table import Table
+
+from fstream_dl.downloader import download_many
+from fstream_dl.models import Episode, StreamSource
+from fstream_dl.providers.base import ProviderError
+from fstream_dl.providers.uqload import UqloadProvider
+from fstream_dl.scraper import fetch_season
+
+console = Console()
+logger = logging.getLogger(__name__)
+
+
+def parse_episodes(spec: str) -> set[int]:
+    """Parse episode spec like '1,3,5-8' into a set of integers."""
+    result: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if "-" in part:
+            start, end = part.split("-", 1)
+            result.update(range(int(start), int(end) + 1))
+        else:
+            result.add(int(part))
+    return result
+
+
+def _get_provider(name: str):
+    if name == "uqload":
+        return UqloadProvider()
+    raise click.BadParameter(f"Unknown provider: {name}. Available: uqload")
+
+
+@click.command()
+@click.argument("url")
+@click.option("--episodes", "-e", default=None, help="Episodes to download, e.g. '1,3,5-8'. Default: all.")
+@click.option("--lang", default="vf", show_default=True, type=click.Choice(["vf", "vostfr"]), help="Language.")
+@click.option("--output", "-o", default=".", show_default=True, help="Output directory.")
+@click.option("--concurrency", "-c", default=20, show_default=True, help="Max parallel downloads.")
+@click.option("--provider", default="uqload", show_default=True, help="Stream provider.")
+@click.option("--dry-run", is_flag=True, default=False, help="Print resolved URLs without downloading.")
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Enable debug logging.")
+def main(url, episodes, lang, output, concurrency, provider, dry_run, verbose):
+    """Download episodes from an fstream season page URL."""
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+
+    output_dir = Path(output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    console.print(f"[bold]Fetching season page…[/bold] {url}")
+    try:
+        season, all_episodes = fetch_season(url, lang=lang)
+    except Exception as exc:
+        console.print(f"[red]Error fetching season page:[/red] {exc}")
+        sys.exit(1)
+
+    console.print(f"Found [bold]{len(all_episodes)}[/bold] episodes for Season {season} ({lang.upper()})")
+
+    # Filter by episode selection
+    if episodes:
+        wanted = parse_episodes(episodes)
+        selected = [ep for ep in all_episodes if ep.number in wanted]
+        missing = wanted - {ep.number for ep in selected}
+        if missing:
+            console.print(f"[yellow]Warning:[/yellow] episodes not found in {lang.upper()}: {sorted(missing)}")
+    else:
+        selected = all_episodes
+
+    if not selected:
+        console.print("[yellow]No episodes to download.[/yellow]")
+        sys.exit(0)
+
+    # Resolve stream URLs
+    stream_provider = _get_provider(provider)
+    jobs: list[tuple[StreamSource, Path]] = []
+    skipped = 0
+
+    for ep in selected:
+        embed_url = ep.embed_urls.get(provider)
+        if not embed_url:
+            console.print(f"[yellow]Skip[/yellow] S{season:02d}E{ep.number:02d} — no {provider} URL")
+            skipped += 1
+            continue
+        try:
+            source = stream_provider.get_stream_url(embed_url)
+        except ProviderError as exc:
+            console.print(f"[yellow]Skip[/yellow] S{season:02d}E{ep.number:02d} — {exc}")
+            skipped += 1
+            continue
+
+        out_path = output_dir / ep.filename
+        jobs.append((source, out_path))
+
+    if dry_run:
+        _print_dry_run_table(jobs)
+        sys.exit(0)
+
+    if not jobs:
+        console.print("[yellow]Nothing to download.[/yellow]")
+        sys.exit(0)
+
+    console.print(f"\nDownloading [bold]{len(jobs)}[/bold] episode(s) with concurrency={concurrency}…\n")
+    results = download_many(jobs, concurrency=concurrency)
+
+    ok = sum(1 for v in results.values() if v)
+    fail = len(results) - ok
+    console.print(f"\n[green]✓ {ok} downloaded[/green]", end="")
+    if fail:
+        console.print(f"  [red]✗ {fail} failed[/red]", end="")
+    if skipped:
+        console.print(f"  [yellow]⚠ {skipped} skipped[/yellow]", end="")
+    console.print()
+
+
+def _print_dry_run_table(jobs: list[tuple[StreamSource, Path]]) -> None:
+    table = Table(title="Dry run — resolved stream URLs")
+    table.add_column("File", style="cyan")
+    table.add_column("Provider", style="magenta")
+    table.add_column("URL")
+    for source, path in jobs:
+        table.add_row(path.name, source.provider, source.url)
+    console.print(table)
