@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import sys
 from pathlib import Path
@@ -6,10 +8,12 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from fstream_dl.downloader import download_many
+from fstream_dl.downloader import check_yt_dlp, download_many
+from fstream_dl.logging_config import setup_logging
 from fstream_dl.models import Episode, StreamSource
 from fstream_dl.providers.base import ProviderError
 from fstream_dl.providers.uqload import UqloadProvider
+from fstream_dl.resolver import rebase_url, resolve_live_domain
 from fstream_dl.scraper import fetch_season
 
 console = Console()
@@ -29,13 +33,18 @@ def parse_episodes(spec: str) -> set[int]:
     return result
 
 
-def _get_provider(name: str):
+def _get_provider(name: str) -> UqloadProvider:
     if name == "uqload":
         return UqloadProvider()
     raise click.BadParameter(f"Unknown provider: {name}. Available: uqload")
 
 
-@click.command()
+@click.group()
+def main() -> None:
+    """fstream-dl — download and browse fstream episodes."""
+
+
+@main.command("download")
 @click.argument("url")
 @click.option("--episodes", "-e", default=None, help="Episodes to download, e.g. '1,3,5-8'. Default: all.")
 @click.option("--lang", default="vf", show_default=True, type=click.Choice(["vf", "vostfr"]), help="Language.")
@@ -43,16 +52,39 @@ def _get_provider(name: str):
 @click.option("--concurrency", "-c", default=20, show_default=True, help="Max parallel downloads.")
 @click.option("--provider", default="uqload", show_default=True, help="Stream provider.")
 @click.option("--dry-run", is_flag=True, default=False, help="Print resolved URLs without downloading.")
+@click.option("--no-resolve", is_flag=True, default=False, help="Skip auto-resolution of live domain.")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Enable debug logging.")
-def main(url, episodes, lang, output, concurrency, provider, dry_run, verbose):
+def download_cmd(
+    url: str,
+    episodes: str | None,
+    lang: str,
+    output: str,
+    concurrency: int,
+    provider: str,
+    dry_run: bool,
+    no_resolve: bool,
+    verbose: bool,
+) -> None:
     """Download episodes from an fstream season page URL."""
-    logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.WARNING,
-        format="%(levelname)s %(name)s: %(message)s",
-    )
+    setup_logging(verbose)
+
+    if not dry_run:
+        try:
+            check_yt_dlp()
+        except RuntimeError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            sys.exit(1)
 
     output_dir = Path(output)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if not no_resolve:
+        try:
+            live_domain = resolve_live_domain()
+            url = rebase_url(url, live_domain)
+            logger.debug("Using live domain: %s", live_domain)
+        except Exception as exc:
+            logger.warning("Domain resolution failed (%s), using URL as-is", exc)
 
     console.print(f"[bold]Fetching season page…[/bold] {url}")
     try:
@@ -63,7 +95,7 @@ def main(url, episodes, lang, output, concurrency, provider, dry_run, verbose):
 
     console.print(f"Found [bold]{len(all_episodes)}[/bold] episodes for Season {season} ({lang.upper()})")
 
-    # Filter by episode selection
+    selected: list[Episode]
     if episodes:
         wanted = parse_episodes(episodes)
         selected = [ep for ep in all_episodes if ep.number in wanted]
@@ -77,7 +109,6 @@ def main(url, episodes, lang, output, concurrency, provider, dry_run, verbose):
         console.print("[yellow]No episodes to download.[/yellow]")
         sys.exit(0)
 
-    # Resolve stream URLs
     stream_provider = _get_provider(provider)
     jobs: list[tuple[StreamSource, Path]] = []
     skipped = 0
@@ -117,6 +148,31 @@ def main(url, episodes, lang, output, concurrency, provider, dry_run, verbose):
     if skipped:
         console.print(f"  [yellow]⚠ {skipped} skipped[/yellow]", end="")
     console.print()
+
+
+@main.command("serve")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind.")
+@click.option("--port", default=8080, show_default=True, help="Port to listen on.")
+@click.option("--no-resolve", is_flag=True, default=False, help="Skip auto-resolution of live domain.")
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Enable debug logging.")
+def serve_cmd(host: str, port: int, no_resolve: bool, verbose: bool) -> None:
+    """Start the web UI server."""
+    setup_logging(verbose)
+
+    import uvicorn
+    from fstream_dl.web.app import create_app
+
+    live_domain: str | None = None
+    if not no_resolve:
+        try:
+            live_domain = resolve_live_domain()
+            logger.debug("Resolved live domain: %s", live_domain)
+        except Exception as exc:
+            logger.warning("Domain resolution failed (%s), searches will use fstream.top", exc)
+
+    app = create_app(live_domain=live_domain)
+    console.print(f"[bold green]fstream-dl web UI[/bold green] → http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port)
 
 
 def _print_dry_run_table(jobs: list[tuple[StreamSource, Path]]) -> None:

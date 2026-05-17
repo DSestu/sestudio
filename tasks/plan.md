@@ -1,167 +1,79 @@
-# fstream-dl — Implementation Plan
+# Plan: fstream-dl Web UI
 
 ## Context
+The CLI tool (`fstream-dl`) can download episodes but requires knowing the exact season URL. The goal is a local web interface that proxies fstream's search, lets the user pick seasons/episodes via a checkbox tree, and streams per-episode download progress — all from a browser. A new `fstream-dl serve` subcommand starts the server.
 
-From live browser exploration we know:
+---
 
-- **Season page** (`fs03.lol/<id>-...-vf-vostfr.html`) loads episode data from `/data/eps_<newsId>.txt`
-- The `newsId` is in a `#serie-config` element's `data-news-id` attribute
-- `/data/eps_<newsId>.txt` returns JSON: `{ vf: {1: {uqload, vidzy, netu, voe, ...}, ...}, vostfr: {...}, info: {...} }`
-- **Uqload embed HTML** contains the mp4 URL directly in plain HTML: `https://strm*.uqload.is/<hash>/v.mp4`
-- Uqload requires `Referer: https://uqload.is/`
-- Episode title comes from `data.info[n]` or falls back to `Episode N`
-- Season number must be parsed from the page HTML (title or URL slug)
+## Key findings
 
-## What already exists
+- **CLI is a single `@click.command()`** → must refactor to `@click.group()` to add `serve`
+- **No search function** in `scraper.py` → search endpoint is `GET /index.php?do=search&subaction=search&story={query}`, returns HTML with `<div data-newsid data-title data-affiche data-fulllink>` elements per season result
+- **No progress tracking** in `downloader.py` → yt-dlp runs with `--quiet`; must switch to `--progress --newline` and parse stdout lines in real-time with a callback
+- **All httpx usage is synchronous** → keep sync for scraper calls wrapped in `asyncio.to_thread()` inside FastAPI route handlers
+- **Config**: persist to `~/.config/fstream-dl/config.json` (output root, default lang)
 
-| File | Status |
-|------|--------|
-| `pyproject.toml` | Done — uv project, deps, entry point wired |
-| `src/fstream_dl/models.py` | Done — `Episode`, `StreamSource` dataclasses |
-| `src/fstream_dl/resolver.py` | Done — pass-through + `resolve_live_domain()` stub |
-| `src/fstream_dl/__init__.py` | Done — empty |
-| `src/fstream_dl/providers/__init__.py` | Done — empty |
+---
 
-## Dependency Graph
+## Architecture
 
 ```
-models.py  ← (no deps)
-resolver.py ← httpx
-scraper.py ← httpx, bs4, models.py, resolver.py
-providers/base.py ← models.py
-providers/uqload.py ← httpx, re, providers/base.py, models.py
-downloader.py ← subprocess, concurrent.futures, models.py
-cli.py ← click, rich, scraper.py, providers/uqload.py, downloader.py
+src/fstream_dl/
+  cli.py                 # MODIFIED: @click.group(), download → subcommand, serve subcommand
+  config.py              # NEW: read/write ~/.config/fstream-dl/config.json
+  scraper.py             # MODIFIED: add search_seasons(query) function
+  downloader.py          # MODIFIED: add progress_callback param, parse yt-dlp stdout
+  web/
+    __init__.py
+    app.py               # FastAPI app factory, mounts router + static files
+    routes/
+      __init__.py
+      search.py          # GET /api/search?q=
+      seasons.py         # GET /api/season?url=
+      downloads.py       # POST /api/downloads, GET /api/downloads, GET /api/downloads/{id}/progress (SSE)
+      settings.py        # GET /api/settings, PUT /api/settings
+    worker.py            # DownloadJob dataclass, in-memory job store, ThreadPoolExecutor
+frontend/                # Vite + React + TypeScript + Tailwind
+  src/
+    api.ts               # typed fetch wrappers for all API routes
+    components/
+      SearchBar.tsx
+      ResultsGrid.tsx     # season cards with poster, badges, episode count
+      SeasonTree.tsx      # 3-level checkbox tree with cascading state
+      DownloadQueue.tsx   # job list with SSE-fed progress bars
+      SettingsPanel.tsx   # output path + language selector
+    App.tsx
+  dist/                  # built assets served by FastAPI
 ```
 
-No cycles. Build order follows the graph top-down.
+---
+
+## New Python deps to add
+```
+fastapi>=0.115
+uvicorn[standard]>=0.34
+python-multipart>=0.0.20
+```
 
 ---
 
-## Phases
-
-### Phase 1 — Core scraper + Uqload provider (vertical slice, end-to-end)
-
-**Goal**: given a season URL, extract all episodes with their Uqload embed URLs and resolve each to a direct mp4 URL.  
-No CLI, no download yet — just the data pipeline working and tested.
-
-#### Task 1.1 — `scraper.py`: season page → episode list
-
-**What to build:**
-- `fetch_season_page(url) -> (season: int, episodes: list[Episode])`
-- Fetches the season page with proper headers
-- Parses `#serie-config[data-news-id]` to get `newsId`
-- Fetches `/data/eps_<newsId>.txt`
-- Parses JSON into `Episode` objects (number, title from `info`, embed_urls dict)
-- Extracts season number from page `<title>` tag (e.g. "Stargate SG-1 - Saison 1 …" → 1)
-
-**Acceptance criteria:**
-- Returns correct season number
-- Returns 22 episodes for the Stargate SG-1 S1 test page
-- Each episode has `embed_urls["uqload"]` populated
-- Episodes with missing uqload entry have empty string (not KeyError)
-
-**Verification:** `uv run pytest tests/test_scraper.py -v`
+## Search endpoint (discovered)
+- URL: `GET {live_domain}/index.php?do=search&subaction=search&story={query}`
+- Response: HTML page
+- Each result is a `<div>` with attributes: `data-newsid`, `data-title`, `data-affiche` (poster URL), `data-fulllink` (season page path)
+- Season number extracted from `data-title` via existing `SEASON_RE` regex
+- Series name = title before ` - Saison N`
 
 ---
 
-#### Task 1.2 — `providers/base.py` + `providers/uqload.py`
-
-**What to build:**
-- `base.py`: abstract `StreamProvider` with `get_stream_url(embed_url: str) -> StreamSource`
-- `uqload.py`: fetches embed page HTML, regex-extracts `https://strm*.uqload.is/<hash>/v.mp4`, returns `StreamSource(url, referer="https://uqload.is/", provider="uqload")`
-
-**Acceptance criteria:**
-- Correct mp4 URL extracted from fixture embed HTML
-- Raises `ProviderError` if no URL found in HTML
-- `referer` is always `https://uqload.is/`
-
-**Verification:** `uv run pytest tests/test_providers.py -v`
+## Progress tracking design
+- Remove `--quiet` from yt-dlp command, add `--progress --newline`
+- Parse stdout lines matching `[download]  X% of Y at Z ETA W`
+- `download()` accepts optional `on_progress: Callable[[ProgressEvent], None] | None`
+- `ProgressEvent(percent: float, speed: str, eta: str)`
+- Worker stores last progress on `DownloadJob` dataclass; SSE route reads it every 500ms
 
 ---
 
-#### Task 1.3 — Test fixtures
-
-**What to build:**
-- `tests/fixtures/season_page.html` — real fs03.lol season page snapshot (Stargate SG-1 S1)
-- `tests/fixtures/eps_16676.json` — real `/data/eps_16676.txt` response
-- `tests/fixtures/uqload_embed.html` — real Uqload embed page snapshot
-- `tests/conftest.py` — shared fixtures for httpx mocking
-
-**Note:** Fixtures captured from the live browser session.
-
----
-
-> **Checkpoint 1**: `uv run pytest` passes. Data pipeline proven end-to-end on fixtures.
-
----
-
-### Phase 2 — Downloader + CLI (complete working tool)
-
-**Goal**: `fstream-dl <url>` works, downloads files with correct names.
-
-#### Task 2.1 — `downloader.py`
-
-**What to build:**
-- `download(source: StreamSource, output_path: Path) -> bool`
-  - Runs `yt-dlp` as subprocess with `--referer`, `-o`, `--merge-output-format mp4`
-  - Returns True on success, False on non-zero exit
-- `download_many(jobs: list[tuple[StreamSource, Path]], concurrency: int) -> dict[str, bool]`
-  - `ThreadPoolExecutor(max_workers=concurrency)`
-  - Returns map of filename → success
-
-**Acceptance criteria:**
-- `yt-dlp` invocation includes correct `--add-header "Referer: ..."` flag
-- Concurrent jobs respect `concurrency` cap
-- Failures don't abort other downloads
-
----
-
-#### Task 2.2 — `cli.py`
-
-**What to build:**
-- `@click.command` with all flags from spec
-- Episode selection parser: `"1,3,5-8"` → `{1, 3, 5, 6, 7, 8}`
-- Flow:
-  1. Fetch season + episodes via `scraper`
-  2. Filter by `--episodes` and `--lang`
-  3. Resolve stream URLs via provider
-  4. `--dry-run`: print table with Rich, exit
-  5. Otherwise: `download_many(...)`, print summary
-
-**Acceptance criteria:**
-- `fstream-dl --help` shows all flags
-- `--dry-run` prints episode table without calling yt-dlp
-- `--episodes 1-3` downloads only episodes 1, 2, 3
-- `--lang vostfr` uses VOSTFR column
-- Missing episode in selected lang prints warning, skips gracefully
-
----
-
-> **Checkpoint 2**: Full manual end-to-end test:
-> ```bash
-> fstream-dl "https://fs03.lol/16676-..." --episodes 1 --dry-run
-> fstream-dl "https://fs03.lol/16676-..." --episodes 1
-> ```
-> File `S01E01 - Enfants des dieux (1-2) VF.mp4` created in current dir.
-
----
-
-### Phase 3 — Polish
-
-#### Task 3.1 — Error handling & edge cases
-- Episode not available in chosen language → skip with warning
-- Uqload embed returns no mp4 URL → log error, skip episode
-- yt-dlp not found → raise clear error at startup
-- Network timeout → retry once, then skip
-
-#### Task 3.2 — `resolver.py` live domain resolution
-- Wire `resolve_live_domain()` into CLI startup
-- Add `--no-resolve` flag to skip (for direct URL use)
-
----
-
-## Out of scope for this plan
-- Vidzy provider (Playwright)
-- Web UI
-- Folder structure / bulk season management
+## Folder structure for downloads
+`{output_root}/{series_name}/Season {season:02d}/S{season:02d}E{ep:02d} - {title}.mp4`

@@ -1,21 +1,23 @@
-# fstream-dl — Task List
+# Task List: fstream-dl Web UI
 
-## Phase 1 — Data pipeline
+## Phase 1 — Backend foundation
 
-- [ ] **1.1** `scraper.py` — season page fetch + episode list from `/data/eps_<newsId>.txt`
-- [ ] **1.2** `providers/base.py` + `providers/uqload.py` — embed URL → mp4 StreamSource
-- [ ] **1.3** Test fixtures (season HTML, eps JSON, uqload embed HTML) + `tests/conftest.py`
-- [ ] **1.4** `tests/test_scraper.py` — scraper unit tests
-- [ ] **1.5** `tests/test_providers.py` — uqload unit tests
-- [ ] **CHECKPOINT 1** — `uv run pytest` passes ✓
+- [ ] **T1** CLI group refactor — `@click.group()`, move download logic to `download` subcommand, add `serve` stub with `--host`/`--port`
+- [ ] **T2** Config module — `src/fstream_dl/config.py`, `AppConfig` dataclass, `load_config()` / `save_config()`, persists to `~/.config/fstream-dl/config.json`
+- [ ] **T3** Search scraper + route — `search_seasons(query, base_url)` in `scraper.py`; `GET /api/search?q=` route
+- [ ] **T4** Season detail route — `GET /api/season?url=` wrapping existing `fetch_season()`, returns episodes + available langs
+- [ ] **T5** Settings route — `GET /api/settings`, `PUT /api/settings` backed by config module
+- [ ] **T6** Download worker + progress — modify `downloader.py` for yt-dlp stdout progress parsing; `worker.py` with `DownloadJob`, `JobStore`, `ThreadPoolExecutor`
+- [ ] **T7** Downloads route + SSE — `POST /api/downloads`, `GET /api/downloads`, `GET /api/downloads/{id}/progress` (SSE)
 
-## Phase 2 — Working CLI
+### CHECKPOINT A — all API routes working via curl before starting frontend
 
-- [ ] **2.1** `downloader.py` — yt-dlp wrapper + ThreadPoolExecutor
-- [ ] **2.2** `cli.py` — Click entry point, episode filter, dry-run, download flow
-- [ ] **CHECKPOINT 2** — manual end-to-end test ✓
+## Phase 2 — Frontend
 
-## Phase 3 — Polish
+- [ ] **T8** Frontend scaffold — Vite + React + TypeScript + Tailwind; `/api` proxy to FastAPI; `src/api.ts` typed wrappers
+- [ ] **T9** SearchBar + ResultsGrid — debounced search input, season cards with poster/title/language badges
+- [ ] **T10** SeasonTree — 3-level checkbox tree (series → season → episode), cascading check/indeterminate state, "Download selected" button
+- [ ] **T11** SettingsPanel + DownloadQueue — settings form (output path, lang), job list with SSE progress bars and status badges
+- [ ] **T12** Build integration — `vite build` → `frontend/dist/`, FastAPI serves as static + SPA fallback; `fstream-dl serve` opens `http://localhost:{port}`
 
-- [ ] **3.1** Error handling — lang missing, no URL, yt-dlp absent, timeout
-- [ ] **3.2** `resolver.py` — wire live domain resolution into CLI
+### CHECKPOINT B — full end-to-end flow: search → select → download → progress

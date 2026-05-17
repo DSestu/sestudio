@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import logging
 import re
 
 import httpx
@@ -5,10 +8,12 @@ import httpx
 from fstream_dl.models import StreamSource
 from fstream_dl.providers.base import ProviderError, StreamProvider
 
+logger = logging.getLogger(__name__)
+
 REFERER = "https://uqload.is/"
 MP4_RE = re.compile(r'(https://strm[^"\'<>\s]+/v\.mp4)')
 
-HEADERS = {
+HEADERS: dict[str, str] = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
     "Referer": REFERER,
 }
@@ -16,9 +21,15 @@ HEADERS = {
 
 class UqloadProvider(StreamProvider):
     def get_stream_url(self, embed_url: str) -> StreamSource:
-        with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
-            resp = client.get(embed_url)
-            resp.raise_for_status()
+        logger.debug("Fetching Uqload embed: %s", embed_url)
+        try:
+            with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
+                resp = client.get(embed_url)
+                resp.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise ProviderError(f"Timeout fetching Uqload embed: {embed_url}") from exc
+        except httpx.HTTPStatusError as exc:
+            raise ProviderError(f"HTTP {exc.response.status_code} fetching Uqload embed: {embed_url}") from exc
 
         match = MP4_RE.search(resp.text)
         if not match:

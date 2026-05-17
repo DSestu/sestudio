@@ -2,6 +2,16 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class SeasonCard:
+    newsid: str
+    title: str
+    series_name: str
+    season_number: int
+    poster_url: str
+    page_url: str
+
+
+@dataclass
 class Episode:
     number: int
     title: str
