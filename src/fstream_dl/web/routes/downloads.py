@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from fstream_dl.config import load_config
+from fstream_dl.models import sanitize_path_component
 from fstream_dl.providers.base import ProviderError
 from fstream_dl.web.worker import DownloadJob
 
@@ -46,11 +47,12 @@ async def check_downloads(items: list[DownloadRequest]) -> list[str]:
     cfg = load_config()
     existing: list[str] = []
     for item in items:
+        safe_ep = sanitize_path_component(item.episode_name)
         if item.season == 0:
-            out_path = Path(cfg.output_root) / "fstream_films" / item.episode_name
+            out_path = Path(cfg.output_root) / "fstream_films" / safe_ep
         else:
-            safe_series = item.series_name.replace("/", "-").replace("\\", "-").strip()
-            out_path = Path(cfg.output_root) / safe_series / f"Season {item.season:02d}" / item.episode_name
+            safe_series = sanitize_path_component(item.series_name)
+            out_path = Path(cfg.output_root) / safe_series / f"Season {item.season:02d}" / safe_ep
         if out_path.exists() and out_path.stat().st_size > 0:
             existing.append(item.episode_name)
     return existing
@@ -100,13 +102,14 @@ async def post_downloads(
             results.append({"episode_name": item.episode_name, "error": last_error})
             continue
 
+        safe_ep = sanitize_path_component(item.episode_name)
         if item.season == 0:
             out_dir = Path(cfg.output_root) / "fstream_films"
         else:
-            safe_series = item.series_name.replace("/", "-").replace("\\", "-").strip()
+            safe_series = sanitize_path_component(item.series_name)
             out_dir = Path(cfg.output_root) / safe_series / f"Season {item.season:02d}"
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / item.episode_name
+        out_path = out_dir / safe_ep
 
         if out_path.exists() and out_path.stat().st_size > 0:
             logger.info("Skipping %s: already exists at %s", item.episode_name, out_path)
@@ -119,7 +122,7 @@ async def post_downloads(
 
         # Pass all_providers so the worker can fall back if the initial download fails
         remaining_providers = {k: v for k, v in item.all_providers.items() if k not in tried}
-        job = store.submit(source, out_path, item.episode_name, all_providers=remaining_providers)
+        job = store.submit(source, out_path, safe_ep, all_providers=remaining_providers)
         results.append(_job_to_dict(job))
 
     return results

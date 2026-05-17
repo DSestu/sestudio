@@ -1,4 +1,15 @@
+import re
 from dataclasses import dataclass, field
+
+_UNSAFE_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_MULTI_DASH_RE = re.compile(r'-{2,}')
+
+
+def sanitize_path_component(name: str) -> str:
+    """Replace path-unsafe characters with dashes, collapse runs, strip edges."""
+    name = _UNSAFE_RE.sub('-', name)
+    name = _MULTI_DASH_RE.sub('-', name)
+    return name.strip('-. ')
 
 
 @dataclass
@@ -22,7 +33,7 @@ class Episode:
 
     @property
     def filename(self) -> str:
-        safe_title = self.title.replace("/", "-").replace("\\", "-").strip()
+        safe_title = sanitize_path_component(self.title)
         if self.season == 0:
             return f"{safe_title}.mp4"
         return f"S{self.season:02d}E{self.number:02d} - {safe_title}.mp4"

@@ -65,7 +65,7 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
   async function handleDownload() {
     if (!detail) return
     const filmFilename = detail.is_film
-      ? card.series_name.replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').replace(/[/\\:*?"<>|]/g, '-').trim() + '.mp4'
+      ? card.series_name.replace(/[\x00-\x1f<>:"/\\|?*]/g, '-').replace(/-{2,}/g, '-').replace(/^[-. ]+|[-. ]+$/g, '').trim() + '.mp4'
       : null
 
     const items: DownloadItem[] = detail.episodes
