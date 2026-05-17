@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException
 
-from fstream_dl.scraper import HEADERS, fetch_season
+from fstream_dl.scraper import HEADERS, _fetch_film_available_langs, fetch_page, fetch_season
 
 router = APIRouter()
 
@@ -14,15 +14,18 @@ router = APIRouter()
 @router.get("/season")
 async def get_season(url: str, lang: str = "vf") -> dict[str, Any]:
     try:
-        season_num, episodes = await asyncio.to_thread(fetch_season, url, lang)
+        season_num, episodes, is_film = await asyncio.to_thread(fetch_page, url, lang)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    # Determine available languages by fetching the eps JSON keys
-    available_langs = await asyncio.to_thread(_fetch_available_langs, url)
+    if is_film:
+        available_langs = await asyncio.to_thread(_fetch_film_available_langs, url)
+    else:
+        available_langs = await asyncio.to_thread(_fetch_available_langs, url)
 
     return {
         "season": season_num,
+        "is_film": is_film,
         "available_langs": available_langs,
         "episodes": [
             {

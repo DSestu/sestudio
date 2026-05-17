@@ -58,19 +58,26 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
 
   async function handleDownload() {
     if (!detail) return
+    const filmFilename = detail.is_film
+      ? card.series_name.replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').replace(/[/\\:*?"<>|]/g, '-').trim() + '.mp4'
+      : null
+
     const items: DownloadItem[] = detail.episodes
       .filter(ep => checked.has(ep.number))
       .map(ep => ({
-        embed_url: ep.embed_urls['uqload'] ?? ep.embed_urls['netu'] ?? Object.values(ep.embed_urls)[0] ?? '',
-        provider: ep.embed_urls['uqload'] ? 'uqload' : ep.embed_urls['netu'] ? 'netu' : Object.keys(ep.embed_urls)[0] ?? '',
+        embed_url: ep.embed_urls['uqload'] ?? ep.embed_urls['vidzy'] ?? ep.embed_urls['netu'] ?? Object.values(ep.embed_urls)[0] ?? '',
+        provider: ep.embed_urls['uqload'] ? 'uqload' : ep.embed_urls['vidzy'] ? 'vidzy' : ep.embed_urls['netu'] ? 'netu' : Object.keys(ep.embed_urls)[0] ?? '',
         all_providers: ep.embed_urls,
-        episode_name: ep.filename,
+        episode_name: filmFilename ?? ep.filename,
         series_name: card.series_name,
-        season: detail.season,
+        season: detail.is_film ? 0 : detail.season,
       }))
       .filter(i => i.embed_url)
 
-    if (!items.length) return
+    if (!items.length) {
+      setError('No stream sources found for this film. The provider may be unsupported.')
+      return
+    }
     setSubmitting(true)
     try {
       const existing = await checkDownloads(items)
@@ -107,16 +114,18 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
           <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-700">
             <div>
               <h2 className="text-white font-semibold text-lg">{card.series_name}</h2>
-              <p className="text-zinc-400 text-sm">Season {detail?.season ?? '…'}</p>
+              <p className="text-zinc-400 text-sm">
+              {detail ? (detail.is_film ? 'Film' : `Season ${detail.season}`) : '…'}
+            </p>
             </div>
             <button onClick={onClose} className="text-zinc-400 hover:text-white text-xl">✕</button>
           </div>
 
           {/* Body */}
           <div className="overflow-y-auto flex-1 px-6 py-4">
-            {loading && <p className="text-zinc-400">Loading episodes…</p>}
+            {loading && <p className="text-zinc-400">Loading…</p>}
             {error && <p className="text-red-400">{error}</p>}
-            {detail && (
+            {detail && !detail.is_film && (
               <>
                 {/* Season row */}
                 <div className="flex items-center gap-3 mb-2 cursor-pointer select-none" onClick={toggleAll}>
@@ -185,6 +194,48 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
                   </div>
                 )}
               </>
+            )}
+
+            {detail && detail.is_film && (
+              <div className="space-y-3">
+                <div className="flex gap-1 mb-3">
+                  {detail.available_langs.map(l => (
+                    <span key={l} className={`text-xs px-1.5 py-0.5 rounded font-mono uppercase ${l === lang ? 'bg-violet-600 text-white' : 'bg-zinc-700 text-zinc-400'}`}>
+                      {l}
+                    </span>
+                  ))}
+                </div>
+                {detail.episodes.map(ep => (
+                  <div key={ep.number} className="flex items-center gap-3 hover:bg-zinc-800 rounded px-2 py-2">
+                    <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={checked.has(ep.number)}
+                        onChange={() => toggleEpisode(ep.number)}
+                        className="accent-violet-500 w-4 h-4 shrink-0"
+                      />
+                      <span className="text-zinc-200 text-sm flex-1 truncate font-medium">{ep.title}</span>
+                      <div className="flex gap-1 shrink-0">
+                        {ep.providers.map(p => (
+                          <span key={p} className="text-xs bg-zinc-700 text-zinc-400 rounded px-1">{p}</span>
+                        ))}
+                      </div>
+                    </label>
+                    <a
+                      href={card.page_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open on fstream"
+                      className="shrink-0 text-zinc-500 hover:text-violet-400 transition-colors"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

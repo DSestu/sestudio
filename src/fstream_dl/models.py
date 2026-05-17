@@ -9,6 +9,7 @@ class SeasonCard:
     season_number: int
     poster_url: str
     page_url: str
+    is_film: bool = False
 
 
 @dataclass
@@ -21,6 +22,8 @@ class Episode:
     @property
     def filename(self) -> str:
         safe_title = self.title.replace("/", "-").replace("\\", "-").strip()
+        if self.season == 0:
+            return f"{safe_title}.mp4"
         return f"S{self.season:02d}E{self.number:02d} - {safe_title}.mp4"
 
 

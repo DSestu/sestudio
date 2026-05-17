@@ -10,6 +10,20 @@ export default function SearchBar({ onResults }: Props) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        inputRef.current?.focus()
+        inputRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current)
@@ -29,6 +43,7 @@ export default function SearchBar({ onResults }: Props) {
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         type="text"
         placeholder="Search series…"
         value={query}

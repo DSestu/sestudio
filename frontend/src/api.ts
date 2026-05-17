@@ -5,6 +5,7 @@ export interface SeasonCard {
   season_number: number
   poster_url: string
   page_url: string
+  is_film: boolean
 }
 
 export interface EpisodeDetail {
@@ -17,6 +18,7 @@ export interface EpisodeDetail {
 
 export interface SeasonDetail {
   season: number
+  is_film: boolean
   available_langs: string[]
   episodes: EpisodeDetail[]
 }
@@ -55,7 +57,11 @@ export async function searchSeasons(q: string): Promise<SeasonCard[]> {
 
 export async function getSeason(url: string, lang: string): Promise<SeasonDetail> {
   const res = await fetch(`${BASE}/season?url=${encodeURIComponent(url)}&lang=${lang}`)
-  if (!res.ok) throw new Error(`Season fetch failed: ${res.status}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const detail = body?.detail ?? `HTTP ${res.status}`
+    throw new Error(detail)
+  }
   return res.json()
 }
 

@@ -4,6 +4,7 @@ import logging
 import re
 import shutil
 import subprocess
+import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -50,7 +51,6 @@ def download(
         "--add-header", f"Referer: {source.referer}",
         "--merge-output-format", "mp4",
         "-o", str(output_path),
-        "--no-warnings",
         "--progress",
         "--newline",
         source.url,
@@ -66,6 +66,19 @@ def download(
         )
 
         assert proc.stdout is not None
+        stderr_lines: list[str] = []
+
+        def _drain_stderr(_proc: subprocess.Popen = proc) -> None:  # type: ignore[type-arg]
+            if _proc.stderr:
+                for line in _proc.stderr:
+                    stripped = line.rstrip()
+                    if stripped:
+                        stderr_lines.append(stripped)
+                        logger.debug("yt-dlp stderr: %s", stripped)
+
+        stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+        stderr_thread.start()
+
         for line in proc.stdout:
             line = line.rstrip()
             if on_progress:
@@ -78,11 +91,21 @@ def download(
                     ))
 
         proc.wait()
-        if proc.returncode == 0:
-            return True
+        stderr_thread.join()
 
-        stderr = proc.stderr.read() if proc.stderr else ""
-        stderr = stderr.strip()
+        if proc.returncode == 0:
+            _MIN_SIZE = 5 * 1024 * 1024  # 5 MB
+            if output_path.exists() and output_path.stat().st_size >= _MIN_SIZE:
+                return True
+            actual = output_path.stat().st_size if output_path.exists() else 0
+            logger.warning(
+                "yt-dlp exited 0 but output is too small (%d bytes) for %s", actual, output_path.name
+            )
+
+        # Clean up any partial/empty file left by yt-dlp before retrying or giving up
+        _cleanup(output_path)
+
+        stderr = "\n".join(stderr_lines).strip()
 
         if attempt < _MAX_RETRIES - 1 and _RETRYABLE.search(stderr):
             wait = _RETRY_BACKOFF[attempt]
@@ -97,6 +120,17 @@ def download(
         return False
 
     return False
+
+
+def _cleanup(path: Path) -> None:
+    """Remove output file and any .part sibling left by a failed yt-dlp run."""
+    for p in [path, path.with_suffix(path.suffix + ".part")]:
+        try:
+            if p.exists():
+                p.unlink()
+                logger.debug("Removed partial file: %s", p)
+        except OSError:
+            pass
 
 
 def download_many(

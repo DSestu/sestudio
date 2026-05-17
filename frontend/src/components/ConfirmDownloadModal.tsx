@@ -18,10 +18,11 @@ interface FileTree {
 function buildTree(items: DownloadItem[]): FileTree {
   const tree: FileTree = {}
   for (const item of items) {
-    const season = `Season ${String(item.season).padStart(2, '0')}`
-    if (!tree[item.series_name]) tree[item.series_name] = {}
-    if (!tree[item.series_name][season]) tree[item.series_name][season] = []
-    tree[item.series_name][season].push(item.episode_name)
+    const season = item.season === 0 ? 'fstream_films' : `Season ${String(item.season).padStart(2, '0')}`
+    const group = item.season === 0 ? 'Films' : item.series_name
+    if (!tree[group]) tree[group] = {}
+    if (!tree[group][season]) tree[group][season] = []
+    tree[group][season].push(item.episode_name)
   }
   return tree
 }
@@ -30,10 +31,28 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
   const [confirming, setConfirming] = useState(false)
   const tree = buildTree(items)
   const episodeCount = items.length
+  const filmCount = items.filter(i => i.season === 0).length
+  const episodeOnlyCount = episodeCount - filmCount
   const newCount = items.filter(i => !existingFiles.has(i.episode_name)).length
   const skippedCount = episodeCount - newCount
   const seasonCount = Object.values(tree).reduce((n, s) => n + Object.keys(s).length, 0)
   const seriesCount = Object.keys(tree).length
+
+  function summaryLabel(): string {
+    const parts: string[] = []
+    if (filmCount > 0) parts.push(`${filmCount} film${filmCount !== 1 ? 's' : ''}`)
+    if (episodeOnlyCount > 0) parts.push(`${episodeOnlyCount} episode${episodeOnlyCount !== 1 ? 's' : ''}`)
+    return parts.join(' + ')
+  }
+
+  function downloadLabel(): string {
+    const newFilms = items.filter(i => i.season === 0 && !existingFiles.has(i.episode_name)).length
+    const newEps = newCount - newFilms
+    const parts: string[] = []
+    if (newFilms > 0) parts.push(`${newFilms} film${newFilms !== 1 ? 's' : ''}`)
+    if (newEps > 0) parts.push(`${newEps} episode${newEps !== 1 ? 's' : ''}`)
+    return `Download ${parts.join(' + ')}`
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onCancel}>
@@ -45,9 +64,9 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
         <div className="px-6 py-4 border-b border-zinc-700">
           <h2 className="text-white font-semibold text-lg">Confirm download</h2>
           <p className="text-zinc-400 text-sm mt-0.5">
-            {episodeCount} episode{episodeCount !== 1 ? 's' : ''} across{' '}
-            {seasonCount} season{seasonCount !== 1 ? 's' : ''}
-            {seriesCount > 1 ? ` in ${seriesCount} series` : ''}
+            {summaryLabel()}
+            {episodeOnlyCount > 0 && ` across ${seasonCount} season${seasonCount !== 1 ? 's' : ''}`}
+            {seriesCount > 1 && episodeOnlyCount > 0 ? ` in ${seriesCount - (filmCount > 0 ? 1 : 0)} series` : ''}
             {skippedCount > 0 && (
               <span className="ml-2 text-amber-500">· {skippedCount} already downloaded</span>
             )}
@@ -123,7 +142,7 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
             disabled={newCount === 0 || confirming}
             className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            {confirming ? 'Queuing…' : `Download ${newCount} episode${newCount !== 1 ? 's' : ''}`}
+            {confirming ? 'Queuing…' : downloadLabel()}
           </button>
         </div>
       </div>

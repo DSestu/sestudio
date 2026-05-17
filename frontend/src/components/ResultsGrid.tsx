@@ -18,7 +18,11 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail 
           <div
             key={card.newsid}
             className={`relative bg-zinc-900 border rounded-lg overflow-hidden transition-colors ${
-              checked ? 'border-violet-500' : 'border-zinc-700 hover:border-zinc-500'
+              checked
+                ? 'border-violet-500'
+                : card.is_film
+                ? 'border-blue-700 hover:border-blue-500'
+                : 'border-yellow-700 hover:border-yellow-500'
             }`}
           >
             {/* Checkbox overlay */}
@@ -56,9 +60,13 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail 
                   {card.series_name}
                 </p>
                 <div className="flex items-center gap-1 mt-1">
-                  <span className="text-xs bg-zinc-700 text-zinc-300 rounded px-1">
-                    S{String(card.season_number).padStart(2, '0')}
-                  </span>
+                  {card.is_film ? (
+                    <span className="text-xs bg-blue-800 text-blue-200 rounded px-1">Film</span>
+                  ) : (
+                    <span className="text-xs bg-orange-900 text-orange-300 rounded px-1">
+                      S{String(card.season_number).padStart(2, '0')}
+                    </span>
+                  )}
                 </div>
               </div>
             </button>

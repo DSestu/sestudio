@@ -11,19 +11,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from fstream_dl.config import load_config
-from fstream_dl.models import StreamSource
 from fstream_dl.providers.base import ProviderError
-from fstream_dl.providers.netu import NetuProvider
-from fstream_dl.providers.uqload import UqloadProvider
 from fstream_dl.web.worker import DownloadJob
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-_PROVIDERS: dict[str, Any] = {
-    "uqload": UqloadProvider(),
-    "netu": NetuProvider(),
-}
 
 
 class DownloadRequest(BaseModel):
@@ -54,11 +46,12 @@ async def check_downloads(items: list[DownloadRequest]) -> list[str]:
     cfg = load_config()
     existing: list[str] = []
     for item in items:
-        safe_series = item.series_name.replace("/", "-").replace("\\", "-").strip()
-        out_path = (
-            Path(cfg.output_root) / safe_series / f"Season {item.season:02d}" / item.episode_name
-        )
-        if out_path.exists():
+        if item.season == 0:
+            out_path = Path(cfg.output_root) / "fstream_films" / item.episode_name
+        else:
+            safe_series = item.series_name.replace("/", "-").replace("\\", "-").strip()
+            out_path = Path(cfg.output_root) / safe_series / f"Season {item.season:02d}" / item.episode_name
+        if out_path.exists() and out_path.stat().st_size > 0:
             existing.append(item.episode_name)
     return existing
 
@@ -72,6 +65,8 @@ async def post_downloads(
     cfg = load_config()
     results: list[dict[str, Any]] = []
 
+    providers = store._providers
+
     for item in items:
         # Build ordered candidate list: primary provider first, then the rest
         candidates: list[tuple[str, str]] = []
@@ -83,17 +78,21 @@ async def post_downloads(
 
         source: StreamSource | None = None
         last_error: str = "No supported provider available"
+        tried: list[str] = []
         for pname, purl in candidates:
-            handler = _PROVIDERS.get(pname)
+            handler = providers.get(pname)
             if handler is None:
                 logger.debug("Skipping unsupported provider %r for %s", pname, item.episode_name)
+                tried.append(pname)
                 continue
             try:
                 source = await asyncio.to_thread(handler.get_stream_url, purl)
+                tried.append(pname)
                 logger.debug("Resolved %s via %s", item.episode_name, pname)
                 break
             except ProviderError as exc:
                 last_error = str(exc)
+                tried.append(pname)
                 logger.warning("Provider %s failed for %s: %s — trying next", pname, item.episode_name, exc)
 
         if source is None:
@@ -101,17 +100,26 @@ async def post_downloads(
             results.append({"episode_name": item.episode_name, "error": last_error})
             continue
 
-        safe_series = item.series_name.replace("/", "-").replace("\\", "-").strip()
-        out_dir = Path(cfg.output_root) / safe_series / f"Season {item.season:02d}"
+        if item.season == 0:
+            out_dir = Path(cfg.output_root) / "fstream_films"
+        else:
+            safe_series = item.series_name.replace("/", "-").replace("\\", "-").strip()
+            out_dir = Path(cfg.output_root) / safe_series / f"Season {item.season:02d}"
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / item.episode_name
 
-        if out_path.exists():
+        if out_path.exists() and out_path.stat().st_size > 0:
             logger.info("Skipping %s: already exists at %s", item.episode_name, out_path)
             results.append({"episode_name": item.episode_name, "status": "skipped", "error": None})
             continue
 
-        job = store.submit(source, out_path, item.episode_name)
+        # Remove any 0-byte remnant from a previous failed attempt
+        if out_path.exists():
+            out_path.unlink()
+
+        # Pass all_providers so the worker can fall back if the initial download fails
+        remaining_providers = {k: v for k, v in item.all_providers.items() if k not in tried}
+        job = store.submit(source, out_path, item.episode_name, all_providers=remaining_providers)
         results.append(_job_to_dict(job))
 
     return results

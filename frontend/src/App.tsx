@@ -49,8 +49,8 @@ export default function App() {
         const items = detail.episodes
           .filter(ep => ep.embed_urls['uqload'] || Object.keys(ep.embed_urls).length > 0)
           .map(ep => ({
-            embed_url: ep.embed_urls['uqload'] ?? ep.embed_urls['netu'] ?? Object.values(ep.embed_urls)[0] ?? '',
-            provider: ep.embed_urls['uqload'] ? 'uqload' : ep.embed_urls['netu'] ? 'netu' : Object.keys(ep.embed_urls)[0] ?? '',
+            embed_url: ep.embed_urls['uqload'] ?? ep.embed_urls['vidzy'] ?? ep.embed_urls['netu'] ?? Object.values(ep.embed_urls)[0] ?? '',
+            provider: ep.embed_urls['uqload'] ? 'uqload' : ep.embed_urls['vidzy'] ? 'vidzy' : ep.embed_urls['netu'] ? 'netu' : Object.keys(ep.embed_urls)[0] ?? '',
             all_providers: ep.embed_urls,
             episode_name: ep.filename,
             series_name: card.series_name,

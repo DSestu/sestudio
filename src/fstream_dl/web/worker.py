@@ -3,13 +3,15 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fstream_dl.downloader import ProgressEvent, download
 from fstream_dl.models import StreamSource
+from fstream_dl.providers.base import ProviderError, StreamProvider
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,8 @@ class DownloadJob:
     episode_name: str
     source: StreamSource
     output_path: Path
+    all_providers: dict[str, str] = field(default_factory=dict)
+    tried_providers: list[str] = field(default_factory=list)
     status: JobStatus = "queued"
     progress: float = 0.0
     speed: str = ""
@@ -30,17 +34,30 @@ class DownloadJob:
 
 
 class JobStore:
-    def __init__(self, max_workers: int = 20) -> None:
+    def __init__(
+        self,
+        max_workers: int = 20,
+        provider_registry: dict[str, StreamProvider] | None = None,
+    ) -> None:
         self._jobs: dict[str, DownloadJob] = {}
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=max_workers)
+        self._providers: dict[str, StreamProvider] = provider_registry or {}
 
-    def submit(self, source: StreamSource, output_path: Path, episode_name: str) -> DownloadJob:
+    def submit(
+        self,
+        source: StreamSource,
+        output_path: Path,
+        episode_name: str,
+        all_providers: dict[str, str] | None = None,
+    ) -> DownloadJob:
         job = DownloadJob(
             id=str(uuid.uuid4()),
             episode_name=episode_name,
             source=source,
             output_path=output_path,
+            all_providers=dict(all_providers or {}),
+            tried_providers=[source.provider],
         )
         with self._lock:
             self._jobs[job.id] = job
@@ -72,17 +89,49 @@ class JobStore:
                     j.speed = ev.speed
                     j.eta = ev.eta
 
-        try:
-            ok = download(job.source, job.output_path, on_progress=on_progress)
-        except Exception as exc:
-            logger.error("Job %s failed: %s", job_id, exc)
-            self._set_status(job_id, "failed", error=str(exc))
-            return
+        while True:
+            try:
+                ok = download(job.source, job.output_path, on_progress=on_progress)
+            except Exception as exc:
+                logger.error("Job %s failed: %s", job_id, exc)
+                ok = False
 
-        if ok:
-            self._set_status(job_id, "done", progress=100.0)
-        else:
-            self._set_status(job_id, "failed")
+            if ok:
+                self._set_status(job_id, "done", progress=100.0)
+                return
+
+            # Try the next untried provider
+            next_source = self._resolve_next_provider(job)
+            if next_source is None:
+                self._set_status(job_id, "failed", error="All providers failed")
+                return
+
+            logger.warning(
+                "Provider %s failed for %s, falling back to %s",
+                job.source.provider, job.episode_name, next_source.provider,
+            )
+            with self._lock:
+                job.source = next_source
+                job.progress = 0.0
+                job.speed = ""
+                job.eta = ""
+
+    def _resolve_next_provider(self, job: DownloadJob) -> StreamSource | None:
+        for pname, purl in job.all_providers.items():
+            if pname in job.tried_providers:
+                continue
+            handler = self._providers.get(pname)
+            if handler is None:
+                job.tried_providers.append(pname)
+                continue
+            try:
+                source = handler.get_stream_url(purl)
+                job.tried_providers.append(pname)
+                return source
+            except ProviderError as exc:
+                logger.warning("Fallback provider %s failed for %s: %s", pname, job.episode_name, exc)
+                job.tried_providers.append(pname)
+        return None
 
     def _set_status(
         self,

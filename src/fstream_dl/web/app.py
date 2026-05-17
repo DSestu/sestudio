@@ -7,8 +7,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from fstream_dl.providers.netu import NetuProvider
+from fstream_dl.providers.uqload import UqloadProvider
+from fstream_dl.providers.vidzy import VidzyProvider
 from fstream_dl.web.routes import downloads, search, seasons, settings
 from fstream_dl.web.worker import JobStore
+
+_PROVIDERS = {
+    "uqload": UqloadProvider(),
+    "vidzy": VidzyProvider(),
+    "netu": NetuProvider(),
+}
 
 # app.py lives at src/fstream_dl/web/app.py → 4 parents up = repo root
 _REPO_ROOT = Path(__file__).parent.parent.parent.parent
@@ -26,7 +35,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     )
 
     app.state.live_domain = live_domain or "https://fstream.top"
-    app.state.job_store = JobStore()
+    app.state.job_store = JobStore(provider_registry=_PROVIDERS)
 
     app.include_router(search.router, prefix="/api")
     app.include_router(seasons.router, prefix="/api")
