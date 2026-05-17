@@ -15,7 +15,7 @@ from fstream_dl.providers.base import ProviderError, StreamProvider
 
 logger = logging.getLogger(__name__)
 
-JobStatus = Literal["queued", "downloading", "done", "failed"]
+JobStatus = Literal["queued", "downloading", "done", "failed", "cancelled"]
 
 
 @dataclass
@@ -40,6 +40,7 @@ class JobStore:
         provider_registry: dict[str, StreamProvider] | None = None,
     ) -> None:
         self._jobs: dict[str, DownloadJob] = {}
+        self._cancel_events: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=max_workers)
         self._providers: dict[str, StreamProvider] = provider_registry or {}
@@ -59,11 +60,31 @@ class JobStore:
             all_providers=dict(all_providers or {}),
             tried_providers=[source.provider],
         )
+        cancel_event = threading.Event()
         with self._lock:
             self._jobs[job.id] = job
+            self._cancel_events[job.id] = cancel_event
         self._pool.submit(self._run, job.id)
         logger.debug("Queued job %s for %s", job.id, episode_name)
         return job
+
+    def cancel(self, job_id: str) -> bool:
+        """Cancel a queued or downloading job, clean up partial files. Returns True if found."""
+        from fstream_dl.downloader import _cleanup
+        with self._lock:
+            job = self._jobs.get(job_id)
+            event = self._cancel_events.get(job_id)
+            if job is None:
+                return False
+            if job.status in ("done", "failed", "cancelled"):
+                return False
+            job.status = "cancelled"
+        if event:
+            event.set()
+        if job:
+            _cleanup(job.output_path)
+            logger.info("Cancelled job %s (%s)", job_id, job.episode_name)
+        return True
 
     def get(self, job_id: str) -> DownloadJob | None:
         with self._lock:
@@ -76,7 +97,12 @@ class JobStore:
     def _run(self, job_id: str) -> None:
         with self._lock:
             job = self._jobs.get(job_id)
+            cancel_event = self._cancel_events.get(job_id)
         if job is None:
+            return
+
+        # Job may have been cancelled before it even started
+        if cancel_event and cancel_event.is_set():
             return
 
         self._set_status(job_id, "downloading")
@@ -90,11 +116,17 @@ class JobStore:
                     j.eta = ev.eta
 
         while True:
+            if cancel_event and cancel_event.is_set():
+                return
+
             try:
-                ok = download(job.source, job.output_path, on_progress=on_progress)
+                ok = download(job.source, job.output_path, on_progress=on_progress, cancel_event=cancel_event)
             except Exception as exc:
                 logger.error("Job %s failed: %s", job_id, exc)
                 ok = False
+
+            if cancel_event and cancel_event.is_set():
+                return
 
             if ok:
                 self._set_status(job_id, "done", progress=100.0)

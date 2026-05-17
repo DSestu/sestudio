@@ -40,7 +40,7 @@ export interface DownloadItem {
 export interface DownloadJob {
   id: string
   episode_name: string
-  status: 'queued' | 'downloading' | 'done' | 'failed' | 'skipped'
+  status: 'queued' | 'downloading' | 'done' | 'failed' | 'skipped' | 'cancelled'
   progress: number
   speed: string
   eta: string
@@ -99,6 +99,11 @@ export async function postDownloads(items: DownloadItem[]): Promise<DownloadJob[
   })
   if (!res.ok) throw new Error('Download request failed')
   return res.json()
+}
+
+export async function cancelJob(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/downloads/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Cancel failed: ${res.status}`)
 }
 
 export async function getJobs(): Promise<DownloadJob[]> {

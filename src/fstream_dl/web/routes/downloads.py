@@ -131,6 +131,16 @@ async def get_downloads(request: Request) -> list[dict[str, Any]]:
     return [_job_to_dict(j) for j in store.all_jobs()]
 
 
+@router.delete("/downloads/{job_id}")
+async def cancel_download(job_id: str, request: Request) -> dict[str, Any]:
+    store = request.app.state.job_store
+    found = store.cancel(job_id)
+    if not found:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Job not found or already terminal")
+    return {"id": job_id, "status": "cancelled"}
+
+
 @router.get("/downloads/{job_id}/progress")
 async def job_progress(job_id: str, request: Request) -> StreamingResponse:
     store = request.app.state.job_store

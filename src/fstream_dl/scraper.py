@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 
@@ -120,6 +121,49 @@ _EMBED_PROVIDERS_RE = re.compile(r"uqload|vidzy|netu|byse", re.IGNORECASE)
 _TITLE_SUFFIX_RE = re.compile(r"\s+[-–|]\s+.*$")  # space-dash-space avoids breaking hyphenated titles
 _FILM_PREFIX_RE = re.compile(r"^(?:Film|Movie)\s+", re.IGNORECASE)
 
+# Supported providers and their lang key in the film API response
+_FILM_PROVIDERS = ("uqload", "vidzy", "netu")
+_FILM_LANG_KEY: dict[str, str] = {
+    "vf": "vfq",
+    "vfq": "vfq",
+    "vostfr": "vostfr",
+    "vo": "vostfr",
+}
+
+
+def _fetch_film_api(client: httpx.Client, base_origin: str, news_id: str, referer: str, lang: str) -> tuple[dict[str, str], list[str]]:
+    """Call /engine/ajax/film_api.php and return (embed_urls, available_langs)."""
+    api_url = f"{base_origin}/engine/ajax/film_api.php?id={news_id}"
+    logger.debug("Fetching film API: %s", api_url)
+    resp = client.get(api_url, headers={"Referer": referer, "X-Requested-With": "XMLHttpRequest"})
+    resp.raise_for_status()
+    data: dict[str, object] = resp.json()
+    if data.get("error"):
+        raise ValueError(f"Film API error: {data['error']}")
+
+    players: dict[str, dict[str, str]] = data.get("players", {})  # type: ignore[assignment]
+    lang_key = _FILM_LANG_KEY.get(lang.lower(), "vfq")
+
+    embed_urls: dict[str, str] = {}
+    for provider in _FILM_PROVIDERS:
+        variants = players.get(provider, {})
+        url = variants.get(lang_key) or variants.get("default") or ""
+        if url:
+            embed_urls[provider] = url
+
+    # Detect available languages from which lang_keys are non-empty across all providers
+    available: set[str] = set()
+    for variants in players.values():
+        if variants.get("vfq") or variants.get("vff"):
+            available.add("vf")
+        if variants.get("vostfr"):
+            available.add("vostfr")
+    if not available and players:
+        available.add("vf")
+
+    logger.debug("Film API embed_urls: %s, langs: %s", list(embed_urls), sorted(available))
+    return embed_urls, sorted(available)
+
 
 def fetch_page(url: str, lang: str = "vf") -> tuple[int, list[Episode], bool]:
     """Fetch either a series season or a film page. Returns (season, episodes, is_film)."""
@@ -152,45 +196,25 @@ def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode]]:
 
         base_origin = "/".join(str(page_resp.url).split("/")[:3])
 
-        # Try film-specific JSON endpoint first, then series endpoint
+        # Primary: call the film API endpoint
         embed_urls: dict[str, str] = {}
         available_langs: list[str] = []
-        for endpoint in (f"/data/film_{news_id}.txt", f"/data/eps_{news_id}.txt"):
-            try:
-                eps_resp = client.get(f"{base_origin}{endpoint}", headers={"Referer": url})
-                eps_resp.raise_for_status()
-                data: dict[str, object] = eps_resp.json()
-                available_langs = [k for k in data if k != "info" and isinstance(data[k], dict)]
-                # Try requested lang first, then any available lang
-                for candidate_lang in ([lang] + [l for l in available_langs if l != lang]):
-                    lang_data = data.get(candidate_lang, {})
-                    if isinstance(lang_data, dict) and lang_data:
-                        first_ep = next(iter(lang_data.values()), {})
-                        if isinstance(first_ep, dict):
-                            embed_urls = {k: v for k, v in first_ep.items() if v}
-                        if embed_urls:
-                            break
-                if embed_urls:
-                    logger.debug("Film embed URLs from %s: %s", endpoint, list(embed_urls))
-                    break
-            except Exception as exc:
-                logger.debug("Film endpoint %s unavailable: %s", endpoint, exc)
-                continue
+        try:
+            embed_urls, available_langs = _fetch_film_api(client, base_origin, news_id, url, lang)
+        except Exception as exc:
+            logger.warning("Film API unavailable for %s: %s — trying fallbacks", news_id, exc)
 
-        # Fallback: scrape iframes from the page (try src and data-src)
+        # Fallback: scrape iframes (src and data-src)
         if not embed_urls:
             logger.debug("Falling back to iframe scraping for film %s", url)
             for iframe in soup.find_all("iframe"):
                 src: str = iframe.get("src") or iframe.get("data-src") or ""
-                if not src:
-                    continue
-                if _EMBED_PROVIDERS_RE.search(src):
+                if src and _EMBED_PROVIDERS_RE.search(src):
                     pname = next((p for p in ("uqload", "vidzy", "netu") if p in src.lower()), "unknown")
                     embed_urls[pname] = src
-            logger.debug("Iframe scraped embed URLs: %s", list(embed_urls))
 
         if not embed_urls:
-            logger.warning("No embed URLs found for film %s — page may use dynamic loading", url)
+            logger.warning("No embed URLs found for film %s", url)
 
     episode = Episode(
         number=1,
@@ -208,18 +232,13 @@ def _fetch_film_available_langs(url: str) -> list[str]:
         return []
     news_id = m_id.group(1)
     with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
-        page_resp = client.get(url)
-        page_resp.raise_for_status()
-        base_origin = "/".join(str(page_resp.url).split("/")[:3])
-        for endpoint in (f"/data/film_{news_id}.txt", f"/data/eps_{news_id}.txt"):
-            try:
-                resp = client.get(f"{base_origin}{endpoint}", headers={"Referer": url})
-                resp.raise_for_status()
-                data: dict[str, object] = resp.json()
-                return sorted(k for k in data if k != "info" and isinstance(data[k], dict))
-            except Exception:
-                continue
-    return []
+        resp = client.get(url, follow_redirects=True)
+        base_origin = "/".join(str(resp.url).split("/")[:3])
+        try:
+            _, available = _fetch_film_api(client, base_origin, news_id, url, "vf")
+            return available
+        except Exception:
+            return []
 
 
 def _parse_season_number(soup: BeautifulSoup) -> int:

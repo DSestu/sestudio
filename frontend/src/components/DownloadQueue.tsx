@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DownloadJob } from '../api'
-import { getJobs, subscribeJobProgress } from '../api'
+import { cancelJob, getJobs, subscribeJobProgress } from '../api'
 
 interface Props {
   refreshTrigger: number
@@ -10,6 +10,12 @@ interface Props {
 export default function DownloadQueue({ refreshTrigger, skippedJobs }: Props) {
   const [jobs, setJobs] = useState<DownloadJob[]>([])
   const subscriptions = useRef<Record<string, () => void>>({})
+
+  function handleCancel(id: string) {
+    cancelJob(id).then(() => {
+      setJobs(prev => prev.map(j => j.id === id ? { ...j, status: 'cancelled' as const } : j))
+    }).catch(() => {})
+  }
 
   // Fetch jobs list when trigger fires (after new downloads queued)
   useEffect(() => {
@@ -54,6 +60,17 @@ export default function DownloadQueue({ refreshTrigger, skippedJobs }: Props) {
               {job.status === 'downloading' && (
                 <span className="text-zinc-500 text-xs">{job.speed} ETA {job.eta}</span>
               )}
+              {(job.status === 'queued' || job.status === 'downloading') && (
+                <button
+                  onClick={() => handleCancel(job.id)}
+                  title="Cancel download"
+                  className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
             {(job.status === 'downloading' || job.status === 'done') && (
               <div className="w-full bg-zinc-700 rounded-full h-1.5">
@@ -80,6 +97,7 @@ function StatusBadge({ status }: { status: DownloadJob['status'] }) {
     done:        ['bg-green-900 text-green-300', '✓ done'],
     failed:      ['bg-red-900 text-red-300', '✗ failed'],
     skipped:     ['bg-zinc-800 text-zinc-500', '— exists'],
+    cancelled:   ['bg-zinc-800 text-zinc-500', '✕ cancelled'],
   }
   const [cls, label] = map[status]
   return (

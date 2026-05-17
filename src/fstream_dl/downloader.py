@@ -44,6 +44,7 @@ def download(
     source: StreamSource,
     output_path: Path,
     on_progress: Callable[[ProgressEvent], None] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> bool:
     """Download a single stream via yt-dlp. Retries up to 3 times on 5xx/429. Returns True on success."""
     cmd: list[str] = [
@@ -80,6 +81,12 @@ def download(
         stderr_thread.start()
 
         for line in proc.stdout:
+            if cancel_event and cancel_event.is_set():
+                proc.terminate()
+                proc.wait()
+                stderr_thread.join()
+                _cleanup(output_path)
+                return False
             line = line.rstrip()
             if on_progress:
                 m = _PROGRESS_RE.search(line)
