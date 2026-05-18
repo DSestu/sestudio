@@ -151,7 +151,7 @@ def download_cmd(
 
 
 @main.command("serve")
-@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind.")
+@click.option("--host", default="0.0.0.0", show_default=True, help="Host to bind.")
 @click.option("--port", default=8080, show_default=True, help="Port to listen on.")
 @click.option("--no-resolve", is_flag=True, default=False, help="Skip auto-resolution of live domain.")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Enable debug logging.")
