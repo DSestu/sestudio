@@ -1,0 +1,28 @@
+---
+name: Pull request title validation
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+
+jobs:
+  conventional_title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: lint pr title
+        run: |
+            if ! [[ "$TITLE" =~ (^$PREFIXES)(\(.+\))?!?:.+$ ]]; then
+            echo "Invalid pull request title $TITLE"
+            echo "Title must use one of the following prefix: feat|fix|docs|refactor|chore|deps|ci|perf|build|style|test"
+            echo "Learn more at https://www.conventionalcommits.org/en/v1.0.0/"
+            exit 1
+            fi
+        shell: bash
+        env:
+            TITLE: ${{ github.event.pull_request.title }}
+            PREFIXES: feat|fix|docs|refactor|chore|deps|ci|perf|build|style|test

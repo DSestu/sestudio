@@ -1,0 +1,68 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "pull-request-title-pattern": "chore: release ${version}",
+  "pull-request-header": "New release ! 🎉",
+  "bootstrap-sha": "ea29b7b8ee620a3243421a356846208716946d68",
+  "changelog-sections": [
+    {
+      "type": "feat",
+      "section": "New features",
+      "hidden": false
+    },
+    {
+      "type": "fix",
+      "section": "Bug fixes",
+      "hidden": false
+    },
+    {
+      "type": "refactor",
+      "section": "Code refactoring",
+      "hidden": false
+    },
+    {
+      "type": "chore",
+      "section": "Miscellaneous Chores",
+      "hidden": false
+    },
+    {
+      "type": "docs",
+      "section": "Documentation",
+      "hidden": false
+    },
+    {
+      "type": "deps",
+      "section": "Dependencies update",
+      "hidden": false
+    },
+    {
+      "type": "ci",
+      "section": "CI configuration",
+      "hidden": false
+    },
+    {
+      "type": "perf",
+      "section": "Performance improvements",
+      "hidden": false
+    },
+    {
+      "type": "build",
+      "section": "Build system",
+      "hidden": false
+    },
+    {
+      "type": "style",
+      "section": "Style improvements",
+      "hidden": false
+    },
+    {
+      "type": "test",
+      "section": "Test improvements",
+      "hidden": false
+    }
+  ],
+  "packages": {
+    ".": {}
+  }
+}

@@ -1,9 +1,12 @@
 [project]
 name = "fstream-dl"
 version = "0.1.0"
+authors = [
+    { name = "DSestu", email = "davidsestu@sencrop.com" },
+]
 description = "Download episodes from fstream"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "click>=8.4.0",
@@ -15,6 +18,12 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "yt-dlp>=2026.3.17",
 ]
+
+[project.urls]
+Source = "https://github.com/DSestu/fstream-dl"
+Issues = "https://github.com/DSestu/fstream-dl/issues"
+Changelog = "https://github.com/DSestu/fstream-dl/releases"
+License = "https://github.com/DSestu/fstream-dl/blob/main/LICENSE"
 
 [project.scripts]
 fstream-dl = "fstream_dl.cli:main"
@@ -31,6 +40,8 @@ pythonpath = ["src", "."]
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.5.1",
     "pytest>=9.0.3",
     "pytest-httpx>=0.36.2",
+    "ruff>=0.6.3",
 ]
