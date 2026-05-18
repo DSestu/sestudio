@@ -20,20 +20,20 @@ export default function SettingsPanel({ onChange }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-4 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3">
-      <span className="text-zinc-400 text-sm font-medium">Settings</span>
+    <div className="flex items-center gap-4 card card-bordered bg-base-200 px-4 py-3">
+      <span className="text-base-content/60 text-sm font-medium">Settings</span>
       <div className="flex items-center gap-2">
-        <label className="text-zinc-400 text-sm">Output</label>
+        <label className="text-base-content/60 text-sm">Output</label>
         <input
-          className="bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-sm text-white w-64 focus:outline-none focus:border-violet-500"
+          className="input input-bordered input-sm w-64"
           value={settings.output_root}
           onChange={e => update({ output_root: e.target.value })}
         />
       </div>
       <div className="flex items-center gap-2">
-        <label className="text-zinc-400 text-sm">Lang</label>
+        <label className="text-base-content/60 text-sm">Lang</label>
         <select
-          className="bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-violet-500"
+          className="select select-bordered select-sm"
           value={settings.lang}
           onChange={e => update({ lang: e.target.value })}
         >

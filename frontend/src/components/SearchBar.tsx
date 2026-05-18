@@ -48,10 +48,10 @@ export default function SearchBar({ onResults }: Props) {
         placeholder="Search series…"
         value={query}
         onChange={e => setQuery(e.target.value)}
-        className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-3 text-white text-lg placeholder-zinc-500 focus:outline-none focus:border-violet-500"
+        className="input input-bordered w-full text-lg"
       />
       {loading && (
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base-content/50 text-sm">
           …
         </span>
       )}

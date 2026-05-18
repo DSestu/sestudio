@@ -17,7 +17,7 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail 
         return (
           <div
             key={card.newsid}
-            className={`relative bg-zinc-900 border rounded-lg overflow-hidden transition-colors ${
+            className={`relative bg-base-200 border rounded-lg overflow-hidden transition-colors ${
               checked
                 ? 'border-violet-500'
                 : card.is_film
@@ -53,23 +53,23 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail 
                   className="w-full aspect-[2/3] object-cover"
                 />
               ) : (
-                <div className="w-full aspect-[2/3] bg-zinc-800 flex items-center justify-center text-zinc-500 text-4xl">
+                <div className="w-full aspect-[2/3] bg-base-300 flex items-center justify-center text-base-content/30 text-4xl">
                   ?
                 </div>
               )}
               <div className="p-2">
-                <p className="text-white text-sm font-medium leading-tight truncate">
+                <p className="text-sm font-medium leading-tight truncate">
                   {card.series_name}
                 </p>
                 <div className="flex items-center gap-1 mt-1">
                   {card.is_film ? (
-                    <span className="text-xs bg-blue-800 text-blue-200 rounded px-1">Film</span>
+                    <span className="badge badge-info badge-sm">Film</span>
                   ) : card.is_anime ? (
-                    <span className="text-xs bg-rose-900 text-rose-300 rounded px-1">
+                    <span className="badge badge-error badge-sm">
                       Anime S{String(card.season_number).padStart(2, '0')}
                     </span>
                   ) : (
-                    <span className="text-xs bg-orange-900 text-orange-300 rounded px-1">
+                    <span className="badge badge-warning badge-sm">
                       S{String(card.season_number).padStart(2, '0')}
                     </span>
                   )}

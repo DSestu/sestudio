@@ -83,9 +83,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 p-6 flex flex-col gap-6 max-w-6xl mx-auto">
+    <div className="min-h-screen bg-base-100 p-6 flex flex-col gap-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-white text-2xl font-bold tracking-tight">
+        <h1 className="text-2xl font-bold tracking-tight">
           fstream<span className="text-violet-400">-dl</span>
         </h1>
         <SettingsPanel onChange={setSettings} />
@@ -101,14 +101,14 @@ export default function App() {
               const allChecked = results.every(c => checkedIds.has(c.newsid))
               setCheckedIds(allChecked ? new Set() : allIds)
             }}
-            className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors"
+            className="flex items-center gap-2 text-sm text-base-content/60 hover:text-base-content transition-colors"
           >
             <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
               results.every(c => checkedIds.has(c.newsid))
                 ? 'bg-violet-600 border-violet-600'
                 : results.some(c => checkedIds.has(c.newsid))
                 ? 'bg-violet-900 border-violet-500'
-                : 'border-zinc-500'
+                : 'border-base-content/30'
             }`}>
               {results.every(c => checkedIds.has(c.newsid)) && (
                 <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -121,7 +121,7 @@ export default function App() {
             </span>
             {results.every(c => checkedIds.has(c.newsid)) ? 'Deselect all' : 'Select all'}
           </button>
-          <span className="text-zinc-600 text-sm">{results.length} result{results.length !== 1 ? 's' : ''}</span>
+          <span className="text-base-content/30 text-sm">{results.length} result{results.length !== 1 ? 's' : ''}</span>
         </div>
       )}
 
@@ -134,20 +134,17 @@ export default function App() {
 
       {/* Bulk download bar */}
       {checkedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-zinc-800 border border-zinc-600 rounded-xl px-6 py-3 shadow-xl">
-          <span className="text-zinc-300 text-sm">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 card card-bordered bg-base-200 shadow-xl px-6 py-3">
+          <span className="text-base-content/80 text-sm">
             {checkedIds.size} season{checkedIds.size !== 1 ? 's' : ''} selected
           </span>
-          <button
-            onClick={() => setCheckedIds(new Set())}
-            className="text-zinc-400 hover:text-white text-sm"
-          >
+          <button onClick={() => setCheckedIds(new Set())} className="btn btn-ghost btn-sm">
             Clear
           </button>
           <button
             onClick={resolveChecked}
             disabled={bulkLoading}
-            className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+            className="btn btn-primary btn-sm"
           >
             {bulkLoading ? 'Loading…' : 'Download all'}
           </button>

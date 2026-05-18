@@ -1,23 +1,46 @@
-# Task List: fstream-dl Web UI
+# Task List: DaisyUI Migration
 
-## Phase 1 — Backend foundation
+## Phase 1 — Foundation
 
-- [ ] **T1** CLI group refactor — `@click.group()`, move download logic to `download` subcommand, add `serve` stub with `--host`/`--port`
-- [ ] **T2** Config module — `src/fstream_dl/config.py`, `AppConfig` dataclass, `load_config()` / `save_config()`, persists to `~/.config/fstream-dl/config.json`
-- [ ] **T3** Search scraper + route — `search_seasons(query, base_url)` in `scraper.py`; `GET /api/search?q=` route
-- [ ] **T4** Season detail route — `GET /api/season?url=` wrapping existing `fetch_season()`, returns episodes + available langs
-- [ ] **T5** Settings route — `GET /api/settings`, `PUT /api/settings` backed by config module
-- [ ] **T6** Download worker + progress — modify `downloader.py` for yt-dlp stdout progress parsing; `worker.py` with `DownloadJob`, `JobStore`, `ThreadPoolExecutor`
-- [ ] **T7** Downloads route + SSE — `POST /api/downloads`, `GET /api/downloads`, `GET /api/downloads/{id}/progress` (SSE)
+- [ ] **T1** Install DaisyUI v5, configure dark theme in `index.css`, add `data-theme="dark"` to `index.html`
+  - AC: `npm run dev` starts; DaisyUI base styles active; page visually unchanged
 
-### CHECKPOINT A — all API routes working via curl before starting frontend
+## Phase 2 — Simple/Isolated Components
 
-## Phase 2 — Frontend
+- [ ] **T2** SearchBar — swap input to `input input-bordered w-full text-lg`
+  - AC: search works; focus ring shows violet; placeholder visible
 
-- [ ] **T8** Frontend scaffold — Vite + React + TypeScript + Tailwind; `/api` proxy to FastAPI; `src/api.ts` typed wrappers
-- [ ] **T9** SearchBar + ResultsGrid — debounced search input, season cards with poster/title/language badges
-- [ ] **T10** SeasonTree — 3-level checkbox tree (series → season → episode), cascading check/indeterminate state, "Download selected" button
-- [ ] **T11** SettingsPanel + DownloadQueue — settings form (output path, lang), job list with SSE progress bars and status badges
-- [ ] **T12** Build integration — `vite build` → `frontend/dist/`, FastAPI serves as static + SPA fallback; `fstream-dl serve` opens `http://localhost:{port}`
+- [ ] **T3** SettingsPanel — swap container to `card bg-base-200`, input to `input input-bordered input-sm`, select to `select select-bordered select-sm`
+  - AC: settings panel renders; values persist
 
-### CHECKPOINT B — full end-to-end flow: search → select → download → progress
+### CHECKPOINT A — settings + search visually correct, no regressions
+
+## Phase 3 — Download Queue
+
+- [ ] **T4** DownloadQueue — swap `StatusBadge` to `badge badge-{ghost|info|success|error}`, progress bar to `<progress className="progress progress-primary">`, "Clear history" to `btn btn-ghost btn-xs`
+  - AC: job rows show; progress animates; badge colors match status
+
+## Phase 4 — Cards and Grid
+
+- [ ] **T5** ResultsGrid — swap type badges (Film/Anime/Series) to `badge badge-{info|error|warning} badge-sm`; keep card border-color utilities
+  - AC: grid renders; all 3 badge types show correct colors; card selection works
+
+### CHECKPOINT B — search → select cards → visual correct
+
+## Phase 5 — Modals
+
+- [ ] **T6** SeasonTree — swap overlay/dialog to `modal modal-open`/`modal-box`, checkboxes to `checkbox checkbox-primary checkbox-sm`, lang buttons to `btn btn-primary|ghost btn-xs`, provider badges to `badge badge-ghost badge-sm`, action button to `btn btn-primary btn-sm`
+  - AC: modal opens/closes; episode selection works; language switch works; download queues
+
+- [ ] **T7** ConfirmDownloadModal — swap overlay/dialog to `modal`/`modal-box`, cancel to `btn btn-ghost btn-sm`, confirm to `btn btn-primary btn-sm`, existing-file badge to `badge badge-warning badge-xs`
+  - AC: file tree renders; amber warning on existing files; cancel/confirm work
+
+## Phase 6 — App Layout + Cleanup
+
+- [ ] **T8** App.tsx — swap bulk floating bar to `card card-bordered bg-base-200 shadow-xl`, "Clear" to `btn btn-ghost btn-sm`, "Download all" to `btn btn-primary btn-sm`
+  - AC: bulk bar appears when cards checked; buttons work
+
+- [ ] **T9** Cleanup — delete `App.css`, remove its import from `App.tsx`, replace stale `bg-zinc-9xx`/`border-zinc-7xx` with `bg-base-*`/`border-base-*` where DaisyUI now covers them
+  - AC: `npm run build` succeeds; no unused CSS; full flow works
+
+### CHECKPOINT C — full end-to-end: search → select → season tree → confirm → download queue
