@@ -32,24 +32,31 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
   const [activeLang, setActiveLang] = useState(lang)
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
+    let cancelled = false
     getSeason(card.page_url, activeLang)
       .then(d => {
+        if (cancelled) return
         setDetail(d)
         setChecked(new Set(d.episodes.map(e => e.number)))
         if (d.available_langs.length > 0 && !d.available_langs.includes(activeLang)) {
           setActiveLang(d.available_langs[0])
         }
+        setError(null)
+        setLoading(false)
       })
-      .catch(e => setError(String(e)))
-      .finally(() => setLoading(false))
+      .catch(e => {
+        if (cancelled) return
+        setError(String(e))
+        setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [card.page_url, activeLang])
 
   function toggleEpisode(num: number) {
     setChecked(prev => {
       const next = new Set(prev)
-      next.has(num) ? next.delete(num) : next.add(num)
+      if (next.has(num)) next.delete(num)
+      else next.add(num)
       return next
     })
   }
@@ -63,9 +70,9 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
 
   async function handleDownload() {
     if (!detail) return
-    const filmFilename = detail.is_film
-      ? card.series_name.replace(/[\x00-\x1f<>:"/\\|?*]/g, '-').replace(/-{2,}/g, '-').replace(/^[-. ]+|[-. ]+$/g, '').trim() + '.mp4'
-      : null
+    // eslint-disable-next-line no-control-regex
+    const sanitizedName = card.series_name.replace(/[\u0000-\u001f<>:"/\\|?*]/g, '-').replace(/-{2,}/g, '-').replace(/^[-. ]+|[-. ]+$/g, '').trim()
+    const filmFilename = detail.is_film ? sanitizedName + '.mp4' : null
 
     const items: DownloadItem[] = detail.episodes
       .filter(ep => checked.has(ep.number))

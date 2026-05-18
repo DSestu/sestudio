@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AppSettings } from '../api'
 import { getSettings, putSettings } from '../api'
 
@@ -8,9 +8,11 @@ interface Props {
 
 export default function SettingsPanel({ onChange }: Props) {
   const [settings, setSettings] = useState<AppSettings>({ output_root: '.', lang: 'vf' })
+  const onChangeRef = useRef(onChange)
+  useEffect(() => { onChangeRef.current = onChange })
 
   useEffect(() => {
-    getSettings().then(s => { setSettings(s); onChange(s) })
+    getSettings().then(s => { setSettings(s); onChangeRef.current(s) })
   }, [])
 
   async function update(patch: Partial<AppSettings>) {

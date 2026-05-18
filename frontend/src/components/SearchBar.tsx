@@ -11,6 +11,8 @@ export default function SearchBar({ onResults }: Props) {
   const [loading, setLoading] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const onResultsRef = useRef(onResults)
+  useEffect(() => { onResultsRef.current = onResults })
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -27,12 +29,12 @@ export default function SearchBar({ onResults }: Props) {
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current)
-    if (!query.trim()) { onResults([]); return }
+    if (!query.trim()) { onResultsRef.current([]); return }
     timer.current = setTimeout(async () => {
       setLoading(true)
       try {
         const results = await searchSeasons(query.trim())
-        onResults(results)
+        onResultsRef.current(results)
       } finally {
         setLoading(false)
       }

@@ -3,8 +3,8 @@
 
 @plugin "daisyui/theme" {
   name: "abyss";
-  default: false;
-  prefersdark: false;
+  default: true;
+  prefersdark: true;
   color-scheme: "dark";
   --color-base-100: oklch(20% 0.08 209);
   --color-base-200: oklch(15% 0.08 209);
@@ -34,4 +34,4 @@
   --border: 1px;
   --depth: 1;
   --noise: 0;
-}
+};

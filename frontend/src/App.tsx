@@ -24,7 +24,8 @@ export default function App() {
   function toggleCard(newsid: string) {
     setCheckedIds(prev => {
       const next = new Set(prev)
-      next.has(newsid) ? next.delete(newsid) : next.add(newsid)
+      if (next.has(newsid)) next.delete(newsid)
+      else next.add(newsid)
       return next
     })
   }
