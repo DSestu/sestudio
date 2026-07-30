@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 import re
 
@@ -24,6 +25,22 @@ _PACKED_RE = re.compile(
     re.DOTALL,
 )
 _SRC_RE = re.compile(r'src\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']')
+
+# Newer embeds obfuscate the real source: the src is produced by an inline
+# function that base64-decodes a string and XORs each byte with a rotating key,
+# e.g. src:(function(s){var k=[214,91,...],b=atob(s),...^k[i%8]...})("<b64>").
+# The plaintext .m3u8 URLs left in the page (…/troll/master.m3u8) are decoys.
+_OBFUSCATED_SRC_RE = re.compile(
+    r'src:\(function\(s\)\{var k=\[([\d,]+)\],b=atob\(s\).*?\}\)\("([A-Za-z0-9+/=]+)"\)',
+    re.DOTALL,
+)
+
+
+def _deobfuscate_src(key_csv: str, payload_b64: str) -> str:
+    """Replicate the embed's inline decoder: base64 then XOR with a rotating key."""
+    key = [int(x) for x in key_csv.split(",")]
+    raw = base64.b64decode(payload_b64)
+    return "".join(chr(raw[i] ^ key[i % len(key)]) for i in range(len(raw)))
 
 
 def _unpack(packed: str) -> str:
@@ -68,10 +85,19 @@ class VidzyProvider(StreamProvider):
             raise ProviderError(f"No packed script found in Vidzy embed: {embed_url}")
 
         unpacked = _unpack(packed_match.group(0))
-        src_match = _SRC_RE.search(unpacked)
-        if not src_match:
-            raise ProviderError(f"No m3u8 source found in Vidzy embed: {embed_url}")
 
-        stream_url = src_match.group(1)
+        obf_match = _OBFUSCATED_SRC_RE.search(unpacked)
+        if obf_match:
+            stream_url = _deobfuscate_src(obf_match.group(1), obf_match.group(2))
+        else:
+            # Fallback: older embeds put the m3u8 URL in a plain quoted string.
+            src_match = _SRC_RE.search(unpacked)
+            if not src_match:
+                raise ProviderError(f"No m3u8 source found in Vidzy embed: {embed_url}")
+            stream_url = src_match.group(1)
+
+        if ".m3u8" not in stream_url:
+            raise ProviderError(f"Decoded Vidzy source is not an m3u8: {embed_url}")
+
         logger.debug("Vidzy resolved stream: %s", stream_url[:80])
         return StreamSource(url=stream_url, referer=REFERER, provider="vidzy")
