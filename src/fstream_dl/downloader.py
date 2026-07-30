@@ -50,6 +50,12 @@ def download(
     cmd: list[str] = [
         check_yt_dlp(),
         "--add-header", f"Referer: {source.referer}",
+    ]
+    # Some CDNs (e.g. vidzy) 403 requests without a browser User-Agent; use the
+    # one the provider resolved with so the download matches the embed fetch.
+    if source.user_agent:
+        cmd += ["--user-agent", source.user_agent]
+    cmd += [
         "--merge-output-format", "mp4",
         "-o", str(output_path),
         "--progress",

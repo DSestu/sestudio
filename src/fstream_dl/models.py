@@ -1,6 +1,8 @@
 import re
 from dataclasses import dataclass, field
 
+from fstream_dl.http_client import BROWSER_UA
+
 _UNSAFE_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _MULTI_DASH_RE = re.compile(r'-{2,}')
 
@@ -44,3 +46,4 @@ class StreamSource:
     url: str
     referer: str
     provider: str
+    user_agent: str = BROWSER_UA  # browser UA the CDN expects; some hosts 403 without it

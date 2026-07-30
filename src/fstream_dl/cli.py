@@ -163,6 +163,7 @@ class Entrypoint:
                 logger.warning("Domain resolution failed (%s), searches will use fstream.top", exc)
 
         app = create_app(live_domain=live_domain)
+        app.state.http_port = port
         console.print(f"[bold green]fstream-dl web UI[/bold green] → http://{host}:{port}")
         uvicorn.run(app, host=host, port=port)
 

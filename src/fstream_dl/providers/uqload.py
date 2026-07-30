@@ -5,7 +5,7 @@ import re
 
 import httpx
 
-from fstream_dl.http_client import new_client
+from fstream_dl.http_client import BROWSER_UA, new_client
 from fstream_dl.models import StreamSource
 from fstream_dl.providers.base import ProviderError, StreamProvider
 
@@ -15,7 +15,7 @@ REFERER = "https://uqload.is/"
 MP4_RE = re.compile(r'(https://strm[^"\'<>\s]+/v\.mp4)')
 
 HEADERS: dict[str, str] = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+    "User-Agent": BROWSER_UA,
     "Referer": REFERER,
 }
 
@@ -36,4 +36,4 @@ class UqloadProvider(StreamProvider):
         if not match:
             raise ProviderError(f"No mp4 URL found in Uqload embed: {embed_url}")
 
-        return StreamSource(url=match.group(1), referer=REFERER, provider="uqload")
+        return StreamSource(url=match.group(1), referer=REFERER, provider="uqload", user_agent=HEADERS["User-Agent"])

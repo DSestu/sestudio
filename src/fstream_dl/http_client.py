@@ -11,6 +11,14 @@ import httpx
 # verification is disabled to keep the app usable when their certs lapse.
 VERIFY_TLS = False
 
+# A common, current Chrome-on-Windows User-Agent. Used for every outbound request
+# to the stream hosts (embed fetch, proxy, and download) so the traffic looks like
+# an ordinary browser — some CDNs 403 requests with an unusual or missing UA.
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
 
 def new_client(**kwargs: Any) -> httpx.Client:
     """Create an httpx.Client with scraper-friendly defaults (TLS verify off)."""

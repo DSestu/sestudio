@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fstream_dl.providers.netu import NetuProvider
 from fstream_dl.providers.uqload import UqloadProvider
 from fstream_dl.providers.vidzy import VidzyProvider
-from fstream_dl.web.routes import downloads, search, seasons, settings
+from fstream_dl.web.routes import cast, downloads, search, seasons, settings, stream
 from fstream_dl.web.worker import JobStore
 
 _PROVIDERS = {
@@ -36,12 +37,21 @@ def create_app(live_domain: str | None = None) -> FastAPI:
 
     app.state.live_domain = live_domain or "https://fstream.top"
     app.state.anime_domain = "https://french-manga.net"
+    app.state.providers = _PROVIDERS
+    app.state.proxy_secret = secrets.token_bytes(32)
+    app.state.dlna_renderers = {}  # udn -> control location, populated by discovery
+    # The direct HTTP port uvicorn listens on. Cast devices fetch media over
+    # plain HTTP on this port even when the UI is fronted by HTTPS (Caddy), so
+    # it must be the real listen port, not whatever the browser connected to.
+    app.state.http_port = 8080
     app.state.job_store = JobStore(provider_registry=_PROVIDERS)
 
     app.include_router(search.router, prefix="/api")
     app.include_router(seasons.router, prefix="/api")
     app.include_router(downloads.router, prefix="/api")
     app.include_router(settings.router, prefix="/api")
+    app.include_router(stream.router, prefix="/api")
+    app.include_router(cast.router, prefix="/api")
 
     # Serve built frontend if available
     dist = _FRONTEND_DIST

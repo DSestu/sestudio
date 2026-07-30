@@ -6,7 +6,7 @@ import re
 
 import httpx
 
-from fstream_dl.http_client import new_client
+from fstream_dl.http_client import BROWSER_UA, new_client
 from fstream_dl.models import StreamSource
 from fstream_dl.providers.base import ProviderError, StreamProvider
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 REFERER = "https://vidzy.org/"
 
 HEADERS: dict[str, str] = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": BROWSER_UA,
     "Referer": REFERER,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
@@ -100,4 +100,4 @@ class VidzyProvider(StreamProvider):
             raise ProviderError(f"Decoded Vidzy source is not an m3u8: {embed_url}")
 
         logger.debug("Vidzy resolved stream: %s", stream_url[:80])
-        return StreamSource(url=stream_url, referer=REFERER, provider="vidzy")
+        return StreamSource(url=stream_url, referer=REFERER, provider="vidzy", user_agent=HEADERS["User-Agent"])

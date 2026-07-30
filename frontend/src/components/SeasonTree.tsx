@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import type { DownloadItem, EpisodeDetail, SeasonCard, SeasonDetail } from '../api'
 import { checkDownloads, getSeason, postDownloads } from '../api'
 import ConfirmDownloadModal from './ConfirmDownloadModal'
+import PlayerModal from './PlayerModal'
+import CastModal from './CastModal'
 
 interface Props {
   card: SeasonCard
@@ -30,6 +32,56 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
   const [activeLang, setActiveLang] = useState(lang)
+  const [playing, setPlaying] = useState<{ embedUrls: Record<string, string>; title: string } | null>(null)
+  const [casting, setCasting] = useState<{ embedUrls: Record<string, string>; title: string } | null>(null)
+
+  // Big, clearly-tappable icon actions for an episode row (play / cast / open).
+  const iconBtn = 'btn btn-ghost btn-sm sm:btn-md btn-square text-base-content/50 hover:text-violet-400'
+
+  function rowActions(ep: EpisodeDetail) {
+    const hasProviders = Object.keys(ep.embed_urls).length > 0
+    return (
+      <div className="flex items-center gap-0.5 shrink-0">
+        {hasProviders && (
+          <>
+            <button
+              onClick={e => { e.stopPropagation(); setPlaying({ embedUrls: ep.embed_urls, title: ep.title }) }}
+              title="Play in browser"
+              aria-label="Play in browser"
+              className={iconBtn}
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); setCasting({ embedUrls: ep.embed_urls, title: ep.title }) }}
+              title="Cast to a device"
+              aria-label="Cast to a device"
+              className={iconBtn}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 11a6 6 0 016 6M3 15a2 2 0 012 2M3 19h.01" />
+              </svg>
+            </button>
+          </>
+        )}
+        <a
+          href={card.page_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open on fstream"
+          aria-label="Open on fstream"
+          className={iconBtn}
+          onClick={e => e.stopPropagation()}
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      </div>
+    )
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -119,34 +171,34 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
     <>
       <div className="modal modal-open" onClick={onClose}>
         <div
-          className="modal-box max-w-2xl max-h-[80vh] flex flex-col p-0"
+          className="modal-box w-full max-w-2xl h-[92vh] sm:h-auto sm:max-h-[80vh] flex flex-col p-0"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-base-300">
-            <div>
-              <h2 className="font-semibold text-lg">{card.series_name}</h2>
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-base-300">
+            <div className="min-w-0">
+              <h2 className="font-semibold text-lg truncate">{card.series_name}</h2>
               <p className="text-base-content/60 text-sm">
                 {detail ? (detail.is_film ? 'Film' : `Season ${detail.season}`) : '…'}
               </p>
             </div>
-            <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost">✕</button>
+            <button onClick={onClose} aria-label="Close" className="btn btn-circle btn-ghost shrink-0">✕</button>
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto flex-1 px-6 py-4">
+          <div className="overflow-y-auto flex-1 px-2 sm:px-6 py-4">
             {loading && <p className="text-base-content/60">Loading…</p>}
             {error && <p className="text-error">{error}</p>}
             {detail && !detail.is_film && (
               <>
                 {/* Season row */}
-                <div className="flex items-center gap-3 mb-2 cursor-pointer select-none" onClick={toggleAll}>
+                <div className="flex items-center gap-3 mb-2 px-2 sm:px-3 py-2 cursor-pointer select-none" onClick={toggleAll}>
                   <input
                     type="checkbox"
                     checked={seasonState === 'all'}
                     ref={el => { if (el) el.indeterminate = seasonState === 'partial' }}
                     onChange={toggleAll}
-                    className="checkbox checkbox-primary checkbox-sm"
+                    className="checkbox checkbox-primary"
                     onClick={e => e.stopPropagation()}
                   />
                   <span
@@ -163,7 +215,7 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
                       <button
                         key={l}
                         onClick={e => { e.stopPropagation(); setActiveLang(l) }}
-                        className={`btn btn-xs font-mono uppercase ${l === activeLang ? 'btn-primary' : 'btn-ghost'}`}
+                        className={`btn btn-sm font-mono uppercase ${l === activeLang ? 'btn-primary' : 'btn-ghost'}`}
                       >
                         {l}
                       </button>
@@ -173,38 +225,22 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
 
                 {/* Episode rows */}
                 {expanded && (
-                  <div className="ml-7 space-y-1">
+                  <div className="ml-1 sm:ml-7 space-y-1">
                     {detail.episodes.map(ep => (
-                      <div key={ep.number} className="flex items-center gap-3 hover:bg-base-300 rounded px-2 py-1">
+                      <div key={ep.number} className="flex items-center gap-2 sm:gap-3 hover:bg-base-300 rounded-lg px-2 sm:px-3 py-2">
                         <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
                           <input
                             type="checkbox"
                             checked={checked.has(ep.number)}
                             onChange={() => toggleEpisode(ep.number)}
-                            className="checkbox checkbox-primary checkbox-sm shrink-0"
+                            className="checkbox checkbox-primary shrink-0"
                           />
-                          <span className="text-base-content/60 text-sm font-mono w-10 shrink-0">
+                          <span className="text-base-content/50 text-xs sm:text-sm font-mono w-8 shrink-0">
                             E{String(ep.number).padStart(2, '0')}
                           </span>
-                          <span className="text-sm flex-1 truncate">{ep.title}</span>
-                          <div className="flex gap-1 shrink-0">
-                            {ep.providers.map(p => (
-                              <span key={p} className="badge badge-ghost badge-sm">{p}</span>
-                            ))}
-                          </div>
+                          <span className="text-sm sm:text-base flex-1 truncate">{ep.title}</span>
                         </label>
-                        <a
-                          href={card.page_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Open on fstream"
-                          className="shrink-0 text-base-content/30 hover:text-violet-400 transition-colors"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
+                        {rowActions(ep)}
                       </div>
                     ))}
                   </div>
@@ -219,40 +255,24 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
                     <button
                       key={l}
                       onClick={() => setActiveLang(l)}
-                      className={`btn btn-xs font-mono uppercase ${l === activeLang ? 'btn-primary' : 'btn-ghost'}`}
+                      className={`btn btn-sm font-mono uppercase ${l === activeLang ? 'btn-primary' : 'btn-ghost'}`}
                     >
                       {l}
                     </button>
                   ))}
                 </div>
                 {detail.episodes.map(ep => (
-                  <div key={ep.number} className="flex items-center gap-3 hover:bg-base-300 rounded px-2 py-2">
+                  <div key={ep.number} className="flex items-center gap-2 sm:gap-3 hover:bg-base-300 rounded-lg px-2 sm:px-3 py-2.5">
                     <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
                       <input
                         type="checkbox"
                         checked={checked.has(ep.number)}
                         onChange={() => toggleEpisode(ep.number)}
-                        className="checkbox checkbox-primary checkbox-sm shrink-0"
+                        className="checkbox checkbox-primary shrink-0"
                       />
-                      <span className="text-sm flex-1 truncate font-medium">{ep.title}</span>
-                      <div className="flex gap-1 shrink-0">
-                        {ep.providers.map(p => (
-                          <span key={p} className="badge badge-ghost badge-sm">{p}</span>
-                        ))}
-                      </div>
+                      <span className="text-sm sm:text-base flex-1 truncate font-medium">{ep.title}</span>
                     </label>
-                    <a
-                      href={card.page_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open on fstream"
-                      className="shrink-0 text-base-content/30 hover:text-violet-400 transition-colors"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
+                    {rowActions(ep)}
                   </div>
                 ))}
               </div>
@@ -260,14 +280,14 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-base-300">
-            <span className="text-base-content/60 text-sm">
-              {checked.size} episode{checked.size !== 1 ? 's' : ''} selected
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-base-300">
+            <span className="text-base-content/60 text-sm shrink-0">
+              {checked.size} selected
             </span>
             <button
               onClick={handleDownload}
               disabled={checked.size === 0 || submitting || loading}
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary flex-1 sm:flex-none"
             >
               {submitting ? 'Checking…' : 'Download selected'}
             </button>
@@ -282,6 +302,24 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
           existingFiles={existingFiles}
           onConfirm={confirmDownload}
           onCancel={() => setPendingItems(null)}
+        />
+      )}
+
+      {playing && (
+        <PlayerModal
+          key={playing.title}
+          embedUrls={playing.embedUrls}
+          title={playing.title}
+          onClose={() => setPlaying(null)}
+        />
+      )}
+
+      {casting && (
+        <CastModal
+          key={casting.title}
+          embedUrls={casting.embedUrls}
+          title={casting.title}
+          onClose={() => setCasting(null)}
         />
       )}
     </>

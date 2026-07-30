@@ -8,7 +8,7 @@ import re
 import httpx
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from fstream_dl.http_client import new_client
+from fstream_dl.http_client import BROWSER_UA, new_client
 from fstream_dl.models import StreamSource
 from fstream_dl.providers.base import ProviderError, StreamProvider
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _CODE_RE = re.compile(r"/e/([a-zA-Z0-9]+)")
 
 HEADERS: dict[str, str] = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+    "User-Agent": BROWSER_UA,
 }
 
 
@@ -85,4 +85,4 @@ class NetuProvider(StreamProvider):
         stream_url = source["url"]
 
         logger.debug("Netu resolved stream: %s", stream_url[:80])
-        return StreamSource(url=stream_url, referer=referer, provider="netu")
+        return StreamSource(url=stream_url, referer=referer, provider="netu", user_agent=HEADERS["User-Agent"])

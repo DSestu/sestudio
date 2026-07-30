@@ -50,6 +50,67 @@ export interface DownloadJob {
 
 const BASE = '/api'
 
+export interface StreamSource {
+  proxy_url: string
+  kind: 'hls' | 'mp4'
+  provider: string
+}
+
+/** Resolve an episode's providers to a playable proxy URL, falling back across providers server-side. */
+export async function resolveStream(
+  embedUrls: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<StreamSource> {
+  const res = await fetch(`${BASE}/stream/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ embed_urls: embedUrls }),
+    signal,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail ?? `Stream resolve failed: ${res.status}`)
+  }
+  return res.json()
+}
+
+export interface Renderer {
+  name: string
+  udn: string
+}
+
+/** The direct HTTP port cast devices should fetch media on (bypasses any HTTPS front). */
+export async function getCastHttpPort(): Promise<number> {
+  const res = await fetch(`${BASE}/cast/http-port`)
+  if (!res.ok) throw new Error(`http-port fetch failed: ${res.status}`)
+  return (await res.json()).http_port
+}
+
+/** Discover DLNA MediaRenderers on the LAN (a ~4s SSDP scan). */
+export async function listRenderers(): Promise<Renderer[]> {
+  const res = await fetch(`${BASE}/cast/dlna/renderers`)
+  if (!res.ok) throw new Error(`Renderer scan failed: ${res.status}`)
+  return res.json()
+}
+
+/** Push a resolved proxy URL to a DLNA renderer and start playback. */
+export async function dlnaPlay(
+  rendererUdn: string,
+  proxyUrl: string,
+  title: string,
+  kind: string,
+): Promise<void> {
+  const res = await fetch(`${BASE}/cast/dlna/play`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ renderer_udn: rendererUdn, proxy_url: proxyUrl, title, kind }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail ?? `Cast failed: ${res.status}`)
+  }
+}
+
 export async function searchSeasons(q: string): Promise<SeasonCard[]> {
   const res = await fetch(`${BASE}/search?q=${encodeURIComponent(q)}`)
   if (!res.ok) throw new Error(`Search failed: ${res.status}`)
