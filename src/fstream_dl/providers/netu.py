@@ -8,6 +8,7 @@ import re
 import httpx
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from fstream_dl.http_client import new_client
 from fstream_dl.models import StreamSource
 from fstream_dl.providers.base import ProviderError, StreamProvider
 
@@ -38,7 +39,7 @@ class NetuProvider(StreamProvider):
     def get_stream_url(self, embed_url: str) -> StreamSource:
         logger.debug("Fetching Netu embed: %s", embed_url)
         try:
-            with httpx.Client(headers={**HEADERS, "Referer": embed_url}, timeout=15, follow_redirects=True) as client:
+            with new_client(headers={**HEADERS, "Referer": embed_url}) as client:
                 resp = client.get(embed_url)
                 resp.raise_for_status()
                 final_url = str(resp.url)
@@ -58,7 +59,7 @@ class NetuProvider(StreamProvider):
         logger.debug("Netu resolved code=%s api_base=%s", code, api_base)
 
         try:
-            with httpx.Client(headers={**HEADERS, "Referer": referer, "Accept": "application/json"}, timeout=15) as client:
+            with new_client(headers={**HEADERS, "Referer": referer, "Accept": "application/json"}, follow_redirects=False) as client:
                 api_resp = client.get(f"{api_base}/api/videos/{code}/")
                 api_resp.raise_for_status()
                 data = api_resp.json()

@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import urllib.parse
 
-import httpx
 from bs4 import BeautifulSoup
+
+from fstream_dl.http_client import new_client
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ FSTREAM_ENTRYPOINT = "https://fstream.top"
 def resolve_live_domain() -> str:
     """Follow fstream.top redirects and extract the current live domain from the landing page."""
     logger.debug("Resolving live domain from %s", FSTREAM_ENTRYPOINT)
-    with httpx.Client(follow_redirects=True, timeout=10) as client:
+    with new_client(timeout=10) as client:
         resp = client.get(FSTREAM_ENTRYPOINT)
         resp.raise_for_status()
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
 from fastapi import APIRouter, HTTPException
 
+from fstream_dl.http_client import new_client
 from fstream_dl.scraper import HEADERS, _fetch_film_available_langs, fetch_page, fetch_season
 
 router = APIRouter()
@@ -43,7 +43,7 @@ async def get_season(url: str, lang: str = "vf") -> dict[str, Any]:
 def _fetch_available_langs(url: str) -> list[str]:
     """Return the language keys present in the eps JSON for this season page."""
     from bs4 import BeautifulSoup
-    with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
+    with new_client(headers=HEADERS) as client:
         page = client.get(url)
         page.raise_for_status()
         soup = BeautifulSoup(page.text, "html.parser")

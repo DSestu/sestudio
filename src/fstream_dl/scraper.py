@@ -7,6 +7,7 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
+from fstream_dl.http_client import new_client
 from fstream_dl.models import Episode, SeasonCard
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ _YEAR_RE = re.compile(r"\s*\(\d{4}\)\s*$")
 
 def _search_one(query: str, base_url: str, *, is_anime: bool = False) -> list[SeasonCard]:
     """Search a single domain and return SeasonCard list."""
-    with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
+    with new_client(headers=HEADERS) as client:
         # Resolve the final URL (some domains redirect to a versioned subdomain)
         head = client.get(base_url)
         resolved_origin = "/".join(str(head.url).split("/")[:3])
@@ -102,7 +103,7 @@ def search_seasons(query: str, base_url: str, anime_domain: str | None = None) -
 def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
     """Fetch a season page and return (season_number, episodes) for the given language."""
     logger.debug("Fetching season page: %s (lang=%s)", url, lang)
-    with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
+    with new_client(headers=HEADERS) as client:
         page_resp = client.get(url)
         page_resp.raise_for_status()
 
@@ -212,7 +213,7 @@ def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode]]:
         raise ValueError(f"Cannot extract news ID from film URL: {url}")
     news_id = m_id.group(1)
 
-    with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
+    with new_client(headers=HEADERS) as client:
         page_resp = client.get(url)
         page_resp.raise_for_status()
         soup = BeautifulSoup(page_resp.text, "html.parser")
@@ -259,7 +260,7 @@ def _fetch_film_available_langs(url: str) -> list[str]:
     if not m_id:
         return []
     news_id = m_id.group(1)
-    with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
+    with new_client(headers=HEADERS) as client:
         resp = client.get(url, follow_redirects=True)
         base_origin = "/".join(str(resp.url).split("/")[:3])
         try:

@@ -5,6 +5,7 @@ import re
 
 import httpx
 
+from fstream_dl.http_client import new_client
 from fstream_dl.models import StreamSource
 from fstream_dl.providers.base import ProviderError, StreamProvider
 
@@ -54,7 +55,7 @@ class VidzyProvider(StreamProvider):
     def get_stream_url(self, embed_url: str) -> StreamSource:
         logger.debug("Fetching Vidzy embed: %s", embed_url)
         try:
-            with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
+            with new_client(headers=HEADERS) as client:
                 resp = client.get(embed_url)
                 resp.raise_for_status()
         except httpx.TimeoutException as exc:

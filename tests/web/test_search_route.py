@@ -21,10 +21,14 @@ SEARCH_HTML = """
 @pytest.fixture()
 def client():
     app = create_app(live_domain="https://fs03.lol")
+    # Isolate the test to the primary domain; the anime domain is exercised elsewhere.
+    app.state.anime_domain = ""
     return TestClient(app)
 
 
 def test_search_returns_cards(client, httpx_mock: HTTPXMock):
+    # The scraper first GETs the base URL to resolve the final origin.
+    httpx_mock.add_response(url="https://fs03.lol", method="GET", text="")
     httpx_mock.add_response(
         url="https://fs03.lol/engine/ajax/search.php",
         method="POST",
@@ -42,6 +46,7 @@ def test_search_returns_cards(client, httpx_mock: HTTPXMock):
 
 
 def test_search_strips_year_from_title(client, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(url="https://fs03.lol", method="GET", text="")
     httpx_mock.add_response(
         url="https://fs03.lol/engine/ajax/search.php",
         method="POST",
@@ -53,6 +58,7 @@ def test_search_strips_year_from_title(client, httpx_mock: HTTPXMock):
 
 
 def test_search_empty_result(client, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(url="https://fs03.lol", method="GET", text="")
     httpx_mock.add_response(
         url="https://fs03.lol/engine/ajax/search.php",
         method="POST",
