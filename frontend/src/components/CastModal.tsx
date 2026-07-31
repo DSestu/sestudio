@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { Renderer } from '../api'
-import { dlnaPlay, getCastHttpPort, listRenderers, resolveStream } from '../api'
+import { dlnaPlay, getCastHttpPort, listRenderers } from '../api'
 import { castToChromecast, loadCast } from '../cast'
+import { useProviderSources } from '../useProviderSources'
+import ProviderChips from './ProviderChips'
 
 interface Props {
   embedUrls: Record<string, string>
@@ -14,9 +16,12 @@ const CAST_ICON =
 
 /** Modal that casts an episode to a TV — via Chromecast (browser) or DLNA (server). */
 export default function CastModal({ embedUrls, title, onClose }: Props) {
+  // Sources are tested up front, so the chosen one is already verified before
+  // we issue any cast command.
+  const { providers, status, sources, active, select, markFailed, probing } = useProviderSources(embedUrls)
   const [renderers, setRenderers] = useState<Renderer[] | null>(null)
   const [castAvailable, setCastAvailable] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -28,16 +33,18 @@ export default function CastModal({ embedUrls, title, onClose }: Props) {
     return () => { cancelled = true }
   }, [])
 
+  const activeSource = active ? sources[active] : null
+
   async function withStream(label: string, run: (proxyUrl: string, kind: string) => Promise<void>) {
+    if (!activeSource || !active) { setMsg('No working source selected.'); return }
     setBusy(true)
-    setStatus(`Resolving stream for ${label}…`)
+    setMsg(`Sending to ${label}…`)
     try {
-      const src = await resolveStream(embedUrls)
-      setStatus(`Sending to ${label}…`)
-      await run(src.proxy_url, src.kind)
-      setStatus(`▶ Playing on ${label}`)
+      await run(activeSource.proxy_url, activeSource.kind)
+      setMsg(`▶ Playing on ${label}`)
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Cast failed')
+      markFailed(active)  // the device couldn't read this source
+      setMsg(err instanceof Error ? err.message : 'Cast failed')
     } finally {
       setBusy(false)
     }
@@ -58,6 +65,8 @@ export default function CastModal({ embedUrls, title, onClose }: Props) {
     return withStream(name, (proxyUrl, kind) => dlnaPlay(udn, proxyUrl, title, kind))
   }
 
+  const canCast = !busy && !probing && !!activeSource
+
   return (
     <div className="modal modal-open" onClick={onClose}>
       <div className="modal-box max-w-md" onClick={e => e.stopPropagation()}>
@@ -65,13 +74,24 @@ export default function CastModal({ embedUrls, title, onClose }: Props) {
           <h2 className="font-semibold text-base">Cast to a device</h2>
           <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost">✕</button>
         </div>
-        <p className="text-base-content/60 text-sm mb-4 truncate">{title}</p>
+        <p className="text-base-content/60 text-sm mb-3 truncate">{title}</p>
+
+        {/* Providers (tested up front) */}
+        <div className="mb-4">
+          <p className="text-xs uppercase tracking-wide text-base-content/40 mb-1">
+            Source {probing && <span className="text-base-content/30">· testing…</span>}
+          </p>
+          <ProviderChips providers={providers} active={active} status={status} onSelect={select} disabled={busy} />
+          {!probing && !activeSource && (
+            <p className="text-error text-xs mt-2">No working source — nothing to cast.</p>
+          )}
+        </div>
 
         {/* Chromecast (browser, needs HTTPS) */}
         <div className="mb-4">
           <p className="text-xs uppercase tracking-wide text-base-content/40 mb-1">Chromecast &amp; AirPlay</p>
           {castAvailable ? (
-            <button disabled={busy} onClick={castChromecast} className="btn btn-sm btn-block justify-start gap-3">
+            <button disabled={!canCast} onClick={castChromecast} className="btn btn-sm btn-block justify-start gap-3">
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={CAST_ICON} />
               </svg>
@@ -98,7 +118,7 @@ export default function CastModal({ embedUrls, title, onClose }: Props) {
           <ul className="menu bg-base-200 rounded-box gap-1 px-0">
             {renderers.map(r => (
               <li key={r.udn}>
-                <button disabled={busy} onClick={() => castDlna(r.udn, r.name)} className="flex items-center gap-3">
+                <button disabled={!canCast} onClick={() => castDlna(r.udn, r.name)} className="flex items-center gap-3">
                   <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={CAST_ICON} />
                   </svg>
@@ -109,7 +129,7 @@ export default function CastModal({ embedUrls, title, onClose }: Props) {
           </ul>
         )}
 
-        {status && <p className="text-sm mt-4 text-center text-base-content/70">{status}</p>}
+        {msg && <p className="text-sm mt-4 text-center text-base-content/70">{msg}</p>}
       </div>
     </div>
   )
