@@ -50,6 +50,11 @@ def download(
     cmd: list[str] = [
         check_yt_dlp(),
         "--add-header", f"Referer: {source.referer}",
+        # Some CDN nodes (e.g. vidzy's u*.vidzy.cc) 403 requests lacking the
+        # Sec-Fetch-* headers a browser sends — match them here too.
+        "--add-header", "Sec-Fetch-Dest: empty",
+        "--add-header", "Sec-Fetch-Mode: cors",
+        "--add-header", "Sec-Fetch-Site: cross-site",
     ]
     # Some CDNs (e.g. vidzy) 403 requests without a browser User-Agent; use the
     # one the provider resolved with so the download matches the embed fetch.

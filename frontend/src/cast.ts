@@ -10,6 +10,7 @@
 // to ORIGIN_SCOPED auto-join, that session is picked up again after a reload.
 
 import { useSyncExternalStore } from 'react'
+import { castEnded, clearCastQueue } from './castQueue'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Cast SDK is untyped
 type Cast = any
@@ -72,9 +73,19 @@ function bindRemotePlayer(w: Cast) {
       state.canSeek = !!player.canSeek
       state.canControlVolume = !!player.canControlVolume
       emit()
+
+      // Autoplay-next: fire once the media reaches IDLE after having played.
+      const ps = player.playerState  // 'PLAYING' | 'PAUSED' | 'BUFFERING' | 'IDLE'
+      if (ps === 'PLAYING') sawPlaying = true
+      else if (sawPlaying && ps === 'IDLE' && player.isConnected) {
+        sawPlaying = false
+        castEnded()
+      }
     },
   )
 }
+
+let sawPlaying = false
 
 let castReady: Promise<boolean> | null = null
 
@@ -111,8 +122,13 @@ export async function castToChromecast(url: string, contentType: string, title: 
   if (!ok) throw new Error('Chromecast is only available over HTTPS')
   const w = window as Cast
   const context = w.cast.framework.CastContext.getInstance()
-  await context.requestSession()
-  const session = context.getCurrentSession()
+  // Reuse an existing session (autoplay-next) instead of reopening the device
+  // picker; only prompt when there is no active session yet.
+  let session = context.getCurrentSession()
+  if (!session) {
+    await context.requestSession()
+    session = context.getCurrentSession()
+  }
   if (!session) throw new Error('No Chromecast session')
   const mediaInfo = new w.chrome.cast.media.MediaInfo(url, contentType)
   mediaInfo.metadata = new w.chrome.cast.media.GenericMediaMetadata()
@@ -147,6 +163,7 @@ export function castSetVolume(level: number) {
 
 /** Stop playback and end the session (disconnects the receiver). */
 export function castStop() {
+  clearCastQueue()
   const w = window as Cast
   w.cast?.framework?.CastContext?.getInstance()?.endCurrentSession(true)
 }

@@ -1,27 +1,76 @@
+import { useState } from 'react'
 import { MediaPlayer, MediaProvider } from '@vidstack/react'
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default'
 import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
+import type { StreamSource } from '../api'
 import ProviderChips from './ProviderChips'
 import { useProviderSources } from '../useProviderSources'
+import { useModalBack } from '../useModalBack'
+
+export interface PlayableEpisode {
+  number: number
+  title: string
+  embed_urls: Record<string, string>
+}
 
 interface Props {
-  embedUrls: Record<string, string>
-  title: string
+  episodes: PlayableEpisode[]
+  startIndex: number
   onClose: () => void
 }
 
-export default function PlayerModal({ embedUrls, title, onClose }: Props) {
-  const { providers, status, sources, active, select, markFailed, probing } = useProviderSources(embedUrls)
+export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
+  useModalBack(true, onClose)
+  const [index, setIndex] = useState(startIndex)
+  const [autoplay, setAutoplay] = useState(true)
+
+  const ep = episodes[index]
+  const hasNext = index < episodes.length - 1
+
+  const { providers, status, sources, active, select, markFailed, probing } = useProviderSources(ep.embed_urls)
   const activeSource = active ? sources[active] : null
+
+  // The player element is never unmounted between episodes — its `src` is
+  // swapped only once the next source is ready. Keeping the same element mounted
+  // means an autoplay transition preserves fullscreen (the browser won't let us
+  // re-enter fullscreen without a user gesture on `ended`).
+  const [displaySource, setDisplaySource] = useState<StreamSource | null>(null)
+  if (activeSource && activeSource !== displaySource) setDisplaySource(activeSource)
+
+  function handleEnded() {
+    if (autoplay && hasNext) setIndex(i => i + 1)
+  }
+
+  if (!ep) return null
 
   return (
     <div className="modal modal-open" onClick={onClose}>
       <div className="modal-box max-w-4xl p-0 overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-base-300">
-          <h2 className="font-semibold text-base truncate">{title}</h2>
-          <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost">✕</button>
+        <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-base-300">
+          <h2 className="font-semibold text-base truncate">{ep.title}</h2>
+          <div className="flex items-center gap-3 shrink-0">
+            <label className="flex items-center gap-2 cursor-pointer text-sm text-base-content/70" title="Play the next episode automatically">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary toggle-sm"
+                checked={autoplay}
+                onChange={e => setAutoplay(e.target.checked)}
+              />
+              Autoplay
+            </label>
+            <button
+              onClick={() => setIndex(i => i + 1)}
+              disabled={!hasNext}
+              title="Next episode"
+              className="btn btn-sm btn-ghost btn-square"
+              aria-label="Next episode"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 5v14l8-7zM16 5h2v14h-2z" /></svg>
+            </button>
+            <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost" aria-label="Close">✕</button>
+          </div>
         </div>
 
         {/* Providers */}
@@ -29,39 +78,39 @@ export default function PlayerModal({ embedUrls, title, onClose }: Props) {
           <ProviderChips providers={providers} active={active} status={status} onSelect={select} />
         </div>
 
-        {/* Video */}
-        <div className="bg-black aspect-video flex items-center justify-center">
-          {probing && !activeSource && (
-            <div className="flex items-center gap-3 text-base-content/50">
-              <span className="loading loading-spinner loading-lg" /> Testing sources…
-            </div>
-          )}
-          {!probing && !activeSource && (
-            <div className="text-center px-6">
-              <p className="text-error text-sm mb-1">
-                {active ? 'This provider is unavailable.' : 'No playable source for this episode.'}
-              </p>
-              {providers.some(p => sources[p]) && (
-                <p className="text-base-content/40 text-xs mt-1">Pick a working source above.</p>
-              )}
-            </div>
-          )}
-          {activeSource && (
+        {/* Video — persistent element, src swapped per episode */}
+        <div className="relative bg-black aspect-video flex items-center justify-center">
+          {displaySource && (
             <MediaPlayer
-              key={activeSource.proxy_url}
               className="w-full h-full"
-              title={title}
+              title={ep.title}
               src={{
-                src: activeSource.proxy_url,
-                type: activeSource.kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
+                src: displaySource.proxy_url,
+                type: displaySource.kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
               }}
               autoPlay
               playsInline
+              onEnded={handleEnded}
               onError={() => { if (active) markFailed(active) }}
             >
               <MediaProvider />
               <DefaultVideoLayout icons={defaultLayoutIcons} />
             </MediaPlayer>
+          )}
+
+          {/* Overlays: initial testing / no source / next-episode failure */}
+          {!displaySource && probing && (
+            <div className="flex items-center gap-3 text-base-content/50">
+              <span className="loading loading-spinner loading-lg" /> Testing sources…
+            </div>
+          )}
+          {!displaySource && !probing && !activeSource && (
+            <p className="text-error text-sm px-6 text-center">No playable source for this episode.</p>
+          )}
+          {displaySource && !probing && !activeSource && (
+            <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-center px-6">
+              <p className="text-error text-sm">This episode has no working source. Pick another above{hasNext ? ' or skip ▶▶' : ''}.</p>
+            </div>
           )}
         </div>
       </div>

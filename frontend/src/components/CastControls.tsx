@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   castPlayPause, castSeek, castSeekBy, castSetVolume, castStop, castToggleMute, useCastState,
 } from '../cast'
+import { useModalBack } from '../useModalBack'
 
 // Relative-seek buttons shown around play/pause, in display order.
 const SEEK_STEPS: { label: string; delta: number }[] = [
@@ -33,6 +34,7 @@ export default function CastControls() {
   const [open, setOpen] = useState(false)
   // While dragging the timeline, show the local value instead of live updates.
   const [seeking, setSeeking] = useState<number | null>(null)
+  useModalBack(open, () => setOpen(false))
 
   if (!cast.connected) return null
 

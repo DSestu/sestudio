@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import type { AppSettings, DownloadItem, DownloadJob, SeasonCard } from './api'
 import { checkDownloads, getSeason, postDownloads } from './api'
 import { loadCast } from './cast'
+import { refreshDlna } from './dlnaControl'
 import CastControls from './components/CastControls'
+import DlnaControls from './components/DlnaControls'
 import ConfirmDownloadModal from './components/ConfirmDownloadModal'
 import DownloadQueue from './components/DownloadQueue'
 import ResultsGrid from './components/ResultsGrid'
@@ -21,9 +23,9 @@ export default function App() {
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
   const [skippedJobs, setSkippedJobs] = useState<DownloadJob[]>([])
 
-  // Initialise the Cast SDK on load so an existing (origin-scoped) session is
-  // rejoined after a page reload and surfaced by <CastControls>.
-  useEffect(() => { loadCast() }, [])
+  // On load: init the Cast SDK (rejoins an existing Chromecast session) and
+  // check for an active DLNA session, so both control bars reappear after reload.
+  useEffect(() => { loadCast(); refreshDlna() }, [])
 
   const cardMap = new Map(results.map(c => [c.newsid, c]))
 
@@ -185,6 +187,7 @@ export default function App() {
       )}
 
       <CastControls />
+      <DlnaControls />
     </div>
   )
 }

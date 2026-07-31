@@ -48,7 +48,7 @@ def _proxy_url(secret: bytes, target_url: str, referer: str, provider: str) -> s
 
 
 # Preferred provider order, mirroring the download worker's fallback (worker.py).
-_PROVIDER_ORDER = ("uqload", "vidzy", "netu")
+_PROVIDER_ORDER = ("uqload", "vidzy", "netu", "luluvid")
 
 
 class ResolveRequest(BaseModel):
@@ -126,6 +126,12 @@ def proxy_stream(token: str, request: Request) -> Response:
         "User-Agent": _UA,
         "Referer": referer,
         "Accept-Encoding": "identity",
+        # Some CDN nodes (e.g. vidzy's u*.vidzy.cc) 403 requests that lack the
+        # Sec-Fetch-* headers a real browser sends; without these the master
+        # playlist / segments are rejected even with a valid token and referer.
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "cross-site",
     }
     range_header = request.headers.get("range")
     if range_header:

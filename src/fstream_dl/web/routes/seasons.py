@@ -62,5 +62,11 @@ def _fetch_available_langs(url: str) -> list[str]:
             )
         eps_resp.raise_for_status()
     data: dict[str, object] = eps_resp.json()
-    lang_keys = [k for k in data if k not in ("info", "alt_titles") and isinstance(data[k], dict)]
+    # Only report a language that actually has episodes: some titles list a lang
+    # key (e.g. "vf") with an empty map, which otherwise makes the UI think the
+    # language exists and show an empty season instead of switching to a real one.
+    lang_keys = [
+        k for k, v in data.items()
+        if k not in ("info", "alt_titles") and isinstance(v, dict) and v
+    ]
     return sorted(lang_keys)

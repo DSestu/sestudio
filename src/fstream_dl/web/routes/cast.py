@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import logging
 import socket
 import urllib.parse
@@ -89,7 +90,88 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
     mime_type = _MIME_BY_KIND.get(body.kind, "video/mp4")
 
     try:
-        await dlna.play_on_renderer(location, media_url, body.title, mime_type)
+        dmr = await dlna.play_on_renderer(location, media_url, body.title, mime_type)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"DLNA play failed: {exc}") from exc
+
+    # Cache the device so the session can be controlled (play/pause/seek/etc).
+    request.app.state.dlna_dmr = dmr
+    request.app.state.dlna_title = body.title
     return {"status": "playing", "renderer": body.renderer_udn, "media_url": media_url}
+
+
+def _active_dmr(request: Request):
+    dmr = getattr(request.app.state, "dlna_dmr", None)
+    if dmr is None:
+        raise HTTPException(status_code=409, detail="No active DLNA session")
+    return dmr
+
+
+@router.get("/cast/dlna/status")
+async def dlna_status(request: Request) -> dict[str, Any]:
+    """Current DLNA session state for the control UI. Reports disconnected when
+    there is no session or the renderer is unreachable."""
+    dmr = getattr(request.app.state, "dlna_dmr", None)
+    if dmr is None:
+        return {"connected": False}
+    try:
+        await dmr.async_update()
+        state = dmr.transport_state
+        return {
+            "connected": True,
+            "title": getattr(request.app.state, "dlna_title", "") or (dmr.media_title or ""),
+            "state": getattr(state, "value", str(state)) if state is not None else "",
+            "position": dmr.media_position or 0,
+            "duration": dmr.media_duration or 0,
+            "volume": dmr.volume_level if dmr.volume_level is not None else 1.0,
+            "can_pause": bool(dmr.can_pause),
+        }
+    except Exception as exc:  # noqa: BLE001 — renderer gone/unreachable
+        logger.debug("DLNA status update failed: %s", exc)
+        return {"connected": False}
+
+
+class DlnaSeekRequest(BaseModel):
+    seconds: float
+
+
+class DlnaVolumeRequest(BaseModel):
+    level: float  # 0..1
+
+
+@router.post("/cast/dlna/pause")
+async def dlna_pause(request: Request) -> dict[str, Any]:
+    await _active_dmr(request).async_pause()
+    return {"status": "paused"}
+
+
+@router.post("/cast/dlna/resume")
+async def dlna_resume(request: Request) -> dict[str, Any]:
+    await _active_dmr(request).async_play()
+    return {"status": "playing"}
+
+
+@router.post("/cast/dlna/seek")
+async def dlna_seek(body: DlnaSeekRequest, request: Request) -> dict[str, Any]:
+    # DLNA REL_TIME seek targets the absolute position within the track.
+    await _active_dmr(request).async_seek_rel_time(datetime.timedelta(seconds=max(0, body.seconds)))
+    return {"status": "ok"}
+
+
+@router.post("/cast/dlna/volume")
+async def dlna_volume(body: DlnaVolumeRequest, request: Request) -> dict[str, Any]:
+    await _active_dmr(request).async_set_volume_level(max(0.0, min(1.0, body.level)))
+    return {"status": "ok"}
+
+
+@router.post("/cast/dlna/stop")
+async def dlna_stop(request: Request) -> dict[str, Any]:
+    dmr = getattr(request.app.state, "dlna_dmr", None)
+    if dmr is not None:
+        try:
+            await dmr.async_stop()
+        except Exception as exc:  # noqa: BLE001 — best-effort; clear regardless
+            logger.debug("DLNA stop failed: %s", exc)
+    request.app.state.dlna_dmr = None
+    request.app.state.dlna_title = ""
+    return {"status": "stopped"}

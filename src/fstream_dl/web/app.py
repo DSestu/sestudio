@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from fstream_dl.providers.luluvid import LuluvidProvider
 from fstream_dl.providers.netu import NetuProvider
 from fstream_dl.providers.uqload import UqloadProvider
 from fstream_dl.providers.vidzy import VidzyProvider
@@ -18,6 +19,7 @@ _PROVIDERS = {
     "uqload": UqloadProvider(),
     "vidzy": VidzyProvider(),
     "netu": NetuProvider(),
+    "luluvid": LuluvidProvider(),
 }
 
 # app.py lives at src/fstream_dl/web/app.py → 4 parents up = repo root
@@ -40,6 +42,8 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.state.providers = _PROVIDERS
     app.state.proxy_secret = secrets.token_bytes(32)
     app.state.dlna_renderers = {}  # udn -> control location, populated by discovery
+    app.state.dlna_dmr = None  # active DmrDevice for the current cast session
+    app.state.dlna_title = ""
     # The direct HTTP port uvicorn listens on. Cast devices fetch media over
     # plain HTTP on this port even when the UI is fronted by HTTPS (Caddy), so
     # it must be the real listen port, not whatever the browser connected to.

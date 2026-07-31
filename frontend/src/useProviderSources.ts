@@ -43,11 +43,24 @@ export function useProviderSources(embedUrls: Record<string, string>): ProviderS
   const sourcesRef = useRef<Record<string, StreamSource>>({})
   const activeRef = useRef<string | null>(null)
 
+  // Reset when the episode (embedUrls) changes without remounting the consumer,
+  // so the video player element can persist across episodes (keeps fullscreen).
+  const [prevEmbed, setPrevEmbed] = useState(embedUrls)
+  if (prevEmbed !== embedUrls) {
+    setPrevEmbed(embedUrls)
+    setStatus(Object.fromEntries(providers.map(p => [p, 'loading'])))
+    setSources({})
+    setActive(null)
+    setProbing(true)
+  }
+
   const setActiveBoth = (p: string | null) => { activeRef.current = p; setActive(p) }
 
   useEffect(() => {
     const controller = new AbortController()
     let cancelled = false
+    sourcesRef.current = {}
+    activeRef.current = null
     Promise.allSettled(
       providers.map(async p => {
         try {

@@ -146,12 +146,12 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
     return season, episodes
 
 
-_EMBED_PROVIDERS_RE = re.compile(r"uqload|vidzy|netu|byse", re.IGNORECASE)
+_EMBED_PROVIDERS_RE = re.compile(r"uqload|vidzy|netu|byse|luluvid", re.IGNORECASE)
 _TITLE_SUFFIX_RE = re.compile(r"\s+[-–|]\s+.*$")  # space-dash-space avoids breaking hyphenated titles
 _FILM_PREFIX_RE = re.compile(r"^(?:Film|Movie)\s+", re.IGNORECASE)
 
 # Supported providers and their lang key in the film API response
-_FILM_PROVIDERS = ("uqload", "vidzy", "netu")
+_FILM_PROVIDERS = ("uqload", "vidzy", "netu", "luluvid")
 _FILM_LANG_KEY: dict[str, str] = {
     "vf": "vfq",
     "vfq": "vfq",
@@ -239,7 +239,7 @@ def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode]]:
             for iframe in soup.find_all("iframe"):
                 src: str = iframe.get("src") or iframe.get("data-src") or ""
                 if src and _EMBED_PROVIDERS_RE.search(src):
-                    pname = next((p for p in ("uqload", "vidzy", "netu") if p in src.lower()), "unknown")
+                    pname = next((p for p in ("uqload", "vidzy", "netu", "luluvid") if p in src.lower()), "unknown")
                     embed_urls[pname] = src
 
         if not embed_urls:

@@ -1,0 +1,37 @@
+import type { PlayableEpisode } from './providers'
+
+// A cast "playlist" so autoplay can advance to the next episode when the
+// current one finishes on a cast device. It lives outside React (the cast
+// modal may be closed) and is driven by the persistent controllers, which
+// detect end-of-media and call castEnded(). The actual cast is injected as
+// `cast` so this module needs no knowledge of DLNA vs Chromecast.
+
+interface CastQueue {
+  episodes: PlayableEpisode[]
+  index: number
+  autoplay: boolean
+  cast: (ep: PlayableEpisode) => Promise<void>
+}
+
+let queue: CastQueue | null = null
+let advancing = false
+
+export function startCastQueue(q: CastQueue) { queue = q }
+export function clearCastQueue() { queue = null }
+export function setCastAutoplay(on: boolean) { if (queue) queue.autoplay = on }
+
+/** Called by a controller when the current cast media ends. Advances if able. */
+export async function castEnded(): Promise<void> {
+  if (!queue || !queue.autoplay || advancing) return
+  const next = queue.index + 1
+  if (next >= queue.episodes.length) return
+  advancing = true
+  try {
+    queue.index = next
+    await queue.cast(queue.episodes[next])
+  } catch {
+    // leave the session as-is; the controller keeps showing current state
+  } finally {
+    advancing = false
+  }
+}

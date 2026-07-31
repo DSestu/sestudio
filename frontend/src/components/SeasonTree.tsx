@@ -4,6 +4,7 @@ import { checkDownloads, getSeason, postDownloads } from '../api'
 import ConfirmDownloadModal from './ConfirmDownloadModal'
 import PlayerModal from './PlayerModal'
 import CastModal from './CastModal'
+import { useModalBack } from '../useModalBack'
 
 interface Props {
   card: SeasonCard
@@ -23,6 +24,7 @@ function allChecked(eps: EpisodeDetail[], checked: Set<number>): CheckState {
 }
 
 export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCreated }: Props) {
+  useModalBack(true, onClose)
   const [detail, setDetail] = useState<SeasonDetail | null>(null)
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const [expanded, setExpanded] = useState(true)
@@ -32,11 +34,22 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
   const [activeLang, setActiveLang] = useState(lang)
-  const [playing, setPlaying] = useState<{ embedUrls: Record<string, string>; title: string } | null>(null)
-  const [casting, setCasting] = useState<{ embedUrls: Record<string, string>; title: string } | null>(null)
+  const [playing, setPlaying] = useState<{ episodes: EpisodeDetail[]; index: number } | null>(null)
+  const [casting, setCasting] = useState<{ episodes: EpisodeDetail[]; index: number } | null>(null)
 
   // Big, clearly-tappable icon actions for an episode row (play / cast / open).
   const iconBtn = 'btn btn-ghost btn-sm sm:btn-md btn-square text-base-content/50 hover:text-violet-400'
+
+  // Ordered playlist of episodes with at least one provider, starting at the
+  // clicked one, so both the player and cast can autoplay through the season.
+  function playlistFrom(ep: EpisodeDetail): { episodes: EpisodeDetail[]; index: number } | null {
+    if (!detail) return null
+    const playable = detail.episodes.filter(e => Object.keys(e.embed_urls).length > 0)
+    const index = Math.max(0, playable.findIndex(e => e.number === ep.number))
+    return { episodes: playable, index }
+  }
+  function playFrom(ep: EpisodeDetail) { const p = playlistFrom(ep); if (p) setPlaying(p) }
+  function castFrom(ep: EpisodeDetail) { const p = playlistFrom(ep); if (p) setCasting(p) }
 
   function rowActions(ep: EpisodeDetail) {
     const hasProviders = Object.keys(ep.embed_urls).length > 0
@@ -45,7 +58,7 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
         {hasProviders && (
           <>
             <button
-              onClick={e => { e.stopPropagation(); setPlaying({ embedUrls: ep.embed_urls, title: ep.title }) }}
+              onClick={e => { e.stopPropagation(); playFrom(ep) }}
               title="Play in browser"
               aria-label="Play in browser"
               className={iconBtn}
@@ -55,7 +68,7 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
               </svg>
             </button>
             <button
-              onClick={e => { e.stopPropagation(); setCasting({ embedUrls: ep.embed_urls, title: ep.title }) }}
+              onClick={e => { e.stopPropagation(); castFrom(ep) }}
               title="Cast to a device"
               aria-label="Cast to a device"
               className={iconBtn}
@@ -88,11 +101,14 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
     getSeason(card.page_url, activeLang)
       .then(d => {
         if (cancelled) return
-        setDetail(d)
-        setChecked(new Set(d.episodes.map(e => e.number)))
+        // Requested language absent but another exists: switch and let the
+        // refetch load it — keep "Loading…" so the empty-state doesn't flash.
         if (d.available_langs.length > 0 && !d.available_langs.includes(activeLang)) {
           setActiveLang(d.available_langs[0])
+          return
         }
+        setDetail(d)
+        setChecked(new Set(d.episodes.map(e => e.number)))
         setError(null)
         setLoading(false)
       })
@@ -171,7 +187,7 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
     <>
       <div className="modal modal-open" onClick={onClose}>
         <div
-          className="modal-box w-full max-w-2xl h-[92vh] sm:h-auto sm:max-h-[80vh] flex flex-col p-0"
+          className="modal-box w-full max-w-2xl h-[88dvh] sm:h-auto sm:max-h-[80dvh] flex flex-col p-0"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -189,7 +205,20 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
           <div className="overflow-y-auto flex-1 px-2 sm:px-6 py-4">
             {loading && <p className="text-base-content/60">Loading…</p>}
             {error && <p className="text-error">{error}</p>}
-            {detail && !detail.is_film && (
+
+            {/* No playable version — shown like an unavailable source, so the
+                user sees it immediately instead of an empty list. */}
+            {detail && detail.episodes.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+                <svg className="w-8 h-8 text-error/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <p className="text-error text-sm">No VF / VOSTFR / VO version available for this title.</p>
+                <p className="text-base-content/40 text-xs">There are no episodes to play or download.</p>
+              </div>
+            )}
+
+            {detail && !detail.is_film && detail.episodes.length > 0 && (
               <>
                 {/* Season row */}
                 <div className="flex items-center gap-3 mb-2 px-2 sm:px-3 py-2 cursor-pointer select-none" onClick={toggleAll}>
@@ -248,7 +277,7 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
               </>
             )}
 
-            {detail && detail.is_film && (
+            {detail && detail.is_film && detail.episodes.length > 0 && (
               <div className="space-y-3">
                 <div className="flex gap-1 mb-3">
                   {detail.available_langs.map(l => (
@@ -279,19 +308,21 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-base-300">
-            <span className="text-base-content/60 text-sm shrink-0">
-              {checked.size} selected
-            </span>
-            <button
-              onClick={handleDownload}
-              disabled={checked.size === 0 || submitting || loading}
-              className="btn btn-primary flex-1 sm:flex-none"
-            >
-              {submitting ? 'Checking…' : 'Download selected'}
-            </button>
-          </div>
+          {/* Footer — hidden when there are no episodes to download */}
+          {(!detail || detail.episodes.length > 0) && (
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-base-300">
+              <span className="text-base-content/60 text-sm shrink-0">
+                {checked.size} selected
+              </span>
+              <button
+                onClick={handleDownload}
+                disabled={checked.size === 0 || submitting || loading}
+                className="btn btn-primary flex-1 sm:flex-none"
+              >
+                {submitting ? 'Checking…' : 'Download selected'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -307,18 +338,16 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
 
       {playing && (
         <PlayerModal
-          key={playing.title}
-          embedUrls={playing.embedUrls}
-          title={playing.title}
+          episodes={playing.episodes}
+          startIndex={playing.index}
           onClose={() => setPlaying(null)}
         />
       )}
 
       {casting && (
         <CastModal
-          key={casting.title}
-          embedUrls={casting.embedUrls}
-          title={casting.title}
+          episodes={casting.episodes}
+          startIndex={casting.index}
           onClose={() => setCasting(null)}
         />
       )}

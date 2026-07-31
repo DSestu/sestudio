@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { DownloadItem } from '../api'
+import { useModalBack } from '../useModalBack'
 
 interface Props {
   items: DownloadItem[]
@@ -28,6 +29,7 @@ function buildTree(items: DownloadItem[]): FileTree {
 }
 
 export default function ConfirmDownloadModal({ items, outputRoot, existingFiles, onConfirm, onCancel }: Props) {
+  useModalBack(true, onCancel)
   const [confirming, setConfirming] = useState(false)
   const tree = buildTree(items)
   const episodeCount = items.length
@@ -57,7 +59,7 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
   return (
     <div className="modal modal-open" onClick={onCancel}>
       <div
-        className="modal-box max-w-2xl max-h-[80vh] flex flex-col p-0"
+        className="modal-box max-w-2xl max-h-[70dvh] sm:max-h-[80dvh] flex flex-col p-0"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
