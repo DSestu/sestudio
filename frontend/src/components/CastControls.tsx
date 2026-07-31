@@ -40,10 +40,10 @@ export default function CastControls() {
 
   return (
     <>
-      {/* Floating pill */}
-      <button
+      {/* Floating pill — above all other overlays; hidden while its own modal is open */}
+      {!open && <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 left-6 z-40 btn btn-primary gap-2 shadow-xl"
+        className="fixed bottom-6 left-6 z-[9999] btn btn-primary gap-2 shadow-xl"
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 11a6 6 0 016 6M3 15a2 2 0 012 2M3 19h.01" />
@@ -52,7 +52,7 @@ export default function CastControls() {
         <span className={`badge badge-sm ${cast.isPaused ? 'badge-ghost' : 'badge-success'}`}>
           {cast.isPaused ? 'Paused' : 'Playing'}
         </span>
-      </button>
+      </button>}
 
       {open && (
         <div className="modal modal-open" onClick={() => setOpen(false)}>
