@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AppSettings, DownloadItem, DownloadJob, SeasonCard } from './api'
 import { checkDownloads, getSeason, postDownloads } from './api'
+import { loadCast } from './cast'
+import CastControls from './components/CastControls'
 import ConfirmDownloadModal from './components/ConfirmDownloadModal'
 import DownloadQueue from './components/DownloadQueue'
 import ResultsGrid from './components/ResultsGrid'
@@ -18,6 +20,10 @@ export default function App() {
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
   const [skippedJobs, setSkippedJobs] = useState<DownloadJob[]>([])
+
+  // Initialise the Cast SDK on load so an existing (origin-scoped) session is
+  // rejoined after a page reload and surfaced by <CastControls>.
+  useEffect(() => { loadCast() }, [])
 
   const cardMap = new Map(results.map(c => [c.newsid, c]))
 
@@ -177,6 +183,8 @@ export default function App() {
           onJobsCreated={() => setDownloadTick(t => t + 1)}
         />
       )}
+
+      <CastControls />
     </div>
   )
 }

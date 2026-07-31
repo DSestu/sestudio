@@ -27,6 +27,15 @@ _RELAY_HEADERS = ("content-type", "content-range", "accept-ranges", "content-len
 
 _HLS_CONTENT_TYPE = "application/vnd.apple.mpegurl"
 
+# The Google Cast Default Media Receiver *requires* CORS headers on media (it
+# rejects HLS playlists/segments served without them), and they are harmless for
+# every other client, so every proxy response carries them.
+_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "*",
+    "Access-Control-Expose-Headers": "*",
+}
+
 
 def _is_playlist(url: str, content_type: str) -> bool:
     path = urllib.parse.urlparse(url).path.lower()
@@ -107,7 +116,11 @@ def proxy_stream(token: str, request: Request) -> Response:
     # they accept the resource, without opening an upstream connection.
     if request.method == "HEAD":
         media_type = _HLS_CONTENT_TYPE if _is_playlist(target_url, "") else "video/mp4"
-        return Response(status_code=200, media_type=media_type, headers={"Accept-Ranges": "bytes"})
+        return Response(
+            status_code=200,
+            media_type=media_type,
+            headers={"Accept-Ranges": "bytes", **_CORS_HEADERS},
+        )
 
     upstream_headers = {
         "User-Agent": _UA,
@@ -141,9 +154,11 @@ def proxy_stream(token: str, request: Request) -> Response:
             content=rewritten,
             status_code=upstream.status_code,
             media_type=_HLS_CONTENT_TYPE,
+            headers=dict(_CORS_HEADERS),
         )
 
     relay = {h: upstream.headers[h] for h in _RELAY_HEADERS if h in upstream.headers}
+    relay.update(_CORS_HEADERS)
 
     def body() -> Iterator[bytes]:
         try:

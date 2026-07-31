@@ -178,6 +178,20 @@ def test_proxy_head_bad_token_403(httpx_mock: HTTPXMock):
     assert httpx_mock.get_requests() == []
 
 
+def test_proxy_sets_cors_headers(httpx_mock: HTTPXMock):
+    # Google Cast's default receiver requires CORS on media responses.
+    client = _client()
+    secret = client.app.state.proxy_secret
+    token = sign(secret, "https://cdn.example/v.mp4", "https://uqload.is/", "uqload")
+    httpx_mock.add_response(url="https://cdn.example/v.mp4", content=b"x" * 16, headers={"Content-Type": "video/mp4"})
+
+    resp = client.get("/api/stream/proxy", params={"token": token})
+    assert resp.headers["access-control-allow-origin"] == "*"
+
+    head = client.head("/api/stream/proxy", params={"token": token})
+    assert head.headers["access-control-allow-origin"] == "*"
+
+
 def test_proxy_rejects_bad_token_without_upstream_call(httpx_mock: HTTPXMock):
     client = _client()
     resp = client.get("/api/stream/proxy", params={"token": "forged.AAAA"})
