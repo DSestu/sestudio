@@ -7,7 +7,7 @@ export interface PlayableEpisode {
 }
 
 // Preferred order, mirroring the backend resolve fallback.
-const ORDER = ['uqload', 'vidzy', 'netu', 'luluvid']
+const ORDER = ['uqload', 'vidzy', 'premium', 'netu', 'luluvid', 'voe']
 
 /** Sort a provider list into preference order (known providers first). */
 export function orderProviders(list: string[]): string[] {

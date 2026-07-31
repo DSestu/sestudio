@@ -146,12 +146,12 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
     return season, episodes
 
 
-_EMBED_PROVIDERS_RE = re.compile(r"uqload|vidzy|netu|byse|luluvid", re.IGNORECASE)
+_EMBED_PROVIDERS_RE = re.compile(r"uqload|vidzy|netu|byse|luluvid|premium|voe", re.IGNORECASE)
 _TITLE_SUFFIX_RE = re.compile(r"\s+[-–|]\s+.*$")  # space-dash-space avoids breaking hyphenated titles
 _FILM_PREFIX_RE = re.compile(r"^(?:Film|Movie)\s+", re.IGNORECASE)
 
 # Supported providers and their lang key in the film API response
-_FILM_PROVIDERS = ("uqload", "vidzy", "netu", "luluvid")
+_FILM_PROVIDERS = ("uqload", "vidzy", "premium", "netu", "luluvid")
 _FILM_LANG_KEY: dict[str, str] = {
     "vf": "vfq",
     "vfq": "vfq",

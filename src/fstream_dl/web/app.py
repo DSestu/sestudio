@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from fstream_dl.providers.luluvid import LuluvidProvider
 from fstream_dl.providers.netu import NetuProvider
+from fstream_dl.providers.premium import PremiumProvider
 from fstream_dl.providers.uqload import UqloadProvider
 from fstream_dl.providers.vidzy import VidzyProvider
 from fstream_dl.web.routes import cast, downloads, search, seasons, settings, stream
@@ -18,6 +19,7 @@ from fstream_dl.web.worker import JobStore
 _PROVIDERS = {
     "uqload": UqloadProvider(),
     "vidzy": VidzyProvider(),
+    "premium": PremiumProvider(),
     "netu": NetuProvider(),
     "luluvid": LuluvidProvider(),
 }
