@@ -92,11 +92,15 @@ Opens at `http://<host>:8080`. The server keeps running in the terminal — down
 * **Play an episode in the browser** (▶ per row) — streams through the server, so provider referer/TLS quirks are handled for you, with automatic fallback across providers
 * **Cast to a TV** (⧉ per row) — send an episode to any DLNA renderer on your network; Chromecast and AirPlay are available from the player when served over HTTPS (see below)
 
-Downloads are organised automatically:
+Downloads are organised automatically, with a per-language subfolder (VF / VOSTFR / VO):
 
 ```
-<output_root>/<Series Name>/Season 01/S01E01 - Title.mp4
+<output_root>/<Series Name>/Season 01/VOSTFR/S01E01 - Title.mp4
+<output_root>/fstream_films/VF/<Film Title>.mp4
 ```
+
+The "already downloaded" check is per-language, so the same episode in VF and VOSTFR
+are tracked separately.
 
 ### Watch & cast on your network
 

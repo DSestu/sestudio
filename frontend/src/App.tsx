@@ -64,6 +64,7 @@ export default function App() {
             episode_name: ep.filename,
             series_name: card.series_name,
             season: detail.season,
+            lang: settings.lang,
           }))
           .filter((i): i is DownloadItem => Boolean(i.embed_url))
         allItems.push(...items)

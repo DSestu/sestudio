@@ -151,6 +151,7 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
         episode_name: filmFilename ?? ep.filename,
         series_name: card.series_name,
         season: detail.is_film ? 0 : detail.season,
+        lang: activeLang,
       }))
       .filter(i => i.embed_url)
 

@@ -25,8 +25,26 @@ class DownloadRequest(BaseModel):
     episode_name: str
     series_name: str
     season: int
+    lang: str = ""  # VF / VOSTFR / VO — becomes a subfolder in the output path
     # All available providers for this episode, in priority order
     all_providers: dict[str, str] = {}
+
+
+def _episode_path(root: str, item: DownloadRequest) -> Path:
+    """Build the output file path, with a per-language subfolder.
+
+    ``<root>/<Series>/Season NN/<LANG>/<file>`` for episodes, or
+    ``<root>/fstream_films/<LANG>/<file>`` for films. The language folder is
+    omitted when no language is given (e.g. CLI downloads).
+    """
+    safe_ep = sanitize_path_component(item.episode_name)
+    if item.season == 0:
+        parts = [root, "fstream_films"]
+    else:
+        parts = [root, sanitize_path_component(item.series_name), f"Season {item.season:02d}"]
+    if item.lang:
+        parts.append(sanitize_path_component(item.lang.upper()))
+    return Path(*parts) / safe_ep
 
 
 def _job_to_dict(job: DownloadJob) -> dict[str, Any]:
@@ -47,12 +65,7 @@ async def check_downloads(items: list[DownloadRequest]) -> list[str]:
     cfg = load_config()
     existing: list[str] = []
     for item in items:
-        safe_ep = sanitize_path_component(item.episode_name)
-        if item.season == 0:
-            out_path = Path(cfg.output_root) / "fstream_films" / safe_ep
-        else:
-            safe_series = sanitize_path_component(item.series_name)
-            out_path = Path(cfg.output_root) / safe_series / f"Season {item.season:02d}" / safe_ep
+        out_path = _episode_path(cfg.output_root, item)
         if out_path.exists() and out_path.stat().st_size > 0:
             existing.append(item.episode_name)
     return existing
@@ -103,13 +116,8 @@ async def post_downloads(
             continue
 
         safe_ep = sanitize_path_component(item.episode_name)
-        if item.season == 0:
-            out_dir = Path(cfg.output_root) / "fstream_films"
-        else:
-            safe_series = sanitize_path_component(item.series_name)
-            out_dir = Path(cfg.output_root) / safe_series / f"Season {item.season:02d}"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / safe_ep
+        out_path = _episode_path(cfg.output_root, item)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
         if out_path.exists() and out_path.stat().st_size > 0:
             logger.info("Skipping %s: already exists at %s", item.episode_name, out_path)

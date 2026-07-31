@@ -35,6 +35,7 @@ export interface DownloadItem {
   episode_name: string
   series_name: string
   season: number
+  lang: string
   all_providers: Record<string, string>
 }
 
