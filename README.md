@@ -96,8 +96,9 @@ Opens at `https://<host>:8443` — HTTPS with a self-signed cert by default (so 
 | Option | Default | Description |
 | --- | --- | --- |
 | `--host` | `0.0.0.0` | Bind address (`0.0.0.0` = reachable from other devices on your LAN) |
-| `--port` | `8443` | Port |
-| `--no-https` | off | Serve plain HTTP instead of the default self-signed HTTPS |
+| `--port` | `8443` | HTTPS port |
+| `--http-port` | `8080` | Plain-HTTP port served alongside HTTPS, for cast media (DLNA / Chromecast fetch media over HTTP) |
+| `--no-https` | off | Serve plain HTTP only, on `--port` |
 | `--no-resolve` | off | Skip live-domain auto-resolution |
 
 > The default `0.0.0.0` binding makes the UI reachable from other devices on your network — needed for casting. There is no authentication, so run it only on a trusted home network. Pass `--host 127.0.0.1` to restrict it to the local machine.
@@ -129,7 +130,7 @@ uvx sestudio serve --host 0.0.0.0
 ```
 
 * **Google Cast (Chromecast)** and **AirPlay** need a **secure context (HTTPS)** — the Cast Web Sender SDK refuses to run over plain HTTP. sestudio serves HTTPS by default, so this works out of the box once you trust the cert (below).
-* **In-browser player** and **DLNA "Cast to TV"** also work; the ⧉ button scans for renderers (a ~4 s SSDP scan) and pushes the stream to the one you pick. (Some older DLNA TVs only accept plain HTTP — use `--no-https` for those.)
+* **In-browser player** and **DLNA "Cast to TV"** also work; the ⧉ button scans for renderers (a ~4 s SSDP scan) and pushes the stream to the one you pick. DLNA renderers fetch the media over plain HTTP, which the server always exposes on `--http-port` (8080) alongside HTTPS — so casting works without any extra flags.
 
 #### HTTPS built in (default)
 
