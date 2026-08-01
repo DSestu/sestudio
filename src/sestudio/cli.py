@@ -158,22 +158,24 @@ class Entrypoint:
         self,
         host: str = "0.0.0.0",
         port: int = 8443,
+        http_port: int = 8080,
         no_resolve: bool = False,
         verbose: bool = False,
+        no_http: bool = False,
         no_https: bool = False,
-        http_port: int = 8080,
     ) -> None:
-        """Start the web UI server.
+        """Start the web UI as two full servers: plain HTTP and HTTPS.
 
-        Serves over HTTPS by default with a self-signed cert (cached, covering the
-        LAN IPs) so Chromecast/AirPlay work with no extra tools; the casting device
-        must trust the cert once (see the README). A plain-HTTP server also runs on
-        --http-port because DLNA renderers fetch media over HTTP and can't use the
-        self-signed cert. Pass --no-https to serve plain HTTP only, on --port.
+        By default both run on the same app — plain HTTP on --http-port and HTTPS
+        (self-signed cert, covering the LAN IPs) on --port — so a client/renderer
+        can use whichever it needs: DLNA and cast media fetch over HTTP, while
+        Chromecast/AirPlay require the HTTPS site (trust the cert once; see README).
+        Disable either side with --no-http or --no-https.
         """
         setup_logging(verbose)
 
         import uvicorn
+
         from sestudio.web.app import create_app
 
         live_domain: str | None = None
@@ -187,53 +189,58 @@ class Entrypoint:
                 )
 
         app = create_app(live_domain=live_domain)
+        shown = _display_host(host)
 
-        if no_https:
-            app.state.http_port = port
-            console.print(
-                f"[bold green]sestudio web UI[/bold green] → http://{host}:{port}"
-            )
-            uvicorn.run(app, host=host, port=port)
-            return
-
-        from sestudio.tls import ensure_cert
-
-        cert_path, key_path = ensure_cert()
-
-        # DLNA renderers fetch the media over plain HTTP and can't use our
-        # self-signed cert, so run an HTTP server alongside HTTPS and point cast
-        # media URLs at it (app.state.http_port). Skip it only if the ports clash.
-        if http_port != port:
+        # Both servers share one app so a proxy token minted on either site is
+        # valid on the other. Cast media URLs must be plain HTTP (renderers can't
+        # use the self-signed cert), so point app.state.http_port at the HTTP one.
+        servers: list[tuple[str, uvicorn.Config]] = []
+        if not no_http:
+            servers.append(("http", uvicorn.Config(app, host=host, port=http_port)))
             app.state.http_port = http_port
-            http_server = uvicorn.Server(uvicorn.Config(app, host=host, port=http_port))
-            # signal handlers only install in the main thread; the HTTPS server
-            # (below) owns Ctrl-C and the process exits with it.
-            http_server.install_signal_handlers = lambda: None
-            threading.Thread(target=http_server.run, daemon=True).start()
-        else:
-            app.state.http_port = port
-            logger.warning(
-                "--http-port equals --port; DLNA casting needs a distinct HTTP port"
+        if not no_https:
+            from sestudio.tls import ensure_cert
+
+            cert_path, key_path = ensure_cert()
+            servers.append(
+                (
+                    "https",
+                    uvicorn.Config(
+                        app,
+                        host=host,
+                        port=port,
+                        ssl_certfile=str(cert_path),
+                        ssl_keyfile=str(key_path),
+                    ),
+                )
+            )
+            if no_http:
+                app.state.http_port = port
+
+        if not servers:
+            console.print(
+                "[red]Nothing to serve: --no-http and --no-https both set[/red]"
+            )
+            sys.exit(1)
+
+        for scheme, _cfg in servers:
+            p = http_port if scheme == "http" else port
+            console.print(
+                f"[bold green]sestudio web UI[/bold green] → {scheme}://{shown}:{p}"
+            )
+        if not no_https:
+            console.print(
+                "[dim]HTTPS uses a self-signed cert — trust it on the casting device "
+                "(see README). DLNA/plain browsing can use the HTTP site.[/dim]"
             )
 
-        console.print(
-            f"[bold green]sestudio web UI[/bold green] → https://{_display_host(host)}:{port}"
-            + (
-                f"  ·  media/DLNA on http://{_display_host(host)}:{http_port}"
-                if http_port != port
-                else ""
-            )
-        )
-        console.print(
-            "[dim]self-signed cert — trust it on the casting device (see README)[/dim]"
-        )
-        uvicorn.run(
-            app,
-            host=host,
-            port=port,
-            ssl_certfile=str(cert_path),
-            ssl_keyfile=str(key_path),
-        )
+        # Run all but the last server in daemon threads; the last runs in the main
+        # thread so Ctrl-C (its signal handlers) stops the whole process.
+        for _scheme, cfg in servers[:-1]:
+            bg = uvicorn.Server(cfg)
+            bg.install_signal_handlers = lambda: None
+            threading.Thread(target=bg.run, daemon=True).start()
+        uvicorn.Server(servers[-1][1]).run()
 
 
 def _display_host(host: str) -> str:

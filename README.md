@@ -91,14 +91,15 @@ uv run sestudio download <url> --dry-run
 uv run sestudio serve
 ```
 
-Opens at `https://<host>:8443` — HTTPS with a self-signed cert by default (so Chromecast/AirPlay work; trust the cert once, see below). The server keeps running in the terminal — downloads continue in the background even if you close the browser tab. Stop it with Ctrl-C.
+Starts **two servers** by default — `http://<host>:8080` and `https://<host>:8443` (self-signed cert). Open the **HTTP** one for hassle-free browsing and DLNA casting; open the **HTTPS** one for Chromecast/AirPlay (which require a secure context — trust the cert once, see below). The server keeps running in the terminal — downloads continue in the background even if you close the browser tab. Stop it with Ctrl-C.
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `--host` | `0.0.0.0` | Bind address (`0.0.0.0` = reachable from other devices on your LAN) |
 | `--port` | `8443` | HTTPS port |
-| `--http-port` | `8080` | Plain-HTTP port served alongside HTTPS, for cast media (DLNA / Chromecast fetch media over HTTP) |
-| `--no-https` | off | Serve plain HTTP only, on `--port` |
+| `--http-port` | `8080` | HTTP port (DLNA / cast media fetch over plain HTTP) |
+| `--no-http` | off | Don't start the HTTP server (HTTPS only) |
+| `--no-https` | off | Don't start the HTTPS server (HTTP only) |
 | `--no-resolve` | off | Skip live-domain auto-resolution |
 
 > The default `0.0.0.0` binding makes the UI reachable from other devices on your network — needed for casting. There is no authentication, so run it only on a trusted home network. Pass `--host 127.0.0.1` to restrict it to the local machine.
@@ -135,16 +136,16 @@ uvx sestudio serve --host 0.0.0.0
 #### HTTPS built in (default)
 
 sestudio terminates HTTPS itself with a self-signed certificate covering your
-LAN IP — no extra tools:
+LAN IP — no extra tools. By default it runs **both** an HTTP and an HTTPS server:
 
 ```bash
-uvx sestudio serve                # HTTPS on :8443 by default (change with --port)
-uvx sestudio serve --no-https     # plain HTTP instead
+uvx sestudio serve                # both: http://…:8080 and https://…:8443
+uvx sestudio serve --no-https     # HTTP only (:8080)
+uvx sestudio serve --no-http      # HTTPS only (:8443)
 ```
 
-It prints the `https://<lan-ip>:8443` URL. The certificate is self-signed
-(cached at `~/.config/sestudio/cert.pem`), so the casting device must trust it
-once:
+The HTTPS certificate is self-signed (cached at `~/.config/sestudio/cert.pem`),
+so a client that uses the HTTPS site must trust it once:
 
 * **Desktop browser:** open the URL and accept the certificate warning, or import
   `~/.config/sestudio/cert.pem` into the system trust store.
@@ -159,7 +160,7 @@ once:
 uv run pytest
 
 # Backend for the dev proxy: plain HTTP on 8080 (the Vite proxy target)
-uv run sestudio serve --no-https --port 8080
+uv run sestudio serve --no-https
 
 # Frontend dev server (proxies /api to localhost:8080)
 cd frontend && npm install && npm run dev
