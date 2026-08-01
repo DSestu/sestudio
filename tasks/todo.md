@@ -81,7 +81,7 @@ human review.
 
 ### [x] Task 7 — CI build+publish with asset verification
 **Deps:** Task 2 · **Scope:** M · **Files:** `.github/workflows/*.yml`, `README.md`
-- Release job: `npm ci && npm run build` → `uv build` → assert wheel contains `web/static/index.html` → `uv publish` (token secret). Alongside `release_please.yml`.
+- Release job: `npm ci && npm run build` → `uv build` → assert wheel contains `web/static/index.html`, then a separate `publish-to-pypi` job via **OIDC trusted publishing** (no token). Matches the python-project-template.
 - README: supported platform/arch matrix (per imageio-ffmpeg wheels) + `uvx sestudio` install.
 - **AC:** frontend built before wheel; job fails if assets missing.
 - **Verify:** YAML lints; `workflow_dispatch` on a test tag yields a wheel with assets.
