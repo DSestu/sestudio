@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
+from sestudio.media import ffmpeg_location
 from sestudio.models import StreamSource
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,11 @@ def download(
     # one the provider resolved with so the download matches the embed fetch.
     if source.user_agent:
         cmd += ["--user-agent", source.user_agent]
+    # Point yt-dlp at a bundled ffmpeg when the system has none (returns None
+    # when a system ffmpeg is on PATH, so yt-dlp uses that instead).
+    ffmpeg_dir = ffmpeg_location()
+    if ffmpeg_dir:
+        cmd += ["--ffmpeg-location", ffmpeg_dir]
     cmd += [
         "--merge-output-format", "mp4",
         "-o", str(output_path),

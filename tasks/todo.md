@@ -42,7 +42,7 @@ human review.
 
 ## Phase 2 — Bundled ffmpeg
 
-### [ ] Task 4 — imageio-ffmpeg resolver in downloads
+### [x] Task 4 — imageio-ffmpeg resolver in downloads
 **Deps:** none (do after Phase 1 checkpoint) · **Scope:** M
 **Files:** `pyproject.toml`, `src/sestudio/media.py` (new), `src/sestudio/downloader.py`, `tests/test_media.py` (new)
 - Add `imageio-ffmpeg` dep.
