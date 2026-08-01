@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 HEADERS: dict[str, str] = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
     "Accept-Language": "fr-FR,fr;q=0.9",
+    # fstream fronts every page with a JS "Verification..." interstitial that just
+    # sets this cookie client-side and reloads; sending it up front skips the
+    # challenge and returns the real content. (Harmless to the anime domain.)
+    "Cookie": "fsschal=1",
 }
 
 SEASON_RE = re.compile(r"[Ss]aison\s+(\d+)", re.IGNORECASE)
