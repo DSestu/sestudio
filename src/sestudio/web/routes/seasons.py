@@ -5,8 +5,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from fstream_dl.http_client import new_client
-from fstream_dl.scraper import HEADERS, _fetch_film_available_langs, fetch_page, fetch_season
+from sestudio.http_client import new_client
+from sestudio.scraper import HEADERS, _fetch_film_available_langs, fetch_page, fetch_season
 
 router = APIRouter()
 

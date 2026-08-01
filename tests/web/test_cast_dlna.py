@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from fstream_dl.web.app import create_app
-from fstream_dl.web.routes import cast
+from sestudio.web.app import create_app
+from sestudio.web.routes import cast
 
 
 @pytest.fixture()

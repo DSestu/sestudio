@@ -1,5 +1,5 @@
 def main():
-    print("Hello from fstream-dl!")
+    print("Hello from sestudio!")
 
 
 if __name__ == "__main__":

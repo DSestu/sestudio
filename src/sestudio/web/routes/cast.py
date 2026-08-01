@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from fstream_dl import dlna
+from sestudio import dlna
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class DlnaPlayRequest(BaseModel):
     renderer_udn: str
     proxy_url: str
     kind: str = "mp4"
-    title: str = "fstream-dl"
+    title: str = "sestudio"
 
 
 @router.post("/cast/dlna/play")

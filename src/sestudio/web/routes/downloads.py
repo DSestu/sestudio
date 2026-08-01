@@ -10,10 +10,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from fstream_dl.config import load_config
-from fstream_dl.models import sanitize_path_component
-from fstream_dl.providers.base import ProviderError
-from fstream_dl.web.worker import DownloadJob
+from sestudio.config import load_config
+from sestudio.models import sanitize_path_component
+from sestudio.providers.base import ProviderError
+from sestudio.web.worker import DownloadJob
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

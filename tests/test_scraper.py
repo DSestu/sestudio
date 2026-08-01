@@ -3,7 +3,7 @@ import pytest
 import httpx
 from pytest_httpx import HTTPXMock
 
-from fstream_dl.scraper import fetch_season
+from sestudio.scraper import fetch_season
 from tests.conftest import load_fixture, FIXTURES
 
 

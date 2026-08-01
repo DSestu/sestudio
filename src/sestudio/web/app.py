@@ -8,13 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from fstream_dl.providers.luluvid import LuluvidProvider
-from fstream_dl.providers.netu import NetuProvider
-from fstream_dl.providers.premium import PremiumProvider
-from fstream_dl.providers.uqload import UqloadProvider
-from fstream_dl.providers.vidzy import VidzyProvider
-from fstream_dl.web.routes import cast, downloads, search, seasons, settings, stream
-from fstream_dl.web.worker import JobStore
+from sestudio.providers.luluvid import LuluvidProvider
+from sestudio.providers.netu import NetuProvider
+from sestudio.providers.premium import PremiumProvider
+from sestudio.providers.uqload import UqloadProvider
+from sestudio.providers.vidzy import VidzyProvider
+from sestudio.web.routes import cast, downloads, search, seasons, settings, stream
+from sestudio.web.worker import JobStore
 
 _PROVIDERS = {
     "uqload": UqloadProvider(),
@@ -24,13 +24,13 @@ _PROVIDERS = {
     "luluvid": LuluvidProvider(),
 }
 
-# app.py lives at src/fstream_dl/web/app.py → 4 parents up = repo root
+# app.py lives at src/sestudio/web/app.py → 4 parents up = repo root
 _REPO_ROOT = Path(__file__).parent.parent.parent.parent
 _FRONTEND_DIST = _REPO_ROOT / "frontend" / "dist"
 
 
 def create_app(live_domain: str | None = None) -> FastAPI:
-    app = FastAPI(title="fstream-dl", docs_url="/api/docs")
+    app = FastAPI(title="sestudio", docs_url="/api/docs")
 
     app.add_middleware(
         CORSMiddleware,

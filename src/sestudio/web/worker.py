@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from fstream_dl.downloader import ProgressEvent, download
-from fstream_dl.models import StreamSource
-from fstream_dl.providers.base import ProviderError, StreamProvider
+from sestudio.downloader import ProgressEvent, download
+from sestudio.models import StreamSource
+from sestudio.providers.base import ProviderError, StreamProvider
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class JobStore:
 
     def cancel(self, job_id: str) -> bool:
         """Cancel a queued or downloading job, clean up partial files. Returns True if found."""
-        from fstream_dl.downloader import _cleanup
+        from sestudio.downloader import _cleanup
         with self._lock:
             job = self._jobs.get(job_id)
             event = self._cancel_events.get(job_id)

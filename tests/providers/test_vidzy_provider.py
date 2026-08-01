@@ -4,7 +4,7 @@ import base64
 
 from pytest_httpx import HTTPXMock
 
-from fstream_dl.providers.vidzy import VidzyProvider
+from sestudio.providers.vidzy import VidzyProvider
 
 # The real m3u8 URL we expect the provider to recover from the obfuscated embed.
 _EXPECTED = "https://v6.vidzy.cc/hls2/02/00040/abc_n/master.m3u8?t=token&s=1&e=2"

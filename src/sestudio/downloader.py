@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
-from fstream_dl.models import StreamSource
+from sestudio.models import StreamSource
 
 logger = logging.getLogger(__name__)
 

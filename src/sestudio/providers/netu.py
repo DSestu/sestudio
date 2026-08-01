@@ -8,9 +8,9 @@ import re
 import httpx
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from fstream_dl.http_client import BROWSER_UA, new_client
-from fstream_dl.models import StreamSource
-from fstream_dl.providers.base import ProviderError, StreamProvider
+from sestudio.http_client import BROWSER_UA, new_client
+from sestudio.models import StreamSource
+from sestudio.providers.base import ProviderError, StreamProvider
 
 logger = logging.getLogger(__name__)
 

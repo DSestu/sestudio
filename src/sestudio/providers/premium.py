@@ -5,10 +5,10 @@ import re
 
 import httpx
 
-from fstream_dl.http_client import BROWSER_UA, new_client
-from fstream_dl.models import StreamSource
-from fstream_dl.providers.base import ProviderError, StreamProvider
-from fstream_dl.providers.vidzy import (
+from sestudio.http_client import BROWSER_UA, new_client
+from sestudio.models import StreamSource
+from sestudio.providers.base import ProviderError, StreamProvider
+from sestudio.providers.vidzy import (
     _OBFUSCATED_SRC_RE,
     _SRC_RE,
     _deobfuscate_src,

@@ -363,53 +363,6 @@ wheels = [
 ]
 
 [[package]]
-name = "fstream-dl"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "async-upnp-client" },
-    { name = "beautifulsoup4" },
-    { name = "cryptography" },
-    { name = "fastapi" },
-    { name = "fire" },
-    { name = "httpx" },
-    { name = "python-multipart" },
-    { name = "rich" },
-    { name = "uvicorn", extra = ["standard"] },
-    { name = "yt-dlp" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-httpx" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "async-upnp-client", specifier = ">=0.48.0" },
-    { name = "beautifulsoup4", specifier = ">=4.14.3" },
-    { name = "cryptography", specifier = ">=48.0.0" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "fire", specifier = ">=0.7.1" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "python-multipart", specifier = ">=0.0.20" },
-    { name = "rich", specifier = ">=15.0.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
-    { name = "yt-dlp", specifier = ">=2026.3.17" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-httpx", specifier = ">=0.36.2" },
-    { name = "ruff", specifier = ">=0.6.3" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -881,6 +834,53 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6b/8c/b1e1666aef7fc6555094d73ae6cd981701781ae85b97ceefc0eebd0b4668/ruff-0.15.13-py3-none-win32.whl", hash = "sha256:4044f94208b3b05ba0fc4a4abd0558cf4d6459bd18325eead7fd8cc66f909b41", size = 10721455, upload-time = "2026-05-14T13:44:35.697Z" },
     { url = "https://files.pythonhosted.org/packages/ab/a6/870a3e8a50590bb92be184ad928c2922f088b00d9dc5c5ec7b924ee08c22/ruff-0.15.13-py3-none-win_amd64.whl", hash = "sha256:7064884d442b7d477b4e7473d12da7f08851d2b1982763c5d3f388a19468a1a4", size = 11900409, upload-time = "2026-05-14T13:44:30.389Z" },
     { url = "https://files.pythonhosted.org/packages/9b/36/9c015cd052fca743dae8cb2aeb16b551444787467db42ceab0fc968865af/ruff-0.15.13-py3-none-win_arm64.whl", hash = "sha256:2471da9bd1068c8c064b5fd9c0c4b6dddffd6369cb1cd68b29993b1709ff1b21", size = 11179336, upload-time = "2026-05-14T13:44:33.026Z" },
+]
+
+[[package]]
+name = "sestudio"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "async-upnp-client" },
+    { name = "beautifulsoup4" },
+    { name = "cryptography" },
+    { name = "fastapi" },
+    { name = "fire" },
+    { name = "httpx" },
+    { name = "python-multipart" },
+    { name = "rich" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "yt-dlp" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-httpx" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "async-upnp-client", specifier = ">=0.48.0" },
+    { name = "beautifulsoup4", specifier = ">=4.14.3" },
+    { name = "cryptography", specifier = ">=48.0.0" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "fire", specifier = ">=0.7.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "python-multipart", specifier = ">=0.0.20" },
+    { name = "rich", specifier = ">=15.0.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
+    { name = "yt-dlp", specifier = ">=2026.3.17" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-httpx", specifier = ">=0.36.2" },
+    { name = "ruff", specifier = ">=0.6.3" },
 ]
 
 [[package]]

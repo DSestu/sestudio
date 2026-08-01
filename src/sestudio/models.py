@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass, field
 
-from fstream_dl.http_client import BROWSER_UA
+from sestudio.http_client import BROWSER_UA
 
 _UNSAFE_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _MULTI_DASH_RE = re.compile(r'-{2,}')

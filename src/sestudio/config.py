@@ -8,7 +8,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_CONFIG_PATH = Path.home() / ".config" / "fstream-dl" / "config.json"
+_CONFIG_PATH = Path.home() / ".config" / "sestudio" / "config.json"
 
 
 @dataclass

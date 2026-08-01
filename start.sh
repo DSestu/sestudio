@@ -1,1 +1,1 @@
-uvx --with-editable . fstream-dl serve "$@"
+uvx --with-editable . sestudio serve "$@"

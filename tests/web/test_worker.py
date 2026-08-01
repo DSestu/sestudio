@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from fstream_dl.models import StreamSource
-from fstream_dl.web.worker import JobStore
+from sestudio.models import StreamSource
+from sestudio.web.worker import JobStore
 
 
 @pytest.fixture()
@@ -21,7 +21,7 @@ def source():
 
 
 def test_submit_creates_queued_job(store, source, tmp_path):
-    with patch("fstream_dl.web.worker.download", return_value=True) as mock_dl:
+    with patch("sestudio.web.worker.download", return_value=True) as mock_dl:
         mock_dl.side_effect = lambda *a, **kw: time.sleep(10)  # block so we can inspect
         job = store.submit(source, tmp_path / "ep.mp4", "S01E01")
     assert job.id
@@ -30,7 +30,7 @@ def test_submit_creates_queued_job(store, source, tmp_path):
 
 
 def test_job_transitions_to_done(store, source, tmp_path):
-    with patch("fstream_dl.web.worker.download", return_value=True):
+    with patch("sestudio.web.worker.download", return_value=True):
         job = store.submit(source, tmp_path / "ep.mp4", "S01E01")
         deadline = time.time() + 3
         while time.time() < deadline:
@@ -42,7 +42,7 @@ def test_job_transitions_to_done(store, source, tmp_path):
 
 
 def test_job_transitions_to_failed(store, source, tmp_path):
-    with patch("fstream_dl.web.worker.download", return_value=False):
+    with patch("sestudio.web.worker.download", return_value=False):
         job = store.submit(source, tmp_path / "ep.mp4", "S01E01")
         deadline = time.time() + 3
         while time.time() < deadline:
@@ -54,7 +54,7 @@ def test_job_transitions_to_failed(store, source, tmp_path):
 
 
 def test_all_jobs_returns_list(store, source, tmp_path):
-    with patch("fstream_dl.web.worker.download", return_value=True) as mock_dl:
+    with patch("sestudio.web.worker.download", return_value=True) as mock_dl:
         mock_dl.side_effect = lambda *a, **kw: True
         store.submit(source, tmp_path / "ep1.mp4", "S01E01")
         store.submit(source, tmp_path / "ep2.mp4", "S01E02")

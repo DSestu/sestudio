@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from fstream_dl.config import AppConfig, load_config, save_config
+from sestudio.config import AppConfig, load_config, save_config
 
 router = APIRouter()
 

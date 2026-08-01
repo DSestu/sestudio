@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-rem fstream-dl (Windows): run the app on all interfaces and front it with HTTPS
+rem sestudio (Windows): run the app on all interfaces and front it with HTTPS
 rem via Caddy (self-signed) so Chromecast/AirPlay work and it is reachable over a
 rem port-forward. DLNA works without HTTPS. Ctrl-C in this window stops the app.
 
@@ -46,12 +46,12 @@ if %errorlevel%==0 (
   echo   Remote:  https://YOUR-PUBLIC-IP:%HTTPS_PORT%   [forward TCP %HTTPS_PORT% on your router]
   echo   Browsers show a certificate warning - click through to proceed.
   echo.
-  start "Caddy HTTPS (fstream-dl)" caddy run --config "%CADDYFILE%" --adapter caddyfile
+  start "Caddy HTTPS (sestudio)" caddy run --config "%CADDYFILE%" --adapter caddyfile
 ) else (
   echo [!] caddy not found on PATH - HTTPS/Chromecast unavailable.
   echo     DLNA casting still works over http://%LANIP%:%PORT%
 )
 
-uvx --with-editable . fstream-dl serve --host 0.0.0.0 -p %PORT% %*
+uvx --with-editable . sestudio serve --host 0.0.0.0 -p %PORT% %*
 
 endlocal

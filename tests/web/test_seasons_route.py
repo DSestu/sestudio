@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pytest_httpx import HTTPXMock
 
-from fstream_dl.web.app import create_app
+from sestudio.web.app import create_app
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 

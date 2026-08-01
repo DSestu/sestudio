@@ -5,7 +5,7 @@ import urllib.parse
 
 from bs4 import BeautifulSoup
 
-from fstream_dl.http_client import new_client
+from sestudio.http_client import new_client
 
 logger = logging.getLogger(__name__)
 

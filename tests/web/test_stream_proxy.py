@@ -7,10 +7,10 @@ import pytest
 from fastapi.testclient import TestClient
 from pytest_httpx import HTTPXMock
 
-from fstream_dl.models import StreamSource
-from fstream_dl.providers.base import ProviderError
-from fstream_dl.web.app import create_app
-from fstream_dl.web.proxy import TokenError, rewrite_playlist, sign, verify
+from sestudio.models import StreamSource
+from sestudio.providers.base import ProviderError
+from sestudio.web.app import create_app
+from sestudio.web.proxy import TokenError, rewrite_playlist, sign, verify
 
 SECRET = b"0123456789abcdef0123456789abcdef"
 

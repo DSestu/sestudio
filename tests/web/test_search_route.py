@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pytest_httpx import HTTPXMock
 
-from fstream_dl.web.app import create_app
+from sestudio.web.app import create_app
 
 SEARCH_HTML = """
 <div class='search-item' onclick="location.href='/16676-stargate-sg-1-saison-1-streaming.html'">

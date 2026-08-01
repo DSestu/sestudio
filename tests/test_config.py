@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from fstream_dl.config import AppConfig, load_config, save_config
+from sestudio.config import AppConfig, load_config, save_config
 
 
 def test_defaults_when_missing(tmp_path, monkeypatch):

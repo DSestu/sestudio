@@ -7,8 +7,8 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-from fstream_dl.http_client import new_client
-from fstream_dl.models import Episode, SeasonCard
+from sestudio.http_client import new_client
+from sestudio.models import Episode, SeasonCard
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +108,11 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
         page_resp.raise_for_status()
 
         soup = BeautifulSoup(page_resp.text, "html.parser")
-        season = _parse_season_number(soup)
+        # Parse the news ID first: its absence (no #serie-config) is what marks a
+        # film. The season number is optional — some series (e.g. sketch shows)
+        # have no "Saison N" in their title yet still expose full episode data.
         news_id = _parse_news_id(soup)
+        season = _parse_season_number(soup)
 
         base_url = str(page_resp.url)
         base_origin = "/".join(base_url.split("/")[:3])
@@ -271,6 +274,11 @@ def _fetch_film_available_langs(url: str) -> list[str]:
 
 
 def _parse_season_number(soup: BeautifulSoup) -> int:
+    """Return the season number, or 0 when the page carries no "Saison N" label.
+
+    A series without a season number (e.g. a sketch show) is still a valid
+    series; only a missing #serie-config (handled by _parse_news_id) marks a film.
+    """
     config = soup.find(id="serie-config")
     if config:
         title: str = config.get("data-title", "")  # type: ignore[assignment]
@@ -283,7 +291,7 @@ def _parse_season_number(soup: BeautifulSoup) -> int:
     if m:
         return int(m.group(1))
 
-    raise ValueError("Could not determine season number from page")
+    return 0
 
 
 def _parse_news_id(soup: BeautifulSoup) -> str:

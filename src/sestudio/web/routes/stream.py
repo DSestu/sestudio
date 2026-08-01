@@ -10,8 +10,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from fstream_dl.http_client import BROWSER_UA, new_client
-from fstream_dl.web.proxy import PROXY_TOKEN_TTL, TokenError, rewrite_playlist, sign, verify
+from sestudio.http_client import BROWSER_UA, new_client
+from sestudio.web.proxy import PROXY_TOKEN_TTL, TokenError, rewrite_playlist, sign, verify
 
 logger = logging.getLogger(__name__)
 

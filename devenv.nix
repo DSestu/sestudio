@@ -17,7 +17,7 @@
 
   scripts.start.exec = ''
     build
-    uvx --with-editable "$DEVENV_ROOT" fstream-dl serve "$@"
+    uvx --with-editable "$DEVENV_ROOT" sestudio serve "$@"
   '';
 
   scripts.build.exec = ''

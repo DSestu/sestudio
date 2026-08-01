@@ -1,247 +1,195 @@
-# SPEC: fstream-dl Web UI
+# SPEC: sestudio uvx Packaging & Distribution
+
+Status: **Draft — awaiting review**
+Supersedes (in this file): the prior "Web UI" and "In-browser Player & Cast" specs, which remain in git history (`git show HEAD:SPEC.md`) and describe already-shipped features. This spec covers only how that product gets packaged and shipped.
 
 ## Objective
-Add a local web interface to fstream-dl that proxies the fstream search engine, lets the user browse results, select seasons/episodes via a checkbox tree, configure download settings, and monitor per-episode progress. Target: single user, self-hosted, runs on localhost.
+
+Make sestudio installable and runnable as a **single self-contained command** via
+`uvx sestudio`, with **zero manual system setup** — the user should not have to
+separately install ffmpeg, ffprobe, Node, or Caddy. Primary distribution channel is
+**PyPI**; `uvx --from git+…` is a best-effort secondary path.
+
+Who it's for: the existing single self-hosted user, now installing on a fresh machine
+with only `uv` present.
+
+Success = on a clean machine with no repo checkout and nothing but `uv`:
+- `uvx sestudio serve` starts the web UI **with assets loading** and downloads working.
+- An HLS episode downloads end-to-end **with no system ffmpeg on PATH**.
+- `uvx sestudio serve --https` serves HTTPS with a self-signed cert so casting works
+  without Caddy.
+
+---
+
+## Tech Stack (packaging-relevant)
+
+| Concern | Choice |
+|---|---|
+| Build backend | `hatchling` (existing) + build step that bundles the frontend into the package |
+| Frontend assets | Vite `dist/` **relocated into** `src/sestudio/web/static/`, shipped inside the wheel |
+| ffmpeg | `imageio-ffmpeg` pip wheel (**truly bundles** a static ffmpeg per-platform, offline-verified; ~77 MB installed), injected via yt-dlp `--ffmpeg-location`. ffprobe not needed for HLS→mp4 (verified). |
+| yt-dlp | already a dependency; its console script is on PATH inside the uvx venv (invoked via `shutil.which("yt-dlp")`) |
+| HTTPS / TLS | self-signed cert generated at startup via the existing `cryptography` dep; served by uvicorn `ssl_keyfile`/`ssl_certfile` |
+| Publish | PyPI (built wheel with pre-built frontend); git-based `uvx --from` secondary |
+
+New runtime dep: `imageio-ffmpeg`. No new dep for TLS (`cryptography` already present).
 
 ---
 
 ## Commands
 
+Run (end users):
+```bash
+uvx sestudio serve [--host 0.0.0.0] [--port 8080] [--https] [--https-port 8443]
+uvx --from git+https://github.com/DSestu/sestudio sestudio serve   # secondary
 ```
-fstream-dl serve [--host 0.0.0.0] [--port 8080]
+
+Build & publish (maintainer):
+```bash
+npm --prefix frontend ci
+npm --prefix frontend run build          # → frontend/dist
+# build hook copies frontend/dist → src/sestudio/web/static/ (see build hook below)
+uv build                                  # produces sdist + wheel with static assets
+uvx --from ./dist/sestudio-*.whl sestudio serve   # smoke test the built wheel
+uv publish                                # → PyPI
 ```
-Starts the FastAPI + static frontend server. Downloads dispatched from the UI continue running as long as the process is alive. Ctrl-C stops the server but not in-flight downloads (they run in a background thread pool).
 
----
-
-## Core Features & Acceptance Criteria
-
-### Search
-- Input box proxies fstream search → returns list of season cards
-- Each card shows: series title, poster image, language badges (VF / VOSTFR), episode count
-- Results update as user types (debounced) or on submit
-
-### Selection tree
-- Three levels: Series → Season → Episode (expand/collapse)
-- Checkboxes cascade: check series → all seasons checked; uncheck one season → series goes indeterminate
-- Episode level shows episode number + title
-
-### Global settings panel
-- Language selector (VF / VOSTFR) — overrides any per-item setting
-- Output root path (text input, default from config or `.`)
-
-### Download queue
-- "Download selected" button dispatches jobs to FastAPI background worker
-- Per-episode progress bar (bytes or percentage from yt-dlp `--progress` output)
-- Status badges: queued / downloading / done / failed
-- UI stays open; downloads survive UI closure as long as server process runs
-
-### Config persistence
-- Output root and default language saved to `~/.config/fstream-dl/config.json`
-
----
-
-## Project Structure
-
-```
-src/fstream_dl/
-  web/
-    app.py          # FastAPI app, mounts static files
-    routes/
-      search.py     # GET /api/search?q=
-      seasons.py    # GET /api/season?url=
-      downloads.py  # POST /api/downloads, GET /api/downloads
-      settings.py   # GET/PUT /api/settings
-    worker.py       # Background download executor (reuses downloader.py)
-    progress.py     # SSE progress emitter
-frontend/           # React app (Vite)
-  src/
-    components/
-      SearchBar.tsx
-      ResultsGrid.tsx
-      SeasonTree.tsx
-      DownloadQueue.tsx
-      SettingsPanel.tsx
-  dist/             # built assets, served by FastAPI as /static
+Verify (maintainer):
+```bash
+uv run pytest tests/ -q
+uv run ruff check . && uv run ruff format --check .
+python -m zipfile -l dist/sestudio-*.whl | grep web/static/index.html   # assets present
 ```
 
 ---
 
-## Tech Stack
+## Core Changes & Acceptance Criteria
 
-| Layer | Choice |
-|---|---|
-| Backend | FastAPI + uvicorn |
-| Frontend | React + TypeScript (Vite) |
-| Progress streaming | Server-Sent Events (SSE) |
-| State management | React built-in (useState/useContext) |
-| Styling | Tailwind CSS |
-| Build | `vite build` → `frontend/dist/`, committed or built on install |
-| New deps | `fastapi`, `uvicorn`, `python-multipart` |
+### P1 — Bundle frontend assets into the package
+The UI must load when installed, with no repo `frontend/` sibling.
+- Relocate built assets to `src/sestudio/web/static/` (via build hook; see below).
+- `web/app.py` resolves the dist dir **relative to the module**:
+  `Path(__file__).parent / "static"` — not `_REPO_ROOT / "frontend" / "dist"`.
+- A hatch build step (`[tool.hatch.build.targets.wheel.force-include]` or a custom build
+  hook) ensures `web/static/**` lands in the wheel.
+- **AC1**: `python -m zipfile -l` on the built wheel lists `sestudio/web/static/index.html`
+  and `sestudio/web/static/assets/*`.
+- **AC2**: installing the wheel in a clean venv (no repo checkout) and running `serve`
+  returns the SPA at `/` with assets loading (HTTP 200, no 404 on `/assets/*`).
 
----
+### P2 — Ship ffmpeg, no system install required
+- Add `imageio-ffmpeg` to `dependencies`. Its per-platform wheel bundles a static ffmpeg
+  (offline-verified: no runtime download). ffprobe is **not** required for the HLS→mp4
+  path (empirically verified — yt-dlp's `hlsnative` downloader muxes via ffmpeg alone).
+- A resolver (`media.ffmpeg_location()`) returns the directory containing the ffmpeg
+  binary; `downloader.download()` adds `--ffmpeg-location <dir>` to the yt-dlp command.
+- **Prefer a real system install**: if `ffmpeg` is already on PATH, use it (fuller codec
+  set, plus a real ffprobe) and skip the bundled binary.
+- **AC3**: with no system ffmpeg on PATH, an HLS episode downloads and muxes to mp4
+  successfully using the bundled binary.
+- **AC4**: with system ffmpeg present, the bundled binary is **not** used (verifiable:
+  `--ffmpeg-location` omitted so yt-dlp uses PATH).
 
-## Code Style
-- All Python with full type annotations and `from __future__ import annotations`
-- FastAPI route functions are thin — business logic stays in existing modules
-- Frontend: functional components only, no class components
-- No global mutable state in the worker — each job is a dataclass with a thread-safe status field
+### P3 — Self-contained HTTPS for casting (no Caddy)
+- `serve --https` generates (once, cached under the config/data dir) a self-signed cert
+  whose SubjectAltName includes the resolved LAN IP (and `127.0.0.1`/`localhost`), using
+  `cryptography`, then runs uvicorn with `ssl_keyfile`/`ssl_certfile`.
+- Keep the existing "use Caddy if on PATH" path as an **optional** upgrade; document both.
+- **AC6**: `serve --https` serves the UI over `https://<lan-ip>:<https-port>` with the
+  generated cert.
+- **AC7**: after trusting the generated cert on the casting device, Chromecast lists and
+  plays (the cert-trust step is documented; trust itself is manual — same constraint as
+  Caddy).
+- **AC8**: `serve` without `--https` is unchanged (HTTP only, current default behavior).
 
----
-
-## Testing Strategy
-- Unit tests for `search.py` route (mock httpx, assert response shape)
-- Unit tests for `seasons.py` route (reuse existing scraper fixtures)
-- Unit tests for `downloads.py` route (mock worker, assert job creation)
-- Frontend: no automated tests in this phase (manual browser verification)
-
----
-
-## Boundaries
-
-| Always | Ask first | Never |
-|---|---|---|
-| Resolve live domain at serve startup | Overwrite existing downloaded file | Store credentials or session tokens |
-| Sanitize all filenames | Delete a partially downloaded file | Expose the server on 0.0.0.0 by default |
-| Respect `--no-resolve` flag | Change default output path | Embed provider secrets in frontend |
-
----
----
-
-# SPEC: In-browser Player & Cast-to-device
-
-Status: **Approved**
-Related prior work: Caddy HTTPS reverse-proxy investigation (memory S1890/S1891), broken upstream TLS handling in `http_client.py`.
-
-## Objective
-
-Let a user **watch an episode directly in the fstream-dl web UI** and **cast it to a device on their LAN** (Chromecast, AirPlay, or DLNA/UPnP TV), without downloading it first. Target: the existing single self-hosted user on a trusted home network — not multi-tenant or public.
-
-### The core problem this solves
-Resolved stream URLs (from `uqload`, `vidzy`, `netu`) are **not directly playable by a browser or a cast device**, because every stream requires:
-1. A provider-specific `Referer` header (hotlink protection) — JS and cast devices **cannot** set `Referer`.
-2. Tolerance of **broken upstream TLS** (expired/mismatched certs) — browsers and cast devices refuse these.
-3. HLS streams additionally hit CORS.
-
-The **only** component that can satisfy all three is the Python backend (already uses `httpx` with `verify=False` and sets `Referer` in `http_client.new_client()`). Therefore the keystone of this spec is a **server-side streaming proxy**; the player and all three cast targets consume the proxied stream, never the raw provider URL.
-
----
-
-## Core Features & Acceptance Criteria
-
-### F1 — Stream resolution endpoint
-Reuse existing providers (`get_stream_url`) to turn an embed URL into a playable descriptor.
-- `GET /api/stream/resolve?embed_url=<url>&provider=<name>` → `{ proxy_url, kind }`, `kind ∈ {"mp4","hls"}`.
-- The raw provider URL and referer are **never** returned to the client — sealed inside a signed proxy token (F2).
-- **AC1**: valid uqload embed → `kind:"mp4"` + `proxy_url`.
-- **AC2**: valid vidzy/netu embed → `kind:"hls"`.
-- **AC3**: provider failure → HTTP 502 with the provider's message (matches `/api/season` style).
-
-### F2 — Server-side streaming proxy (keystone)
-- `GET /api/stream/proxy?token=<signed>` where `token` is an **HMAC-signed** opaque blob encoding `{target_url, referer, provider, exp}` — prevents an open relay.
-- Forwards the correct `Referer`, uses `new_client()` (TLS verify off), streams back via `StreamingResponse`.
-- **MP4 path**: forwards client `Range` upstream; relays `Content-Range`/`Accept-Ranges`/`Content-Length`/206 so seeking works.
-- **HLS path**: fetches the `.m3u8` and **rewrites** every URI to point back at `/api/stream/proxy` with a fresh token — segments (`.ts`/`.m4s`), nested playlists (master → media), and `#EXT-X-KEY URI=` values; relative and absolute both handled.
-- **AC4**: MP4 seek issues a `Range` request and resumes correctly.
-- **AC5**: vidzy master playlist rewritten so the browser loads variants + segments **only** through the proxy (verifiable in network tab).
-- **AC6**: AES-128 `#EXT-X-KEY URI` rewritten and key fetched through the proxy.
-- **AC7**: tampered/expired `token` → HTTP 403, **no** upstream request issued.
-
-### F3 — In-browser player (Vidstack)
-- A **Play** action per episode opens a modal with a Vidstack player pointed at `proxy_url`, selecting HLS or MP4 by `kind`.
-- Closing the modal tears down the player and aborts in-flight proxy requests.
-- **AC8**: Play starts playback in the modal; closing stops network activity.
-- **AC9**: works for an MP4-backed (uqload) and an HLS-backed (vidzy) episode.
-
-### F4 — Cast: Google Cast + AirPlay (client-driven)
-- Vidstack's built-in **Google Cast** and **AirPlay** buttons.
-- Cast devices fetch `proxy_url` themselves → server MUST be LAN-bound and reachable over **HTTPS with a cert the device trusts** (F6).
-- **AC10**: over trusted HTTPS on the LAN, the Cast button lists a Chromecast and casting starts playback.
-- **AC11**: AirPlay button casts in Safari on the same network. *(Best-effort; Apple-device dependent.)*
-
-### F5 — Cast: DLNA / UPnP (server-driven)
-Web player libraries cannot do DLNA — separate backend path.
-- `GET /api/cast/dlna/renderers` — SSDP-discover MediaRenderers → `[{name, udn, control_url}]`.
-- `POST /api/cast/dlna/play` — `{renderer_udn, proxy_url}` → `SetAVTransportURI` + `Play`.
-- Frontend "Cast to TV" menu lists renderers; selecting one pushes the episode's `proxy_url`.
-- DLNA renderers fetch over **HTTP** → works without HTTPS (only LAN-reachable HTTP needed).
-- **AC12**: `/api/cast/dlna/renderers` lists a real renderer.
-- **AC13**: selecting a renderer starts playback of the proxied stream on it.
-
-### F6 — LAN + HTTPS serving posture
-- `serve` binds configurably (already has `--host`); document `--host 0.0.0.0` for LAN reach.
-- Provide a **Caddy** reverse-proxy recipe for HTTPS on the LAN IP (reuses prior Caddy work), incl. trusting the local CA on the casting device.
-- **AC14**: docs take a user from `serve --host 0.0.0.0` + Caddy to a working HTTPS origin, with the Chromecast cert-trust step called out.
+### P4 — Distribution metadata & release plumbing
+- Add a `LICENSE` file and `license` metadata (the `[project.urls]` already points at one).
+- Remove/repurpose the stray `main.py` "Hello from sestudio!" stub — it is not an entry
+  point.
+- CI release job: `npm build` → build hook → `uv build` → `uv publish`, so the published
+  wheel always contains fresh pre-built assets.
+- Declare the **supported platform/arch matrix** in the README, bounded by which platforms
+  `imageio-ffmpeg` ships wheels for.
+- **AC9**: `uvx sestudio` (from the published wheel) runs the CLI with no manual system
+  deps.
+- **AC10**: `pyproject.toml` has a valid `license`, a `LICENSE` file exists, and the wheel
+  metadata is complete (`uv build` emits no metadata warnings).
 
 ### Non-goals
-No transcoding · no auth/multi-user · no watch-history/resume · no public-internet exposure.
-
----
-
-## Commands
-
-Backend (`uv`):
-```bash
-uv sync                                              # + async-upnp-client (DLNA)
-uv run fstream-dl serve --host 0.0.0.0 --port 8080   # LAN-reachable
-uv run pytest tests/web/test_stream_proxy.py -q      # proxy unit tests
-uv run ruff check . && uv run ruff format --check .
-```
-Frontend (`frontend/`):
-```bash
-npm install        # + @vidstack/react
-npm run dev
-npm run build      # → frontend/dist served by FastAPI
-npm run lint
-```
-HTTPS for casting:
-```bash
-caddy reverse-proxy --from https://<lan-ip> --to 127.0.0.1:8080
-```
+No Docker packaging changes · no Windows installer · no auto-updating · no vendoring the
+Caddy binary · no change to provider/scraper/cast logic beyond the ffmpeg-location and
+static-path wiring.
 
 ---
 
 ## Project Structure (new / changed)
 
 ```
-src/fstream_dl/
+pyproject.toml                       # CHANGED  + imageio-ffmpeg dep, license, build hook/force-include
+LICENSE                              # NEW
+src/sestudio/
   web/
-    routes/stream.py   # NEW  /api/stream/resolve, /api/stream/proxy
-    routes/cast.py     # NEW  /api/cast/dlna/renderers, /api/cast/dlna/play
-    proxy.py           # NEW  token sign/verify + HLS playlist rewriting
-    app.py             # CHANGED  register stream + cast routers
-  dlna.py              # NEW  SSDP discovery + SetAVTransportURI (async-upnp-client)
-  # providers/*, resolver.py, http_client.py, models.py — reused unchanged
-frontend/src/
-  components/PlayerModal.tsx  # NEW  Vidstack player + Cast/AirPlay
-  components/CastMenu.tsx     # NEW  DLNA renderer list
-  api.ts                      # CHANGED  resolveStream(), listRenderers(), dlnaPlay()
-  components/SeasonTree.tsx / ResultsGrid.tsx  # CHANGED  Play/Cast affordance
-tests/web/test_stream_proxy.py  # NEW  token, Range, HLS rewrite
-tests/web/test_cast_dlna.py     # NEW  discovery + play (mocked)
+    app.py                           # CHANGED  static dir = __file__.parent/"static"
+    static/                          # NEW (build artifact)  bundled frontend dist, shipped in wheel
+  media.py                           # NEW  resolve ffmpeg dir (system-preferred, imageio-ffmpeg fallback)
+  tls.py                             # NEW  generate/cache self-signed cert with LAN-IP SAN
+  downloader.py                      # CHANGED  add --ffmpeg-location from media.py
+  cli.py                             # CHANGED  serve gains --https/--https-port; wires tls.py + uvicorn ssl args
+main.py                              # REMOVED  stray stub
+frontend/dist/                       # build input, copied into web/static by the build hook
+tests/
+  test_media.py                      # NEW  system-preferred vs bundled fallback
+  test_tls.py                        # NEW  cert has expected SANs; cached on second call
+  test_packaging.py                  # NEW  built wheel contains web/static assets
 ```
-New deps: backend `async-upnp-client` (signing uses stdlib `hmac`/`hashlib`); frontend `@vidstack/react`.
+
+Build hook: a hatchling build hook (or `force-include = { "src/sestudio/web/static" = "sestudio/web/static" }`)
+copies `frontend/dist` → `src/sestudio/web/static` at build time. The frontend build
+(`npm run build`) runs **before** `uv build` (in CI and documented for local builds); the
+Python build does not invoke npm.
 
 ---
 
 ## Code Style
-- **Match the existing codebase** over any general convention.
-- Python: `from __future__ import annotations`, full type hints, `logging` (not print), typed exceptions surfaced as HTTP 502/403. Reuse `new_client()` for **all** upstream fetches (never a bare `httpx.Client` — TLS-verify-off lives there deliberately). Keep blocking I/O off the loop with `asyncio.to_thread` (as `routes/seasons.py` does).
-- Proxy token secret generated per-process at startup on `app.state`; never hardcoded.
-- React/TS: functional components + hooks, DaisyUI classes, the ref-pattern already used for `exhaustive-deps` (SearchBar/SettingsPanel). No new state library.
-- Comment *why* (referer/TLS rationale), not *what*; no comments on unchanged code.
+
+- **Match the existing codebase.** Python: `from __future__ import annotations`, full type
+  hints, `logging` not `print`, typed exceptions.
+- `media.py` and `tls.py` are small, pure, testable helpers — no global mutable state; the
+  cert path and ffmpeg dir are computed and returned, cached on disk (not in module
+  globals). Example shape:
+
+```python
+def ffmpeg_location() -> str | None:
+    """Directory holding ffmpeg for yt-dlp's --ffmpeg-location.
+
+    Returns None when a system install is already on PATH (let yt-dlp use it —
+    gives a real ffprobe and fuller codecs).
+    """
+    if shutil.which("ffmpeg"):
+        return None
+    import imageio_ffmpeg
+    return str(Path(imageio_ffmpeg.get_ffmpeg_exe()).parent)
+```
+
+- No new comments on unchanged code; comment *why* (e.g. the system-preferred rationale),
+  not *what*.
 
 ---
 
 ## Testing Strategy
-- **Unit (pytest + respx/httpx mock)** — priority, correctness lives in the proxy:
-  - Token sign→verify round-trip; tampered/expired rejected **before** any upstream call (AC7).
-  - MP4 `Range` forwarded, 206 + `Content-Range` relayed (AC4).
-  - HLS rewriting master→media→segment + `#EXT-X-KEY URI=`, relative & absolute, via captured-playlist fixtures (AC5, AC6).
-  - DLNA discovery parses mocked SSDP/description; `play` emits well-formed `SetAVTransportURI` SOAP (AC12/AC13), network mocked.
-- Resolve endpoint returns correct `kind` per provider (AC1–AC3); extend existing provider tests.
-- **Manual checklist (needs real devices/HTTPS)**: in-browser MP4 + HLS (AC8/AC9); Chromecast over HTTPS (AC10); AirPlay in Safari (AC11); DLNA to a TV (AC13); Caddy walkthrough (AC14).
-- Keep existing layout (`tests/web`, `tests/providers`); no framework changes.
+
+- **Unit (pytest)** — the new logic is small and deterministic:
+  - `media.ffmpeg_location()` returns `None` when a system ffmpeg is stubbed onto PATH,
+    and a directory (mocked `imageio_ffmpeg`) otherwise (AC3/AC4).
+  - `tls` cert generation: SAN includes the passed IP + `127.0.0.1`/`localhost`; a second
+    call reuses the cached cert (AC6).
+  - Packaging: build the wheel in a tmp dir and assert `sestudio/web/static/index.html`
+    is a member (AC1). (Or assert the module-relative path resolves inside site-packages.)
+- **Manual / smoke (clean environment, real network/devices)**:
+  - `uvx --from ./dist/*.whl sestudio serve` → UI + assets load (AC2, AC9).
+  - HLS download with system ffmpeg removed from PATH (AC3).
+  - `serve --https` + Chromecast after cert trust (AC6/AC7).
+- Keep existing `tests/` layout; no framework changes.
 
 ---
 
@@ -249,15 +197,52 @@ New deps: backend `async-upnp-client` (signing uses stdlib `hmac`/`hashlib`); fr
 
 | Always | Ask first | Never |
 |---|---|---|
-| Route every upstream fetch through `new_client()` with the provider `Referer` | Add any dep beyond `@vidstack/react` + `async-upnp-client` | Expose raw provider URLs, referers, or the signing secret to the client |
-| Keep the proxy **closed** — only HMAC-signed, unexpired tokens honored (403 before touching network) | Change the default bind host / widen network exposure | Ship an **open** proxy (arbitrary target URLs) |
-| Default bind stays `0.0.0.0` (LAN-reachable, as the committed `serve` already does — casting needs it); documented as trusted-LAN-only, `--host 127.0.0.1` to restrict | Introduce auth, accounts, or persistence | Disable TLS verification anywhere except the existing `new_client()` scraper path |
-| Stream responses (never buffer whole videos); support `Range` for MP4 | Swap the player or DLNA library after approval | Add transcoding, DRM circumvention, or public-internet exposure |
-| Document the cert-trust step for HTTPS casting | | Commit without explicit user consent (repo git rule) |
+| Prefer a system ffmpeg when present; fall back to bundled | Add any runtime dep beyond `imageio-ffmpeg` | Vendor/commit large binaries into git |
+| Resolve the static dir relative to the module (`__file__`) | Change the default bind host or default port | Ship an sdist/wheel whose UI silently 404s (assets must be verified present) |
+| Run `npm build` before `uv build` so assets are fresh | Commit built `web/static` into git vs. build-hook-only | Invoke `npm` from the Python build backend |
+| Cache the self-signed cert; regenerate only if missing/expired | Publish to PyPI (needs the account/token) | Enable HTTPS by default silently, or weaken the existing HTTP default |
+| Verify wheel contents in CI before publish | Remove `main.py` | Commit without explicit user consent (repo git rule) |
 
 ---
 
-## Resolved decisions
-1. **DLNA scope**: full discovery + push (F5) is **in v1**, alongside Google Cast + AirPlay.
-2. **Player entry point**: **one Play button per episode row**.
-3. **Token TTL**: **short-lived (a few hours)** — cast sessions survive, stale links expire.
+## Success Criteria (testable)
+
+1. `uv build` yields a wheel containing `sestudio/web/static/index.html` + `assets/**` (AC1).
+2. In a clean env with only `uv`, `uvx --from <wheel> sestudio serve` serves the UI with
+   assets loading (AC2, AC9).
+3. An HLS episode downloads and merges to mp4 with **no** system ffmpeg on PATH (AC3).
+4. With system ffmpeg present, bundled binaries are not used (AC4).
+5. `serve --https` serves HTTPS with a self-signed cert whose SAN includes the LAN IP (AC6).
+6. `serve` (no flag) behaves exactly as today (AC8).
+7. `LICENSE` exists and metadata is complete (AC10).
+
+---
+
+## Resolved decisions (from empirical checks, 2026-08-01)
+
+- **Project name → `sestudio`** (Sestu + studio). Chosen over the old `fstream-dl` because
+  the project is heading toward a general multi-source video aggregator, not
+  fstream-specific. PyPI name confirmed available (2026-08-01). **Full rename executed
+  2026-08-01**: distribution name + console command (`pyproject.toml`), the four GitHub URLs
+  (→ `DSestu/sestudio` — the GitHub repo must be renamed to match), and the import module
+  `src/fstream_dl/` → `src/sestudio/` with all `from fstream_dl …` updated across the code
+  and tests. All 55 tests pass; `sestudio` console script verified. Two follow-ups noted:
+  the config dir moved to `~/.config/sestudio/` (old config not migrated — fine pre-release),
+  and PyPI publishing is the user's to do.
+- **ffmpeg packaging → `imageio-ffmpeg`.** Verified `static-ffmpeg` does *not* bundle its
+  binaries (36 KB of pure Python; downloads platform zips from a third-party GitHub repo at
+  runtime) → rejected for breaking zero-setup/offline. `imageio-ffmpeg` genuinely bundles a
+  static ffmpeg in its per-platform wheel (77 MB, works offline).
+- **ffprobe not required.** Verified yt-dlp's `hlsnative` HLS→mp4 download muxes via ffmpeg
+  alone with no ffprobe on PATH and no ffprobe request — so `imageio-ffmpeg` (ffmpeg-only)
+  is sufficient for the download path.
+
+## Open Questions
+
+1. **Platform matrix.** Which OS/arch combos must be supported at launch (Linux x86_64,
+   Linux arm64, macOS arm64, Windows x86_64)? Bounded by `imageio-ffmpeg` wheel
+   availability (it publishes wheels for the common desktop/server targets).
+2. **Commit built assets or build-hook-only?** Committing `web/static` makes
+   `uvx --from git+…` work without npm; a build-hook keeps the repo clean but makes
+   git-install require a build step. Recommendation: build-hook + CI, document git-install
+   caveat.

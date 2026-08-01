@@ -8,13 +8,13 @@ from fire import Fire
 from rich.console import Console
 from rich.table import Table
 
-from fstream_dl.downloader import check_yt_dlp, download_many
-from fstream_dl.logging_config import setup_logging
-from fstream_dl.models import Episode, StreamSource
-from fstream_dl.providers.base import ProviderError
-from fstream_dl.providers.uqload import UqloadProvider
-from fstream_dl.resolver import rebase_url, resolve_live_domain
-from fstream_dl.scraper import fetch_season
+from sestudio.downloader import check_yt_dlp, download_many
+from sestudio.logging_config import setup_logging
+from sestudio.models import Episode, StreamSource
+from sestudio.providers.base import ProviderError
+from sestudio.providers.uqload import UqloadProvider
+from sestudio.resolver import rebase_url, resolve_live_domain
+from sestudio.scraper import fetch_season
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def _get_provider(name: str) -> UqloadProvider:
 
 
 class Entrypoint:
-    """fstream-dl — download and browse fstream episodes."""
+    """sestudio — download and browse fstream episodes."""
 
     def download(
         self,
@@ -152,7 +152,7 @@ class Entrypoint:
         setup_logging(verbose)
 
         import uvicorn
-        from fstream_dl.web.app import create_app
+        from sestudio.web.app import create_app
 
         live_domain: str | None = None
         if not no_resolve:
@@ -164,7 +164,7 @@ class Entrypoint:
 
         app = create_app(live_domain=live_domain)
         app.state.http_port = port
-        console.print(f"[bold green]fstream-dl web UI[/bold green] → http://{host}:{port}")
+        console.print(f"[bold green]sestudio web UI[/bold green] → http://{host}:{port}")
         uvicorn.run(app, host=host, port=port)
 
 

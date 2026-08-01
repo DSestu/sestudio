@@ -1,10 +1,10 @@
-# fstream-dl
+# sestudio
 
 Download episodes from fstream — via CLI or a local web UI.
 
 ## Casting from a phone
 
-Casting, in general, need the receiving TV to have access to the network address of the fstream-dl server.
+Casting, in general, need the receiving TV to have access to the network address of the sestudio server.
 
 If you are outside of your network, and use tailscale to access to your server, you will need to set up a port forwarding from your phone on your incoming wlan connections to your server's tailscale address.
 
@@ -48,13 +48,13 @@ uv sync
 
 ```bash
 # All episodes, VF (default)
-uv run fstream-dl download <season-page-url>
+uv run sestudio download <season-page-url>
 
 # Specific episodes, VOSTFR, custom output folder
-uv run fstream-dl download <url> -e 1,3,5-8 --lang vostfr -o ~/Videos
+uv run sestudio download <url> -e 1,3,5-8 --lang vostfr -o ~/Videos
 
 # Dry-run: resolve URLs without downloading
-uv run fstream-dl download <url> --dry-run
+uv run sestudio download <url> --dry-run
 ```
 
 | Option | Default | Description |
@@ -71,7 +71,7 @@ uv run fstream-dl download <url> --dry-run
 ### Web UI
 
 ```bash
-uv run fstream-dl serve
+uv run sestudio serve
 ```
 
 Opens at `http://<host>:8080`. The server keeps running in the terminal — downloads continue in the background even if you close the browser tab. Stop it with Ctrl-C.
@@ -87,7 +87,7 @@ Opens at `http://<host>:8080`. The server keeps running in the terminal — down
 **Features:**
 * Search fstream, browse season cards with posters and language badges
 * Expand seasons to episode level; cascading checkboxes (series → season → episode)
-* Global language and output folder settings (persisted to `~/.config/fstream-dl/config.json`)
+* Global language and output folder settings (persisted to `~/.config/sestudio/config.json`)
 * Per-episode progress bars via SSE; downloads keep running after closing the browser tab
 * **Play an episode in the browser** (▶ per row) — streams through the server, so provider referer/TLS quirks are handled for you, with automatic fallback across providers
 * **Cast to a TV** (⧉ per row) — send an episode to any DLNA renderer on your network; Chromecast and AirPlay are available from the player when served over HTTPS (see below)
@@ -107,7 +107,7 @@ are tracked separately.
 Start the server so other devices can reach it (this is the default bind):
 
 ```bash
-uv run fstream-dl serve --host 0.0.0.0
+uv run sestudio serve --host 0.0.0.0
 ```
 
 * **In-browser player** and **DLNA "Cast to TV"** work over plain HTTP on the LAN — nothing extra to set up. The ⧉ button scans for renderers (a ~4 s SSDP scan) and pushes the stream to the one you pick; the TV fetches it directly from this server.

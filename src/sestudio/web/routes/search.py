@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from fstream_dl.scraper import search_seasons
+from sestudio.scraper import search_seasons
 
 router = APIRouter()
 

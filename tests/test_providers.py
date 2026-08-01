@@ -2,8 +2,8 @@ import pytest
 import httpx
 from pytest_httpx import HTTPXMock
 
-from fstream_dl.providers.uqload import UqloadProvider
-from fstream_dl.providers.base import ProviderError
+from sestudio.providers.uqload import UqloadProvider
+from sestudio.providers.base import ProviderError
 from tests.conftest import load_fixture
 
 EMBED_URL = "https://uqload.is/embed-czbs41i6g7nb.html"

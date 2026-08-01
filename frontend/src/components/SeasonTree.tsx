@@ -256,23 +256,31 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
                 {/* Episode rows */}
                 {expanded && (
                   <div className="ml-1 sm:ml-7 space-y-1">
-                    {detail.episodes.map(ep => (
+                    {detail.episodes.map(ep => {
+                      const hasProviders = Object.keys(ep.embed_urls).length > 0
+                      return (
                       <div key={ep.number} className="flex items-center gap-2 sm:gap-3 hover:bg-base-300 rounded-lg px-2 sm:px-3 py-2">
-                        <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={checked.has(ep.number)}
-                            onChange={() => toggleEpisode(ep.number)}
-                            className="checkbox checkbox-primary shrink-0"
-                          />
+                        <input
+                          type="checkbox"
+                          checked={checked.has(ep.number)}
+                          onChange={() => toggleEpisode(ep.number)}
+                          aria-label={`Select episode ${ep.number}`}
+                          className="checkbox checkbox-primary shrink-0 cursor-pointer"
+                        />
+                        <div
+                          className={`flex items-center gap-3 flex-1 min-w-0 ${hasProviders ? 'cursor-pointer' : ''}`}
+                          onClick={() => hasProviders && playFrom(ep)}
+                          title={hasProviders ? 'Play in browser' : undefined}
+                        >
                           <span className="text-base-content/50 text-xs sm:text-sm font-mono w-8 shrink-0">
                             E{String(ep.number).padStart(2, '0')}
                           </span>
                           <span className="text-sm sm:text-base flex-1 truncate">{ep.title}</span>
-                        </label>
+                        </div>
                         {rowActions(ep)}
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </>
@@ -291,20 +299,28 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
                     </button>
                   ))}
                 </div>
-                {detail.episodes.map(ep => (
+                {detail.episodes.map(ep => {
+                  const hasProviders = Object.keys(ep.embed_urls).length > 0
+                  return (
                   <div key={ep.number} className="flex items-center gap-2 sm:gap-3 hover:bg-base-300 rounded-lg px-2 sm:px-3 py-2.5">
-                    <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-                      <input
-                        type="checkbox"
-                        checked={checked.has(ep.number)}
-                        onChange={() => toggleEpisode(ep.number)}
-                        className="checkbox checkbox-primary shrink-0"
-                      />
+                    <input
+                      type="checkbox"
+                      checked={checked.has(ep.number)}
+                      onChange={() => toggleEpisode(ep.number)}
+                      aria-label={`Select ${ep.title}`}
+                      className="checkbox checkbox-primary shrink-0 cursor-pointer"
+                    />
+                    <div
+                      className={`flex items-center gap-3 flex-1 min-w-0 ${hasProviders ? 'cursor-pointer' : ''}`}
+                      onClick={() => hasProviders && playFrom(ep)}
+                      title={hasProviders ? 'Play in browser' : undefined}
+                    >
                       <span className="text-sm sm:text-base flex-1 truncate font-medium">{ep.title}</span>
-                    </label>
+                    </div>
                     {rowActions(ep)}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
