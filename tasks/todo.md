@@ -58,14 +58,14 @@ human review.
 
 ## Phase 3 — Self-contained HTTPS
 
-### [ ] Task 5 — Self-signed cert generation + caching
+### [x] Task 5 — Self-signed cert generation + caching
 **Deps:** none · **Scope:** M · **Files:** `src/sestudio/tls.py` (new), `tests/test_tls.py` (new)
 - `tls.ensure_cert() -> (cert_path, key_path)`; SAN = `dlna._local_ipv4s()` + `127.0.0.1` + `localhost`.
 - Cache under the config dir; regenerate only if missing/expired.
 - **AC:** SAN includes LAN IP(s)/loopback/localhost; second call reuses cache.
 - **Verify:** `tests/test_tls.py` (SAN + cache-reuse) green.
 
-### [ ] Task 6 — `serve --https` wiring
+### [x] Task 6 — `serve --https` wiring
 **Deps:** Task 5 · **Scope:** S · **Files:** `src/sestudio/cli.py`
 - Add `--https` / `--https-port` (default 8443). When set: `ensure_cert()` → uvicorn `ssl_keyfile`/`ssl_certfile`; print `https://<lan-ip>:<port>`.
 - No-flag path unchanged; keep Caddy-if-present note in docs.

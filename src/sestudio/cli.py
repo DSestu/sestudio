@@ -147,8 +147,15 @@ class Entrypoint:
         port: int = 8080,
         no_resolve: bool = False,
         verbose: bool = False,
+        https: bool = False,
+        https_port: int = 8443,
     ) -> None:
-        """Start the web UI server."""
+        """Start the web UI server.
+
+        With --https, generate a self-signed cert (cached, covering the LAN IPs)
+        and serve over HTTPS on --https-port so Chromecast/AirPlay work without
+        Caddy. The casting device must trust the cert once (see the README).
+        """
         setup_logging(verbose)
 
         import uvicorn
@@ -163,9 +170,39 @@ class Entrypoint:
                 logger.warning("Domain resolution failed (%s), searches will use fstream.top", exc)
 
         app = create_app(live_domain=live_domain)
-        app.state.http_port = port
-        console.print(f"[bold green]sestudio web UI[/bold green] → http://{host}:{port}")
-        uvicorn.run(app, host=host, port=port)
+
+        if https:
+            from sestudio.tls import ensure_cert
+
+            cert_path, key_path = ensure_cert()
+            app.state.http_port = https_port
+            console.print(
+                f"[bold green]sestudio web UI[/bold green] → https://{_display_host(host)}:{https_port}"
+            )
+            console.print(
+                "[dim]self-signed cert — trust it on the casting device (see README)[/dim]"
+            )
+            uvicorn.run(
+                app,
+                host=host,
+                port=https_port,
+                ssl_certfile=str(cert_path),
+                ssl_keyfile=str(key_path),
+            )
+        else:
+            app.state.http_port = port
+            console.print(f"[bold green]sestudio web UI[/bold green] → http://{host}:{port}")
+            uvicorn.run(app, host=host, port=port)
+
+
+def _display_host(host: str) -> str:
+    """A clickable host for the printed URL: a LAN IP when bound to all interfaces."""
+    if host not in ("0.0.0.0", "::"):
+        return host
+    from sestudio.dlna import _local_ipv4s
+
+    ips = _local_ipv4s()
+    return ips[0] if ips else "localhost"
 
 
 def main() -> None:
