@@ -65,12 +65,12 @@ human review.
 - **AC:** SAN includes LAN IP(s)/loopback/localhost; second call reuses cache.
 - **Verify:** `tests/test_tls.py` (SAN + cache-reuse) green.
 
-### [x] Task 6 — `serve --https` wiring
-**Deps:** Task 5 · **Scope:** S · **Files:** `src/sestudio/cli.py`
-- Add `--https` / `--https-port` (default 8443). When set: `ensure_cert()` → uvicorn `ssl_keyfile`/`ssl_certfile`; print `https://<lan-ip>:<port>`.
-- No-flag path unchanged; keep Caddy-if-present note in docs.
-- **AC6:** HTTPS on LAN IP with generated cert. **AC8:** no-flag = current HTTP behavior.
-- **Verify:** `curl -k https://<lan-ip>:8443/` → SPA; real-device Chromecast after cert trust (AC7).
+### [x] Task 6 — HTTPS-by-default serve wiring
+**Deps:** Task 5 · **Scope:** S · **Files:** `src/sestudio/cli.py`, `start.bat`
+- **HTTPS is the default** (port 8443): `ensure_cert()` → uvicorn `ssl_certfile`/`ssl_keyfile`; print `https://<lan-ip>:8443` + cert-trust hint. `--no-https` → plain HTTP.
+- Drop Caddy from `start.bat` (built-in HTTPS replaces it); `start.sh` already Caddy-free.
+- **AC6:** default serves HTTPS on LAN IP with generated cert. **AC8:** `--no-https` = plain HTTP.
+- **Verify:** default `serve` → `https://…:8443/` 200; `--no-https` → http 200; real-device Chromecast after cert trust (AC7).
 
 ### ▸ CHECKPOINT: HTTPS (after Tasks 5–6) — human review
 - [ ] `test_tls.py` green; no-flag `serve` unchanged; `--https` reachable on LAN.
@@ -79,14 +79,14 @@ human review.
 
 ## Phase 4 — Release plumbing & docs
 
-### [ ] Task 7 — CI build+publish with asset verification
+### [x] Task 7 — CI build+publish with asset verification
 **Deps:** Task 2 · **Scope:** M · **Files:** `.github/workflows/*.yml`, `README.md`
 - Release job: `npm ci && npm run build` → `uv build` → assert wheel contains `web/static/index.html` → `uv publish` (token secret). Alongside `release_please.yml`.
 - README: supported platform/arch matrix (per imageio-ffmpeg wheels) + `uvx sestudio` install.
 - **AC:** frontend built before wheel; job fails if assets missing.
 - **Verify:** YAML lints; `workflow_dispatch` on a test tag yields a wheel with assets.
 
-### [ ] Task 8 — Rename leftover + usage docs
+### [x] Task 8 — Rename leftover + usage docs
 **Deps:** none · **Scope:** S · **Files:** `src/sestudio/config.py`, `README.md`, maybe `tests/test_config.py`
 - Fix `FSTREAM_DL_CONFIG` → `SESTUDIO_CONFIG` (rename miss; uppercase slipped the sed).
 - README: `uvx sestudio serve`, `--https` + cert-trust, system-vs-bundled ffmpeg note.

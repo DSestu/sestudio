@@ -32,10 +32,24 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # Set once the project exists on PyPI; until then the publish step is skipped
+    # (so releases keep working before you're ready to publish).
+    env:
+      UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
 
       - name: Install uv
         run: |
@@ -49,6 +63,11 @@ jobs:
       - name: Build wheels
         run: uv build
 
+      - name: Verify the wheel bundles the frontend
+        run: |
+          python3 -m zipfile -l dist/*.whl | grep -q 'sestudio/web/static/index.html' \
+            || { echo '::error::built wheel is missing the frontend (sestudio/web/static)'; exit 1; }
+
       - name: Upload wheels to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -56,3 +75,7 @@ jobs:
           files: |
             dist/*.whl
             dist/*.tar.gz
+
+      - name: Publish to PyPI
+        if: env.UV_PUBLISH_TOKEN != ''
+        run: uv publish

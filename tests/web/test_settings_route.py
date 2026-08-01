@@ -8,7 +8,7 @@ from sestudio.web.app import create_app
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("FSTREAM_DL_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
     app = create_app()
     return TestClient(app)
 

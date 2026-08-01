@@ -144,17 +144,16 @@ class Entrypoint:
     def serve(
         self,
         host: str = "0.0.0.0",
-        port: int = 8080,
+        port: int = 8443,
         no_resolve: bool = False,
         verbose: bool = False,
-        https: bool = False,
-        https_port: int = 8443,
+        no_https: bool = False,
     ) -> None:
         """Start the web UI server.
 
-        With --https, generate a self-signed cert (cached, covering the LAN IPs)
-        and serve over HTTPS on --https-port so Chromecast/AirPlay work without
-        Caddy. The casting device must trust the cert once (see the README).
+        Serves over HTTPS by default with a self-signed cert (cached, covering the
+        LAN IPs) so Chromecast/AirPlay work with no extra tools; the casting device
+        must trust the cert once (see the README). Pass --no-https for plain HTTP.
         """
         setup_logging(verbose)
 
@@ -170,14 +169,17 @@ class Entrypoint:
                 logger.warning("Domain resolution failed (%s), searches will use fstream.top", exc)
 
         app = create_app(live_domain=live_domain)
+        app.state.http_port = port
 
-        if https:
+        if no_https:
+            console.print(f"[bold green]sestudio web UI[/bold green] → http://{host}:{port}")
+            uvicorn.run(app, host=host, port=port)
+        else:
             from sestudio.tls import ensure_cert
 
             cert_path, key_path = ensure_cert()
-            app.state.http_port = https_port
             console.print(
-                f"[bold green]sestudio web UI[/bold green] → https://{_display_host(host)}:{https_port}"
+                f"[bold green]sestudio web UI[/bold green] → https://{_display_host(host)}:{port}"
             )
             console.print(
                 "[dim]self-signed cert — trust it on the casting device (see README)[/dim]"
@@ -185,14 +187,10 @@ class Entrypoint:
             uvicorn.run(
                 app,
                 host=host,
-                port=https_port,
+                port=port,
                 ssl_certfile=str(cert_path),
                 ssl_keyfile=str(key_path),
             )
-        else:
-            app.state.http_port = port
-            console.print(f"[bold green]sestudio web UI[/bold green] → http://{host}:{port}")
-            uvicorn.run(app, host=host, port=port)
 
 
 def _display_host(host: str) -> str:

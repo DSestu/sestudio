@@ -91,16 +91,17 @@ The UI must load when installed, with no repo `frontend/` sibling.
   `--ffmpeg-location` omitted so yt-dlp uses PATH).
 
 ### P3 — Self-contained HTTPS for casting (no Caddy)
-- `serve --https` generates (once, cached under the config/data dir) a self-signed cert
-  whose SubjectAltName includes the resolved LAN IP (and `127.0.0.1`/`localhost`), using
-  `cryptography`, then runs uvicorn with `ssl_keyfile`/`ssl_certfile`.
-- Keep the existing "use Caddy if on PATH" path as an **optional** upgrade; document both.
-- **AC6**: `serve --https` serves the UI over `https://<lan-ip>:<https-port>` with the
-  generated cert.
+- **HTTPS is the default** (decision, 2026-08-01): `serve` generates (once, cached under
+  the config dir) a self-signed cert whose SubjectAltName includes the resolved LAN IP
+  (and `127.0.0.1`/`localhost`), using `cryptography`, then runs uvicorn with
+  `ssl_keyfile`/`ssl_certfile` on port `8443`. `--no-https` opts into plain HTTP.
+- Caddy is dropped from the start scripts; the built-in HTTPS replaces it.
+- **AC6**: `serve` (default) serves the UI over `https://<lan-ip>:8443` with the generated
+  cert; `--no-https` serves plain HTTP.
 - **AC7**: after trusting the generated cert on the casting device, Chromecast lists and
-  plays (the cert-trust step is documented; trust itself is manual — same constraint as
-  Caddy).
-- **AC8**: `serve` without `--https` is unchanged (HTTP only, current default behavior).
+  plays (the cert-trust step is documented; trust itself is manual).
+- **AC8**: `--no-https` serves plain HTTP (for older DLNA renderers / the frontend dev
+  proxy).
 
 ### P4 — Distribution metadata & release plumbing
 - Add a `LICENSE` file and `license` metadata (the `[project.urls]` already points at one).

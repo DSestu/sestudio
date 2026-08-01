@@ -12,31 +12,48 @@ Then, you will have to connect on your phone browser to your your phone's local 
 
 By doing this, the TV will connect to your phone's local network address, and your phone will forward the stream to your server, making the cast work.
 
-DLNA casting works from the plain HTTP version of the server.
-
-Chrome cast don't work from the plain HTTP version of the server. You will need to use the HTTPS version of the server.
-
-Caddy can be used to create a small https reverse proxy on your server to its own local http port. It is launched if it is installed on your system.
-The certificated won't be trusted by the browser, but at least the chrome cast feature will be available.
-
-Currently, the `start.bat` script launch the http server on port 8081, and the https server on port 8443.
+The server serves **HTTPS by default** (self-signed) on port `8443`, which is what
+Chromecast/AirPlay require — no Caddy or reverse proxy needed. The certificate is
+self-signed, so trust it once on the casting device (see [HTTPS built in](#https-built-in-default) below).
 
 To sum this up, here are the steps to follow to have full casting functionality:
 
 * Be connected to tailscale
-* Having port 8081 and 8443 forwarded from your phone lan ip to the server's tailscale address
+* Having port `8443` forwarded from your phone lan ip to the server's tailscale address
 * Connect to https://<phone-lan-ip>:8443 from your phone browser
 
 The phone ip address can be easily found on Android by long pressing the wifi widget, and then clicking on "advanced info" icon next to the current wifi name.
 
 ## Requirements
 
-* Python 3.11+
-* [uv](https://github.com/astral-sh/uv)
-* [yt-dlp](https://github.com/yt-dlp/yt-dlp) in `PATH`
-* Node 18+ (only needed to rebuild the frontend)
+* [uv](https://github.com/astral-sh/uv) — that's the only thing you install.
 
-## Install
+Everything else is bundled: uv provides Python, and `yt-dlp` plus a static
+`ffmpeg` ship as dependencies (a system `ffmpeg` on `PATH` is preferred when
+present, giving a real `ffprobe` and fuller codecs). Node 18+ is only needed to
+rebuild the frontend during development.
+
+### Supported platforms
+
+The wheel bundles a static ffmpeg, so it targets the platforms
+[`imageio-ffmpeg`](https://github.com/imageio/imageio-ffmpeg) ships wheels for:
+
+| OS | Arch |
+| --- | --- |
+| Linux | x86_64, arm64 |
+| macOS | arm64 |
+| Windows | x86_64 |
+
+## Install / run
+
+Run it directly, without installing (recommended):
+
+```bash
+uvx sestudio serve            # web UI
+uvx sestudio download <url>   # CLI
+```
+
+Or set up a source checkout for development:
 
 ```bash
 uv sync
@@ -74,12 +91,13 @@ uv run sestudio download <url> --dry-run
 uv run sestudio serve
 ```
 
-Opens at `http://<host>:8080`. The server keeps running in the terminal — downloads continue in the background even if you close the browser tab. Stop it with Ctrl-C.
+Opens at `https://<host>:8443` — HTTPS with a self-signed cert by default (so Chromecast/AirPlay work; trust the cert once, see below). The server keeps running in the terminal — downloads continue in the background even if you close the browser tab. Stop it with Ctrl-C.
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `--host` | `0.0.0.0` | Bind address (`0.0.0.0` = reachable from other devices on your LAN) |
-| `--port` | `8080` | Port |
+| `--port` | `8443` | Port |
+| `--no-https` | off | Serve plain HTTP instead of the default self-signed HTTPS |
 | `--no-resolve` | off | Skip live-domain auto-resolution |
 
 > The default `0.0.0.0` binding makes the UI reachable from other devices on your network — needed for casting. There is no authentication, so run it only on a trusted home network. Pass `--host 127.0.0.1` to restrict it to the local machine.
@@ -107,26 +125,31 @@ are tracked separately.
 Start the server so other devices can reach it (this is the default bind):
 
 ```bash
-uv run sestudio serve --host 0.0.0.0
+uvx sestudio serve --host 0.0.0.0
 ```
 
-* **In-browser player** and **DLNA "Cast to TV"** work over plain HTTP on the LAN — nothing extra to set up. The ⧉ button scans for renderers (a ~4 s SSDP scan) and pushes the stream to the one you pick; the TV fetches it directly from this server.
-* **Google Cast (Chromecast)** and **AirPlay** need a **secure context (HTTPS)** — the Cast Web Sender SDK refuses to run over plain HTTP. Put an HTTPS reverse proxy in front of the app.
+* **Google Cast (Chromecast)** and **AirPlay** need a **secure context (HTTPS)** — the Cast Web Sender SDK refuses to run over plain HTTP. sestudio serves HTTPS by default, so this works out of the box once you trust the cert (below).
+* **In-browser player** and **DLNA "Cast to TV"** also work; the ⧉ button scans for renderers (a ~4 s SSDP scan) and pushes the stream to the one you pick. (Some older DLNA TVs only accept plain HTTP — use `--no-https` for those.)
 
-#### HTTPS via Caddy (for Chromecast / AirPlay)
+#### HTTPS built in (default)
 
-[Caddy](https://caddyserver.com/) can terminate HTTPS on your LAN IP with one command:
+sestudio terminates HTTPS itself with a self-signed certificate covering your
+LAN IP — no extra tools:
 
 ```bash
-caddy reverse-proxy --from https://<lan-ip> --to 127.0.0.1:8080
+uvx sestudio serve                # HTTPS on :8443 by default (change with --port)
+uvx sestudio serve --no-https     # plain HTTP instead
 ```
 
-Caddy mints a certificate from its own local CA. Browsers and cast devices won't trust it until that CA is installed:
+It prints the `https://<lan-ip>:8443` URL. The certificate is self-signed
+(cached at `~/.config/sestudio/cert.pem`), so the casting device must trust it
+once:
 
-* **On this machine:** `caddy trust` (adds Caddy's root CA to the system store).
-* **On the casting device** (phone/laptop driving the cast, and where applicable the TV): install Caddy's root CA — find it at `caddy root-ca` / `$(caddy environ | grep XDG_DATA)/caddy/pki/authorities/local/root.crt` — and mark it trusted. Without this step the Cast button will not list devices.
-
-Then open `https://<lan-ip>` instead of `http://<lan-ip>:8080`; the Cast and AirPlay controls appear in the player.
+* **Desktop browser:** open the URL and accept the certificate warning, or import
+  `~/.config/sestudio/cert.pem` into the system trust store.
+* **Android phone driving the cast:** install `~/.config/sestudio/cert.pem` as a
+  user CA (Settings → Security → Encryption & credentials → Install a certificate
+  → CA certificate). Without trusting it, the Cast button won't list devices.
 
 ## Development
 
@@ -134,10 +157,13 @@ Then open `https://<lan-ip>` instead of `http://<lan-ip>:8080`; the Cast and Air
 # Run tests
 uv run pytest
 
+# Backend for the dev proxy: plain HTTP on 8080 (the Vite proxy target)
+uv run sestudio serve --no-https --port 8080
+
 # Frontend dev server (proxies /api to localhost:8080)
 cd frontend && npm install && npm run dev
 
-# Rebuild frontend
+# Rebuild frontend (commit the result — frontend/dist ships in the wheel)
 cd frontend && npm run build
 ```
 

@@ -18,7 +18,7 @@ class AppConfig:
 
 
 def _config_path() -> Path:
-    env = os.environ.get("FSTREAM_DL_CONFIG")
+    env = os.environ.get("SESTUDIO_CONFIG")
     return Path(env) if env else _CONFIG_PATH
 
 
