@@ -24,9 +24,18 @@ _PROVIDERS = {
     "luluvid": LuluvidProvider(),
 }
 
-# app.py lives at src/sestudio/web/app.py → 4 parents up = repo root
-_REPO_ROOT = Path(__file__).parent.parent.parent.parent
-_FRONTEND_DIST = _REPO_ROOT / "frontend" / "dist"
+# An installed wheel bundles the built frontend at sestudio/web/static (via
+# force-include); a source checkout has no such dir and uses frontend/dist at
+# the repo root (app.py is 4 parents deep) instead.
+_MODULE_STATIC = Path(__file__).parent / "static"
+_REPO_DIST = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
+
+
+def _frontend_dist() -> Path | None:
+    for candidate in (_MODULE_STATIC, _REPO_DIST):
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def create_app(live_domain: str | None = None) -> FastAPI:
@@ -59,9 +68,9 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(stream.router, prefix="/api")
     app.include_router(cast.router, prefix="/api")
 
-    # Serve built frontend if available
-    dist = _FRONTEND_DIST
-    if dist.exists():
+    # Serve built frontend if available (installed static dir or source dist)
+    dist = _frontend_dist()
+    if dist is not None:
         app.mount("/assets", StaticFiles(directory=str(dist / "assets")), name="assets")
 
         @app.get("/{full_path:path}", include_in_schema=False)

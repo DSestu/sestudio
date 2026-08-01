@@ -8,7 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist is intentionally committed: it's bundled into the Python wheel and lets
+# `uvx --from git+…` work without an npm build. Rebuild + commit on UI changes.
 dist-ssr
 *.local
 
