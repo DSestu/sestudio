@@ -15,8 +15,16 @@ def client():
 def test_list_renderers_caches_locations(client, monkeypatch):
     async def fake_discover(timeout: int = 4):
         return [
-            {"name": "Living Room TV", "udn": "uuid:tv-1", "location": "http://192.168.1.5:8200/desc.xml"},
-            {"name": "Bedroom", "udn": "uuid:tv-2", "location": "http://192.168.1.9:8200/desc.xml"},
+            {
+                "name": "Living Room TV",
+                "udn": "uuid:tv-1",
+                "location": "http://192.168.1.5:8200/desc.xml",
+            },
+            {
+                "name": "Bedroom",
+                "udn": "uuid:tv-2",
+                "location": "http://192.168.1.9:8200/desc.xml",
+            },
         ]
 
     monkeypatch.setattr(cast.dlna, "discover_renderers", fake_discover)
@@ -27,7 +35,10 @@ def test_list_renderers_caches_locations(client, monkeypatch):
         {"name": "Bedroom", "udn": "uuid:tv-2"},
     ]
     # Control locations are cached (not exposed to the client) for the play call.
-    assert client.app.state.dlna_renderers["uuid:tv-1"] == "http://192.168.1.5:8200/desc.xml"
+    assert (
+        client.app.state.dlna_renderers["uuid:tv-1"]
+        == "http://192.168.1.5:8200/desc.xml"
+    )
 
 
 def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
@@ -35,7 +46,9 @@ def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
     calls = {}
 
     async def fake_play(location: str, media_url: str, title: str, mime_type: str):
-        calls.update(location=location, media_url=media_url, title=title, mime_type=mime_type)
+        calls.update(
+            location=location, media_url=media_url, title=title, mime_type=mime_type
+        )
 
     # Pin the LAN IP so the assertion is deterministic (no real routing lookup).
     monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
@@ -69,7 +82,11 @@ def test_play_hls_kind_maps_to_hls_mime(client, monkeypatch):
     monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
     resp = client.post(
         "/api/cast/dlna/play",
-        json={"renderer_udn": "uuid:tv-1", "proxy_url": "/api/stream/proxy?token=abc", "kind": "hls"},
+        json={
+            "renderer_udn": "uuid:tv-1",
+            "proxy_url": "/api/stream/proxy?token=abc",
+            "kind": "hls",
+        },
     )
     assert resp.status_code == 200
     assert calls["mime_type"] == "application/vnd.apple.mpegurl"
@@ -78,7 +95,10 @@ def test_play_hls_kind_maps_to_hls_mime(client, monkeypatch):
 def test_play_unknown_renderer_404(client):
     resp = client.post(
         "/api/cast/dlna/play",
-        json={"renderer_udn": "uuid:missing", "proxy_url": "/api/stream/proxy?token=abc"},
+        json={
+            "renderer_udn": "uuid:missing",
+            "proxy_url": "/api/stream/proxy?token=abc",
+        },
     )
     assert resp.status_code == 404
 

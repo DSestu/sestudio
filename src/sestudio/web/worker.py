@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Literal
 
 from sestudio.downloader import ProgressEvent, download
 from sestudio.models import StreamSource
@@ -71,6 +70,7 @@ class JobStore:
     def cancel(self, job_id: str) -> bool:
         """Cancel a queued or downloading job, clean up partial files. Returns True if found."""
         from sestudio.downloader import _cleanup
+
         with self._lock:
             job = self._jobs.get(job_id)
             event = self._cancel_events.get(job_id)
@@ -131,7 +131,12 @@ class JobStore:
                 return
 
             try:
-                ok = download(job.source, job.output_path, on_progress=on_progress, cancel_event=cancel_event)
+                ok = download(
+                    job.source,
+                    job.output_path,
+                    on_progress=on_progress,
+                    cancel_event=cancel_event,
+                )
             except Exception as exc:
                 logger.error("Job %s failed: %s", job_id, exc)
                 ok = False
@@ -151,7 +156,9 @@ class JobStore:
 
             logger.warning(
                 "Provider %s failed for %s, falling back to %s",
-                job.source.provider, job.episode_name, next_source.provider,
+                job.source.provider,
+                job.episode_name,
+                next_source.provider,
             )
             with self._lock:
                 job.source = next_source
@@ -172,7 +179,12 @@ class JobStore:
                 job.tried_providers.append(pname)
                 return source
             except ProviderError as exc:
-                logger.warning("Fallback provider %s failed for %s: %s", pname, job.episode_name, exc)
+                logger.warning(
+                    "Fallback provider %s failed for %s: %s",
+                    pname,
+                    job.episode_name,
+                    exc,
+                )
                 job.tried_providers.append(pname)
         return None
 

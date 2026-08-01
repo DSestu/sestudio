@@ -22,7 +22,9 @@ def test_get_settings_defaults(client):
 
 
 def test_put_settings_persists(client):
-    resp = client.put("/api/settings", json={"lang": "vostfr", "output_root": "/tmp/test"})
+    resp = client.put(
+        "/api/settings", json={"lang": "vostfr", "output_root": "/tmp/test"}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["lang"] == "vostfr"

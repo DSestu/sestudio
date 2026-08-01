@@ -64,7 +64,9 @@ def _unpack(packed: str) -> str:
     result = payload
     for i in range(count - 1, -1, -1):
         if i < len(keys) and keys[i]:
-            result = re.sub(r"\b" + re.escape(to_base(i, base)) + r"\b", keys[i], result)
+            result = re.sub(
+                r"\b" + re.escape(to_base(i, base)) + r"\b", keys[i], result
+            )
     return result
 
 
@@ -78,9 +80,13 @@ class VidzyProvider(StreamProvider):
         except httpx.TimeoutException as exc:
             raise ProviderError(f"Timeout fetching Vidzy embed: {embed_url}") from exc
         except httpx.HTTPStatusError as exc:
-            raise ProviderError(f"HTTP {exc.response.status_code} fetching Vidzy embed: {embed_url}") from exc
+            raise ProviderError(
+                f"HTTP {exc.response.status_code} fetching Vidzy embed: {embed_url}"
+            ) from exc
 
-        packed_match = re.search(r"eval\s*\(function\s*\(p,a,c,k.*?</script>", resp.text, re.DOTALL)
+        packed_match = re.search(
+            r"eval\s*\(function\s*\(p,a,c,k.*?</script>", resp.text, re.DOTALL
+        )
         if not packed_match:
             raise ProviderError(f"No packed script found in Vidzy embed: {embed_url}")
 
@@ -100,4 +106,9 @@ class VidzyProvider(StreamProvider):
             raise ProviderError(f"Decoded Vidzy source is not an m3u8: {embed_url}")
 
         logger.debug("Vidzy resolved stream: %s", stream_url[:80])
-        return StreamSource(url=stream_url, referer=REFERER, provider="vidzy", user_agent=HEADERS["User-Agent"])
+        return StreamSource(
+            url=stream_url,
+            referer=REFERER,
+            provider="vidzy",
+            user_agent=HEADERS["User-Agent"],
+        )

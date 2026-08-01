@@ -78,7 +78,9 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
     renderers: dict[str, str] = getattr(request.app.state, "dlna_renderers", {})
     location = renderers.get(body.renderer_udn)
     if location is None:
-        raise HTTPException(status_code=404, detail="Unknown renderer — re-scan and try again")
+        raise HTTPException(
+            status_code=404, detail="Unknown renderer — re-scan and try again"
+        )
 
     # The renderer fetches the stream itself, so build an absolute HTTP URL on
     # our LAN IP facing the renderer (browsing via localhost would otherwise
@@ -119,7 +121,8 @@ async def dlna_status(request: Request) -> dict[str, Any]:
         state = dmr.transport_state
         return {
             "connected": True,
-            "title": getattr(request.app.state, "dlna_title", "") or (dmr.media_title or ""),
+            "title": getattr(request.app.state, "dlna_title", "")
+            or (dmr.media_title or ""),
             "state": getattr(state, "value", str(state)) if state is not None else "",
             "position": dmr.media_position or 0,
             "duration": dmr.media_duration or 0,
@@ -154,7 +157,9 @@ async def dlna_resume(request: Request) -> dict[str, Any]:
 @router.post("/cast/dlna/seek")
 async def dlna_seek(body: DlnaSeekRequest, request: Request) -> dict[str, Any]:
     # DLNA REL_TIME seek targets the absolute position within the track.
-    await _active_dmr(request).async_seek_rel_time(datetime.timedelta(seconds=max(0, body.seconds)))
+    await _active_dmr(request).async_seek_rel_time(
+        datetime.timedelta(seconds=max(0, body.seconds))
+    )
     return {"status": "ok"}
 
 

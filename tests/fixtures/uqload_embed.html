@@ -154,7 +154,7 @@ $.cookie('ref_url', 'https://fs03.lol/', { expires: 10 });
 <!-- <iframe src="https://URL/NONE/" height="0" width="0" stype="visible:false;"></iframe> -->
 
     <div style="position:relative;">
-    
+
           <div id="play_limit_box">
             <a href="https://uqload.is/premium.html" target="_blank">Upgrade you account</a> to watch videos with no limits!
           </div>
@@ -180,9 +180,9 @@ $.cookie('ref_url', 'https://fs03.lol/', { expires: 10 });
 
 
 <script type='text/javascript'>var player = new Clappr.Player({
-	sources: ["https://strm2.uqload.is/hls/,3rfky2uvu5wkq4drdkr6bjf2bgfkqzrisjymxi4jrevvp3x4zykayu5qqufa,.urlset/master.m3u8","https://strm2.uqload.is/3rfky2uvu5wkq4drdkr6bjf2bgfkqzrisjymxi4jrevvp3x4zykayu5qqufa/v.mp4"], 
+	sources: ["https://strm2.uqload.is/hls/,3rfky2uvu5wkq4drdkr6bjf2bgfkqzrisjymxi4jrevvp3x4zykayu5qqufa,.urlset/master.m3u8","https://strm2.uqload.is/3rfky2uvu5wkq4drdkr6bjf2bgfkqzrisjymxi4jrevvp3x4zykayu5qqufa/v.mp4"],
 	preload: 'none',
-	poster: "https://strm2.uqload.is/i/03/05087/czbs41i6g7nb_xt.jpg", 
+	poster: "https://strm2.uqload.is/i/03/05087/czbs41i6g7nb_xt.jpg",
 	width: "100%",
     height: "100%",
     disableVideoTagContextMenu: true,
@@ -204,7 +204,7 @@ player.listenTo(player.core.mediaControl, Clappr.Events.MEDIACONTROL_HIDE, funct
 player.listenTo(player.core.mediaControl, Clappr.Events.MEDIACONTROL_SHOW, function(){$('#share-button').show();});
 
 player.on(Clappr.Events.PLAYER_READY, function() { jwplayer().resize( $(window).width(), $(window).height() ); });
-player.on(Clappr.Events.PLAYER_TIMEUPDATE, function(x) { 
+player.on(Clappr.Events.PLAYER_TIMEUPDATE, function(x) {
     if(5>0 && x.current>=5 && vvad!=1){vvad=1;$('div.video_ad_fadein').fadeIn('slow');}
     if(x2ok==0 && x.current>=2514 && x.current<=(2514+2)){x2ok=x.current;}
 });
@@ -219,7 +219,7 @@ function doPlay()
   if( window.cRAds === undefined ){ adb=1; }
   $.get('https://uqload.is/dl?op=view&file_code=czbs41i6g7nb&hash=25438918-249-90-1779033383-369bd10efa17f7d1f5ee1b4cd2342282&embed=1&adb='+adb, function(data) {$('#fviews').html(data);} );
 
-  
+
 }
 
 </script>
@@ -230,7 +230,7 @@ function doPlay()
 
 <Script>
 $(function() {
- 
+
 });
 </Script>
 

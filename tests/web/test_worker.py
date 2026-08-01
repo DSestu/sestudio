@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -17,7 +16,9 @@ def store():
 
 @pytest.fixture()
 def source():
-    return StreamSource(url="https://example.com/v.mp4", referer="https://uqload.is/", provider="uqload")
+    return StreamSource(
+        url="https://example.com/v.mp4", referer="https://uqload.is/", provider="uqload"
+    )
 
 
 def test_submit_creates_queued_job(store, source, tmp_path):

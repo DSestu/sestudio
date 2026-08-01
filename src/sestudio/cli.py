@@ -55,7 +55,9 @@ class Entrypoint:
     ) -> None:
         """Download episodes from an fstream season page URL."""
         if lang not in ("vf", "vostfr"):
-            console.print(f"[red]Error:[/red] --lang must be 'vf' or 'vostfr', got '{lang}'")
+            console.print(
+                f"[red]Error:[/red] --lang must be 'vf' or 'vostfr', got '{lang}'"
+            )
             sys.exit(1)
 
         setup_logging(verbose)
@@ -85,7 +87,9 @@ class Entrypoint:
             console.print(f"[red]Error fetching season page:[/red] {exc}")
             sys.exit(1)
 
-        console.print(f"Found [bold]{len(all_episodes)}[/bold] episodes for Season {season} ({lang.upper()})")
+        console.print(
+            f"Found [bold]{len(all_episodes)}[/bold] episodes for Season {season} ({lang.upper()})"
+        )
 
         selected: list[Episode]
         if episodes:
@@ -93,7 +97,9 @@ class Entrypoint:
             selected = [ep for ep in all_episodes if ep.number in wanted]
             missing = wanted - {ep.number for ep in selected}
             if missing:
-                console.print(f"[yellow]Warning:[/yellow] episodes not found in {lang.upper()}: {sorted(missing)}")
+                console.print(
+                    f"[yellow]Warning:[/yellow] episodes not found in {lang.upper()}: {sorted(missing)}"
+                )
         else:
             selected = all_episodes
 
@@ -108,13 +114,17 @@ class Entrypoint:
         for ep in selected:
             embed_url = ep.embed_urls.get(provider)
             if not embed_url:
-                console.print(f"[yellow]Skip[/yellow] S{season:02d}E{ep.number:02d} — no {provider} URL")
+                console.print(
+                    f"[yellow]Skip[/yellow] S{season:02d}E{ep.number:02d} — no {provider} URL"
+                )
                 skipped += 1
                 continue
             try:
                 source = stream_provider.get_stream_url(embed_url)
             except ProviderError as exc:
-                console.print(f"[yellow]Skip[/yellow] S{season:02d}E{ep.number:02d} — {exc}")
+                console.print(
+                    f"[yellow]Skip[/yellow] S{season:02d}E{ep.number:02d} — {exc}"
+                )
                 skipped += 1
                 continue
 
@@ -129,7 +139,9 @@ class Entrypoint:
             console.print("[yellow]Nothing to download.[/yellow]")
             sys.exit(0)
 
-        console.print(f"\nDownloading [bold]{len(jobs)}[/bold] episode(s) with concurrency={concurrency}…\n")
+        console.print(
+            f"\nDownloading [bold]{len(jobs)}[/bold] episode(s) with concurrency={concurrency}…\n"
+        )
         results = download_many(jobs, concurrency=concurrency)
 
         ok = sum(1 for v in results.values() if v)
@@ -166,13 +178,17 @@ class Entrypoint:
                 live_domain = resolve_live_domain()
                 logger.debug("Resolved live domain: %s", live_domain)
             except Exception as exc:
-                logger.warning("Domain resolution failed (%s), searches will use fstream.top", exc)
+                logger.warning(
+                    "Domain resolution failed (%s), searches will use fstream.top", exc
+                )
 
         app = create_app(live_domain=live_domain)
         app.state.http_port = port
 
         if no_https:
-            console.print(f"[bold green]sestudio web UI[/bold green] → http://{host}:{port}")
+            console.print(
+                f"[bold green]sestudio web UI[/bold green] → http://{host}:{port}"
+            )
             uvicorn.run(app, host=host, port=port)
         else:
             from sestudio.tls import ensure_cert

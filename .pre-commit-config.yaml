@@ -1,3 +1,7 @@
+# The built frontend (frontend/dist) is committed so git-installs work without
+# npm — but it's generated output, so no hook should lint or rewrite it.
+exclude: ^frontend/dist/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0

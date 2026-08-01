@@ -19,6 +19,7 @@ SECRET = b"0123456789abcdef0123456789abcdef"
 # T1 — token sign/verify
 # --------------------------------------------------------------------------- #
 
+
 def test_token_round_trip():
     token = sign(SECRET, "https://cdn/v.mp4", "https://uqload.is/", "uqload")
     payload = verify(SECRET, token)
@@ -43,7 +44,9 @@ def test_token_wrong_secret_rejected():
 
 def test_token_expired_rejected():
     past = time.time() - 10
-    token = sign(SECRET, "https://cdn/v.mp4", "https://uqload.is/", "uqload", ttl=-1, now=past)
+    token = sign(
+        SECRET, "https://cdn/v.mp4", "https://uqload.is/", "uqload", ttl=-1, now=past
+    )
     with pytest.raises(TokenError):
         verify(SECRET, token)
 
@@ -57,8 +60,11 @@ def test_token_malformed_rejected():
 # T2 — resolve + MP4 proxy
 # --------------------------------------------------------------------------- #
 
+
 class _FakeProvider:
-    def __init__(self, source: StreamSource | None = None, exc: Exception | None = None):
+    def __init__(
+        self, source: StreamSource | None = None, exc: Exception | None = None
+    ):
         self._source = source
         self._exc = exc
 
@@ -81,7 +87,9 @@ def _resolve(client, embed_urls):
 
 
 def test_resolve_mp4_kind():
-    src = StreamSource(url="https://cdn.example/v.mp4", referer="https://uqload.is/", provider="uqload")
+    src = StreamSource(
+        url="https://cdn.example/v.mp4", referer="https://uqload.is/", provider="uqload"
+    )
     client = _client({"uqload": _FakeProvider(source=src)})
     resp = _resolve(client, {"uqload": "https://e/x"})
     assert resp.status_code == 200
@@ -92,7 +100,11 @@ def test_resolve_mp4_kind():
 
 
 def test_resolve_hls_kind():
-    src = StreamSource(url="https://cdn.example/master.m3u8", referer="https://vidzy.org/", provider="vidzy")
+    src = StreamSource(
+        url="https://cdn.example/master.m3u8",
+        referer="https://vidzy.org/",
+        provider="vidzy",
+    )
     client = _client({"vidzy": _FakeProvider(source=src)})
     resp = _resolve(client, {"vidzy": "https://e/x"})
     assert resp.json()["kind"] == "hls"
@@ -100,21 +112,29 @@ def test_resolve_hls_kind():
 
 def test_resolve_falls_back_to_next_provider():
     # uqload fails to resolve; vidzy succeeds — resolve should return vidzy.
-    vidzy_src = StreamSource(url="https://cdn.example/master.m3u8", referer="https://vidzy.org/", provider="vidzy")
-    client = _client({
-        "uqload": _FakeProvider(exc=ProviderError("No mp4 URL found")),
-        "vidzy": _FakeProvider(source=vidzy_src),
-    })
+    vidzy_src = StreamSource(
+        url="https://cdn.example/master.m3u8",
+        referer="https://vidzy.org/",
+        provider="vidzy",
+    )
+    client = _client(
+        {
+            "uqload": _FakeProvider(exc=ProviderError("No mp4 URL found")),
+            "vidzy": _FakeProvider(source=vidzy_src),
+        }
+    )
     resp = _resolve(client, {"uqload": "https://e/u", "vidzy": "https://e/v"})
     assert resp.status_code == 200
     assert resp.json()["provider"] == "vidzy"
 
 
 def test_resolve_all_providers_fail_502():
-    client = _client({
-        "uqload": _FakeProvider(exc=ProviderError("no mp4 found")),
-        "vidzy": _FakeProvider(exc=ProviderError("no m3u8 found")),
-    })
+    client = _client(
+        {
+            "uqload": _FakeProvider(exc=ProviderError("no mp4 found")),
+            "vidzy": _FakeProvider(exc=ProviderError("no m3u8 found")),
+        }
+    )
     resp = _resolve(client, {"uqload": "https://e/u", "vidzy": "https://e/v"})
     assert resp.status_code == 502
     assert "no mp4 found" in resp.json()["detail"]
@@ -143,7 +163,9 @@ def test_proxy_forwards_range_and_relays_206(httpx_mock: HTTPXMock):
         content=b"x" * 1024,
     )
 
-    resp = client.get("/api/stream/proxy", params={"token": token}, headers={"Range": "bytes=0-1023"})
+    resp = client.get(
+        "/api/stream/proxy", params={"token": token}, headers={"Range": "bytes=0-1023"}
+    )
     assert resp.status_code == 206
     assert resp.headers["content-range"] == "bytes 0-1023/5000000"
     assert resp.headers["accept-ranges"] == "bytes"
@@ -183,7 +205,11 @@ def test_proxy_sets_cors_headers(httpx_mock: HTTPXMock):
     client = _client()
     secret = client.app.state.proxy_secret
     token = sign(secret, "https://cdn.example/v.mp4", "https://uqload.is/", "uqload")
-    httpx_mock.add_response(url="https://cdn.example/v.mp4", content=b"x" * 16, headers={"Content-Type": "video/mp4"})
+    httpx_mock.add_response(
+        url="https://cdn.example/v.mp4",
+        content=b"x" * 16,
+        headers={"Content-Type": "video/mp4"},
+    )
 
     resp = client.get("/api/stream/proxy", params={"token": token})
     assert resp.headers["access-control-allow-origin"] == "*"
@@ -203,7 +229,14 @@ def test_proxy_rejects_bad_token_without_upstream_call(httpx_mock: HTTPXMock):
 def test_proxy_rejects_expired_token_without_upstream_call(httpx_mock: HTTPXMock):
     client = _client()
     secret = client.app.state.proxy_secret
-    token = sign(secret, "https://cdn.example/v.mp4", "https://uqload.is/", "uqload", ttl=-1, now=time.time() - 10)
+    token = sign(
+        secret,
+        "https://cdn.example/v.mp4",
+        "https://uqload.is/",
+        "uqload",
+        ttl=-1,
+        now=time.time() - 10,
+    )
     resp = client.get("/api/stream/proxy", params={"token": token})
     assert resp.status_code == 403
     assert httpx_mock.get_requests() == []
@@ -213,7 +246,10 @@ def test_proxy_rejects_expired_token_without_upstream_call(httpx_mock: HTTPXMock
 # T3 — HLS playlist rewriting
 # --------------------------------------------------------------------------- #
 
-def _collect_proxied(text: str, base_url: str = "https://cdn.example/hls/master.m3u8") -> str:
+
+def _collect_proxied(
+    text: str, base_url: str = "https://cdn.example/hls/master.m3u8"
+) -> str:
     """Rewrite a playlist, tagging each minted URL with the absolute target it wraps."""
     return rewrite_playlist(text, base_url, mint_token=lambda url: f"PROXY[{url}]")
 
@@ -236,9 +272,9 @@ def test_rewrite_absolute_segments():
 def test_rewrite_master_variants():
     playlist = (
         "#EXTM3U\n"
-        '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360\n'
+        "#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360\n"
         "480/index.m3u8\n"
-        '#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720\n'
+        "#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720\n"
         "https://other.cdn/720/index.m3u8\n"
     )
     out = _collect_proxied(playlist)
@@ -260,11 +296,7 @@ def test_rewrite_aes_key_uri():
 
 
 def test_rewrite_map_uri():
-    playlist = (
-        "#EXTM3U\n"
-        '#EXT-X-MAP:URI="init.mp4"\n'
-        "#EXTINF:4.0,\nseg0.m4s\n"
-    )
+    playlist = "#EXTM3U\n" '#EXT-X-MAP:URI="init.mp4"\n' "#EXTINF:4.0,\nseg0.m4s\n"
     out = _collect_proxied(playlist, base_url="https://cdn.example/hls/media.m3u8")
     assert 'URI="PROXY[https://cdn.example/hls/init.mp4]"' in out
     assert "PROXY[https://cdn.example/hls/seg0.m4s]" in out
@@ -280,12 +312,14 @@ def test_rewrite_preserves_byterange_and_blanks():
 def test_proxy_serves_rewritten_playlist_end_to_end(httpx_mock: HTTPXMock):
     client = _client()
     secret = client.app.state.proxy_secret
-    token = sign(secret, "https://cdn.example/hls/master.m3u8", "https://vidzy.org/", "vidzy")
+    token = sign(
+        secret, "https://cdn.example/hls/master.m3u8", "https://vidzy.org/", "vidzy"
+    )
 
     httpx_mock.add_response(
         url="https://cdn.example/hls/master.m3u8",
         headers={"Content-Type": "application/vnd.apple.mpegurl"},
-        text='#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\n480/index.m3u8\n',
+        text="#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\n480/index.m3u8\n",
     )
 
     resp = client.get("/api/stream/proxy", params={"token": token})

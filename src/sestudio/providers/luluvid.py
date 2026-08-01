@@ -68,6 +68,13 @@ class LuluvidProvider(StreamProvider):
 
             stream_url = src.group(1)
             logger.debug("Luluvid resolved stream: %s", stream_url[:80])
-            return StreamSource(url=stream_url, referer=REFERER, provider="luluvid", user_agent=BROWSER_UA)
+            return StreamSource(
+                url=stream_url,
+                referer=REFERER,
+                provider="luluvid",
+                user_agent=BROWSER_UA,
+            )
 
-        raise ProviderError(f"Could not resolve Luluvid embed {embed_url} ({last_error})")
+        raise ProviderError(
+            f"Could not resolve Luluvid embed {embed_url} ({last_error})"
+        )

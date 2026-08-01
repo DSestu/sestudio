@@ -32,11 +32,15 @@ def check_yt_dlp() -> str:
     """Return the path to yt-dlp or raise RuntimeError if not found."""
     path = shutil.which("yt-dlp")
     if not path:
-        raise RuntimeError("yt-dlp not found in PATH. Install it with: pip install yt-dlp")
+        raise RuntimeError(
+            "yt-dlp not found in PATH. Install it with: pip install yt-dlp"
+        )
     return path
 
 
-_RETRYABLE = re.compile(r"HTTP Error 5\d\d|429|Too Many|Service Unavailable", re.IGNORECASE)
+_RETRYABLE = re.compile(
+    r"HTTP Error 5\d\d|429|Too Many|Service Unavailable", re.IGNORECASE
+)
 _MAX_RETRIES = 3
 _RETRY_BACKOFF = (10, 30, 60)  # seconds between attempts
 
@@ -50,12 +54,16 @@ def download(
     """Download a single stream via yt-dlp. Retries up to 3 times on 5xx/429. Returns True on success."""
     cmd: list[str] = [
         check_yt_dlp(),
-        "--add-header", f"Referer: {source.referer}",
+        "--add-header",
+        f"Referer: {source.referer}",
         # Some CDN nodes (e.g. vidzy's u*.vidzy.cc) 403 requests lacking the
         # Sec-Fetch-* headers a browser sends — match them here too.
-        "--add-header", "Sec-Fetch-Dest: empty",
-        "--add-header", "Sec-Fetch-Mode: cors",
-        "--add-header", "Sec-Fetch-Site: cross-site",
+        "--add-header",
+        "Sec-Fetch-Dest: empty",
+        "--add-header",
+        "Sec-Fetch-Mode: cors",
+        "--add-header",
+        "Sec-Fetch-Site: cross-site",
     ]
     # Some CDNs (e.g. vidzy) 403 requests without a browser User-Agent; use the
     # one the provider resolved with so the download matches the embed fetch.
@@ -67,8 +75,10 @@ def download(
     if ffmpeg_dir:
         cmd += ["--ffmpeg-location", ffmpeg_dir]
     cmd += [
-        "--merge-output-format", "mp4",
-        "-o", str(output_path),
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        str(output_path),
         "--progress",
         "--newline",
         source.url,
@@ -108,11 +118,13 @@ def download(
             if on_progress:
                 m = _PROGRESS_RE.search(line)
                 if m:
-                    on_progress(ProgressEvent(
-                        percent=float(m.group(1)),
-                        speed=m.group(2),
-                        eta=m.group(3),
-                    ))
+                    on_progress(
+                        ProgressEvent(
+                            percent=float(m.group(1)),
+                            speed=m.group(2),
+                            eta=m.group(3),
+                        )
+                    )
 
         proc.wait()
         stderr_thread.join()
@@ -123,7 +135,9 @@ def download(
                 return True
             actual = output_path.stat().st_size if output_path.exists() else 0
             logger.warning(
-                "yt-dlp exited 0 but output is too small (%d bytes) for %s", actual, output_path.name
+                "yt-dlp exited 0 but output is too small (%d bytes) for %s",
+                actual,
+                output_path.name,
             )
 
         # Clean up any partial/empty file left by yt-dlp before retrying or giving up
@@ -135,7 +149,11 @@ def download(
             wait = _RETRY_BACKOFF[attempt]
             logger.warning(
                 "yt-dlp transient error for %s (attempt %d/%d), retrying in %ds: %s",
-                output_path.name, attempt + 1, _MAX_RETRIES, wait, stderr,
+                output_path.name,
+                attempt + 1,
+                _MAX_RETRIES,
+                wait,
+                stderr,
             )
             time.sleep(wait)
             continue
@@ -171,7 +189,9 @@ def download_many(
                 download,
                 source,
                 path,
-                (lambda n: lambda ev: on_progress(n, ev))(path.name) if on_progress else None,
+                (lambda n: lambda ev: on_progress(n, ev))(path.name)
+                if on_progress
+                else None,
             ): path.name
             for source, path in jobs
         }

@@ -56,18 +56,24 @@ async def discover_renderers(timeout: int = 4) -> list[dict[str, str]]:
 
     sources = _local_ipv4s()
     searches = [
-        async_search(_on_response, timeout=timeout, search_target=_MEDIA_RENDERER, source=(ip, 0))
+        async_search(
+            _on_response, timeout=timeout, search_target=_MEDIA_RENDERER, source=(ip, 0)
+        )
         for ip in sources
     ]
     # Also a default (unbound) search, in case interface enumeration misses one.
-    searches.append(async_search(_on_response, timeout=timeout, search_target=_MEDIA_RENDERER))
+    searches.append(
+        async_search(_on_response, timeout=timeout, search_target=_MEDIA_RENDERER)
+    )
 
     results = await asyncio.gather(*searches, return_exceptions=True)
     for r in results:
         if isinstance(r, Exception):
             logger.debug("SSDP search error: %s", r)
     logger.info(
-        "SSDP discovery: %d location(s) via interfaces %s", len(locations), sources or ["default"]
+        "SSDP discovery: %d location(s) via interfaces %s",
+        len(locations),
+        sources or ["default"],
     )
 
     factory = UpnpFactory(AiohttpRequester(timeout=timeout))
@@ -75,7 +81,9 @@ async def discover_renderers(timeout: int = 4) -> list[dict[str, str]]:
     for location in locations:
         try:
             device = await factory.async_create_device(location)
-            renderers.append({"name": device.friendly_name, "udn": device.udn, "location": location})
+            renderers.append(
+                {"name": device.friendly_name, "udn": device.udn, "location": location}
+            )
         except Exception as exc:  # noqa: BLE001 — skip unreachable/odd devices
             logger.debug("Skipping renderer at %s: %s", location, exc)
     return renderers
@@ -88,7 +96,9 @@ async def make_device(location: str) -> DmrDevice:
     return DmrDevice(device, event_handler=None)
 
 
-async def play_on_renderer(location: str, media_url: str, title: str, mime_type: str) -> DmrDevice:
+async def play_on_renderer(
+    location: str, media_url: str, title: str, mime_type: str
+) -> DmrDevice:
     """Push *media_url* to the renderer's AVTransport and start playback.
 
     Returns the DmrDevice so the caller can cache it and control the session

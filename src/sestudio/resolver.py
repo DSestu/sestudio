@@ -20,7 +20,9 @@ def resolve_live_domain() -> str:
         resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")
-    link = soup.find("a", href=lambda h: h and h.startswith("https://") and "fstream" not in h)
+    link = soup.find(
+        "a", href=lambda h: h and h.startswith("https://") and "fstream" not in h
+    )
     if link:
         parsed = urllib.parse.urlparse(str(link["href"]))
         live = f"{parsed.scheme}://{parsed.netloc}"

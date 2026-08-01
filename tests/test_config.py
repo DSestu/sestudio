@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-
-import pytest
 
 from sestudio.config import AppConfig, load_config, save_config
 

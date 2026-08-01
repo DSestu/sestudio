@@ -4,10 +4,12 @@ import httpx
 from pytest_httpx import HTTPXMock
 
 from sestudio.scraper import fetch_season
-from tests.conftest import load_fixture, FIXTURES
+from tests.conftest import load_fixture
 
 
-SEASON_URL = "https://fs03.lol/16676-stargate-sg-1-saison-1-streaming-complet-vf-vostfr.html"
+SEASON_URL = (
+    "https://fs03.lol/16676-stargate-sg-1-saison-1-streaming-complet-vf-vostfr.html"
+)
 EPS_URL = "https://fs03.lol/data/eps_16676.txt"
 
 
@@ -21,7 +23,9 @@ def eps_json() -> str:
     return load_fixture("eps_16676.json")
 
 
-def test_fetch_season_returns_correct_season_number(httpx_mock: HTTPXMock, season_html, eps_json):
+def test_fetch_season_returns_correct_season_number(
+    httpx_mock: HTTPXMock, season_html, eps_json
+):
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
@@ -39,7 +43,9 @@ def test_fetch_season_returns_22_episodes(httpx_mock: HTTPXMock, season_html, ep
     assert len(episodes) == 22
 
 
-def test_fetch_season_episodes_have_uqload_url(httpx_mock: HTTPXMock, season_html, eps_json):
+def test_fetch_season_episodes_have_uqload_url(
+    httpx_mock: HTTPXMock, season_html, eps_json
+):
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
@@ -50,7 +56,9 @@ def test_fetch_season_episodes_have_uqload_url(httpx_mock: HTTPXMock, season_htm
     assert ep1.embed_urls.get("uqload") == "https://uqload.is/embed-czbs41i6g7nb.html"
 
 
-def test_fetch_season_episode_title_from_info(httpx_mock: HTTPXMock, season_html, eps_json):
+def test_fetch_season_episode_title_from_info(
+    httpx_mock: HTTPXMock, season_html, eps_json
+):
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
@@ -79,7 +87,9 @@ def test_fetch_season_vostfr_lang(httpx_mock: HTTPXMock, season_html, eps_json):
     assert len(episodes) == vostfr_count
 
 
-def test_fetch_season_episodes_sorted_by_number(httpx_mock: HTTPXMock, season_html, eps_json):
+def test_fetch_season_episodes_sorted_by_number(
+    httpx_mock: HTTPXMock, season_html, eps_json
+):
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 

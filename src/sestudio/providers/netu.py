@@ -46,11 +46,15 @@ class NetuProvider(StreamProvider):
         except httpx.TimeoutException as exc:
             raise ProviderError(f"Timeout fetching Netu embed: {embed_url}") from exc
         except httpx.HTTPStatusError as exc:
-            raise ProviderError(f"HTTP {exc.response.status_code} fetching Netu embed: {embed_url}") from exc
+            raise ProviderError(
+                f"HTTP {exc.response.status_code} fetching Netu embed: {embed_url}"
+            ) from exc
 
         m = _CODE_RE.search(final_url)
         if not m:
-            raise ProviderError(f"Could not extract video code from Netu redirect: {final_url}")
+            raise ProviderError(
+                f"Could not extract video code from Netu redirect: {final_url}"
+            )
 
         code = m.group(1)
         api_base = f"{resp.url.scheme}://{resp.url.host}"
@@ -59,14 +63,19 @@ class NetuProvider(StreamProvider):
         logger.debug("Netu resolved code=%s api_base=%s", code, api_base)
 
         try:
-            with new_client(headers={**HEADERS, "Referer": referer, "Accept": "application/json"}, follow_redirects=False) as client:
+            with new_client(
+                headers={**HEADERS, "Referer": referer, "Accept": "application/json"},
+                follow_redirects=False,
+            ) as client:
                 api_resp = client.get(f"{api_base}/api/videos/{code}/")
                 api_resp.raise_for_status()
                 data = api_resp.json()
         except httpx.TimeoutException as exc:
             raise ProviderError(f"Timeout fetching Netu API for {code}") from exc
         except httpx.HTTPStatusError as exc:
-            raise ProviderError(f"HTTP {exc.response.status_code} from Netu API for {code}") from exc
+            raise ProviderError(
+                f"HTTP {exc.response.status_code} from Netu API for {code}"
+            ) from exc
 
         pb = data.get("playback")
         if not pb or not pb.get("key_parts"):
@@ -75,7 +84,9 @@ class NetuProvider(StreamProvider):
         try:
             sources = _decrypt_playback(pb)
         except Exception as exc:
-            raise ProviderError(f"Failed to decrypt Netu playback config for {code}") from exc
+            raise ProviderError(
+                f"Failed to decrypt Netu playback config for {code}"
+            ) from exc
 
         if not sources:
             raise ProviderError(f"No sources in Netu playback config for {code}")
@@ -85,4 +96,9 @@ class NetuProvider(StreamProvider):
         stream_url = source["url"]
 
         logger.debug("Netu resolved stream: %s", stream_url[:80])
-        return StreamSource(url=stream_url, referer=referer, provider="netu", user_agent=HEADERS["User-Agent"])
+        return StreamSource(
+            url=stream_url,
+            referer=referer,
+            provider="netu",
+            user_agent=HEADERS["User-Agent"],
+        )

@@ -15,7 +15,9 @@ def test_prefers_system_ffmpeg(monkeypatch):
 def test_falls_back_to_bundled(monkeypatch):
     """No system ffmpeg → the directory of the imageio-ffmpeg bundled binary."""
     monkeypatch.setattr(media.shutil, "which", lambda name: None)
-    fake = types.SimpleNamespace(get_ffmpeg_exe=lambda: "/bundle/bin/ffmpeg-linux-x86_64")
+    fake = types.SimpleNamespace(
+        get_ffmpeg_exe=lambda: "/bundle/bin/ffmpeg-linux-x86_64"
+    )
     monkeypatch.setitem(sys.modules, "imageio_ffmpeg", fake)
     assert media.ffmpeg_location() == "/bundle/bin"
 

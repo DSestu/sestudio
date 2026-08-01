@@ -17,7 +17,9 @@ from collections.abc import Callable
 # process minted are honoured; everything else is rejected before any network
 # call is made.
 
-PROXY_TOKEN_TTL = 6 * 3600  # seconds; long enough for a cast session, short enough that stale links die
+PROXY_TOKEN_TTL = (
+    6 * 3600
+)  # seconds; long enough for a cast session, short enough that stale links die
 
 
 class TokenError(Exception):
@@ -45,7 +47,9 @@ def sign(
     """Seal a proxy target into a URL-safe ``<payload>.<sig>`` token."""
     issued = time.time() if now is None else now
     payload = {"u": target_url, "r": referer, "p": provider, "exp": issued + ttl}
-    payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
+        "utf-8"
+    )
     payload_b64 = _b64url_encode(payload_json)
     sig = hmac.new(secret, payload_b64.encode("ascii"), hashlib.sha256).digest()
     return f"{payload_b64}.{_b64url_encode(sig)}"
@@ -121,9 +125,11 @@ def rewrite_playlist(
 
         if stripped.startswith("#"):
             if stripped.startswith(_URI_TAGS) and "URI=" in stripped:
+
                 def _sub(m: re.Match[str]) -> str:
                     absolute = urllib.parse.urljoin(base_url, m.group(1))
                     return f'URI="{mint_token(absolute)}"'
+
                 out.append(_URI_ATTR_RE.sub(_sub, line))
             else:
                 out.append(line)

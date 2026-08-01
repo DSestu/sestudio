@@ -1,4 +1,0 @@
-beautifulsoup4>=4.14.3
-click>=8.4.0
-httpx>=0.28.1
-rich>=15.0.0

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
 
@@ -25,7 +24,9 @@ _NEWSID_RE = re.compile(r"/(\d+)-")
 _YEAR_RE = re.compile(r"\s*\(\d{4}\)\s*$")
 
 
-def _search_one(query: str, base_url: str, *, is_anime: bool = False) -> list[SeasonCard]:
+def _search_one(
+    query: str, base_url: str, *, is_anime: bool = False
+) -> list[SeasonCard]:
     """Search a single domain and return SeasonCard list."""
     with new_client(headers=HEADERS) as client:
         # Resolve the final URL (some domains redirect to a versioned subdomain)
@@ -36,7 +37,12 @@ def _search_one(query: str, base_url: str, *, is_anime: bool = False) -> list[Se
         logger.debug("Searching: POST %s query=%r", search_url, query)
         resp = client.post(
             search_url,
-            data={"query": query, "search_start": "0", "full_search": "0", "result_from": "1"},
+            data={
+                "query": query,
+                "search_start": "0",
+                "full_search": "0",
+                "result_from": "1",
+            },
             headers={
                 "Referer": f"{resolved_origin}/",
                 "Origin": resolved_origin,
@@ -71,25 +77,33 @@ def _search_one(query: str, base_url: str, *, is_anime: bool = False) -> list[Se
 
         m_season = SEASON_RE.search(title)
         season_number = int(m_season.group(1)) if m_season else 0
-        series_name = SEASON_RE.split(title)[0].rstrip(" -").strip() if m_season else title
+        series_name = (
+            SEASON_RE.split(title)[0].rstrip(" -").strip() if m_season else title
+        )
         is_film = not bool(m_season) and not is_anime
 
-        cards.append(SeasonCard(
-            newsid=newsid,
-            title=title,
-            series_name=series_name,
-            season_number=season_number,
-            poster_url=poster_url,
-            page_url=page_url,
-            is_film=is_film,
-            is_anime=is_anime,
-        ))
+        cards.append(
+            SeasonCard(
+                newsid=newsid,
+                title=title,
+                series_name=series_name,
+                season_number=season_number,
+                poster_url=poster_url,
+                page_url=page_url,
+                is_film=is_film,
+                is_anime=is_anime,
+            )
+        )
 
-    logger.debug("Search returned %d cards for %r (anime=%s)", len(cards), query, is_anime)
+    logger.debug(
+        "Search returned %d cards for %r (anime=%s)", len(cards), query, is_anime
+    )
     return cards
 
 
-def search_seasons(query: str, base_url: str, anime_domain: str | None = None) -> list[SeasonCard]:
+def search_seasons(
+    query: str, base_url: str, anime_domain: str | None = None
+) -> list[SeasonCard]:
     """Search fstream (and optionally the anime domain) for content matching *query*."""
     cards = _search_one(query, base_url, is_anime=False)
     if anime_domain:
@@ -123,7 +137,10 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
         if eps_resp.status_code == 404:
             manga_url = f"{base_origin}/engine/ajax/manga_episodes_api.php?id={news_id}"
             logger.debug("eps txt 404, trying manga API: %s", manga_url)
-            eps_resp = client.get(manga_url, headers={"Referer": url, "X-Requested-With": "XMLHttpRequest"})
+            eps_resp = client.get(
+                manga_url,
+                headers={"Referer": url, "X-Requested-With": "XMLHttpRequest"},
+            )
         eps_resp.raise_for_status()
 
     data: dict[str, dict[str, object]] = eps_resp.json()
@@ -149,8 +166,12 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
     return season, episodes
 
 
-_EMBED_PROVIDERS_RE = re.compile(r"uqload|vidzy|netu|byse|luluvid|premium|voe", re.IGNORECASE)
-_TITLE_SUFFIX_RE = re.compile(r"\s+[-–|]\s+.*$")  # space-dash-space avoids breaking hyphenated titles
+_EMBED_PROVIDERS_RE = re.compile(
+    r"uqload|vidzy|netu|byse|luluvid|premium|voe", re.IGNORECASE
+)
+_TITLE_SUFFIX_RE = re.compile(
+    r"\s+[-–|]\s+.*$"
+)  # space-dash-space avoids breaking hyphenated titles
 _FILM_PREFIX_RE = re.compile(r"^(?:Film|Movie)\s+", re.IGNORECASE)
 
 # Supported providers and their lang key in the film API response
@@ -163,11 +184,15 @@ _FILM_LANG_KEY: dict[str, str] = {
 }
 
 
-def _fetch_film_api(client: httpx.Client, base_origin: str, news_id: str, referer: str, lang: str) -> tuple[dict[str, str], list[str]]:
+def _fetch_film_api(
+    client: httpx.Client, base_origin: str, news_id: str, referer: str, lang: str
+) -> tuple[dict[str, str], list[str]]:
     """Call /engine/ajax/film_api.php and return (embed_urls, available_langs)."""
     api_url = f"{base_origin}/engine/ajax/film_api.php?id={news_id}"
     logger.debug("Fetching film API: %s", api_url)
-    resp = client.get(api_url, headers={"Referer": referer, "X-Requested-With": "XMLHttpRequest"})
+    resp = client.get(
+        api_url, headers={"Referer": referer, "X-Requested-With": "XMLHttpRequest"}
+    )
     resp.raise_for_status()
     data: dict[str, object] = resp.json()
     if data.get("error"):
@@ -193,7 +218,9 @@ def _fetch_film_api(client: httpx.Client, base_origin: str, news_id: str, refere
     if not available and players:
         available.add("vf")
 
-    logger.debug("Film API embed_urls: %s, langs: %s", list(embed_urls), sorted(available))
+    logger.debug(
+        "Film API embed_urls: %s, langs: %s", list(embed_urls), sorted(available)
+    )
     return embed_urls, sorted(available)
 
 
@@ -232,9 +259,13 @@ def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode]]:
         embed_urls: dict[str, str] = {}
         available_langs: list[str] = []
         try:
-            embed_urls, available_langs = _fetch_film_api(client, base_origin, news_id, url, lang)
+            embed_urls, available_langs = _fetch_film_api(
+                client, base_origin, news_id, url, lang
+            )
         except Exception as exc:
-            logger.warning("Film API unavailable for %s: %s — trying fallbacks", news_id, exc)
+            logger.warning(
+                "Film API unavailable for %s: %s — trying fallbacks", news_id, exc
+            )
 
         # Fallback: scrape iframes (src and data-src)
         if not embed_urls:
@@ -242,7 +273,14 @@ def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode]]:
             for iframe in soup.find_all("iframe"):
                 src: str = iframe.get("src") or iframe.get("data-src") or ""
                 if src and _EMBED_PROVIDERS_RE.search(src):
-                    pname = next((p for p in ("uqload", "vidzy", "netu", "luluvid") if p in src.lower()), "unknown")
+                    pname = next(
+                        (
+                            p
+                            for p in ("uqload", "vidzy", "netu", "luluvid")
+                            if p in src.lower()
+                        ),
+                        "unknown",
+                    )
                     embed_urls[pname] = src
 
         if not embed_urls:

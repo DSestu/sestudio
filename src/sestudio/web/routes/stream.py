@@ -11,7 +11,13 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from sestudio.http_client import BROWSER_UA, new_client
-from sestudio.web.proxy import PROXY_TOKEN_TTL, TokenError, rewrite_playlist, sign, verify
+from sestudio.web.proxy import (
+    PROXY_TOKEN_TTL,
+    TokenError,
+    rewrite_playlist,
+    sign,
+    verify,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,19 +84,27 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
         if handler is None:
             continue
         try:
-            source = await asyncio.to_thread(handler.get_stream_url, body.embed_urls[pname])
+            source = await asyncio.to_thread(
+                handler.get_stream_url, body.embed_urls[pname]
+            )
         except Exception as exc:  # noqa: BLE001 — try the next provider on any failure
             logger.debug("Provider %s failed to resolve: %s", pname, exc)
             errors.append(f"{pname}: {exc}")
             continue
         kind = "hls" if ".m3u8" in source.url else "mp4"
         return {
-            "proxy_url": _proxy_url(secret, source.url, source.referer, source.provider),
+            "proxy_url": _proxy_url(
+                secret, source.url, source.referer, source.provider
+            ),
             "kind": kind,
             "provider": pname,
         }
 
-    detail = "All providers failed — " + "; ".join(errors) if errors else "No supported provider"
+    detail = (
+        "All providers failed — " + "; ".join(errors)
+        if errors
+        else "No supported provider"
+    )
     raise HTTPException(status_code=502, detail=detail)
 
 
@@ -155,7 +169,9 @@ def proxy_stream(token: str, request: Request) -> Response:
         def _mint(absolute_url: str) -> str:
             return _proxy_url(secret_bytes, absolute_url, referer, provider)
 
-        rewritten = rewrite_playlist(raw.decode("utf-8", errors="replace"), base_url, _mint)
+        rewritten = rewrite_playlist(
+            raw.decode("utf-8", errors="replace"), base_url, _mint
+        )
         return Response(
             content=rewritten,
             status_code=upstream.status_code,

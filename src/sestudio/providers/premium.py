@@ -41,7 +41,9 @@ class PremiumProvider(StreamProvider):
         except httpx.TimeoutException as exc:
             raise ProviderError(f"Timeout fetching Premium embed: {embed_url}") from exc
         except httpx.HTTPStatusError as exc:
-            raise ProviderError(f"HTTP {exc.response.status_code} fetching Premium embed: {embed_url}") from exc
+            raise ProviderError(
+                f"HTTP {exc.response.status_code} fetching Premium embed: {embed_url}"
+            ) from exc
 
         packed = _PACKED_RE.search(resp.text)
         if not packed:
@@ -59,4 +61,6 @@ class PremiumProvider(StreamProvider):
 
         if ".m3u8" not in stream_url:
             raise ProviderError(f"Decoded Premium source is not an m3u8: {embed_url}")
-        return StreamSource(url=stream_url, referer=REFERER, provider="premium", user_agent=BROWSER_UA)
+        return StreamSource(
+            url=stream_url, referer=REFERER, provider="premium", user_agent=BROWSER_UA
+        )

@@ -29,7 +29,7 @@ def _packed_embed(payload_b64: str, key: list[int]) -> str:
     key_csv = ",".join(str(k) for k in key)
     src = (
         f'sources:[{{src:(function(s){{var k=[{key_csv}],b=atob(s),r="";'
-        f'for(var i=0;i<b.length;i++){{r+=String.fromCharCode(b.charCodeAt(i)^k[i%8])}}'
+        f"for(var i=0;i<b.length;i++){{r+=String.fromCharCode(b.charCodeAt(i)^k[i%8])}}"
         f'return r}})("{payload_b64}"),type:"application/x-mpegURL"}}]'
     )
     # A decoy plain m3u8 that must NOT be picked over the real (obfuscated) one.

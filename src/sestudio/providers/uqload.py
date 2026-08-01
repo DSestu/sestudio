@@ -39,7 +39,9 @@ class UqloadProvider(StreamProvider):
         except httpx.TimeoutException as exc:
             raise ProviderError(f"Timeout fetching Uqload embed: {embed_url}") from exc
         except httpx.HTTPStatusError as exc:
-            raise ProviderError(f"HTTP {exc.response.status_code} fetching Uqload embed: {embed_url}") from exc
+            raise ProviderError(
+                f"HTTP {exc.response.status_code} fetching Uqload embed: {embed_url}"
+            ) from exc
 
         html = resp.text
         packed = _PACKED_RE.search(html)
@@ -47,10 +49,20 @@ class UqloadProvider(StreamProvider):
             unpacked = _unpack(packed.group(0))
             m = _FILE_RE.search(unpacked)
             if m:
-                return StreamSource(url=m.group(1), referer=REFERER, provider="uqload", user_agent=BROWSER_UA)
+                return StreamSource(
+                    url=m.group(1),
+                    referer=REFERER,
+                    provider="uqload",
+                    user_agent=BROWSER_UA,
+                )
 
         m = _MP4_RE.search(html)
         if m:
-            return StreamSource(url=m.group(1), referer=REFERER, provider="uqload", user_agent=BROWSER_UA)
+            return StreamSource(
+                url=m.group(1),
+                referer=REFERER,
+                provider="uqload",
+                user_agent=BROWSER_UA,
+            )
 
         raise ProviderError(f"No stream URL found in Uqload embed: {embed_url}")

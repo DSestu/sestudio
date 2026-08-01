@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from sestudio.config import load_config
-from sestudio.models import sanitize_path_component
+from sestudio.models import StreamSource, sanitize_path_component
 from sestudio.providers.base import ProviderError
 from sestudio.web.worker import DownloadJob
 
@@ -41,7 +41,11 @@ def _episode_path(root: str, item: DownloadRequest) -> Path:
     if item.season == 0:
         parts = [root, "fstream_films"]
     else:
-        parts = [root, sanitize_path_component(item.series_name), f"Season {item.season:02d}"]
+        parts = [
+            root,
+            sanitize_path_component(item.series_name),
+            f"Season {item.season:02d}",
+        ]
     if item.lang:
         parts.append(sanitize_path_component(item.lang.upper()))
     return Path(*parts) / safe_ep
@@ -97,7 +101,9 @@ async def post_downloads(
         for pname, purl in candidates:
             handler = providers.get(pname)
             if handler is None:
-                logger.debug("Skipping unsupported provider %r for %s", pname, item.episode_name)
+                logger.debug(
+                    "Skipping unsupported provider %r for %s", pname, item.episode_name
+                )
                 tried.append(pname)
                 continue
             try:
@@ -108,7 +114,12 @@ async def post_downloads(
             except ProviderError as exc:
                 last_error = str(exc)
                 tried.append(pname)
-                logger.warning("Provider %s failed for %s: %s — trying next", pname, item.episode_name, exc)
+                logger.warning(
+                    "Provider %s failed for %s: %s — trying next",
+                    pname,
+                    item.episode_name,
+                    exc,
+                )
 
         if source is None:
             logger.warning("Could not resolve %s: %s", item.episode_name, last_error)
@@ -120,8 +131,12 @@ async def post_downloads(
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         if out_path.exists() and out_path.stat().st_size > 0:
-            logger.info("Skipping %s: already exists at %s", item.episode_name, out_path)
-            results.append({"episode_name": item.episode_name, "status": "skipped", "error": None})
+            logger.info(
+                "Skipping %s: already exists at %s", item.episode_name, out_path
+            )
+            results.append(
+                {"episode_name": item.episode_name, "status": "skipped", "error": None}
+            )
             continue
 
         # Remove any 0-byte remnant from a previous failed attempt
@@ -129,7 +144,9 @@ async def post_downloads(
             out_path.unlink()
 
         # Pass all_providers so the worker can fall back if the initial download fails
-        remaining_providers = {k: v for k, v in item.all_providers.items() if k not in tried}
+        remaining_providers = {
+            k: v for k, v in item.all_providers.items() if k not in tried
+        }
         job = store.submit(source, out_path, safe_ep, all_providers=remaining_providers)
         results.append(_job_to_dict(job))
 
@@ -155,6 +172,7 @@ async def cancel_download(job_id: str, request: Request) -> dict[str, Any]:
     found = store.cancel(job_id)
     if not found:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Job not found or already terminal")
     return {"id": job_id, "status": "cancelled"}
 
@@ -171,13 +189,15 @@ async def job_progress(job_id: str, request: Request) -> StreamingResponse:
             if job is None:
                 yield f"data: {json.dumps({'error': 'not found'})}\n\n"
                 break
-            payload = json.dumps({
-                "status": job.status,
-                "progress": job.progress,
-                "speed": job.speed,
-                "eta": job.eta,
-                "error": job.error,
-            })
+            payload = json.dumps(
+                {
+                    "status": job.status,
+                    "progress": job.progress,
+                    "speed": job.speed,
+                    "eta": job.eta,
+                    "error": job.error,
+                }
+            )
             yield f"data: {payload}\n\n"
             if job.status in ("done", "failed", "cancelled"):
                 break

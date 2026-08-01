@@ -1,5 +1,4 @@
 import pytest
-import httpx
 from pytest_httpx import HTTPXMock
 
 from sestudio.providers.uqload import UqloadProvider
@@ -43,7 +42,9 @@ def test_uqload_provider_name(httpx_mock: HTTPXMock, uqload_html):
 
 
 def test_uqload_raises_on_missing_url(httpx_mock: HTTPXMock):
-    httpx_mock.add_response(url=EMBED_URL, text="<html><body>no video here</body></html>")
+    httpx_mock.add_response(
+        url=EMBED_URL, text="<html><body>no video here</body></html>"
+    )
 
     provider = UqloadProvider()
 
