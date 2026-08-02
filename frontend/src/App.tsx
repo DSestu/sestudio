@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, DownloadItem, DownloadJob, SeasonCard } from './api'
+import type { AppSettings, DownloadDestination, DownloadItem, DownloadJob, SeasonCard } from './api'
 import { checkDownloads, getSeason, postDownloads } from './api'
+import { downloadToDevice } from './deviceDownloads'
 import { loadCast } from './cast'
 import { refreshDlna } from './dlnaControl'
 import CastControls from './components/CastControls'
@@ -45,7 +46,7 @@ export default function App() {
   // is opened from Continue Watching / Next Up rather than from search.
   const [autoPlayEpisode, setAutoPlayEpisode] = useState<number | undefined>(undefined)
   const [openLang, setOpenLang] = useState<string | null>(null)
-  const [settings, setSettings] = useState<AppSettings>({ output_root: '.', lang: 'vf' })
+  const [settings, setSettings] = useState<AppSettings>({ output_root: '.', lang: 'vf', download_destination: 'server' })
   const [downloadTick, setDownloadTick] = useState(0)
   const [bulkLoading, setBulkLoading] = useState(false)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
@@ -129,8 +130,19 @@ export default function App() {
     }
   }
 
-  async function confirmDownload() {
+  async function confirmDownload(destination: DownloadDestination) {
     if (!pendingItems) return
+    if (destination === 'device') {
+      // Progress shows in the Downloads panel — directly for relayed MP4s, or
+      // as a server job for HLS (which needs downloading first).
+      const items = pendingItems
+      setPendingItems(null)
+      setCheckedIds(new Set())
+      void downloadToDevice(items).then(queued => {
+        if (queued) setDownloadTick(t => t + 1)
+      })
+      return
+    }
     const newSkipped: DownloadJob[] = []
     for (const chunk of chunkBy(pendingItems, i => `${i.series_name}__${i.season}`)) {
       const results = await postDownloads(chunk)
@@ -259,6 +271,7 @@ export default function App() {
           items={pendingItems}
           outputRoot={settings.output_root}
           existingFiles={existingFiles}
+          destination={settings.download_destination}
           onConfirm={confirmDownload}
           onCancel={() => setPendingItems(null)}
         />
@@ -269,6 +282,7 @@ export default function App() {
           card={selected}
           lang={openLang ?? settings.lang}
           outputRoot={settings.output_root}
+          downloadDestination={settings.download_destination}
           onClose={closeDetail}
           onJobsCreated={() => setDownloadTick(t => t + 1)}
           autoPlayEpisode={autoPlayEpisode}

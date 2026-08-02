@@ -16,9 +16,20 @@ from sestudio.models import StreamSource
 
 logger = logging.getLogger(__name__)
 
+# Tolerant progress parser: yt-dlp drops the size/speed/ETA fields when they
+# aren't known yet (common for HLS), so everything after the percentage is
+# optional — otherwise progress would appear frozen for the whole download.
 _PROGRESS_RE = re.compile(
-    r"\[download\]\s+([\d.]+)%\s+of\s+~?\s*[\d.]+\S+\s+at\s+(\S+)\s+ETA\s+(\S+)"
+    r"\[download\]\s+(?P<pct>[\d.]+)%"
+    r"(?:\s+of\s+~?\s*(?P<size>\S+))?"
+    r"(?:\s+at\s+(?P<speed>\S+))?"
+    r"(?:\s+ETA\s+(?P<eta>\S+))?"
+    r"(?:.*?\(frag\s+(?P<frag>\d+/\d+)\))?"
 )
+
+# Post-processing steps worth surfacing — the download bar sits at 100% while
+# these run, which otherwise looks like a stall on large files.
+_POSTPROCESS_RE = re.compile(r"^\[(Merger|ffmpeg|FixupM3u8|VideoConvertor)\]\s*(.*)")
 
 
 @dataclass
@@ -26,6 +37,8 @@ class ProgressEvent:
     percent: float
     speed: str
     eta: str
+    total_size: str = ""
+    fragment: str = ""
 
 
 def check_yt_dlp() -> str:
@@ -50,8 +63,21 @@ def download(
     output_path: Path,
     on_progress: Callable[[ProgressEvent], None] | None = None,
     cancel_event: threading.Event | None = None,
+    on_status: Callable[[str, str], None] | None = None,
 ) -> bool:
-    """Download a single stream via yt-dlp. Retries up to 3 times on 5xx/429. Returns True on success."""
+    """Download a single stream via yt-dlp. Retries up to 3 times on 5xx/429.
+
+    ``on_status(phase, detail)`` reports what the job is doing beyond the
+    percentage — post-processing, retries, and the real failure reason — so the
+    UI doesn't have to guess during the gaps.
+
+    Returns True on success.
+    """
+
+    def status(phase: str, detail: str = "") -> None:
+        if on_status:
+            on_status(phase, detail)
+
     cmd: list[str] = [
         check_yt_dlp(),
         "--add-header",
@@ -120,11 +146,17 @@ def download(
                 if m:
                     on_progress(
                         ProgressEvent(
-                            percent=float(m.group(1)),
-                            speed=m.group(2),
-                            eta=m.group(3),
+                            percent=float(m.group("pct")),
+                            speed=_known(m.group("speed")),
+                            eta=_known(m.group("eta")),
+                            total_size=_known(m.group("size")),
+                            fragment=m.group("frag") or "",
                         )
                     )
+                    continue
+            post = _POSTPROCESS_RE.match(line)
+            if post:
+                status("processing", post.group(2) or post.group(1))
 
         proc.wait()
         stderr_thread.join()
@@ -155,13 +187,36 @@ def download(
                 wait,
                 stderr,
             )
+            status(
+                "retrying",
+                f"attempt {attempt + 2}/{_MAX_RETRIES} in {wait}s — {_short(stderr)}",
+            )
             time.sleep(wait)
             continue
 
         logger.error("yt-dlp failed for %s: %s", output_path.name, stderr)
+        status("failed", _short(stderr) or "yt-dlp exited without a usable file")
         return False
 
     return False
+
+
+def _known(value: str | None) -> str:
+    """Drop yt-dlp's "Unknown" placeholders so the UI shows nothing instead."""
+    if not value or value.startswith("Unknown") or value == "N/A":
+        return ""
+    return value
+
+
+def _short(text: str, limit: int = 300) -> str:
+    """Last meaningful line of a stderr blob, trimmed for display."""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    # yt-dlp puts the actionable message on the last ERROR line when there is one.
+    errors = [ln for ln in lines if "ERROR" in ln]
+    msg = (errors or lines)[-1]
+    return msg[:limit]
 
 
 def _cleanup(path: Path) -> None:

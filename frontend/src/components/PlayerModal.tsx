@@ -23,6 +23,14 @@ interface Props {
 /** Persist progress at most every SAVE_INTERVAL ms of playback. */
 const SAVE_INTERVAL = 5000
 
+/** Saved position worth resuming from, or null (unwatched and not near the end). */
+function resumePointFor(ep: PlayableEpisode): number | null {
+  const saved = getProgress(ep)
+  return saved && !saved.watched && saved.duration > 0 && saved.position < saved.duration * 0.95
+    ? saved.position
+    : null
+}
+
 export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
   useModalBack(true, onClose)
   const [index, setIndex] = useState(startIndex)
@@ -30,8 +38,8 @@ export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
   const playerRef = useRef<MediaPlayerInstance>(null)
   const lastSaveRef = useRef(0)
   // Position to restore once the (persistent) player can play the new source.
-  const resumeToRef = useRef<number | null>(null)
-  const [resumedFrom, setResumedFrom] = useState<number | null>(null)
+  const [resumedFrom, setResumedFrom] = useState<number | null>(() => resumePointFor(episodes[startIndex]))
+  const resumeToRef = useRef<number | null>(resumedFrom)
   // Auto-next countdown (seconds remaining); null when not counting.
   const [nextIn, setNextIn] = useState<number | null>(null)
   // Handoff: position captured when the cast picker opens; null = picker closed.
@@ -50,30 +58,35 @@ export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
   const [displaySource, setDisplaySource] = useState<StreamSource | null>(null)
   if (activeSource && activeSource !== displaySource) setDisplaySource(activeSource)
 
-  // Per-episode setup: open the playback session and arm the resume position.
-  useEffect(() => {
-    startPlayback(ep, 'browser')
-    const saved = getProgress(ep)
-    const resumable = saved && !saved.watched && saved.duration > 0
-      && saved.position < saved.duration * 0.95 ? saved.position : null
-    resumeToRef.current = resumable
-    setResumedFrom(resumable)
+  // Open/refresh the playback session for the current episode.
+  useEffect(() => { startPlayback(ep, 'browser') }, [ep])
+
+  // Re-arm the resume position when the episode changes. Done during render
+  // (not in an effect) so it lands in the same pass as the episode switch.
+  const [armedEp, setArmedEp] = useState(ep)
+  if (armedEp !== ep) {
+    setArmedEp(ep)
+    const point = resumePointFor(ep)
+    resumeToRef.current = point
+    setResumedFrom(point)
     setNextIn(null)
     lastSaveRef.current = 0
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ep])
+  }
 
-  // Tick the auto-next countdown; advancing when it reaches zero.
+  // Tick the auto-next countdown; the advance happens in the timer callback.
   useEffect(() => {
     if (nextIn === null) return
-    if (nextIn <= 0) {
-      setNextIn(null)
-      setIndex(i => i + 1)
-      return
-    }
-    const t = window.setTimeout(() => setNextIn(n => (n === null ? null : n - 1)), 1000)
+    const t = window.setTimeout(() => {
+      if (nextIn <= 1) advanceNow()
+      else setNextIn(nextIn - 1)
+    }, 1000)
     return () => window.clearTimeout(t)
   }, [nextIn])
+
+  function advanceNow() {
+    setNextIn(null)
+    setIndex(i => i + 1)
+  }
 
   // Close the session when the modal goes away.
   useEffect(() => () => endPlayback('browser'), [])
@@ -209,7 +222,7 @@ export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
               <p className="font-semibold text-white">{episodes[index + 1].title}</p>
               <p className="text-3xl font-bold text-white tabular-nums">{nextIn}</p>
               <div className="flex gap-2">
-                <button onClick={() => setNextIn(0)} className="btn btn-sm btn-primary">Play now</button>
+                <button onClick={advanceNow} className="btn btn-sm btn-primary">Play now</button>
                 <button onClick={() => setNextIn(null)} className="btn btn-sm btn-ghost text-white">Cancel</button>
               </div>
             </div>

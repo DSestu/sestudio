@@ -14,6 +14,7 @@ router = APIRouter()
 class SettingsBody(BaseModel):
     output_root: str | None = None
     lang: str | None = None
+    download_destination: str | None = None
 
 
 @router.get("/settings")
@@ -28,5 +29,10 @@ async def put_settings(body: SettingsBody) -> dict[str, Any]:
         cfg.output_root = body.output_root
     if body.lang is not None and body.lang in ("vf", "vostfr", "vo"):
         cfg.lang = body.lang
+    if body.download_destination is not None and body.download_destination in (
+        "server",
+        "device",
+    ):
+        cfg.download_destination = body.download_destination
     save_config(cfg)
     return dataclasses.asdict(cfg)

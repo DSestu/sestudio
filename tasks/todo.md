@@ -33,10 +33,10 @@
 - [ ] **Checkpoint 3**: build/lint green ✓ · dist rebuilt · **handoff both ways: verify manually on real devices** · approval
 
 ## Phase 4 — Flexible downloads
-- [ ] T16: Backend GET /api/downloads/stream — MP4 attachment pass-through + tests (M)
-- [ ] T17: Destination toggle (Server / This device) + settings default (M)
-- [ ] T18: HLS → device via ffmpeg mux ⚠ ask-first (M)
-- [ ] **Checkpoint 4**: green · rebuild · both destinations verified · T18 go/no-go · approval
+- [x] T16: Backend GET /api/downloads/stream — MP4 attachment pass-through + 5 tests (M) — token-gated (reuses proxy HMAC), RFC 6266 filename, 501 on HLS, 502 on upstream error
+- [x] T17: Destination toggle (Server / This device) + settings default (M) — download_destination in AppConfig/SettingsBody; toggle in ConfirmDownloadModal; sequential <a download>; HLS-only items reported
+- [ ] T18: HLS → device via ffmpeg mux ⚠ ask-first (M) — **pending go/no-go**
+- [ ] **Checkpoint 4**: build/lint/pytest green ✓ (67) · dist rebuilt ✓ · endpoint verified live (403/settings/route) ✓ · **real MP4 download: verify manually** · T18 decision · approval
 
 ## Phase 5 — Discovery & metadata (TMDB)
 - [ ] T19: tmdb_api_key config + stop discarding year (scraper.py:80) (S)

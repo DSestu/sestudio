@@ -15,6 +15,9 @@ _CONFIG_PATH = Path.home() / ".config" / "sestudio" / "config.json"
 class AppConfig:
     output_root: str = "."
     lang: str = "vf"
+    # Web UI default download destination: "server" (job queue on the server's
+    # disk) or "device" (forwarded to the browser as a file download).
+    download_destination: str = "server"
 
 
 def _config_path() -> Path:
@@ -31,6 +34,7 @@ def load_config() -> AppConfig:
         return AppConfig(
             output_root=str(data.get("output_root", ".")),
             lang=str(data.get("lang", "vf")),
+            download_destination=str(data.get("download_destination", "server")),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

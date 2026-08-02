@@ -25,11 +25,19 @@ class DownloadJob:
     output_path: Path
     all_providers: dict[str, str] = field(default_factory=dict)
     tried_providers: list[str] = field(default_factory=list)
+    # Downloaded on the server for the browser to fetch afterwards (rather than
+    # kept in the library), so the file lives in a temp dir and is served once.
+    to_device: bool = False
     status: JobStatus = "queued"
     progress: float = 0.0
     speed: str = ""
     eta: str = ""
     error: str | None = None
+    # Verbosity: what the job is doing beyond the percentage.
+    phase: str = ""  # downloading | processing | retrying | resolving
+    detail: str = ""  # human-readable note for the current phase
+    total_size: str = ""  # e.g. "412.53MiB", as reported by yt-dlp
+    fragment: str = ""  # HLS fragment counter, e.g. "42/318"
 
 
 class JobStore:
@@ -50,6 +58,7 @@ class JobStore:
         output_path: Path,
         episode_name: str,
         all_providers: dict[str, str] | None = None,
+        to_device: bool = False,
     ) -> DownloadJob:
         job = DownloadJob(
             id=str(uuid.uuid4()),
@@ -58,6 +67,7 @@ class JobStore:
             output_path=output_path,
             all_providers=dict(all_providers or {}),
             tried_providers=[source.provider],
+            to_device=to_device,
         )
         cancel_event = threading.Event()
         with self._lock:
@@ -92,6 +102,14 @@ class JobStore:
         with self._lock:
             to_remove = [jid for jid, j in self._jobs.items() if j.status in terminal]
             for jid in to_remove:
+                job = self._jobs[jid]
+                # Device-bound files live in a temp dir purely to be served to
+                # the browser — drop them with the job so they don't pile up.
+                if job.to_device:
+                    try:
+                        job.output_path.unlink(missing_ok=True)
+                    except OSError as exc:  # pragma: no cover — best effort
+                        logger.debug("Could not remove %s: %s", job.output_path, exc)
                 del self._jobs[jid]
                 self._cancel_events.pop(jid, None)
         logger.info("Cleared %d terminal jobs", len(to_remove))
@@ -125,6 +143,22 @@ class JobStore:
                     j.progress = ev.percent
                     j.speed = ev.speed
                     j.eta = ev.eta
+                    j.phase = "downloading"
+                    if ev.total_size:
+                        j.total_size = ev.total_size
+                    j.fragment = ev.fragment
+
+        def on_status(phase: str, detail: str) -> None:
+            with self._lock:
+                j = self._jobs.get(job_id)
+                if j:
+                    # "failed" here is advisory: a fallback provider may still
+                    # succeed, so only the note is kept — the status is set by
+                    # the run loop once every provider has been tried.
+                    j.phase = phase
+                    j.detail = detail
+                    if phase == "failed":
+                        j.error = detail
 
         while True:
             if cancel_event and cancel_event.is_set():
@@ -136,22 +170,38 @@ class JobStore:
                     job.output_path,
                     on_progress=on_progress,
                     cancel_event=cancel_event,
+                    on_status=on_status,
                 )
             except Exception as exc:
                 logger.error("Job %s failed: %s", job_id, exc)
+                on_status("failed", str(exc))
                 ok = False
 
             if cancel_event and cancel_event.is_set():
                 return
 
             if ok:
+                with self._lock:
+                    j = self._jobs.get(job_id)
+                    if j:
+                        j.phase = ""
+                        j.detail = ""
                 self._set_status(job_id, "done", progress=100.0)
                 return
 
             # Try the next untried provider
+            with self._lock:
+                last_detail = job.detail
+            self._set_status(job_id, "downloading")  # keep the row non-terminal
             next_source = self._resolve_next_provider(job)
             if next_source is None:
-                self._set_status(job_id, "failed", error="All providers failed")
+                tried = ", ".join(job.tried_providers) or "none"
+                reason = f" — {last_detail}" if last_detail else ""
+                self._set_status(
+                    job_id,
+                    "failed",
+                    error=f"All providers failed ({tried}){reason}",
+                )
                 return
 
             logger.warning(
@@ -161,10 +211,15 @@ class JobStore:
                 next_source.provider,
             )
             with self._lock:
+                previous = job.source.provider
                 job.source = next_source
                 job.progress = 0.0
                 job.speed = ""
                 job.eta = ""
+                job.total_size = ""
+                job.fragment = ""
+                job.phase = "retrying"
+                job.detail = f"{previous} failed — trying {next_source.provider}"
 
     def _resolve_next_provider(self, job: DownloadJob) -> StreamSource | None:
         for pname, purl in job.all_providers.items():

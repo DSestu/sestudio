@@ -24,9 +24,12 @@ export interface SeasonDetail {
   episodes: EpisodeDetail[]
 }
 
+export type DownloadDestination = 'server' | 'device'
+
 export interface AppSettings {
   output_root: string
   lang: string
+  download_destination: DownloadDestination
 }
 
 export interface DownloadItem {
@@ -37,6 +40,8 @@ export interface DownloadItem {
   season: number
   lang: string
   all_providers: Record<string, string>
+  /** Download to a temp dir for the browser to collect, not into the library. */
+  to_device?: boolean
 }
 
 export interface DownloadJob {
@@ -47,6 +52,19 @@ export interface DownloadJob {
   speed: string
   eta: string
   error: string | null
+  /** What the job is doing beyond the percentage. */
+  phase?: string        // downloading | processing | retrying
+  detail?: string       // human-readable note for the current phase
+  total_size?: string   // e.g. "412.53MiB"
+  fragment?: string     // HLS fragment counter, e.g. "42/318"
+  provider?: string     // host currently being downloaded from
+  /** Staged on the server for this browser to collect once done. */
+  to_device?: boolean
+}
+
+/** URL serving a finished device-bound job's file as an attachment. */
+export function jobFileUrl(jobId: string): string {
+  return `${BASE}/downloads/${jobId}/file`
 }
 
 const BASE = '/api'
@@ -57,15 +75,20 @@ export interface StreamSource {
   provider: string
 }
 
-/** Resolve an episode's providers to a playable proxy URL, falling back across providers server-side. */
+/**
+ * Resolve an episode's providers to a playable proxy URL, falling back across
+ * providers server-side. `preferKind` keeps looking for a provider of that kind
+ * (e.g. 'mp4' for device downloads) before settling for another.
+ */
 export async function resolveStream(
   embedUrls: Record<string, string>,
   signal?: AbortSignal,
+  preferKind?: StreamSource['kind'],
 ): Promise<StreamSource> {
   const res = await fetch(`${BASE}/stream/resolve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ embed_urls: embedUrls }),
+    body: JSON.stringify({ embed_urls: embedUrls, prefer_kind: preferKind }),
     signal,
   })
   if (!res.ok) {
@@ -110,6 +133,16 @@ export async function dlnaPlay(
     const body = await res.json().catch(() => null)
     throw new Error(body?.detail ?? `Cast failed: ${res.status}`)
   }
+}
+
+/**
+ * URL that streams an already-resolved source to the browser as a file
+ * download. The proxy URL carries the signed token; the server relays the
+ * bytes with a Content-Disposition attachment header (MP4 only for now).
+ */
+export function deviceDownloadUrl(proxyUrl: string, filename: string): string {
+  const token = new URLSearchParams(proxyUrl.split('?')[1] ?? '').get('token') ?? ''
+  return `${BASE}/downloads/stream?${new URLSearchParams({ token, filename })}`
 }
 
 export async function searchSeasons(q: string): Promise<SeasonCard[]> {

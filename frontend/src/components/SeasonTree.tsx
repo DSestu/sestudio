@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { DownloadItem, EpisodeDetail, SeasonCard } from '../api'
+import type { DownloadDestination, DownloadItem, EpisodeDetail, SeasonCard } from '../api'
 import { checkDownloads, postDownloads } from '../api'
+import { downloadToDevice } from '../deviceDownloads'
 import ConfirmDownloadModal from './ConfirmDownloadModal'
 import PlayerModal from './PlayerModal'
 import CastModal from './CastModal'
@@ -16,6 +17,7 @@ interface Props {
   card: SeasonCard
   lang: string
   outputRoot: string
+  downloadDestination: DownloadDestination
   onClose: () => void
   onJobsCreated: () => void
   /** Open the player on this episode number as soon as the season loads. */
@@ -31,7 +33,7 @@ function allChecked(eps: EpisodeDetail[], checked: Set<number>): CheckState {
   return 'partial'
 }
 
-export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCreated, autoPlayEpisode }: Props) {
+export default function SeasonTree({ card, lang, outputRoot, downloadDestination, onClose, onJobsCreated, autoPlayEpisode }: Props) {
   useModalBack(true, onClose)
   const { detail, loading, error, setError, activeLang, setActiveLang } = useSeasonDetail(card.page_url, lang)
   const [checked, setChecked] = useState<Set<number>>(new Set())
@@ -139,18 +141,28 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
     }
   }
 
-  async function confirmDownload() {
+  async function confirmDownload(destination: DownloadDestination) {
     if (!pendingItems) return
     setSubmitting(true)
     try {
+      if (destination === 'device') {
+        // Progress shows in the Downloads panel — directly for relayed MP4s,
+        // or as a server job for HLS (which needs downloading first).
+        const items = pendingItems
+        setPendingItems(null)
+        onClose()
+        void downloadToDevice(items).then(queued => { if (queued) onJobsCreated() })
+        return
+      }
       await postDownloads(pendingItems)
-      setPendingItems(null)
       onJobsCreated()
+      setPendingItems(null)
       onClose()
     } finally {
       setSubmitting(false)
     }
   }
+
 
   const seasonState = detail ? allChecked(detail.episodes, checked) : 'none'
   const watch = useWatchState()
@@ -282,6 +294,7 @@ export default function SeasonTree({ card, lang, outputRoot, onClose, onJobsCrea
           items={pendingItems}
           outputRoot={outputRoot}
           existingFiles={existingFiles}
+          destination={downloadDestination}
           onConfirm={confirmDownload}
           onCancel={() => setPendingItems(null)}
         />
