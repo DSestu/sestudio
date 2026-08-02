@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/DSestu/sestudio/compare/v0.6.1...v0.6.2) (2026-08-02)
+
+
+### Bug fixes
+
+* Launching command ([3d4667d](https://github.com/DSestu/sestudio/commit/3d4667da397abd78d08e3e9cc6bd49a23a390249))
+
 ## [0.6.1](https://github.com/DSestu/sestudio/compare/v0.6.0...v0.6.1) (2026-08-02)
 
 
