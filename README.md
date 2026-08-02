@@ -49,9 +49,12 @@ The wheel bundles a static ffmpeg, so it targets the platforms
 Run it directly, without installing (recommended):
 
 ```bash
-uvx sestudio serve            # web UI
+uvx sestudio                  # web UI (default command)
 uvx sestudio download <url>   # CLI
 ```
+
+With no command, `sestudio` starts the web UI — `uvx sestudio --port 9000` is the
+same as `uvx sestudio serve --port 9000`.
 
 Or set up a source checkout for development:
 

@@ -40,7 +40,10 @@ def _get_provider(name: str) -> UqloadProvider:
 
 
 class Entrypoint:
-    """sestudio — download and browse fstream episodes."""
+    """sestudio — download and browse fstream episodes.
+
+    Running `sestudio` with no command starts the web UI (`serve`).
+    """
 
     def download(
         self,
@@ -253,8 +256,21 @@ def _display_host(host: str) -> str:
     return ips[0] if ips else "localhost"
 
 
+def default_argv(argv: list[str]) -> list[str]:
+    """Insert the default `serve` command when none was given.
+
+    Serving the web UI is the primary use, so `sestudio` and `sestudio --port
+    9000` both start it. An explicit command still wins, and the bare help flags
+    stay on the command group so `download` remains discoverable.
+    """
+    commands = [name for name in vars(Entrypoint) if not name.startswith("_")]
+    if argv and (argv[0] in commands or argv[0] in ("-h", "--help")):
+        return argv
+    return ["serve", *argv]
+
+
 def main() -> None:
-    Fire(Entrypoint)
+    Fire(Entrypoint, command=default_argv(sys.argv[1:]))
 
 
 def _print_dry_run_table(jobs: list[tuple[StreamSource, Path]]) -> None:
