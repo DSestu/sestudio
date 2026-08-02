@@ -1,0 +1,62 @@
+name: "🔧 Code / Architecture Improvement"
+description: "Refactor, cleanup, or structural improvement — no user-facing behaviour change."
+title: "[Improvement]: "
+labels: ["refactor", "tech-debt"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For **internal quality** work: refactors, architecture changes, dependency cleanup.
+        Behaviour should stay the same — if it changes for users, use a Feature or Bug template.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of improvement
+      options:
+        - "Refactor (restructure existing code)"
+        - "Architecture (module boundaries, data flow, patterns)"
+        - "Performance"
+        - "Dependency / tooling / build"
+        - "Test coverage"
+        - "Developer experience"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-state
+    attributes:
+      label: Current state
+      description: What does the code look like today, and where does it hurt? Link the files/functions.
+      placeholder: |
+        `_local_ip_for()` hardcodes port 80, so LAN IP resolution can fail with non-standard
+        HTTP ports (see cast.py). Server startup logic is duplicated across HTTP and HTTPS paths.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should it look like instead? Sketch the target structure.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why it is worth doing
+      description: What does this make easier, safer, or faster? What risk/debt does it remove?
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk & migration notes
+      description: Blast radius, backward-compat concerns, and how to verify nothing broke.
+      value: |
+        - Blast radius:
+        - How to verify no behaviour change:
+    validations:
+      required: false

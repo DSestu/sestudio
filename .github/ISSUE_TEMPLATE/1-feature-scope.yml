@@ -1,0 +1,90 @@
+name: "🎯 Product Feature Scope"
+description: "Scope a product feature: the problem, its value, the proposed solution, and what 'done' means."
+title: "[Feature]: "
+labels: ["feature", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this to frame a **product feature** before any implementation work is broken out.
+        Keep it outcome-focused — the *how* can be refined later in implementation tasks.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What is the current situation? What background does a reader need to understand this request?
+      placeholder: |
+        Today, users cast media to Chromecast over HTTPS only. Recent changes added a
+        parallel HTTP server, but there is no way to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What specific problem or unmet need are we solving? Who feels the pain?
+      placeholder: |
+        As a <type of user>, I cannot <do X> because <reason>, which forces me to <workaround>.
+    validations:
+      required: true
+
+  - type: textarea
+    id: business-value
+    attributes:
+      label: Business value / Why now
+      description: What is the impact of solving this (or the cost of not)? Why is it worth doing now?
+      placeholder: |
+        - Unblocks casting for the most common phone/TV setup (majority of users)
+        - Removes a support burden (recurring "cast fails" reports)
+        - Prerequisite for the uvx packaging milestone
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: The intended approach at a high level. Alternatives considered are welcome.
+      placeholder: |
+        Auto-detect the LAN IP and serve media over plain HTTP on a fixed port, while
+        keeping the UI on HTTPS. Considered: Caddy reverse proxy (rejected — extra dependency).
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope / Out of scope
+      description: Draw a boundary so the work does not sprawl.
+      value: |
+        **In scope**
+        -
+
+        **Out of scope**
+        -
+    validations:
+      required: false
+
+  - type: textarea
+    id: definition-of-done
+    attributes:
+      label: Definition of Done
+      description: Concrete, testable conditions that must all be true for this to ship. Check them off as they land.
+      value: |
+        - [ ] Behaviour implemented and works end-to-end
+        - [ ] Tests cover the new behaviour and pass
+        - [ ] Documentation (README / SPEC) updated
+        - [ ] No regression in existing cast / download flows
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: open-questions
+    attributes:
+      label: Open questions / Dependencies
+      description: Anything unresolved, or work this depends on / blocks.
+    validations:
+      required: false

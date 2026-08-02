@@ -1,0 +1,81 @@
+name: "🔍 Investigation / Trace Report"
+description: "Track a diagnosis of strange, unexpected, or suspicious behaviour (root cause unknown)."
+title: "[Investigation]: "
+labels: ["investigation", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when something looks **wrong or suspicious but the cause is not yet known**.
+        This issue is a living trace — update the findings and hypotheses as you learn more.
+        If it turns out to be a clear defect, it can be converted to / linked with a **Bug Report**.
+
+  - type: textarea
+    id: observation
+    attributes:
+      label: What triggered this
+      description: The strange/unexpected/suspicious behaviour that prompted the investigation.
+      placeholder: |
+        Search suddenly returns only anime results; series and films are missing since the
+        last scraper change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-normal
+    attributes:
+      label: Why this is unexpected
+      description: What is the normal / expected behaviour, and how does this deviate?
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence gathered
+      description: Logs, network traces, reproductions, timestamps, commits inspected. Facts only.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: hypotheses
+    attributes:
+      label: Hypotheses
+      description: Candidate explanations, ranked. Mark each as confirmed / rejected as you go.
+      value: |
+        - [ ] H1:
+        - [ ] H2:
+    validations:
+      required: false
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: Findings / Trace log
+      description: Running log of what was checked and what it showed. Append as the investigation proceeds.
+      value: |
+        -
+    validations:
+      required: false
+
+  - type: textarea
+    id: root-cause
+    attributes:
+      label: Root cause (once known)
+      description: The confirmed cause, and the follow-up (fix issue / PR) it leads to.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - "Open — investigating"
+        - "Root cause identified"
+        - "Resolved / explained"
+        - "Could not reproduce"
+      default: 0
+    validations:
+      required: true

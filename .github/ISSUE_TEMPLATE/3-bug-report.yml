@@ -1,0 +1,95 @@
+name: "🐛 Bug Report"
+description: "Something is broken or behaves incorrectly."
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please fill in enough for someone to **reproduce** the bug.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the bug. What did you see?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, ordered steps. Include the exact command or UI action.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "Blocker — feature unusable, no workaround"
+        - "Major — feature broken, workaround exists"
+        - "Minor — cosmetic or edge case"
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of sestudio?
+      multiple: true
+      options:
+        - "Scraper / search"
+        - "Download"
+        - "Casting (DLNA / Chromecast)"
+        - "Web UI"
+        - "Server (HTTP / HTTPS)"
+        - "CLI / packaging"
+        - "Other / unsure"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: sestudio version
+      placeholder: "e.g. 0.4.1 (or git commit)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+      multiple: true
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / output
+      description: Paste console output or a stack trace. Automatically formatted as code.
+      render: shell
+    validations:
+      required: false

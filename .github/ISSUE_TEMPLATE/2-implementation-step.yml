@@ -1,0 +1,64 @@
+name: "🧩 Implementation Step"
+description: "A single, concrete implementation task (e.g. 'Implement the data source schema')."
+title: "[Task]: "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A **small, self-contained unit of work** that can be picked up and finished in one go.
+        If it needs multiple sub-tasks or has broad product implications, open a
+        **Product Feature Scope** instead and link back to it.
+
+  - type: input
+    id: summary
+    attributes:
+      label: What to build
+      description: One line — the concrete thing to implement.
+      placeholder: "Implement the data source schema for scraped media items"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Short description
+      description: A few sentences on what this task involves.
+      placeholder: |
+        Define a typed schema (pydantic model) representing a scraped item: title, kind
+        (series/film/anime), season, source domain, and resolved playback URL.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is necessary
+      description: What does this unblock or enable? What breaks or stays painful without it?
+      placeholder: |
+        The scraper currently passes around loose dicts, so field typos surface only at
+        runtime. A schema gives one validated shape for search, cast, and download to share.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fit
+    attributes:
+      label: How it fits the overall scope
+      description: Where does this sit in the bigger picture? Link the parent feature/epic if any.
+      placeholder: |
+        First step of #<feature-issue>. Downstream tasks (search parsing, cast URL building)
+        will consume this schema.
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How we know this task is done.
+      value: |
+        - [ ]
+        - [ ] Covered by a test
+    validations:
+      required: true
