@@ -1,33 +1,64 @@
 import { useEffect, useState } from 'react'
 
-/** Top-level destinations. The shell renders exactly one at a time. */
-export const VIEWS = ['home', 'search', 'library', 'downloads'] as const
-export type View = (typeof VIEWS)[number]
+/** Destinations that appear in the nav rail / tab bar. */
+export const TABS = ['home', 'search', 'library', 'downloads'] as const
+export type Tab = (typeof TABS)[number]
 
-function parseHash(): View {
-  const raw = window.location.hash.replace(/^#\/?/, '')
-  return (VIEWS as readonly string[]).includes(raw) ? (raw as View) : 'home'
+/** All routable views. `watch` is reachable only by opening a title. */
+export type View = Tab | 'watch'
+
+const VIEWS: readonly string[] = [...TABS, 'watch']
+
+export interface Route {
+  view: View
+  params: URLSearchParams
 }
 
+function parseHash(): Route {
+  const raw = window.location.hash.replace(/^#\/?/, '')
+  const [path, query] = raw.split('?')
+  return {
+    view: VIEWS.includes(path) ? (path as View) : 'home',
+    params: new URLSearchParams(query ?? ''),
+  }
+}
+
+function hashFor(view: View, params?: Record<string, string | number | undefined>): string {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v !== undefined && v !== '') q.set(k, String(v))
+  }
+  const query = q.toString()
+  return `#/${view}${query ? `?${query}` : ''}`
+}
+
+export type Navigate = (view: View, params?: Record<string, string | number | undefined>) => void
+
 /**
- * View state synced to the URL hash, so reloads and the browser back button
- * behave. Deliberately hand-rolled — a router would be the only runtime
- * dependency added for four static destinations.
+ * Route state synced to the URL hash, so reloads, deep links and the browser
+ * back button behave. Deliberately hand-rolled — a router would be the only
+ * runtime dependency added for five routes.
  */
-export function useView(): [View, (v: View) => void] {
-  const [view, setView] = useState<View>(parseHash)
+export function useRoute(): [Route, Navigate] {
+  const [route, setRoute] = useState<Route>(parseHash)
 
   useEffect(() => {
-    const onHash = () => setView(parseHash())
+    const onHash = () => setRoute(parseHash())
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  function navigate(next: View) {
+  const navigate: Navigate = (view, params) => {
+    const next = hashFor(view, params)
     // Writing the hash fires hashchange, which drives the state update.
-    if (parseHash() === next) setView(next)
-    else window.location.hash = `/${next}`
+    if (window.location.hash === next) setRoute(parseHash())
+    else window.location.hash = next
   }
 
-  return [view, navigate]
+  return [route, navigate]
+}
+
+/** Params for opening a title in the watch view. */
+export function watchParams(pageUrl: string, lang: string, episode?: number) {
+  return { u: pageUrl, lang, ep: episode }
 }

@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import type { View } from '../nav'
+import type { Tab, View } from '../nav'
 
 interface Destination {
-  id: View
+  id: Tab
   label: string
   icon: ReactNode
 }
@@ -22,7 +22,7 @@ const DESTINATIONS: Destination[] = [
 
 interface Props {
   view: View
-  onNavigate: (v: View) => void
+  onNavigate: (v: Tab) => void
   /** Rendered on the Downloads destination when non-zero. */
   downloadBadge?: number
   /** Opens the settings drawer. */

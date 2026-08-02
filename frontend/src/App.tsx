@@ -5,10 +5,8 @@ import { refreshDlna } from './dlnaControl'
 import AppShell from './components/AppShell'
 import CastControls from './components/CastControls'
 import DlnaControls from './components/DlnaControls'
-import PlayerModal from './components/PlayerModal'
-import SeasonTree from './components/SeasonTree'
 import SettingsPanel from './components/SettingsPanel'
-import { useView } from './nav'
+import { useRoute } from './nav'
 import { clearPullback, usePullback } from './pullback'
 import { useDownloadJobs } from './useDownloadJobs'
 import { useSettings } from './useSettings'
@@ -16,17 +14,12 @@ import DownloadsView from './views/DownloadsView'
 import HomeView from './views/HomeView'
 import LibraryView from './views/LibraryView'
 import SearchView from './views/SearchView'
+import WatchView from './views/WatchView'
 
 export default function App() {
-  const [view, navigate] = useView()
+  const [route, navigate] = useRoute()
   const [settings, updateSettings] = useSettings()
   const [settingsOpen, setSettingsOpen] = useState(false)
-
-  // Title detail modal, plus the library deep-link that opens it on a given
-  // episode / language rather than the defaults.
-  const [selected, setSelected] = useState<SeasonCard | null>(null)
-  const [autoPlayEpisode, setAutoPlayEpisode] = useState<number | undefined>(undefined)
-  const [openLang, setOpenLang] = useState<string | null>(null)
 
   // Set when a browse-row card is clicked, to drive the search box.
   const [searchTerm, setSearchTerm] = useState<string | null>(null)
@@ -40,17 +33,32 @@ export default function App() {
   // check for an active DLNA session, so both control bars reappear after reload.
   useEffect(() => { loadCast(); refreshDlna() }, [])
 
+  /** Open a title in the watch view. Identity travels in the URL so the route
+   *  is self-contained (SeasonDetail carries no series name or poster). */
   function openTitle(card: SeasonCard, episode: number, lang: string) {
-    setOpenLang(lang)
-    setAutoPlayEpisode(episode)
-    setSelected(card)
+    navigate('watch', {
+      u: card.page_url,
+      t: card.series_name,
+      p: card.poster_url,
+      lang,
+      ep: episode || undefined,
+    })
   }
 
-  function closeDetail() {
-    setSelected(null)
-    setAutoPlayEpisode(undefined)
-    setOpenLang(null)
-  }
+  // TV → browser pull-back: land in the watch view on the same episode, which
+  // resumes from the position the cast controller saved.
+  useEffect(() => {
+    if (!pullback) return
+    const ep = pullback.episodes[pullback.index]
+    clearPullback()
+    if (!ep) return
+    navigate('watch', {
+      u: ep.page_url, t: ep.series_name, p: ep.poster_url, lang: ep.lang, ep: ep.number,
+    })
+    // navigate is stable enough for this one-shot handoff; re-running on every
+    // render would fight the user's own navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pullback])
 
   function searchFor(term: string) {
     setSearchTerm(term)
@@ -65,12 +73,12 @@ export default function App() {
   return (
     <>
       <AppShell
-        view={view}
+        view={route.view}
         onNavigate={navigate}
         downloadBadge={downloads.activeCount}
         onOpenSettings={() => setSettingsOpen(true)}
       >
-        {view === 'home' && (
+        {route.view === 'home' && (
           <HomeView
             settings={settings}
             onOpen={openTitle}
@@ -78,24 +86,37 @@ export default function App() {
             onSearchTerm={searchFor}
           />
         )}
-        {view === 'search' && (
+        {route.view === 'search' && (
           <SearchView
             settings={settings}
             term={searchTerm}
-            onOpenDetail={setSelected}
+            onOpenDetail={card => openTitle(card, 0, settings.lang)}
             onJobsCreated={() => setDownloadTick(t => t + 1)}
             onSkipped={jobs => setSkippedJobs(prev => [...prev, ...jobs])}
           />
         )}
-        {view === 'library' && (
+        {route.view === 'library' && (
           <LibraryView settings={settings} onOpen={openTitle} onNavigate={navigate} />
         )}
-        {view === 'downloads' && (
+        {route.view === 'downloads' && (
           <DownloadsView
             jobs={allJobs}
             onCancel={downloads.cancel}
             onClearHistory={downloads.clear}
             onNavigate={navigate}
+          />
+        )}
+        {route.view === 'watch' && (
+          <WatchView
+            key={route.params.get('u') ?? ''}
+            pageUrl={route.params.get('u') ?? ''}
+            seriesName={route.params.get('t') ?? ''}
+            posterUrl={route.params.get('p') ?? ''}
+            lang={route.params.get('lang') || settings.lang}
+            episode={route.params.has('ep') ? Number(route.params.get('ep')) : undefined}
+            settings={settings}
+            navigate={navigate}
+            onJobsCreated={() => setDownloadTick(t => t + 1)}
           />
         )}
       </AppShell>
@@ -108,29 +129,13 @@ export default function App() {
         />
       )}
 
-      {selected && (
-        <SeasonTree
-          card={selected}
-          lang={openLang ?? settings.lang}
-          outputRoot={settings.output_root}
-          downloadDestination={settings.download_destination}
-          enrich={settings.tmdb_configured}
-          onClose={closeDetail}
-          onJobsCreated={() => setDownloadTick(t => t + 1)}
-          autoPlayEpisode={autoPlayEpisode}
-        />
-      )}
-
-      <CastControls />
-      <DlnaControls />
-
-      {/* TV → browser pull-back: play here, resuming from the saved position */}
-      {pullback && (
-        <PlayerModal
-          episodes={pullback.episodes}
-          startIndex={pullback.index}
-          onClose={clearPullback}
-        />
+      {/* Floating controllers for a session started elsewhere — the watch view
+          shows its own inline transport, so these hide while it's open. */}
+      {route.view !== 'watch' && (
+        <>
+          <CastControls />
+          <DlnaControls />
+        </>
       )}
     </>
   )
