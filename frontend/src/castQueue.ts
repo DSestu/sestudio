@@ -20,6 +20,10 @@ let advancing = false
 
 export function startCastQueue(q: CastQueue) { queue = q }
 export function clearCastQueue() { queue = null }
+/** The active cast playlist (for pull-back to the browser player). */
+export function getCastQueue(): { episodes: PlayableEpisode[]; index: number } | null {
+  return queue ? { episodes: queue.episodes, index: queue.index } : null
+}
 export function setCastAutoplay(on: boolean) { if (queue) queue.autoplay = on }
 
 /** Called by a controller when the current cast media ends. Advances if able. */

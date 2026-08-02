@@ -26,11 +26,11 @@
 - [ ] **Checkpoint 2**: build/lint/pytest green ✓ · dist rebuilt ✓ · rows + deep-link verified in browser ✓ · **cast loop + real resume: verify manually** · approval
 
 ## Phase 3 — Player upgrades + Web↔TV handoff
-- [ ] T12: Auto-next countdown + volume/speed persistence (S)
-- [ ] T13: Handoff browser → TV at current position (M)
-- [ ] T14: Handoff TV → browser (pull back) (M)
-- [ ] T15: Verify+document native multi-track pass-through (XS)
-- [ ] **Checkpoint 3**: green · rebuild · handoff both ways demoed · approval
+- [x] T12: Auto-next countdown + volume/speed persistence (S) — 5s overlay w/ Play now · Cancel; playerPrefs.ts
+- [x] T13: Handoff browser → TV (M) — ⧉ in player header → CastModal resumeAt; seeks target (DLNA needs ~1.5s settle); onCastStarted closes player
+- [x] T14: Handoff TV → browser (M) — "Watch here" on both pills: saves exact cast position → pullback store → PlayerModal auto-resumes; uses cast queue playlist; hidden after page reload (in-memory session)
+- [x] T15: Multi-track pass-through documented in README (proxy passes #EXT-X-MEDIA; providers are single-rendition today; side-loaded subs deferred)
+- [ ] **Checkpoint 3**: build/lint green ✓ · dist rebuilt · **handoff both ways: verify manually on real devices** · approval
 
 ## Phase 4 — Flexible downloads
 - [ ] T16: Backend GET /api/downloads/stream — MP4 attachment pass-through + tests (M)

@@ -13,6 +13,8 @@ import SearchBar from './components/SearchBar'
 import SeasonTree from './components/SeasonTree'
 import SettingsPanel from './components/SettingsPanel'
 import { continueWatching, nextUp, removeEntry, useWatchState } from './watchState'
+import { clearPullback, usePullback } from './pullback'
+import PlayerModal from './components/PlayerModal'
 
 /** Synthesize a SeasonCard from stored watch-state identity so the library
  * can reopen a title without a fresh search. */
@@ -57,6 +59,7 @@ export default function App() {
   // Library rows (home screen only). In-progress series take precedence over
   // their own "next up" suggestion.
   const watch = useWatchState()
+  const pullback = usePullback()
   const cw = continueWatching(watch)
   const cwSeries = new Set(cw.map(e => e.series))
   const nu = nextUp(watch).filter(s => !cwSeries.has(s.series))
@@ -274,6 +277,15 @@ export default function App() {
 
       <CastControls />
       <DlnaControls />
+
+      {/* TV → browser pull-back: play here, resuming from the saved position */}
+      {pullback && (
+        <PlayerModal
+          episodes={pullback.episodes}
+          startIndex={pullback.index}
+          onClose={clearPullback}
+        />
+      )}
     </div>
   )
 }

@@ -4,6 +4,10 @@ import {
   useCastState,
 } from '../cast'
 import { useModalBack } from '../useModalBack'
+import { getCastQueue } from '../castQueue'
+import { getPlaybackSession } from '../playbackSession'
+import { requestPullback } from '../pullback'
+import { saveProgress } from '../watchState'
 import ResponsiveModal from './ResponsiveModal'
 
 // Relative-seek buttons shown around play/pause, in display order.
@@ -129,7 +133,24 @@ export default function CastControls() {
               <button onClick={() => castVolumeBy(0.05)} disabled={!cast.canControlVolume} aria-label="Volume up" className="btn btn-ghost btn-square font-mono sm:btn-sm">＋</button>
             </div>
 
-            <div className="modal-action">
+            <div className="modal-action justify-between">
+              {/* Pull-back needs the in-memory session (lost on page reload). */}
+              {getPlaybackSession()?.target === 'chromecast' && (
+                <button
+                  onClick={() => {
+                    const session = getPlaybackSession()
+                    if (!session) return
+                    saveProgress(session.episode, cast.currentTime, cast.duration)
+                    const q = getCastQueue()
+                    requestPullback(q ?? { episodes: [session.episode], index: 0 })
+                    castStop()
+                    setOpen(false)
+                  }}
+                  className="btn btn-sm btn-primary btn-outline"
+                >
+                  Watch here
+                </button>
+              )}
               <button onClick={castStop} className="btn btn-error btn-sm">Stop casting</button>
             </div>
         </ResponsiveModal>

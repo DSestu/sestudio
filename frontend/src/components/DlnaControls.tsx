@@ -3,6 +3,10 @@ import {
   dlnaPause, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStop, dlnaToggleMute,
   dlnaVolumeBy, useDlnaState,
 } from '../dlnaControl'
+import { getCastQueue } from '../castQueue'
+import { getPlaybackSession } from '../playbackSession'
+import { requestPullback } from '../pullback'
+import { saveProgress } from '../watchState'
 import { useModalBack } from '../useModalBack'
 import ResponsiveModal from './ResponsiveModal'
 
@@ -126,7 +130,24 @@ export default function DlnaControls() {
               <button onClick={() => dlnaVolumeBy(0.05)} aria-label="Volume up" className="btn btn-ghost btn-square font-mono sm:btn-sm">＋</button>
             </div>
 
-            <div className="modal-action">
+            <div className="modal-action justify-between">
+              {/* Pull-back needs the in-memory session (lost on page reload). */}
+              {getPlaybackSession()?.target === 'dlna' && (
+                <button
+                  onClick={() => {
+                    const session = getPlaybackSession()
+                    if (!session) return
+                    saveProgress(session.episode, dlna.position, dlna.duration)
+                    const q = getCastQueue()
+                    requestPullback(q ?? { episodes: [session.episode], index: 0 })
+                    dlnaStop()
+                    setOpen(false)
+                  }}
+                  className="btn btn-sm btn-primary btn-outline"
+                >
+                  Watch here
+                </button>
+              )}
               <button onClick={() => { dlnaStop(); setOpen(false) }} className="btn btn-error btn-sm">Stop casting</button>
             </div>
         </ResponsiveModal>
