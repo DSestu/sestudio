@@ -1,90 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
 import type { DownloadJob } from '../api'
-import { cancelJob, clearHistory, getJobs, jobFileUrl, subscribeJobProgress } from '../api'
-import { clearDeviceDownloads, useDeviceDownloads } from '../deviceDownloads'
+import { jobFileUrl } from '../api'
+import type { DeviceDownload } from '../deviceDownloads'
 
 interface Props {
-  refreshTrigger: number
-  skippedJobs: DownloadJob[]
+  jobs: DownloadJob[]
+  deviceDownloads: DeviceDownload[]
+  onCancel: (id: string) => void
   onClearHistory: () => void
 }
 
-export default function DownloadQueue({ refreshTrigger, skippedJobs, onClearHistory }: Props) {
-  const [jobs, setJobs] = useState<DownloadJob[]>([])
-  const subscriptions = useRef<Record<string, () => void>>({})
-  // Device-bound jobs already handed to the browser, so a re-render or a
-  // second SSE 'done' event doesn't download the same file twice.
-  const delivered = useRef<Set<string>>(new Set())
-
-  /** Hand a finished device-bound job's file to the browser. */
-  function deliverToDevice(job: DownloadJob) {
-    if (delivered.current.has(job.id)) return
-    delivered.current.add(job.id)
-    const a = document.createElement('a')
-    a.href = jobFileUrl(job.id)
-    a.download = job.episode_name
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-  }
-
-  function handleCancel(id: string) {
-    cancelJob(id).then(() => {
-      setJobs(prev => prev.map(j => j.id === id ? { ...j, status: 'cancelled' as const } : j))
-    }).catch(() => {})
-  }
-
-  function handleClearHistory() {
-    clearHistory().then(() => {
-      setJobs(prev => prev.filter(j => j.status === 'queued' || j.status === 'downloading'))
-      onClearHistory()
-    }).catch(() => {})
-  }
-
-  useEffect(() => {
-    getJobs().then(setJobs)
-  }, [refreshTrigger])
-
-  useEffect(() => {
-    jobs.forEach(job => {
-      if (subscriptions.current[job.id]) return
-      if (job.status === 'done' || job.status === 'failed' || job.status === 'skipped' || job.status === 'cancelled') return
-
-      const unsub = subscribeJobProgress(
-        job.id,
-        (data) => {
-          setJobs(prev => prev.map(j => {
-            if (j.id !== job.id) return j
-            const next = { ...j, ...data } as DownloadJob
-            // The file only exists once the job finishes — collect it then.
-            if (next.to_device && next.status === 'done') deliverToDevice(next)
-            return next
-          }))
-        },
-        () => { delete subscriptions.current[job.id] },
-      )
-      subscriptions.current[job.id] = unsub
-    })
-  }, [jobs])
-
-  const deviceDownloads = useDeviceDownloads()
-  const allJobs = [...jobs, ...skippedJobs.filter(s => !jobs.some(j => j.episode_name === s.episode_name))]
-  const hasTerminal = allJobs.some(j => j.status === 'done' || j.status === 'failed' || j.status === 'cancelled' || j.status === 'skipped')
+/** The download list. Job state is owned by useDownloadJobs, so the shell can
+ * badge the nav without duplicating the SSE subscriptions. */
+export default function DownloadQueue({ jobs, deviceDownloads, onCancel, onClearHistory }: Props) {
+  const hasTerminal = jobs.some(j => j.status !== 'queued' && j.status !== 'downloading')
     || deviceDownloads.some(d => d.status !== 'resolving')
 
-  if (!allJobs.length && !deviceDownloads.length) return null
-
   return (
-    <div className="card card-bordered bg-base-200 overflow-hidden">
+    <div className="rounded-box border border-base-300 bg-base-200 overflow-hidden">
       <div className="px-4 py-3 border-b border-base-300 flex items-center justify-between">
-        <h3 className="font-medium text-sm">Downloads</h3>
+        <h3 className="font-medium text-sm">Queue</h3>
         {hasTerminal && (
-          <button
-            onClick={() => { handleClearHistory(); clearDeviceDownloads() }}
-            className="btn btn-ghost btn-xs"
-          >
-            Clear history
-          </button>
+          <button onClick={onClearHistory} className="btn btn-ghost btn-xs">Clear history</button>
         )}
       </div>
       <div className="divide-y divide-base-300">
@@ -113,7 +49,7 @@ export default function DownloadQueue({ refreshTrigger, skippedJobs, onClearHist
             {d.error && <p className="text-error text-xs mt-1">{d.error}</p>}
           </div>
         ))}
-        {allJobs.map(job => (
+        {jobs.map(job => (
           <div key={job.id} className="px-4 py-3">
             <div className="flex items-center gap-3 mb-1.5">
               <StatusBadge status={job.status} />
@@ -124,7 +60,7 @@ export default function DownloadQueue({ refreshTrigger, skippedJobs, onClearHist
                 )}
               </span>
               {job.status === 'downloading' && (
-                <span className="text-base-content/50 text-xs font-mono whitespace-nowrap">
+                <span className="text-base-content/50 text-xs font-mono whitespace-nowrap hidden sm:inline">
                   {job.progress > 0 && `${job.progress.toFixed(1)}%`}
                   {job.speed && ` · ${job.speed}`}
                   {job.eta && ` · ETA ${job.eta}`}
@@ -141,7 +77,8 @@ export default function DownloadQueue({ refreshTrigger, skippedJobs, onClearHist
               )}
               {(job.status === 'queued' || job.status === 'downloading') && (
                 <button
-                  onClick={() => handleCancel(job.id)}
+                  onClick={() => onCancel(job.id)}
+                  aria-label={`Cancel download of ${job.episode_name}`}
                   title="Cancel download"
                   className="text-base-content/50 hover:text-error transition-colors shrink-0"
                 >
@@ -162,6 +99,7 @@ export default function DownloadQueue({ refreshTrigger, skippedJobs, onClearHist
                 phase it's in — the gaps a bare percentage doesn't explain. */}
             {job.status === 'downloading' && (
               <div className="flex items-center gap-2 flex-wrap mt-1 text-xs text-base-content/50">
+                <span className="font-mono sm:hidden">{job.progress.toFixed(1)}%</span>
                 {job.provider && <span className="badge badge-ghost badge-xs font-mono">{job.provider}</span>}
                 {job.total_size && <span className="font-mono">{job.total_size}</span>}
                 {job.fragment && <span className="font-mono">frag {job.fragment}</span>}

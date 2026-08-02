@@ -60,14 +60,20 @@ export default function SearchBar({ onResults, term }: Props) {
   return (
     <div>
       <div className="relative">
+        <svg
+          className="pointer-events-none absolute z-10 left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/40"
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+        </svg>
         <input
           ref={inputRef}
           type="search"
-          placeholder="Search series…"
-          aria-label="Search series"
+          placeholder="Search series or films…"
+          aria-label="Search series or films"
           value={query}
           onChange={e => { setQuery(e.target.value); setError(null) }}
-          className="input input-bordered w-full text-lg"
+          className="input input-bordered w-full h-12 sm:h-14 pl-12 pr-12 text-base sm:text-lg rounded-box"
         />
         {loading && (
           <span className="absolute right-4 top-1/2 -translate-y-1/2 loading loading-spinner loading-sm text-base-content/50" aria-label="Searching" />
