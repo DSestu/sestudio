@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/DSestu/sestudio/compare/v0.5.0...v0.6.0) (2026-08-02)
+
+
+### New features
+
+* Refactor app layout ([#16](https://github.com/DSestu/sestudio/issues/16)) ([b0cfceb](https://github.com/DSestu/sestudio/commit/b0cfceb0b84fbf1e78c0edb2ac53d27cc0dbb029))
+
 ## [0.5.0](https://github.com/DSestu/sestudio/compare/v0.4.1...v0.5.0) (2026-08-01)
 
 
