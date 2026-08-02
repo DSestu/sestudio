@@ -24,12 +24,24 @@ def parse(line: str):
         # The classic fully-populated line.
         (
             "[download]  12.3% of ~ 412.53MiB at 1.20MiB/s ETA 05:12",
-            {"pct": 12.3, "size": "412.53MiB", "speed": "1.20MiB/s", "eta": "05:12", "frag": ""},
+            {
+                "pct": 12.3,
+                "size": "412.53MiB",
+                "speed": "1.20MiB/s",
+                "eta": "05:12",
+                "frag": "",
+            },
         ),
         # HLS: carries a fragment counter.
         (
             "[download]   3.1% of ~ 250.00MiB at 900.00KiB/s ETA 04:40 (frag 42/318)",
-            {"pct": 3.1, "size": "250.00MiB", "speed": "900.00KiB/s", "eta": "04:40", "frag": "42/318"},
+            {
+                "pct": 3.1,
+                "size": "250.00MiB",
+                "speed": "900.00KiB/s",
+                "eta": "04:40",
+                "frag": "42/318",
+            },
         ),
         # Unknown speed/ETA must still yield a percentage (previously matched
         # nothing at all, so the UI's progress appeared frozen).

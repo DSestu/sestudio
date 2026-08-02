@@ -55,7 +55,10 @@ def test_mp4_download_relays_with_attachment_headers(client, httpx_mock: HTTPXMo
     )
     resp = client.get(
         "/api/downloads/stream",
-        params={"token": _token("https://cdn.example/v.mp4"), "filename": "S01E01 - Pilot.mp4"},
+        params={
+            "token": _token("https://cdn.example/v.mp4"),
+            "filename": "S01E01 - Pilot.mp4",
+        },
     )
     assert resp.status_code == 200
     assert resp.content == b"MP4BYTES"
@@ -83,7 +86,10 @@ def test_hls_source_is_not_relayed(client):
     """HLS is a playlist, not a file: the UI must route it through a job."""
     resp = client.get(
         "/api/downloads/stream",
-        params={"token": _token("https://cdn.example/master.m3u8"), "filename": "ep.mp4"},
+        params={
+            "token": _token("https://cdn.example/master.m3u8"),
+            "filename": "ep.mp4",
+        },
     )
     assert resp.status_code == 409
     assert "server job" in resp.json()["detail"]
