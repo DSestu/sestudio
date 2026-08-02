@@ -1,18 +1,16 @@
-import { useState } from 'react'
-import { MediaPlayer, MediaProvider } from '@vidstack/react'
+import { useEffect, useRef, useState } from 'react'
+import { MediaPlayer, MediaProvider, type MediaPlayerInstance } from '@vidstack/react'
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default'
 import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
 import type { StreamSource } from '../api'
 import ProviderChips from './ProviderChips'
+import ResponsiveModal from './ResponsiveModal'
 import { useProviderSources } from '../useProviderSources'
 import { useModalBack } from '../useModalBack'
-
-export interface PlayableEpisode {
-  number: number
-  title: string
-  embed_urls: Record<string, string>
-}
+import type { PlayableEpisode } from '../providers'
+import { getProgress, markWatched, saveProgress } from '../watchState'
+import { endPlayback, startPlayback, updatePlayback } from '../playbackSession'
 
 interface Props {
   episodes: PlayableEpisode[]
@@ -20,10 +18,18 @@ interface Props {
   onClose: () => void
 }
 
+/** Persist progress at most every SAVE_INTERVAL ms of playback. */
+const SAVE_INTERVAL = 5000
+
 export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
   useModalBack(true, onClose)
   const [index, setIndex] = useState(startIndex)
   const [autoplay, setAutoplay] = useState(true)
+  const playerRef = useRef<MediaPlayerInstance>(null)
+  const lastSaveRef = useRef(0)
+  // Position to restore once the (persistent) player can play the new source.
+  const resumeToRef = useRef<number | null>(null)
+  const [resumedFrom, setResumedFrom] = useState<number | null>(null)
 
   const ep = episodes[index]
   const hasNext = index < episodes.length - 1
@@ -38,15 +44,55 @@ export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
   const [displaySource, setDisplaySource] = useState<StreamSource | null>(null)
   if (activeSource && activeSource !== displaySource) setDisplaySource(activeSource)
 
+  // Per-episode setup: open the playback session and arm the resume position.
+  useEffect(() => {
+    startPlayback(ep, 'browser')
+    const saved = getProgress(ep)
+    const resumable = saved && !saved.watched && saved.duration > 0
+      && saved.position < saved.duration * 0.95 ? saved.position : null
+    resumeToRef.current = resumable
+    setResumedFrom(resumable)
+    lastSaveRef.current = 0
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ep])
+
+  // Close the session when the modal goes away.
+  useEffect(() => () => endPlayback('browser'), [])
+
+  function handleCanPlay() {
+    const target = resumeToRef.current
+    if (target !== null && playerRef.current) {
+      resumeToRef.current = null
+      playerRef.current.currentTime = target
+    }
+  }
+
+  function handleTimeUpdate() {
+    const p = playerRef.current
+    if (!p) return
+    updatePlayback(p.currentTime, p.duration)
+    const now = Date.now()
+    if (now - lastSaveRef.current >= SAVE_INTERVAL) {
+      lastSaveRef.current = now
+      saveProgress(ep, p.currentTime, p.duration)
+    }
+  }
+
+  function startOver() {
+    resumeToRef.current = null
+    setResumedFrom(null)
+    if (playerRef.current) playerRef.current.currentTime = 0
+  }
+
   function handleEnded() {
+    markWatched(ep)
     if (autoplay && hasNext) setIndex(i => i + 1)
   }
 
   if (!ep) return null
 
   return (
-    <div className="modal modal-open" onClick={onClose}>
-      <div className="modal-box max-w-4xl p-0 overflow-hidden" onClick={e => e.stopPropagation()}>
+    <ResponsiveModal onClose={onClose} boxClassName="max-w-4xl p-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-base-300">
           <h2 className="font-semibold text-base truncate">{ep.title}</h2>
@@ -64,12 +110,12 @@ export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
               onClick={() => setIndex(i => i + 1)}
               disabled={!hasNext}
               title="Next episode"
-              className="btn btn-sm btn-ghost btn-square"
+              className="btn btn-ghost btn-square sm:btn-sm"
               aria-label="Next episode"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 5v14l8-7zM16 5h2v14h-2z" /></svg>
             </button>
-            <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost" aria-label="Close">✕</button>
+            <button onClick={onClose} className="btn btn-circle btn-ghost sm:btn-sm" aria-label="Close">✕</button>
           </div>
         </div>
 
@@ -82,6 +128,7 @@ export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
         <div className="relative bg-black aspect-video flex items-center justify-center">
           {displaySource && (
             <MediaPlayer
+              ref={playerRef}
               className="w-full h-full"
               title={ep.title}
               src={{
@@ -90,12 +137,24 @@ export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
               }}
               autoPlay
               playsInline
+              onCanPlay={handleCanPlay}
+              onTimeUpdate={handleTimeUpdate}
               onEnded={handleEnded}
               onError={() => { if (active) markFailed(active) }}
             >
               <MediaProvider />
               <DefaultVideoLayout icons={defaultLayoutIcons} />
             </MediaPlayer>
+          )}
+
+          {/* Resumed indicator — lets the user restart from the beginning. */}
+          {displaySource && resumedFrom !== null && (
+            <button
+              onClick={startOver}
+              className="absolute top-3 right-3 z-10 btn btn-sm bg-black/70 border-none text-white hover:bg-black/90"
+            >
+              ↺ Start over
+            </button>
           )}
 
           {/* Overlays: initial testing / no source / next-episode failure */}
@@ -113,7 +172,6 @@ export default function PlayerModal({ episodes, startIndex, onClose }: Props) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   )
 }

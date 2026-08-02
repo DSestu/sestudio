@@ -11,19 +11,19 @@
 - [ ] **Checkpoint 0**: build/lint/pytest green ✓ (62 passed) · dist rebuilt ✓ · manual cast test (user) · approval
 
 ## Phase 1 — Foundation & polish (mobile-first + PWA)
-- [ ] T3: "Cinematic dark" theme + semantic-token sweep (M)
-- [ ] T4: a11y — SearchBar error/label/spinner, SeasonTree keyboard, grid empty-state (M)
-- [ ] T5: Split SeasonTree into components/season/ (M)
-- [ ] T6: ResponsiveModal bottom-sheets + 320px mobile pass (L — split if overrunning)
-- [ ] T7: PWA manifest + app-shell SW (never cache /api) (S)
-- [ ] **Checkpoint 1**: green · rebuild · 320px + keyboard + PWA install · theme sign-off · approval
+- [x] T3: "Cinematic dark" theme + semantic-token sweep (M) — theme `sestudio-dark`; zero raw palette utilities left
+- [x] T4: a11y — SearchBar error/label/spinner, SeasonTree keyboard, grid empty-state (M) — also fixed expand-toggles-all bubbling bug
+- [x] T5: Split SeasonTree into components/season/ (M) — 269 lines (shell is the remainder; useSeasonDetail/EpisodeRow/LangSwitcher/EpisodeRowActions extracted)
+- [x] T6: ResponsiveModal bottom-sheets + mobile pass (L) — all 6 modals adopted; ≥44px targets via md-on-mobile pattern; safe-area + viewport-fit
+- [x] T7: PWA manifest + app-shell SW (never cache /api) (S) — icons generated from favicon.svg; also fixed stale data-theme="abyss" in index.html
+- [ ] **Checkpoint 1**: build/lint/pytest green ✓ (62) · dist rebuilt ✓ · desktop visual pass ✓ · **mobile + PWA install: verify on phone (WM blocked resize emulation)** · theme sign-off · approval
 
 ## Phase 2 — Watch-state & library
-- [ ] T8: Thread episode identity to playback ⚠ regression-critical (M)
-- [ ] T9: watchState store + playback session (S)
-- [ ] T10: Progress capture + resume (player + cast stores) (M)
-- [ ] T11: Continue Watching / Next Up rows + watched badges (M)
-- [ ] **Checkpoint 2**: green · rebuild · resume/rows verified · cast loop re-verified · approval
+- [x] T8: Thread episode identity to playback ⚠ regression-critical (M) — PlayableEpisode widened (series/season/poster/page_url/lang); single canonical type in providers.ts
+- [x] T9: watchState store + playback session (S) — sestudio.watch.v1; playbackSession.ts singleton (browser/chromecast/dlna targets)
+- [x] T10: Progress capture + resume (M) — 5s-throttled onTimeUpdate + resume-on-canplay + "Start over"; cast stores feed the same store; castEnded marks watched
+- [x] T11: Continue Watching / Next Up rows + watched badges (M) — MediaRow; deep-link opens season → player at episode (autoPlayEpisode), honors stored lang; verified in browser with seeded state
+- [ ] **Checkpoint 2**: build/lint/pytest green ✓ · dist rebuilt ✓ · rows + deep-link verified in browser ✓ · **cast loop + real resume: verify manually** · approval
 
 ## Phase 3 — Player upgrades + Web↔TV handoff
 - [ ] T12: Auto-next countdown + volume/speed persistence (S)

@@ -7,7 +7,9 @@ import { startCastQueue } from '../castQueue'
 import type { PlayableEpisode } from '../providers'
 import { useProviderSources } from '../useProviderSources'
 import { useModalBack } from '../useModalBack'
+import { startPlayback } from '../playbackSession'
 import ProviderChips from './ProviderChips'
+import ResponsiveModal from './ResponsiveModal'
 
 interface Props {
   episodes: PlayableEpisode[]
@@ -66,6 +68,9 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
     setMsg(`Sending to ${label}…`)
     try {
       await castSource(activeSource.proxy_url, activeSource.kind, current.title, mode, udn)
+      // Open the playback session on the cast target so the controllers can
+      // record watch-state progress for this episode.
+      startPlayback(current, mode)
       // Register the playlist so the controller can autoplay the next episode.
       startCastQueue({
         episodes,
@@ -88,8 +93,7 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
   const canCast = !busy && !probing && !!activeSource
 
   return (
-    <div className="modal modal-open" onClick={onClose}>
-      <div className="modal-box max-w-md" onClick={e => e.stopPropagation()}>
+    <ResponsiveModal onClose={onClose} boxClassName="max-w-md">
         <div className="flex items-center justify-between gap-3 mb-1">
           <h2 className="font-semibold text-base">Cast to a device</h2>
           <div className="flex items-center gap-3 shrink-0">
@@ -102,7 +106,7 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
               />
               Autoplay
             </label>
-            <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost" aria-label="Close">✕</button>
+            <button onClick={onClose} className="btn btn-circle btn-ghost sm:btn-sm" aria-label="Close">✕</button>
           </div>
         </div>
         <p className="text-base-content/60 text-sm mb-3 truncate">{current.title}</p>
@@ -161,7 +165,6 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
         )}
 
         {msg && <p className="text-sm mt-4 text-center text-base-content/70">{msg}</p>}
-      </div>
-    </div>
+    </ResponsiveModal>
   )
 }

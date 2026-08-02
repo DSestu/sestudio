@@ -3,12 +3,14 @@ import type { SeasonCard } from '../api'
 import { searchSeasons } from '../api'
 
 interface Props {
-  onResults: (cards: SeasonCard[]) => void
+  /** Called with the results and the query they belong to ('' when cleared). */
+  onResults: (cards: SeasonCard[], query: string) => void
 }
 
 export default function SearchBar({ onResults }: Props) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const onResultsRef = useRef(onResults)
@@ -29,12 +31,16 @@ export default function SearchBar({ onResults }: Props) {
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current)
-    if (!query.trim()) { onResultsRef.current([]); return }
+    if (!query.trim()) { onResultsRef.current([], ''); return }
     timer.current = setTimeout(async () => {
       setLoading(true)
       try {
         const results = await searchSeasons(query.trim())
-        onResultsRef.current(results)
+        setError(null)
+        onResultsRef.current(results, query.trim())
+      } catch {
+        setError('Search failed — is the server reachable?')
+        onResultsRef.current([], query.trim())
       } finally {
         setLoading(false)
       }
@@ -43,19 +49,23 @@ export default function SearchBar({ onResults }: Props) {
   }, [query])
 
   return (
-    <div className="relative">
-      <input
-        ref={inputRef}
-        type="text"
-        placeholder="Search series…"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        className="input input-bordered w-full text-lg"
-      />
-      {loading && (
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base-content/50 text-sm">
-          …
-        </span>
+    <div>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="search"
+          placeholder="Search series…"
+          aria-label="Search series"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setError(null) }}
+          className="input input-bordered w-full text-lg"
+        />
+        {loading && (
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 loading loading-spinner loading-sm text-base-content/50" aria-label="Searching" />
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="text-error text-sm mt-2">{error}</p>
       )}
     </div>
   )

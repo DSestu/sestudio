@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="248" height="64" viewBox="0 0 248 64" fill="none" role="img" aria-label="sestudio">
+  <defs>
+    <linearGradient id="bg2" x1="8" y1="6" x2="52" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9b52ff"/>
+      <stop offset="1" stop-color="#5613c9"/>
+    </linearGradient>
+    <linearGradient id="play2" x1="20" y1="18" x2="37" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dcefff"/>
+    </linearGradient>
+    <style>
+      .word { fill: #1b1440; }
+      @media (prefers-color-scheme: dark) { .word { fill: #f2efff; } }
+    </style>
+  </defs>
+
+  <!-- mark, scaled to 56px -->
+  <g transform="translate(4 4) scale(0.875)">
+    <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bg2)"/>
+    <path d="M22 18 L22 46 L43 32 Z" fill="url(#play2)" stroke="url(#play2)"
+          stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+    <g fill="none" stroke="#a9ecff" stroke-width="3.4" stroke-linecap="round">
+      <path d="M48.0 27.5 A6 6 0 0 1 48.0 36.5" opacity="0.95"/>
+      <path d="M51.4 23.8 A11 11 0 0 1 51.4 40.2" opacity="0.7"/>
+      <path d="M54.7 20.1 A16 16 0 0 1 54.7 43.9" opacity="0.45"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text class="word" x="72" y="42"
+        font-family="'Poppins','Segoe UI',system-ui,-apple-system,sans-serif"
+        font-size="30" font-weight="600" letter-spacing="-0.5">sestudio</text>
+</svg>

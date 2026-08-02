@@ -1,4 +1,6 @@
 import type { PlayableEpisode } from './providers'
+import { getPlaybackSession, startPlayback } from './playbackSession'
+import { markWatched } from './watchState'
 
 // A cast "playlist" so autoplay can advance to the next episode when the
 // current one finishes on a cast device. It lives outside React (the cast
@@ -22,13 +24,20 @@ export function setCastAutoplay(on: boolean) { if (queue) queue.autoplay = on }
 
 /** Called by a controller when the current cast media ends. Advances if able. */
 export async function castEnded(): Promise<void> {
-  if (!queue || !queue.autoplay || advancing) return
+  if (!queue || advancing) return
+  // The episode that just finished counts as watched regardless of autoplay.
+  markWatched(queue.episodes[queue.index])
+  if (!queue.autoplay) return
   const next = queue.index + 1
   if (next >= queue.episodes.length) return
   advancing = true
   try {
     queue.index = next
-    await queue.cast(queue.episodes[next])
+    const ep = queue.episodes[next]
+    // Keep the playback session on the same cast target for the next episode.
+    const target = getPlaybackSession()?.target
+    if (target && target !== 'browser') startPlayback(ep, target)
+    await queue.cast(ep)
   } catch {
     // leave the session as-is; the controller keeps showing current state
   } finally {

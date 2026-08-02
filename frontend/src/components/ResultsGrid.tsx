@@ -19,12 +19,12 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail 
             key={card.newsid}
             className={`relative bg-base-200 border rounded-lg overflow-hidden transition-colors ${
               checked
-                ? 'border-violet-500'
+                ? 'border-primary'
                 : card.is_film
-                ? 'border-blue-700 hover:border-blue-500'
+                ? 'border-info/50 hover:border-info'
                 : card.is_anime
-                ? 'border-rose-700 hover:border-rose-500'
-                : 'border-yellow-700 hover:border-yellow-500'
+                ? 'border-error/50 hover:border-error'
+                : 'border-warning/50 hover:border-warning'
             }`}
           >
             {/* Checkbox overlay */}
@@ -32,13 +32,13 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail 
               onClick={() => onToggle(card.newsid)}
               className={`absolute top-2 left-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
                 checked
-                  ? 'bg-violet-600 border-violet-600'
-                  : 'bg-black/50 border-zinc-400 hover:border-violet-400'
+                  ? 'bg-primary border-primary'
+                  : 'bg-black/50 border-base-content/40 hover:border-primary'
               }`}
               aria-label={checked ? 'Deselect season' : 'Select season'}
             >
               {checked && (
-                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <svg className="w-3 h-3 text-primary-content" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}

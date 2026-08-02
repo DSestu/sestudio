@@ -4,6 +4,13 @@ export interface PlayableEpisode {
   number: number
   title: string
   embed_urls: Record<string, string>
+  // Identity — keys the watch-state store and lets the library reopen the title.
+  series_name: string
+  /** Season number; 0 for films. */
+  season: number
+  poster_url: string
+  page_url: string
+  lang: string
 }
 
 // Preferred order, mirroring the backend resolve fallback.

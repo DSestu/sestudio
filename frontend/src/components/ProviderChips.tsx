@@ -29,7 +29,7 @@ export default function ProviderChips({ providers, active, status, onSelect, dis
             disabled={disabled || st === 'loading'}
             onClick={() => onSelect(p)}
             title={`${p} — ${label}`}
-            className={`btn btn-sm gap-1 font-mono ${cls}`}
+            className={`btn sm:btn-sm gap-1 font-mono ${cls}`}
           >
             {st === 'loading' && <span className="loading loading-spinner loading-xs" />}
             {st === 'failed' && <span aria-hidden>⚠</span>}

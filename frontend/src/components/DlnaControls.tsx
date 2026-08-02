@@ -4,6 +4,7 @@ import {
   dlnaVolumeBy, useDlnaState,
 } from '../dlnaControl'
 import { useModalBack } from '../useModalBack'
+import ResponsiveModal from './ResponsiveModal'
 
 const SEEK_STEPS = [
   { label: '-5m', delta: -300 },
@@ -58,11 +59,10 @@ export default function DlnaControls() {
       )}
 
       {open && (
-        <div className="modal modal-open" onClick={() => setOpen(false)}>
-          <div className="modal-box max-w-md" onClick={e => e.stopPropagation()}>
+        <ResponsiveModal onClose={() => setOpen(false)} boxClassName="max-w-md">
             <div className="flex items-center justify-between mb-1">
               <h2 className="font-semibold text-base">Casting to TV</h2>
-              <button onClick={() => setOpen(false)} aria-label="Close" className="btn btn-sm btn-circle btn-ghost">✕</button>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="btn btn-circle btn-ghost sm:btn-sm">✕</button>
             </div>
             <p className="text-base-content/60 text-sm mb-4 truncate">{dlna.title || 'Unknown title'}</p>
 
@@ -86,7 +86,7 @@ export default function DlnaControls() {
             {/* Transport */}
             <div className="flex items-center justify-center flex-wrap gap-2 mb-4">
               {SEEK_STEPS.slice(0, 4).map(s => (
-                <button key={s.label} onClick={() => dlnaSeekBy(s.delta)} className="btn btn-sm btn-ghost font-mono">{s.label}</button>
+                <button key={s.label} onClick={() => dlnaSeekBy(s.delta)} className="btn btn-ghost font-mono sm:btn-sm">{s.label}</button>
               ))}
               <button
                 onClick={() => (dlna.isPaused ? dlnaResume() : dlnaPause())}
@@ -100,20 +100,20 @@ export default function DlnaControls() {
                 )}
               </button>
               {SEEK_STEPS.slice(4).map(s => (
-                <button key={s.label} onClick={() => dlnaSeekBy(s.delta)} className="btn btn-sm btn-ghost font-mono">{s.label}</button>
+                <button key={s.label} onClick={() => dlnaSeekBy(s.delta)} className="btn btn-ghost font-mono sm:btn-sm">{s.label}</button>
               ))}
             </div>
 
             {/* Volume */}
             <div className="flex items-center gap-2">
-              <button onClick={dlnaToggleMute} aria-label={dlna.muted ? 'Unmute' : 'Mute'} className="btn btn-ghost btn-sm btn-square">
+              <button onClick={dlnaToggleMute} aria-label={dlna.muted ? 'Unmute' : 'Mute'} className="btn btn-ghost btn-square sm:btn-sm">
                 {dlna.muted ? (
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15zM17 9l4 4m0-4l-4 4" /></svg>
                 ) : (
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z M15 9a3 3 0 010 6 M18 6a7 7 0 010 12" /></svg>
                 )}
               </button>
-              <button onClick={() => dlnaVolumeBy(-0.05)} aria-label="Volume down" className="btn btn-ghost btn-sm btn-square font-mono">−</button>
+              <button onClick={() => dlnaVolumeBy(-0.05)} aria-label="Volume down" className="btn btn-ghost btn-square font-mono sm:btn-sm">−</button>
               <input
                 type="range"
                 min={0}
@@ -123,14 +123,13 @@ export default function DlnaControls() {
                 onChange={e => dlnaSetVolume(Number(e.target.value))}
                 className="range range-sm flex-1"
               />
-              <button onClick={() => dlnaVolumeBy(0.05)} aria-label="Volume up" className="btn btn-ghost btn-sm btn-square font-mono">＋</button>
+              <button onClick={() => dlnaVolumeBy(0.05)} aria-label="Volume up" className="btn btn-ghost btn-square font-mono sm:btn-sm">＋</button>
             </div>
 
             <div className="modal-action">
               <button onClick={() => { dlnaStop(); setOpen(false) }} className="btn btn-error btn-sm">Stop casting</button>
             </div>
-          </div>
-        </div>
+        </ResponsiveModal>
       )}
     </>
   )

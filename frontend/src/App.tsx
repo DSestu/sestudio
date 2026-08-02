@@ -7,15 +7,42 @@ import CastControls from './components/CastControls'
 import DlnaControls from './components/DlnaControls'
 import ConfirmDownloadModal from './components/ConfirmDownloadModal'
 import DownloadQueue from './components/DownloadQueue'
+import MediaRow from './components/MediaRow'
 import ResultsGrid from './components/ResultsGrid'
 import SearchBar from './components/SearchBar'
 import SeasonTree from './components/SeasonTree'
 import SettingsPanel from './components/SettingsPanel'
+import { continueWatching, nextUp, removeEntry, useWatchState } from './watchState'
+
+/** Synthesize a SeasonCard from stored watch-state identity so the library
+ * can reopen a title without a fresh search. */
+function cardFor(series: string, season: number, posterUrl: string, pageUrl: string): SeasonCard {
+  return {
+    newsid: pageUrl,
+    title: series,
+    series_name: series,
+    season_number: season,
+    poster_url: posterUrl,
+    page_url: pageUrl,
+    is_film: season === 0,
+    is_anime: false,
+  }
+}
+
+function minutesLeft(position: number, duration: number): string {
+  const mins = Math.max(0, Math.round((duration - position) / 60))
+  return `${mins} min left`
+}
 
 export default function App() {
   const [results, setResults] = useState<SeasonCard[]>([])
+  const [lastQuery, setLastQuery] = useState('')
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<SeasonCard | null>(null)
+  // Library deep-link: episode to auto-play and language override when a title
+  // is opened from Continue Watching / Next Up rather than from search.
+  const [autoPlayEpisode, setAutoPlayEpisode] = useState<number | undefined>(undefined)
+  const [openLang, setOpenLang] = useState<string | null>(null)
   const [settings, setSettings] = useState<AppSettings>({ output_root: '.', lang: 'vf' })
   const [downloadTick, setDownloadTick] = useState(0)
   const [bulkLoading, setBulkLoading] = useState(false)
@@ -26,6 +53,25 @@ export default function App() {
   // On load: init the Cast SDK (rejoins an existing Chromecast session) and
   // check for an active DLNA session, so both control bars reappear after reload.
   useEffect(() => { loadCast(); refreshDlna() }, [])
+
+  // Library rows (home screen only). In-progress series take precedence over
+  // their own "next up" suggestion.
+  const watch = useWatchState()
+  const cw = continueWatching(watch)
+  const cwSeries = new Set(cw.map(e => e.series))
+  const nu = nextUp(watch).filter(s => !cwSeries.has(s.series))
+
+  function openFromLibrary(card: SeasonCard, episode: number, lang: string) {
+    setOpenLang(lang)
+    setAutoPlayEpisode(episode)
+    setSelected(card)
+  }
+
+  function closeDetail() {
+    setSelected(null)
+    setAutoPlayEpisode(undefined)
+    setOpenLang(null)
+  }
 
   const cardMap = new Map(results.map(c => [c.newsid, c]))
 
@@ -38,8 +84,9 @@ export default function App() {
     })
   }
 
-  function handleSearchResults(cards: SeasonCard[]) {
+  function handleSearchResults(cards: SeasonCard[], query: string) {
     setResults(cards)
+    setLastQuery(query)
     setCheckedIds(prev => {
       const ids = new Set(cards.map(c => c.newsid))
       return new Set([...prev].filter(id => ids.has(id)))
@@ -96,12 +143,42 @@ export default function App() {
     <div className="min-h-screen bg-base-100 p-6 flex flex-col gap-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">
-          fstream<span className="text-violet-400">-dl</span>
+          fstream<span className="text-primary">-dl</span>
         </h1>
         <SettingsPanel onChange={setSettings} />
       </div>
 
       <SearchBar onResults={handleSearchResults} />
+
+      {/* Library rows — shown on the home screen (no active search) */}
+      {lastQuery === '' && (cw.length > 0 || nu.length > 0) && (
+        <div className="flex flex-col gap-6">
+          <MediaRow
+            title="Continue Watching"
+            items={cw.map(e => ({
+              key: `cw-${e.series}-${e.season}-${e.number}`,
+              title: e.series,
+              subtitle: e.season > 0
+                ? `S${String(e.season).padStart(2, '0')}E${String(e.number).padStart(2, '0')} · ${minutesLeft(e.position, e.duration)}`
+                : minutesLeft(e.position, e.duration),
+              poster_url: e.poster_url,
+              progress: e.duration > 0 ? e.position / e.duration : undefined,
+              onClick: () => openFromLibrary(cardFor(e.series, e.season, e.poster_url, e.page_url), e.number, e.lang),
+              onRemove: () => removeEntry(e),
+            }))}
+          />
+          <MediaRow
+            title="Next Up"
+            items={nu.map(s => ({
+              key: `nu-${s.series}-${s.season}-${s.nextNumber}`,
+              title: s.series,
+              subtitle: `Next: S${String(s.season).padStart(2, '0')}E${String(s.nextNumber).padStart(2, '0')}`,
+              poster_url: s.poster_url,
+              onClick: () => openFromLibrary(cardFor(s.series, s.season, s.poster_url, s.page_url), s.nextNumber, s.lang),
+            }))}
+          />
+        </div>
+      )}
 
       {results.length > 0 && (
         <div className="flex items-center gap-3">
@@ -115,18 +192,18 @@ export default function App() {
           >
             <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
               results.every(c => checkedIds.has(c.newsid))
-                ? 'bg-violet-600 border-violet-600'
+                ? 'bg-primary border-primary'
                 : results.some(c => checkedIds.has(c.newsid))
-                ? 'bg-violet-900 border-violet-500'
+                ? 'bg-primary/30 border-primary'
                 : 'border-base-content/30'
             }`}>
               {results.every(c => checkedIds.has(c.newsid)) && (
-                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <svg className="w-3 h-3 text-primary-content" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}
               {!results.every(c => checkedIds.has(c.newsid)) && results.some(c => checkedIds.has(c.newsid)) && (
-                <span className="w-2 h-0.5 bg-violet-400 block" />
+                <span className="w-2 h-0.5 bg-primary block" />
               )}
             </span>
             {results.every(c => checkedIds.has(c.newsid)) ? 'Deselect all' : 'Select all'}
@@ -135,16 +212,23 @@ export default function App() {
         </div>
       )}
 
-      <ResultsGrid
-        cards={results}
-        checkedIds={checkedIds}
-        onToggle={toggleCard}
-        onOpenDetail={setSelected}
-      />
+      {results.length === 0 && lastQuery !== '' ? (
+        <div role="status" className="text-center py-12 text-base-content/60">
+          <p className="text-lg font-medium">No results for “{lastQuery}”</p>
+          <p className="text-sm mt-1">Try a different title or check the spelling.</p>
+        </div>
+      ) : (
+        <ResultsGrid
+          cards={results}
+          checkedIds={checkedIds}
+          onToggle={toggleCard}
+          onOpenDetail={setSelected}
+        />
+      )}
 
       {/* Bulk download bar */}
       {checkedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 card card-bordered bg-base-200 shadow-xl px-6 py-3">
+        <div className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-40 flex items-center flex-wrap justify-between sm:justify-start gap-3 sm:gap-4 card card-bordered bg-base-200 shadow-xl px-4 sm:px-6 py-3 w-[calc(100%-1.5rem)] max-w-md sm:w-auto sm:max-w-none">
           <span className="text-base-content/80 text-sm">
             {checkedIds.size} season{checkedIds.size !== 1 ? 's' : ''} selected
           </span>
@@ -180,10 +264,11 @@ export default function App() {
       {selected && (
         <SeasonTree
           card={selected}
-          lang={settings.lang}
+          lang={openLang ?? settings.lang}
           outputRoot={settings.output_root}
-          onClose={() => setSelected(null)}
+          onClose={closeDetail}
           onJobsCreated={() => setDownloadTick(t => t + 1)}
+          autoPlayEpisode={autoPlayEpisode}
         />
       )}
 
