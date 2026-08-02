@@ -8,7 +8,17 @@
   }
 }
 
-/* "Cinematic dark" — near-black low-chroma base so poster art carries the color;
+/* Poster rows scroll horizontally; the scrollbar is visual noise on desktop
+   and absent on touch anyway. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* "Cinematic dark"— near-black low-chroma base so poster art carries the color;
    electric cyan-blue primary for actions, warm coral secondary for accents. */
 @plugin "daisyui/theme" {
   name: "sestudio-dark";

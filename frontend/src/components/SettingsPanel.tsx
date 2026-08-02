@@ -1,63 +1,71 @@
-import { useEffect, useRef, useState } from 'react'
 import type { AppSettings } from '../api'
-import { getSettings, putSettings } from '../api'
+import { useModalBack } from '../useModalBack'
+import ResponsiveModal from './ResponsiveModal'
 
 interface Props {
-  onChange: (settings: AppSettings) => void
+  settings: AppSettings
+  onUpdate: (patch: Partial<AppSettings>) => void
+  onClose: () => void
 }
 
-export default function SettingsPanel({ onChange }: Props) {
-  const [settings, setSettings] = useState<AppSettings>({
-    output_root: '.', lang: 'vf', download_destination: 'server', tmdb_configured: false,
-  })
-  const onChangeRef = useRef(onChange)
-  useEffect(() => { onChangeRef.current = onChange })
-
-  useEffect(() => {
-    getSettings().then(s => { setSettings(s); onChangeRef.current(s) })
-  }, [])
-
-  async function update(patch: Partial<AppSettings>) {
-    const updated = await putSettings(patch)
-    setSettings(updated)
-    onChange(updated)
-  }
+/** Settings drawer — a bottom sheet on phones, a centered dialog on desktop. */
+export default function SettingsPanel({ settings, onUpdate, onClose }: Props) {
+  useModalBack(true, onClose)
 
   return (
-    <div className="flex items-center gap-4 card card-bordered bg-base-200 px-4 py-3">
-      <span className="text-base-content/60 text-sm font-medium">Settings</span>
-      <div className="flex items-center gap-2">
-        <label className="text-base-content/60 text-sm">Output</label>
-        <input
-          className="input input-bordered input-sm w-64"
-          value={settings.output_root}
-          onChange={e => update({ output_root: e.target.value })}
-        />
+    <ResponsiveModal onClose={onClose} boxClassName="max-w-md">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-base">Settings</h2>
+        <button onClick={onClose} aria-label="Close settings" className="btn btn-circle btn-ghost sm:btn-sm">✕</button>
       </div>
-      <div className="flex items-center gap-2">
-        <label className="text-base-content/60 text-sm">Lang</label>
-        <select
-          className="select select-bordered select-sm"
-          value={settings.lang}
-          onChange={e => update({ lang: e.target.value })}
-        >
-          <option value="vf">VF</option>
-          <option value="vostfr">VOSTFR</option>
-          <option value="vo">VO</option>
-        </select>
+
+      <div className="flex flex-col gap-4">
+        <div>
+          <label htmlFor="set-output" className="text-sm text-base-content/60 mb-1 block">
+            Download folder (server)
+          </label>
+          <input
+            id="set-output"
+            className="input input-bordered w-full"
+            value={settings.output_root}
+            onChange={e => onUpdate({ output_root: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="set-lang" className="text-sm text-base-content/60 mb-1 block">
+            Preferred language
+          </label>
+          <select
+            id="set-lang"
+            className="select select-bordered w-full"
+            value={settings.lang}
+            onChange={e => onUpdate({ lang: e.target.value })}
+          >
+            <option value="vf">VF</option>
+            <option value="vostfr">VOSTFR</option>
+            <option value="vo">VO</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="set-dest" className="text-sm text-base-content/60 mb-1 block">
+            Download to
+          </label>
+          <select
+            id="set-dest"
+            className="select select-bordered w-full"
+            value={settings.download_destination}
+            onChange={e => onUpdate({ download_destination: e.target.value as AppSettings['download_destination'] })}
+          >
+            <option value="server">Server</option>
+            <option value="device">This device</option>
+          </select>
+          <p className="text-xs text-base-content/50 mt-1">
+            “This device” streams the file through the server to your browser.
+          </p>
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <label className="text-base-content/60 text-sm" htmlFor="dl-dest">Download to</label>
-        <select
-          id="dl-dest"
-          className="select select-bordered select-sm"
-          value={settings.download_destination}
-          onChange={e => update({ download_destination: e.target.value as AppSettings['download_destination'] })}
-        >
-          <option value="server">Server</option>
-          <option value="device">This device</option>
-        </select>
-      </div>
-    </div>
+    </ResponsiveModal>
   )
 }
