@@ -1,213 +1,386 @@
-# Implementation Plan: sestudio uvx Packaging
+# Implementation Plan: Aggregator UI/UX build-out
 
-Derived from `SPEC.md` (Draft). Goal: `uvx sestudio` runs the full app (CLI + web UI +
-downloads + optional HTTPS casting) on a clean machine with only `uv` — no manually
-installed ffmpeg, Node, or Caddy. Published to PyPI.
-
-(Supersedes the prior "Player & Cast" plan, which is in git history and describes
-already-shipped work.)
+(Supersedes the prior "uvx Packaging" plan, which is in git history and describes shipped work.)
 
 ## Overview
 
-Four concerns from the spec, sliced vertically so each task leaves a working,
-independently verifiable system:
+Evolve sestudio from a single-source fstream downloader into a personal streaming aggregator, per
+`SPEC.md` (product vision) and `docs/RESEARCH-aggregator-ux.md` (research). Work is sliced into
+S/M-sized tasks across 6 phases; **the frontend is rebuilt (`npm run build`) at every checkpoint**
+so the user can test via `uv run sestudio serve`. Each phase pauses for approval.
 
-- **P1** Ship the frontend inside the wheel + resolve it relative to the module.
-- **P2** Ship ffmpeg via `imageio-ffmpeg`, system-preferred.
-- **P3** Self-contained HTTPS via a self-signed cert (no Caddy).
-- **P4** Metadata, cleanup, and a CI release job.
+## Architecture decisions (locked with user)
 
-## Architecture Decisions
+- **Watch-state:** localStorage behind a small interface (`watchState.ts`) — swappable to a
+  server JSON store later. No database, ever (single-user).
+- **Theme:** new custom daisyUI "cinematic dark" theme (near-black cool base, cyan-blue primary,
+  coral secondary); **semantic tokens only** everywhere.
+- **Playback session:** one shared source of truth for "what's playing + position", fed by the
+  browser player and both cast stores — the seam that makes Web↔TV handoff cheap.
+- **Browser downloads go through the server** (browser can't send provider Referer/UA): new
+  attachment endpoint; MP4 pass-through first, HLS ffmpeg-mux as a separate ask-first task.
+- **TMDB** with user-provided key; graceful fallback without it. Match on series_name + year
+  (year must stop being discarded at `scraper.py:80`).
+- **Boundaries** (SPEC.md §7): no commits without consent; cast/download core is
+  regression-critical; no telemetry; sources stay pluggable.
 
-- **Frontend bundling via hatchling `force-include`**, not a custom build hook or a
-  committed `dist/`. `force-include = { "frontend/dist" = "sestudio/web/static" }` maps the
-  (gitignored) build artifact into the wheel at build time. Requires `npm run build` to run
-  **before** `uv build` (enforced in CI, documented for local builds).
-- **Dual-path static resolution in `app.py`**: prefer module-relative `web/static/`
-  (installed wheel), fall back to repo `frontend/dist` (dev / `uv run`). Keeps the dev
-  workflow unchanged while making installed wheels self-contained.
-- **ffmpeg: system-preferred.** `media.ffmpeg_location()` returns `None` when a system
-  ffmpeg is on PATH (yt-dlp uses it, gets real ffprobe + fuller codecs), else the bundled
-  `imageio-ffmpeg` binary's dir. ffprobe not needed for HLS→mp4 (verified in spec).
-- **HTTPS cert SAN reuses existing LAN-IP helpers** (`dlna._local_ipv4s()`), cached under
-  the config dir, generated with the existing `cryptography` dep. Caddy stays an optional
-  upgrade, not a dependency.
-- **Release hangs off the existing `release_please.yml`** flow, adding a build+publish job.
-
-## Dependency Graph
+## Dependency graph
 
 ```
-Task 1 (module-relative static path, dev fallback)  ─┐
-Task 2 (force-include → wheel bundles assets)  ──────┤  P1  → AC1, AC2
-                                                     │
-Task 3 (LICENSE + license metadata + drop main.py) ──┘  P4a (unblocks clean build)
+P0 cast-control tweaks ────────────── (independent quick win)
+
+P1 theme/tokens ──► P1 a11y ──► P1 SeasonTree split ──► P1 ResponsiveModal/mobile ──► P1 PWA
+                                        │
+P2 identity threading (needs split) ◄───┘
         │
-        ├── Task 4 (imageio-ffmpeg + media.py + downloader)   P2 → AC3, AC4   (independent)
-        │
-        ├── Task 5 (tls.py cert gen/cache)  ──┐
-        │                                     ├── P3 → AC6, AC7, AC8
-        │   Task 6 (serve --https wiring) ────┘   (Task 6 depends on Task 5)
-        │
-        └── Task 7 (CI release job + platform matrix)   P4b  (depends on Task 2)
-Task 8 (rename leftover fix + uvx/HTTPS README docs)    cleanup (independent)
+        ├──► P2 watchState store ──► P2 progress capture + resume ──► P2 home rows
+        │                                     │
+P3 countdown/persistence (independent)        └──► P3 handoff (needs session + cast stores)
+        
+P4 backend MP4 endpoint ──► P4 frontend toggle ──► P4 HLS mux (ask-first)
+
+P5 config key + year ──► P5 TMDB match/detail/cache ──► P5 catalogs ──► P5 UI enrichment ──► P5 rows
 ```
 
-Order: P1 first (critical path — blocks the installed UI, highest build risk → fail fast),
-then the independent P2 and P3 slices, then release plumbing.
+High-risk-early: identity threading (T8) touches the play/cast paths — the regression-critical
+core — so it's isolated in its own task with explicit cast verification.
 
-## Task List
+---
 
-### Phase 1 — Self-contained package (P1 + metadata)
+## Task list
 
-#### Task 1: Module-relative static resolution with dev fallback
-**Description:** Make `app.py` serve the SPA from `Path(__file__).parent / "static"` when
-present (installed wheel), falling back to the repo `frontend/dist` for dev. Removes the
-hard-coded `_REPO_ROOT / "frontend" / "dist"` that breaks once installed.
+### Phase 0 — Cast-control quick wins (independent; ships first for immediate value)
+
+#### Task 1: Extend seek steps and finer volume step on both cast controllers
+**Description:** Extend `SEEK_STEPS` in both controllers from `±10s/±30s/±5m` to
+`[-5m,-1m,-30s,-10s,+10s,+30s,+1m,+5m]` (4/4 around play-pause), and change volume slider
+`step={0.05}` → `step={0.01}`.
 **Acceptance criteria:**
-- [ ] `create_app()` mounts `/assets` and the SPA fallback from the module-relative dir when it exists.
-- [ ] With no `web/static/` present, it still serves `frontend/dist` (dev unchanged).
-**Verification:**
-- [ ] `.venv/bin/python -m pytest -q` still green.
-- [ ] Manual: `.venv/bin/sestudio serve` serves the UI from `frontend/dist` as today.
-**Dependencies:** None
-**Files:** `src/sestudio/web/app.py`
-**Scope:** S
+- [ ] Both modals show 8 seek buttons: ±10s, ±30s, ±1m, ±5m
+- [ ] Volume sliders move in 1% increments on both
+**Verification:** `npm run build && npm run lint`; manual: cast to a device, click each step,
+confirm position jumps; drag volume, confirm fine steps.
+**Dependencies:** None.
+**Files:** `frontend/src/components/DlnaControls.tsx`, `CastControls.tsx`. **Scope:** S
 
-#### Task 2: Bundle frontend into the wheel via force-include
-**Description:** Add `[tool.hatch.build.targets.wheel.force-include]` mapping
-`frontend/dist` → `sestudio/web/static`, so a built wheel contains the assets. Document the
-`npm run build` prerequisite.
-**Acceptance criteria (AC1):**
-- [ ] After `npm --prefix frontend run build && uv build`, the wheel lists `sestudio/web/static/index.html` and `sestudio/web/static/assets/*`.
-- [ ] Build fails loudly (or warns) if `frontend/dist` is absent at build time.
-**Verification:**
-- [ ] `python -m zipfile -l dist/sestudio-*.whl | grep web/static/index.html`.
-- [ ] AC2: `uvx --from ./dist/sestudio-*.whl sestudio serve` in a clean dir serves the SPA with assets (no 404 on `/assets/*`).
-**Dependencies:** Task 1
-**Files:** `pyproject.toml`, (README build note)
-**Scope:** S
-
-#### Task 3: LICENSE, license metadata, drop stray main.py
-**Description:** Add a `LICENSE` file + `license` field in `[project]`; remove `main.py`
-(the "Hello from sestudio!" stub — not an entry point).
-**Acceptance criteria (AC10):**
-- [ ] `LICENSE` exists; `pyproject.toml` declares `license`.
-- [ ] `main.py` removed; nothing imports it (`rg 'main:main|import main'` clean).
-- [ ] `uv build` emits no metadata warnings.
-**Verification:**
-- [ ] `uv build` clean; `rg -n 'from main|import main' src tests` empty.
-**Dependencies:** None
-**Files:** `LICENSE` (new), `pyproject.toml`, remove `main.py`
-**Scope:** XS
-
-### Checkpoint: Foundation (after Tasks 1–3)
-- [ ] Tests pass; `uv build` clean.
-- [ ] Built wheel installed in a clean env serves the UI with assets (AC1, AC2, AC9 core).
-- [ ] Review with human before proceeding.
-
-### Phase 2 — Bundled ffmpeg (P2)
-
-#### Task 4: imageio-ffmpeg resolver wired into downloads
-**Description:** Add `imageio-ffmpeg` to `dependencies`. New `media.ffmpeg_location()`:
-`None` if system ffmpeg on PATH, else the bundled binary's dir. `downloader.download()`
-appends `--ffmpeg-location <dir>` when non-None.
+#### Task 2: DLNA mute button + volume up/down buttons
+**Description:** Add a mute toggle to `DlnaControls` (Chromecast already has `castToggleMute`).
+Check `async-upnp-client` for RenderingControl `SetMute`: if available, add
+`POST /api/cast/dlna/mute` in `cast.py` + `dlnaMute()` in `dlnaControl.ts`; else client-side
+save-volume→0→restore. Add −/＋ volume nudge buttons (±5%) flanking the DLNA slider via
+`dlnaSetVolume`; mirror −/＋ onto Chromecast for parity.
 **Acceptance criteria:**
-- [ ] `media.ffmpeg_location()` returns `None` with a system ffmpeg stubbed on PATH; a dir otherwise (AC4/AC3).
-- [ ] yt-dlp command includes `--ffmpeg-location` only when resolver returns a dir.
-**Verification:**
-- [ ] New `tests/test_media.py` passes (both branches, `imageio_ffmpeg` mocked).
-- [ ] Manual (optional): HLS download with system ffmpeg removed from PATH succeeds (AC3).
-**Dependencies:** None (Phase 1 checkpoint recommended first)
-**Files:** `pyproject.toml`, `src/sestudio/media.py` (new), `src/sestudio/downloader.py`, `tests/test_media.py` (new)
+- [ ] DLNA modal has a working mute toggle with correct icon state (mirrors `CastControls.tsx:108-114` markup)
+- [ ] −/＋ buttons nudge volume by 5% on both controllers, `aria-label`ed
+- [ ] Mute state survives the 2s DLNA status poll (no flicker/fight)
+**Verification:** `npm run build && npm run lint`; `uv run pytest tests/` (if backend touched, add a
+route test); manual: mute/unmute on a real DLNA renderer, nudge volume.
+**Dependencies:** None.
+**Files:** `DlnaControls.tsx`, `dlnaControl.ts`, `CastControls.tsx`, possibly
+`src/sestudio/web/routers/cast.py` + test. **Scope:** M
+
+### Checkpoint 0
+- [ ] Build + lint + pytest green; **rebuild `frontend/dist`**
+- [ ] Manual cast session on DLNA + Chromecast: seek steps, 1% volume, mute, nudges
+- [ ] User approval before Phase 1
+
+---
+
+### Phase 1 — Foundation & polish (mobile-first + PWA)
+
+#### Task 3: New theme + semantic-token sweep
+**Description:** Replace the customized `abyss` block in `index.css` with the "cinematic dark"
+theme (SPEC/plan hues). Convert all raw palette utilities to semantic tokens: `ResultsGrid.tsx:20-37`
+(violet/blue/rose/yellow/zinc — replace border-color type-coding with a type badge, fixing
+color-as-sole-signal), `SeasonTree.tsx:41` `iconBtn`, `App.tsx:99,116-129` header + select-all.
+**Acceptance criteria:**
+- [ ] `grep -rE "(violet|rose|zinc|yellow|blue)-[0-9]" frontend/src` returns nothing
+- [ ] Type distinction (film/anime/series) conveyed by badge text, not border color alone
+- [ ] Contrast AA for text tokens on base colors
+**Verification:** build + lint; browser MCP screenshot pass, user eyeballs the palette (one-block
+tweak if hues disliked).
+**Dependencies:** None. **Files:** `index.css`, `ResultsGrid.tsx`, `SeasonTree.tsx`, `App.tsx`,
+`ProviderChips.tsx`. **Scope:** M
+
+#### Task 4: a11y fixes on search & grid & tree
+**Description:** `SearchBar`: add label/`aria-label`, `catch` surfacing an inline error state,
+daisyUI spinner replacing `…`. `SeasonTree`: convert mouse-only clickable `<div>`s
+(`:225-242, 270-279, 313-321`) to buttons/keyboard-operable. `ResultsGrid`: `role="status"`
+empty-state ("No results for …").
+**Acceptance criteria:**
+- [ ] Full flow (search → open season → toggle → play) operable by keyboard alone
+- [ ] Failed search shows an error message (kill the backend to test)
+- [ ] Empty search result shows copy instead of blank space
+**Verification:** build + lint; manual Tab-through via browser MCP.
+**Dependencies:** T3 (touches same files; avoid conflicts). **Files:** `SearchBar.tsx`,
+`SeasonTree.tsx`, `ResultsGrid.tsx`, `App.tsx`. **Scope:** M
+
+#### Task 5: Split SeasonTree
+**Description:** Extract `components/season/`: `useSeasonDetail` hook (fetch + lang fallback,
+`:99-121`), `EpisodeRow` (dedupe series `:262-281` / film `:305-321`), `LangSwitcher`
+(`:244-252`/`:292-300`), `EpisodeRowActions` (from `rowActions` closure `:54-97`). No behavior change.
+**Acceptance criteria:**
+- [ ] `SeasonTree.tsx` < 200 lines; each extracted file < 150
+- [ ] Series and film variants render identically to before (visual diff)
+**Verification:** build + lint; manual: open a series and a film, download + play + cast still work.
+**Dependencies:** T4. **Files:** `SeasonTree.tsx` + new `season/*` (4 files). **Scope:** M
+
+#### Task 6: Mobile-first responsive + bottom-sheets
+**Description:** Shared `ResponsiveModal` wrapper: centered `modal-box` ≥sm, bottom-sheet on small
+screens; adopt in all 5 modals (Player, Season, Cast, CastControls, DlnaControls — keep
+`useModalBack`). ≥44px touch targets; bulk bar (`App.tsx:146-162`) and cast pills stack cleanly;
+safe-area insets + `viewport-fit=cover`.
+**Acceptance criteria:**
+- [ ] At 320px: no horizontal scroll anywhere; modals are bottom-sheets; all targets ≥44px
+- [ ] At ≥768px: modals centered as today
+**Verification:** build + lint; browser MCP at 320/768/1024/1440 through the full flow.
+**Dependencies:** T5. **Files:** new `ResponsiveModal.tsx`, the 5 modal components, `App.tsx`,
+`index.html`. **Scope:** L → if it overruns, split adoption into "wrapper + 2 modals" / "remaining 3".
+
+#### Task 7: PWA
+**Description:** `manifest.webmanifest` (name, icons from `fstream.ico`/assets, theme-color,
+standalone) + minimal app-shell service worker (**never cache `/api`**), registered in `main.tsx`.
+**Acceptance criteria:**
+- [ ] Chrome offers install; app opens standalone
+- [ ] `/api/*` requests bypass the SW (verify in devtools network)
+**Verification:** build; browser MCP: manifest detected, SW registered, no console errors.
+**Dependencies:** T3 (theme-color). **Files:** `frontend/public/*`, `main.tsx`, `vite.config.ts`,
+`index.html`. **Scope:** S
+
+### Checkpoint 1
+- [ ] Build + lint + pytest green; **rebuild `frontend/dist`**
+- [ ] 320px walkthrough clean; keyboard-only flow works; PWA installs
+- [ ] User approval (incl. theme sign-off) before Phase 2
+
+---
+
+### Phase 2 — Watch-state & library
+
+#### Task 8: Thread episode identity to playback (REGRESSION-CRITICAL)
+**Description:** Widen `PlayableEpisode` (`providers.ts:3-7`) with `series_name`, `season`,
+`poster_url`, `page_url`, `lang`; populate in `playlistFrom` (`SeasonTree.tsx:45-52`); propagate
+through `PlayerModal`, `CastModal`, `castQueue`.
+**Acceptance criteria:**
+- [ ] Playback and cast still work end-to-end (browser, DLNA, Chromecast)
+- [ ] Episode identity available inside `PlayerModal` (visible in React devtools/props)
+**Verification:** build + lint; **explicit manual re-verify of the cast+download core loop** (SPEC
+boundary).
+**Dependencies:** T5. **Files:** `providers.ts`, `SeasonTree.tsx` (or `season/` pieces),
+`PlayerModal.tsx`, `CastModal.tsx`, `castQueue.ts`. **Scope:** M
+
+#### Task 9: watchState store + unified playback session
+**Description:** `watchState.ts`: localStorage `sestudio.watch.v1`, key
+`${series}|S${season}|E${number}`, entries per plan §P2. API: `getProgress`, `saveProgress`,
+`markWatched`, `continueWatching()`, `nextUp(series)` + `useWatchState` hook (external-store
+pattern like `useCastState`). Include the **playback session** singleton (current episode +
+position source) that both player and cast stores will feed.
+**Acceptance criteria:**
+- [ ] Store round-trips entries; corrupt/missing localStorage degrades to empty (try/catch)
+- [ ] ≥90% position marks watched
+**Verification:** build + lint; exercise via console in browser MCP.
+**Dependencies:** T8 (types). **Files:** new `watchState.ts`, `playbackSession.ts`. **Scope:** S
+
+#### Task 10: Progress capture + resume in player and cast
+**Description:** Throttled (~5s) `onTimeUpdate` on `<MediaPlayer>` → `saveProgress`; on source load
+seek to saved position with a "Resume from mm:ss / Start over" affordance (respect the
+persistent-element pattern `PlayerModal.tsx:34-39`). Subscribe cast stores' `position/duration`
+(`cast.ts`, `dlnaControl.ts` poll) → same store.
+**Acceptance criteria:**
+- [ ] Watch 2 min in browser, reload, reopen episode → resume prompt at the right time
+- [ ] Cast progress also lands in the store (check localStorage after casting)
+- [ ] Finishing an episode (auto-next) marks it watched
+**Verification:** build + lint; manual browser + one cast target.
+**Dependencies:** T9. **Files:** `PlayerModal.tsx`, `cast.ts`, `dlnaControl.ts`. **Scope:** M
+
+#### Task 11: Continue Watching / Next Up home rows + watched badges
+**Description:** Horizontal poster-row component (reused by P5). Home (no active search) shows
+**Continue Watching** (in-progress by `updatedAt`, with progress bar on card) and **Next Up**.
+Clicking reopens season → player at the right episode (via stored `page_url` + `lang`). Watched
+badge on `EpisodeRow`.
+**Acceptance criteria:**
+- [ ] Rows appear only when store has entries and search is empty; empty store → clean home
+- [ ] Card click lands in the player on the correct episode
+- [ ] Rows scroll horizontally on mobile without vertical jank
+**Verification:** build + lint; browser MCP walkthrough 320px + desktop.
+**Dependencies:** T10. **Files:** new `components/MediaRow.tsx`, `App.tsx`, `season/EpisodeRow`.
 **Scope:** M
 
-### Checkpoint: ffmpeg (after Task 4)
-- [ ] `tests/test_media.py` green; existing tests green.
-- [ ] Download path verified (manual, optional) without system ffmpeg.
+### Checkpoint 2
+- [ ] Build + lint + pytest green; **rebuild `frontend/dist`**
+- [ ] Resume + continue-watching + next-up verified on desktop and 320px; cast loop re-verified
+- [ ] User approval before Phase 3
 
-### Phase 3 — Self-contained HTTPS (P3)
+---
 
-#### Task 5: Self-signed cert generation + caching
-**Description:** New `tls.py`: generate a self-signed cert/key (SAN = resolved LAN IPs via
-`dlna._local_ipv4s()` + `127.0.0.1` + `localhost`), cached under the config dir; regenerate
-only if missing/expired. Uses the existing `cryptography` dep.
-**Acceptance criteria (AC6 support):**
-- [ ] `tls.ensure_cert()` returns `(cert_path, key_path)`; SAN includes the LAN IP(s), `127.0.0.1`, `localhost`.
-- [ ] Second call reuses the cached files (no regeneration).
-**Verification:**
-- [ ] New `tests/test_tls.py`: SAN assertions + cache-reuse.
-**Dependencies:** None
-**Files:** `src/sestudio/tls.py` (new), `tests/test_tls.py` (new)
+### Phase 3 — Player upgrades + Web↔TV handoff
+
+#### Task 12: Auto-next countdown + volume/speed persistence
+**Description:** Replace silent jump (`PlayerModal.tsx:41-43`) with a 5s "Next: <title> · Cancel"
+overlay. Persist player volume + rate in localStorage; restore on mount and across the persistent
+element's src swaps.
+**Acceptance criteria:**
+- [ ] Countdown shows, cancel works, autoplay-off disables it
+- [ ] Volume/speed survive reload and episode transitions
+**Verification:** build + lint; manual two-episode run.
+**Dependencies:** T8. **Files:** `PlayerModal.tsx` (+ small `playerPrefs.ts`). **Scope:** S
+
+#### Task 13: Handoff — browser → TV
+**Description:** "Cast to TV" button in `PlayerModal` → target picker (reuse `CastModal` internals)
+preloaded with current episode; start cast, seek target to browser position (`dlnaSeek` /
+Chromecast seek), pause+close browser player, register cast queue for autoplay-next continuity.
+**Acceptance criteria:**
+- [ ] Mid-episode handoff resumes on TV within a few seconds of the browser position
+- [ ] Cast queue continues the season after handoff
+**Verification:** build + lint; manual on DLNA + Chromecast.
+**Dependencies:** T9, T10. **Files:** `PlayerModal.tsx`, `CastModal.tsx` (extract picker),
+`castQueue.ts`. **Scope:** M
+
+#### Task 14: Handoff — TV → browser (pull back)
+**Description:** "Watch here" on `CastControls`/`DlnaControls` → read session position, stop cast,
+open `PlayerModal` at that episode+position. Note: DLNA position accuracy varies by renderer —
+verify per-target; degrade to nearest-known position.
+**Acceptance criteria:**
+- [ ] Pull-back opens the browser player at (approx.) the TV position
+- [ ] Works from both pills; cast session cleanly stopped
+**Verification:** build + lint; manual both targets.
+**Dependencies:** T13. **Files:** `CastControls.tsx`, `DlnaControls.tsx`, `App.tsx` (player open
+plumbing), `playbackSession.ts`. **Scope:** M
+
+#### Task 15: Verify native multi-track pass-through (doc-only)
+**Description:** Confirm `DefaultVideoLayout` surfaces audio/subtitle menus when an upstream HLS
+master carries renditions (proxy already rewrites `#EXT-X-MEDIA`, `proxy.py:98-102`). Document in
+README. Side-loaded subtitles (OpenSubtitles + `/api/subtitles`) is **deferred — ask first**.
+**Acceptance:** finding documented. **Dependencies:** None. **Scope:** XS
+
+### Checkpoint 3
+- [ ] Build + lint + pytest green; **rebuild `frontend/dist`**
+- [ ] Handoff both directions demoed; countdown + prefs verified
+- [ ] User approval before Phase 4
+
+---
+
+### Phase 4 — Flexible downloads
+
+#### Task 16: Backend attachment endpoint (MP4 pass-through)
+**Description:** `GET /api/downloads/stream` in `downloads.py`: resolve best provider (reuse
+resolve path), fetch upstream with injected Referer/UA (proxy mechanism), stream back as
+`StreamingResponse` with `Content-Disposition: attachment; filename="<episode>.mp4"`. HLS returns
+501 for now (T18).
+**Acceptance criteria:**
+- [ ] MP4 episode downloads through the browser with the correct filename
+- [ ] Raw upstream URL never appears in the response/headers
+- [ ] pytest route test (pytest-httpx mock) for headers + streaming + 501-on-HLS
+**Verification:** `uv run pytest tests/`; manual download of a real MP4 title.
+**Dependencies:** None (backend-only). **Files:** `downloads.py`, `tests/test_downloads_stream.py`.
 **Scope:** M
 
-#### Task 6: `serve --https` wiring
-**Description:** Add `--https` / `--https-port` to `cli.serve`; when set, call
-`tls.ensure_cert()` and pass `ssl_keyfile`/`ssl_certfile` to `uvicorn.run`. Print the
-`https://<lan-ip>:<port>` URL. Default (no flag) unchanged. Keep the "use Caddy if on PATH"
-note in docs as an optional upgrade.
+#### Task 17: Frontend destination toggle
+**Description:** **Server / This device** toggle in `ConfirmDownloadModal` (default in
+`SettingsPanel`, persisted via existing `/api/settings` — extend `AppConfig` + `SettingsBody`).
+"This device" → `<a download>` navigation to T16's endpoint per selected episode; server path
+unchanged.
 **Acceptance criteria:**
-- [ ] `serve --https` serves over HTTPS on the LAN IP with the generated cert (AC6).
-- [ ] `serve` (no flag) is byte-for-byte the current HTTP behavior (AC8).
-**Verification:**
-- [ ] Manual: `sestudio serve --https`, `curl -k https://<lan-ip>:8443/` returns the SPA.
-- [ ] Manual (real device): Chromecast lists + plays after trusting the cert (AC7).
-**Dependencies:** Task 5
-**Files:** `src/sestudio/cli.py`
-**Scope:** S
+- [ ] Toggle visible, default honored from settings
+- [ ] Device download triggers browser download; server download unchanged (SSE queue)
+- [ ] HLS-only titles show "device download not yet supported" state (501 handled)
+**Verification:** build + lint + pytest (settings roundtrip); manual both destinations.
+**Dependencies:** T16. **Files:** `ConfirmDownloadModal.tsx`, `SettingsPanel.tsx`, `api.ts`,
+`src/sestudio/config.py`, `settings.py`. **Scope:** M
 
-### Checkpoint: HTTPS (after Tasks 5–6)
-- [ ] `test_tls.py` green; `serve` (no flag) unchanged.
-- [ ] `serve --https` reachable over HTTPS on the LAN (manual).
-
-### Phase 4 — Release plumbing & docs (P4 remainder + cleanup)
-
-#### Task 7: CI build+publish job with asset verification
-**Description:** Extend the release flow (`.github/workflows/`, alongside
-`release_please.yml`): on release, `npm ci && npm run build` → `uv build` → verify the wheel
-contains `web/static/index.html` → `uv publish` (token via secret). Add the supported
-platform/arch matrix to the README (bounded by `imageio-ffmpeg` wheels).
+#### Task 18: HLS → device via ffmpeg mux (ASK FIRST — heavy)
+**Description:** For `kind=hls`, spawn bundled ffmpeg (`-c copy` to fragmented MP4/MKV) and stream
+stdout chunked to the client; concurrent-job guard; cancellation on client disconnect.
 **Acceptance criteria:**
-- [ ] Release workflow builds the frontend before the wheel and fails if assets are missing from the wheel.
-- [ ] README documents supported platforms and the `uvx sestudio` install.
-**Verification:**
-- [ ] Workflow YAML lints; a manual `workflow_dispatch` on a test tag builds a wheel containing assets.
-**Dependencies:** Task 2
-**Files:** `.github/workflows/*.yml`, `README.md`
-**Scope:** M
+- [ ] HLS episode downloads as a playable file; server CPU bounded (copy, not transcode)
+- [ ] Client disconnect kills ffmpeg (no zombie processes)
+**Verification:** pytest with a small fixture playlist; manual HLS title; `ps` check after abort.
+**Dependencies:** T16, T17, **explicit user go-ahead** (SPEC ask-first). **Files:** `downloads.py`,
+`media.py`(?), tests. **Scope:** M
 
-#### Task 8: Rename leftover + usage docs
-**Description:** Fix the rename miss `FSTREAM_DL_CONFIG` → `SESTUDIO_CONFIG` in `config.py`.
-Add README sections for `uvx sestudio serve`, `--https` + cert-trust steps, and the
-system-vs-bundled ffmpeg note.
+### Checkpoint 4
+- [ ] Build + lint + pytest green; **rebuild `frontend/dist`**
+- [ ] Both destinations verified; server download path regression-checked
+- [ ] User approval before Phase 5
+
+---
+
+### Phase 5 — Discovery & metadata (TMDB)
+
+#### Task 19: Config plumbing + year preservation
+**Description:** Add `tmdb_api_key` to `AppConfig` + `SettingsBody` (+ `TMDB_API_KEY` env
+override); stop discarding the year in `scraper.py:80` — add `year` to `SeasonCard` (model +
+frontend type).
 **Acceptance criteria:**
-- [ ] `config._config_path()` reads `SESTUDIO_CONFIG`; no `FSTREAM_DL` tokens remain.
-- [ ] README covers uvx install, HTTPS casting, and ffmpeg behavior.
-**Verification:**
-- [ ] `rg -i 'FSTREAM_DL'` returns nothing; `test_config.py` still green (update if it referenced the old env var).
-**Dependencies:** None
-**Files:** `src/sestudio/config.py`, `README.md`, maybe `tests/test_config.py`
-**Scope:** S
+- [ ] Key settable via settings API and env; absent key → feature off, no errors
+- [ ] `SeasonCard.year` populated when fstream provides it; existing tests updated
+**Verification:** `uv run pytest tests/` (scraper fixtures). **Dependencies:** None.
+**Files:** `config.py`, `settings.py`, `scraper.py`, `models.py`, `api.ts`. **Scope:** S
 
-### Checkpoint: Complete
-- [ ] All acceptance criteria met; full test suite green.
-- [ ] `uvx --from <wheel> sestudio serve` works end-to-end in a clean env.
-- [ ] Ready for review + PyPI publish (user-driven).
+#### Task 20: TMDB matcher + detail endpoint + cache
+**Description:** New `/api/tmdb` router (mounted in `app.py:64-69`): `GET /api/tmdb/enrich?title=&year=&kind=`
+→ match via TMDB search (series_name+year, fallback title-only) → detail (synopsis, backdrop,
+cast top-N, genres, rating, trailer key). Two-layer cache: in-memory + JSON file
+(`~/.config/sestudio/tmdb_cache.json`, config.py atomic pattern). HTTP via `http_client.new_client`.
+**Acceptance criteria:**
+- [ ] Known title enriches correctly; unknown returns 404-style empty (frontend falls back)
+- [ ] Second request served from cache (no TMDB hit — assert with pytest-httpx)
+- [ ] No key → 503/disabled response, never a crash
+**Verification:** pytest with mocked TMDB fixtures. **Dependencies:** T19.
+**Files:** new `routers/tmdb.py`, `tmdb.py` (client+matcher), `app.py`, tests. **Scope:** M
 
-## Risks and Mitigations
+#### Task 21: TMDB catalogs (trending / by-genre)
+**Description:** `GET /api/tmdb/trending`, `GET /api/tmdb/genre/{id}` returning poster-card lists
+(TMDB-shaped; playable only after user searches — cards deep-link to a prefilled search).
+**Acceptance criteria:**
+- [ ] Endpoints return cached, paginated card lists; disabled cleanly without key
+**Verification:** pytest mocked. **Dependencies:** T20. **Files:** `routers/tmdb.py`, tests. **Scope:** S
+
+#### Task 22: Frontend enrichment — cards + title detail header
+**Description:** Enrich `ResultsGrid` cards (rating badge, year) via batched enrich calls
+(lazy, after render — skeleton shimmer); `SeasonTree` gains a detail header (backdrop, synopsis,
+cast strip) with graceful fstream-only fallback.
+**Acceptance criteria:**
+- [ ] Cards enrich progressively without layout shift; no key → identical to today
+- [ ] Season modal shows backdrop/synopsis when matched
+**Verification:** build + lint; browser MCP with and without key. **Dependencies:** T20 (+T5).
+**Files:** `ResultsGrid.tsx`, `season/` header component, `api.ts`. **Scope:** M
+
+#### Task 23: Browse rows on home
+**Description:** Trending + by-genre rows on the empty-search home, reusing `MediaRow` (T11);
+row card click → prefills search with the title.
+**Acceptance criteria:**
+- [ ] Home shows Continue Watching / Next Up / Trending / genre rows in that order
+- [ ] Without key: only watch-state rows appear
+**Verification:** build + lint; browser MCP 320px + desktop. **Dependencies:** T21, T22, T11.
+**Files:** `App.tsx`, `MediaRow.tsx`, `api.ts`. **Scope:** S
+
+### Checkpoint 5 (final)
+- [ ] Build + lint + pytest green; **rebuild `frontend/dist`**
+- [ ] Full loop: discover → play → resume → handoff → download (both destinations)
+- [ ] SPEC.md acceptance ("success looks like") walkthrough with user
+
+---
+
+## Risks and mitigations
 
 | Risk | Impact | Mitigation |
-|------|--------|------------|
-| `frontend/dist` drifts from source (stale committed assets) | Med | `dist/` is committed (git-install support); rebuild+commit on frontend changes — CI check/automation in Task 7 keeps it fresh. |
-| `imageio-ffmpeg` lacks a wheel for a target arch | Med | Pin the platform matrix to its published wheels; document unsupported arches; system-ffmpeg fallback still works there. |
-| force-include path/layout wrong → assets silently missing | Med (silent) | AC1 zipfile check in CI is a hard gate; build fails if assets absent. |
-| Self-signed cert trust is manual on the cast device | Low (expected) | Document the trust step (same as Caddy today); not automatable. |
-| `serve --https` regresses the HTTP default | Low | AC8 pins no-flag behavior; keep the flag purely additive. |
+|---|---|---|
+| T8 identity threading breaks play/cast core | High | Isolated task; explicit cast+download manual re-verify; ships alone |
+| DLNA renderer quirks (mute, position accuracy) | Med | Feature-detect per target; client-side mute fallback; degrade pull-back to nearest-known position |
+| ResponsiveModal adoption regressions (5 modals × `useModalBack`) | Med | Adopt incrementally; split T6 if overrunning; back-button behavior in every modal's manual check |
+| HLS device-download server load / zombie ffmpeg | Med | Ask-first task (T18); `-c copy` only; disconnect kills process; concurrency guard |
+| TMDB fuzzy match wrong title | Low | Year-assisted match; frontend fallback; cache is per-title correctable later |
+| SW caching staleness (PWA) | Low | App-shell only, never `/api`; version-keyed cache bust on build |
 
-## Resolved (2026-08-01)
+## Parallelization
 
-1. **Platform matrix:** Linux x86_64, Linux arm64, macOS arm64, Windows x86_64 (all four).
-   Task 7's README matrix lists these; all are covered by `imageio-ffmpeg` wheels.
-2. **Commit `frontend/dist`:** YES — un-gitignore and commit the built assets so
-   `uvx --from git+…` works without a local npm build. `force-include` still maps
-   `frontend/dist` → `sestudio/web/static` in the wheel. Trade-off accepted: build
-   artifacts live in git; rebuild+commit `dist/` on frontend changes (CI can automate).
+- Safe: T16 (backend) alongside any P1 frontend task; T15 anytime; T19-21 (backend) alongside P3 frontend.
+- Sequential: T3→T4→T5→T6 (same files); T8→T9→T10→T11; T13→T14.
+- Contract-first: T16's response shape before T17.
+
+## Open questions (carry into checkpoints, don't block start)
+
+1. Branch or `main`? (branch creation was declined earlier — needs an explicit call)
+2. T18 (HLS mux) go/no-go — decide at Checkpoint 4.
+3. Side-loaded subtitles (OpenSubtitles) — deferred; revisit after Phase 3.
+4. Volume −/＋ nudge and 1% step on Chromecast too (assumed yes for parity) — confirm at T2.

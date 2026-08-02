@@ -1,249 +1,155 @@
-# SPEC: sestudio uvx Packaging & Distribution
+# sestudio — Product Specification
 
-Status: **Draft — awaiting review**
-Supersedes (in this file): the prior "Web UI" and "In-browser Player & Cast" specs, which remain in git history (`git show HEAD:SPEC.md`) and describe already-shipped features. This spec covers only how that product gets packaged and shipped.
+Supersedes (in this file): the prior "uvx Packaging & Distribution" spec, which remains in
+git history (`git log --all -- SPEC.md`) and covered the now-shipped packaging work.
 
-## Objective
+> North-star spec for sestudio's evolution from a single-source fstream downloader into a
+> personal, multi-functionality streaming aggregator. The executable roadmap lives in the phased
+> plan (`~/.claude/plans/binary-leaping-cook.md`); the deep research behind it is in
+> `docs/RESEARCH-aggregator-ux.md`. This file is the durable *what* and *why*; the plan is the *how*.
 
-Make sestudio installable and runnable as a **single self-contained command** via
-`uvx sestudio`, with **zero manual system setup** — the user should not have to
-separately install ffmpeg, ffprobe, Node, or Caddy. Primary distribution channel is
-**PyPI**; `uvx --from git+…` is a best-effort secondary path.
+## 1. Objective
 
-Who it's for: the existing single self-hosted user, now installing on a fresh machine
-with only `uv` present.
+**Build a personal, self-hosted streaming aggregator that unifies discovery, watching, casting, and
+downloading across many content sources — starting from the existing fstream + casting core.**
 
-Success = on a clean machine with no repo checkout and nothing but `uv`:
-- `uvx sestudio serve` starts the web UI **with assets loading** and downloads working.
-- An HLS episode downloads end-to-end **with no system ffmpeg on PATH**.
-- `uvx sestudio serve --https` serves HTTPS with a self-signed cert so casting works
-  without Caddy.
+The product's identity is the **phone → watch → cast → download** loop: a mobile-first web UI, run on
+a home server (LAN / Tailscale), that lets one user find something, play it in the browser or throw
+it to a TV (DLNA / Chromecast / AirPlay) with seamless handoff, and download it either to the server
+or to the device in hand.
 
----
+### Target user
 
-## Tech Stack (packaging-relevant)
+- **Single user, personal self-host** (household at most). Accessed over LAN / Tailscale, primarily
+  from a phone browser (the casting flow starts there), also desktop.
+- **No accounts, no multi-tenancy, no telemetry.** State is local (localStorage now; a single-user
+  server-side JSON store is the only sanctioned future upgrade path).
 
-| Concern | Choice |
-|---|---|
-| Build backend | `hatchling` (existing) + build step that bundles the frontend into the package |
-| Frontend assets | Vite `dist/` **relocated into** `src/sestudio/web/static/`, shipped inside the wheel |
-| ffmpeg | `imageio-ffmpeg` pip wheel (**truly bundles** a static ffmpeg per-platform, offline-verified; ~77 MB installed), injected via yt-dlp `--ffmpeg-location`. ffprobe not needed for HLS→mp4 (verified). |
-| yt-dlp | already a dependency; its console script is on PATH inside the uvx venv (invoked via `shutil.which("yt-dlp")`) |
-| HTTPS / TLS | self-signed cert generated at startup via the existing `cryptography` dep; served by uvicorn `ssl_keyfile`/`ssl_certfile` |
-| Publish | PyPI (built wheel with pre-built frontend); git-based `uvx --from` secondary |
+### Success looks like
 
-New runtime dep: `imageio-ffmpeg`. No new dep for TLS (`cryptography` already present).
+- Open on a phone → resume what you were watching → cast it to the TV at the same position → later
+  pull it back to the phone — all without friction.
+- Search a title → see rich metadata → play, cast, or download it (to server or device).
+- Everything works at 320px width and installs as a PWA.
 
----
+## 2. Feature set (phased)
 
-## Commands
+The feature set *is* the roadmap. Each phase ends with a frontend rebuild for local testing and a
+pause for approval. Full acceptance criteria live in the plan; summary:
 
-Run (end users):
-```bash
-uvx sestudio serve [--host 0.0.0.0] [--port 8080] [--https] [--https-port 8443]
-uvx --from git+https://github.com/DSestu/sestudio sestudio serve   # secondary
-```
-
-Build & publish (maintainer):
-```bash
-npm --prefix frontend ci
-npm --prefix frontend run build          # → frontend/dist
-# build hook copies frontend/dist → src/sestudio/web/static/ (see build hook below)
-uv build                                  # produces sdist + wheel with static assets
-uvx --from ./dist/sestudio-*.whl sestudio serve   # smoke test the built wheel
-uv publish                                # → PyPI
-```
-
-Verify (maintainer):
-```bash
-uv run pytest tests/ -q
-uv run ruff check . && uv run ruff format --check .
-python -m zipfile -l dist/sestudio-*.whl | grep web/static/index.html   # assets present
-```
-
----
-
-## Core Changes & Acceptance Criteria
-
-### P1 — Bundle frontend assets into the package
-The UI must load when installed, with no repo `frontend/` sibling.
-- Relocate built assets to `src/sestudio/web/static/` (via build hook; see below).
-- `web/app.py` resolves the dist dir **relative to the module**:
-  `Path(__file__).parent / "static"` — not `_REPO_ROOT / "frontend" / "dist"`.
-- A hatch build step (`[tool.hatch.build.targets.wheel.force-include]` or a custom build
-  hook) ensures `web/static/**` lands in the wheel.
-- **AC1**: `python -m zipfile -l` on the built wheel lists `sestudio/web/static/index.html`
-  and `sestudio/web/static/assets/*`.
-- **AC2**: installing the wheel in a clean venv (no repo checkout) and running `serve`
-  returns the SPA at `/` with assets loading (HTTP 200, no 404 on `/assets/*`).
-
-### P2 — Ship ffmpeg, no system install required
-- Add `imageio-ffmpeg` to `dependencies`. Its per-platform wheel bundles a static ffmpeg
-  (offline-verified: no runtime download). ffprobe is **not** required for the HLS→mp4
-  path (empirically verified — yt-dlp's `hlsnative` downloader muxes via ffmpeg alone).
-- A resolver (`media.ffmpeg_location()`) returns the directory containing the ffmpeg
-  binary; `downloader.download()` adds `--ffmpeg-location <dir>` to the yt-dlp command.
-- **Prefer a real system install**: if `ffmpeg` is already on PATH, use it (fuller codec
-  set, plus a real ffprobe) and skip the bundled binary.
-- **AC3**: with no system ffmpeg on PATH, an HLS episode downloads and muxes to mp4
-  successfully using the bundled binary.
-- **AC4**: with system ffmpeg present, the bundled binary is **not** used (verifiable:
-  `--ffmpeg-location` omitted so yt-dlp uses PATH).
-
-### P3 — Self-contained HTTPS for casting (no Caddy)
-- **HTTPS is the default** (decision, 2026-08-01): `serve` generates (once, cached under
-  the config dir) a self-signed cert whose SubjectAltName includes the resolved LAN IP
-  (and `127.0.0.1`/`localhost`), using `cryptography`, then runs uvicorn with
-  `ssl_keyfile`/`ssl_certfile` on port `8443`. `--no-https` opts into plain HTTP.
-- Caddy is dropped from the start scripts; the built-in HTTPS replaces it.
-- **AC6**: `serve` (default) serves the UI over `https://<lan-ip>:8443` with the generated
-  cert; `--no-https` serves plain HTTP.
-- **AC7**: after trusting the generated cert on the casting device, Chromecast lists and
-  plays (the cert-trust step is documented; trust itself is manual).
-- **AC8**: `--no-https` serves plain HTTP (for older DLNA renderers / the frontend dev
-  proxy).
-
-### P4 — Distribution metadata & release plumbing
-- Add a `LICENSE` file and `license` metadata (the `[project.urls]` already points at one).
-- Remove/repurpose the stray `main.py` "Hello from sestudio!" stub — it is not an entry
-  point.
-- CI release job: `npm build` → build hook → `uv build` → `uv publish`, so the published
-  wheel always contains fresh pre-built assets.
-- Declare the **supported platform/arch matrix** in the README, bounded by which platforms
-  `imageio-ffmpeg` ships wheels for.
-- **AC9**: `uvx sestudio` (from the published wheel) runs the CLI with no manual system
-  deps.
-- **AC10**: `pyproject.toml` has a valid `license`, a `LICENSE` file exists, and the wheel
-  metadata is complete (`uv build` emits no metadata warnings).
-
-### Non-goals
-No Docker packaging changes · no Windows installer · no auto-updating · no vendoring the
-Caddy binary · no change to provider/scraper/cast logic beyond the ffmpeg-location and
-static-path wiring.
-
----
-
-## Project Structure (new / changed)
-
-```
-pyproject.toml                       # CHANGED  + imageio-ffmpeg dep, license, build hook/force-include
-LICENSE                              # NEW
-src/sestudio/
-  web/
-    app.py                           # CHANGED  static dir = __file__.parent/"static"
-    static/                          # NEW (build artifact)  bundled frontend dist, shipped in wheel
-  media.py                           # NEW  resolve ffmpeg dir (system-preferred, imageio-ffmpeg fallback)
-  tls.py                             # NEW  generate/cache self-signed cert with LAN-IP SAN
-  downloader.py                      # CHANGED  add --ffmpeg-location from media.py
-  cli.py                             # CHANGED  serve gains --https/--https-port; wires tls.py + uvicorn ssl args
-main.py                              # REMOVED  stray stub
-frontend/dist/                       # build input, copied into web/static by the build hook
-tests/
-  test_media.py                      # NEW  system-preferred vs bundled fallback
-  test_tls.py                        # NEW  cert has expected SANs; cached on second call
-  test_packaging.py                  # NEW  built wheel contains web/static assets
-```
-
-Build hook: a hatchling build hook (or `force-include = { "src/sestudio/web/static" = "sestudio/web/static" }`)
-copies `frontend/dist` → `src/sestudio/web/static` at build time. The frontend build
-(`npm run build`) runs **before** `uv build` (in CI and documented for local builds); the
-Python build does not invoke npm.
-
----
-
-## Code Style
-
-- **Match the existing codebase.** Python: `from __future__ import annotations`, full type
-  hints, `logging` not `print`, typed exceptions.
-- `media.py` and `tls.py` are small, pure, testable helpers — no global mutable state; the
-  cert path and ffmpeg dir are computed and returned, cached on disk (not in module
-  globals). Example shape:
-
-```python
-def ffmpeg_location() -> str | None:
-    """Directory holding ffmpeg for yt-dlp's --ffmpeg-location.
-
-    Returns None when a system install is already on PATH (let yt-dlp use it —
-    gives a real ffprobe and fuller codecs).
-    """
-    if shutil.which("ffmpeg"):
-        return None
-    import imageio_ffmpeg
-    return str(Path(imageio_ffmpeg.get_ffmpeg_exe()).parent)
-```
-
-- No new comments on unchanged code; comment *why* (e.g. the system-preferred rationale),
-  not *what*.
-
----
-
-## Testing Strategy
-
-- **Unit (pytest)** — the new logic is small and deterministic:
-  - `media.ffmpeg_location()` returns `None` when a system ffmpeg is stubbed onto PATH,
-    and a directory (mocked `imageio_ffmpeg`) otherwise (AC3/AC4).
-  - `tls` cert generation: SAN includes the passed IP + `127.0.0.1`/`localhost`; a second
-    call reuses the cached cert (AC6).
-  - Packaging: build the wheel in a tmp dir and assert `sestudio/web/static/index.html`
-    is a member (AC1). (Or assert the module-relative path resolves inside site-packages.)
-- **Manual / smoke (clean environment, real network/devices)**:
-  - `uvx --from ./dist/*.whl sestudio serve` → UI + assets load (AC2, AC9).
-  - HLS download with system ffmpeg removed from PATH (AC3).
-  - `serve --https` + Chromecast after cert trust (AC6/AC7).
-- Keep existing `tests/` layout; no framework changes.
-
----
-
-## Boundaries
-
-| Always | Ask first | Never |
+| Phase | Scope | Core acceptance |
 |---|---|---|
-| Prefer a system ffmpeg when present; fall back to bundled | Add any runtime dep beyond `imageio-ffmpeg` | Vendor/commit large binaries into git |
-| Resolve the static dir relative to the module (`__file__`) | Change the default bind host or default port | Ship an sdist/wheel whose UI silently 404s (assets must be verified present) |
-| Run `npm build` before `uv build` so assets are fresh | Commit built `web/static` into git vs. build-hook-only | Invoke `npm` from the Python build backend |
-| Cache the self-signed cert; regenerate only if missing/expired | Publish to PyPI (needs the account/token) | Enable HTTPS by default silently, or weaken the existing HTTP default |
-| Verify wheel contents in CI before publish | Remove `main.py` | Commit without explicit user consent (repo git rule) |
+| **1. Foundation & polish** | New "cinematic dark" daisyUI theme (semantic tokens only), a11y (keyboard, labels, states), split `SeasonTree`, **mobile-first responsive (320px, bottom-sheets, ≥44px) + PWA** | Build/lint clean; no raw palette utilities; installable; no horizontal scroll on mobile |
+| **2. Watch-state & library** | localStorage store (continue-watching, next-up, resume, watched flags), thread series/season identity to the player, **unified playback session** | Play → reload → resumes and appears in Continue Watching; ≥90% marks watched |
+| **3. Player + Web↔TV handoff** | Auto-next countdown, remember volume/speed, native track menus; **cast-from-player at current position + pull-back-to-browser** | Handoff resumes at the same position both directions |
+| **4. Flexible downloads** | Destination choice: **server** (as today) or **this device** via server-forwarding (MP4 pass-through; HLS ffmpeg-mux) | Both destinations work; server path unchanged |
+| **5. Discovery & metadata** | TMDB enrichment (posters, synopsis, cast, rating), title detail header, browse rows (trending/genre); graceful fallback without a key | Enriched cards + trending; degrades cleanly when no key |
 
----
+**Guiding architecture** (from the research): sources should trend toward a **uniform provider
+interface** (Stremio-style: catalog / meta / stream / subtitles) so new sources are additive. Not a
+near-term phase, but new code should not entrench fstream-specific assumptions above the resolver.
 
-## Success Criteria (testable)
+## 3. Commands
 
-1. `uv build` yields a wheel containing `sestudio/web/static/index.html` + `assets/**` (AC1).
-2. In a clean env with only `uv`, `uvx --from <wheel> sestudio serve` serves the UI with
-   assets loading (AC2, AC9).
-3. An HLS episode downloads and merges to mp4 with **no** system ffmpeg on PATH (AC3).
-4. With system ffmpeg present, bundled binaries are not used (AC4).
-5. `serve --https` serves HTTPS with a self-signed cert whose SAN includes the LAN IP (AC6).
-6. `serve` (no flag) behaves exactly as today (AC8).
-7. `LICENSE` exists and metadata is complete (AC10).
+**Backend / app (Python, `uv` + hatchling):**
+- Run web UI (dev, editable): `uv run sestudio serve` — serves the built `frontend/dist/` if present.
+- Run web UI (isolated, like a user): `./start.sh` (`uvx --with-editable . sestudio serve`).
+- CLI download: `uv run sestudio download <url> [-e 1,3,5-8] [--lang vf|vostfr] [-o DIR]`.
+- Tests: `uv run pytest tests/` (or `./tests.sh`).
+- Lint/format: `uv run ruff check` / `uv run ruff format`.
+- Pre-commit (all files): `./precommit.sh` (`uv run pre-commit run --all-files`).
 
----
+**Frontend (`frontend/`, Node 18+):**
+- Dev server (HMR, cross-origin to `/api`): `npm run dev`.
+- **Build (required after every phase):** `npm run build` (`tsc -b && vite build` → `frontend/dist/`).
+- Lint: `npm run lint`.
 
-## Resolved decisions (from empirical checks, 2026-08-01)
+**Wheel packaging:** `npm --prefix frontend run build` must run before `uv build` — the wheel
+force-includes `frontend/dist` at `sestudio/web/static` so the installed app serves the UI.
 
-- **Project name → `sestudio`** (Sestu + studio). Chosen over the old `fstream-dl` because
-  the project is heading toward a general multi-source video aggregator, not
-  fstream-specific. PyPI name confirmed available (2026-08-01). **Full rename executed
-  2026-08-01**: distribution name + console command (`pyproject.toml`), the four GitHub URLs
-  (→ `DSestu/sestudio` — the GitHub repo must be renamed to match), and the import module
-  `src/fstream_dl/` → `src/sestudio/` with all `from fstream_dl …` updated across the code
-  and tests. All 55 tests pass; `sestudio` console script verified. Two follow-ups noted:
-  the config dir moved to `~/.config/sestudio/` (old config not migrated — fine pre-release),
-  and PyPI publishing is the user's to do.
-- **ffmpeg packaging → `imageio-ffmpeg`.** Verified `static-ffmpeg` does *not* bundle its
-  binaries (36 KB of pure Python; downloads platform zips from a third-party GitHub repo at
-  runtime) → rejected for breaking zero-setup/offline. `imageio-ffmpeg` genuinely bundles a
-  static ffmpeg in its per-platform wheel (77 MB, works offline).
-- **ffprobe not required.** Verified yt-dlp's `hlsnative` HLS→mp4 download muxes via ffmpeg
-  alone with no ffprobe on PATH and no ffprobe request — so `imageio-ffmpeg` (ffmpeg-only)
-  is sufficient for the download path.
+## 4. Project structure
 
-## Open Questions
+```
+src/sestudio/
+  cli.py                 # fire-based CLI entrypoint (sestudio = sestudio.cli:main)
+  web/
+    app.py               # FastAPI app factory; routers mounted under /api; SPA fallback
+    routers: search, seasons, downloads, settings, stream, cast
+    static/              # built frontend, bundled into the wheel
+  config.py              # ~/.config/sestudio/config.json — atomic JSON persistence pattern
+  (scraper, providers, proxy, worker, http_client, models …)
+frontend/src/
+  App.tsx                # top-level composition
+  api.ts                 # typed /api client (single source of API types)
+  components/            # presentational + modal components (daisyUI)
+    season/              # (Phase 1) split-out SeasonTree pieces
+  useProviderSources.ts  # per-host probe/resolve hook
+  cast.ts, castQueue.ts, dlnaControl.ts   # casting + queue + external stores
+  watchState.ts          # (Phase 2) localStorage watch-state store
+  index.css              # Tailwind v4 + daisyUI theme (@plugin)
+tests/                   # pytest; fixtures/, providers/; 12 test modules, ~60 tests
+docs/                    # research + design notes
+```
 
-1. **Platform matrix.** Which OS/arch combos must be supported at launch (Linux x86_64,
-   Linux arm64, macOS arm64, Windows x86_64)? Bounded by `imageio-ffmpeg` wheel
-   availability (it publishes wheels for the common desktop/server targets).
-2. **Commit built assets or build-hook-only?** Committing `web/static` makes
-   `uvx --from git+…` work without npm; a build-hook keeps the repo clean but makes
-   git-install require a build step. Recommendation: build-hook + CI, document git-install
-   caveat.
+**Persistence:** no database. Server state = the single JSON config file (atomic write via
+`config.py`); any new single-user server state follows that exact pattern. Client state = localStorage
+behind a small isolated interface. Download jobs and cast sessions are in-memory (lost on restart, by
+design).
+
+## 5. Code style
+
+**Python:** ruff (lint + format) is the authority — match it. Type hints on public functions;
+dataclasses for config, Pydantic models for API bodies (keep the persisted dataclass shape decoupled
+from the API model, as `config.py` / `settings.py` already do). Keep the raw upstream stream URL
+server-side only (HMAC-sealed proxy tokens) — never leak it to the client. New endpoints mount under
+`/api` via a router, registered in `app.py`.
+
+**Frontend:** TypeScript, function components + hooks. **daisyUI semantic tokens only**
+(`primary`, `secondary`, `base-*`, `error`) — no raw Tailwind palette utilities (`violet-*`,
+`blue-*`, …) and no inline hex. Keep components < ~200 lines (split when larger). `api.ts` is the
+single home for API types and fetch calls. Match existing idioms: external stores for cross-component
+live state (cast/dlna), refs to keep callbacks fresh across a persistent player element, the
+`useModalBack` history pattern for every modal.
+
+**Accessibility (WCAG 2.1 AA) is non-negotiable:** every interactive element keyboard-operable and
+labeled; visible focus; contrast ≥ 4.5:1; never color as the sole signal; loading/empty/error states
+on every async surface; skeletons over spinners for content.
+
+## 6. Testing strategy
+
+- **Backend:** pytest (`tests/`), with `pytest-httpx` for mocking upstream HTTP. New backend behavior
+  (Phase 4 download-forwarding, Phase 5 TMDB matcher/cache) ships with tests. The existing ~60 tests
+  must stay green after every change.
+- **Frontend:** `npm run build` (tsc typecheck + vite) and `npm run lint` must pass each phase; no
+  test runner is configured today (add one only if a phase's logic warrants it — e.g. the watch-state
+  store).
+- **Manual / integration:** drive the running app via the browser (Chrome MCP) at **320**/768/1024/1440
+  each phase; Tab-through keyboard check; and explicitly re-verify the **cast + download core loop**
+  after any change that touches `PlayableEpisode` / `playlistFrom` / the proxy.
+- **Cadence:** rebuild `frontend/dist` at the end of every phase so `uv run sestudio serve` reflects
+  changes for local testing before approval.
+
+## 7. Boundaries
+
+**Always do**
+- Rebuild the frontend (`npm run build`) at the end of each phase before pausing for approval.
+- Keep the **cast + download core loop working** (DLNA / Chromecast / AirPlay playback and existing
+  server-side downloads are regression-critical) — re-verify after every change that could touch it.
+- Preserve accessibility, semantic-token, and mobile-first standards on all new UI.
+- Keep upstream stream URLs sealed server-side.
+
+**Ask first**
+- Before **committing or pushing** anything — stage changes, show the diff, wait for explicit consent.
+  A prior "commit" does not authorize later commits. Same for branch creation, force-push, resets.
+- Before widening scope beyond the current phase, or before the heavy HLS-mux sub-task in Phase 4.
+- Before introducing any new runtime dependency, external service, or a server-side persistence store
+  (the localStorage → server-JSON upgrade).
+
+**Never do**
+- **No telemetry / no phoning home.** No user data leaves the server except to the explicitly
+  configured source (fstream) and metadata provider (TMDB, with the user's own key).
+- **Do not bundle/entrench content sources as the product's core.** Treat sources as
+  pluggable/user-added and keep the architecture source-agnostic above the resolver (legal/ToS
+  posture) — don't grow the scraper set as a selling point.
+- No multi-user/auth/tenancy assumptions — this is single-user by design.
+- No raw hex or Tailwind palette utilities in the UI; no inaccessible interactive elements.

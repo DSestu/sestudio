@@ -161,6 +161,12 @@ export function castSetVolume(level: number) {
   controller?.setVolumeLevel()
 }
 
+/** Nudge the receiver volume by *delta* (e.g. ±0.05), clamped to 0..1. */
+export function castVolumeBy(delta: number) {
+  if (!player) return
+  castSetVolume(Math.max(0, Math.min(1, (player.volumeLevel ?? 0) + delta)))
+}
+
 /** Stop playback and end the session (disconnects the receiver). */
 export function castStop() {
   clearCastQueue()

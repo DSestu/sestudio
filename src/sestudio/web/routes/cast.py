@@ -127,6 +127,7 @@ async def dlna_status(request: Request) -> dict[str, Any]:
             "position": dmr.media_position or 0,
             "duration": dmr.media_duration or 0,
             "volume": dmr.volume_level if dmr.volume_level is not None else 1.0,
+            "muted": bool(dmr.is_volume_muted),
             "can_pause": bool(dmr.can_pause),
         }
     except Exception as exc:  # noqa: BLE001 — renderer gone/unreachable
@@ -140,6 +141,10 @@ class DlnaSeekRequest(BaseModel):
 
 class DlnaVolumeRequest(BaseModel):
     level: float  # 0..1
+
+
+class DlnaMuteRequest(BaseModel):
+    muted: bool
 
 
 @router.post("/cast/dlna/pause")
@@ -166,6 +171,12 @@ async def dlna_seek(body: DlnaSeekRequest, request: Request) -> dict[str, Any]:
 @router.post("/cast/dlna/volume")
 async def dlna_volume(body: DlnaVolumeRequest, request: Request) -> dict[str, Any]:
     await _active_dmr(request).async_set_volume_level(max(0.0, min(1.0, body.level)))
+    return {"status": "ok"}
+
+
+@router.post("/cast/dlna/mute")
+async def dlna_mute(body: DlnaMuteRequest, request: Request) -> dict[str, Any]:
+    await _active_dmr(request).async_mute_volume(body.muted)
     return {"status": "ok"}
 
 

@@ -13,9 +13,10 @@ export interface DlnaState {
   position: number
   duration: number
   volume: number
+  muted: boolean
 }
 
-const EMPTY: DlnaState = { connected: false, title: '', isPaused: false, position: 0, duration: 0, volume: 1 }
+const EMPTY: DlnaState = { connected: false, title: '', isPaused: false, position: 0, duration: 0, volume: 1, muted: false }
 let snapshot: DlnaState = EMPTY
 const listeners = new Set<() => void>()
 
@@ -56,6 +57,7 @@ export async function refreshDlna(): Promise<void> {
       position: Number(d.position) || 0,
       duration: Number(d.duration) || 0,
       volume: typeof d.volume === 'number' ? d.volume : 1,
+      muted: Boolean(d.muted),
     })
     startPolling()
     // End-of-media detection for autoplay: the renderer reports STOPPED /
@@ -91,7 +93,13 @@ export const dlnaPause = () => post('pause')
 export const dlnaResume = () => post('resume')
 export const dlnaSeek = (seconds: number) => post('seek', { seconds })
 export const dlnaSetVolume = (level: number) => post('volume', { level })
+export const dlnaToggleMute = () => post('mute', { muted: !snapshot.muted })
 export const dlnaStop = () => { clearCastQueue(); return post('stop') }
+
+/** Nudge the renderer volume by *delta* (e.g. ±0.05), clamped to 0..1. */
+export function dlnaVolumeBy(delta: number) {
+  return dlnaSetVolume(Math.max(0, Math.min(1, snapshot.volume + delta)))
+}
 
 export function dlnaSeekBy(delta: number) {
   const max = snapshot.duration || Number.MAX_SAFE_INTEGER
