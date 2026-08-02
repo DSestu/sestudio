@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, DownloadDestination, DownloadItem, DownloadJob, SeasonCard } from './api'
-import { checkDownloads, getSeason, postDownloads } from './api'
+import type {
+  AppSettings, DownloadDestination, DownloadItem, DownloadJob, SeasonCard, TrendingCard,
+} from './api'
+import { checkDownloads, getSeason, getTrending, postDownloads } from './api'
 import { downloadToDevice } from './deviceDownloads'
 import { loadCast } from './cast'
 import { refreshDlna } from './dlnaControl'
@@ -40,13 +42,17 @@ function minutesLeft(position: number, duration: number): string {
 export default function App() {
   const [results, setResults] = useState<SeasonCard[]>([])
   const [lastQuery, setLastQuery] = useState('')
+  // Set when a browse-row card is clicked, to drive the search box.
+  const [searchTerm, setSearchTerm] = useState<string | null>(null)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<SeasonCard | null>(null)
   // Library deep-link: episode to auto-play and language override when a title
   // is opened from Continue Watching / Next Up rather than from search.
   const [autoPlayEpisode, setAutoPlayEpisode] = useState<number | undefined>(undefined)
   const [openLang, setOpenLang] = useState<string | null>(null)
-  const [settings, setSettings] = useState<AppSettings>({ output_root: '.', lang: 'vf', download_destination: 'server' })
+  const [settings, setSettings] = useState<AppSettings>({
+    output_root: '.', lang: 'vf', download_destination: 'server', tmdb_configured: false,
+  })
   const [downloadTick, setDownloadTick] = useState(0)
   const [bulkLoading, setBulkLoading] = useState(false)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
@@ -61,6 +67,17 @@ export default function App() {
   // their own "next up" suggestion.
   const watch = useWatchState()
   const pullback = usePullback()
+
+  // Trending row (home screen only) — requires a TMDB key.
+  const [fetchedTrending, setFetchedTrending] = useState<TrendingCard[]>([])
+  useEffect(() => {
+    if (!settings.tmdb_configured) return
+    let cancelled = false
+    getTrending().then(t => { if (!cancelled) setFetchedTrending(t) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [settings.tmdb_configured])
+  // Derived, so turning the key off hides the row without a state write.
+  const trending = settings.tmdb_configured ? fetchedTrending : []
   const cw = continueWatching(watch)
   const cwSeries = new Set(cw.map(e => e.series))
   const nu = nextUp(watch).filter(s => !cwSeries.has(s.series))
@@ -163,10 +180,10 @@ export default function App() {
         <SettingsPanel onChange={setSettings} />
       </div>
 
-      <SearchBar onResults={handleSearchResults} />
+      <SearchBar onResults={handleSearchResults} term={searchTerm} />
 
       {/* Library rows — shown on the home screen (no active search) */}
-      {lastQuery === '' && (cw.length > 0 || nu.length > 0) && (
+      {lastQuery === '' && (cw.length > 0 || nu.length > 0 || trending.length > 0) && (
         <div className="flex flex-col gap-6">
           <MediaRow
             title="Continue Watching"
@@ -180,6 +197,18 @@ export default function App() {
               progress: e.duration > 0 ? e.position / e.duration : undefined,
               onClick: () => openFromLibrary(cardFor(e.series, e.season, e.poster_url, e.page_url), e.number, e.lang),
               onRemove: () => removeEntry(e),
+            }))}
+          />
+          {/* TMDB titles aren't playable directly — clicking runs a search. */}
+          <MediaRow
+            title="Trending this week"
+            items={trending.map(t => ({
+              key: `tr-${t.tmdb_id}`,
+              title: t.title,
+              subtitle: [t.year || null, t.rating ? `★ ${t.rating.toFixed(1)}` : null]
+                .filter(Boolean).join(' · '),
+              poster_url: t.poster_url,
+              onClick: () => setSearchTerm(t.title),
             }))}
           />
           <MediaRow
@@ -238,6 +267,7 @@ export default function App() {
           checkedIds={checkedIds}
           onToggle={toggleCard}
           onOpenDetail={setSelected}
+          enrich={settings.tmdb_configured}
         />
       )}
 
@@ -283,6 +313,7 @@ export default function App() {
           lang={openLang ?? settings.lang}
           outputRoot={settings.output_root}
           downloadDestination={settings.download_destination}
+          enrich={settings.tmdb_configured}
           onClose={closeDetail}
           onJobsCreated={() => setDownloadTick(t => t + 1)}
           autoPlayEpisode={autoPlayEpisode}

@@ -18,6 +18,8 @@ class AppConfig:
     # Web UI default download destination: "server" (job queue on the server's
     # disk) or "device" (forwarded to the browser as a file download).
     download_destination: str = "server"
+    # Optional TMDB key enabling metadata enrichment; empty disables the feature.
+    tmdb_api_key: str = ""
 
 
 def _config_path() -> Path:
@@ -35,10 +37,16 @@ def load_config() -> AppConfig:
             output_root=str(data.get("output_root", ".")),
             lang=str(data.get("lang", "vf")),
             download_destination=str(data.get("download_destination", "server")),
+            tmdb_api_key=str(data.get("tmdb_api_key", "")),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)
         return AppConfig()
+
+
+def tmdb_key() -> str:
+    """TMDB API key, from the environment first so it needn't be stored on disk."""
+    return os.environ.get("TMDB_API_KEY") or load_config().tmdb_api_key
 
 
 def save_config(cfg: AppConfig) -> None:

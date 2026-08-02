@@ -7,6 +7,8 @@ export interface SeasonCard {
   page_url: string
   is_film: boolean
   is_anime: boolean
+  /** Release year parsed from the search title, 0 when absent. */
+  year?: number
 }
 
 export interface EpisodeDetail {
@@ -30,6 +32,61 @@ export interface AppSettings {
   output_root: string
   lang: string
   download_destination: DownloadDestination
+  /** Whether a TMDB key is set — the key itself is never sent to the client. */
+  tmdb_configured: boolean
+  /** Write-only: sent when saving a new key, never returned. */
+  tmdb_api_key?: string
+}
+
+export interface TmdbCast {
+  name: string
+  character: string
+  profile_url: string
+}
+
+export interface TmdbMeta {
+  tmdb_id: number
+  kind: string
+  title: string
+  overview: string
+  year: number
+  rating: number
+  poster_url: string
+  backdrop_url: string
+  genres: string[]
+  cast: TmdbCast[]
+  trailer_key: string
+}
+
+export interface TrendingCard {
+  tmdb_id: number
+  kind: string
+  title: string
+  year: number
+  rating: number
+  poster_url: string
+}
+
+/** Metadata for a title, or null when TMDB has no match / is disabled. */
+export async function enrichTitle(
+  title: string,
+  year: number,
+  isFilm: boolean,
+): Promise<TmdbMeta | null> {
+  const params = new URLSearchParams({
+    title,
+    year: String(year || 0),
+    is_film: String(isFilm),
+  })
+  const res = await fetch(`${BASE}/tmdb/enrich?${params}`)
+  if (!res.ok) return null  // 503 = no key configured; enrichment is optional
+  return res.json()
+}
+
+export async function getTrending(): Promise<TrendingCard[]> {
+  const res = await fetch(`${BASE}/tmdb/trending`)
+  if (!res.ok) return []
+  return res.json()
 }
 
 export interface DownloadItem {

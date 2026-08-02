@@ -35,19 +35,32 @@
 ## Phase 4 — Flexible downloads
 - [x] T16: Backend GET /api/downloads/stream — MP4 attachment pass-through + 5 tests (M) — token-gated (reuses proxy HMAC), RFC 6266 filename, 501 on HLS, 502 on upstream error
 - [x] T17: Destination toggle (Server / This device) + settings default (M) — download_destination in AppConfig/SettingsBody; toggle in ConfirmDownloadModal; sequential <a download>; HLS-only items reported
-- [ ] T18: HLS → device via ffmpeg mux ⚠ ask-first (M) — **pending go/no-go**
-- [ ] **Checkpoint 4**: build/lint/pytest green ✓ (67) · dist rebuilt ✓ · endpoint verified live (403/settings/route) ✓ · **real MP4 download: verify manually** · T18 decision · approval
+- [x] T18: ~~HLS → device via ffmpeg mux~~ **superseded** — the streaming remux was
+      wrong (browser committed to the download before the server knew it could deliver,
+      no progress possible, and the bundled ffmpeg segfaults on mpegts here). HLS device
+      downloads now run as a normal server job → `/api/downloads/{id}/file`.
+- [x] **Checkpoint 4**: green (83) · dist rebuilt · verified working by user
 
-## Phase 5 — Discovery & metadata (TMDB)
-- [ ] T19: tmdb_api_key config + stop discarding year (scraper.py:80) (S)
-- [ ] T20: /api/tmdb enrich — matcher + detail + 2-layer cache + tests (M)
-- [ ] T21: /api/tmdb trending + genre catalogs (S)
-- [ ] T22: Card enrichment + season detail header (backdrop/synopsis/cast) (M)
-- [ ] T23: Trending/genre browse rows on home (S)
-- [ ] **Checkpoint 5 (final)**: green · rebuild · full-loop walkthrough vs SPEC · done
+## Phase 5 — Discovery & metadata (TMDB) — built, **hidden pending a key**
+- [x] T19: tmdb_api_key config + stop discarding year (scraper.py:80) (S) — key masked in
+      the API (`tmdb_configured` flag only); year survives `Blade Runner 2049 (2017)`
+- [x] T20: /api/tmdb enrich — matcher + detail + 2-layer cache + 7 tests (M) — retries
+      without the year when a search misses; TLS-verifying client (unlike the scraper's)
+- [x] T21: /api/tmdb trending (S)
+- [x] T22: Card enrichment (rating/year/poster) + season TitleHeader (backdrop/synopsis/
+      cast/trailer) (M)
+- [x] T23: Trending row on home, deep-linking into a prefilled search (S)
+- [x] **Checkpoint 5**: green (94) · dist rebuilt · **feature hidden at user's request** —
+      no settings field; everything is gated on `tmdb_configured`, so it stays invisible
+      until `TMDB_API_KEY` is set in the environment
 
 ## Open questions
-- [ ] Branch vs main (branch creation declined earlier — needs explicit call)
-- [ ] T18 HLS mux go/no-go (decide at Checkpoint 4)
-- [ ] Side-loaded subtitles (deferred; revisit post-Phase 3)
-- [ ] Chromecast volume nudge/1% parity (assumed yes; confirm at T2)
+- [x] Branch vs main → working on `refactor/rework_the_interface`, pushed
+- [x] T18 HLS mux → superseded by the job-based approach
+- [ ] Side-loaded subtitles (OpenSubtitles + /api/subtitles) — still deferred, ask-first
+- [x] Chromecast volume nudge/1% parity → applied to both controllers
+
+## Verification still owed by the user (needs real devices)
+- [ ] Mobile bottom-sheets + PWA install on a phone (WM blocked resize emulation here)
+- [ ] Web↔TV handoff both directions on a real Chromecast / DLNA renderer
+- [ ] Resume-after-cast (cast progress landing in the watch store)

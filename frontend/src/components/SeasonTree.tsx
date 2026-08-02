@@ -9,7 +9,9 @@ import { useModalBack } from '../useModalBack'
 import type { PlayableEpisode } from '../providers'
 import { useWatchState, watchKey } from '../watchState'
 import ResponsiveModal from './ResponsiveModal'
+import { useTmdb } from '../useTmdb'
 import { useSeasonDetail } from './season/useSeasonDetail'
+import TitleHeader from './season/TitleHeader'
 import EpisodeRow from './season/EpisodeRow'
 import LangSwitcher from './season/LangSwitcher'
 
@@ -18,6 +20,8 @@ interface Props {
   lang: string
   outputRoot: string
   downloadDestination: DownloadDestination
+  /** Show TMDB backdrop/synopsis/cast (when a key is configured). */
+  enrich?: boolean
   onClose: () => void
   onJobsCreated: () => void
   /** Open the player on this episode number as soon as the season loads. */
@@ -33,7 +37,7 @@ function allChecked(eps: EpisodeDetail[], checked: Set<number>): CheckState {
   return 'partial'
 }
 
-export default function SeasonTree({ card, lang, outputRoot, downloadDestination, onClose, onJobsCreated, autoPlayEpisode }: Props) {
+export default function SeasonTree({ card, lang, outputRoot, downloadDestination, onClose, onJobsCreated, autoPlayEpisode, enrich }: Props) {
   useModalBack(true, onClose)
   const { detail, loading, error, setError, activeLang, setActiveLang } = useSeasonDetail(card.page_url, lang)
   const [checked, setChecked] = useState<Set<number>>(new Set())
@@ -165,6 +169,7 @@ export default function SeasonTree({ card, lang, outputRoot, downloadDestination
 
 
   const seasonState = detail ? allChecked(detail.episodes, checked) : 'none'
+  const meta = useTmdb(card.series_name, card.year ?? 0, card.is_film, !!enrich)
   const watch = useWatchState()
   const isWatched = (epNumber: number) =>
     !!detail && !!watch[watchKey(card.series_name, detail.is_film ? 0 : detail.season, epNumber)]?.watched
@@ -185,6 +190,8 @@ export default function SeasonTree({ card, lang, outputRoot, downloadDestination
             </div>
             <button onClick={onClose} aria-label="Close" className="btn btn-circle btn-ghost shrink-0">✕</button>
           </div>
+
+          <TitleHeader meta={meta} />
 
           {/* Body */}
           <div className="overflow-y-auto flex-1 px-2 sm:px-6 py-4">

@@ -13,7 +13,15 @@ from sestudio.providers.netu import NetuProvider
 from sestudio.providers.premium import PremiumProvider
 from sestudio.providers.uqload import UqloadProvider
 from sestudio.providers.vidzy import VidzyProvider
-from sestudio.web.routes import cast, downloads, search, seasons, settings, stream
+from sestudio.web.routes import (
+    cast,
+    downloads,
+    search,
+    seasons,
+    settings,
+    stream,
+    tmdb,
+)
 from sestudio.web.worker import JobStore
 
 _PROVIDERS = {
@@ -67,6 +75,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(settings.router, prefix="/api")
     app.include_router(stream.router, prefix="/api")
     app.include_router(cast.router, prefix="/api")
+    app.include_router(tmdb.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)
     dist = _frontend_dist()

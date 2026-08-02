@@ -5,10 +5,19 @@ import { searchSeasons } from '../api'
 interface Props {
   /** Called with the results and the query they belong to ('' when cleared). */
   onResults: (cards: SeasonCard[], query: string) => void
+  /** Externally-driven query (e.g. clicking a browse-row card). */
+  term?: string | null
 }
 
-export default function SearchBar({ onResults }: Props) {
+export default function SearchBar({ onResults, term }: Props) {
   const [query, setQuery] = useState('')
+
+  // Adopt an externally-set term (render-phase, so it lands in the same pass).
+  const [prevTerm, setPrevTerm] = useState(term)
+  if (term !== prevTerm) {
+    setPrevTerm(term)
+    if (term) setQuery(term)
+  }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)

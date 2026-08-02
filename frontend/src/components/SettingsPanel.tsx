@@ -7,7 +7,9 @@ interface Props {
 }
 
 export default function SettingsPanel({ onChange }: Props) {
-  const [settings, setSettings] = useState<AppSettings>({ output_root: '.', lang: 'vf', download_destination: 'server' })
+  const [settings, setSettings] = useState<AppSettings>({
+    output_root: '.', lang: 'vf', download_destination: 'server', tmdb_configured: false,
+  })
   const onChangeRef = useRef(onChange)
   useEffect(() => { onChangeRef.current = onChange })
 

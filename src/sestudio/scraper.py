@@ -25,7 +25,7 @@ SEASON_RE = re.compile(r"[Ss]aison\s+(\d+)", re.IGNORECASE)
 
 _ONCLICK_RE = re.compile(r"location\.href='([^']+)'")
 _NEWSID_RE = re.compile(r"/(\d+)-")
-_YEAR_RE = re.compile(r"\s*\(\d{4}\)\s*$")
+_YEAR_RE = re.compile(r"\s*\((\d{4})\)\s*$")
 
 
 def _search_one(
@@ -77,6 +77,10 @@ def _search_one(
 
         title_el = item.find("div", class_="search-title")
         raw_title: str = title_el.get_text(strip=True) if title_el else ""
+        # The trailing "(2019)" is stripped from the display title, but kept —
+        # it disambiguates remakes when matching against metadata providers.
+        m_year = _YEAR_RE.search(raw_title)
+        year = int(m_year.group(1)) if m_year else 0
         title = _YEAR_RE.sub("", raw_title).strip()
 
         m_season = SEASON_RE.search(title)
@@ -96,6 +100,7 @@ def _search_one(
                 page_url=page_url,
                 is_film=is_film,
                 is_anime=is_anime,
+                year=year,
             )
         )
 
