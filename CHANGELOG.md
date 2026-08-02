@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/DSestu/sestudio/compare/v0.6.0...v0.6.1) (2026-08-02)
+
+
+### Code refactoring
+
+* set serve as default command ([6ba60bf](https://github.com/DSestu/sestudio/commit/6ba60bf837b850f327679937492963465d45acff))
+
 ## [0.6.0](https://github.com/DSestu/sestudio/compare/v0.5.0...v0.6.0) (2026-08-02)
 
 
