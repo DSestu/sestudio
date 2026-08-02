@@ -111,6 +111,28 @@ Starts **two servers** by default — `http://<host>:8080` and `https://<host>:8
 * Per-episode progress bars via SSE; downloads keep running after closing the browser tab
 * **Play an episode in the browser** (▶ per row) — streams through the server, so provider referer/TLS quirks are handled for you, with automatic fallback across providers
 * **Cast to a TV** (⧉ per row) — send an episode to any DLNA renderer on your network; Chromecast and AirPlay are available from the player when served over HTTPS (see below)
+* **Continue Watching & Next Up** — the home screen resumes what you were watching (browser *or* cast progress counts), suggests the next episode per series, and marks watched episodes; remove an item with its ✕. Stored locally in the browser.
+* **Web ↔ TV handoff** — the player's ⧉ button casts the current episode *from the current position*; "Watch here" on a cast pill pulls it back into the browser where the TV left off
+* **Player niceties** — resume with "Start over", 5-second auto-next countdown with cancel, volume/speed remembered across episodes and reloads
+
+* **Download to the server or to this device** — the confirm dialog offers both (default in
+  Settings). Direct MP4 sources are relayed straight to the browser; HLS has no single file
+  to relay, so it downloads as a normal server job (with full progress, provider fallback
+  and retries) and the browser collects the finished file. Device files are staged in a
+  temp dir and removed when you clear the download history.
+
+> **Optional metadata (off by default):** set `TMDB_API_KEY=<your key>` in the environment
+> before starting the server to enrich results with posters, ratings, synopses, cast and a
+> "Trending this week" row ([themoviedb.org](https://www.themoviedb.org) keys are free).
+> Without it, nothing changes and no external requests are made. The key is read from the
+> environment or `~/.config/sestudio/config.json` and is never sent to the browser.
+
+> **Audio/subtitle tracks:** the streaming proxy passes HLS alternate renditions
+> (`#EXT-X-MEDIA` audio/subtitle tracks) through untouched, so when a provider's
+> stream carries multiple tracks the player's menus expose them automatically.
+> In practice the current providers serve single-rendition streams, so the menus
+> usually have nothing extra to show; side-loaded subtitles (e.g. OpenSubtitles)
+> are not supported yet.
 
 Downloads are organised automatically, with a per-language subfolder (VF / VOSTFR / VO):
 

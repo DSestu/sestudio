@@ -7,7 +7,9 @@ interface Props {
 }
 
 export default function SettingsPanel({ onChange }: Props) {
-  const [settings, setSettings] = useState<AppSettings>({ output_root: '.', lang: 'vf' })
+  const [settings, setSettings] = useState<AppSettings>({
+    output_root: '.', lang: 'vf', download_destination: 'server', tmdb_configured: false,
+  })
   const onChangeRef = useRef(onChange)
   useEffect(() => { onChangeRef.current = onChange })
 
@@ -42,6 +44,18 @@ export default function SettingsPanel({ onChange }: Props) {
           <option value="vf">VF</option>
           <option value="vostfr">VOSTFR</option>
           <option value="vo">VO</option>
+        </select>
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="text-base-content/60 text-sm" htmlFor="dl-dest">Download to</label>
+        <select
+          id="dl-dest"
+          className="select select-bordered select-sm"
+          value={settings.download_destination}
+          onChange={e => update({ download_destination: e.target.value as AppSettings['download_destination'] })}
+        >
+          <option value="server">Server</option>
+          <option value="device">This device</option>
         </select>
       </div>
     </div>

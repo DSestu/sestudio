@@ -11,6 +11,8 @@
 
 import { useSyncExternalStore } from 'react'
 import { castEnded, clearCastQueue } from './castQueue'
+import { endPlayback, getPlaybackSession, updatePlayback } from './playbackSession'
+import { saveProgress } from './watchState'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Cast SDK is untyped
 type Cast = any
@@ -74,6 +76,18 @@ function bindRemotePlayer(w: Cast) {
       state.canControlVolume = !!player.canControlVolume
       emit()
 
+      // Watch-state: mirror the receiver's position into the playback session
+      // and persist progress (throttled) while this cast owns the session.
+      const session = getPlaybackSession()
+      if (session?.target === 'chromecast' && state.connected && state.duration > 0) {
+        updatePlayback(state.currentTime, state.duration)
+        const now = Date.now()
+        if (now - lastProgressSave >= 5000) {
+          lastProgressSave = now
+          saveProgress(session.episode, state.currentTime, state.duration)
+        }
+      }
+
       // Autoplay-next: fire once the media reaches IDLE after having played.
       const ps = player.playerState  // 'PLAYING' | 'PAUSED' | 'BUFFERING' | 'IDLE'
       if (ps === 'PLAYING') sawPlaying = true
@@ -81,11 +95,13 @@ function bindRemotePlayer(w: Cast) {
         sawPlaying = false
         castEnded()
       }
+      if (!state.connected) endPlayback('chromecast')
     },
   )
 }
 
 let sawPlaying = false
+let lastProgressSave = 0
 
 let castReady: Promise<boolean> | null = null
 
@@ -159,6 +175,12 @@ export function castSetVolume(level: number) {
   if (!player) return
   player.volumeLevel = level
   controller?.setVolumeLevel()
+}
+
+/** Nudge the receiver volume by *delta* (e.g. ±0.05), clamped to 0..1. */
+export function castVolumeBy(delta: number) {
+  if (!player) return
+  castSetVolume(Math.max(0, Math.min(1, (player.volumeLevel ?? 0) + delta)))
 }
 
 /** Stop playback and end the session (disconnects the receiver). */

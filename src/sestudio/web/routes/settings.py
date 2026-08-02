@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from sestudio.config import load_config, save_config
+from sestudio.config import load_config, save_config, tmdb_key
 
 router = APIRouter()
 
@@ -14,11 +14,21 @@ router = APIRouter()
 class SettingsBody(BaseModel):
     output_root: str | None = None
     lang: str | None = None
+    download_destination: str | None = None
+    tmdb_api_key: str | None = None
+
+
+def _public(cfg) -> dict[str, Any]:
+    """Settings for the client, with the API key replaced by a set/unset flag."""
+    data = dataclasses.asdict(cfg)
+    data.pop("tmdb_api_key", None)
+    data["tmdb_configured"] = bool(tmdb_key())
+    return data
 
 
 @router.get("/settings")
 async def get_settings() -> dict[str, Any]:
-    return dataclasses.asdict(load_config())
+    return _public(load_config())
 
 
 @router.put("/settings")
@@ -28,5 +38,12 @@ async def put_settings(body: SettingsBody) -> dict[str, Any]:
         cfg.output_root = body.output_root
     if body.lang is not None and body.lang in ("vf", "vostfr", "vo"):
         cfg.lang = body.lang
+    if body.download_destination is not None and body.download_destination in (
+        "server",
+        "device",
+    ):
+        cfg.download_destination = body.download_destination
+    if body.tmdb_api_key is not None:
+        cfg.tmdb_api_key = body.tmdb_api_key.strip()
     save_config(cfg)
-    return dataclasses.asdict(cfg)
+    return _public(cfg)

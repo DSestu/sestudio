@@ -59,6 +59,10 @@ _PROVIDER_ORDER = ("uqload", "vidzy", "premium", "netu", "luluvid")
 
 class ResolveRequest(BaseModel):
     embed_urls: dict[str, str]  # provider -> embed url
+    # Optional "mp4"/"hls": keep looking for a provider serving this kind before
+    # settling. Device downloads ask for mp4 so they can relay bytes directly
+    # instead of paying for an ffmpeg remux.
+    prefer_kind: str | None = None
 
 
 def _ordered_providers(embed_urls: dict[str, str]) -> list[str]:
@@ -78,6 +82,7 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
     providers = request.app.state.providers
     secret = request.app.state.proxy_secret
     errors: list[str] = []
+    fallback: dict[str, Any] | None = None
 
     for pname in _ordered_providers(body.embed_urls):
         handler = providers.get(pname)
@@ -92,13 +97,22 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
             errors.append(f"{pname}: {exc}")
             continue
         kind = "hls" if ".m3u8" in source.url else "mp4"
-        return {
+        result = {
             "proxy_url": _proxy_url(
                 secret, source.url, source.referer, source.provider
             ),
             "kind": kind,
             "provider": pname,
         }
+        # With a preferred kind, remember the first working source but keep
+        # looking for one of the requested kind.
+        if body.prefer_kind and kind != body.prefer_kind:
+            fallback = fallback or result
+            continue
+        return result
+
+    if fallback is not None:
+        return fallback
 
     detail = (
         "All providers failed — " + "; ".join(errors)

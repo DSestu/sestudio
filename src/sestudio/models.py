@@ -24,6 +24,9 @@ class SeasonCard:
     page_url: str
     is_film: bool = False
     is_anime: bool = False
+    # Release year from the search title, 0 when absent. Used to disambiguate
+    # remakes when matching against a metadata provider.
+    year: int = 0
 
 
 @dataclass

@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import type { DownloadItem } from '../api'
+import type { DownloadDestination, DownloadItem } from '../api'
 import { useModalBack } from '../useModalBack'
+import ResponsiveModal from './ResponsiveModal'
 
 interface Props {
   items: DownloadItem[]
   outputRoot: string
   existingFiles: Set<string>
-  onConfirm: () => Promise<void>
+  /** Default destination from settings. */
+  destination: DownloadDestination
+  onConfirm: (destination: DownloadDestination) => Promise<void>
   onCancel: () => void
 }
 
@@ -28,9 +31,10 @@ function buildTree(items: DownloadItem[]): FileTree {
   return tree
 }
 
-export default function ConfirmDownloadModal({ items, outputRoot, existingFiles, onConfirm, onCancel }: Props) {
+export default function ConfirmDownloadModal({ items, outputRoot, existingFiles, destination, onConfirm, onCancel }: Props) {
   useModalBack(true, onCancel)
   const [confirming, setConfirming] = useState(false)
+  const [dest, setDest] = useState<DownloadDestination>(destination)
   const tree = buildTree(items)
   const episodeCount = items.length
   const filmCount = items.filter(i => i.season === 0).length
@@ -57,11 +61,10 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
   }
 
   return (
-    <div className="modal modal-open" onClick={onCancel}>
-      <div
-        className="modal-box max-w-2xl max-h-[70dvh] sm:max-h-[80dvh] flex flex-col p-0"
-        onClick={e => e.stopPropagation()}
-      >
+    <ResponsiveModal
+      onClose={onCancel}
+      boxClassName="max-w-2xl max-h-[70dvh] sm:max-h-[80dvh] flex flex-col p-0"
+    >
         {/* Header */}
         <div className="px-6 py-4 border-b border-base-300">
           <h2 className="font-semibold text-lg">Confirm download</h2>
@@ -75,12 +78,36 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
           </p>
         </div>
 
-        {/* Output path */}
-        <div className="px-6 py-3 bg-base-300 border-b border-base-300 flex items-center gap-2">
-          <svg className="w-4 h-4 text-base-content/40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-          </svg>
-          <span className="text-base-content/60 text-sm font-mono truncate">{outputRoot}</span>
+        {/* Destination + output path */}
+        <div className="px-6 py-3 bg-base-300 border-b border-base-300 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div role="group" aria-label="Download destination" className="join">
+            <button
+              onClick={() => setDest('server')}
+              aria-pressed={dest === 'server'}
+              className={`btn btn-sm join-item ${dest === 'server' ? 'btn-primary' : 'btn-ghost'}`}
+            >
+              Server
+            </button>
+            <button
+              onClick={() => setDest('device')}
+              aria-pressed={dest === 'device'}
+              className={`btn btn-sm join-item ${dest === 'device' ? 'btn-primary' : 'btn-ghost'}`}
+            >
+              This device
+            </button>
+          </div>
+          {dest === 'server' ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <svg className="w-4 h-4 text-base-content/40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+              </svg>
+              <span className="text-base-content/60 text-sm font-mono truncate">{outputRoot}</span>
+            </div>
+          ) : (
+            <span className="text-base-content/60 text-sm">
+              Saved by your browser{newCount > 1 ? ` · ${newCount} files, one at a time` : ''}
+            </span>
+          )}
         </div>
 
         {/* File tree */}
@@ -88,7 +115,7 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
           {Object.entries(tree).map(([series, seasons]) => (
             <div key={series}>
               <div className="flex items-center gap-2 mb-1">
-                <svg className="w-4 h-4 text-violet-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
                 </svg>
                 <span className="text-sm font-medium">{series}</span>
@@ -134,14 +161,13 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
             Cancel
           </button>
           <button
-            onClick={async () => { setConfirming(true); try { await onConfirm() } finally { setConfirming(false) } }}
+            onClick={async () => { setConfirming(true); try { await onConfirm(dest) } finally { setConfirming(false) } }}
             disabled={newCount === 0 || confirming}
             className="btn btn-primary btn-sm"
           >
-            {confirming ? 'Queuing…' : downloadLabel()}
+            {confirming ? (dest === 'device' ? 'Starting…' : 'Queuing…') : downloadLabel()}
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModal>
   )
 }

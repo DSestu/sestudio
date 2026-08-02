@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react'
 import type { Renderer } from '../api'
 import { dlnaPlay, getCastHttpPort, listRenderers, resolveStream } from '../api'
-import { castToChromecast, loadCast } from '../cast'
-import { dlnaStarted } from '../dlnaControl'
+import { castSeek, castToChromecast, loadCast } from '../cast'
+import { dlnaSeek, dlnaStarted } from '../dlnaControl'
 import { startCastQueue } from '../castQueue'
 import type { PlayableEpisode } from '../providers'
 import { useProviderSources } from '../useProviderSources'
 import { useModalBack } from '../useModalBack'
+import { startPlayback } from '../playbackSession'
 import ProviderChips from './ProviderChips'
+import ResponsiveModal from './ResponsiveModal'
 
 interface Props {
   episodes: PlayableEpisode[]
   startIndex: number
   onClose: () => void
+  /** Handoff: seek the cast target here (seconds) once playback starts. */
+  resumeAt?: number
+  /** Handoff: called after a successful cast (e.g. to close the browser player). */
+  onCastStarted?: () => void
 }
 
 const CAST_ICON =
@@ -21,7 +27,7 @@ const CAST_ICON =
 type CastMode = 'dlna' | 'chromecast'
 
 /** Modal that casts an episode to a TV — via Chromecast (browser) or DLNA (server). */
-export default function CastModal({ episodes, startIndex, onClose }: Props) {
+export default function CastModal({ episodes, startIndex, onClose, resumeAt, onCastStarted }: Props) {
   useModalBack(true, onClose)
   const current = episodes[startIndex]
   // Sources are tested up front, so the chosen one is already verified before
@@ -66,6 +72,19 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
     setMsg(`Sending to ${label}…`)
     try {
       await castSource(activeSource.proxy_url, activeSource.kind, current.title, mode, udn)
+      // Open the playback session on the cast target so the controllers can
+      // record watch-state progress for this episode.
+      startPlayback(current, mode)
+      // Handoff: continue on the TV from where the browser player was.
+      if (resumeAt && resumeAt > 5) {
+        if (mode === 'dlna') {
+          // Give the renderer a moment to load the media before seeking.
+          await new Promise(r => setTimeout(r, 1500))
+          await dlnaSeek(resumeAt).catch(() => {})
+        } else {
+          castSeek(resumeAt)
+        }
+      }
       // Register the playlist so the controller can autoplay the next episode.
       startCastQueue({
         episodes,
@@ -77,6 +96,7 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
         },
       })
       setMsg(`▶ Playing on ${label}`)
+      onCastStarted?.()
     } catch (err) {
       markFailed(active)  // the device couldn't read this source
       setMsg(err instanceof Error ? err.message : 'Cast failed')
@@ -88,8 +108,7 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
   const canCast = !busy && !probing && !!activeSource
 
   return (
-    <div className="modal modal-open" onClick={onClose}>
-      <div className="modal-box max-w-md" onClick={e => e.stopPropagation()}>
+    <ResponsiveModal onClose={onClose} boxClassName="max-w-md">
         <div className="flex items-center justify-between gap-3 mb-1">
           <h2 className="font-semibold text-base">Cast to a device</h2>
           <div className="flex items-center gap-3 shrink-0">
@@ -102,7 +121,7 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
               />
               Autoplay
             </label>
-            <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost" aria-label="Close">✕</button>
+            <button onClick={onClose} className="btn btn-circle btn-ghost sm:btn-sm" aria-label="Close">✕</button>
           </div>
         </div>
         <p className="text-base-content/60 text-sm mb-3 truncate">{current.title}</p>
@@ -161,7 +180,6 @@ export default function CastModal({ episodes, startIndex, onClose }: Props) {
         )}
 
         {msg && <p className="text-sm mt-4 text-center text-base-content/70">{msg}</p>}
-      </div>
-    </div>
+    </ResponsiveModal>
   )
 }

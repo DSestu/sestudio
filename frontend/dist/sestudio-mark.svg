@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="sestudio">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9b52ff"/>
+      <stop offset="1" stop-color="#5613c9"/>
+    </linearGradient>
+    <linearGradient id="play" x1="22" y1="18" x2="41" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dcefff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- squircle tile -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bg)"/>
+
+  <!-- play triangle (rounded via stroke) -->
+  <path d="M22 18 L22 46 L43 32 Z"
+        fill="url(#play)" stroke="url(#play)" stroke-width="4"
+        stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- broadcast / cast arcs radiating from the play tip -->
+  <g fill="none" stroke="#a9ecff" stroke-width="3.4" stroke-linecap="round">
+    <path d="M48.0 27.5 A6 6 0 0 1 48.0 36.5" opacity="0.95"/>
+    <path d="M51.4 23.8 A11 11 0 0 1 51.4 40.2" opacity="0.7"/>
+    <path d="M54.7 20.1 A16 16 0 0 1 54.7 43.9" opacity="0.45"/>
+  </g>
+</svg>

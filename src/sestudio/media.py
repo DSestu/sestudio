@@ -7,6 +7,23 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def ffmpeg_binary() -> str:
+    """Absolute path to an ffmpeg executable (system first, else bundled).
+
+    Unlike :func:`ffmpeg_location` (a directory for yt-dlp's flag), this is the
+    executable itself, for running ffmpeg directly — e.g. remuxing an HLS
+    stream to MP4 on the fly.
+    """
+    system = shutil.which("ffmpeg")
+    if system:
+        return system
+    try:
+        import imageio_ffmpeg
+    except ImportError as exc:  # pragma: no cover — packaging guarantees it
+        raise RuntimeError("No ffmpeg available (system or bundled)") from exc
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
 def ffmpeg_location() -> str | None:
     """Directory to pass to yt-dlp's ``--ffmpeg-location``, or None.
 

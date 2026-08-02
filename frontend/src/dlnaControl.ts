@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { castEnded, clearCastQueue } from './castQueue'
+import { endPlayback, getPlaybackSession, updatePlayback } from './playbackSession'
+import { saveProgress } from './watchState'
 
 // Control state for an active DLNA cast session. Unlike Chromecast (which has a
 // client-side RemotePlayer), DLNA state lives on the renderer, so we poll the
@@ -13,9 +15,10 @@ export interface DlnaState {
   position: number
   duration: number
   volume: number
+  muted: boolean
 }
 
-const EMPTY: DlnaState = { connected: false, title: '', isPaused: false, position: 0, duration: 0, volume: 1 }
+const EMPTY: DlnaState = { connected: false, title: '', isPaused: false, position: 0, duration: 0, volume: 1, muted: false }
 let snapshot: DlnaState = EMPTY
 const listeners = new Set<() => void>()
 
@@ -41,13 +44,14 @@ function stopPolling() { if (timer !== null) { window.clearInterval(timer); time
 // Track whether the current media actually started, so a STOPPED state only
 // counts as "ended" (autoplay next) after it has been playing — not at startup.
 let sawPlaying = false
+let lastProgressSave = 0
 
 /** Fetch current status; keeps polling while connected, stops when not. */
 export async function refreshDlna(): Promise<void> {
   try {
     const res = await fetch('/api/cast/dlna/status')
     const d = await res.json()
-    if (!d.connected) { emit(EMPTY); stopPolling(); return }
+    if (!d.connected) { emit(EMPTY); stopPolling(); endPlayback('dlna'); return }
     const state: string = typeof d.state === 'string' ? d.state : ''
     emit({
       connected: true,
@@ -56,8 +60,22 @@ export async function refreshDlna(): Promise<void> {
       position: Number(d.position) || 0,
       duration: Number(d.duration) || 0,
       volume: typeof d.volume === 'number' ? d.volume : 1,
+      muted: Boolean(d.muted),
     })
     startPolling()
+    // Watch-state: mirror the renderer's position into the playback session
+    // and persist progress (throttled) while this cast owns the session.
+    const session = getPlaybackSession()
+    const position = Number(d.position) || 0
+    const duration = Number(d.duration) || 0
+    if (session?.target === 'dlna' && duration > 0) {
+      updatePlayback(position, duration)
+      const now = Date.now()
+      if (now - lastProgressSave >= 5000) {
+        lastProgressSave = now
+        saveProgress(session.episode, position, duration)
+      }
+    }
     // End-of-media detection for autoplay: the renderer reports STOPPED /
     // NO_MEDIA while our session is still active (user-stop clears the session
     // server-side, so we wouldn't be connected here).
@@ -91,7 +109,13 @@ export const dlnaPause = () => post('pause')
 export const dlnaResume = () => post('resume')
 export const dlnaSeek = (seconds: number) => post('seek', { seconds })
 export const dlnaSetVolume = (level: number) => post('volume', { level })
+export const dlnaToggleMute = () => post('mute', { muted: !snapshot.muted })
 export const dlnaStop = () => { clearCastQueue(); return post('stop') }
+
+/** Nudge the renderer volume by *delta* (e.g. ±0.05), clamped to 0..1. */
+export function dlnaVolumeBy(delta: number) {
+  return dlnaSetVolume(Math.max(0, Math.min(1, snapshot.volume + delta)))
+}
 
 export function dlnaSeekBy(delta: number) {
   const max = snapshot.duration || Number.MAX_SAFE_INTEGER

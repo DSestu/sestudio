@@ -103,6 +103,28 @@ def test_play_unknown_renderer_404(client):
     assert resp.status_code == 404
 
 
+def test_mute_forwards_to_active_renderer(client):
+    calls = {}
+
+    class FakeDmr:
+        async def async_mute_volume(self, muted: bool):
+            calls["muted"] = muted
+
+    client.app.state.dlna_dmr = FakeDmr()
+    resp = client.post("/api/cast/dlna/mute", json={"muted": True})
+    assert resp.status_code == 200
+    assert calls["muted"] is True
+
+    resp = client.post("/api/cast/dlna/mute", json={"muted": False})
+    assert resp.status_code == 200
+    assert calls["muted"] is False
+
+
+def test_mute_without_session_409(client):
+    resp = client.post("/api/cast/dlna/mute", json={"muted": True})
+    assert resp.status_code == 409
+
+
 def test_play_failure_maps_to_502(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
 

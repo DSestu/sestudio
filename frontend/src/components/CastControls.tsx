@@ -1,16 +1,24 @@
 import { useState } from 'react'
 import {
-  castPlayPause, castSeek, castSeekBy, castSetVolume, castStop, castToggleMute, useCastState,
+  castPlayPause, castSeek, castSeekBy, castSetVolume, castStop, castToggleMute, castVolumeBy,
+  useCastState,
 } from '../cast'
 import { useModalBack } from '../useModalBack'
+import { getCastQueue } from '../castQueue'
+import { getPlaybackSession } from '../playbackSession'
+import { requestPullback } from '../pullback'
+import { saveProgress } from '../watchState'
+import ResponsiveModal from './ResponsiveModal'
 
 // Relative-seek buttons shown around play/pause, in display order.
 const SEEK_STEPS: { label: string; delta: number }[] = [
   { label: '-5m', delta: -300 },
-  { label: '-10s', delta: -10 },
+  { label: '-1m', delta: -60 },
   { label: '-30s', delta: -30 },
-  { label: '+30s', delta: 30 },
+  { label: '-10s', delta: -10 },
   { label: '+10s', delta: 10 },
+  { label: '+30s', delta: 30 },
+  { label: '+1m', delta: 60 },
   { label: '+5m', delta: 300 },
 ]
 
@@ -57,11 +65,10 @@ export default function CastControls() {
       </button>}
 
       {open && (
-        <div className="modal modal-open" onClick={() => setOpen(false)}>
-          <div className="modal-box max-w-md" onClick={e => e.stopPropagation()}>
+        <ResponsiveModal onClose={() => setOpen(false)} boxClassName="max-w-md">
             <div className="flex items-center justify-between mb-1">
               <h2 className="font-semibold text-base">Casting</h2>
-              <button onClick={() => setOpen(false)} aria-label="Close" className="btn btn-sm btn-circle btn-ghost">✕</button>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="btn btn-circle btn-ghost sm:btn-sm">✕</button>
             </div>
             <p className="text-base-content/60 text-sm mb-4 truncate">{cast.title || 'Unknown title'}</p>
 
@@ -84,8 +91,8 @@ export default function CastControls() {
 
             {/* Transport */}
             <div className="flex items-center justify-center flex-wrap gap-2 mb-4">
-              {SEEK_STEPS.slice(0, 3).map(s => (
-                <button key={s.label} onClick={() => castSeekBy(s.delta)} disabled={!cast.canSeek} className="btn btn-sm btn-ghost font-mono">
+              {SEEK_STEPS.slice(0, 4).map(s => (
+                <button key={s.label} onClick={() => castSeekBy(s.delta)} disabled={!cast.canSeek} className="btn btn-ghost font-mono sm:btn-sm">
                   {s.label}
                 </button>
               ))}
@@ -96,8 +103,8 @@ export default function CastControls() {
                   <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
                 )}
               </button>
-              {SEEK_STEPS.slice(3).map(s => (
-                <button key={s.label} onClick={() => castSeekBy(s.delta)} disabled={!cast.canSeek} className="btn btn-sm btn-ghost font-mono">
+              {SEEK_STEPS.slice(4).map(s => (
+                <button key={s.label} onClick={() => castSeekBy(s.delta)} disabled={!cast.canSeek} className="btn btn-ghost font-mono sm:btn-sm">
                   {s.label}
                 </button>
               ))}
@@ -105,30 +112,48 @@ export default function CastControls() {
 
             {/* Volume */}
             <div className="flex items-center gap-3">
-              <button onClick={castToggleMute} aria-label={cast.muted ? 'Unmute' : 'Mute'} className="btn btn-ghost btn-sm btn-square">
+              <button onClick={castToggleMute} aria-label={cast.muted ? 'Unmute' : 'Mute'} className="btn btn-ghost btn-square sm:btn-sm">
                 {cast.muted ? (
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15zM17 9l4 4m0-4l-4 4" /></svg>
                 ) : (
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z M15 9a3 3 0 010 6 M18 6a7 7 0 010 12" /></svg>
                 )}
               </button>
+              <button onClick={() => castVolumeBy(-0.05)} disabled={!cast.canControlVolume} aria-label="Volume down" className="btn btn-ghost btn-square font-mono sm:btn-sm">−</button>
               <input
                 type="range"
                 min={0}
                 max={1}
-                step={0.05}
+                step={0.01}
                 value={cast.muted ? 0 : cast.volume}
                 disabled={!cast.canControlVolume}
                 onChange={e => castSetVolume(Number(e.target.value))}
                 className="range range-sm flex-1"
               />
+              <button onClick={() => castVolumeBy(0.05)} disabled={!cast.canControlVolume} aria-label="Volume up" className="btn btn-ghost btn-square font-mono sm:btn-sm">＋</button>
             </div>
 
-            <div className="modal-action">
+            <div className="modal-action justify-between">
+              {/* Pull-back needs the in-memory session (lost on page reload). */}
+              {getPlaybackSession()?.target === 'chromecast' && (
+                <button
+                  onClick={() => {
+                    const session = getPlaybackSession()
+                    if (!session) return
+                    saveProgress(session.episode, cast.currentTime, cast.duration)
+                    const q = getCastQueue()
+                    requestPullback(q ?? { episodes: [session.episode], index: 0 })
+                    castStop()
+                    setOpen(false)
+                  }}
+                  className="btn btn-sm btn-primary btn-outline"
+                >
+                  Watch here
+                </button>
+              )}
               <button onClick={castStop} className="btn btn-error btn-sm">Stop casting</button>
             </div>
-          </div>
-        </div>
+        </ResponsiveModal>
       )}
     </>
   )
