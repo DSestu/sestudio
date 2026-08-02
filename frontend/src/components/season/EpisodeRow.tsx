@@ -1,4 +1,5 @@
 import type { EpisodeDetail } from '../../api'
+import SaveToggles from '../SaveToggles'
 import EpisodeRowActions from './EpisodeRowActions'
 
 interface Props {
@@ -8,6 +9,11 @@ interface Props {
   onPlay: () => void
   onCast: () => void
   pageUrl: string
+  // Identity for saving this episode to a list.
+  seriesName: string
+  season: number
+  posterUrl: string
+  lang: string
   /** Series rows show the E## number; film rows show only the title. */
   showNumber: boolean
   /** Marks the episode as already watched (from the watch-state store). */
@@ -15,7 +21,10 @@ interface Props {
 }
 
 /** One selectable, playable episode row (series and film variants). */
-export default function EpisodeRow({ ep, checked, onToggle, onPlay, onCast, pageUrl, showNumber, watched }: Props) {
+export default function EpisodeRow({
+  ep, checked, onToggle, onPlay, onCast, pageUrl, showNumber, watched,
+  seriesName, season, posterUrl, lang,
+}: Props) {
   const hasProviders = Object.keys(ep.embed_urls).length > 0
   return (
     <div className="flex items-center gap-2 sm:gap-3 hover:bg-base-300 rounded-lg px-2 sm:px-3 py-2">
@@ -46,6 +55,19 @@ export default function EpisodeRow({ ep, checked, onToggle, onPlay, onCast, page
           </span>
         )}
       </button>
+      <SaveToggles
+        size="sm"
+        entry={{
+          kind: 'episode',
+          series: seriesName,
+          season,
+          number: ep.number,
+          label: ep.title,
+          poster_url: posterUrl,
+          page_url: pageUrl,
+          lang,
+        }}
+      />
       <EpisodeRowActions hasProviders={hasProviders} pageUrl={pageUrl} onPlay={onPlay} onCast={onCast} />
     </div>
   )

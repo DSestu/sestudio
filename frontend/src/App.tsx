@@ -17,6 +17,9 @@ import SeasonTree from './components/SeasonTree'
 import SettingsPanel from './components/SettingsPanel'
 import { continueWatching, nextUp, removeEntry, useWatchState } from './watchState'
 import { clearPullback, usePullback } from './pullback'
+import type { CollectionEntry, ListName } from './collections'
+import { entries as collectionEntries, useCollections } from './collections'
+import SaveToggles from './components/SaveToggles'
 import PlayerModal from './components/PlayerModal'
 
 /** Synthesize a SeasonCard from stored watch-state identity so the library
@@ -31,6 +34,20 @@ function cardFor(series: string, season: number, posterUrl: string, pageUrl: str
     page_url: pageUrl,
     is_film: season === 0,
     is_anime: false,
+  }
+}
+
+/** Strip the stored timestamp — SaveToggles sets a fresh one when re-saving. */
+function entryWithoutTimestamp(e: CollectionEntry): Omit<CollectionEntry, 'addedAt'> {
+  return {
+    kind: e.kind,
+    series: e.series,
+    season: e.season,
+    number: e.number,
+    label: e.label,
+    poster_url: e.poster_url,
+    page_url: e.page_url,
+    lang: e.lang,
   }
 }
 
@@ -67,6 +84,25 @@ export default function App() {
   // their own "next up" suggestion.
   const watch = useWatchState()
   const pullback = usePullback()
+  const collections = useCollections()
+
+  /** Saved entries as row items: episodes deep-link to themselves, titles open the season. */
+  function savedRow(list: ListName) {
+    return collectionEntries(list, collections).map(e => ({
+      key: `${list}-${e.series}-${e.season}-${e.number ?? 'title'}`,
+      title: e.series,
+      subtitle: e.kind === 'episode'
+        ? `S${String(e.season).padStart(2, '0')}E${String(e.number).padStart(2, '0')} · ${e.label}`
+        : (e.season > 0 ? `S${String(e.season).padStart(2, '0')}` : 'Film'),
+      poster_url: e.poster_url,
+      onClick: () => openFromLibrary(
+        cardFor(e.series, e.season, e.poster_url, e.page_url),
+        e.number ?? 0,
+        e.lang || settings.lang,
+      ),
+      actions: <SaveToggles size="sm" entry={entryWithoutTimestamp(e)} />,
+    }))
+  }
 
   // Trending row (home screen only) — requires a TMDB key.
   const [fetchedTrending, setFetchedTrending] = useState<TrendingCard[]>([])
@@ -175,7 +211,7 @@ export default function App() {
     <div className="min-h-screen bg-base-100 p-6 flex flex-col gap-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">
-          fstream<span className="text-primary">-dl</span>
+          se<span className="text-primary">studio</span>
         </h1>
         <SettingsPanel onChange={setSettings} />
       </div>
@@ -183,7 +219,11 @@ export default function App() {
       <SearchBar onResults={handleSearchResults} term={searchTerm} />
 
       {/* Library rows — shown on the home screen (no active search) */}
-      {lastQuery === '' && (cw.length > 0 || nu.length > 0 || trending.length > 0) && (
+      {lastQuery === '' && (
+        cw.length > 0 || nu.length > 0 || trending.length > 0
+        || collectionEntries('watchlist', collections).length > 0
+        || collectionEntries('favourites', collections).length > 0
+      ) && (
         <div className="flex flex-col gap-6">
           <MediaRow
             title="Continue Watching"
@@ -197,8 +237,25 @@ export default function App() {
               progress: e.duration > 0 ? e.position / e.duration : undefined,
               onClick: () => openFromLibrary(cardFor(e.series, e.season, e.poster_url, e.page_url), e.number, e.lang),
               onRemove: () => removeEntry(e),
+              actions: (
+                <SaveToggles
+                  size="sm"
+                  entry={{
+                    kind: 'episode',
+                    series: e.series,
+                    season: e.season,
+                    number: e.number,
+                    label: e.title,
+                    poster_url: e.poster_url,
+                    page_url: e.page_url,
+                    lang: e.lang,
+                  }}
+                />
+              ),
             }))}
           />
+          <MediaRow title="Watchlist" items={savedRow('watchlist')} />
+          <MediaRow title="Favourites" items={savedRow('favourites')} />
           {/* TMDB titles aren't playable directly — clicking runs a search. */}
           <MediaRow
             title="Trending this week"
@@ -219,6 +276,20 @@ export default function App() {
               subtitle: `Next: S${String(s.season).padStart(2, '0')}E${String(s.nextNumber).padStart(2, '0')}`,
               poster_url: s.poster_url,
               onClick: () => openFromLibrary(cardFor(s.series, s.season, s.poster_url, s.page_url), s.nextNumber, s.lang),
+              actions: (
+                <SaveToggles
+                  size="sm"
+                  entry={{
+                    kind: 'title',
+                    series: s.series,
+                    season: s.season,
+                    label: s.series,
+                    poster_url: s.poster_url,
+                    page_url: s.page_url,
+                    lang: s.lang,
+                  }}
+                />
+              ),
             }))}
           />
         </div>

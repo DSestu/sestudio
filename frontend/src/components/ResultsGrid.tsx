@@ -1,5 +1,6 @@
 import type { SeasonCard } from '../api'
 import { useTmdb } from '../useTmdb'
+import SaveToggles from './SaveToggles'
 
 interface Props {
   cards: SeasonCard[]
@@ -118,6 +119,22 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
                 </div>
               </div>
             </button>
+
+            {/* Save controls sit outside the poster button — nesting buttons is invalid */}
+            <div className="absolute bottom-1 right-1">
+              <SaveToggles
+                size="sm"
+                entry={{
+                  kind: 'title',
+                  series: card.series_name,
+                  season: card.is_film ? 0 : card.season_number,
+                  label: card.series_name,
+                  poster_url: poster,
+                  page_url: card.page_url,
+                  lang: '',
+                }}
+              />
+            </div>
           </div>
   )
 }

@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 export interface MediaRowItem {
   key: string
   title: string
@@ -8,6 +10,8 @@ export interface MediaRowItem {
   onClick: () => void
   /** When set, shows a ✕ control that removes the item from the row. */
   onRemove?: () => void
+  /** Extra controls rendered over the card (e.g. save toggles). */
+  actions?: ReactNode
 }
 
 interface Props {
@@ -36,6 +40,9 @@ export default function MediaRow({ title, items }: Props) {
               >
                 ✕
               </button>
+            )}
+            {item.actions && (
+              <div className="absolute bottom-1 right-1 z-10">{item.actions}</div>
             )}
             <button onClick={item.onClick} className="w-full text-left">
               {item.poster_url ? (

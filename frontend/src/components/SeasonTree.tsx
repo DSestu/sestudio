@@ -10,6 +10,7 @@ import type { PlayableEpisode } from '../providers'
 import { useWatchState, watchKey } from '../watchState'
 import ResponsiveModal from './ResponsiveModal'
 import { useTmdb } from '../useTmdb'
+import SaveToggles from './SaveToggles'
 import { useSeasonDetail } from './season/useSeasonDetail'
 import TitleHeader from './season/TitleHeader'
 import EpisodeRow from './season/EpisodeRow'
@@ -188,7 +189,20 @@ export default function SeasonTree({ card, lang, outputRoot, downloadDestination
                 {detail ? (detail.is_film ? 'Film' : `Season ${detail.season}`) : '…'}
               </p>
             </div>
-            <button onClick={onClose} aria-label="Close" className="btn btn-circle btn-ghost shrink-0">✕</button>
+            <div className="flex items-center gap-1 shrink-0">
+              <SaveToggles
+                entry={{
+                  kind: 'title',
+                  series: card.series_name,
+                  season: detail?.is_film ? 0 : (detail?.season ?? card.season_number),
+                  label: card.series_name,
+                  poster_url: card.poster_url,
+                  page_url: card.page_url,
+                  lang: activeLang,
+                }}
+              />
+              <button onClick={onClose} aria-label="Close" className="btn btn-circle btn-ghost">✕</button>
+            </div>
           </div>
 
           <TitleHeader meta={meta} />
@@ -247,6 +261,10 @@ export default function SeasonTree({ card, lang, outputRoot, downloadDestination
                         onToggle={() => toggleEpisode(ep.number)}
                         onPlay={() => playFrom(ep)}
                         onCast={() => castFrom(ep)}
+                        seriesName={card.series_name}
+                        season={detail.is_film ? 0 : detail.season}
+                        posterUrl={card.poster_url}
+                        lang={activeLang}
                         pageUrl={card.page_url}
                         showNumber
                         watched={isWatched(ep.number)}
@@ -270,6 +288,10 @@ export default function SeasonTree({ card, lang, outputRoot, downloadDestination
                     onToggle={() => toggleEpisode(ep.number)}
                     onPlay={() => playFrom(ep)}
                     onCast={() => castFrom(ep)}
+                    seriesName={card.series_name}
+                    season={0}
+                    posterUrl={card.poster_url}
+                    lang={activeLang}
                     pageUrl={card.page_url}
                     showNumber={false}
                     watched={isWatched(ep.number)}
