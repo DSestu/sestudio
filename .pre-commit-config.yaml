@@ -19,3 +19,15 @@ repos:
         exclude: ^\.github/workflows/
       - id: ruff-format
         exclude: ^\.github/workflows/
+
+  # frontend/dist is committed and force-included into the wheel
+  # (see [tool.hatch.build.targets.wheel.force-include]), so it must never lag
+  # behind the sources. Only runs when something the build consumes changes.
+  - repo: local
+    hooks:
+      - id: frontend-build
+        name: build frontend (npm run build)
+        entry: scripts/build-frontend.sh
+        language: script
+        pass_filenames: false
+        files: ^frontend/(src/|public/|index\.html|package(-lock)?\.json|vite\.config\.ts|tsconfig[^/]*\.json|eslint\.config\.js)
