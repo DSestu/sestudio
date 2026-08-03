@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { deleteWatchEntry, putWatchEntry } from './api'
 import type { PlayableEpisode } from './providers'
 
 // Watch-state store: continue-watching positions and watched flags, persisted
@@ -97,6 +98,7 @@ export function saveProgress(ep: PlayableEpisode, position: number, duration: nu
     },
   }
   persist()
+  void putWatchEntry(key, store[key]).catch(() => {})
 }
 
 export function markWatched(ep: PlayableEpisode): void {
@@ -119,12 +121,21 @@ export function markWatched(ep: PlayableEpisode): void {
     },
   }
   persist()
+  void putWatchEntry(key, store[key]).catch(() => {})
 }
 
 export function removeEntry(entry: WatchEntry): void {
+  const key = watchKey(entry.series, entry.season, entry.number)
   const next = { ...store }
-  delete next[watchKey(entry.series, entry.season, entry.number)]
+  delete next[key]
   store = next
+  persist()
+  void deleteWatchEntry(key).catch(() => {})
+}
+
+/** Replace the whole store from a server snapshot (startup hydration, #24). */
+export function hydrateWatch(snapshot: Store): void {
+  store = snapshot
   persist()
 }
 
