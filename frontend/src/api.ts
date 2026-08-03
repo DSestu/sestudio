@@ -1,3 +1,7 @@
+import type { CollectionEntry, ListName } from './collections'
+import type { PlayerPrefs } from './playerPrefs'
+import type { WatchEntry } from './watchState'
+
 export interface SeasonCard {
   newsid: string
   title: string
@@ -231,6 +235,67 @@ export async function putSettings(patch: Partial<AppSettings>): Promise<AppSetti
     body: JSON.stringify(patch),
   })
   if (!res.ok) throw new Error('Settings save failed')
+  return res.json()
+}
+
+// --- Library (server-side watch state / collections / preferences, #24) ----- #
+
+export interface LibrarySnapshot {
+  watch: Record<string, WatchEntry>
+  collections: { watchlist: Record<string, CollectionEntry>; favourites: Record<string, CollectionEntry> }
+  player: PlayerPrefs | null
+  playlist_collapsed: boolean
+}
+
+/** The whole library, for hydrating the client stores on load. */
+export async function getLibrary(): Promise<LibrarySnapshot> {
+  const res = await fetch(`${BASE}/library`)
+  if (!res.ok) throw new Error('Library fetch failed')
+  return res.json()
+}
+
+// Mutators are fire-and-forget from the store's perspective (callers .catch()).
+// Keys can contain "|" and "/", so they're percent-encoded into the path.
+
+export async function putWatchEntry(key: string, entry: WatchEntry): Promise<void> {
+  await fetch(`${BASE}/library/watch/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry),
+  })
+}
+
+export async function deleteWatchEntry(key: string): Promise<void> {
+  await fetch(`${BASE}/library/watch/${encodeURIComponent(key)}`, { method: 'DELETE' })
+}
+
+export async function putCollectionEntry(list: ListName, key: string, entry: CollectionEntry): Promise<void> {
+  await fetch(`${BASE}/library/collections/${list}/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry),
+  })
+}
+
+export async function deleteCollectionEntry(list: ListName, key: string): Promise<void> {
+  await fetch(`${BASE}/library/collections/${list}/${encodeURIComponent(key)}`, { method: 'DELETE' })
+}
+
+export async function putPreference(key: 'player' | 'playlist_collapsed', value: unknown): Promise<void> {
+  await fetch(`${BASE}/library/preferences/${key}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  })
+}
+
+export async function importLibrary(snapshot: LibrarySnapshot): Promise<{ imported: boolean }> {
+  const res = await fetch(`${BASE}/library/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(snapshot),
+  })
+  if (!res.ok) return { imported: false }
   return res.json()
 }
 

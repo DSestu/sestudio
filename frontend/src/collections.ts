@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { deleteCollectionEntry, putCollectionEntry } from './api'
 
 // Saved lists: "watchlist" (want to watch) and "favourites" (loved). Both can
 // hold whole titles or individual episodes. Stored locally, same as watch
@@ -73,17 +74,27 @@ export function isSaved(list: ListName, ref: CollectionRef, state: Store = store
 }
 
 export function save(list: ListName, entry: Omit<CollectionEntry, 'addedAt'>): void {
+  const key = refKey(entry)
   store = {
     ...store,
-    [list]: { ...store[list], [refKey(entry)]: { ...entry, addedAt: Date.now() } },
+    [list]: { ...store[list], [key]: { ...entry, addedAt: Date.now() } },
   }
   persist()
+  void putCollectionEntry(list, key, store[list][key]).catch(() => {})
 }
 
 export function unsave(list: ListName, ref: CollectionRef): void {
+  const key = refKey(ref)
   const next = { ...store[list] }
-  delete next[refKey(ref)]
+  delete next[key]
   store = { ...store, [list]: next }
+  persist()
+  void deleteCollectionEntry(list, key).catch(() => {})
+}
+
+/** Replace the whole store from a server snapshot (startup hydration, #24). */
+export function hydrateCollections(snapshot: Store): void {
+  store = { watchlist: snapshot.watchlist ?? {}, favourites: snapshot.favourites ?? {} }
   persist()
 }
 

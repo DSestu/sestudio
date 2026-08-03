@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { togglePlaylistCollapsed, usePlaylistCollapsed } from '../playlistCollapsed'
 import type {
   AppSettings, DownloadDestination, DownloadItem, EpisodeDetail, SeasonDetail,
 } from '../api'
@@ -24,7 +25,6 @@ import { useWatchState, watchKey } from '../watchState'
 /** Stable reference — useProviderSources resets on embedUrls identity change. */
 const NO_EMBEDS: Record<string, string> = {}
 
-const COLLAPSE_KEY = 'sestudio.playlist.collapsed'
 const MOBILE_TABS = ['episodes', 'details', 'download'] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
 
@@ -59,7 +59,7 @@ export default function WatchView({
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const [initializedFor, setInitializedFor] = useState<SeasonDetail | null>(null)
   const [currentNumber, setCurrentNumber] = useState<number | null>(null)
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
+  const collapsed = usePlaylistCollapsed()
   const [tab, setTab] = useState<MobileTab>('episodes')
   const [autoplay, setAutoplay] = useState(true)
   const [position, setPosition] = useState(0)
@@ -130,10 +130,7 @@ export default function WatchView({
   }
 
   function toggleCollapsed() {
-    setCollapsed(c => {
-      localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1')
-      return !c
-    })
+    togglePlaylistCollapsed()
   }
 
   async function handleDownload() {

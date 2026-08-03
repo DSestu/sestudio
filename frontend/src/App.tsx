@@ -7,6 +7,7 @@ import AppShell from './components/AppShell'
 import NowCastingBar from './components/cast/NowCastingBar'
 import MiniPlayer from './components/watch/MiniPlayer'
 import SettingsPanel from './components/SettingsPanel'
+import { hydrateLibrary } from './hydrateLibrary'
 import { createPortalNode } from './portalNode'
 import { useRoute, type Navigate } from './nav'
 import { clearPullback, usePullback } from './pullback'
@@ -55,7 +56,15 @@ export default function App() {
 
   // On load: init the Cast SDK (rejoins an existing Chromecast session) and
   // check for an active DLNA session, so both control bars reappear after reload.
-  useEffect(() => { loadCast(); refreshDlna() }, [])
+  useEffect(() => { loadCast(); refreshDlna(); void hydrateLibrary() }, [])
+
+  // Cross-device freshness: re-pull the library when the tab regains focus, so
+  // a change made on another device shows up here (#24).
+  useEffect(() => {
+    const onFocus = () => { void hydrateLibrary() }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   // Track the open watch title so the view (and its player) survives navigating
   // away (mini-player, #20). Derived during render — set only when the watch
