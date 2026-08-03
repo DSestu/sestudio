@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/DSestu/sestudio/compare/v0.7.0...v0.7.1) (2026-08-03)
+
+
+### Code refactoring
+
+* Put all user data server-side ([#27](https://github.com/DSestu/sestudio/issues/27)) ([b087d63](https://github.com/DSestu/sestudio/commit/b087d6331d1e2c7ccae7f954b02e1ddce7eb2f45))
+
 ## [0.7.0](https://github.com/DSestu/sestudio/compare/v0.6.2...v0.7.0) (2026-08-03)
 
 
