@@ -6,11 +6,16 @@ import '@vidstack/react/player/styles/default/layouts/video.css'
 import type { StreamSource } from '../../api'
 import type { PlayableEpisode } from '../../providers'
 import { getProgress, markWatched, saveProgress } from '../../watchState'
-import { endPlayback, startPlayback, updatePlayback } from '../../playbackSession'
+import { endBrowserPlayback, startBrowserPlayback, updateBrowserPlayback, useCastSession } from '../../playbackSession'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
 
 /** Persist progress at most every SAVE_INTERVAL ms of playback. */
 const SAVE_INTERVAL = 5000
+
+/** Whether two episodes are the same playable item (identity across targets). */
+function sameEpisode(a: PlayableEpisode | undefined, b: PlayableEpisode): boolean {
+  return !!a && a.page_url === b.page_url && a.number === b.number && a.lang === b.lang
+}
 
 /** Saved position worth resuming from, or null (unwatched and not near the end). */
 function resumePointFor(ep: PlayableEpisode): number | null {
@@ -56,8 +61,17 @@ export default function VideoPane({
   if (source && source !== displaySource) setDisplaySource(source)
 
   // Open/refresh the playback session for the current episode.
-  useEffect(() => { startPlayback(ep, 'browser') }, [ep])
-  useEffect(() => () => endPlayback('browser'), [])
+  useEffect(() => { startBrowserPlayback(ep) }, [ep])
+  useEffect(() => () => endBrowserPlayback(), [])
+
+  // Hand-off: when the episode shown here is the one now casting to a TV, pause
+  // local playback so we don't double up audio. Casting a *different* episode
+  // leaves this player running (dual playback — issue #19).
+  const castSession = useCastSession()
+  const castedSameEp = sameEpisode(castSession?.episode, ep)
+  useEffect(() => {
+    if (castedSameEp) playerRef.current?.pause()
+  }, [castedSameEp])
 
   // Re-arm the resume position when the episode changes. Done during render
   // (not in an effect) so it lands in the same pass as the episode switch.
@@ -99,7 +113,7 @@ export default function VideoPane({
   function handleTimeUpdate() {
     const p = playerRef.current
     if (!p) return
-    updatePlayback(p.currentTime, p.duration)
+    updateBrowserPlayback(p.currentTime, p.duration)
     onPosition(p.currentTime)
     const now = Date.now()
     if (now - lastSaveRef.current >= SAVE_INTERVAL) {
@@ -130,7 +144,7 @@ export default function VideoPane({
             src: displaySource.proxy_url,
             type: displaySource.kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
           }}
-          autoPlay
+          autoPlay={!castedSameEp}
           playsInline
           onCanPlay={handleCanPlay}
           onTimeUpdate={handleTimeUpdate}

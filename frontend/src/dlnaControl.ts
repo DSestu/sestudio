@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { castEnded, clearCastQueue } from './castQueue'
-import { endPlayback, getPlaybackSession, updatePlayback } from './playbackSession'
+import { endCastSession, getCastSession } from './playbackSession'
 import { saveProgress } from './watchState'
 
 // Control state for an active DLNA cast session. Unlike Chromecast (which has a
@@ -51,7 +51,7 @@ export async function refreshDlna(): Promise<void> {
   try {
     const res = await fetch('/api/cast/dlna/status')
     const d = await res.json()
-    if (!d.connected) { emit(EMPTY); stopPolling(); endPlayback('dlna'); return }
+    if (!d.connected) { emit(EMPTY); stopPolling(); endCastSession('dlna'); return }
     const state: string = typeof d.state === 'string' ? d.state : ''
     emit({
       connected: true,
@@ -63,13 +63,12 @@ export async function refreshDlna(): Promise<void> {
       muted: Boolean(d.muted),
     })
     startPolling()
-    // Watch-state: mirror the renderer's position into the playback session
-    // and persist progress (throttled) while this cast owns the session.
-    const session = getPlaybackSession()
+    // Watch-state: persist progress (throttled) for the casting episode while
+    // this cast owns the cast session.
+    const session = getCastSession()
     const position = Number(d.position) || 0
     const duration = Number(d.duration) || 0
     if (session?.target === 'dlna' && duration > 0) {
-      updatePlayback(position, duration)
       const now = Date.now()
       if (now - lastProgressSave >= 5000) {
         lastProgressSave = now

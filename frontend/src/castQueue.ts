@@ -1,5 +1,5 @@
 import type { PlayableEpisode } from './providers'
-import { getPlaybackSession, startPlayback } from './playbackSession'
+import { updateCastEpisode } from './playbackSession'
 import { markWatched } from './watchState'
 
 // A cast "playlist" so autoplay can advance to the next episode when the
@@ -38,9 +38,8 @@ export async function castEnded(): Promise<void> {
   try {
     queue.index = next
     const ep = queue.episodes[next]
-    // Keep the playback session on the same cast target for the next episode.
-    const target = getPlaybackSession()?.target
-    if (target && target !== 'browser') startPlayback(ep, target)
+    // Advance the cast session to the next episode (same target).
+    updateCastEpisode(ep)
     await queue.cast(ep)
   } catch {
     // leave the session as-is; the controller keeps showing current state

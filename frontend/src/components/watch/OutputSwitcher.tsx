@@ -1,20 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { Renderer, StreamSource } from '../../api'
 import { dlnaPlay, getCastHttpPort, listRenderers, resolveStream } from '../../api'
-import {
-  castPlayPause, castSeek, castSeekBy, castSetVolume, castStop, castToChromecast,
-  castToggleMute, castVolumeBy, loadCast, useCastState,
-} from '../../cast'
-import {
-  dlnaPause, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStarted, dlnaStop,
-  dlnaToggleMute, dlnaVolumeBy, useDlnaState,
-} from '../../dlnaControl'
+import { castSeek, castToChromecast, loadCast, useCastState } from '../../cast'
+import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
 import { startCastQueue } from '../../castQueue'
-import { startPlayback } from '../../playbackSession'
+import { startCastSession } from '../../playbackSession'
 import type { PlayableEpisode } from '../../providers'
-import Transport from '../cast/Transport'
-
-export type Output = 'browser' | 'chromecast' | 'dlna'
 
 const CAST_ICON =
   'M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 11a6 6 0 016 6M3 15a2 2 0 012 2M3 19h.01'
@@ -24,8 +15,6 @@ interface Props {
   index: number
   /** Verified source for the current episode, or null while probing/failed. */
   source: StreamSource | null
-  output: Output
-  onOutputChange: (o: Output) => void
   autoplay: boolean
   /** Browser position (seconds) to resume from when handing off to a TV. */
   handoffAt: number
@@ -33,13 +22,14 @@ interface Props {
 }
 
 /**
- * "Playing on …" — picks the output for this title and, when that output is a
- * TV, renders the transport inline where the video would be. Replaces the old
- * stacked cast modal; the floating pills remain for when the user navigates
- * away from the watch view.
+ * "Cast this episode" — sends the currently-browsed episode to a TV
+ * (Chromecast/AirPlay or DLNA). Casting is decoupled from the browser player:
+ * it does not stop or replace local playback, it just starts (or replaces) the
+ * TV session, which the persistent Now-Casting bar then controls. Picking a
+ * different episode and casting it again swaps what's on the TV.
  */
 export default function OutputSwitcher({
-  episodes, index, source, output, onOutputChange, autoplay, handoffAt, onSourceFailed,
+  episodes, index, source, autoplay, handoffAt, onSourceFailed,
 }: Props) {
   const [renderers, setRenderers] = useState<Renderer[] | null>(null)
   const [castAvailable, setCastAvailable] = useState(false)
@@ -49,6 +39,7 @@ export default function OutputSwitcher({
 
   const cast = useCastState()
   const dlna = useDlnaState()
+  const casting = cast.connected || dlna.connected
   const ep = episodes[index]
 
   useEffect(() => {
@@ -80,7 +71,7 @@ export default function OutputSwitcher({
     setMsg(`Sending to ${label}…`)
     try {
       await sendTo(source.proxy_url, source.kind, ep.title, mode, udn)
-      startPlayback(ep, mode)
+      startCastSession(ep, mode)
       // Handoff: continue on the TV from where the browser player was.
       if (handoffAt > 5) {
         if (mode === 'dlna') {
@@ -102,7 +93,6 @@ export default function OutputSwitcher({
       })
       setMsg(null)
       setPicking(false)
-      onOutputChange(mode)
     } catch (err) {
       onSourceFailed() // the device couldn't read this source
       setMsg(err instanceof Error ? err.message : 'Cast failed')
@@ -111,46 +101,24 @@ export default function OutputSwitcher({
     }
   }
 
-  function backToBrowser() {
-    if (output === 'chromecast') castStop()
-    if (output === 'dlna') dlnaStop()
-    onOutputChange('browser')
-    setMsg(null)
-  }
-
-  const label = output === 'browser'
-    ? 'This browser'
-    : output === 'chromecast'
-    ? (cast.title ? 'Chromecast' : 'Chromecast')
-    : (dlna.title ? 'TV' : 'TV')
-
   return (
     <div className="flex flex-col gap-3">
-      {/* Output selector */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs uppercase tracking-wide text-base-content/40">Playing on</span>
-        <span className="badge badge-primary badge-sm gap-1">
-          {output !== 'browser' && (
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d={CAST_ICON} />
-            </svg>
-          )}
-          {label}
-        </span>
-        {output === 'browser' ? (
-          <button onClick={() => setPicking(p => !p)} className="btn btn-xs btn-outline gap-1" aria-expanded={picking}>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d={CAST_ICON} />
-            </svg>
-            Send to TV
-          </button>
-        ) : (
-          <button onClick={backToBrowser} className="btn btn-xs btn-outline">Watch here</button>
+        <button onClick={() => setPicking(p => !p)} className="btn btn-sm btn-outline gap-1" aria-expanded={picking}>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d={CAST_ICON} />
+          </svg>
+          {casting ? 'Cast this episode' : 'Send to TV'}
+        </button>
+        {casting && (
+          <span className="text-xs text-base-content/50">
+            Casting continues below — this swaps what’s on the TV.
+          </span>
         )}
       </div>
 
       {/* Device picker — inline, not an overlay */}
-      {picking && output === 'browser' && (
+      {picking && (
         <div className="rounded-box border border-base-300 bg-base-200 p-3 flex flex-col gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-base-content/40 mb-1">Chromecast &amp; AirPlay</p>
@@ -202,55 +170,6 @@ export default function OutputSwitcher({
       )}
 
       {msg && <p role="status" className="text-sm text-base-content/70">{msg}</p>}
-
-      {/* Inline transport, in place of the video, while a TV owns playback */}
-      {output === 'chromecast' && cast.connected && (
-        <div className="rounded-box border border-base-300 bg-base-200 p-4">
-          <Transport
-            position={cast.currentTime}
-            duration={cast.duration}
-            isPaused={cast.isPaused}
-            muted={cast.muted}
-            volume={cast.volume}
-            canSeek={cast.canSeek}
-            canControlVolume={cast.canControlVolume}
-            onSeek={castSeek}
-            onSeekBy={castSeekBy}
-            onPlayPause={castPlayPause}
-            onToggleMute={castToggleMute}
-            onSetVolume={castSetVolume}
-            onVolumeBy={castVolumeBy}
-          />
-          <div className="flex justify-end mt-4">
-            <button onClick={() => { castStop(); onOutputChange('browser') }} className="btn btn-error btn-sm">
-              Stop casting
-            </button>
-          </div>
-        </div>
-      )}
-
-      {output === 'dlna' && dlna.connected && (
-        <div className="rounded-box border border-base-300 bg-base-200 p-4">
-          <Transport
-            position={dlna.position}
-            duration={dlna.duration}
-            isPaused={dlna.isPaused}
-            muted={dlna.muted}
-            volume={dlna.volume}
-            onSeek={dlnaSeek}
-            onSeekBy={dlnaSeekBy}
-            onPlayPause={() => (dlna.isPaused ? dlnaResume() : dlnaPause())}
-            onToggleMute={dlnaToggleMute}
-            onSetVolume={dlnaSetVolume}
-            onVolumeBy={dlnaVolumeBy}
-          />
-          <div className="flex justify-end mt-4">
-            <button onClick={() => { dlnaStop(); onOutputChange('browser') }} className="btn btn-error btn-sm">
-              Stop casting
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

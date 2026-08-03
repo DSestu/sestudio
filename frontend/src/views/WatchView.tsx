@@ -9,7 +9,7 @@ import ProviderChips from '../components/ProviderChips'
 import SaveToggles from '../components/SaveToggles'
 import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
-import OutputSwitcher, { type Output } from '../components/watch/OutputSwitcher'
+import OutputSwitcher from '../components/watch/OutputSwitcher'
 import VideoPane from '../components/watch/VideoPane'
 import { useSeasonDetail } from '../components/season/useSeasonDetail'
 import { downloadToDevice } from '../deviceDownloads'
@@ -53,7 +53,6 @@ export default function WatchView({
   const [currentNumber, setCurrentNumber] = useState<number | null>(null)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
   const [tab, setTab] = useState<MobileTab>('episodes')
-  const [output, setOutput] = useState<Output>('browser')
   const [autoplay, setAutoplay] = useState(true)
   const [position, setPosition] = useState(0)
   const [submitting, setSubmitting] = useState(false)
@@ -306,9 +305,11 @@ export default function WatchView({
 
           {/* Player pane */}
           <div className="flex-1 min-w-0 flex flex-col gap-3">
-            {/* Sticky on mobile so the list scrolls under it; static on desktop */}
+            {/* Sticky on mobile so the list scrolls under it; static on desktop.
+                The browser always plays the browsed episode; casting to a TV is
+                a separate, non-disruptive action (see OutputSwitcher). */}
             <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-base-100 lg:static lg:mx-0 lg:px-0 lg:py-0 lg:bg-transparent">
-              {output === 'browser' && current ? (
+              {current ? (
                 <VideoPane
                   ep={current}
                   source={source}
@@ -319,11 +320,11 @@ export default function WatchView({
                   onAdvance={() => nextEp && setCurrentNumber(nextEp.number)}
                   onPosition={setPosition}
                 />
-              ) : output === 'browser' ? (
+              ) : (
                 <div className="aspect-video rounded-box bg-base-200 flex items-center justify-center text-base-content/40 text-sm">
                   Select an episode to start
                 </div>
-              ) : null}
+              )}
             </div>
 
             {/* Output + providers + autoplay */}
@@ -333,8 +334,6 @@ export default function WatchView({
                   episodes={playlist}
                   index={index}
                   source={source}
-                  output={output}
-                  onOutputChange={setOutput}
                   autoplay={autoplay}
                   handoffAt={position}
                   onSourceFailed={() => { if (active) markFailed(active) }}

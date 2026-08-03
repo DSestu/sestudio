@@ -3,8 +3,7 @@ import type { DownloadJob, SeasonCard } from './api'
 import { loadCast } from './cast'
 import { refreshDlna } from './dlnaControl'
 import AppShell from './components/AppShell'
-import CastControls from './components/CastControls'
-import DlnaControls from './components/DlnaControls'
+import NowCastingBar from './components/cast/NowCastingBar'
 import SettingsPanel from './components/SettingsPanel'
 import { useRoute } from './nav'
 import { clearPullback, usePullback } from './pullback'
@@ -129,14 +128,9 @@ export default function App() {
         />
       )}
 
-      {/* Floating controllers for a session started elsewhere — the watch view
-          shows its own inline transport, so these hide while it's open. */}
-      {route.view !== 'watch' && (
-        <>
-          <CastControls />
-          <DlnaControls />
-        </>
-      )}
+      {/* One persistent Now-Casting surface, on every view. Renders nothing
+          unless a cast (Chromecast or DLNA) is active. */}
+      <NowCastingBar navigate={navigate} />
     </>
   )
 }
