@@ -16,5 +16,13 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
+# Ensure dependencies (including dev deps like vite and @types/node that tsc
+# needs) are present. On a fresh CI checkout node_modules is absent; locally
+# it's already there, so this is a no-op. Checking for the vite binary also
+# catches a production-only install that omitted dev deps.
+if [ ! -x frontend/node_modules/.bin/vite ]; then
+  npm --prefix frontend ci
+fi
+
 npm --prefix frontend run build
 git add frontend/dist
