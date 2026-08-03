@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { useCastState } from '../cast'
+import { useDlnaState } from '../dlnaControl'
 import type { Tab, View } from '../nav'
 
 interface Destination {
@@ -35,6 +37,11 @@ interface Props {
  * The content column scrolls independently on desktop so the rail stays put.
  */
 export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSettings, children }: Props) {
+  // When a cast is active the Now-Casting bar sits above the mobile tab bar
+  // (and flush to the bottom on desktop), so content needs extra room to clear it.
+  const castConnected = useCastState().connected
+  const dlnaConnected = useDlnaState().connected
+  const casting = castConnected || dlnaConnected
   return (
     <div className="min-h-dvh bg-base-100 md:flex">
       {/* Desktop rail */}
@@ -79,9 +86,18 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
         </button>
       </header>
 
-      {/* Content column — bottom padding clears the mobile tab bar */}
-      <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-10">
-        <div className="mx-auto w-full max-w-6xl">{children}</div>
+      {/* Content column — bottom padding clears the mobile tab bar, plus the
+          Now-Casting bar when a cast is active. */}
+      <main
+        className={`flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-5 ${
+          casting
+            ? 'pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-24'
+            : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-10'
+        }`}
+      >
+        {/* The watch view (player + playlist) fills the available width; the
+            grid/list views stay capped for readability. */}
+        <div className={`mx-auto w-full ${view === 'watch' ? '' : 'max-w-6xl'}`}>{children}</div>
       </main>
 
       {/* Mobile tab bar */}

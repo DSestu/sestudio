@@ -11,7 +11,7 @@
 
 import { useSyncExternalStore } from 'react'
 import { castEnded, clearCastQueue } from './castQueue'
-import { endPlayback, getPlaybackSession, updatePlayback } from './playbackSession'
+import { endCastSession, getCastSession } from './playbackSession'
 import { saveProgress } from './watchState'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Cast SDK is untyped
@@ -76,11 +76,10 @@ function bindRemotePlayer(w: Cast) {
       state.canControlVolume = !!player.canControlVolume
       emit()
 
-      // Watch-state: mirror the receiver's position into the playback session
-      // and persist progress (throttled) while this cast owns the session.
-      const session = getPlaybackSession()
+      // Watch-state: persist progress (throttled) for the casting episode
+      // while this cast owns the cast session.
+      const session = getCastSession()
       if (session?.target === 'chromecast' && state.connected && state.duration > 0) {
-        updatePlayback(state.currentTime, state.duration)
         const now = Date.now()
         if (now - lastProgressSave >= 5000) {
           lastProgressSave = now
@@ -95,7 +94,7 @@ function bindRemotePlayer(w: Cast) {
         sawPlaying = false
         castEnded()
       }
-      if (!state.connected) endPlayback('chromecast')
+      if (!state.connected) endCastSession('chromecast')
     },
   )
 }

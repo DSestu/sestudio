@@ -1,55 +1,83 @@
 import { useSyncExternalStore } from 'react'
 import type { PlayableEpisode } from './providers'
 
-// Unified playback session: the single source of truth for "what is playing
-// right now, where, and at what position". Fed by the in-browser player and
-// by both cast controllers; read by the watch-state store (progress capture)
-// and — later — by Web↔TV handoff to resume on another target.
+// Two INDEPENDENT playback slots, because a cast can run on the TV while the
+// browser plays a *different* episode locally (issue #19). The in-browser
+// player owns the `browser` slot; the cast controllers own the `cast` slot.
+// Keeping them separate means neither clobbers the other's "what's playing"
+// state — the single-session model could only ever track one at a time.
 
-export type PlaybackTarget = 'browser' | 'chromecast' | 'dlna'
+export type CastTarget = 'chromecast' | 'dlna'
 
-export interface PlaybackSession {
+/** The episode playing in the in-browser player, with its live position. */
+export interface BrowserSession {
   episode: PlayableEpisode
-  target: PlaybackTarget
   position: number
   duration: number
 }
 
-let session: PlaybackSession | null = null
-const listeners = new Set<() => void>()
-
-function emit() { listeners.forEach(l => l()) }
-
-function subscribe(cb: () => void): () => void {
-  listeners.add(cb)
-  return () => { listeners.delete(cb) }
+/** The episode currently cast to a TV. Identity only — live transport state
+ *  (position/volume/paused) lives in the cast controllers themselves. */
+export interface CastSession {
+  episode: PlayableEpisode
+  target: CastTarget
 }
 
-/** React hook: the live playback session (null when nothing is playing). */
-export function usePlaybackSession(): PlaybackSession | null {
-  return useSyncExternalStore(subscribe, () => session)
+let browser: BrowserSession | null = null
+let cast: CastSession | null = null
+
+const browserListeners = new Set<() => void>()
+const castListeners = new Set<() => void>()
+function emitBrowser() { browserListeners.forEach(l => l()) }
+function emitCast() { castListeners.forEach(l => l()) }
+
+// --- Browser (local player) session ---------------------------------------- #
+
+export function useBrowserSession(): BrowserSession | null {
+  return useSyncExternalStore(
+    cb => { browserListeners.add(cb); return () => browserListeners.delete(cb) },
+    () => browser,
+  )
+}
+export function getBrowserSession(): BrowserSession | null { return browser }
+
+export function startBrowserPlayback(episode: PlayableEpisode): void {
+  browser = { episode, position: 0, duration: 0 }
+  emitBrowser()
+}
+export function updateBrowserPlayback(position: number, duration: number): void {
+  if (!browser) return
+  browser = { ...browser, position, duration }
+  emitBrowser()
+}
+export function endBrowserPlayback(): void {
+  if (!browser) return
+  browser = null
+  emitBrowser()
 }
 
-export function getPlaybackSession(): PlaybackSession | null {
-  return session
-}
+// --- Cast (TV) session ------------------------------------------------------ #
 
-/** Start (or replace) the session for an episode on a target. */
-export function startPlayback(episode: PlayableEpisode, target: PlaybackTarget): void {
-  session = { episode, target, position: 0, duration: 0 }
-  emit()
+export function useCastSession(): CastSession | null {
+  return useSyncExternalStore(
+    cb => { castListeners.add(cb); return () => castListeners.delete(cb) },
+    () => cast,
+  )
 }
+export function getCastSession(): CastSession | null { return cast }
 
-/** Update the live position/duration; ignored if no session is active. */
-export function updatePlayback(position: number, duration: number): void {
-  if (!session) return
-  session = { ...session, position, duration }
-  emit()
+export function startCastSession(episode: PlayableEpisode, target: CastTarget): void {
+  cast = { episode, target }
+  emitCast()
 }
-
-/** End the session (only if the given target still owns it). */
-export function endPlayback(target: PlaybackTarget): void {
-  if (session?.target !== target) return
-  session = null
-  emit()
+/** Advance the casting episode (autoplay-next) without changing the target. */
+export function updateCastEpisode(episode: PlayableEpisode): void {
+  if (!cast) return
+  cast = { ...cast, episode }
+  emitCast()
+}
+export function endCastSession(target: CastTarget): void {
+  if (cast?.target !== target) return
+  cast = null
+  emitCast()
 }
