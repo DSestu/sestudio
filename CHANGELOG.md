@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/DSestu/sestudio/compare/v0.6.2...v0.7.0) (2026-08-03)
+
+
+### New features
+
+* Add miniplayer ([#25](https://github.com/DSestu/sestudio/issues/25)) ([5058194](https://github.com/DSestu/sestudio/commit/505819446081c76e5fc5412a136248b5cee0f090))
+* Improve casting interface ([#22](https://github.com/DSestu/sestudio/issues/22)) ([4493f67](https://github.com/DSestu/sestudio/commit/4493f67c3554c9e4ffb3de28d8af68e8d18aac5a))
+
 ## [0.6.2](https://github.com/DSestu/sestudio/compare/v0.6.1...v0.6.2) (2026-08-02)
 
 
