@@ -11,6 +11,8 @@ import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
 import VideoPane from '../components/watch/VideoPane'
+import { InPortal, OutPortal } from '../reversePortal'
+import type { PortalNode } from '../portalNode'
 import { useSeasonDetail } from '../components/season/useSeasonDetail'
 import { downloadToDevice } from '../deviceDownloads'
 import type { Navigate } from '../nav'
@@ -37,6 +39,11 @@ interface Props {
   settings: AppSettings
   navigate: Navigate
   onJobsCreated: () => void
+  /** False while the mini-player owns the video (this view is kept mounted but
+   *  hidden). The video is only shown in the pane when visible. */
+  visible: boolean
+  /** Persistent host for the video element, shared with the mini-player. */
+  playerNode: PortalNode
 }
 
 /**
@@ -46,6 +53,7 @@ interface Props {
  */
 export default function WatchView({
   pageUrl, seriesName, posterUrl, lang, episode, settings, navigate, onJobsCreated,
+  visible, playerNode,
 }: Props) {
   const { detail, loading, error, setError, activeLang, setActiveLang } = useSeasonDetail(pageUrl, lang)
   const [checked, setChecked] = useState<Set<number>>(new Set())
@@ -226,6 +234,23 @@ export default function WatchView({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* The player lives in a shared, persistent node so it survives navigation
+          (mini-player, #20). It's driven from here even while minimised. */}
+      <InPortal node={playerNode}>
+        {current && (
+          <VideoPane
+            ep={current}
+            source={source}
+            probing={probing}
+            nextTitle={nextEp?.title ?? null}
+            autoplay={autoplay}
+            onSourceError={() => { if (active) markFailed(active) }}
+            onAdvance={() => nextEp && setCurrentNumber(nextEp.number)}
+            onPosition={setPosition}
+          />
+        )}
+      </InPortal>
+
       {/* Title bar */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('search')} aria-label="Back" className="btn btn-ghost btn-sm btn-square">
@@ -309,22 +334,17 @@ export default function WatchView({
                 The browser always plays the browsed episode; casting to a TV is
                 a separate, non-disruptive action (see OutputSwitcher). */}
             <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-base-100 lg:static lg:mx-0 lg:px-0 lg:py-0 lg:bg-transparent">
-              {current ? (
-                <VideoPane
-                  ep={current}
-                  source={source}
-                  probing={probing}
-                  nextTitle={nextEp?.title ?? null}
-                  autoplay={autoplay}
-                  onSourceError={() => { if (active) markFailed(active) }}
-                  onAdvance={() => nextEp && setCurrentNumber(nextEp.number)}
-                  onPosition={setPosition}
-                />
-              ) : (
-                <div className="aspect-video rounded-box bg-base-200 flex items-center justify-center text-base-content/40 text-sm">
-                  Select an episode to start
-                </div>
-              )}
+              <div className="aspect-video rounded-box overflow-hidden bg-base-200">
+                {/* Only claim the shared video node while visible; when minimised
+                    the mini-player owns it. */}
+                {visible && (current ? (
+                  <OutPortal node={playerNode} morph />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-base-content/40 text-sm">
+                    Select an episode to start
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Output + providers + autoplay */}

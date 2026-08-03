@@ -8,6 +8,26 @@
   }
 }
 
+/* The player morphs between the full pane and the mini-player (#20). The same
+   element carries this name in both spots, so a View Transition tweens its
+   size/position when it moves. */
+.vt-player {
+  view-transition-name: sestudio-player;
+}
+::view-transition-group(sestudio-player),
+::view-transition-old(sestudio-player),
+::view-transition-new(sestudio-player) {
+  animation-duration: 250ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 /* Poster rows scroll horizontally; the scrollbar is visual noise on desktop
    and absent on touch anyway. */
 @utility no-scrollbar {

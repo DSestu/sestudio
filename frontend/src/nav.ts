@@ -50,9 +50,11 @@ export function useRoute(): [Route, Navigate] {
 
   const navigate: Navigate = (view, params) => {
     const next = hashFor(view, params)
-    // Writing the hash fires hashchange, which drives the state update.
-    if (window.location.hash === next) setRoute(parseHash())
-    else window.location.hash = next
+    if (window.location.hash !== next) window.location.hash = next
+    // Update synchronously so a caller can wrap navigate() in a View Transition
+    // and have the new DOM captured; the hashchange listener re-affirms state
+    // for the browser back/forward buttons.
+    setRoute(parseHash())
   }
 
   return [route, navigate]
