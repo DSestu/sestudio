@@ -6,16 +6,12 @@ import '@vidstack/react/player/styles/default/layouts/video.css'
 import type { StreamSource } from '../../api'
 import type { PlayableEpisode } from '../../providers'
 import { getProgress, markWatched, saveProgress } from '../../watchState'
-import { endBrowserPlayback, startBrowserPlayback, updateBrowserPlayback, useCastSession } from '../../playbackSession'
+import { endBrowserPlayback, sameEpisode, startBrowserPlayback, updateBrowserPlayback, useCastSession } from '../../playbackSession'
+import { setBrowserPlayerControls } from '../../browserPlayerControls'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
 
 /** Persist progress at most every SAVE_INTERVAL ms of playback. */
 const SAVE_INTERVAL = 5000
-
-/** Whether two episodes are the same playable item (identity across targets). */
-function sameEpisode(a: PlayableEpisode | undefined, b: PlayableEpisode): boolean {
-  return !!a && a.page_url === b.page_url && a.number === b.number && a.lang === b.lang
-}
 
 /** Saved position worth resuming from, or null (unwatched and not near the end). */
 function resumePointFor(ep: PlayableEpisode): number | null {
@@ -49,11 +45,9 @@ export default function VideoPane({
 }: Props) {
   const playerRef = useRef<MediaPlayerInstance>(null)
   const lastSaveRef = useRef(0)
-  // `resumedFrom` drives the "start over" affordance; `resumeTo` is the pending
-  // seek, applied once the source can play. Both are state (not refs) so they
-  // can be re-armed during render when the episode changes.
-  const [resumedFrom, setResumedFrom] = useState<number | null>(() => resumePointFor(ep))
-  const [resumeTo, setResumeTo] = useState<number | null>(resumedFrom)
+  // `resumeTo` is the pending resume seek, applied once the source can play.
+  // State (not a ref) so it can be re-armed during render when the episode changes.
+  const [resumeTo, setResumeTo] = useState<number | null>(() => resumePointFor(ep))
   // Auto-next countdown (seconds remaining); null when not counting.
   const [nextIn, setNextIn] = useState<number | null>(null)
 
@@ -73,14 +67,32 @@ export default function VideoPane({
     if (castedSameEp) playerRef.current?.pause()
   }, [castedSameEp])
 
+  // Expose play/pause + paused state to out-of-view surfaces (the mini-player).
+  const [paused, setPaused] = useState(true)
+  useEffect(() => {
+    setBrowserPlayerControls({
+      isPaused: paused,
+      playPause: () => {
+        const p = playerRef.current
+        if (!p) return
+        if (p.paused) void p.play(); else p.pause()
+      },
+      resumeAt: (seconds: number) => {
+        const p = playerRef.current
+        if (!p) return
+        p.currentTime = seconds
+        void p.play()
+      },
+    })
+  }, [paused])
+  useEffect(() => () => setBrowserPlayerControls(null), [])
+
   // Re-arm the resume position when the episode changes. Done during render
   // (not in an effect) so it lands in the same pass as the episode switch.
   const [armedEp, setArmedEp] = useState(ep)
   if (armedEp !== ep) {
     setArmedEp(ep)
-    const point = resumePointFor(ep)
-    setResumeTo(point)
-    setResumedFrom(point)
+    setResumeTo(resumePointFor(ep))
     setNextIn(null)
   }
 
@@ -127,14 +139,8 @@ export default function VideoPane({
     if (autoplay && nextTitle) setNextIn(5)
   }
 
-  function startOver() {
-    setResumeTo(null)
-    setResumedFrom(null)
-    if (playerRef.current) playerRef.current.currentTime = 0
-  }
-
   return (
-    <div className="relative bg-black aspect-video flex items-center justify-center rounded-box overflow-hidden">
+    <div className="relative bg-black w-full h-full flex items-center justify-center overflow-hidden">
       {displaySource && (
         <MediaPlayer
           ref={playerRef}
@@ -147,6 +153,8 @@ export default function VideoPane({
           autoPlay={!castedSameEp}
           playsInline
           onCanPlay={handleCanPlay}
+          onPlay={() => setPaused(false)}
+          onPause={() => setPaused(true)}
           onTimeUpdate={handleTimeUpdate}
           onVolumeChange={() => {
             const p = playerRef.current
@@ -175,16 +183,6 @@ export default function VideoPane({
             <button onClick={() => setNextIn(null)} className="btn btn-sm btn-ghost text-white">Cancel</button>
           </div>
         </div>
-      )}
-
-      {/* Resumed indicator — lets the user restart from the beginning. */}
-      {displaySource && resumedFrom !== null && (
-        <button
-          onClick={startOver}
-          className="absolute top-3 right-3 z-10 btn btn-sm bg-black/70 border-none text-white hover:bg-black/90"
-        >
-          ↺ Start over
-        </button>
       )}
 
       {/* Overlays: initial testing / no source / dead source */}

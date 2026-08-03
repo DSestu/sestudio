@@ -9,6 +9,14 @@ import type { PlayableEpisode } from './providers'
 
 export type CastTarget = 'chromecast' | 'dlna'
 
+/** Whether two references point at the same playable episode (across targets). */
+export function sameEpisode(
+  a: PlayableEpisode | undefined | null,
+  b: PlayableEpisode | undefined | null,
+): boolean {
+  return !!a && !!b && a.page_url === b.page_url && a.number === b.number && a.lang === b.lang
+}
+
 /** The episode playing in the in-browser player, with its live position. */
 export interface BrowserSession {
   episode: PlayableEpisode

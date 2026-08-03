@@ -1,19 +1,17 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   castSeek, castSeekBy, castSetVolume, castStop, castToggleMute, castPlayPause, useCastState,
 } from '../../cast'
 import {
   dlnaPause, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStop, dlnaToggleMute, useDlnaState,
 } from '../../dlnaControl'
+import { useBrowserPlayerControls } from '../../browserPlayerControls'
 import { getCastQueue } from '../../castQueue'
 import type { Navigate } from '../../nav'
-import { useCastSession } from '../../playbackSession'
+import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
 import { requestPullback } from '../../pullback'
 import { saveProgress } from '../../watchState'
 
-// Whether the device has a real hover pointer — drives hover-to-open on desktop
-// vs tap-to-open on touch. Evaluated once; the bar isn't rendered server-side.
-const CAN_HOVER = typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover)').matches
 
 // Relative-seek magnitudes — one per column, applied backward (top row) and
 // forward (bottom row) in the accordion's seek grid.
@@ -48,10 +46,21 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   const cast = useCastState()
   const dlna = useDlnaState()
   const session = useCastSession()
+  const browserSession = useBrowserSession()
+  const controls = useBrowserPlayerControls()
   const [open, setOpen] = useState(false)
   // While dragging the timeline, show the local value instead of live updates.
   const [seeking, setSeeking] = useState<number | null>(null)
   const closeTimer = useRef<number | null>(null)
+  // Desktop (≥ md) hovers to expand + clicks to open the series; mobile taps
+  // the bar to expand. Viewport-based so it matches the md-only chevron.
+  const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = () => setDesktop(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   // Only one target is ever connected; DLNA takes precedence if both somehow are.
   const target: 'dlna' | 'chromecast' | null =
@@ -91,9 +100,8 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   const clearClose = () => {
     if (closeTimer.current !== null) { window.clearTimeout(closeTimer.current); closeTimer.current = null }
   }
-  const hoverOpen = () => { if (CAN_HOVER) { clearClose(); setOpen(true) } }
+  const hoverOpen = () => { clearClose(); setOpen(true) }
   const hoverClose = () => {
-    if (!CAN_HOVER) return
     clearClose()
     closeTimer.current = window.setTimeout(() => setOpen(false), 200)
   }
@@ -103,6 +111,17 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
     if (!ep) return
     setOpen(false)
     navigate('watch', { u: ep.page_url, t: ep.series_name, p: ep.poster_url, lang: ep.lang, ep: ep.number })
+  }
+
+  /** Stop the cast. If the local player is on the same episode (i.e. not showing
+   *  a different video), hand it the TV's timestamp so it continues from there. */
+  function stopCasting() {
+    const pos = live.position
+    const castEp = session?.episode
+    live.stop()
+    if (castEp && sameEpisode(castEp, browserSession?.episode)) {
+      controls?.resumeAt(pos)
+    }
   }
 
   /** Pull playback back to this browser, resuming where the TV left off. */
@@ -115,10 +134,12 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
 
   return (
     <div
-      onMouseEnter={hoverOpen}
-      onMouseLeave={hoverClose}
-      onFocusCapture={() => setOpen(true)}
-      onBlurCapture={hoverClose}
+      {...(desktop ? {
+        onMouseEnter: hoverOpen,
+        onMouseLeave: hoverClose,
+        onFocusCapture: () => setOpen(true),
+        onBlurCapture: hoverClose,
+      } : {})}
       onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
       className="fixed inset-x-0 md:left-56 z-40 bottom-[calc(4rem+env(safe-area-inset-bottom))] md:bottom-0"
     >
@@ -135,6 +156,17 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                 open ? 'opacity-100' : 'opacity-0'
               }`}
             >
+              {/* Return to the watch view of the casting episode — restores the
+                  state you left when you navigated away. */}
+              {ep && (
+                <button onClick={openSeries} className="btn btn-ghost btn-sm gap-2 self-start">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                  </svg>
+                  Back to episode
+                </button>
+              )}
+
               {/* Timeline scrubber (absolute seek) */}
               <div>
                 <input
@@ -220,9 +252,9 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
           casting title's watch view. */}
       <div className="border-t border-base-300 bg-base-200/95 backdrop-blur">
         <div
-          onClick={openSeries}
+          onClick={desktop ? openSeries : () => setOpen(o => !o)}
           className={`mx-auto w-full max-w-6xl flex items-center gap-3 px-3 md:px-6 py-2 ${
-            ep ? 'cursor-pointer hover:bg-base-300/40 transition-colors' : ''
+            (desktop ? ep : true) ? 'cursor-pointer hover:bg-base-300/40 transition-colors' : ''
           }`}
         >
           <button onClick={e => { e.stopPropagation(); live.onPlayPause() }} aria-label={live.isPaused ? 'Play' : 'Pause'} className="btn btn-primary btn-circle btn-sm shrink-0">
@@ -251,7 +283,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
               </svg>
             </button>
           )}
-          <button onClick={e => { e.stopPropagation(); live.stop() }} aria-label="Stop casting" title="Stop casting" className="btn btn-ghost btn-sm btn-square text-error shrink-0">
+          <button onClick={e => { e.stopPropagation(); stopCasting() }} aria-label="Stop casting" title="Stop casting" className="btn btn-ghost btn-sm btn-square text-error shrink-0">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" /></svg>
           </button>
 

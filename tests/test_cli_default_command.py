@@ -11,7 +11,9 @@ from sestudio import cli
 def test_serve_is_the_entrypoint() -> None:
     """`main` hands the serve function straight to Fire, so bare `sestudio` serves
     and `sestudio -h` documents serve's own options."""
-    with patch("sestudio.cli.Fire") as mock_fire, patch.object(cli.sys, "argv", ["sestudio"]):
+    with patch("sestudio.cli.Fire") as mock_fire, patch.object(
+        cli.sys, "argv", ["sestudio"]
+    ):
         cli.main()
     mock_fire.assert_called_once()
     assert mock_fire.call_args.args[0] is cli.serve
@@ -19,7 +21,9 @@ def test_serve_is_the_entrypoint() -> None:
 
 def test_dash_h_is_normalised_to_help() -> None:
     """`-h` collides with Fire's flag abbreviations, so main rewrites it to --help."""
-    with patch("sestudio.cli.Fire") as mock_fire, patch.object(cli.sys, "argv", ["sestudio", "-h"]):
+    with patch("sestudio.cli.Fire") as mock_fire, patch.object(
+        cli.sys, "argv", ["sestudio", "-h"]
+    ):
         cli.main()
     assert mock_fire.call_args.kwargs["command"] == ["--help"]
 
