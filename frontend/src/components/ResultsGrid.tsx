@@ -124,6 +124,16 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
             </span>
           )}
           {year > 0 && <span className="text-base-content/40 text-xs font-mono">{year}</span>}
+          {/* Says why this is one card when the source listed the title several
+              times — the languages themselves only load with the detail. */}
+          {card.alt_page_urls && card.alt_page_urls.length > 0 && (
+            <span
+              className="badge badge-ghost badge-sm"
+              title={`${card.alt_page_urls.length + 1} source pages for this title`}
+            >
+              {card.alt_page_urls.length + 1} sources
+            </span>
+          )}
         </div>
       </button>
 

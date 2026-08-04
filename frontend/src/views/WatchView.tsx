@@ -30,6 +30,8 @@ type MobileTab = (typeof MOBILE_TABS)[number]
 
 interface Props {
   pageUrl: string
+  /** Other source pages for this title (other languages or mirrors). */
+  altPageUrls?: string[]
   /** Title identity - SeasonDetail carries neither, so the route supplies them. */
   seriesName: string
   posterUrl: string
@@ -52,10 +54,11 @@ interface Props {
  * old stack of season → player → cast modals.
  */
 export default function WatchView({
-  pageUrl, seriesName, posterUrl, lang, episode, settings, navigate, onJobsCreated,
+  pageUrl, altPageUrls, seriesName, posterUrl, lang, episode, settings, navigate, onJobsCreated,
   visible, playerNode,
 }: Props) {
-  const { detail, loading, error, setError, activeLang, setActiveLang } = useSeasonDetail(pageUrl, lang)
+  const { detail, loading, error, setError, activeLang, setActiveLang, langs, sourceUrl } =
+    useSeasonDetail(pageUrl, lang, altPageUrls)
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const [initializedFor, setInitializedFor] = useState<SeasonDetail | null>(null)
   const [currentNumber, setCurrentNumber] = useState<number | null>(null)
@@ -93,7 +96,7 @@ export default function WatchView({
       series_name: seriesName,
       season: d.is_film ? 0 : d.season,
       poster_url: posterUrl,
-      page_url: pageUrl,
+      page_url: sourceUrl,
       lang: activeLang,
       // The highest number rather than the count, so a sparse playlist can't
       // make the library think the season has ended early.
@@ -213,7 +216,7 @@ export default function WatchView({
       checked={checked}
       watchedNumbers={watchedNumbers}
       progress={progress}
-      langs={detail.available_langs}
+      langs={langs}
       activeLang={activeLang}
       isFilm={detail.is_film}
       season={season}
@@ -278,7 +281,7 @@ export default function WatchView({
               season,
               label: seriesName,
               poster_url: posterUrl,
-              page_url: pageUrl,
+              page_url: sourceUrl,
               lang: activeLang,
             }}
           />
