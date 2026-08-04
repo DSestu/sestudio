@@ -35,3 +35,44 @@ async def trending() -> list[dict[str, Any]]:
         return await asyncio.to_thread(tmdb.catalog)
     except tmdb.TmdbDisabled as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/tmdb/discover")
+async def discover(
+    kind: str = "movie",
+    sort_by: str = "popularity.desc",
+    genres: str = "",
+    min_score: float = 0.0,
+    max_score: float = 10.0,
+    min_votes: int = 0,
+    page: int = 1,
+) -> dict[str, Any]:
+    """Browse the catalogue with the TMDB site's own sort/filter options."""
+    try:
+        return await asyncio.to_thread(
+            tmdb.discover, kind, sort_by, genres, min_score, max_score, min_votes, page
+        )
+    except tmdb.TmdbDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/tmdb/genres")
+async def genre_list(kind: str = "movie") -> list[dict[str, Any]]:
+    """Genre ids and names, for the discover filter chips."""
+    try:
+        return await asyncio.to_thread(tmdb.genres, kind)
+    except tmdb.TmdbDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/tmdb/person/{person_id}")
+async def person(person_id: int) -> dict[str, Any] | None:
+    """A person's profile and filmography, or null when TMDB has no match."""
+    try:
+        return await asyncio.to_thread(tmdb.person, person_id)
+    except tmdb.TmdbDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

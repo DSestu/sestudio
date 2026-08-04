@@ -9,8 +9,12 @@ interface Props {
   term?: string | null
 }
 
+// Session-scoped results cache so returning to a search (browser back from a
+// title) restores instantly instead of re-scraping the sources.
+const resultsCache = new Map<string, SeasonCard[]>()
+
 export default function SearchBar({ onResults, term }: Props) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(term ?? '')
 
   // Adopt an externally-set term (render-phase, so it lands in the same pass).
   const [prevTerm, setPrevTerm] = useState(term)
@@ -40,16 +44,20 @@ export default function SearchBar({ onResults, term }: Props) {
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current)
-    if (!query.trim()) { onResultsRef.current([], ''); return }
+    const q = query.trim()
+    if (!q) { onResultsRef.current([], ''); return }
+    const cached = resultsCache.get(q)
+    if (cached) { onResultsRef.current(cached, q); return }
     timer.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const results = await searchSeasons(query.trim())
+        const results = await searchSeasons(q)
+        resultsCache.set(q, results)
         setError(null)
-        onResultsRef.current(results, query.trim())
+        onResultsRef.current(results, q)
       } catch {
         setError('Search failed — is the server reachable?')
-        onResultsRef.current([], query.trim())
+        onResultsRef.current([], q)
       } finally {
         setLoading(false)
       }

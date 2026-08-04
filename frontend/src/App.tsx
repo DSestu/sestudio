@@ -15,6 +15,7 @@ import { useSettings } from './useSettings'
 import DownloadsView from './views/DownloadsView'
 import HomeView from './views/HomeView'
 import LibraryView from './views/LibraryView'
+import PersonView from './views/PersonView'
 import SearchView from './views/SearchView'
 import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
@@ -23,8 +24,6 @@ export default function App() {
   const [route, rawNavigate] = useRoute()
   const [settings, updateSettings] = useSettings()
 
-  // Set when a browse-row card is clicked, to drive the search box.
-  const [searchTerm, setSearchTerm] = useState<string | null>(null)
   const [downloadTick, setDownloadTick] = useState(0)
   const [skippedJobs, setSkippedJobs] = useState<DownloadJob[]>([])
 
@@ -109,9 +108,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pullback])
 
+  /** Run a source search for a title (browse rows, discover, similar titles).
+   *  The query travels in the URL, so back returns to where it was clicked. */
   function searchFor(term: string) {
-    setSearchTerm(term)
-    navigate('search')
+    navigate('search', { q: term })
   }
 
   const allJobs = [
@@ -133,15 +133,28 @@ export default function App() {
             onOpen={openTitle}
             onNavigate={navigate}
             onSearchTerm={searchFor}
+            onDiscoverGenre={id => navigate('search', { g: id })}
           />
         )}
         {route.view === 'search' && (
           <SearchView
+            // Remount when the query in the URL changes (navigation, back),
+            // so the view re-seeds itself from the URL. Typing only rewrites
+            // the current entry and never remounts.
+            key={route.params.get('q') ?? ''}
             settings={settings}
-            term={searchTerm}
+            params={route.params}
             onOpenDetail={card => openTitle(card, 0, settings.lang)}
+            onSearchTerm={searchFor}
             onJobsCreated={() => setDownloadTick(t => t + 1)}
             onSkipped={jobs => setSkippedJobs(prev => [...prev, ...jobs])}
+          />
+        )}
+        {route.view === 'person' && (
+          <PersonView
+            key={route.params.get('id') ?? ''}
+            personId={Number(route.params.get('id'))}
+            navigate={navigate}
           />
         )}
         {route.view === 'library' && (
