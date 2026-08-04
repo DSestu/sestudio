@@ -4,10 +4,13 @@ import { useEffect, useState } from 'react'
 export const TABS = ['home', 'search', 'library', 'downloads'] as const
 export type Tab = (typeof TABS)[number]
 
-/** All routable views. `watch` is reachable only by opening a title. */
-export type View = Tab | 'watch'
+/**
+ * All routable views. `watch` is reachable only by opening a title, `settings`
+ * only from the settings control — neither takes a slot in the nav.
+ */
+export type View = Tab | 'watch' | 'settings'
 
-const VIEWS: readonly string[] = [...TABS, 'watch']
+const VIEWS: readonly string[] = [...TABS, 'watch', 'settings']
 
 export interface Route {
   view: View

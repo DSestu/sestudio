@@ -6,7 +6,6 @@ import { refreshDlna } from './dlnaControl'
 import AppShell from './components/AppShell'
 import NowCastingBar from './components/cast/NowCastingBar'
 import MiniPlayer from './components/watch/MiniPlayer'
-import SettingsPanel from './components/SettingsPanel'
 import { hydrateLibrary } from './hydrateLibrary'
 import { createPortalNode } from './portalNode'
 import { useRoute, type Navigate } from './nav'
@@ -17,12 +16,12 @@ import DownloadsView from './views/DownloadsView'
 import HomeView from './views/HomeView'
 import LibraryView from './views/LibraryView'
 import SearchView from './views/SearchView'
+import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
 
 export default function App() {
   const [route, rawNavigate] = useRoute()
   const [settings, updateSettings] = useSettings()
-  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // Set when a browse-row card is clicked, to drive the search box.
   const [searchTerm, setSearchTerm] = useState<string | null>(null)
@@ -126,7 +125,7 @@ export default function App() {
         view={route.view}
         onNavigate={navigate}
         downloadBadge={downloads.activeCount}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => navigate('settings')}
       >
         {route.view === 'home' && (
           <HomeView
@@ -147,6 +146,9 @@ export default function App() {
         )}
         {route.view === 'library' && (
           <LibraryView settings={settings} onOpen={openTitle} onNavigate={navigate} />
+        )}
+        {route.view === 'settings' && (
+          <SettingsView settings={settings} onUpdate={updateSettings} />
         )}
         {route.view === 'downloads' && (
           <DownloadsView
@@ -177,14 +179,6 @@ export default function App() {
           </div>
         )}
       </AppShell>
-
-      {settingsOpen && (
-        <SettingsPanel
-          settings={settings}
-          onUpdate={updateSettings}
-          onClose={() => setSettingsOpen(false)}
-        />
-      )}
 
       {/* One persistent Now-Casting surface, on every view. Renders nothing
           unless a cast (Chromecast or DLNA) is active. */}

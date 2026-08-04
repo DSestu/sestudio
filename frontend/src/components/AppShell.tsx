@@ -29,7 +29,7 @@ interface Props {
   onNavigate: (v: Tab) => void
   /** Rendered on the Downloads destination when non-zero. */
   downloadBadge?: number
-  /** Opens the settings drawer. */
+  /** Navigates to the settings page. */
   onOpenSettings: () => void
   children: ReactNode
 }
@@ -77,7 +77,12 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
         <div className="mt-auto">
           <button
             onClick={onOpenSettings}
-            className="flex w-full items-center gap-3 rounded-box px-3 py-2.5 text-sm font-medium text-base-content/60 hover:bg-base-300/60 hover:text-base-content transition-colors"
+            aria-current={view === 'settings' ? 'page' : undefined}
+            className={`flex w-full items-center gap-3 rounded-box px-3 py-2.5 text-sm font-medium transition-colors ${
+              view === 'settings'
+                ? 'bg-primary/15 text-primary'
+                : 'text-base-content/60 hover:bg-base-300/60 hover:text-base-content'
+            }`}
           >
             {icon('M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75')}
             Settings
@@ -88,7 +93,12 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
       {/* Mobile top bar */}
       <header className="md:hidden sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-base-300 bg-base-100/95 backdrop-blur px-4 h-14 pt-[env(safe-area-inset-top)]">
         <Wordmark />
-        <button onClick={onOpenSettings} aria-label="Settings" className="btn btn-ghost btn-square btn-sm">
+        <button
+          onClick={onOpenSettings}
+          aria-label="Settings"
+          aria-current={view === 'settings' ? 'page' : undefined}
+          className={`btn btn-square btn-sm ${view === 'settings' ? 'btn-active text-primary' : 'btn-ghost'}`}
+        >
           {icon('M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75')}
         </button>
       </header>
