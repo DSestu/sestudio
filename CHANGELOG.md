@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.0](https://github.com/DSestu/sestudio/compare/v0.8.0...v0.9.0) (2026-08-04)
+
+
+### New features
+
+* Improve TMDB experience ([#36](https://github.com/DSestu/sestudio/issues/36)) ([2162e22](https://github.com/DSestu/sestudio/commit/2162e22aee77f4937d3b506e0c92b60adbaf082b))
+* settings page and TMDB key ([5d4176a](https://github.com/DSestu/sestudio/commit/5d4176aeee04042bfac167dbe14cd31c8fe29278))
+
+
+### Bug fixes
+
+* search duplicates ([#35](https://github.com/DSestu/sestudio/issues/35)) ([98f16b5](https://github.com/DSestu/sestudio/commit/98f16b53baf62f0798c975e29369a4d6c8694cba))
+
+
+### Code refactoring
+
+* Add select all button in favorites ([#33](https://github.com/DSestu/sestudio/issues/33)) ([1f7fc27](https://github.com/DSestu/sestudio/commit/1f7fc27936f6e04c28e1382c937da642b87cbbb6))
+* layout of tmdb ([2f93c6e](https://github.com/DSestu/sestudio/commit/2f93c6e9f2bde0f3669c4dc2b8219d5ffa280b9b))
+
 ## [0.8.0](https://github.com/DSestu/sestudio/compare/v0.7.1...v0.8.0) (2026-08-04)
 
 
