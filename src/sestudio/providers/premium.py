@@ -9,7 +9,7 @@ from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import StreamSource
 from sestudio.providers.base import ProviderError, StreamProvider
 from sestudio.providers.vidzy import (
-    _OBFUSCATED_SRC_RE,
+    _INLINE_SRC_RE,
     _SRC_RE,
     _deobfuscate_src,
     _unpack,
@@ -50,9 +50,9 @@ class PremiumProvider(StreamProvider):
             raise ProviderError(f"No packed script found in Premium embed: {embed_url}")
         unpacked = _unpack(packed.group(0))
 
-        obf = _OBFUSCATED_SRC_RE.search(unpacked)
+        obf = _INLINE_SRC_RE.search(unpacked)
         if obf:
-            stream_url = _deobfuscate_src(obf.group(1), obf.group(2))
+            stream_url = _deobfuscate_src(obf.group("body"), obf.group("payload"))
         else:
             src = _SRC_RE.search(unpacked)
             if not src:

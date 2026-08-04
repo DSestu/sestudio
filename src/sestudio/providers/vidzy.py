@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 import re
+from collections.abc import Iterator
 
 import httpx
 
@@ -30,17 +31,67 @@ _SRC_RE = re.compile(r'src\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']')
 # function that base64-decodes a string and XORs each byte with a rotating key,
 # e.g. src:(function(s){var k=[214,91,...],b=atob(s),...^k[i%8]...})("<b64>").
 # The plaintext .m3u8 URLs left in the page (…/troll/master.m3u8) are decoys.
-_OBFUSCATED_SRC_RE = re.compile(
-    r'src:\(function\(s\)\{var k=\[([\d,]+)\],b=atob\(s\).*?\}\)\("([A-Za-z0-9+/=]+)"\)',
+#
+# Several key derivations are in the wild and the embed rotates between them:
+#   - a literal array, XORed cyclically:      k=[214,91,...]  ... ^k[i%8]
+#   - an arithmetic ramp computed per byte:   kk=(0x5b+i*37)&255
+# Some variants also reverse the decoded string before returning it, and the
+# array contents / ramp seed+multiplier differ per embed. Rather than deciding
+# up front which scheme a body describes, we generate *every* candidate the body
+# plausibly supports and return the first that decodes to something containing
+# ".m3u8" — see _deobfuscate_src.
+_INLINE_SRC_RE = re.compile(
+    r'src:\(function\(s\)\{(?P<body>.{0,400}?)\}\)\("(?P<payload>[A-Za-z0-9+/=]+)"\)',
     re.DOTALL,
+)
+_ARRAY_KEY_RE = re.compile(r"k=\[([\d,]+)\]")
+_RAMP_KEY_RE = re.compile(
+    r"\(\s*(0x[0-9a-fA-F]+|\d+)\s*\+\s*i\s*\*\s*(\d+)\s*\)\s*&\s*255"
 )
 
 
-def _deobfuscate_src(key_csv: str, payload_b64: str) -> str:
-    """Replicate the embed's inline decoder: base64 then XOR with a rotating key."""
-    key = [int(x) for x in key_csv.split(",")]
+def _keystreams(body: str, length: int) -> Iterator[list[int]]:
+    """Yield every XOR keystream the decoder body plausibly describes.
+
+    Both derivations are emitted whenever the body supports them — the caller
+    validates the result, so guessing wrong is free. Every ramp occurrence is
+    tried, not just the first, since the body may hold more than one.
+    """
+    for array_match in _ARRAY_KEY_RE.finditer(body):
+        key = [int(x) for x in array_match.group(1).split(",")]
+        if key:
+            yield [key[i % len(key)] for i in range(length)]
+
+    for ramp_match in _RAMP_KEY_RE.finditer(body):
+        seed = int(ramp_match.group(1), 0)
+        step = int(ramp_match.group(2))
+        yield [(seed + i * step) & 255 for i in range(length)]
+
+
+def _deobfuscate_src(body: str, payload_b64: str) -> str:
+    """Replicate the embed's inline decoder: base64, XOR, maybe reversal.
+
+    The embed rotates between obfuscation schemes, so every known one is tried
+    against the payload — in both orientations, since some variants reverse the
+    result — and the first that yields a plausible m3u8 URL wins. Trying blindly
+    is safe because a wrong keystream produces bytes that cannot contain
+    ".m3u8"; this way a rotation only breaks us if it introduces a derivation we
+    have never seen, not merely a different combination of known ones.
+    """
     raw = base64.b64decode(payload_b64)
-    return "".join(chr(raw[i] ^ key[i % len(key)]) for i in range(len(raw)))
+
+    tried = 0
+    for keystream in _keystreams(body, len(raw)):
+        decoded = "".join(chr(raw[i] ^ keystream[i]) for i in range(len(raw)))
+        for candidate in (decoded, decoded[::-1]):
+            tried += 1
+            if ".m3u8" in candidate:
+                return candidate
+
+    raise ProviderError(
+        f"No known Vidzy obfuscation scheme decoded the src ({tried} combinations "
+        f"tried) — the embed likely rotated to a new one"
+    )
 
 
 def _unpack(packed: str) -> str:
@@ -92,9 +143,11 @@ class VidzyProvider(StreamProvider):
 
         unpacked = _unpack(packed_match.group(0))
 
-        obf_match = _OBFUSCATED_SRC_RE.search(unpacked)
+        obf_match = _INLINE_SRC_RE.search(unpacked)
         if obf_match:
-            stream_url = _deobfuscate_src(obf_match.group(1), obf_match.group(2))
+            stream_url = _deobfuscate_src(
+                obf_match.group("body"), obf_match.group("payload")
+            )
         else:
             # Fallback: older embeds put the m3u8 URL in a plain quoted string.
             src_match = _SRC_RE.search(unpacked)
