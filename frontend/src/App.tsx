@@ -91,6 +91,7 @@ export default function App() {
       p: card.poster_url,
       lang,
       ep: episode || undefined,
+      alt: card.alt_page_urls?.length ? card.alt_page_urls.join('|') : undefined,
     })
   }
 
@@ -162,6 +163,7 @@ export default function App() {
             <WatchView
               key={String(activeWatch.u)}
               pageUrl={String(activeWatch.u ?? '')}
+              altPageUrls={String(activeWatch.alt ?? '').split('|').filter(Boolean)}
               seriesName={String(activeWatch.t ?? '')}
               posterUrl={String(activeWatch.p ?? '')}
               lang={String(activeWatch.lang || settings.lang)}

@@ -13,6 +13,9 @@ export interface SeasonCard {
   is_anime: boolean
   /** Release year parsed from the search title, 0 when absent. */
   year?: number
+  /** Other source pages for this same title (other languages or mirrors), set
+   *  by mergeCards. The detail view unions their languages. */
+  alt_page_urls?: string[]
 }
 
 export interface EpisodeDetail {

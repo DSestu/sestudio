@@ -6,6 +6,7 @@ import { checkDownloads, getSeason, postDownloads } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import EmptyState from '../components/EmptyState'
 import ResultsGrid from '../components/ResultsGrid'
+import { mergeCards } from '../mergeResults'
 import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
 
@@ -41,7 +42,8 @@ export default function SearchView({ settings, term, onOpenDetail, onJobsCreated
   }
 
   function handleSearchResults(cards: SeasonCard[], query: string) {
-    setResults(cards)
+    // Same title listed per language and per mirror collapses to one result.
+    setResults(mergeCards(cards))
     setLastQuery(query)
     setCheckedIds(prev => {
       const ids = new Set(cards.map(c => c.newsid))

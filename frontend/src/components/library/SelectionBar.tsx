@@ -10,8 +10,6 @@ export interface BulkAction {
 
 interface Props {
   count: number
-  total: number
-  onSelectAll: () => void
   onCancel: () => void
   actions: BulkAction[]
   /** Shown when a bulk mutation was rejected and the store rolled back. */
@@ -27,11 +25,7 @@ interface Props {
  * AppShell hides the tab bar while this is up, so total chrome height is
  * unchanged and the cast bar stays exactly where it was (#26).
  */
-export default function SelectionBar({
-  count, total, onSelectAll, onCancel, actions, error,
-}: Props) {
-  const allSelected = count > 0 && count === total
-
+export default function SelectionBar({ count, onCancel, actions, error }: Props) {
   return (
     <div
       role="toolbar"
@@ -44,15 +38,11 @@ export default function SelectionBar({
         </p>
       )}
       <div className="flex items-center gap-2 px-3 py-2 min-h-16">
-        <div className="flex flex-col min-w-0">
-          <span className="text-sm font-medium whitespace-nowrap">{count} selected</span>
-          <button
-            onClick={onSelectAll}
-            className="text-xs text-base-content/50 hover:text-primary transition-colors text-left"
-          >
-            {allSelected ? 'Select none' : 'Select all'}
-          </button>
-        </div>
+        {/* Select-all is in the content section, where it's actually visible;
+            this count stays because the bar outlives the header on scroll. */}
+        <span aria-live="polite" className="text-sm font-medium whitespace-nowrap">
+          {count} selected
+        </span>
 
         <div className="flex-1" />
 
