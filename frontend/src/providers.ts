@@ -11,6 +11,9 @@ export interface PlayableEpisode {
   poster_url: string
   page_url: string
   lang: string
+  /** Highest episode number in the season, when the playlist is known. Recorded
+   *  onto watch state so the library can tell a finished season from an ongoing one. */
+  seasonEpisodes?: number
 }
 
 // Preferred order, mirroring the backend resolve fallback.

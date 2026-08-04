@@ -9,13 +9,13 @@ interface Props {
   className?: string
 }
 
-/** Watchlist (☆) and favourite (♥) toggles for a title or episode. */
+/** Watchlist (☆) and favourite (♥) toggles for a title. */
 export default function SaveToggles({ entry, size = 'md', className = '' }: Props) {
   const state = useCollections()
   const inWatchlist = isSaved('watchlist', entry, state)
   const isFavourite = isSaved('favourites', entry, state)
   const btn = `btn btn-ghost btn-square ${size === 'sm' ? 'btn-sm' : 'btn-md sm:btn-sm'}`
-  const label = entry.kind === 'episode' ? `episode ${entry.label}` : entry.label
+  const label = entry.label
 
   return (
     <div className={`flex items-center ${className}`}>

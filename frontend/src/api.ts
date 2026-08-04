@@ -245,6 +245,8 @@ export interface LibrarySnapshot {
   collections: { watchlist: Record<string, CollectionEntry>; favourites: Record<string, CollectionEntry> }
   player: PlayerPrefs | null
   playlist_collapsed: boolean
+  /** Per-tab library layout, or null before anything was ever set (#26). */
+  library_layout: unknown
 }
 
 /** The whole library, for hydrating the client stores on load. */
@@ -281,7 +283,31 @@ export async function deleteCollectionEntry(list: ListName, key: string): Promis
   await fetch(`${BASE}/library/collections/${list}/${encodeURIComponent(key)}`, { method: 'DELETE' })
 }
 
-export async function putPreference(key: 'player' | 'playlist_collapsed', value: unknown): Promise<void> {
+/** Deletes and puts applied server-side in one transaction. Keys travel in the
+ *  body, so unlike the single-entry mutators they need no percent-encoding. */
+export interface LibraryBatch {
+  watch_delete?: string[]
+  watch_put?: { key: string; entry: WatchEntry }[]
+  collections_delete?: { list: ListName; key: string }[]
+  collections_put?: { list: ListName; key: string; entry: CollectionEntry }[]
+}
+
+/**
+ * Apply many library mutations at once. Unlike the single-entry mutators this
+ * reports failure, because callers apply optimistically and need to roll back.
+ */
+export async function batchLibrary(batch: LibraryBatch): Promise<void> {
+  const res = await fetch(`${BASE}/library/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(batch),
+  })
+  if (!res.ok) throw new Error('Library batch failed')
+}
+
+export type PreferenceKey = 'player' | 'playlist_collapsed' | 'library_layout'
+
+export async function putPreference(key: PreferenceKey, value: unknown): Promise<void> {
   await fetch(`${BASE}/library/preferences/${key}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

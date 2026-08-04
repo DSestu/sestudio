@@ -5,7 +5,7 @@ import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
 import type { StreamSource } from '../../api'
 import type { PlayableEpisode } from '../../providers'
-import { getProgress, markWatched, saveProgress } from '../../watchState'
+import { getProgress, saveProgress, setWatched } from '../../watchState'
 import { endBrowserPlayback, sameEpisode, startBrowserPlayback, updateBrowserPlayback, useCastSession } from '../../playbackSession'
 import { setBrowserPlayerControls } from '../../browserPlayerControls'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
@@ -135,7 +135,7 @@ export default function VideoPane({
   }
 
   function handleEnded() {
-    markWatched(ep)
+    setWatched(ep, true)
     if (autoplay && nextTitle) setNextIn(5)
   }
 
