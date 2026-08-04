@@ -46,9 +46,15 @@ export interface AppSettings {
 }
 
 export interface TmdbCast {
+  id: number
   name: string
   character: string
   profile_url: string
+}
+
+export interface TmdbPersonRef {
+  id: number
+  name: string
 }
 
 export interface TmdbMeta {
@@ -58,10 +64,13 @@ export interface TmdbMeta {
   overview: string
   year: number
   rating: number
+  vote_count: number
   poster_url: string
   backdrop_url: string
   genres: string[]
   cast: TmdbCast[]
+  directors: TmdbPersonRef[]
+  recommendations: TrendingCard[]
   trailer_key: string
 }
 
@@ -72,6 +81,94 @@ export interface TrendingCard {
   year: number
   rating: number
   poster_url: string
+}
+
+export type TmdbKind = 'movie' | 'tv'
+
+export interface DiscoverFilters {
+  kind: TmdbKind
+  sortBy: string
+  /** TMDB genre ids. */
+  genres: number[]
+  minScore: number
+  /** 10 = no ceiling. A low ceiling finds enjoyably bad films. */
+  maxScore: number
+  minVotes: number
+}
+
+export const DEFAULT_DISCOVER_FILTERS: DiscoverFilters = {
+  kind: 'movie',
+  sortBy: 'popularity.desc',
+  genres: [],
+  minScore: 0,
+  maxScore: 10,
+  minVotes: 0,
+}
+
+export interface DiscoverPage {
+  page: number
+  total_pages: number
+  results: TrendingCard[]
+}
+
+export interface TmdbGenre {
+  id: number
+  name: string
+}
+
+export interface TmdbCredit extends TrendingCard {
+  /** Character(s) played and/or crew job, e.g. "Cameo · Director". */
+  role: string
+}
+
+export interface TmdbPerson {
+  id: number
+  name: string
+  biography: string
+  known_for_department: string
+  profile_url: string
+  birthday: string
+  credits: TmdbCredit[]
+}
+
+/** TMDB names date/title sort fields differently per media type. */
+function sortParam(kind: TmdbKind, sortBy: string): string {
+  if (sortBy.startsWith('date.')) {
+    return (kind === 'movie' ? 'primary_release_date' : 'first_air_date') + sortBy.slice('date'.length)
+  }
+  if (sortBy.startsWith('title.')) {
+    return (kind === 'movie' ? 'title' : 'name') + sortBy.slice('title'.length)
+  }
+  return sortBy
+}
+
+/** One page of the TMDB catalogue under the given sort/filters. */
+export async function discoverTitles(filters: DiscoverFilters, page: number): Promise<DiscoverPage> {
+  const params = new URLSearchParams({
+    kind: filters.kind,
+    sort_by: sortParam(filters.kind, filters.sortBy),
+    page: String(page),
+  })
+  if (filters.genres.length) params.set('genres', filters.genres.join(','))
+  if (filters.minScore > 0) params.set('min_score', String(filters.minScore))
+  if (filters.maxScore < 10) params.set('max_score', String(filters.maxScore))
+  if (filters.minVotes > 0) params.set('min_votes', String(filters.minVotes))
+  const res = await fetch(`${BASE}/tmdb/discover?${params}`)
+  if (!res.ok) return { page: 1, total_pages: 1, results: [] }
+  return res.json()
+}
+
+export async function getGenres(kind: TmdbKind): Promise<TmdbGenre[]> {
+  const res = await fetch(`${BASE}/tmdb/genres?kind=${kind}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+/** A person's profile and filmography, or null when unknown / TMDB disabled. */
+export async function getPerson(id: number): Promise<TmdbPerson | null> {
+  const res = await fetch(`${BASE}/tmdb/person/${id}`)
+  if (!res.ok) return null
+  return res.json()
 }
 
 /** Metadata for a title, or null when TMDB has no match / is disabled. */

@@ -1,5 +1,6 @@
 import type { SeasonCard } from '../api'
 import { useTmdb } from '../useTmdb'
+import RatingBadge from './RatingBadge'
 import SaveToggles from './SaveToggles'
 
 interface Props {
@@ -66,13 +67,8 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
       </button>
 
       {/* Rating from TMDB, when enrichment found a match */}
-      {meta && meta.rating > 0 && (
-        <span
-          className="absolute top-1.5 right-1.5 z-10 badge badge-sm bg-base-100/80 border-none gap-0.5"
-          title={`TMDB rating ${meta.rating}/10`}
-        >
-          ★ {meta.rating.toFixed(1)}
-        </span>
+      {meta && (
+        <RatingBadge rating={meta.rating} className="absolute top-1.5 right-1.5 z-10" />
       )}
 
       {/* Save controls sit outside the poster button — nesting buttons is invalid.

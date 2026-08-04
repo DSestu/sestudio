@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react'
+import RatingBadge from './RatingBadge'
 
 export interface MediaCardItem {
   key: string
   title: string
   subtitle?: string
+  /** TMDB score — shown as a colored chip on the poster when set. */
+  rating?: number
   poster_url: string
   /** 0..1 — renders a progress bar under the poster when set. */
   progress?: number
@@ -115,6 +118,9 @@ export default function MediaCard({ item, removeContext, selection }: Props) {
             <div className="w-full aspect-[2/3] bg-base-300 flex items-center justify-center text-base-content/30 text-3xl">
               ?
             </div>
+          )}
+          {item.rating !== undefined && (
+            <RatingBadge rating={item.rating} className="absolute top-1.5 right-1.5 z-10" />
           )}
           {/* Play affordance — hover-only, so it never occupies a touch card. */}
           <span className="pointer-events-none absolute inset-0 hidden [@media(hover:hover)]:flex items-center justify-center bg-base-100/40 opacity-0 group-hover:opacity-100 transition-opacity">

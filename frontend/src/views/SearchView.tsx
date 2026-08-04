@@ -1,28 +1,61 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
-  AppSettings, DownloadDestination, DownloadItem, DownloadJob, SeasonCard,
+  AppSettings, DiscoverFilters, DownloadDestination, DownloadItem, DownloadJob, SeasonCard,
 } from '../api'
 import { checkDownloads, getSeason, postDownloads } from '../api'
+import { DEFAULT_DISCOVER_FILTERS } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
+import DiscoverPanel from '../components/DiscoverPanel'
 import EmptyState from '../components/EmptyState'
 import ResultsGrid from '../components/ResultsGrid'
 import { mergeCards } from '../mergeResults'
 import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
+import { replaceParams } from '../nav'
 
 interface Props {
   settings: AppSettings
-  /** Externally-driven query (e.g. clicking a trending card on Home). */
-  term: string | null
+  /** The route's params — query and discover filters live in the URL, so the
+   *  view restores itself after a reload or browser back. */
+  params: URLSearchParams
   onOpenDetail: (card: SeasonCard) => void
+  /** Run a fresh source search for a title (a TMDB discover card). */
+  onSearchTerm: (term: string) => void
   onJobsCreated: () => void
   onSkipped: (jobs: DownloadJob[]) => void
 }
 
-/** Search view: query, results grid, and bulk season download. */
-export default function SearchView({ settings, term, onOpenDetail, onJobsCreated, onSkipped }: Props) {
+function filtersFrom(params: URLSearchParams): DiscoverFilters {
+  return {
+    kind: params.get('kind') === 'tv' ? 'tv' : 'movie',
+    sortBy: params.get('sort') ?? DEFAULT_DISCOVER_FILTERS.sortBy,
+    genres: (params.get('g') ?? '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0),
+    minScore: Number(params.get('score')) || 0,
+    maxScore: Number(params.get('max')) || 10,
+    minVotes: Number(params.get('votes')) || 0,
+  }
+}
+
+/** Non-default filters only, so the URL stays clean. */
+function filterParams(f: DiscoverFilters): Record<string, string | number | undefined> {
+  return {
+    kind: f.kind === 'tv' ? 'tv' : undefined,
+    sort: f.sortBy !== DEFAULT_DISCOVER_FILTERS.sortBy ? f.sortBy : undefined,
+    g: f.genres.length ? f.genres.join(',') : undefined,
+    score: f.minScore > 0 ? f.minScore : undefined,
+    max: f.maxScore < 10 ? f.maxScore : undefined,
+    votes: f.minVotes > 0 ? f.minVotes : undefined,
+  }
+}
+
+/** Search view: query, TMDB discovery, results grid, and bulk season download. */
+export default function SearchView({ settings, params, onOpenDetail, onSearchTerm, onJobsCreated, onSkipped }: Props) {
   const [results, setResults] = useState<SeasonCard[]>([])
-  const [lastQuery, setLastQuery] = useState('')
+  // The query being searched for; seeded from the URL so back/reload restores.
+  const [lastQuery, setLastQuery] = useState(params.get('q') ?? '')
+  // The query the current `results` belong to — '' until the first response.
+  const [resolvedQuery, setResolvedQuery] = useState('')
+  const [filters, setFilters] = useState<DiscoverFilters>(() => filtersFrom(params))
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
@@ -45,11 +78,18 @@ export default function SearchView({ settings, term, onOpenDetail, onJobsCreated
     // Same title listed per language and per mirror collapses to one result.
     setResults(mergeCards(cards))
     setLastQuery(query)
+    setResolvedQuery(query)
     setCheckedIds(prev => {
       const ids = new Set(cards.map(c => c.newsid))
       return new Set([...prev].filter(id => ids.has(id)))
     })
   }
+
+  // Persist query + filters into the current history entry, so browser back
+  // (and reload) land on this exact search instead of an empty one.
+  useEffect(() => {
+    replaceParams('search', { q: lastQuery || undefined, ...filterParams(filters) })
+  }, [lastQuery, filters])
 
   async function resolveChecked() {
     if (!checkedIds.size) return
@@ -108,7 +148,7 @@ export default function SearchView({ settings, term, onOpenDetail, onJobsCreated
 
   return (
     <div className="flex flex-col gap-5">
-      <SearchBar onResults={handleSearchResults} term={term} />
+      <SearchBar onResults={handleSearchResults} term={params.get('q')} />
 
       {results.length > 0 && (
         <div className="flex items-center gap-3">
@@ -136,17 +176,22 @@ export default function SearchView({ settings, term, onOpenDetail, onJobsCreated
         </div>
       )}
 
-      {results.length === 0 && lastQuery !== '' ? (
-        <EmptyState
-          title={`No results for “${lastQuery}”`}
-          message="Try a different title, or check the spelling."
-        />
-      ) : results.length === 0 ? (
-        <EmptyState
-          title="Search the catalogue"
-          message="Type a series or film name above. Results can be played here, cast to a TV, or downloaded."
-        />
-      ) : (
+      {lastQuery === '' ? (
+        // No query: browse the TMDB catalogue instead of a blank page, so
+        // suggestions and search flow into each other.
+        settings.tmdb_configured ? (
+          <DiscoverPanel
+            filters={filters}
+            onChange={setFilters}
+            onSelect={card => onSearchTerm(card.title)}
+          />
+        ) : (
+          <EmptyState
+            title="Search the catalogue"
+            message="Type a series or film name above. Results can be played here, cast to a TV, or downloaded."
+          />
+        )
+      ) : results.length > 0 ? (
         <ResultsGrid
           cards={results}
           checkedIds={checkedIds}
@@ -154,6 +199,16 @@ export default function SearchView({ settings, term, onOpenDetail, onJobsCreated
           onOpenDetail={onOpenDetail}
           enrich={settings.tmdb_configured}
         />
+      ) : resolvedQuery === lastQuery ? (
+        <EmptyState
+          title={`No results for “${lastQuery}”`}
+          message="Try a different title, or check the spelling."
+        />
+      ) : (
+        // Restored from the URL and still fetching — the bar shows a spinner.
+        <div className="flex justify-center py-12" aria-busy="true" aria-label="Searching">
+          <span className="loading loading-spinner loading-md text-base-content/40" />
+        </div>
       )}
 
       {/* Bulk download bar — clears the mobile tab bar */}

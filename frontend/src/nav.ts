@@ -6,11 +6,12 @@ export type Tab = (typeof TABS)[number]
 
 /**
  * All routable views. `watch` is reachable only by opening a title, `settings`
- * only from the settings control — neither takes a slot in the nav.
+ * only from the settings control, `person` only from a cast/director credit —
+ * none takes a slot in the nav.
  */
-export type View = Tab | 'watch' | 'settings'
+export type View = Tab | 'watch' | 'settings' | 'person'
 
-const VIEWS: readonly string[] = [...TABS, 'watch', 'settings']
+const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person']
 
 export interface Route {
   view: View
@@ -66,4 +67,13 @@ export function useRoute(): [Route, Navigate] {
 /** Params for opening a title in the watch view. */
 export function watchParams(pageUrl: string, lang: string, episode?: number) {
   return { u: pageUrl, lang, ep: episode }
+}
+
+/**
+ * Rewrite the current entry's params without adding a history entry or firing
+ * hashchange. Lets a view persist live state (query text, filters) into the
+ * URL so browser-back lands on it exactly as it was left.
+ */
+export function replaceParams(view: View, params?: Record<string, string | number | undefined>) {
+  history.replaceState(null, '', hashFor(view, params))
 }
