@@ -1,8 +1,9 @@
-import { getLibrary, importLibrary, type LibrarySnapshot } from './api'
-import type { CollectionEntry } from './collections'
-import { hydrateCollections } from './collections'
+import { batchLibrary, getLibrary, importLibrary, type LibrarySnapshot } from './api'
+import type { CollectionEntry, ListName } from './collections'
+import { foldToTitles, hydrateCollections } from './collections'
 import type { PlayerPrefs } from './playerPrefs'
 import { hydratePlayerPrefs } from './playerPrefs'
+import { hydrateLibraryLayout } from './libraryLayout'
 import { hydrateCollapsed } from './playlistCollapsed'
 import type { WatchEntry } from './watchState'
 import { hydrateWatch } from './watchState'
@@ -13,9 +14,11 @@ import { hydrateWatch } from './watchState'
 // localStorage caches the stores already loaded.
 
 const WATCH_KEY = 'sestudio.watch.v1'
-const COLLECTIONS_KEY = 'sestudio.collections.v1'
+// v2 by the time this runs: the collections module upgrades a v1 cache at import.
+const COLLECTIONS_KEY = 'sestudio.collections.v2'
 const PLAYER_KEY = 'sestudio.player.v1'
 const COLLAPSE_KEY = 'sestudio.playlist.collapsed'
+const LAYOUT_KEY = 'sestudio.libraryLayout.v1'
 
 function readLocal<T>(key: string, fallback: T): T {
   try {
@@ -54,7 +57,42 @@ function localSnapshot(): LibrarySnapshot {
     },
     player: readLocal<PlayerPrefs | null>(PLAYER_KEY, null),
     playlist_collapsed: collapsed,
+    library_layout: readLocal<unknown>(LAYOUT_KEY, null),
   }
+}
+
+/**
+ * Fold any episode-level collection entries the server still holds up to their
+ * title, and drop the superseded keys (#26).
+ *
+ * Returns the snapshot unchanged when there is nothing to fold, which is the
+ * case from the second run onward — so this is safe on every load. When there
+ * is, it rewrites the whole list rather than computing a minimal diff; it only
+ * ever happens once, and one transaction is cheaper than the bookkeeping.
+ */
+async function foldCollections(s: LibrarySnapshot): Promise<LibrarySnapshot> {
+  const folded = {
+    watchlist: foldToTitles(s.collections.watchlist),
+    favourites: foldToTitles(s.collections.favourites),
+  }
+  const lists = Object.keys(folded) as ListName[]
+  const stale = lists.flatMap(list =>
+    folded[list].staleKeys.map(key => ({ list, key })),
+  )
+  if (!stale.length) return s
+
+  const collections = { watchlist: folded.watchlist.entries, favourites: folded.favourites.entries }
+  try {
+    await batchLibrary({
+      collections_delete: stale,
+      collections_put: lists.flatMap(list =>
+        Object.entries(collections[list]).map(([key, entry]) => ({ list, key, entry })),
+      ),
+    })
+  } catch {
+    // Server unreachable — fold locally anyway; the next load retries the write.
+  }
+  return { ...s, collections }
 }
 
 function apply(s: LibrarySnapshot): void {
@@ -62,6 +100,7 @@ function apply(s: LibrarySnapshot): void {
   hydrateCollections(s.collections)
   hydratePlayerPrefs(s.player)
   hydrateCollapsed(s.playlist_collapsed)
+  hydrateLibraryLayout(s.library_layout)
 }
 
 export async function hydrateLibrary(): Promise<void> {
@@ -75,7 +114,7 @@ export async function hydrateLibrary(): Promise<void> {
         return
       }
     }
-    apply(server)
+    apply(await foldCollections(server))
   } catch {
     // offline / server down — keep the localStorage-seeded caches as-is
   }

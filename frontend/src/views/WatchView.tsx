@@ -20,7 +20,7 @@ import type { Navigate } from '../nav'
 import type { PlayableEpisode } from '../providers'
 import { useProviderSources } from '../useProviderSources'
 import { useTmdb } from '../useTmdb'
-import { useWatchState, watchKey } from '../watchState'
+import { setWatched, useWatchState, watchKey } from '../watchState'
 
 /** Stable reference — useProviderSources resets on embedUrls identity change. */
 const NO_EMBEDS: Record<string, string> = {}
@@ -95,6 +95,11 @@ export default function WatchView({
       poster_url: posterUrl,
       page_url: pageUrl,
       lang: activeLang,
+      // The highest number rather than the count, so a sparse playlist can't
+      // make the library think the season has ended early.
+      seasonEpisodes: d.episodes.length
+        ? Math.max(...d.episodes.map(x => x.number))
+        : undefined,
     }
   }
 
@@ -112,6 +117,12 @@ export default function WatchView({
   function setCurrent(ep: EpisodeDetail) {
     setCurrentNumber(ep.number)
     setPosition(0)
+  }
+
+  /** Flip an episode's watched flag from the playlist. */
+  function toggleWatched(ep: EpisodeDetail) {
+    if (!detail) return
+    setWatched(toPlayable(ep, detail), !watchedNumbers.has(ep.number))
   }
 
   function toggleEpisode(num: number) {
@@ -206,13 +217,11 @@ export default function WatchView({
       activeLang={activeLang}
       isFilm={detail.is_film}
       season={season}
-      seriesName={seriesName}
-      posterUrl={posterUrl}
-      pageUrl={pageUrl}
       onSelect={setCurrent}
       onToggle={toggleEpisode}
       onToggleAll={toggleAll}
       onLang={setActiveLang}
+      onToggleWatched={toggleWatched}
     />
   )
 
@@ -265,7 +274,6 @@ export default function WatchView({
         {detail && (
           <SaveToggles
             entry={{
-              kind: 'title',
               series: seriesName,
               season,
               label: seriesName,

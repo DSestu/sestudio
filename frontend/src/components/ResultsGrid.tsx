@@ -14,8 +14,9 @@ interface Props {
 export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail, enrich }: Props) {
   if (!cards.length) return null
 
+  // Two across on a phone, so the always-visible touch controls fit (#26).
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
       {cards.map(card => (
         <ResultCard
           key={card.newsid}
@@ -54,7 +55,7 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
         className={`absolute top-1.5 left-1.5 z-10 w-6 h-6 rounded border-2 flex items-center justify-center transition ${
           checked
             ? 'bg-primary border-primary'
-            : 'bg-base-100/70 border-base-content/40 hover:border-primary opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+            : 'bg-base-100/70 border-base-content/40 hover:border-primary [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100'
         }`}
       >
         {checked && (
@@ -74,12 +75,13 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
         </span>
       )}
 
-      {/* Save controls sit outside the poster button — nesting buttons is invalid */}
-      <div className="absolute bottom-[4.25rem] right-1.5 z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+      {/* Save controls sit outside the poster button — nesting buttons is invalid.
+          Overlaid only where a pointer can hover; touch gets them in the caption
+          below, since search is where saving actually happens (#26). */}
+      <div className="hidden [@media(hover:hover)]:block absolute bottom-[4.25rem] right-1.5 z-10 rounded-box bg-base-100/80 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
         <SaveToggles
           size="sm"
           entry={{
-            kind: 'title',
             series: card.series_name,
             season: card.is_film ? 0 : card.season_number,
             label: card.series_name,
@@ -99,7 +101,7 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
           ) : (
             <div className="w-full aspect-[2/3] bg-base-300 flex items-center justify-center text-base-content/30 text-3xl">?</div>
           )}
-          <span className="pointer-events-none absolute inset-0 hidden sm:flex items-center justify-center bg-base-100/40 opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="pointer-events-none absolute inset-0 hidden [@media(hover:hover)]:flex items-center justify-center bg-base-100/40 opacity-0 group-hover:opacity-100 transition-opacity">
             <span className="btn btn-circle btn-primary btn-sm">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
             </span>
@@ -124,6 +126,21 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
           {year > 0 && <span className="text-base-content/40 text-xs font-mono">{year}</span>}
         </div>
       </button>
+
+      {/* Touch: the same save controls, permanently visible under the caption. */}
+      <div className="flex [@media(hover:hover)]:hidden items-center mt-1">
+        <SaveToggles
+          size="sm"
+          entry={{
+            series: card.series_name,
+            season: card.is_film ? 0 : card.season_number,
+            label: card.series_name,
+            poster_url: poster,
+            page_url: card.page_url,
+            lang: '',
+          }}
+        />
+      </div>
     </div>
   )
 }

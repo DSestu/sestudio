@@ -104,6 +104,7 @@ def get_snapshot() -> dict[str, Any]:
         "collections": collections,
         "player": prefs.get("player"),
         "playlist_collapsed": bool(prefs.get("playlist_collapsed", False)),
+        "library_layout": prefs.get("library_layout"),
     }
 
 
@@ -156,6 +157,56 @@ def delete_collection(list_name: str, key: str) -> None:
         conn.commit()
 
 
+# --- batch ------------------------------------------------------------------ #
+
+
+def apply_batch(
+    watch_delete: list[str],
+    collections_delete: list[tuple[str, str]],
+    collections_put: list[tuple[str, str, dict[str, Any]]],
+    watch_put: list[tuple[str, dict[str, Any]]] | None = None,
+) -> None:
+    """Apply many mutations in one transaction.
+
+    Batch selection in the library removes tens of entries at once, and "move to
+    favourites" is a delete from one list plus a put to another — neither should
+    be able to half-apply. Deletes run before puts, so a batch that touches the
+    same (list, key) both ways ends with the entry present.
+
+    Callers must validate list names first; unknown lists are written as-is.
+    """
+    with _lock:
+        conn = _connect()
+        with conn:  # transaction
+            conn.executemany(
+                "DELETE FROM watch_state WHERE key = ?",
+                [(key,) for key in watch_delete],
+            )
+            # Same last-write-wins guard as the single-entry upsert, so a stale
+            # batch from another device can't roll back a newer position.
+            conn.executemany(
+                "INSERT INTO watch_state (key, data, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at "
+                "WHERE excluded.updated_at >= watch_state.updated_at",
+                [
+                    (key, json.dumps(entry), int(entry.get("updatedAt", 0)))
+                    for key, entry in (watch_put or [])
+                ],
+            )
+            conn.executemany(
+                "DELETE FROM collections WHERE list = ? AND key = ?",
+                collections_delete,
+            )
+            conn.executemany(
+                "INSERT INTO collections (list, key, data, added_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(list, key) DO UPDATE SET data=excluded.data, added_at=excluded.added_at",
+                [
+                    (list_name, key, json.dumps(entry), int(entry.get("addedAt", 0)))
+                    for list_name, key, entry in collections_put
+                ],
+            )
+
+
 # --- preferences ------------------------------------------------------------ #
 
 
@@ -190,6 +241,7 @@ def import_bulk(payload: dict[str, Any]) -> None:
     collections = payload.get("collections") or {}
     player = payload.get("player")
     collapsed = payload.get("playlist_collapsed")
+    layout = payload.get("library_layout")
     with _lock:
         conn = _connect()
         with conn:  # transaction
@@ -217,4 +269,9 @@ def import_bulk(payload: dict[str, Any]) -> None:
                 conn.execute(
                     "INSERT OR REPLACE INTO preferences (key, value) VALUES ('playlist_collapsed', ?)",
                     (json.dumps(bool(collapsed)),),
+                )
+            if layout is not None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO preferences (key, value) VALUES ('library_layout', ?)",
+                    (json.dumps(layout),),
                 )

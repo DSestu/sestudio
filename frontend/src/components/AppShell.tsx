@@ -3,6 +3,7 @@ import { useBrowserPlayerControls } from '../browserPlayerControls'
 import { useCastState } from '../cast'
 import { useDlnaState } from '../dlnaControl'
 import type { Tab, View } from '../nav'
+import { useSelectionActive } from '../selectionMode'
 
 interface Destination {
   id: Tab
@@ -45,6 +46,9 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
   const browserControls = useBrowserPlayerControls()
   const miniActive = view !== 'watch' && browserControls !== null
   const bottomBar = castConnected || dlnaConnected || miniActive
+  // While the library is selecting, its action bar takes the tab bar's slot
+  // instead of stacking on top of it, so fixed chrome height never grows (#26).
+  const selecting = useSelectionActive()
   return (
     <div className="min-h-dvh bg-base-100 md:flex">
       {/* Desktop rail */}
@@ -103,10 +107,12 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
         <div className={`mx-auto w-full ${view === 'watch' ? '' : 'max-w-6xl'}`}>{children}</div>
       </main>
 
-      {/* Mobile tab bar */}
+      {/* Mobile tab bar — hidden while the selection bar occupies this slot. */}
       <nav
         aria-label="Primary"
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 grid grid-cols-4 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)]"
+        className={`fixed bottom-0 inset-x-0 z-40 grid grid-cols-4 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)] ${
+          selecting ? 'hidden' : 'md:hidden'
+        }`}
       >
         {DESTINATIONS.map(d => (
           <button
