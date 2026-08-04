@@ -25,7 +25,9 @@ import { setWatched, useWatchState, watchKey } from '../watchState'
 /** Stable reference — useProviderSources resets on embedUrls identity change. */
 const NO_EMBEDS: Record<string, string> = {}
 
-const MOBILE_TABS = ['episodes', 'details', 'download'] as const
+// Details is not among them: the TMDB metadata sits above the player on every
+// breakpoint now, so a tab for it would duplicate what is already on screen.
+const MOBILE_TABS = ['episodes', 'download'] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
 
 interface Props {
@@ -338,6 +340,11 @@ export default function WatchView({
 
           {/* Player pane */}
           <div className="flex-1 min-w-0 flex flex-col gap-3">
+            {/* TMDB metadata above the player, on every breakpoint. Renders
+                nothing without a key or a match, so the layout is unchanged
+                then. Its own bottom border separates it from the player. */}
+            <TitleHeader meta={meta} />
+
             {/* Sticky on mobile so the list scrolls under it; static on desktop.
                 The browser always plays the browsed episode; casting to a TV is
                 a separate, non-disruptive action (see OutputSwitcher). */}
@@ -398,22 +405,8 @@ export default function WatchView({
               </div>
               <div className="mt-3 rounded-box border border-base-300 bg-base-200 overflow-hidden">
                 {tab === 'episodes' && list}
-                {tab === 'details' && (
-                  <div className="p-3">
-                    {meta ? <TitleHeader meta={meta} /> : (
-                      <p className="text-sm text-base-content/50">
-                        No extra metadata — add a TMDB key in Settings for synopsis, cast and artwork.
-                      </p>
-                    )}
-                  </div>
-                )}
                 {tab === 'download' && downloadBar}
               </div>
-            </div>
-
-            {/* Desktop: metadata sits under the player */}
-            <div className="hidden lg:block">
-              <TitleHeader meta={meta} />
             </div>
           </div>
         </div>
