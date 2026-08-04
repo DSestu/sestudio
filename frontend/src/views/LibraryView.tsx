@@ -101,6 +101,13 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
     ? inProgress.map(i => `w-${i.series}-${i.season}`)
     : saved[tab].map(refKey)
 
+  const allPicked = keysOnTab.length > 0 && picked.size === keysOnTab.length
+  const somePicked = picked.size > 0 && !allPicked
+
+  function toggleAll() {
+    setPicked(allPicked ? new Set() : new Set(keysOnTab))
+  }
+
   /** Run a bulk mutation, surfacing failure since the store rolls itself back. */
   async function runBulk(mutate: () => Promise<void>) {
     setError(null)
@@ -228,6 +235,23 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
         aria-labelledby={`library-tab-${tab}`}
         tabIndex={0}
       >
+        {/* Select-all lives in the content, not the action bar: as a text link
+            down beside the counter it was too easy to miss. Same indeterminate
+            checkbox idiom as the playlist's "select all for download". */}
+        {selecting && counts[tab] > 0 && (
+          <label className="flex items-center gap-2.5 mb-3 px-3 py-2.5 rounded-box bg-base-200/60 ring-1 ring-base-300 cursor-pointer text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={allPicked}
+              ref={el => { if (el) el.indeterminate = somePicked }}
+              onChange={toggleAll}
+              className="checkbox checkbox-primary checkbox-sm"
+            />
+            {allPicked ? 'Select none' : 'Select all'}
+            <span className="text-base-content/50 font-normal">({keysOnTab.length})</span>
+          </label>
+        )}
+
         {counts[tab] === 0 ? (
           <EmptyState
             title={EMPTY_COPY[tab].title}
@@ -288,10 +312,6 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
       {selecting && (
         <SelectionBar
           count={picked.size}
-          total={keysOnTab.length}
-          onSelectAll={() =>
-            setPicked(prev => (prev.size === keysOnTab.length ? new Set() : new Set(keysOnTab)))
-          }
           onCancel={exitSelection}
           actions={bulkActions}
           error={error}
