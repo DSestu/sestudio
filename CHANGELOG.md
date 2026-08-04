@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/DSestu/sestudio/compare/v0.7.1...v0.8.0) (2026-08-04)
+
+
+### New features
+
+* Improve watching lists ([#30](https://github.com/DSestu/sestudio/issues/30)) ([8c26c8d](https://github.com/DSestu/sestudio/commit/8c26c8d49f42e150aef1643feca2f338f4e6d7cb))
+
+
+### Bug fixes
+
+* Decode Vidzy embeds across rotating obfuscation schemes ([#32](https://github.com/DSestu/sestudio/issues/32)) ([767496b](https://github.com/DSestu/sestudio/commit/767496b33fc6c80551e26b88dcd9dd3d3e6add86))
+
 ## [0.7.1](https://github.com/DSestu/sestudio/compare/v0.7.0...v0.7.1) (2026-08-03)
 
 
