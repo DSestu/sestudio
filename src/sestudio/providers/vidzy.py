@@ -9,6 +9,7 @@ import httpx
 
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import StreamSource
+from sestudio.providers import jsdecode
 from sestudio.providers.base import ProviderError, StreamProvider
 
 logger = logging.getLogger(__name__)
@@ -40,8 +41,12 @@ _SRC_RE = re.compile(r'src\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']')
 # up front which scheme a body describes, we generate *every* candidate the body
 # plausibly supports and return the first that decodes to something containing
 # ".m3u8" — see _deobfuscate_src.
+# The body bound is deliberately loose: with the decoder executed rather than
+# modelled, a longer body is no longer harder to handle, and a cap tight enough
+# to exclude one would make the construct fail to match at all. The lazy
+# quantifier still stops at the first `})("<payload>")`.
 _INLINE_SRC_RE = re.compile(
-    r'src:\(function\(s\)\{(?P<body>.{0,400}?)\}\)\("(?P<payload>[A-Za-z0-9+/=]+)"\)',
+    r'src:\(function\(s\)\{(?P<body>.{0,4000}?)\}\)\("(?P<payload>[A-Za-z0-9+/=]+)"\)',
     re.DOTALL,
 )
 _ARRAY_KEY_RE = re.compile(r"k=\[([\d,]+)\]")
@@ -69,28 +74,47 @@ def _keystreams(body: str, length: int) -> Iterator[list[int]]:
 
 
 def _deobfuscate_src(body: str, payload_b64: str) -> str:
-    """Replicate the embed's inline decoder: base64, XOR, maybe reversal.
+    """Recover the real m3u8 URL from the embed's obfuscated `src:`.
 
-    The embed rotates between obfuscation schemes, so every known one is tried
-    against the payload — in both orientations, since some variants reverse the
-    result — and the first that yields a plausible m3u8 URL wins. Trying blindly
-    is safe because a wrong keystream produces bytes that cannot contain
-    ".m3u8"; this way a rotation only breaks us if it introduces a derivation we
-    have never seen, not merely a different combination of known ones.
+    Two strategies, in order of durability:
+
+    1. **Run the embed's own decoder** in a sandboxed JS engine (jsdecode). This
+       is scheme-agnostic — a rotation to any new arithmetic works for free —
+       so it is tried first whenever the engine is installed.
+    2. **Replicate the known schemes in Python**, trying every keystream the body
+       plausibly describes with reversal on either side of the XOR. Guessing
+       blindly is safe because a wrong keystream cannot produce ".m3u8". This is
+       the fallback for environments without the JS engine, and it still covers
+       every variant seen so far.
+
+    Reversal is tried on both sides of the XOR in strategy 2 because variants
+    reverse either the base64 bytes before XORing or the decoded string after,
+    and with a position-dependent ramp key the two are not equivalent.
     """
+    from_js = jsdecode.run_inline_decoder(body, payload_b64)
+    if from_js and ".m3u8" in from_js:
+        logger.debug("Inline decoder executed in JS engine")
+        return from_js
+
     raw = base64.b64decode(payload_b64)
 
     tried = 0
     for keystream in _keystreams(body, len(raw)):
-        decoded = "".join(chr(raw[i] ^ keystream[i]) for i in range(len(raw)))
-        for candidate in (decoded, decoded[::-1]):
-            tried += 1
-            if ".m3u8" in candidate:
-                return candidate
+        for source in (raw, raw[::-1]):
+            decoded = "".join(chr(source[i] ^ keystream[i]) for i in range(len(raw)))
+            for candidate in (decoded, decoded[::-1]):
+                tried += 1
+                if ".m3u8" in candidate:
+                    return candidate
 
+    engine = (
+        "JS engine ran but produced no m3u8"
+        if jsdecode.ENGINE_AVAILABLE
+        else "JS engine unavailable (install quickjs for scheme-agnostic decoding)"
+    )
     raise ProviderError(
         f"No known Vidzy obfuscation scheme decoded the src ({tried} combinations "
-        f"tried) — the embed likely rotated to a new one"
+        f"tried; {engine}) — the embed likely rotated to a new one"
     )
 
 

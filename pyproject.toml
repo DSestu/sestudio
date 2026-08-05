@@ -17,6 +17,11 @@ dependencies = [
     "httpx>=0.28.1",
     "imageio-ffmpeg>=0.5.1",
     "python-multipart>=0.0.20",
+    # Sandboxed JS engine used to execute embeds' own inline src: decoders
+    # instead of reimplementing their rotating obfuscation — see
+    # providers/jsdecode.py. Optional at runtime: the import is guarded and the
+    # pattern-matching fallback still works without it.
+    "quickjs>=1.19.4",
     "rich>=15.0.0",
     "uvicorn[standard]>=0.34",
     "yt-dlp>=2026.3.17",
