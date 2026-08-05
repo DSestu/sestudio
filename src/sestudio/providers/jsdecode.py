@@ -17,12 +17,15 @@ the construct is a pure string→string transform — it needs no DOM, no networ
 and no filesystem. Neither engine is a browser, so `atob` does not exist and is
 shimmed below; nothing else is injected.
 
-Two engines are supported, because neither covers every platform on its own:
+Two engines are supported:
 
-* QuickJS — tiny and preferred, but ships no Windows wheel, and building it
-  there fails (its setup.py passes a GCC-only flag that MSVC rejects).
-* MiniRacer (V8) — a much larger download, but publishes an ABI-agnostic
-  `py3-none-win_amd64` wheel, so Windows needs no compiler at all.
+* MiniRacer (V8) — a large download, but its wheels are ABI-agnostic
+  (`py3-none-<platform>`) and cover every platform we care about, so nothing
+  needs a C compiler. This is what the package depends on.
+* QuickJS — tiny, and still preferred when importable, but not depended on: its
+  wheels are CPython-ABI-specific and stop at cp312, absent entirely for macOS
+  arm64 / Linux aarch64 / musl, and unbuildable on Windows. Install it by hand
+  to trade the 21MB of V8 for ~1MB.
 
 Both enforce the same time and memory caps, so the safety argument above holds
 either way. The engine is optional: with neither installed, callers fall back to

@@ -111,7 +111,7 @@ def _deobfuscate_src(body: str, payload_b64: str) -> str:
         f"JS engine ({jsdecode.ENGINE_NAME}) ran but produced no m3u8"
         if jsdecode.ENGINE_AVAILABLE
         else "no JS engine installed, so only known schemes were tried "
-        "(install quickjs, or mini-racer on Windows)"
+        "(install mini-racer)"
     )
     raise ProviderError(
         f"No known Vidzy obfuscation scheme decoded the src ({tried} combinations "
