@@ -261,10 +261,12 @@ def test_jsdecode_payload_cannot_inject_code():
 
 
 # --- Both engines --------------------------------------------------------- #
-# The engine differs by platform (QuickJS everywhere, MiniRacer on Windows), so
-# whichever one a developer happens to have would otherwise be the only one
-# tested. These force each in turn. The injection case matters most: QuickJS
-# binds the payload, while MiniRacer has to interpolate it as a JSON literal.
+# MiniRacer is the shipped engine, but jsdecode.py still prefers QuickJS when it
+# is importable, so whichever one a machine happens to have would otherwise be
+# the only one tested. These force each in turn. The injection case matters most:
+# QuickJS binds the payload, while MiniRacer has to interpolate it as a JSON
+# literal. QuickJS is a dev-only dependency limited to the platforms with a
+# wheel, so its half skips elsewhere rather than failing.
 
 
 @pytest.fixture(params=[("quickjs", "MiniRacer"), ("MiniRacer", "quickjs")])

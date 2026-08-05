@@ -22,18 +22,19 @@ dependencies = [
     # providers/jsdecode.py. Optional at runtime: the import is guarded and the
     # pattern-matching fallback still works without it.
     #
-    # Split by platform because neither engine covers both:
+    # MiniRacer on every platform, despite being a 21MB V8 download, because its
+    # wheels are `py3-none-<platform>`: ABI-agnostic, so no platform needs a C
+    # compiler and new Python versions work the day they ship. Coverage is
+    # manylinux x86_64+aarch64, musllinux, macOS x86_64+arm64, win amd64+arm64.
     #
-    # QuickJS is tiny but publishes no win_amd64 wheel, so Windows has to build
-    # it, and its setup.py passes the GCC-only flag
-    # `-Werror=incompatible-pointer-types`, which MSVC rejects outright (D8021) —
-    # failing the entire install, compiler or not.
-    #
-    # MiniRacer is a 21MB V8 download, but its wheel is `py3-none-win_amd64`:
-    # ABI-agnostic, so it needs no compiler and covers new Python versions the
-    # day they ship. Too heavy to impose everywhere, exactly right for Windows.
-    "quickjs>=1.19.4; sys_platform != 'win32'",
-    "mini-racer>=0.14.1; sys_platform == 'win32'",
+    # QuickJS was the previous choice — a ~1MB build — but it is unusable as a
+    # blanket dependency. Its wheels are CPython-ABI-specific and stop at cp312,
+    # and it has none for macOS arm64, Linux aarch64 or musl, so all of those
+    # fall back to the sdist and need `cc`. On Windows the build fails outright
+    # even with a compiler: its setup.py passes the GCC-only flag
+    # `-Werror=incompatible-pointer-types`, which MSVC rejects (D8021).
+    # jsdecode.py still prefers it when importable, so a manual install works.
+    "mini-racer>=0.14.1",
     "rich>=15.0.0",
     "uvicorn[standard]>=0.34",
     "yt-dlp>=2026.3.17",
@@ -78,7 +79,10 @@ dev = [
     "pytest>=9.0.3",
     "pytest-httpx>=0.36.2",
     "ruff>=0.6.3",
-    # Windows' JS engine, installed everywhere for development so its branch in
-    # jsdecode.py is covered on the machines that don't ship it.
-    "mini-racer>=0.14.1",
+    # Not a runtime dependency (see the note on mini-racer above), but
+    # jsdecode.py still prefers it when present, so the dual-engine tests need
+    # it here or the QuickJS branch is never exercised anywhere. Marked to the
+    # platforms where a wheel actually exists — cp311/cp312 only, no aarch64,
+    # no musl, unbuildable on Windows — so `uv sync` never needs a compiler.
+    "quickjs>=1.19.4; sys_platform != 'win32' and platform_machine == 'x86_64' and python_version < '3.13'",
 ]
