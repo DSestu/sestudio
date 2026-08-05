@@ -175,21 +175,71 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
     return season, episodes
 
 
-_EMBED_PROVIDERS_RE = re.compile(
-    r"uqload|vidzy|netu|byse|luluvid|premium|voe", re.IGNORECASE
+# Maps a substring of an embed URL to the provider that handles it. Matching on
+# provider *names* alone silently drops embeds, because the site's URLs mostly do
+# not contain them: premium is served from fsvid.lol, luluvid from luluvdo.com or
+# rotating aliases like vidhsareup.io, and voe/netu arrive as wrapper paths
+# (/voe1/, /moon2/) on kakaflix.lol. First hit wins.
+_PROVIDER_URL_HINTS: tuple[tuple[str, str], ...] = (
+    ("uqload", "uqload"),
+    ("vidzy", "vidzy"),
+    ("fsvid", "premium"),
+    ("premium", "premium"),
+    ("luluvdo", "luluvid"),
+    ("luluvid", "luluvid"),
+    ("lulustream", "luluvid"),
+    ("vidhsareup", "luluvid"),
+    ("voe", "voe"),
+    ("vidaraa", "filmoon"),
+    ("filmoon", "filmoon"),
+    ("/viper", "filmoon"),
+    ("chamber_go", "filmoon"),
+    ("netu", "netu"),
+    ("/moon", "netu"),
+    ("byse", "netu"),
 )
+
+
+def _provider_from_embed_url(src: str) -> str | None:
+    """Return the provider that handles this embed URL, or None if unrecognised."""
+    low = src.lower()
+    for hint, provider in _PROVIDER_URL_HINTS:
+        if hint in low:
+            return provider
+    return None
+
+
 _TITLE_SUFFIX_RE = re.compile(
     r"\s+[-–|]\s+.*$"
 )  # space-dash-space avoids breaking hyphenated titles
 _FILM_PREFIX_RE = re.compile(r"^(?:Film|Movie)\s+", re.IGNORECASE)
 
 # Supported providers and their lang key in the film API response
-_FILM_PROVIDERS = ("uqload", "vidzy", "premium", "netu", "luluvid")
-_FILM_LANG_KEY: dict[str, str] = {
-    "vf": "vfq",
-    "vfq": "vfq",
-    "vostfr": "vostfr",
-    "vo": "vostfr",
+_FILM_PROVIDERS = (
+    "uqload",
+    "vidzy",
+    "premium",
+    "netu",
+    "luluvid",
+    "filmoon",
+    "voe",
+)
+# The API carries two distinct French dubs — vff (France) and vfq (Québec) — and a
+# title may have either, both, or one of them pointing at a dead wrapper link. So a
+# requested language maps to an *ordered list* of candidate keys rather than a
+# single one, and the first non-empty entry wins.
+#
+# "vf" prefers vff because that is what the site itself serves as `default`
+# (verified: default == vff for every provider on a sampled title). Mapping "vf"
+# to vfq alone meant the app picked the Québec entry even when vff existed —
+# yielding the wrong dub, and on some providers a wrapper URL that cannot be
+# resolved at all while the vff URL works fine.
+_FILM_LANG_KEYS: dict[str, tuple[str, ...]] = {
+    "vf": ("vff", "vfq"),
+    "vff": ("vff", "vfq"),
+    "vfq": ("vfq", "vff"),
+    "vostfr": ("vostfr",),
+    "vo": ("vostfr",),
 }
 
 
@@ -208,12 +258,15 @@ def _fetch_film_api(
         raise ValueError(f"Film API error: {data['error']}")
 
     players: dict[str, dict[str, str]] = data.get("players", {})  # type: ignore[assignment]
-    lang_key = _FILM_LANG_KEY.get(lang.lower(), "vfq")
+    lang_keys = _FILM_LANG_KEYS.get(lang.lower(), ("vff", "vfq"))
 
     embed_urls: dict[str, str] = {}
     for provider in _FILM_PROVIDERS:
         variants = players.get(provider, {})
-        url = variants.get(lang_key) or variants.get("default") or ""
+        url = next(
+            (variants[key] for key in lang_keys if variants.get(key)),
+            variants.get("default") or "",
+        )
         if url:
             embed_urls[provider] = url
 
@@ -281,15 +334,8 @@ def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode]]:
             logger.debug("Falling back to iframe scraping for film %s", url)
             for iframe in soup.find_all("iframe"):
                 src: str = iframe.get("src") or iframe.get("data-src") or ""
-                if src and _EMBED_PROVIDERS_RE.search(src):
-                    pname = next(
-                        (
-                            p
-                            for p in ("uqload", "vidzy", "netu", "luluvid")
-                            if p in src.lower()
-                        ),
-                        "unknown",
-                    )
+                pname = _provider_from_embed_url(src) if src else None
+                if pname:
                     embed_urls[pname] = src
 
         if not embed_urls:

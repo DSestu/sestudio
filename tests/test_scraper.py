@@ -97,3 +97,81 @@ def test_fetch_season_episodes_sorted_by_number(
 
     numbers = [ep.number for ep in episodes]
     assert numbers == sorted(numbers)
+
+
+# The iframe fallback used to name providers by looking for the provider's own
+# name in the URL, which almost never appears: premium is served from fsvid.lol
+# and luluvid from rotating aliases, so those embeds were labelled "unknown" and
+# silently dropped (no registered provider can resolve "unknown").
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://uqload.is/embed-n5ye6ojzr4tt.html", "uqload"),
+        ("https://vidzy.org/embed-unx6mbq6elxm.html", "vidzy"),
+        ("https://fsvid.lol/embed-587o524garwv.html", "premium"),
+        ("https://luluvdo.com/e/x4eyb8np2x91", "luluvid"),
+        ("https://vidhsareup.io/embed-wd05jb8ookxk.html", "luluvid"),
+        ("https://voe.sx/e/hjfbl844ghl0", "voe"),
+        ("https://kakaflix.lol/voe1/newPlayer.php?id=abc", "voe"),
+        ("https://kakaflix.lol/moon2/newPlayer.php?id=abc", "netu"),
+        ("https://example.com/some/unrelated/iframe.html", None),
+    ],
+)
+def test_provider_from_embed_url(url: str, expected: str | None):
+    from sestudio.scraper import _provider_from_embed_url
+
+    assert _provider_from_embed_url(url) == expected
+
+
+# The film API carries two French dubs, vff (France) and vfq (Québec). Mapping
+# "vf" to vfq alone picked the Québec entry even when vff existed — the wrong dub,
+# and on some providers a wrapper URL that cannot be resolved while vff works.
+_PLAYERS_BOTH_DUBS = {
+    "players": {
+        "filmoon": {
+            "default": "https://vidaraa.cc/e/FRANCE",
+            "vff": "https://vidaraa.cc/e/FRANCE",
+            "vfq": "https://kokoflix.lol/chamber_go.php?id=QUEBEC",
+            "vostfr": "https://fr.kakaflix.lol/viper/newplayer.php?id=SUBS",
+        }
+    }
+}
+
+
+def _film_api_embeds(httpx_mock: HTTPXMock, payload: dict, lang: str) -> dict[str, str]:
+    from sestudio.http_client import new_client
+    from sestudio.scraper import _fetch_film_api
+
+    httpx_mock.add_response(
+        url="https://fs.example/engine/ajax/film_api.php?id=1",
+        method="GET",
+        json=payload,
+    )
+    with new_client() as client:
+        embeds, _ = _fetch_film_api(
+            client, "https://fs.example", "1", "https://fs.example/x.html", lang
+        )
+    return embeds
+
+
+@pytest.mark.parametrize(
+    "lang,expected",
+    [
+        ("vf", "https://vidaraa.cc/e/FRANCE"),
+        ("vff", "https://vidaraa.cc/e/FRANCE"),
+        ("vfq", "https://kokoflix.lol/chamber_go.php?id=QUEBEC"),
+        ("vostfr", "https://fr.kakaflix.lol/viper/newplayer.php?id=SUBS"),
+    ],
+)
+def test_film_api_prefers_correct_french_dub(
+    httpx_mock: HTTPXMock, lang: str, expected: str
+):
+    embeds = _film_api_embeds(httpx_mock, _PLAYERS_BOTH_DUBS, lang)
+    assert embeds["filmoon"] == expected
+
+
+def test_film_api_falls_back_across_dubs_when_one_is_missing(httpx_mock: HTTPXMock):
+    """A title with only the Québec dub still resolves when "vf" is requested."""
+    payload = {"players": {"filmoon": {"vfq": "https://vidaraa.cc/e/ONLYQUEBEC"}}}
+    embeds = _film_api_embeds(httpx_mock, payload, "vf")
+    assert embeds["filmoon"] == "https://vidaraa.cc/e/ONLYQUEBEC"

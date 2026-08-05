@@ -8,11 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from sestudio.providers.filmoon import FilmoonProvider
 from sestudio.providers.luluvid import LuluvidProvider
 from sestudio.providers.netu import NetuProvider
 from sestudio.providers.premium import PremiumProvider
 from sestudio.providers.uqload import UqloadProvider
 from sestudio.providers.vidzy import VidzyProvider
+from sestudio.providers.voe import VoeProvider
 from sestudio.web.routes import (
     cast,
     downloads,
@@ -31,6 +33,8 @@ _PROVIDERS = {
     "premium": PremiumProvider(),
     "netu": NetuProvider(),
     "luluvid": LuluvidProvider(),
+    "filmoon": FilmoonProvider(),
+    "voe": VoeProvider(),
 }
 
 # An installed wheel bundles the built frontend at sestudio/web/static (via

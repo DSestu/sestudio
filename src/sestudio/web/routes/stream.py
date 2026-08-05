@@ -54,7 +54,15 @@ def _proxy_url(secret: bytes, target_url: str, referer: str, provider: str) -> s
 
 
 # Preferred provider order, mirroring the download worker's fallback (worker.py).
-_PROVIDER_ORDER = ("uqload", "vidzy", "premium", "netu", "luluvid")
+_PROVIDER_ORDER = (
+    "uqload",
+    "vidzy",
+    "premium",
+    "netu",
+    "luluvid",
+    "filmoon",
+    "voe",
+)
 
 
 class ResolveRequest(BaseModel):
