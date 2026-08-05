@@ -17,7 +17,7 @@ class SettingsBody(BaseModel):
     download_destination: str | None = None
     tmdb_api_key: str | None = None
     tmdb_merge: bool | None = None
-    tmdb_cards: bool | None = None
+    tmdb_posters: bool | None = None
 
 
 def _public(cfg) -> dict[str, Any]:
@@ -49,7 +49,7 @@ async def put_settings(body: SettingsBody) -> dict[str, Any]:
         cfg.tmdb_api_key = body.tmdb_api_key.strip()
     if body.tmdb_merge is not None:
         cfg.tmdb_merge = body.tmdb_merge
-    if body.tmdb_cards is not None:
-        cfg.tmdb_cards = body.tmdb_cards
+    if body.tmdb_posters is not None:
+        cfg.tmdb_posters = body.tmdb_posters
     save_config(cfg)
     return _public(cfg)

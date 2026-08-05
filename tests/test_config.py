@@ -35,13 +35,13 @@ def test_tmdb_merge_round_trip(tmp_path, monkeypatch):
     assert load_config().tmdb_merge is True
 
 
-def test_tmdb_cards_round_trip(tmp_path, monkeypatch):
+def test_tmdb_posters_round_trip(tmp_path, monkeypatch):
     monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
     # On by default, and a stored false survives the round trip rather than
     # being read back as the default.
-    assert load_config().tmdb_cards is True
-    save_config(AppConfig(tmdb_cards=False))
-    assert load_config().tmdb_cards is False
+    assert load_config().tmdb_posters is True
+    save_config(AppConfig(tmdb_posters=False))
+    assert load_config().tmdb_posters is False
 
 
 def test_corrupt_config_returns_defaults(tmp_path, monkeypatch):

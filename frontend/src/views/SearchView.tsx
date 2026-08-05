@@ -7,7 +7,10 @@ import { DEFAULT_DISCOVER_FILTERS } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import DiscoverPanel from '../components/DiscoverPanel'
 import EmptyState from '../components/EmptyState'
+import LayoutToggle from '../components/LayoutToggle'
 import ResultsGrid from '../components/ResultsGrid'
+import ResultsList from '../components/ResultsList'
+import { setLibraryLayout, useLibraryLayout } from '../libraryLayout'
 import { useMergedCards } from '../useMergedCards'
 import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
@@ -61,6 +64,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   const [resolvedQuery, setResolvedQuery] = useState('')
   const [filters, setFilters] = useState<DiscoverFilters>(() => filtersFrom(params))
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const layout = useLibraryLayout().search
   const [bulkLoading, setBulkLoading] = useState(false)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
@@ -183,27 +187,32 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             {results.length} result{results.length !== 1 ? 's' : ''}
           </span>
 
-          {/* The TMDB switches live here, not in Settings: they change what this
-              list looks like, so they belong next to the list they change.
-              Hidden without a key, since neither can do anything without one. */}
-          {settings.tmdb_configured && (
-            <div className="ml-auto flex items-center gap-3 flex-wrap">
-              <ToolbarToggle
-                label="TMDB artwork"
-                title="Show TMDB posters, ratings and years on cards. Off shows the source's own posters."
-                checked={settings.tmdb_cards}
-                onChange={v => void onUpdateSettings({ tmdb_cards: v })}
-              />
-              <ToolbarToggle
-                label="Group by TMDB match"
-                title="Identify a title by its TMDB match rather than its name, so differently-spelled listings of one title group together. Costs a lookup per result."
-                checked={settings.tmdb_merge}
-                onChange={v => void onUpdateSettings({ tmdb_merge: v })}
-                // Regrouping waits on a lookup per result, so it is not instant
-                busy={regrouping}
-              />
-            </div>
-          )}
+          {/* View controls, right-aligned as one group. The TMDB switches live
+              here rather than in Settings because they change what this list
+              looks like, so they belong next to the list they change; they are
+              hidden without a key, since neither can do anything without one.
+              The layout choice works either way. */}
+          <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
+            {settings.tmdb_configured && (
+              <>
+                <ToolbarToggle
+                  label="TMDB posters"
+                  title="Let TMDB artwork stand in for the source's own posters. Ratings, years, genres and synopses come from TMDB either way."
+                  checked={settings.tmdb_posters}
+                  onChange={v => void onUpdateSettings({ tmdb_posters: v })}
+                />
+                <ToolbarToggle
+                  label="Group by TMDB match"
+                  title="Identify a title by its TMDB match rather than its name, so differently-spelled listings of one title group together. Costs a lookup per result."
+                  checked={settings.tmdb_merge}
+                  onChange={v => void onUpdateSettings({ tmdb_merge: v })}
+                  // Regrouping waits on a lookup per result, so it is not instant
+                  busy={regrouping}
+                />
+              </>
+            )}
+            <LayoutToggle layout={layout} onChange={next => setLibraryLayout('search', next)} />
+          </div>
         </div>
       )}
 
@@ -223,13 +232,25 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           />
         )
       ) : results.length > 0 ? (
-        <ResultsGrid
-          cards={results}
-          checkedIds={checkedIds}
-          onToggle={toggleCard}
-          onOpenDetail={onOpenDetail}
-          enrich={settings.tmdb_configured && settings.tmdb_cards}
-        />
+        layout === 'detail' ? (
+          <ResultsList
+            cards={results}
+            checkedIds={checkedIds}
+            onToggle={toggleCard}
+            onOpenDetail={onOpenDetail}
+            enrich={settings.tmdb_configured}
+            posters={settings.tmdb_posters}
+          />
+        ) : (
+          <ResultsGrid
+            cards={results}
+            checkedIds={checkedIds}
+            onToggle={toggleCard}
+            onOpenDetail={onOpenDetail}
+            enrich={settings.tmdb_configured}
+            posters={settings.tmdb_posters}
+          />
+        )
       ) : resolvedQuery === lastQuery ? (
         <EmptyState
           title={`No results for “${lastQuery}”`}

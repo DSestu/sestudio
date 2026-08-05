@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DiscoverFilters, TmdbGenre, TmdbKind, TrendingCard } from '../api'
 import { discoverTitles, getGenres } from '../api'
+import { setLibraryLayout, useLibraryLayout } from '../libraryLayout'
+import BrowseList from './BrowseList'
+import LayoutToggle from './LayoutToggle'
 import PosterGrid from './PosterGrid'
 
 interface Props {
@@ -47,6 +50,7 @@ export default function DiscoverPanel({ filters, onChange, onSelect }: Props) {
   const filtersKey = JSON.stringify(filters)
   const current = fetched?.key === filtersKey ? fetched : null
   const genres = genreCache.get(filters.kind) ?? []
+  const layout = useLibraryLayout().browse
 
   useEffect(() => {
     if (genreCache.has(filters.kind)) return
@@ -156,6 +160,9 @@ export default function DiscoverPanel({ filters, onChange, onSelect }: Props) {
         >
           {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
+        {/* Its own preference, not the results list's: the two lists are browsed
+            differently, and the store keeps one layout per surface. */}
+        <LayoutToggle layout={layout} onChange={next => setLibraryLayout('browse', next)} />
       </div>
 
       {genres.length > 0 && (
@@ -234,6 +241,8 @@ export default function DiscoverPanel({ filters, onChange, onSelect }: Props) {
         <p role="status" className="text-sm text-base-content/50 py-8 text-center">
           Nothing matches these filters.
         </p>
+      ) : layout === 'detail' ? (
+        <BrowseList cards={current.cards} genres={genres} onSelect={onSelect} />
       ) : (
         <PosterGrid
           items={current.cards.map(c => ({

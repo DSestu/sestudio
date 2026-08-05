@@ -22,7 +22,7 @@ _CAST_LIMIT = 8
 _RECOMMENDATION_LIMIT = 12
 # Bumped whenever _normalise gains fields, so stale disk-cache entries
 # (missing the new fields) are refetched instead of served.
-_CACHE_VERSION = 2
+_CACHE_VERSION = 3
 
 # The sort orders the TMDB website itself offers on its discover pages.
 _MOVIE_SORTS = frozenset(
@@ -107,7 +107,13 @@ def _image(path: str | None, size: str) -> str:
 
 
 def _light_card(r: dict[str, Any], kind: str) -> dict[str, Any]:
-    """A poster card: the shape shared by trending, discover and credits."""
+    """A poster card: the shape shared by trending, discover and credits.
+
+    The overview and genre ids ride along because the browse list can be read as
+    detail rows, and every search/discover response already contains them —
+    carrying them costs no extra request. Genre *names* are not resolved here:
+    the client already holds the id→name list for its filter chips.
+    """
     date = r.get("release_date") or r.get("first_air_date") or ""
     return {
         "tmdb_id": r.get("id"),
@@ -116,6 +122,8 @@ def _light_card(r: dict[str, Any], kind: str) -> dict[str, Any]:
         "year": int(date[:4]) if date[:4].isdigit() else 0,
         "rating": round(float(r.get("vote_average") or 0), 1),
         "poster_url": _image(r.get("poster_path"), "w342"),
+        "overview": r.get("overview") or "",
+        "genre_ids": [g for g in r.get("genre_ids") or [] if isinstance(g, int)],
     }
 
 

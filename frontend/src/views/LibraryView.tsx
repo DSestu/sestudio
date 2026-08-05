@@ -9,7 +9,7 @@ import {
   useCollections,
 } from '../collections'
 import EmptyState from '../components/EmptyState'
-import LayoutToggle from '../components/library/LayoutToggle'
+import LayoutToggle from '../components/LayoutToggle'
 import SelectionBar, { type BulkAction } from '../components/library/SelectionBar'
 import { sheetIcon } from '../components/library/sheetIcons'
 import TitleRow from '../components/library/TitleRow'

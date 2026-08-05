@@ -49,7 +49,7 @@ export interface AppSettings {
   tmdb_merge: boolean
   /** Show TMDB posters, ratings and years on result cards. Needs a key; on by
    *  default. Off falls back to the source's own posters. */
-  tmdb_cards: boolean
+  tmdb_posters: boolean
   /** Write-only: sent when saving a new key, never returned. */
   tmdb_api_key?: string
 }
@@ -90,6 +90,10 @@ export interface TrendingCard {
   year: number
   rating: number
   poster_url: string
+  /** For the browse list's detail layout. Empty when TMDB has none in `fr-FR`. */
+  overview: string
+  /** Ids, not names — the client already holds the id→name list for its chips. */
+  genre_ids: number[]
 }
 
 export type TmdbKind = 'movie' | 'tv'

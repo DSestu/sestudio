@@ -4,7 +4,7 @@ import { getSettings, putSettings } from './api'
 
 const DEFAULTS: AppSettings = {
   output_root: '.', lang: 'vf', download_destination: 'server', tmdb_configured: false,
-  tmdb_merge: false, tmdb_cards: true,
+  tmdb_merge: false, tmdb_posters: true,
 }
 
 /**

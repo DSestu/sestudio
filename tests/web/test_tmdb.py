@@ -187,6 +187,9 @@ def test_trending_returns_cards(client, httpx_mock: HTTPXMock):
         "year": 2024,
         "rating": 7.2,
         "poster_url": "https://image.tmdb.org/t/p/w342/f.jpg",
+        # Absent upstream rather than omitted here, so the client needn't guard.
+        "overview": "",
+        "genre_ids": [],
     }
 
 
@@ -203,6 +206,8 @@ def test_discover_passes_filters_and_returns_cards(client, httpx_mock: HTTPXMock
                     "release_date": "1994-09-14",
                     "vote_average": 8.71,
                     "poster_path": "/c.jpg",
+                    "overview": "Un synopsis.",
+                    "genre_ids": [18, 80],
                 }
             ],
         },
@@ -224,6 +229,9 @@ def test_discover_passes_filters_and_returns_cards(client, httpx_mock: HTTPXMock
     assert data["page"] == 2
     assert data["total_pages"] == 40
     assert data["results"][0]["title"] == "Chef d'œuvre"
+    # Carried through for the browse list's detail rows, at no extra request.
+    assert data["results"][0]["overview"] == "Un synopsis."
+    assert data["results"][0]["genre_ids"] == [18, 80]
     sent = str(httpx_mock.get_requests()[0].url)
     assert "sort_by=vote_average.desc" in sent
     assert "with_genres=18%2C80" in sent

@@ -36,7 +36,7 @@ class AppConfig:
     # Dress search result cards in TMDB posters, ratings and years. On by
     # default (it is the point of configuring a key); off falls back to the
     # source's own posters and titles.
-    tmdb_cards: bool = True
+    tmdb_posters: bool = True
 
 
 def _config_path() -> Path:
@@ -56,7 +56,7 @@ def load_config() -> AppConfig:
             download_destination=str(data.get("download_destination", "server")),
             tmdb_api_key=str(data.get("tmdb_api_key", "")),
             tmdb_merge=bool(data.get("tmdb_merge", False)),
-            tmdb_cards=bool(data.get("tmdb_cards", True)),
+            tmdb_posters=bool(data.get("tmdb_posters", True)),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

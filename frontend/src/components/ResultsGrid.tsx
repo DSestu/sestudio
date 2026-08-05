@@ -1,19 +1,23 @@
-import { useState } from 'react'
 import type { SeasonCard } from '../api'
 import { useTmdb } from '../useTmdb'
+import { kindLabel, saveEntry } from './resultMeta'
 import RatingBadge from './RatingBadge'
 import SaveToggles from './SaveToggles'
+import SourcesBadge from './SourcesBadge'
 
 interface Props {
   cards: SeasonCard[]
   checkedIds: Set<string>
   onToggle: (newsid: string) => void
   onOpenDetail: (card: SeasonCard) => void
-  /** Enrich cards with TMDB rating/year when a key is configured. */
+  /** Look a title up on TMDB at all — set when a key is configured. */
   enrich?: boolean
+  /** Let a TMDB poster stand in for the source's own. Artwork only: the rating,
+   *  year and genres come from the same lookup either way. */
+  posters?: boolean
 }
 
-export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail, enrich }: Props) {
+export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail, enrich, posters }: Props) {
   if (!cards.length) return null
 
   // Two across on a phone, so the always-visible touch controls fit (#26).
@@ -27,6 +31,7 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail,
           onToggle={() => onToggle(card.newsid)}
           onOpenDetail={onOpenDetail}
           enrich={!!enrich}
+          posters={!!posters}
         />
       ))}
     </div>
@@ -40,17 +45,17 @@ interface CardProps {
   /** Takes the card so a merged-away source can be opened on its own. */
   onOpenDetail: (card: SeasonCard) => void
   enrich: boolean
+  posters: boolean
 }
 
-function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps) {
+function ResultCard({ card, checked, onToggle, onOpenDetail, enrich, posters }: CardProps) {
   // Falls back to the source's own poster/title when TMDB is off or unmatched.
   const meta = useTmdb(card.series_name, card.year ?? 0, card.is_film, enrich)
-  const poster = meta?.poster_url || card.poster_url
+  const poster = (posters ? meta?.poster_url : '') || card.poster_url
   const year = meta?.year || card.year || 0
-  // Merging same-name titles is a heuristic and will sometimes be wrong, so the
-  // pages it folded away stay reachable rather than being lost behind the count.
-  const alts = card.alts ?? []
-  const [showSources, setShowSources] = useState(false)
+  // Two at most: the card is a column in a six-column grid, and a third genre
+  // pushes the row to wrap for very little added information.
+  const genres = (meta?.genres ?? []).slice(0, 2)
 
   return (
     <div className="group relative">
@@ -81,17 +86,7 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
           Overlaid only where a pointer can hover; touch gets them in the caption
           below, since search is where saving actually happens (#26). */}
       <div className="hidden [@media(hover:hover)]:block absolute bottom-[4.25rem] right-1.5 z-10 rounded-box bg-base-100/80 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-        <SaveToggles
-          size="sm"
-          entry={{
-            series: card.series_name,
-            season: card.is_film ? 0 : card.season_number,
-            label: card.series_name,
-            poster_url: poster,
-            page_url: card.page_url,
-            lang: '',
-          }}
-        />
+        <SaveToggles size="sm" entry={saveEntry(card, poster)} />
       </div>
 
       <button className="w-full text-left" onClick={() => onOpenDetail(card)}>
@@ -118,81 +113,22 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
           button, and nesting buttons is invalid. */}
       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
         {/* Kind is carried by the badge text, not by colour alone */}
-        {card.is_film ? (
-          <span className="badge badge-ghost badge-sm">Film</span>
-        ) : card.is_anime ? (
-          <span className="badge badge-ghost badge-sm">
-            Anime S{String(card.season_number).padStart(2, '0')}
-          </span>
-        ) : (
-          <span className="badge badge-ghost badge-sm">
-            S{String(card.season_number).padStart(2, '0')}
-          </span>
-        )}
+        <span className="badge badge-ghost badge-sm">{kindLabel(card)}</span>
         {year > 0 && <span className="text-base-content/40 text-xs font-mono">{year}</span>}
-        {/* Says why this is one card when the source listed the title several
-            times, and opens up to the pages themselves — same-name titles do get
-            merged wrongly, and this is how the other one is reached. */}
-        {alts.length > 0 && (
-          <button
-            onClick={() => setShowSources(v => !v)}
-            aria-expanded={showSources}
-            className="badge badge-ghost badge-sm gap-1 hover:bg-base-300"
-            title={`${alts.length + 1} source pages for this title`}
-          >
-            {alts.length + 1} sources
-            <svg
-              className={`w-2.5 h-2.5 transition-transform ${showSources ? 'rotate-180' : ''}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        )}
+        <SourcesBadge card={card} onOpen={onOpenDetail} />
       </div>
 
-      {showSources && (
-        <ul className="mt-1.5 flex flex-col gap-0.5 rounded-box bg-base-200 p-1.5">
-          {[card, ...alts].map((src, i) => (
-            <li key={src.newsid || src.page_url}>
-              <button
-                onClick={() => onOpenDetail(src)}
-                className="w-full flex items-center gap-2 text-left rounded px-1 py-1 hover:bg-base-300 transition-colors"
-              >
-                {src.poster_url ? (
-                  <img src={src.poster_url} alt="" loading="lazy" className="w-6 aspect-[2/3] object-cover rounded-sm shrink-0" />
-                ) : (
-                  <span className="w-6 aspect-[2/3] rounded-sm bg-base-300 shrink-0" />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[11px] leading-tight truncate">{src.series_name}</span>
-                  <span className="block text-[10px] leading-tight text-base-content/50 font-mono">
-                    {src.year ? src.year : '—'}
-                    {/* Names the one the card is standing in for, so the list
-                        reads as "this plus the others", not a flat set. */}
-                    {i === 0 && ' · shown'}
-                  </span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+      {/* Genres need TMDB, so they appear only once a match resolves. Muted text
+          rather than badges: three badge rows would read as three equal facts. */}
+      {genres.length > 0 && (
+        <p className="text-[11px] leading-tight text-base-content/40 mt-1 truncate">
+          {genres.join(' · ')}
+        </p>
       )}
 
       {/* Touch: the same save controls, permanently visible under the caption. */}
       <div className="flex [@media(hover:hover)]:hidden items-center mt-1">
-        <SaveToggles
-          size="sm"
-          entry={{
-            series: card.series_name,
-            season: card.is_film ? 0 : card.season_number,
-            label: card.series_name,
-            poster_url: poster,
-            page_url: card.page_url,
-            lang: '',
-          }}
-        />
+        <SaveToggles size="sm" entry={saveEntry(card, poster)} />
       </div>
     </div>
   )

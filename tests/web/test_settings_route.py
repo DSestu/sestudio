@@ -43,20 +43,20 @@ def test_tmdb_merge_defaults_off_and_persists(client):
     assert client.get("/api/settings").json()["tmdb_merge"] is True
 
 
-def test_tmdb_cards_defaults_on_and_persists(client):
-    assert client.get("/api/settings").json()["tmdb_cards"] is True
+def test_tmdb_posters_defaults_on_and_persists(client):
+    assert client.get("/api/settings").json()["tmdb_posters"] is True
 
-    resp = client.put("/api/settings", json={"tmdb_cards": False})
+    resp = client.put("/api/settings", json={"tmdb_posters": False})
     assert resp.status_code == 200
-    assert resp.json()["tmdb_cards"] is False
-    assert client.get("/api/settings").json()["tmdb_cards"] is False
+    assert resp.json()["tmdb_posters"] is False
+    assert client.get("/api/settings").json()["tmdb_posters"] is False
 
 
 def test_put_settings_leaves_tmdb_flags_alone_when_absent(client):
-    client.put("/api/settings", json={"tmdb_merge": True, "tmdb_cards": False})
+    client.put("/api/settings", json={"tmdb_merge": True, "tmdb_posters": False})
     resp = client.put("/api/settings", json={"lang": "vo"})
     assert resp.json()["tmdb_merge"] is True
-    assert resp.json()["tmdb_cards"] is False
+    assert resp.json()["tmdb_posters"] is False
 
 
 def test_put_settings_ignores_invalid_lang(client):

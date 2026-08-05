@@ -1,4 +1,4 @@
-import type { Layout } from '../../libraryLayout'
+import type { Layout } from '../libraryLayout'
 
 interface Props {
   layout: Layout
@@ -12,7 +12,7 @@ const OPTIONS: { id: Layout; label: string; path: string }[] = [
 ]
 
 /**
- * Grid-or-detail switch for the active library tab.
+ * Grid-or-detail switch for a list surface — the active library tab, or search.
  *
  * Two `aria-pressed` toggles rather than a radiogroup: radios would owe the user
  * arrow-key navigation, and the tablist beside this already owns that contract —
