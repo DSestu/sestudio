@@ -16,7 +16,7 @@ The server serves **HTTPS by default** (self-signed) on port `8443`, which is wh
 Chromecast/AirPlay require — no Caddy or reverse proxy needed. The certificate is
 self-signed, so trust it once on the casting device (see [HTTPS built in](#https-built-in-default) below).
 
-To sum this up, here are the steps to follow to have full casting functionality:
+To sum this up, here are the steps to follow to have full casting functionality :
 
 * Be connected to tailscale
 * Having port `8443` forwarded from your phone lan ip to the server's tailscale address
