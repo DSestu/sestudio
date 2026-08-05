@@ -136,3 +136,6 @@ micromamba
 # Media files
 *.mp4
 *.mkv
+
+# TMDB key baked into release wheels by CI — never committed
+src/sestudio/_tmdb_default.py

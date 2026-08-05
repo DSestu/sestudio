@@ -16,6 +16,9 @@ export interface SeasonCard {
   /** Other source pages for this same title (other languages or mirrors), set
    *  by mergeCards. The detail view unions their languages. */
   alt_page_urls?: string[]
+  /** The same alternates whole, so the card can list them and open one on its
+   *  own when the merge was wrong. `alt_page_urls` is their flattened form. */
+  alts?: SeasonCard[]
 }
 
 export interface EpisodeDetail {
@@ -41,6 +44,12 @@ export interface AppSettings {
   download_destination: DownloadDestination
   /** Whether a TMDB key is set — the key itself is never sent to the client. */
   tmdb_configured: boolean
+  /** Use the resolved TMDB id as a title's identity when merging search
+   *  results, instead of its name. Needs a key; off by default. */
+  tmdb_merge: boolean
+  /** Show TMDB posters, ratings and years on result cards. Needs a key; on by
+   *  default. Off falls back to the source's own posters. */
+  tmdb_cards: boolean
   /** Write-only: sent when saving a new key, never returned. */
   tmdb_api_key?: string
 }

@@ -56,6 +56,23 @@ jobs:
         run: |
           uv version "${{ needs.release-please.outputs.tag_name }}"
 
+      - name: Bake in the default TMDB key
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib
+          key = os.environ.get("TMDB_API_KEY", "")
+          if not key:
+              raise SystemExit("::error::TMDB_API_KEY secret is not set")
+          path = pathlib.Path("src/sestudio/_tmdb_default.py")
+          path.write_text(
+              "# Generated at release time — do not commit.\n"
+              f"TMDB_API_KEY = {key!r}\n",
+              encoding="utf-8",
+          )
+          PY
+
       - name: Build wheels
         run: uv build
 
@@ -63,6 +80,11 @@ jobs:
         run: |
           python3 -m zipfile -l dist/*.whl | grep -q 'sestudio/web/static/index.html' \
             || { echo '::error::built wheel is missing the frontend (sestudio/web/static)'; exit 1; }
+
+      - name: Verify the wheel bundles the default TMDB key
+        run: |
+          python3 -m zipfile -l dist/*.whl | grep -q 'sestudio/_tmdb_default.py' \
+            || { echo '::error::built wheel is missing the default TMDB key'; exit 1; }
 
       - name: Upload wheels to GitHub Release
         uses: softprops/action-gh-release@v3
@@ -105,8 +127,30 @@ jobs:
       - name: Change package version
         run: uv version "${{ needs.release-please.outputs.tag_name }}"
 
+      - name: Bake in the default TMDB key
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib
+          key = os.environ.get("TMDB_API_KEY", "")
+          if not key:
+              raise SystemExit("::error::TMDB_API_KEY secret is not set")
+          path = pathlib.Path("src/sestudio/_tmdb_default.py")
+          path.write_text(
+              "# Generated at release time — do not commit.\n"
+              f"TMDB_API_KEY = {key!r}\n",
+              encoding="utf-8",
+          )
+          PY
+
       - name: Build wheels
         run: uv build
+
+      - name: Verify the wheel bundles the default TMDB key
+        run: |
+          python3 -m zipfile -l dist/*.whl | grep -q 'sestudio/_tmdb_default.py' \
+            || { echo '::error::built wheel is missing the default TMDB key'; exit 1; }
 
       - name: Publish to PyPI
         run: uv publish

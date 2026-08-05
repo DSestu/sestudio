@@ -145,6 +145,7 @@ export default function App() {
             settings={settings}
             params={route.params}
             onOpenDetail={card => openTitle(card, 0, settings.lang)}
+            onUpdateSettings={updateSettings}
             onSearchTerm={searchFor}
             onJobsCreated={() => setDownloadTick(t => t + 1)}
             onSkipped={jobs => setSkippedJobs(prev => [...prev, ...jobs])}

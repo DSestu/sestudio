@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { SeasonCard } from '../api'
 import { useTmdb } from '../useTmdb'
 import RatingBadge from './RatingBadge'
@@ -24,7 +25,7 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail,
           card={card}
           checked={checkedIds.has(card.newsid)}
           onToggle={() => onToggle(card.newsid)}
-          onOpenDetail={() => onOpenDetail(card)}
+          onOpenDetail={onOpenDetail}
           enrich={!!enrich}
         />
       ))}
@@ -36,7 +37,8 @@ interface CardProps {
   card: SeasonCard
   checked: boolean
   onToggle: () => void
-  onOpenDetail: () => void
+  /** Takes the card so a merged-away source can be opened on its own. */
+  onOpenDetail: (card: SeasonCard) => void
   enrich: boolean
 }
 
@@ -45,6 +47,10 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
   const meta = useTmdb(card.series_name, card.year ?? 0, card.is_film, enrich)
   const poster = meta?.poster_url || card.poster_url
   const year = meta?.year || card.year || 0
+  // Merging same-name titles is a heuristic and will sometimes be wrong, so the
+  // pages it folded away stay reachable rather than being lost behind the count.
+  const alts = card.alts ?? []
+  const [showSources, setShowSources] = useState(false)
 
   return (
     <div className="group relative">
@@ -88,7 +94,7 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
         />
       </div>
 
-      <button className="w-full text-left" onClick={onOpenDetail}>
+      <button className="w-full text-left" onClick={() => onOpenDetail(card)}>
         <div className={`relative rounded-box overflow-hidden bg-base-200 ring-1 transition ${
           checked ? 'ring-2 ring-primary' : 'ring-base-300 group-hover:ring-primary/70'
         }`}>
@@ -106,32 +112,73 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich }: CardProps
         <p className="text-xs sm:text-sm font-medium leading-tight truncate mt-2">
           {card.series_name}
         </p>
-        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          {/* Kind is carried by the badge text, not by colour alone */}
-          {card.is_film ? (
-            <span className="badge badge-ghost badge-sm">Film</span>
-          ) : card.is_anime ? (
-            <span className="badge badge-ghost badge-sm">
-              Anime S{String(card.season_number).padStart(2, '0')}
-            </span>
-          ) : (
-            <span className="badge badge-ghost badge-sm">
-              S{String(card.season_number).padStart(2, '0')}
-            </span>
-          )}
-          {year > 0 && <span className="text-base-content/40 text-xs font-mono">{year}</span>}
-          {/* Says why this is one card when the source listed the title several
-              times — the languages themselves only load with the detail. */}
-          {card.alt_page_urls && card.alt_page_urls.length > 0 && (
-            <span
-              className="badge badge-ghost badge-sm"
-              title={`${card.alt_page_urls.length + 1} source pages for this title`}
-            >
-              {card.alt_page_urls.length + 1} sources
-            </span>
-          )}
-        </div>
       </button>
+
+      {/* Badges sit outside the poster button: the sources count is itself a
+          button, and nesting buttons is invalid. */}
+      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+        {/* Kind is carried by the badge text, not by colour alone */}
+        {card.is_film ? (
+          <span className="badge badge-ghost badge-sm">Film</span>
+        ) : card.is_anime ? (
+          <span className="badge badge-ghost badge-sm">
+            Anime S{String(card.season_number).padStart(2, '0')}
+          </span>
+        ) : (
+          <span className="badge badge-ghost badge-sm">
+            S{String(card.season_number).padStart(2, '0')}
+          </span>
+        )}
+        {year > 0 && <span className="text-base-content/40 text-xs font-mono">{year}</span>}
+        {/* Says why this is one card when the source listed the title several
+            times, and opens up to the pages themselves — same-name titles do get
+            merged wrongly, and this is how the other one is reached. */}
+        {alts.length > 0 && (
+          <button
+            onClick={() => setShowSources(v => !v)}
+            aria-expanded={showSources}
+            className="badge badge-ghost badge-sm gap-1 hover:bg-base-300"
+            title={`${alts.length + 1} source pages for this title`}
+          >
+            {alts.length + 1} sources
+            <svg
+              className={`w-2.5 h-2.5 transition-transform ${showSources ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {showSources && (
+        <ul className="mt-1.5 flex flex-col gap-0.5 rounded-box bg-base-200 p-1.5">
+          {[card, ...alts].map((src, i) => (
+            <li key={src.newsid || src.page_url}>
+              <button
+                onClick={() => onOpenDetail(src)}
+                className="w-full flex items-center gap-2 text-left rounded px-1 py-1 hover:bg-base-300 transition-colors"
+              >
+                {src.poster_url ? (
+                  <img src={src.poster_url} alt="" loading="lazy" className="w-6 aspect-[2/3] object-cover rounded-sm shrink-0" />
+                ) : (
+                  <span className="w-6 aspect-[2/3] rounded-sm bg-base-300 shrink-0" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] leading-tight truncate">{src.series_name}</span>
+                  <span className="block text-[10px] leading-tight text-base-content/50 font-mono">
+                    {src.year ? src.year : '—'}
+                    {/* Names the one the card is standing in for, so the list
+                        reads as "this plus the others", not a flat set. */}
+                    {i === 0 && ' · shown'}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* Touch: the same save controls, permanently visible under the caption. */}
       <div className="flex [@media(hover:hover)]:hidden items-center mt-1">

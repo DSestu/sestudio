@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pytest_httpx import HTTPXMock
 
-from sestudio import tmdb
+from sestudio import config, tmdb
 from sestudio.web.app import create_app
 
 # Matched as regexes so the query string (api key, language, …) is ignored.
@@ -151,6 +151,9 @@ def test_api_error_degrades_to_null(client, httpx_mock: HTTPXMock):
 
 def test_without_a_key_the_feature_reports_disabled(client, monkeypatch):
     monkeypatch.delenv("TMDB_API_KEY", raising=False)
+    # Release wheels bake in a default key; neutralise it so this covers the
+    # genuinely unconfigured case.
+    monkeypatch.setattr(config, "_DEFAULT_TMDB_API_KEY", "")
     resp = client.get("/api/tmdb/enrich", params={"title": "Dark"})
     assert resp.status_code == 503
 
