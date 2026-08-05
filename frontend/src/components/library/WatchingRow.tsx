@@ -1,3 +1,4 @@
+import type { TmdbMeta } from '../../api'
 import type { PlayableEpisode } from '../../providers'
 import { minutesLeft, relativeTime } from '../../rowItems'
 import { setWatched, type WatchingItem } from '../../watchState'
@@ -11,6 +12,8 @@ interface Props {
   onOpen: (item: WatchingItem) => void
   /** When set, the row selects instead of opening. */
   selection?: { selected: boolean; onToggle: () => void }
+  /** TMDB match for this series, when one was found. */
+  meta?: TmdbMeta
 }
 
 /** The resume episode as a playable, so watch-state writes can key off it. */
@@ -28,7 +31,7 @@ function playableFor(item: WatchingItem): PlayableEpisode {
 }
 
 /** One series in the Watching list, with its resume target and context. */
-export default function WatchingRow({ item, onOpen, selection }: Props) {
+export default function WatchingRow({ item, onOpen, selection, meta }: Props) {
   const started = item.resume.position > 0 && item.resume.duration > 0
   const context = watchingContext(item)
 
@@ -44,6 +47,9 @@ export default function WatchingRow({ item, onOpen, selection }: Props) {
       title={item.series}
       meta={context}
       submeta={[watchedOf, relativeTime(item.updatedAt)].filter(Boolean).join(' · ')}
+      rating={meta?.rating}
+      genres={meta?.genres.slice(0, 4)}
+      synopsis={meta?.overview}
       // A not-yet-started episode has no progress to draw.
       progress={
         started

@@ -21,7 +21,19 @@ dependencies = [
     # instead of reimplementing their rotating obfuscation — see
     # providers/jsdecode.py. Optional at runtime: the import is guarded and the
     # pattern-matching fallback still works without it.
-    "quickjs>=1.19.4",
+    #
+    # Split by platform because neither engine covers both:
+    #
+    # QuickJS is tiny but publishes no win_amd64 wheel, so Windows has to build
+    # it, and its setup.py passes the GCC-only flag
+    # `-Werror=incompatible-pointer-types`, which MSVC rejects outright (D8021) —
+    # failing the entire install, compiler or not.
+    #
+    # MiniRacer is a 21MB V8 download, but its wheel is `py3-none-win_amd64`:
+    # ABI-agnostic, so it needs no compiler and covers new Python versions the
+    # day they ship. Too heavy to impose everywhere, exactly right for Windows.
+    "quickjs>=1.19.4; sys_platform != 'win32'",
+    "mini-racer>=0.14.1; sys_platform == 'win32'",
     "rich>=15.0.0",
     "uvicorn[standard]>=0.34",
     "yt-dlp>=2026.3.17",
@@ -66,4 +78,7 @@ dev = [
     "pytest>=9.0.3",
     "pytest-httpx>=0.36.2",
     "ruff>=0.6.3",
+    # Windows' JS engine, installed everywhere for development so its branch in
+    # jsdecode.py is covered on the machines that don't ship it.
+    "mini-racer>=0.14.1",
 ]

@@ -9,6 +9,8 @@ import {
   useCollections,
 } from '../collections'
 import EmptyState from '../components/EmptyState'
+import { matchesAllGenres } from '../genreFilter'
+import GenreChips from '../components/GenreChips'
 import LayoutToggle from '../components/LayoutToggle'
 import SelectionBar, { type BulkAction } from '../components/library/SelectionBar'
 import { sheetIcon } from '../components/library/sheetIcons'
@@ -19,6 +21,7 @@ import { setLibraryLayout, useLibraryLayout, type LayoutTab } from '../libraryLa
 import type { View } from '../nav'
 import { cardFor, openWatching, savedItems, watchingItems, type OpenTitle } from '../rowItems'
 import { setSelectionActive } from '../selectionMode'
+import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
 import { dismissMany, setWatched, useWatchState, watching, type WatchingItem } from '../watchState'
 
 const TABS = [
@@ -53,6 +56,9 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
   const [tab, setTab] = useState<LayoutTab>('watching')
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  // Per tab: the genres on offer differ between them, so a selection carried
+  // across would silently hide everything on the tab you just opened.
+  const [pickedGenres, setPickedGenres] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const collections = useCollections()
   const watch = useWatchState()
@@ -69,6 +75,22 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
     setSelecting(false)
     setPicked(new Set())
     setError(null)
+  }
+
+  function changeTab(next: LayoutTab) {
+    setTab(next)
+    setPickedGenres(new Set())
+    // Selection is per tab, so switching tabs discards it.
+    if (selecting) exitSelection()
+  }
+
+  function toggleGenre(genre: string) {
+    setPickedGenres(prev => {
+      const next = new Set(prev)
+      if (next.has(genre)) next.delete(genre)
+      else next.add(genre)
+      return next
+    })
   }
 
   function togglePicked(key: string) {
@@ -96,10 +118,34 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
   const openTitle = (entry: CollectionEntry) =>
     onOpen(cardFor(entry.series, entry.season, entry.poster_url, entry.page_url), 0, entry.lang || settings.lang)
 
-  /** Every selectable key on the active tab, for select-all. */
+  // A saved title carries no year or kind flag of its own, so season 0 stands for
+  // "film" here exactly as it does where titles are saved.
+  // Narrowed once: `saved` has no watching list, and `tab` includes it.
+  const savedOnTab: CollectionEntry[] = tab === 'watching' ? [] : saved[tab]
+
+  const titles: TitleRef[] = tab === 'watching'
+    ? inProgress.map(i => ({ key: `w-${i.series}-${i.season}`, name: i.series, isFilm: i.season === 0 }))
+    : savedOnTab.map(e => ({ key: refKey(e), name: e.series, isFilm: e.season === 0 }))
+
+  const metas = useTitlesMeta(titles, settings.tmdb_configured)
+
+  // Only genres something on this tab actually has — see GenreChips.
+  const availableGenres = [...new Set([...metas.values()].flatMap(m => m.genres))].sort()
+
+  const matchesGenres = (key: string) =>
+    matchesAllGenres(metas.get(key)?.genres, pickedGenres)
+
+  const visibleWatching = inProgress.filter(i => matchesGenres(`w-${i.series}-${i.season}`))
+  const visibleSaved = savedOnTab.filter(e => matchesGenres(refKey(e)))
+  const visibleCount = tab === 'watching' ? visibleWatching.length : visibleSaved.length
+  // savedItems keys its cards `${list}-${series}-${season}`, not by refKey.
+  const visibleGridKeys = new Set(visibleSaved.map(e => `${tab}-${e.series}-${e.season}`))
+
+  /** Every selectable key on the active tab — filtered, so select-all cannot
+   *  reach a title the genre filter is hiding. */
   const keysOnTab = tab === 'watching'
-    ? inProgress.map(i => `w-${i.series}-${i.season}`)
-    : saved[tab].map(refKey)
+    ? visibleWatching.map(i => `w-${i.series}-${i.season}`)
+    : visibleSaved.map(refKey)
 
   const allPicked = keysOnTab.length > 0 && picked.size === keysOnTab.length
   const somePicked = picked.size > 0 && !allPicked
@@ -184,7 +230,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
     if (!delta) return
     e.preventDefault()
     const next = (index + delta + TABS.length) % TABS.length
-    setTab(TABS[next].id)
+    changeTab(TABS[next].id)
     tabRefs.current[next]?.focus()
   }
 
@@ -215,11 +261,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
             aria-selected={tab === t.id}
             aria-controls={`library-panel-${t.id}`}
             tabIndex={tab === t.id ? 0 : -1}
-            onClick={() => {
-              setTab(t.id)
-              // Selection is per tab, so switching tabs discards it.
-              if (selecting) exitSelection()
-            }}
+            onClick={() => changeTab(t.id)}
             onKeyDown={e => onTabKey(e, i)}
             className={`tab flex-1 sm:flex-none gap-2 ${tab === t.id ? 'tab-active' : ''}`}
           >
@@ -228,6 +270,17 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
           </button>
         ))}
       </div>
+
+      {/* Below the tabs, above the list: the filter belongs to the tab it acts
+          on, and it only appears once TMDB has told us what is in there. */}
+      {counts[tab] > 0 && (
+        <GenreChips
+          available={availableGenres}
+          selected={pickedGenres}
+          onToggle={toggleGenre}
+          onClear={() => setPickedGenres(new Set())}
+        />
+      )}
 
       <div
         role="tabpanel"
@@ -258,16 +311,25 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
             message={EMPTY_COPY[tab].message}
             action={{ label: 'Search', onClick: () => onNavigate('search') }}
           />
+        ) : visibleCount === 0 ? (
+          // Filtered to nothing, which is a different situation from an empty
+          // tab and needs a way back rather than a prompt to go and search.
+          <EmptyState
+            title="No titles match those genres"
+            message="A title has to carry every genre you pick. Try dropping one."
+            action={{ label: 'Clear genres', onClick: () => setPickedGenres(new Set()) }}
+          />
         ) : tab === 'watching' ? (
           layout === 'detail' ? (
             <div className="flex flex-col gap-2">
-              {inProgress.map(item => {
+              {visibleWatching.map(item => {
                 const key = `w-${item.series}-${item.season}`
                 return (
                   <WatchingRow
                     key={key}
                     item={item}
                     onOpen={openWatching(onOpen)}
+                    meta={metas.get(key)}
                     selection={
                       selecting
                         ? { selected: picked.has(key), onToggle: () => togglePicked(key) }
@@ -279,19 +341,20 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
             </div>
           ) : (
             <PosterGrid
-              items={watchingItems(inProgress, onOpen)}
+              items={watchingItems(visibleWatching, onOpen)}
               selection={selecting ? { keys: picked, onToggle: togglePicked } : undefined}
             />
           )
         ) : layout === 'detail' ? (
           <div className="flex flex-col gap-2">
-            {saved[tab].map(entry => {
+            {visibleSaved.map(entry => {
               const key = refKey(entry)
               return (
                 <TitleRow
                   key={key}
                   entry={entry}
                   onOpen={openTitle}
+                  meta={metas.get(key)}
                   selection={
                     selecting
                       ? { selected: picked.has(key), onToggle: () => togglePicked(key) }
@@ -303,7 +366,11 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
           </div>
         ) : (
           <PosterGrid
-            items={savedItems(tab, collections, onOpen, settings.lang)}
+            // savedItems reads the store itself and keys cards its own way, so
+            // the filter is applied to what it produced rather than to its input.
+            items={savedItems(tab, collections, onOpen, settings.lang).filter(i =>
+              visibleGridKeys.has(i.key),
+            )}
             selection={selecting ? { keys: picked, onToggle: togglePicked } : undefined}
           />
         )}

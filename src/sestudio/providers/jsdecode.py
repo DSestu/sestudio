@@ -11,29 +11,45 @@ Running the function instead removes the modelling problem entirely: any
 arithmetic the embed invents works for free, because we are not describing the
 transform, we are evaluating it.
 
-Safety: the body is attacker-controlled, so it runs in a fresh QuickJS context
-with no host bindings, a wall-clock limit and a memory cap. That is sound here
-because the construct is a pure string→string transform — it needs no DOM, no
-network and no filesystem. QuickJS is not a browser, so `atob` does not exist
-and is shimmed below; nothing else is injected.
+Safety: the body is attacker-controlled, so it runs in a fresh context with no
+host bindings, a wall-clock limit and a memory cap. That is sound here because
+the construct is a pure string→string transform — it needs no DOM, no network
+and no filesystem. Neither engine is a browser, so `atob` does not exist and is
+shimmed below; nothing else is injected.
 
-The engine is an optional dependency: if `quickjs` will not import, callers fall
-back to the pattern enumeration in vidzy.py rather than failing outright.
+Two engines are supported, because neither covers every platform on its own:
+
+* QuickJS — tiny and preferred, but ships no Windows wheel, and building it
+  there fails (its setup.py passes a GCC-only flag that MSVC rejects).
+* MiniRacer (V8) — a much larger download, but publishes an ABI-agnostic
+  `py3-none-win_amd64` wheel, so Windows needs no compiler at all.
+
+Both enforce the same time and memory caps, so the safety argument above holds
+either way. The engine is optional: with neither installed, callers fall back to
+the pattern enumeration in vidzy.py rather than failing outright.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 
 logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - exercised by whichever branch the environment takes
     import quickjs
-
-    ENGINE_AVAILABLE = True
 except ImportError:  # pragma: no cover
     quickjs = None  # type: ignore[assignment]
-    ENGINE_AVAILABLE = False
+
+try:  # pragma: no cover - the Windows engine; absent where QuickJS builds
+    from py_mini_racer import MiniRacer
+except ImportError:  # pragma: no cover
+    MiniRacer = None  # type: ignore[assignment,misc]
+
+ENGINE_AVAILABLE = quickjs is not None or MiniRacer is not None
+# Named for diagnostics — which engine a machine ended up with is the first
+# thing worth knowing when a decode works on one box and not another.
+ENGINE_NAME = "quickjs" if quickjs is not None else "mini_racer" if MiniRacer else ""
 
 # Generous enough for any decoder seen in the wild, small enough that a runaway
 # or memory-bomb body dies instead of taking the server with it.
@@ -56,27 +72,54 @@ var atob=function(input){
 """
 
 
+def _run_quickjs(body: str, payload_b64: str) -> object:
+    """Run the decoder in QuickJS, with the payload bound as a variable.
+
+    Binding rather than interpolating means the payload cannot terminate a string
+    literal and inject code of its own.
+    """
+    ctx = quickjs.Context()
+    ctx.set_memory_limit(_MEMORY_LIMIT_BYTES)
+    ctx.set_time_limit(_TIME_LIMIT_SECONDS)
+    ctx.set_max_stack_size(_MAX_STACK_BYTES)
+    ctx.eval(_ATOB_SHIM)
+    ctx.set("__payload", payload_b64)
+    return ctx.eval(f"(function(s){{{body}}})(__payload)")
+
+
+def _run_mini_racer(body: str, payload_b64: str) -> object:
+    """Run the decoder in MiniRacer, with the payload as a JSON literal.
+
+    MiniRacer has no variable-binding call, so the payload has to travel inside
+    the source. `json.dumps` is the safe way to do that: it escapes quotes and
+    backslashes, and its default ensure_ascii also escapes U+2028/U+2029, which
+    are legal in JSON strings but terminate a line in JavaScript.
+    """
+    ctx = MiniRacer()
+    return ctx.eval(
+        f"{_ATOB_SHIM}\n(function(s){{{body}}})({json.dumps(payload_b64)})",
+        timeout_sec=_TIME_LIMIT_SECONDS,
+        max_memory=_MEMORY_LIMIT_BYTES,
+    )
+
+
 def run_inline_decoder(body: str, payload_b64: str) -> str | None:
     """Evaluate `(function(s){<body>})("<payload_b64>")` and return its result.
 
-    Returns None — never raises — when the engine is absent or the body fails to
-    run, so the caller can fall back to pattern matching. The payload is passed
-    in as a bound variable rather than interpolated into the source, so it cannot
-    terminate the string literal and inject code of its own.
+    Returns None — never raises — when no engine is installed or the body fails
+    to run, so the caller can fall back to pattern matching.
     """
-    if quickjs is None:
+    if quickjs is not None:
+        runner = _run_quickjs
+    elif MiniRacer is not None:
+        runner = _run_mini_racer
+    else:
         return None
 
     try:
-        ctx = quickjs.Context()
-        ctx.set_memory_limit(_MEMORY_LIMIT_BYTES)
-        ctx.set_time_limit(_TIME_LIMIT_SECONDS)
-        ctx.set_max_stack_size(_MAX_STACK_BYTES)
-        ctx.eval(_ATOB_SHIM)
-        ctx.set("__payload", payload_b64)
-        result = ctx.eval(f"(function(s){{{body}}})(__payload)")
+        result = runner(body, payload_b64)
     except Exception as exc:  # noqa: BLE001 - any engine failure is a fallback
-        logger.debug("Inline decoder failed to execute in QuickJS: %s", exc)
+        logger.debug("Inline decoder failed to execute in %s: %s", ENGINE_NAME, exc)
         return None
 
     if not isinstance(result, str):

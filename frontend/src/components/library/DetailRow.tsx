@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import RatingBadge from '../RatingBadge'
 
 interface Props {
   poster_url: string
@@ -7,6 +8,12 @@ interface Props {
   meta?: string
   /** Secondary meta line, e.g. "4 of 20 watched · 2 days ago". */
   submeta?: string
+  /** TMDB score, shown as a badge when a match was found. */
+  rating?: number
+  /** TMDB genre names. The caller decides how many are worth the space. */
+  genres?: string[]
+  /** TMDB synopsis, clamped — a row is a summary, not the detail page. */
+  synopsis?: string
   /** Renders a progress bar with a remaining-time label when set. */
   progress?: { fraction: number; label: string }
   onOpen: () => void
@@ -27,7 +34,8 @@ interface Props {
  * stretch to fill the row, above it they size to their content.
  */
 export default function DetailRow({
-  poster_url, title, meta, submeta, progress, onOpen, actions, overflow, selection,
+  poster_url, title, meta, submeta, rating, genres, synopsis,
+  progress, onOpen, actions, overflow, selection,
 }: Props) {
   // In selection mode both tap targets select, and the row's own actions step aside.
   const activate = selection ? selection.onToggle : onOpen
@@ -80,6 +88,17 @@ export default function DetailRow({
           )}
         </div>
 
+        {/* TMDB facts, when a match was found. Absent without a key, which is
+            why nothing here is load-bearing for the row's layout. */}
+        {(rating !== undefined || (genres && genres.length > 0)) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {rating !== undefined && <RatingBadge rating={rating} />}
+            {genres && genres.length > 0 && (
+              <span className="text-xs text-base-content/50">{genres.join(' · ')}</span>
+            )}
+          </div>
+        )}
+
         {progress && (
           <div className="flex items-center gap-2 mt-0.5">
             <div className="flex-1 h-1 rounded-full bg-base-300 overflow-hidden">
@@ -93,6 +112,12 @@ export default function DetailRow({
         )}
 
         {submeta && <p className="text-xs text-base-content/50 truncate">{submeta}</p>}
+
+        {synopsis && (
+          <p className="text-sm text-base-content/70 leading-snug line-clamp-2 sm:line-clamp-3">
+            {synopsis}
+          </p>
+        )}
 
         {actions && !selection && (
           <div className="flex items-center gap-2 mt-1 [&>*]:flex-1 sm:[&>*]:flex-none">
