@@ -8,7 +8,7 @@ import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import DiscoverPanel from '../components/DiscoverPanel'
 import EmptyState from '../components/EmptyState'
 import ResultsGrid from '../components/ResultsGrid'
-import { mergeCards } from '../mergeResults'
+import { useMergedCards } from '../useMergedCards'
 import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
 import { replaceParams } from '../nav'
@@ -19,6 +19,8 @@ interface Props {
    *  view restores itself after a reload or browser back. */
   params: URLSearchParams
   onOpenDetail: (card: SeasonCard) => void
+  /** Save a setting — the results toolbar owns the TMDB-grouping toggle. */
+  onUpdateSettings: (patch: Partial<AppSettings>) => void | Promise<void>
   /** Run a fresh source search for a title (a TMDB discover card). */
   onSearchTerm: (term: string) => void
   onJobsCreated: () => void
@@ -49,8 +51,10 @@ function filterParams(f: DiscoverFilters): Record<string, string | number | unde
 }
 
 /** Search view: query, TMDB discovery, results grid, and bulk season download. */
-export default function SearchView({ settings, params, onOpenDetail, onSearchTerm, onJobsCreated, onSkipped }: Props) {
-  const [results, setResults] = useState<SeasonCard[]>([])
+export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, onJobsCreated, onSkipped }: Props) {
+  // Raw, as scraped: merging is derived, so flipping the TMDB-identity setting
+  // regroups what is already on screen without re-searching.
+  const [rawResults, setRawResults] = useState<SeasonCard[]>([])
   // The query being searched for; seeded from the URL so back/reload restores.
   const [lastQuery, setLastQuery] = useState(params.get('q') ?? '')
   // The query the current `results` belong to — '' until the first response.
@@ -60,6 +64,12 @@ export default function SearchView({ settings, params, onOpenDetail, onSearchTer
   const [bulkLoading, setBulkLoading] = useState(false)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
+
+  // Same title listed per language and per mirror collapses to one result.
+  const [results, regrouping] = useMergedCards(
+    rawResults,
+    settings.tmdb_configured && settings.tmdb_merge,
+  )
 
   const cardMap = new Map(results.map(c => [c.newsid, c]))
   const allChecked = results.length > 0 && results.every(c => checkedIds.has(c.newsid))
@@ -75,8 +85,7 @@ export default function SearchView({ settings, params, onOpenDetail, onSearchTer
   }
 
   function handleSearchResults(cards: SeasonCard[], query: string) {
-    // Same title listed per language and per mirror collapses to one result.
-    setResults(mergeCards(cards))
+    setRawResults(cards)
     setLastQuery(query)
     setResolvedQuery(query)
     setCheckedIds(prev => {
@@ -173,6 +182,28 @@ export default function SearchView({ settings, params, onOpenDetail, onSearchTer
           <span className="text-base-content/40 text-sm">
             {results.length} result{results.length !== 1 ? 's' : ''}
           </span>
+
+          {/* The TMDB switches live here, not in Settings: they change what this
+              list looks like, so they belong next to the list they change.
+              Hidden without a key, since neither can do anything without one. */}
+          {settings.tmdb_configured && (
+            <div className="ml-auto flex items-center gap-3 flex-wrap">
+              <ToolbarToggle
+                label="TMDB artwork"
+                title="Show TMDB posters, ratings and years on cards. Off shows the source's own posters."
+                checked={settings.tmdb_cards}
+                onChange={v => void onUpdateSettings({ tmdb_cards: v })}
+              />
+              <ToolbarToggle
+                label="Group by TMDB match"
+                title="Identify a title by its TMDB match rather than its name, so differently-spelled listings of one title group together. Costs a lookup per result."
+                checked={settings.tmdb_merge}
+                onChange={v => void onUpdateSettings({ tmdb_merge: v })}
+                // Regrouping waits on a lookup per result, so it is not instant
+                busy={regrouping}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -197,7 +228,7 @@ export default function SearchView({ settings, params, onOpenDetail, onSearchTer
           checkedIds={checkedIds}
           onToggle={toggleCard}
           onOpenDetail={onOpenDetail}
-          enrich={settings.tmdb_configured}
+          enrich={settings.tmdb_configured && settings.tmdb_cards}
         />
       ) : resolvedQuery === lastQuery ? (
         <EmptyState
@@ -235,6 +266,31 @@ export default function SearchView({ settings, params, onOpenDetail, onSearchTer
         />
       )}
     </div>
+  )
+}
+
+/** A labelled switch for the results toolbar, with an optional busy spinner. */
+function ToolbarToggle({ label, title, checked, onChange, busy }: {
+  label: string
+  title: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+  busy?: boolean
+}) {
+  return (
+    <label
+      className="flex items-center gap-2 text-sm text-base-content/60 hover:text-base-content transition-colors cursor-pointer"
+      title={title}
+    >
+      <input
+        type="checkbox"
+        className="toggle toggle-xs toggle-primary"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+      />
+      {label}
+      {busy && <span className="loading loading-spinner loading-xs" aria-label="Working" />}
+    </label>
   )
 }
 

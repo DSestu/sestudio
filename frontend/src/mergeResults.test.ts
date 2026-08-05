@@ -94,4 +94,122 @@ describe('mergeCards', () => {
   it('handles an empty result set', () => {
     expect(mergeCards([])).toEqual([])
   })
+
+  it('carries the alternates whole, not just their urls', () => {
+    const merged = mergeCards([
+      card({ newsid: '1', page_url: 'a' }),
+      card({ newsid: '2', page_url: 'b', poster_url: '' }),
+    ])
+    expect(merged[0].alts?.map(c => c.newsid)).toEqual(['2'])
+  })
+
+  describe('same name, different title', () => {
+    it('keeps two years of one name apart', () => {
+      const merged = mergeCards([
+        card({ series_name: 'Dune', page_url: 'a', year: 1984 }),
+        card({ series_name: 'Dune', page_url: 'b', year: 2021 }),
+      ])
+      expect(merged).toHaveLength(2)
+      expect(merged.map(c => c.year)).toEqual([1984, 2021])
+    })
+
+    it('still merges mirrors when only one year is known', () => {
+      const merged = mergeCards([
+        card({ page_url: 'a', year: 2008 }),
+        card({ page_url: 'b', poster_url: '', year: 0 }),
+        card({ page_url: 'c', poster_url: '', year: 0 }),
+      ])
+      expect(merged).toHaveLength(1)
+      expect(merged[0].alt_page_urls).toEqual(['b', 'c'])
+    })
+
+    it('leaves yearless cards alone rather than guessing which remake they are', () => {
+      const merged = mergeCards([
+        card({ series_name: 'Dune', page_url: 'a', year: 1984 }),
+        card({ series_name: 'Dune', page_url: 'b', year: 2021 }),
+        card({ series_name: 'Dune', page_url: 'c', poster_url: '', year: 0 }),
+      ])
+      expect(merged).toHaveLength(3)
+      expect(merged.find(c => c.page_url === 'a')?.alt_page_urls).toBeUndefined()
+    })
+
+    it('splits yearless cards that carry different posters', () => {
+      const merged = mergeCards([
+        card({ series_name: 'Reborn', page_url: 'a', poster_url: '/u/one.jpg' }),
+        card({ series_name: 'Reborn', page_url: 'b', poster_url: '/u/two.jpg' }),
+      ])
+      expect(merged).toHaveLength(2)
+    })
+
+    it('treats the same poster on different hosts as one title', () => {
+      const merged = mergeCards([
+        card({ page_url: 'a', poster_url: 'https://m1.lol/u/one.jpg' }),
+        card({ page_url: 'b', poster_url: 'https://m2.lol/uploads/one.jpg?v=2' }),
+      ])
+      expect(merged).toHaveLength(1)
+    })
+
+    it('does not let the poster overrule a known year', () => {
+      const merged = mergeCards([
+        card({ page_url: 'a', poster_url: '/u/one.jpg', year: 2008 }),
+        card({ page_url: 'b', poster_url: '/u/two.jpg', year: 2008 }),
+      ])
+      expect(merged).toHaveLength(1)
+    })
+
+    it('keeps an anime season apart from a live-action one of the same name', () => {
+      const merged = mergeCards([
+        card({ series_name: 'Bleach', is_film: false, season_number: 1, is_anime: true, page_url: 'a' }),
+        card({ series_name: 'Bleach', is_film: false, season_number: 1, is_anime: false, page_url: 'b' }),
+      ])
+      expect(merged).toHaveLength(2)
+    })
+  })
+
+  describe('TMDB identity', () => {
+    it('merges differently-spelled listings that share an id', () => {
+      const merged = mergeCards(
+        [
+          card({ newsid: '1', series_name: 'Bleach', page_url: 'a' }),
+          card({ newsid: '2', series_name: 'Bleach VF', page_url: 'b', poster_url: '' }),
+        ],
+        new Map([['1', 30984], ['2', 30984]]),
+      )
+      expect(merged).toHaveLength(1)
+      expect(merged[0].alt_page_urls).toEqual(['b'])
+    })
+
+    it('never folds two seasons of one series together', () => {
+      const merged = mergeCards(
+        [
+          card({ newsid: '1', series_name: 'Bleach', is_film: false, season_number: 1, page_url: 'a' }),
+          card({ newsid: '2', series_name: 'Bleach', is_film: false, season_number: 2, page_url: 'b' }),
+        ],
+        new Map([['1', 30984], ['2', 30984]]),
+      )
+      expect(merged).toHaveLength(2)
+    })
+
+    it('splits titles whose ids differ', () => {
+      const merged = mergeCards(
+        [
+          card({ newsid: '1', series_name: 'Reborn', page_url: 'a' }),
+          card({ newsid: '2', series_name: 'Reborn', page_url: 'b', poster_url: '' }),
+        ],
+        new Map([['1', 111], ['2', 222]]),
+      )
+      expect(merged).toHaveLength(2)
+    })
+
+    it('falls back to the title for cards with no id', () => {
+      const merged = mergeCards(
+        [
+          card({ newsid: '1', page_url: 'a' }),
+          card({ newsid: '2', page_url: 'b', poster_url: '' }),
+        ],
+        new Map(),
+      )
+      expect(merged).toHaveLength(1)
+    })
+  })
 })

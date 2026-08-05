@@ -124,11 +124,13 @@ Starts **two servers** by default — `http://<host>:8080` and `https://<host>:8
   and retries) and the browser collects the finished file. Device files are staged in a
   temp dir and removed when you clear the download history.
 
-> **Optional metadata (off by default):** set `TMDB_API_KEY=<your key>` in the environment
-> before starting the server to enrich results with posters, ratings, synopses, cast and a
-> "Trending this week" row ([themoviedb.org](https://www.themoviedb.org) keys are free).
-> Without it, nothing changes and no external requests are made. The key is read from the
-> environment or `~/.config/sestudio/config.json` and is never sent to the browser.
+> **Metadata:** results are enriched with posters, ratings, synopses, cast and a "Trending
+> this week" row, via [themoviedb.org](https://www.themoviedb.org). Released builds ship a
+> default TMDB key, so `uvx sestudio` works with no setup. To use your own key instead, set
+> `TMDB_API_KEY=<your key>` in the environment or save it in Settings (it lands in
+> `~/.config/sestudio/config.json`); either takes precedence over the built-in one. Keys are
+> free. The key is never sent to the browser, and builds from a source checkout have no
+> default key — there, enrichment stays off until you supply one.
 
 > **Audio/subtitle tracks:** the streaming proxy passes HLS alternate renditions
 > (`#EXT-X-MEDIA` audio/subtitle tracks) through untouched, so when a provider's

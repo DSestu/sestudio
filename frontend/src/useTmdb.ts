@@ -12,6 +12,18 @@ function key(title: string, year: number, isFilm: boolean): string {
   return `${isFilm ? 'movie' : 'tv'}:${title.toLowerCase()}:${year}`
 }
 
+/**
+ * The same lookup the hook uses, for callers that need metadata outside render
+ * (result merging). Shares the cache, so an already-enriched title is free.
+ */
+export function lookupTmdb(
+  title: string,
+  year: number,
+  isFilm: boolean,
+): Promise<TmdbMeta | null> {
+  return lookup(title, year, isFilm)
+}
+
 function lookup(title: string, year: number, isFilm: boolean): Promise<TmdbMeta | null> {
   const k = key(title, year, isFilm)
   if (cache.has(k)) return Promise.resolve(cache.get(k) ?? null)
