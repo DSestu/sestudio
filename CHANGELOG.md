@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/DSestu/sestudio/compare/v0.9.0...v0.10.0) (2026-08-05)
+
+
+### New features
+
+* detailed view in search ([0226a99](https://github.com/DSestu/sestudio/commit/0226a99085f92489c8b912ccd379d1772a6be478))
+* voe filmoon providers ([#38](https://github.com/DSestu/sestudio/issues/38)) ([4ce9ba5](https://github.com/DSestu/sestudio/commit/4ce9ba52937369c9ce2315a915db913070b40afa))
+
+
+### Bug fixes
+
+* **vidzy:** execute embeds' inline decoder instead of modelling it ([e51b4f9](https://github.com/DSestu/sestudio/commit/e51b4f9495346548f4f9a5032c2376ecbc2b0abb))
+
 ## [0.9.0](https://github.com/DSestu/sestudio/compare/v0.8.0...v0.9.0) (2026-08-04)
 
 
