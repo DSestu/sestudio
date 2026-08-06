@@ -8,6 +8,10 @@ Casting, in general, need the receiving TV to have access to the network address
 
 If you are outside of your network, and use tailscale to access to your server, you will need to set up a port forwarding from your phone on your incoming wlan connections to your server's tailscale address.
 
+> Simpler alternative: [Tailscale Funnel](#casting-from-outside-your-network-tailscale-funnel)
+> gives the server a public HTTPS address, so neither the phone nor the TV needs
+> Tailscale, port forwarding, or a trusted self-signed cert.
+
 Then, you will have to connect on your phone browser to your your phone's local network address (that will be forwarded to your server).
 
 By doing this, the TV will connect to your phone's local network address, and your phone will forward the stream to your server, making the cast work.
@@ -23,6 +27,57 @@ To sum this up, here are the steps to follow to have full casting functionality 
 * Connect to https://<phone-lan-ip>:8443 from your phone browser
 
 The phone ip address can be easily found on Android by long pressing the wifi widget, and then clicking on "advanced info" icon next to the current wifi name.
+
+## Casting from outside your network (Tailscale Funnel)
+
+[Tailscale Funnel](https://tailscale.com/kb/1223/funnel) publishes a port on the
+server to the public internet with a real, publicly-trusted TLS certificate. This
+removes every awkward part of the phone-forwarding setup above: no port forwarding,
+no Tailscale on the phone or TV, and **no self-signed cert to install** — the Cast
+SDK gets the secure context it wants for free.
+
+Exposing the HTTPS port is enough. Casting to a TV works with only `8443` funneled;
+the HTTP port does not need to be public.
+
+```bash
+# On the server, once: enable the funnel node attribute in the tailnet ACL
+#   "nodeAttrs": [{ "target": ["autogroup:member"], "attr": ["funnel"] }]
+
+tailscale funnel --bg --https=8443 https+insecure://localhost:8443
+tailscale funnel status          # prints the public URL
+```
+
+Then open `https://<host>.<tailnet>.ts.net:8443` on the phone and cast as usual.
+
+`https+insecure://` is required because sestudio's own certificate is self-signed —
+it tells Funnel not to validate the upstream. Funnel presents its own valid
+certificate to the outside world, so clients see a clean HTTPS site regardless.
+
+Things worth knowing before you fight it:
+
+* **Funnel only accepts public ports 443, 8443 and 10000.** Nothing else.
+* `tailscale funnel 8443` is shorthand for *public 443 → local 8443*, not
+  8443 → 8443. Pass `--https=8443` explicitly if you want the port preserved.
+* `listener already exists for port 443` means that port already has a
+  `serve` (tailnet-only) entry. Inspect with `tailscale serve status` and clear it
+  with `tailscale serve --https=443 off` before funneling it. A port left as
+  `serve` rather than `funnel` accepts the TCP connection from outside and then
+  drops the TLS handshake — it looks like a broken cert, but it is a missing funnel.
+* Without `--bg` the proxy is foreground-only and dies with the command.
+* **Anyone with the URL can reach the server.** There is no auth in front of it.
+
+If the public name does not resolve, check it against more than one resolver before
+assuming the setup is wrong:
+
+```bash
+nslookup <host>.<tailnet>.ts.net 8.8.8.8
+nslookup <host>.<tailnet>.ts.net 1.1.1.1
+```
+
+A resolver that was queried before the funnel existed can cache the `NXDOMAIN` for
+its negative TTL while others answer correctly — Cloudflare's `1.1.1.1` has been
+observed doing this for well over an hour. Purge it at
+<https://1.1.1.1/purge-cache/> (A and AAAA), or use another resolver meanwhile.
 
 ## Requirements
 
