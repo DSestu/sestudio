@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/DSestu/sestudio/compare/v0.11.0...v0.12.0) (2026-08-06)
+
+
+### New features
+
+* abstract the stream site ([d856fa5](https://github.com/DSestu/sestudio/commit/d856fa524630298bc401acc586c7714e69c5b446))
+* add new vidzy deobfuscation ([f8b9cab](https://github.com/DSestu/sestudio/commit/f8b9cab2a9c957fde9f1b0095a13c49c76ac84d7))
+* multiple searches, added people search, added a provider ([44dcb1a](https://github.com/DSestu/sestudio/commit/44dcb1ac11753f561792077884bbbadac40e79b6))
+
+
+### Miscellaneous Chores
+
+* add tailscale doc ([f27a367](https://github.com/DSestu/sestudio/commit/f27a3670ec41fa886f59b077142037c47343a131))
+
 ## [0.11.0](https://github.com/DSestu/sestudio/compare/v0.10.1...v0.11.0) (2026-08-05)
 
 
