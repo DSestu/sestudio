@@ -58,6 +58,26 @@ export interface AppSettings {
   tmdb_posters: boolean
   /** Write-only: sent when saving a new key, never returned. */
   tmdb_api_key?: string
+  /** Content sites excluded from search. Opt-out, so a new site is on by
+   *  default; disabling one never stops its saved titles from playing. */
+  disabled_sites?: string[]
+  /** Site to favour when several carry the same title: listed first, and it
+   *  wins the card when listings from different sites are merged. */
+  preferred_site?: string
+}
+
+export interface SiteInfo {
+  id: string
+  display_name: string
+  is_anime: boolean
+  enabled: boolean
+}
+
+/** The content sites this server knows about, for the source toggles. */
+export async function getSites(): Promise<SiteInfo[]> {
+  const res = await fetch(`${BASE}/sites`)
+  if (!res.ok) return []
+  return res.json()
 }
 
 export interface TmdbCast {
@@ -179,6 +199,22 @@ export async function discoverTitles(filters: DiscoverFilters, page: number): Pr
 
 export async function getGenres(kind: TmdbKind): Promise<TmdbGenre[]> {
   const res = await fetch(`${BASE}/tmdb/genres?kind=${kind}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+export interface PersonHit {
+  id: number
+  name: string
+  known_for_department: string
+  profile_url: string
+  /** A few titles they are known for, to tell namesakes apart. */
+  known_for: string[]
+}
+
+/** People matching a name. Empty when TMDB is disabled or has no match. */
+export async function searchPeople(q: string): Promise<PersonHit[]> {
+  const res = await fetch(`${BASE}/tmdb/people?q=${encodeURIComponent(q)}`)
   if (!res.ok) return []
   return res.json()
 }

@@ -12,6 +12,8 @@ import EmptyState from '../components/EmptyState'
 import { matchesAllGenres } from '../genreFilter'
 import GenreChips from '../components/GenreChips'
 import LayoutToggle from '../components/LayoutToggle'
+import SortSelect from '../components/SortSelect'
+import type { MediaCardItem } from '../components/MediaCard'
 import SelectionBar, { type BulkAction } from '../components/library/SelectionBar'
 import { sheetIcon } from '../components/library/sheetIcons'
 import TitleRow from '../components/library/TitleRow'
@@ -22,6 +24,8 @@ import type { View } from '../nav'
 import { cardFor, openWatching, savedItems, watchingItems, type OpenTitle } from '../rowItems'
 import { setSelectionActive } from '../selectionMode'
 import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
+import type { SortKey } from '../sortItems'
+import { SORTS_FOR, defaultSortFor, sortItems } from '../sortItems'
 import { dismissMany, setWatched, useWatchState, watching, type WatchingItem } from '../watchState'
 
 const TABS = [
@@ -59,6 +63,13 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
   // Per tab: the genres on offer differ between them, so a selection carried
   // across would silently hide everything on the tab you just opened.
   const [pickedGenres, setPickedGenres] = useState<Set<string>>(new Set())
+  // Per tab as well: "recently added" means nothing on Watching, whose own
+  // default is how recently you watched.
+  const [sorts, setSorts] = useState<Record<LayoutTab, SortKey>>(() => ({
+    watching: defaultSortFor('watching'),
+    watchlist: defaultSortFor('saved'),
+    favourites: defaultSortFor('saved'),
+  }))
   const [error, setError] = useState<string | null>(null)
   const collections = useCollections()
   const watch = useWatchState()
@@ -135,11 +146,37 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
   const matchesGenres = (key: string) =>
     matchesAllGenres(metas.get(key)?.genres, pickedGenres)
 
-  const visibleWatching = inProgress.filter(i => matchesGenres(`w-${i.series}-${i.season}`))
-  const visibleSaved = savedOnTab.filter(e => matchesGenres(refKey(e)))
+  const sort = sorts[tab]
+  // Sorted after filtering, so the order describes what is actually shown.
+  const visibleWatching = sortItems(
+    inProgress
+      .filter(i => matchesGenres(`w-${i.series}-${i.season}`))
+      .map(i => {
+        const meta = metas.get(`w-${i.series}-${i.season}`)
+        return { ...i, title: i.series, rating: meta?.rating, year: meta?.year }
+      }),
+    sort,
+  )
+  const visibleSaved = sortItems(
+    savedOnTab
+      .filter(e => matchesGenres(refKey(e)))
+      .map(e => {
+        const meta = metas.get(refKey(e))
+        return { ...e, title: e.series, rating: meta?.rating, year: meta?.year }
+      }),
+    sort,
+  )
   const visibleCount = tab === 'watching' ? visibleWatching.length : visibleSaved.length
   // savedItems keys its cards `${list}-${series}-${season}`, not by refKey.
   const visibleGridKeys = new Set(visibleSaved.map(e => `${tab}-${e.series}-${e.season}`))
+  // The grid's own keys mapped back to the metas, which are keyed by refKey.
+  const savedGridMeta = new Map(
+    visibleSaved.map(e => [`${tab}-${e.series}-${e.season}`, metas.get(refKey(e))]),
+  )
+
+  /** Rating and genres onto a poster card, exactly as search result cards show them. */
+  const withMeta = (item: MediaCardItem, meta = metas.get(item.key)): MediaCardItem =>
+    meta ? { ...item, rating: meta.rating, genres: meta.genres } : item
 
   /** Every selectable key on the active tab — filtered, so select-all cannot
    *  reach a title the genre filter is hiding. */
@@ -240,6 +277,13 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xl font-semibold tracking-tight">Library</h2>
         <div className="flex items-center gap-2">
+          {counts[tab] > 0 && (
+            <SortSelect
+              options={tab === 'watching' ? SORTS_FOR.watching : SORTS_FOR.saved}
+              value={sort}
+              onChange={key => setSorts(prev => ({ ...prev, [tab]: key }))}
+            />
+          )}
           <LayoutToggle layout={layout} onChange={next => setLibraryLayout(tab, next)} />
           <button
             onClick={() => (selecting ? exitSelection() : setSelecting(true))}
@@ -342,7 +386,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
             </div>
           ) : (
             <PosterGrid
-              items={watchingItems(visibleWatching, onOpen)}
+              items={watchingItems(visibleWatching, onOpen).map(i => withMeta(i))}
               selection={selecting ? { keys: picked, onToggle: togglePicked } : undefined}
             />
           )
@@ -369,9 +413,9 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
           <PosterGrid
             // savedItems reads the store itself and keys cards its own way, so
             // the filter is applied to what it produced rather than to its input.
-            items={savedItems(tab, collections, onOpen, settings.lang).filter(i =>
-              visibleGridKeys.has(i.key),
-            )}
+            items={savedItems(tab, collections, onOpen, settings.lang)
+              .filter(i => visibleGridKeys.has(i.key))
+              .map(i => withMeta(i, savedGridMeta.get(i.key)))}
             selection={selecting ? { keys: picked, onToggle: togglePicked } : undefined}
           />
         )}

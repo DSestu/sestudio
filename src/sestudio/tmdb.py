@@ -268,6 +268,51 @@ def catalog() -> list[dict[str, Any]]:
     ]
 
 
+_PEOPLE_LIMIT = 12
+
+
+def search_people(query: str) -> list[dict[str, Any]]:
+    """People matching *query*, most prominent first.
+
+    Each carries the titles TMDB considers them known for, so a result is
+    identifiable when several people share a name.
+    """
+    key = tmdb_key()
+    if not key:
+        raise TmdbDisabled("No TMDB API key configured")
+    if not query.strip():
+        return []
+    try:
+        with _client() as client:
+            resp = client.get(
+                f"{_API}/search/person",
+                params={"api_key": key, "language": _LANG, "query": query},
+            )
+            resp.raise_for_status()
+            results = resp.json().get("results") or []
+    except httpx.HTTPError as exc:
+        logger.warning("TMDB person search failed for %r: %s", query, exc)
+        return []
+
+    people: list[dict[str, Any]] = []
+    for r in results[:_PEOPLE_LIMIT]:
+        known_for = [
+            t.get("title") or t.get("name") or ""
+            for t in r.get("known_for") or []
+            if t.get("media_type") in ("movie", "tv")
+        ]
+        people.append(
+            {
+                "id": r.get("id"),
+                "name": r.get("name") or "",
+                "known_for_department": r.get("known_for_department") or "",
+                "profile_url": _image(r.get("profile_path"), "w185"),
+                "known_for": [t for t in known_for if t][:3],
+            }
+        )
+    return people
+
+
 def discover(
     kind: str = "movie",
     sort_by: str = "popularity.desc",

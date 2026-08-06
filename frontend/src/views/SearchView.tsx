@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type {
-  AppSettings, DiscoverFilters, DownloadDestination, DownloadItem, DownloadJob, SeasonCard,
+  AppSettings, DiscoverFilters, DownloadDestination, DownloadItem, DownloadJob, PersonHit,
+  SeasonCard,
 } from '../api'
-import { checkDownloads, getSeason, postDownloads } from '../api'
+import { checkDownloads, getSeason, postDownloads, searchPeople } from '../api'
 import { DEFAULT_DISCOVER_FILTERS } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import DiscoverPanel from '../components/DiscoverPanel'
 import EmptyState from '../components/EmptyState'
 import LayoutToggle from '../components/LayoutToggle'
+import SortSelect from '../components/SortSelect'
+import PeopleResults from '../components/PeopleResults'
 import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
 import { setLibraryLayout, useLibraryLayout } from '../libraryLayout'
 import { useMergedCards } from '../useMergedCards'
+import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
+import type { SortKey } from '../sortItems'
+import { SORTS_FOR, defaultSortFor, sortItems } from '../sortItems'
 import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
 import { replaceParams } from '../nav'
@@ -26,6 +32,8 @@ interface Props {
   onUpdateSettings: (patch: Partial<AppSettings>) => void | Promise<void>
   /** Run a fresh source search for a title (a TMDB discover card). */
   onSearchTerm: (term: string) => void
+  /** Open a person's profile from the People band. */
+  onOpenPerson: (id: number) => void
   onJobsCreated: () => void
   onSkipped: (jobs: DownloadJob[]) => void
 }
@@ -54,7 +62,7 @@ function filterParams(f: DiscoverFilters): Record<string, string | number | unde
 }
 
 /** Search view: query, TMDB discovery, results grid, and bulk season download. */
-export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, onJobsCreated, onSkipped }: Props) {
+export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, onOpenPerson, onJobsCreated, onSkipped }: Props) {
   // Raw, as scraped: merging is derived, so flipping the TMDB-identity setting
   // regroups what is already on screen without re-searching.
   const [rawResults, setRawResults] = useState<SeasonCard[]>([])
@@ -63,6 +71,12 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   // The query the current `results` belong to — '' until the first response.
   const [resolvedQuery, setResolvedQuery] = useState('')
   const [filters, setFilters] = useState<DiscoverFilters>(() => filtersFrom(params))
+  const [sort, setSort] = useState<SortKey>(defaultSortFor('search'))
+  // Tagged with the query they belong to, so a stale set is never shown and
+  // no synchronous reset is needed when the query changes.
+  const [peopleFor, setPeopleFor] = useState<{ q: string; hits: PersonHit[] }>(
+    () => ({ q: '', hits: [] }),
+  )
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const layout = useLibraryLayout().search
   const [bulkLoading, setBulkLoading] = useState(false)
@@ -73,6 +87,30 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   const [results, regrouping] = useMergedCards(
     rawResults,
     settings.tmdb_configured && settings.tmdb_merge,
+    settings.preferred_site,
+  )
+
+  // Ratings are only fetched when a sort actually needs them, so the default
+  // relevance ordering costs no extra lookups. They share the enrichment
+  // cache, so with TMDB posters already on they are usually free.
+  const needsRatings = settings.tmdb_configured && sort === 'rating.desc'
+  const titleRefs: TitleRef[] = needsRatings
+    ? results.map(c => ({ key: c.newsid, name: c.series_name, isFilm: c.is_film }))
+    : []
+  const ratings = useTitlesMeta(titleRefs, needsRatings)
+
+  const sortedResults = useMemo(
+    () =>
+      sortItems(
+        results.map(card => ({
+          card,
+          title: card.series_name,
+          year: card.year,
+          rating: ratings.get(card.newsid)?.rating,
+        })),
+        sort,
+      ).map(row => row.card),
+    [results, sort, ratings],
   )
 
   const cardMap = new Map(results.map(c => [c.newsid, c]))
@@ -97,6 +135,21 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       return new Set([...prev].filter(id => ids.has(id)))
     })
   }
+
+  // People are looked up per query, in parallel with the source search: a
+  // name like "tarantino" matches no title, so without this the search
+  // simply looks empty. Failures are silent — this is an extra, not the
+  // result set.
+  useEffect(() => {
+    if (!lastQuery || !settings.tmdb_configured) return
+    let cancelled = false
+    void searchPeople(lastQuery).then(hits => {
+      if (!cancelled) setPeopleFor({ q: lastQuery, hits })
+    })
+    return () => { cancelled = true }
+  }, [lastQuery, settings.tmdb_configured])
+
+  const people = peopleFor.q === lastQuery ? peopleFor.hits : []
 
   // Persist query + filters into the current history entry, so browser back
   // (and reload) land on this exact search instead of an empty one.
@@ -194,6 +247,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
               hidden without a key, since neither can do anything without one.
               The layout choice works either way. */}
           <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
+            <SortSelect options={SORTS_FOR.search} value={sort} onChange={setSort} />
             {settings.tmdb_configured && (
               <>
                 <ToolbarToggle
@@ -217,6 +271,8 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         </div>
       )}
 
+      {lastQuery !== '' && <PeopleResults people={people} onOpen={onOpenPerson} />}
+
       {lastQuery === '' ? (
         // No query: browse the TMDB catalogue instead of a blank page, so
         // suggestions and search flow into each other.
@@ -235,7 +291,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       ) : results.length > 0 ? (
         layout === 'detail' ? (
           <ResultsList
-            cards={results}
+            cards={sortedResults}
             checkedIds={checkedIds}
             onToggle={toggleCard}
             onOpenDetail={onOpenDetail}
@@ -244,7 +300,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           />
         ) : (
           <ResultsGrid
-            cards={results}
+            cards={sortedResults}
             checkedIds={checkedIds}
             onToggle={toggleCard}
             onOpenDetail={onOpenDetail}
@@ -253,10 +309,17 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           />
         )
       ) : resolvedQuery === lastQuery ? (
-        <EmptyState
-          title={`No results for “${lastQuery}”`}
-          message="Try a different title, or check the spelling."
-        />
+        people.length > 0 ? (
+          <EmptyState
+            title={`No titles match “${lastQuery}”`}
+            message="That looks like a person's name — open one above to browse their filmography."
+          />
+        ) : (
+          <EmptyState
+            title={`No results for “${lastQuery}”`}
+            message="Try a different title, or check the spelling."
+          />
+        )
       ) : (
         // Restored from the URL and still fetching — the bar shows a spinner.
         <div className="flex justify-center py-12" aria-busy="true" aria-label="Searching">

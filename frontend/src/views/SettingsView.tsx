@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import type { AppSettings } from '../api'
+import { useEffect, useState } from 'react'
+import type { AppSettings, SiteInfo } from '../api'
+import { getSites } from '../api'
 
 /** Where to get a TMDB key, linked from the field itself. */
 const TMDB_GUIDE_URL = 'https://duckkota.gitlab.io/guides/tmdb/'
@@ -22,6 +23,16 @@ export default function SettingsView({ settings, onUpdate }: Props) {
   // cannot be pre-filled and instead sets or replaces whatever is stored.
   const [keyDraft, setKeyDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [sites, setSites] = useState<SiteInfo[]>([])
+
+  useEffect(() => { void getSites().then(setSites) }, [])
+
+  const disabled = settings.disabled_sites ?? []
+
+  function toggleSite(id: string, enabled: boolean) {
+    const next = enabled ? disabled.filter(s => s !== id) : [...disabled, id]
+    void onUpdate({ disabled_sites: next })
+  }
 
   async function saveKey(value: string) {
     setSaving(true)
@@ -61,6 +72,62 @@ export default function SettingsView({ settings, onUpdate }: Props) {
           </select>
           <p className="text-xs text-base-content/50 mt-1">
             Used when opening a title; a title without it falls back to what it has.
+          </p>
+        </div>
+      </section>
+
+      <div className="divider my-0" />
+
+      <section aria-labelledby="settings-sources" className="flex flex-col gap-4">
+        <h3
+          id="settings-sources"
+          className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
+        >
+          Sources
+        </h3>
+
+        {sites.length === 0 ? (
+          <p className="text-sm text-base-content/50">No sources available.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {sites.map(site => (
+              <label
+                key={site.id}
+                className="flex items-center gap-3 cursor-pointer text-sm"
+              >
+                <input
+                  type="checkbox"
+                  className="toggle toggle-primary toggle-sm"
+                  checked={!disabled.includes(site.id)}
+                  onChange={e => toggleSite(site.id, e.target.checked)}
+                />
+                <span>{site.display_name}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-base-content/50">
+          Which sites searches look in. Turning one off only hides it from
+          search — titles already saved from it still play and download.
+        </p>
+
+        <div>
+          <label htmlFor="set-preferred-site" className="text-sm text-base-content/60 mb-1 block">
+            Preferred source
+          </label>
+          <select
+            id="set-preferred-site"
+            className="select select-bordered w-full"
+            value={settings.preferred_site ?? ''}
+            onChange={e => onUpdate({ preferred_site: e.target.value })}
+          >
+            {sites.map(site => (
+              <option key={site.id} value={site.id}>{site.display_name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-base-content/50 mt-1">
+            Listed first in search results, and the one you get when the same
+            title is found on several sites.
           </p>
         </div>
       </section>

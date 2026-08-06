@@ -51,6 +51,7 @@ async function resolveIds(cards: SeasonCard[]): Promise<Map<string, number>> {
 export function useMergedCards(
   cards: SeasonCard[],
   tmdbIdentity: boolean,
+  preferredSource?: string,
 ): [SeasonCard[], boolean] {
   // The batch the ids belong to is tracked alongside them, because "resolved"
   // cannot be read off the map itself: a card TMDB has no match for never gets
@@ -72,7 +73,10 @@ export function useMergedCards(
 
   const pending = tmdbIdentity && cards.length > 0 && resolved.batch !== batch
   const active = tmdbIdentity ? resolved.ids : EMPTY_IDS
-  const merged = useMemo(() => mergeCards(cards, active), [cards, active])
+  const merged = useMemo(
+    () => mergeCards(cards, active, preferredSource),
+    [cards, active, preferredSource],
+  )
   return [merged, pending]
 }
 

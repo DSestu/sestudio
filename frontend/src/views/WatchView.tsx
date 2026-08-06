@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { togglePlaylistCollapsed, usePlaylistCollapsed } from '../playlistCollapsed'
 import type {
   AppSettings, DownloadDestination, DownloadItem, EpisodeDetail, SeasonDetail,
@@ -11,7 +11,10 @@ import SaveToggles from '../components/SaveToggles'
 import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
+import SourceSwitcher from '../components/watch/SourceSwitcher'
 import VideoPane from '../components/watch/VideoPane'
+import type { AlternateSource } from '../useAlternateSources'
+import { useAlternateSources } from '../useAlternateSources'
 import { InPortal, OutPortal } from '../reversePortal'
 import type { PortalNode } from '../portalNode'
 import { useSeasonDetail } from '../components/season/useSeasonDetail'
@@ -75,6 +78,21 @@ export default function WatchView({
   const [submitting, setSubmitting] = useState(false)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
+  // The route carries alternates as parallel lists, so pair them back up here.
+  // Keyed on strings: the arrays are rebuilt on every render by the router.
+  const altKey = (altPageUrls ?? []).join('|')
+  const altSrcKey = (altSources ?? []).join('|')
+  const mergedSources = useMemo(() => {
+    const urls = altKey ? altKey.split('|') : []
+    const srcs = altSrcKey ? altSrcKey.split('|') : []
+    return urls.map((url, i) => ({
+      page_url: url,
+      source: srcs[i] || 'fstream',
+      series_name: seriesName,
+      poster_url: '',
+      year: 0,
+    }))
+  }, [altKey, altSrcKey, seriesName])
 
   const watch = useWatchState()
 
@@ -92,6 +110,37 @@ export default function WatchView({
 
   const season = detail?.is_film ? 0 : (detail?.season ?? 0)
   const meta = useTmdb(seriesName, 0, !!detail?.is_film, !!settings.tmdb_configured)
+
+  const {
+    sources: siteSources,
+    loading: siteSourcesLoading,
+    ensureLoaded: loadSiteSources,
+  } = useAlternateSources({
+    seriesName,
+    season,
+    isFilm: !!detail?.is_film,
+    source: sourceId,
+    pageUrl: sourceUrl,
+    tmdbId: meta?.tmdb_id,
+    merged: mergedSources,
+  })
+
+  /** Move to another site's listing of this title.
+   *
+   *  The title identity (name, poster) is carried over rather than taken from
+   *  the new listing, so the watch-state key is unchanged and playback resumes
+   *  where it left off — see watchKey(). The episode travels too; a source
+   *  that lacks that exact number falls back to the nearest one on load. */
+  function switchSource(next: AlternateSource) {
+    navigate('watch', {
+      u: next.page_url,
+      t: seriesName,
+      p: posterUrl,
+      lang: activeLang,
+      ep: current?.number || undefined,
+      src: next.source,
+    })
+  }
 
   /** Attach title identity so playback/casting can record watch-state. */
   function toPlayable(e: EpisodeDetail, d: SeasonDetail): PlayableEpisode {
@@ -217,6 +266,25 @@ export default function WatchView({
     if (w && w.duration > 0) progress[e.number] = w.position / w.duration
   }
 
+  /** Caption for a control on the "where does this play from" row. */
+  const controlLabel = (text: string) => (
+    <span className="text-[10px] uppercase tracking-wide text-base-content/40 shrink-0">
+      {text}
+    </span>
+  )
+
+  const sourceControl = (
+    <div className="flex items-center gap-2 min-w-0">
+      {controlLabel('Source')}
+      <SourceSwitcher
+        sources={siteSources}
+        loading={siteSourcesLoading}
+        onOpenChange={open => { if (open) loadSiteSources() }}
+        onSelect={switchSource}
+      />
+    </div>
+  )
+
   const list = detail && (
     <EpisodeList
       episodes={detail.episodes}
@@ -314,6 +382,11 @@ export default function WatchView({
         />
       )}
 
+      {/* A dead or empty listing is exactly when switching site matters most,
+          and the row under the player is not rendered then — so surface the
+          source on its own here. */}
+      {(error || (detail && detail.episodes.length === 0)) && sourceControl}
+
       {detail && detail.episodes.length > 0 && (
         <div className="lg:flex lg:gap-4 lg:items-start">
           {/* Desktop playlist column — collapsible */}
@@ -376,9 +449,11 @@ export default function WatchView({
               </div>
             </div>
 
-            {/* Output + providers + autoplay */}
-            {current && (
-              <div className="flex flex-col gap-3">
+            {/* Output, then where the video comes from: the site first, then
+                the hosts that site offers — left to right, site → host, which
+                is also the order in which a failure is worth investigating. */}
+            <div className="flex flex-col gap-3">
+              {current && (
                 <OutputSwitcher
                   episodes={playlist}
                   index={index}
@@ -387,20 +462,28 @@ export default function WatchView({
                   handoffAt={position}
                   onSourceFailed={() => { if (active) markFailed(active) }}
                 />
-                <div className="flex items-center gap-3 flex-wrap">
-                  <ProviderChips providers={providers} active={active} status={status} onSelect={select} />
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-base-content/70 ml-auto">
-                    <input
-                      type="checkbox"
-                      className="toggle toggle-primary toggle-sm"
-                      checked={autoplay}
-                      onChange={e => setAutoplay(e.target.checked)}
-                    />
-                    Autoplay next
-                  </label>
-                </div>
+              )}
+              <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
+                {sourceControl}
+                {current && (
+                  <>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {controlLabel('Host')}
+                      <ProviderChips providers={providers} active={active} status={status} onSelect={select} />
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-base-content/70 ml-auto">
+                      <input
+                        type="checkbox"
+                        className="toggle toggle-primary toggle-sm"
+                        checked={autoplay}
+                        onChange={e => setAutoplay(e.target.checked)}
+                      />
+                      Autoplay next
+                    </label>
+                  </>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Mobile: tabs for everything the desktop shows alongside */}
             <div className="lg:hidden">

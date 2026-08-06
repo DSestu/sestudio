@@ -7,6 +7,8 @@ export interface MediaCardItem {
   subtitle?: string
   /** TMDB score — shown as a colored chip on the poster when set. */
   rating?: number
+  /** TMDB genres — the first two render as muted text under the caption. */
+  genres?: string[]
   poster_url: string
   /** 0..1 — renders a progress bar under the poster when set. */
   progress?: number
@@ -140,6 +142,13 @@ export default function MediaCard({ item, removeContext, selection }: Props) {
         <p className="text-xs sm:text-sm font-medium leading-tight truncate mt-2">{item.title}</p>
         {item.subtitle && (
           <p className="text-xs text-base-content/50 mt-0.5 truncate">{item.subtitle}</p>
+        )}
+        {/* Two at most, as on search result cards: a third genre wraps the line
+            in a narrow grid column for very little added information. */}
+        {item.genres && item.genres.length > 0 && (
+          <p className="text-[11px] leading-tight text-base-content/40 mt-1 truncate">
+            {item.genres.slice(0, 2).join(' · ')}
+          </p>
         )}
       </button>
 

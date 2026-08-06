@@ -92,8 +92,13 @@ function splitByPoster(cluster: SeasonCard[]): SeasonCard[][] {
   return groups
 }
 
-function collapse(group: SeasonCard[]): SeasonCard {
-  const primary = group.find(c => c.poster_url) ?? group[0]
+function collapse(group: SeasonCard[], preferredSource?: string): SeasonCard {
+  // The preferred site wins the card outright, so opening a merged result
+  // plays from the site you chose rather than whichever listing sorted first.
+  const primary =
+    (preferredSource && group.find(c => (c.source ?? 'fstream') === preferredSource)) ||
+    group.find(c => c.poster_url) ||
+    group[0]
   const alternates = group.filter(c => c !== primary)
   if (!alternates.length) return primary
   return {
@@ -121,6 +126,7 @@ function collapse(group: SeasonCard[]): SeasonCard {
 export function mergeCards(
   cards: SeasonCard[],
   tmdbIds?: Map<string, number>,
+  preferredSource?: string,
 ): SeasonCard[] {
   const groups = new Map<string, SeasonCard[]>()
   for (const card of cards) {
@@ -132,5 +138,5 @@ export function mergeCards(
 
   return [...groups.values()]
     .flatMap(group => splitByYear(group).flatMap(splitByPoster))
-    .map(collapse)
+    .map(group => collapse(group, preferredSource))
 }

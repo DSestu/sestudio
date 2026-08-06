@@ -315,3 +315,57 @@ def test_person_merges_acting_and_directing_credits(client, httpx_mock: HTTPXMoc
     get_out = data["credits"][1]
     assert get_out["role"] == "Cameo · Director"
     assert "popularity" not in get_out
+
+
+PEOPLE = re.compile(r"https://api\.themoviedb\.org/3/search/person\?.*")
+
+
+def _people_payload():
+    return {
+        "results": [
+            {
+                "id": 138,
+                "name": "Quentin Tarantino",
+                "known_for_department": "Directing",
+                "profile_path": "/qt.jpg",
+                "known_for": [
+                    {"media_type": "movie", "title": "Pulp Fiction"},
+                    {"media_type": "tv", "name": "ER"},
+                    {"media_type": "person", "name": "ignored"},
+                    {"media_type": "movie", "title": "Kill Bill"},
+                    {"media_type": "movie", "title": "Fourth Title"},
+                ],
+            }
+        ]
+    }
+
+
+def test_people_search_returns_named_matches(client, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(url=PEOPLE, json=_people_payload())
+    resp = client.get("/api/tmdb/people?q=tarantino")
+    assert resp.status_code == 200
+    hit = resp.json()[0]
+    assert hit["id"] == 138
+    assert hit["name"] == "Quentin Tarantino"
+    assert hit["known_for_department"] == "Directing"
+    assert hit["profile_url"].endswith("/qt.jpg")
+
+
+def test_people_search_lists_a_few_titles_to_tell_namesakes_apart(
+    client, httpx_mock: HTTPXMock
+):
+    httpx_mock.add_response(url=PEOPLE, json=_people_payload())
+    known = client.get("/api/tmdb/people?q=tarantino").json()[0]["known_for"]
+    # Capped at three, and non-title entries are dropped.
+    assert known == ["Pulp Fiction", "ER", "Kill Bill"]
+
+
+def test_blank_people_query_does_not_call_tmdb(client):
+    """No mocked response: a request would fail the test."""
+    assert client.get("/api/tmdb/people?q=%20").json() == []
+
+
+def test_people_search_without_a_key_is_503(client, monkeypatch):
+    monkeypatch.delenv("TMDB_API_KEY", raising=False)
+    monkeypatch.setattr(config, "_DEFAULT_TMDB_API_KEY", "", raising=False)
+    assert client.get("/api/tmdb/people?q=tarantino").status_code == 503

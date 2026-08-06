@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,15 @@ class AppConfig:
     # default (it is the point of configuring a key); off falls back to the
     # source's own posters and titles.
     tmdb_posters: bool = True
+    # Content sites excluded from search. Stored as an opt-out list so a newly
+    # added site is enabled by default. Only search is affected: a disabled
+    # site still resolves streams, so saved library entries keep working.
+    disabled_sites: list[str] = field(default_factory=list)
+    # The site to favour when several carry the same title: its results are
+    # listed first, and it wins the card when listings are merged. Senpai
+    # serves its own files rather than third-party embeds, so it is the most
+    # dependable default.
+    preferred_site: str = "senpai"
 
 
 def _config_path() -> Path:
@@ -57,6 +66,8 @@ def load_config() -> AppConfig:
             tmdb_api_key=str(data.get("tmdb_api_key", "")),
             tmdb_merge=bool(data.get("tmdb_merge", False)),
             tmdb_posters=bool(data.get("tmdb_posters", True)),
+            disabled_sites=[str(s) for s in data.get("disabled_sites", []) or []],
+            preferred_site=str(data.get("preferred_site", "senpai")),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

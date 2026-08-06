@@ -35,7 +35,7 @@ class TestFstreamSiteContract(SiteContractMixin):
 
 def test_build_sites_registers_both_instances():
     sites = build_sites(BASE)
-    assert set(sites) == {"fstream", "french-manga"}
+    assert {"fstream", "french-manga"} <= set(sites)
     assert sites["fstream"].base_url == BASE
     assert not sites["fstream"].is_anime
     assert sites["french-manga"].is_anime

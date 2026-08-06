@@ -69,6 +69,15 @@ async def genre_list(kind: str = "movie") -> list[dict[str, Any]]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/tmdb/people")
+async def people(q: str) -> list[dict[str, Any]]:
+    """People matching a name, for the search view's People section."""
+    try:
+        return await asyncio.to_thread(tmdb.search_people, q)
+    except tmdb.TmdbDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.get("/tmdb/person/{person_id}")
 async def person(person_id: int) -> dict[str, Any] | None:
     """A person's profile and filmography, or null when TMDB has no match."""

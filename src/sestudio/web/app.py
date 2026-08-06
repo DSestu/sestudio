@@ -23,6 +23,7 @@ from sestudio.web.routes import (
     search,
     seasons,
     settings,
+    sites,
     stream,
     tmdb,
 )
@@ -82,6 +83,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(stream.router, prefix="/api")
     app.include_router(cast.router, prefix="/api")
     app.include_router(tmdb.router, prefix="/api")
+    app.include_router(sites.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)
     dist = _frontend_dist()
