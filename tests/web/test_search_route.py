@@ -21,8 +21,8 @@ SEARCH_HTML = """
 @pytest.fixture()
 def client():
     app = create_app(live_domain="https://fs03.lol")
-    # Isolate the test to the primary domain; the anime domain is exercised elsewhere.
-    app.state.anime_domain = ""
+    # Isolate the test to the primary site; the anime site is exercised elsewhere.
+    app.state.sites.pop("french-manga")
     return TestClient(app)
 
 

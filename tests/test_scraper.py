@@ -29,7 +29,7 @@ def test_fetch_season_returns_correct_season_number(
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
-    season, episodes = fetch_season(SEASON_URL, lang="vf")
+    season, episodes, _ = fetch_season(SEASON_URL, lang="vf")
 
     assert season == 1
 
@@ -38,7 +38,7 @@ def test_fetch_season_returns_22_episodes(httpx_mock: HTTPXMock, season_html, ep
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
-    season, episodes = fetch_season(SEASON_URL, lang="vf")
+    season, episodes, _ = fetch_season(SEASON_URL, lang="vf")
 
     assert len(episodes) == 22
 
@@ -49,7 +49,7 @@ def test_fetch_season_episodes_have_uqload_url(
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
-    _, episodes = fetch_season(SEASON_URL, lang="vf")
+    _, episodes, _ = fetch_season(SEASON_URL, lang="vf")
 
     ep1 = episodes[0]
     assert ep1.number == 1
@@ -62,7 +62,7 @@ def test_fetch_season_episode_title_from_info(
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
-    _, episodes = fetch_season(SEASON_URL, lang="vf")
+    _, episodes, _ = fetch_season(SEASON_URL, lang="vf")
 
     assert episodes[0].title == "Enfants des dieux (1/2)"
 
@@ -71,7 +71,7 @@ def test_fetch_season_episode_filename(httpx_mock: HTTPXMock, season_html, eps_j
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
-    _, episodes = fetch_season(SEASON_URL, lang="vf")
+    _, episodes, _ = fetch_season(SEASON_URL, lang="vf")
 
     assert episodes[0].filename == "S01E01 - Enfants des dieux (1-2).mp4"
 
@@ -80,7 +80,7 @@ def test_fetch_season_vostfr_lang(httpx_mock: HTTPXMock, season_html, eps_json):
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
-    season, episodes = fetch_season(SEASON_URL, lang="vostfr")
+    season, episodes, _ = fetch_season(SEASON_URL, lang="vostfr")
 
     data = json.loads(eps_json)
     vostfr_count = len(data.get("vostfr", {}))
@@ -93,7 +93,7 @@ def test_fetch_season_episodes_sorted_by_number(
     httpx_mock.add_response(url=SEASON_URL, text=season_html)
     httpx_mock.add_response(url=httpx.URL(EPS_URL), text=eps_json)
 
-    _, episodes = fetch_season(SEASON_URL, lang="vf")
+    _, episodes, _ = fetch_season(SEASON_URL, lang="vf")
 
     numbers = [ep.number for ep in episodes]
     assert numbers == sorted(numbers)

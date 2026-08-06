@@ -32,11 +32,3 @@ def resolve_live_domain() -> str:
     live = str(resp.url).rstrip("/")
     logger.debug("Resolved via redirect: %s", live)
     return live
-
-
-def rebase_url(url: str, live_domain: str) -> str:
-    """Replace the host portion of *url* with *live_domain*."""
-    parsed = urllib.parse.urlparse(url)
-    live_parsed = urllib.parse.urlparse(live_domain)
-    rebased = parsed._replace(scheme=live_parsed.scheme, netloc=live_parsed.netloc)
-    return urllib.parse.urlunparse(rebased)

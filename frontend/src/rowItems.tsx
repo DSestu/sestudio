@@ -12,7 +12,7 @@ export type OpenTitle = (card: SeasonCard, episode: number, lang: string) => voi
 
 /** Synthesize a SeasonCard from stored identity so the library can reopen a
  * title without a fresh search. */
-export function cardFor(series: string, season: number, posterUrl: string, pageUrl: string): SeasonCard {
+export function cardFor(series: string, season: number, posterUrl: string, pageUrl: string, source?: string): SeasonCard {
   return {
     newsid: pageUrl,
     title: series,
@@ -22,6 +22,7 @@ export function cardFor(series: string, season: number, posterUrl: string, pageU
     page_url: pageUrl,
     is_film: season === 0,
     is_anime: false,
+    source,
   }
 }
 
@@ -62,7 +63,7 @@ function seasonLabel(season: number, number: number): string {
 export function openWatching(open: OpenTitle) {
   return (item: WatchingItem) =>
     open(
-      cardFor(item.series, item.season, item.poster_url, item.page_url),
+      cardFor(item.series, item.season, item.poster_url, item.page_url, item.source),
       item.resume.number,
       item.lang,
     )
@@ -102,7 +103,7 @@ export function savedItems(
     subtitle: e.season > 0 ? `S${String(e.season).padStart(2, '0')}` : 'Film',
     poster_url: e.poster_url,
     onClick: () => open(
-      cardFor(e.series, e.season, e.poster_url, e.page_url),
+      cardFor(e.series, e.season, e.poster_url, e.page_url, e.source),
       0,
       e.lang || fallbackLang,
     ),

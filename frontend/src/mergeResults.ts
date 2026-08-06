@@ -12,11 +12,13 @@ import type { SeasonCard } from './api'
 // descending order of trust: the release year, the poster image, and (opt-in)
 // the TMDB id.
 
-/** Series name and kind — the coarse key every card falls back to. */
+/** Series name, kind and site — the coarse key every card falls back to.
+ *  Scoped per source site so same-name titles on two sites never merge by
+ *  accident; cross-site merging happens only through a shared TMDB id. */
 export function titleKey(card: SeasonCard): string {
   const title = card.series_name.trim().toLowerCase()
   const kind = card.is_anime ? 'anime' : 'live'
-  return `${title}|${kind}`
+  return `${title}|${kind}|${card.source ?? 'fstream'}`
 }
 
 /**

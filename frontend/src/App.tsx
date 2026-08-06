@@ -76,6 +76,9 @@ export default function App() {
         p: route.params.get('p') ?? '',
         lang: route.params.get('lang') || settings.lang,
         ep: route.params.has('ep') ? Number(route.params.get('ep')) : undefined,
+        alt: route.params.get('alt') ?? undefined,
+        src: route.params.get('src') ?? undefined,
+        altsrc: route.params.get('altsrc') ?? undefined,
       })
     }
   }
@@ -83,13 +86,17 @@ export default function App() {
   /** Open a title in the watch view. Identity travels in the URL so the route
    *  is self-contained (SeasonDetail carries no series name or poster). */
   function openTitle(card: SeasonCard, episode: number, lang: string) {
+    // `alt` and `altsrc` are paired positionally, so both come from `alts`.
+    const alts = card.alts?.length ? card.alts : undefined
     navigate('watch', {
       u: card.page_url,
       t: card.series_name,
       p: card.poster_url,
       lang,
       ep: episode || undefined,
-      alt: card.alt_page_urls?.length ? card.alt_page_urls.join('|') : undefined,
+      src: card.source,
+      alt: alts ? alts.map(a => a.page_url).join('|') : undefined,
+      altsrc: alts ? alts.map(a => a.source ?? 'fstream').join('|') : undefined,
     })
   }
 
@@ -102,6 +109,7 @@ export default function App() {
     if (!ep) return
     navigate('watch', {
       u: ep.page_url, t: ep.series_name, p: ep.poster_url, lang: ep.lang, ep: ep.number,
+      src: ep.source,
     })
     // navigate is stable enough for this one-shot handoff; re-running on every
     // render would fight the user's own navigation.
@@ -179,7 +187,9 @@ export default function App() {
             <WatchView
               key={String(activeWatch.u)}
               pageUrl={String(activeWatch.u ?? '')}
+              source={activeWatch.src ? String(activeWatch.src) : undefined}
               altPageUrls={String(activeWatch.alt ?? '').split('|').filter(Boolean)}
+              altSources={String(activeWatch.altsrc ?? '').split('|').filter(Boolean)}
               seriesName={String(activeWatch.t ?? '')}
               posterUrl={String(activeWatch.p ?? '')}
               lang={String(activeWatch.lang || settings.lang)}

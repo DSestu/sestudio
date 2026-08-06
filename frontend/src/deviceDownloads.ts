@@ -73,7 +73,7 @@ export async function downloadToDevice(downloads: DownloadItem[]): Promise<boole
   const viaServer: DownloadItem[] = []
   for (const { item, id } of queued) {
     try {
-      const src = await resolveStream(item.all_providers, undefined, 'mp4')
+      const src = await resolveStream(item.all_providers, undefined, 'mp4', item.source)
       if (src.kind !== 'mp4') {
         // No direct file to relay — hand it to the server job queue instead.
         viaServer.push({ ...item, to_device: true })

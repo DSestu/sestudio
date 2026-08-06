@@ -17,6 +17,7 @@ from sestudio.config import load_config
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import StreamSource, sanitize_path_component
 from sestudio.providers.base import ProviderError
+from sestudio.sites import ContentSite, SiteError, StreamCandidate, site_for
 from sestudio.web.proxy import TokenError, verify
 from sestudio.web.worker import DownloadJob
 
@@ -36,18 +37,20 @@ class DownloadRequest(BaseModel):
     # Download for the browser to collect afterwards instead of into the
     # library: the file goes to a temp dir and is served by /downloads/{id}/file.
     to_device: bool = False
+    # Id of the ContentSite that produced the embeds; it owns their resolution.
+    source: str = "fstream"
 
 
-def _episode_path(root: str, item: DownloadRequest) -> Path:
+def _episode_path(root: str, item: DownloadRequest, site: ContentSite) -> Path:
     """Build the output file path, with a per-language subfolder.
 
     ``<root>/<Series>/Season NN/<LANG>/<file>`` for episodes, or
-    ``<root>/fstream_films/<LANG>/<file>`` for films. The language folder is
+    ``<root>/<site films dir>/<LANG>/<file>`` for films. The language folder is
     omitted when no language is given (e.g. CLI downloads).
     """
     safe_ep = sanitize_path_component(item.episode_name)
     if item.season == 0:
-        parts = [root, "fstream_films"]
+        parts = [root, site.films_dirname]
     else:
         parts = [
             root,
@@ -185,12 +188,13 @@ def download_stream(token: str, filename: str, request: Request) -> StreamingRes
 
 
 @router.post("/downloads/check")
-async def check_downloads(items: list[DownloadRequest]) -> list[str]:
+async def check_downloads(items: list[DownloadRequest], request: Request) -> list[str]:
     """Return episode_names that already exist on disk."""
     cfg = load_config()
+    sites = request.app.state.sites
     existing: list[str] = []
     for item in items:
-        out_path = _episode_path(cfg.output_root, item)
+        out_path = _episode_path(cfg.output_root, item, site_for(sites, item.source))
         if out_path.exists() and out_path.stat().st_size > 0:
             existing.append(item.episode_name)
     return existing
@@ -206,38 +210,37 @@ async def post_downloads(
     results: list[dict[str, Any]] = []
 
     providers = store._providers
+    sites = request.app.state.sites
 
     for item in items:
+        site = site_for(sites, item.source)
         # Build ordered candidate list: primary provider first, then the rest
-        candidates: list[tuple[str, str]] = []
+        # in the site's preference order.
+        candidates = [
+            c
+            for c in site.stream_candidates(item.all_providers)
+            if c.provider != item.provider
+        ]
         if item.provider and item.embed_url:
-            candidates.append((item.provider, item.embed_url))
-        for pname, purl in item.all_providers.items():
-            if pname != item.provider:
-                candidates.append((pname, purl))
+            candidates.insert(0, StreamCandidate(item.provider, item.embed_url))
 
         source: StreamSource | None = None
         last_error: str = "No supported provider available"
         tried: list[str] = []
-        for pname, purl in candidates:
-            handler = providers.get(pname)
-            if handler is None:
-                logger.debug(
-                    "Skipping unsupported provider %r for %s", pname, item.episode_name
-                )
-                tried.append(pname)
-                continue
+        for cand in candidates:
             try:
-                source = await asyncio.to_thread(handler.get_stream_url, purl)
-                tried.append(pname)
-                logger.debug("Resolved %s via %s", item.episode_name, pname)
+                source = await asyncio.to_thread(
+                    site.resolve_candidate, cand, providers
+                )
+                tried.append(cand.provider)
+                logger.debug("Resolved %s via %s", item.episode_name, cand.provider)
                 break
-            except ProviderError as exc:
+            except (ProviderError, SiteError) as exc:
                 last_error = str(exc)
-                tried.append(pname)
+                tried.append(cand.provider)
                 logger.warning(
                     "Provider %s failed for %s: %s — trying next",
-                    pname,
+                    cand.provider,
                     item.episode_name,
                     exc,
                 )
@@ -253,7 +256,7 @@ async def post_downloads(
             # part of the library, so the "already downloaded" check is skipped.
             out_path = Path(tempfile.mkdtemp(prefix="sestudio-device-")) / safe_ep
         else:
-            out_path = _episode_path(cfg.output_root, item)
+            out_path = _episode_path(cfg.output_root, item, site)
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not item.to_device:
@@ -284,6 +287,7 @@ async def post_downloads(
             safe_ep,
             all_providers=remaining_providers,
             to_device=item.to_device,
+            site_id=site.id,
         )
         results.append(_job_to_dict(job))
 

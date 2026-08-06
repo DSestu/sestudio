@@ -19,10 +19,18 @@ interface FileTree {
   }
 }
 
+/** Server-side films folder per source site (mirrors the backend's
+ *  ContentSite.films_dirname; every current site uses the historical name,
+ *  so unknown sources fall back to it too). */
+const FILMS_DIRNAMES: Record<string, string> = {}
+function filmsDirname(source?: string): string {
+  return FILMS_DIRNAMES[source ?? ''] ?? 'fstream_films'
+}
+
 function buildTree(items: DownloadItem[]): FileTree {
   const tree: FileTree = {}
   for (const item of items) {
-    const season = item.season === 0 ? 'fstream_films' : `Season ${String(item.season).padStart(2, '0')}`
+    const season = item.season === 0 ? filmsDirname(item.source) : `Season ${String(item.season).padStart(2, '0')}`
     const group = item.season === 0 ? 'Films' : item.series_name
     if (!tree[group]) tree[group] = {}
     if (!tree[group][season]) tree[group][season] = []

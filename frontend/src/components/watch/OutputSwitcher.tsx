@@ -87,7 +87,7 @@ export default function OutputSwitcher({
         index,
         autoplay,
         cast: async (next) => {
-          const src = await resolveStream(next.embed_urls)
+          const src = await resolveStream(next.embed_urls, undefined, undefined, next.source)
           await sendTo(src.proxy_url, src.kind, next.title, mode, udn)
         },
       })

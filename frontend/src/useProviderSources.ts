@@ -8,8 +8,8 @@ import { orderProviders, type ProviderStatus } from './providers'
  * ranged GET through the proxy hits the upstream, so a source that resolves but
  * then 403s (or is otherwise unreachable) is caught here rather than on play.
  */
-async function probeSource(provider: string, embedUrl: string, signal: AbortSignal): Promise<StreamSource> {
-  const src = await resolveStream({ [provider]: embedUrl }, signal)
+async function probeSource(provider: string, embedUrl: string, signal: AbortSignal, source?: string): Promise<StreamSource> {
+  const src = await resolveStream({ [provider]: embedUrl }, signal, undefined, source)
   const res = await fetch(src.proxy_url, { method: 'GET', headers: { Range: 'bytes=0-1' }, signal })
   if (!res.ok) throw new Error(`source returned HTTP ${res.status}`)
   await res.body?.cancel().catch(() => {})
@@ -32,8 +32,17 @@ export interface ProviderSources {
  * first working provider in preference order — so the caller loads exactly one
  * media at the end. The user can override it by selecting a chip.
  */
-export function useProviderSources(embedUrls: Record<string, string>): ProviderSources {
-  const providers = useMemo(() => orderProviders(Object.keys(embedUrls)), [embedUrls])
+export function useProviderSources(
+  embedUrls: Record<string, string>,
+  source?: string,
+  providerOrder?: string[],
+): ProviderSources {
+  // Keyed on a string so a fresh array identity doesn't re-trigger probing.
+  const orderKey = providerOrder?.join('|') ?? ''
+  const providers = useMemo(
+    () => orderProviders(Object.keys(embedUrls), orderKey ? orderKey.split('|') : undefined),
+    [embedUrls, orderKey],
+  )
   const [status, setStatus] = useState<Record<string, ProviderStatus>>(
     () => Object.fromEntries(providers.map(p => [p, 'loading'])),
   )
@@ -64,7 +73,7 @@ export function useProviderSources(embedUrls: Record<string, string>): ProviderS
     Promise.allSettled(
       providers.map(async p => {
         try {
-          const src = await probeSource(p, embedUrls[p], controller.signal)
+          const src = await probeSource(p, embedUrls[p], controller.signal, source)
           if (cancelled) return
           sourcesRef.current[p] = src
           setSources(prev => ({ ...prev, [p]: src }))
@@ -85,7 +94,7 @@ export function useProviderSources(embedUrls: Record<string, string>): ProviderS
       }
     })
     return () => { cancelled = true; controller.abort() }
-  }, [providers, embedUrls])
+  }, [providers, embedUrls, source])
 
   const select = (p: string) => setActiveBoth(p)
 

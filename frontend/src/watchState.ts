@@ -21,6 +21,8 @@ export interface WatchEntry {
   poster_url: string
   page_url: string
   lang: string
+  /** Id of the content site page_url belongs to; absent means 'fstream'. */
+  source?: string
   position: number
   duration: number
   watched: boolean
@@ -101,6 +103,7 @@ function identity(ep: PlayableEpisode, prev?: WatchEntry) {
     poster_url: ep.poster_url,
     page_url: ep.page_url,
     lang: ep.lang,
+    source: ep.source,
     // A caller without the playlist to hand shouldn't erase what we already know.
     seasonEpisodes: ep.seasonEpisodes ?? prev?.seasonEpisodes,
     dismissedAt: prev?.dismissedAt,
@@ -246,6 +249,8 @@ export interface WatchingItem {
   poster_url: string
   page_url: string
   lang: string
+  /** Id of the content site page_url belongs to; absent means 'fstream'. */
+  source?: string
   /** The episode to resume or start next. `title` is empty for a fresh episode,
    *  whose name isn't known until the season is opened. */
   resume: { number: number; title: string; position: number; duration: number }
@@ -294,6 +299,7 @@ export function watching(state: Store = store): WatchingItem[] {
       poster_url: latest.poster_url,
       page_url: latest.page_url,
       lang: latest.lang,
+      source: latest.source,
       watchedCount: entries.filter(e => e.watched).length,
       seasonEpisodes: latest.seasonEpisodes,
       updatedAt: latest.updatedAt,

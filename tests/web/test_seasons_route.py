@@ -21,13 +21,7 @@ def test_get_season_returns_episodes(client, httpx_mock: HTTPXMock):
     season_html = (FIXTURES / "season_page.html").read_text(encoding="utf-8")
     eps_json = (FIXTURES / "eps_16676.json").read_text(encoding="utf-8")
 
-    httpx_mock.add_response(url="https://fs03.lol/season1", text=season_html)
-    httpx_mock.add_response(
-        url="https://fs03.lol/data/eps_16676.txt",
-        text=eps_json,
-        headers={"Content-Type": "application/json"},
-    )
-    # Second fetch for available_langs (same pages)
+    # available_langs comes from the same fetch — no second round trip.
     httpx_mock.add_response(url="https://fs03.lol/season1", text=season_html)
     httpx_mock.add_response(
         url="https://fs03.lol/data/eps_16676.txt",
@@ -41,6 +35,13 @@ def test_get_season_returns_episodes(client, httpx_mock: HTTPXMock):
     assert data["season"] == 1
     assert len(data["episodes"]) == 22
     assert "vf" in data["available_langs"]
+    assert data["source"] == "fstream"
+    assert "uqload" in data["provider_order"]
     ep1 = data["episodes"][0]
     assert ep1["number"] == 1
     assert "uqload" in ep1["providers"]
+
+
+def test_get_season_unknown_source_is_400(client):
+    resp = client.get("/api/season?url=https://fs03.lol/season1&source=nope")
+    assert resp.status_code == 400

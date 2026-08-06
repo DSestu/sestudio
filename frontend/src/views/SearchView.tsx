@@ -112,10 +112,10 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       for (const newsid of checkedIds) {
         const card = cardMap.get(newsid)
         if (!card) continue
-        const detail = await getSeason(card.page_url, settings.lang)
+        const detail = await getSeason(card.page_url, settings.lang, card.source)
         const items = detail.episodes
           .filter(ep => Object.keys(ep.embed_urls).length > 0)
-          .map(ep => ({
+          .map((ep): DownloadItem => ({
             embed_url: ep.embed_urls['uqload'] ?? ep.embed_urls['vidzy'] ?? ep.embed_urls['netu'] ?? Object.values(ep.embed_urls)[0] ?? '',
             provider: ep.embed_urls['uqload'] ? 'uqload' : ep.embed_urls['vidzy'] ? 'vidzy' : ep.embed_urls['netu'] ? 'netu' : Object.keys(ep.embed_urls)[0] ?? '',
             all_providers: ep.embed_urls,
@@ -123,8 +123,9 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             series_name: card.series_name,
             season: detail.season,
             lang: settings.lang,
+            source: detail.source ?? card.source,
           }))
-          .filter((i): i is DownloadItem => Boolean(i.embed_url))
+          .filter(i => Boolean(i.embed_url))
         allItems.push(...items)
       }
       if (allItems.length) {

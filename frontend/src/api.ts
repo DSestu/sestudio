@@ -11,6 +11,8 @@ export interface SeasonCard {
   page_url: string
   is_film: boolean
   is_anime: boolean
+  /** Id of the content site this card came from; absent means 'fstream'. */
+  source?: string
   /** Release year parsed from the search title, 0 when absent. */
   year?: number
   /** Other source pages for this same title (other languages or mirrors), set
@@ -33,6 +35,10 @@ export interface SeasonDetail {
   season: number
   is_film: boolean
   available_langs: string[]
+  /** Id of the content site that served this page. */
+  source?: string
+  /** The site's provider preference order, for ranking provider chips. */
+  provider_order?: string[]
   episodes: EpisodeDetail[]
 }
 
@@ -216,6 +222,8 @@ export interface DownloadItem {
   all_providers: Record<string, string>
   /** Download to a temp dir for the browser to collect, not into the library. */
   to_device?: boolean
+  /** Id of the content site that produced the embeds; absent means 'fstream'. */
+  source?: string
 }
 
 export interface DownloadJob {
@@ -258,11 +266,16 @@ export async function resolveStream(
   embedUrls: Record<string, string>,
   signal?: AbortSignal,
   preferKind?: StreamSource['kind'],
+  source?: string,
 ): Promise<StreamSource> {
   const res = await fetch(`${BASE}/stream/resolve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ embed_urls: embedUrls, prefer_kind: preferKind }),
+    body: JSON.stringify({
+      embed_urls: embedUrls,
+      prefer_kind: preferKind,
+      source: source ?? 'fstream',
+    }),
     signal,
   })
   if (!res.ok) {
@@ -325,8 +338,10 @@ export async function searchSeasons(q: string): Promise<SeasonCard[]> {
   return res.json()
 }
 
-export async function getSeason(url: string, lang: string): Promise<SeasonDetail> {
-  const res = await fetch(`${BASE}/season?url=${encodeURIComponent(url)}&lang=${lang}`)
+export async function getSeason(url: string, lang: string, source?: string): Promise<SeasonDetail> {
+  const params = new URLSearchParams({ url, lang })
+  if (source) params.set('source', source)
+  const res = await fetch(`${BASE}/season?${params}`)
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     const detail = body?.detail ?? `HTTP ${res.status}`

@@ -27,6 +27,7 @@ function playableFor(item: WatchingItem): PlayableEpisode {
     poster_url: item.poster_url,
     page_url: item.page_url,
     lang: item.lang,
+    source: item.source,
   }
 }
 

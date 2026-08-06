@@ -20,5 +20,6 @@ export function saveEntry(card: SeasonCard, poster: string): Omit<CollectionEntr
     poster_url: poster,
     page_url: card.page_url,
     lang: '',
+    source: card.source,
   }
 }

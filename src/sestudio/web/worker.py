@@ -11,6 +11,7 @@ from typing import Literal
 from sestudio.downloader import ProgressEvent, download
 from sestudio.models import StreamSource
 from sestudio.providers.base import ProviderError, StreamProvider
+from sestudio.sites import ContentSite, SiteError, StreamCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,8 @@ class DownloadJob:
     output_path: Path
     all_providers: dict[str, str] = field(default_factory=dict)
     tried_providers: list[str] = field(default_factory=list)
+    # Id of the ContentSite whose candidates this job downloads.
+    site_id: str = "fstream"
     # Downloaded on the server for the browser to fetch afterwards (rather than
     # kept in the library), so the file lives in a temp dir and is served once.
     to_device: bool = False
@@ -45,12 +48,14 @@ class JobStore:
         self,
         max_workers: int = 20,
         provider_registry: dict[str, StreamProvider] | None = None,
+        sites: dict[str, ContentSite] | None = None,
     ) -> None:
         self._jobs: dict[str, DownloadJob] = {}
         self._cancel_events: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=max_workers)
         self._providers: dict[str, StreamProvider] = provider_registry or {}
+        self._sites: dict[str, ContentSite] = sites or {}
 
     def submit(
         self,
@@ -59,6 +64,7 @@ class JobStore:
         episode_name: str,
         all_providers: dict[str, str] | None = None,
         to_device: bool = False,
+        site_id: str = "fstream",
     ) -> DownloadJob:
         job = DownloadJob(
             id=str(uuid.uuid4()),
@@ -68,6 +74,7 @@ class JobStore:
             all_providers=dict(all_providers or {}),
             tried_providers=[source.provider],
             to_device=to_device,
+            site_id=site_id,
         )
         cancel_event = threading.Event()
         with self._lock:
@@ -222,25 +229,38 @@ class JobStore:
                 job.detail = f"{previous} failed — trying {next_source.provider}"
 
     def _resolve_next_provider(self, job: DownloadJob) -> StreamSource | None:
-        for pname, purl in job.all_providers.items():
-            if pname in job.tried_providers:
-                continue
-            handler = self._providers.get(pname)
-            if handler is None:
-                job.tried_providers.append(pname)
+        site = self._sites.get(job.site_id)
+        if site is not None:
+            candidates = site.stream_candidates(job.all_providers)
+        else:
+            # No site registry (old callers/tests): resolve against the shared
+            # host-resolver registry directly, preserving the map's order.
+            candidates = [
+                StreamCandidate(pname, purl)
+                for pname, purl in job.all_providers.items()
+            ]
+        for cand in candidates:
+            if cand.provider in job.tried_providers:
                 continue
             try:
-                source = handler.get_stream_url(purl)
-                job.tried_providers.append(pname)
+                if site is not None:
+                    source = site.resolve_candidate(cand, self._providers)
+                else:
+                    handler = self._providers.get(cand.provider)
+                    if handler is None:
+                        job.tried_providers.append(cand.provider)
+                        continue
+                    source = handler.get_stream_url(cand.embed_url)
+                job.tried_providers.append(cand.provider)
                 return source
-            except ProviderError as exc:
+            except (ProviderError, SiteError) as exc:
                 logger.warning(
                     "Fallback provider %s failed for %s: %s",
-                    pname,
+                    cand.provider,
                     job.episode_name,
                     exc,
                 )
-                job.tried_providers.append(pname)
+                job.tried_providers.append(cand.provider)
         return None
 
     def _set_status(

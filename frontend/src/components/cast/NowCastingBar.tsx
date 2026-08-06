@@ -110,7 +110,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   function openSeries() {
     if (!ep) return
     setOpen(false)
-    navigate('watch', { u: ep.page_url, t: ep.series_name, p: ep.poster_url, lang: ep.lang, ep: ep.number })
+    navigate('watch', { u: ep.page_url, t: ep.series_name, p: ep.poster_url, lang: ep.lang, ep: ep.number, src: ep.source })
   }
 
   /** Stop the cast. If the local player is on the same episode (i.e. not showing

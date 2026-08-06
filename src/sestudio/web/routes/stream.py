@@ -11,6 +11,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from sestudio.http_client import BROWSER_UA, new_client
+from sestudio.sites import site_for
 from sestudio.web.proxy import (
     PROXY_TOKEN_TTL,
     TokenError,
@@ -53,56 +54,39 @@ def _proxy_url(secret: bytes, target_url: str, referer: str, provider: str) -> s
     return "/api/stream/proxy?" + urllib.parse.urlencode({"token": token})
 
 
-# Preferred provider order, mirroring the download worker's fallback (worker.py).
-_PROVIDER_ORDER = (
-    "uqload",
-    "vidzy",
-    "premium",
-    "netu",
-    "luluvid",
-    "filmoon",
-    "voe",
-)
-
-
 class ResolveRequest(BaseModel):
     embed_urls: dict[str, str]  # provider -> embed url
     # Optional "mp4"/"hls": keep looking for a provider serving this kind before
     # settling. Device downloads ask for mp4 so they can relay bytes directly
     # instead of paying for an ffmpeg remux.
     prefer_kind: str | None = None
-
-
-def _ordered_providers(embed_urls: dict[str, str]) -> list[str]:
-    ordered = [p for p in _PROVIDER_ORDER if p in embed_urls]
-    ordered += [p for p in embed_urls if p not in ordered]
-    return ordered
+    # Id of the ContentSite that produced the embeds; it owns their resolution.
+    source: str = "fstream"
 
 
 @router.post("/stream/resolve")
 async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, Any]:
     """Resolve an episode's providers to a proxied, playable descriptor.
 
-    Tries providers in preference order and returns the first that resolves, so
-    a dead uqload embed falls back to vidzy/netu — same behaviour as downloads.
-    Never leaks the raw stream URL (it is sealed inside the proxy token).
+    The owning site orders and resolves its candidates, so a dead uqload embed
+    falls back to vidzy/netu — same behaviour as downloads. Never leaks the raw
+    stream URL (it is sealed inside the proxy token).
     """
     providers = request.app.state.providers
     secret = request.app.state.proxy_secret
+    try:
+        site = site_for(request.app.state.sites, body.source)
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"Unknown source: {body.source}")
     errors: list[str] = []
     fallback: dict[str, Any] | None = None
 
-    for pname in _ordered_providers(body.embed_urls):
-        handler = providers.get(pname)
-        if handler is None:
-            continue
+    for cand in site.stream_candidates(body.embed_urls):
         try:
-            source = await asyncio.to_thread(
-                handler.get_stream_url, body.embed_urls[pname]
-            )
-        except Exception as exc:  # noqa: BLE001 — try the next provider on any failure
-            logger.debug("Provider %s failed to resolve: %s", pname, exc)
-            errors.append(f"{pname}: {exc}")
+            source = await asyncio.to_thread(site.resolve_candidate, cand, providers)
+        except Exception as exc:  # noqa: BLE001 — try the next candidate on any failure
+            logger.debug("Provider %s failed to resolve: %s", cand.provider, exc)
+            errors.append(f"{cand.provider}: {exc}")
             continue
         kind = "hls" if ".m3u8" in source.url else "mp4"
         result = {
@@ -110,7 +94,7 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
                 secret, source.url, source.referer, source.provider
             ),
             "kind": kind,
-            "provider": pname,
+            "provider": cand.provider,
         }
         # With a preferred kind, remember the first working source but keep
         # looking for one of the requested kind.

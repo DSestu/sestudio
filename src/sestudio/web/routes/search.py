@@ -2,21 +2,36 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from sestudio.scraper import search_seasons
+from sestudio.sites import ContentSite
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 @router.get("/search")
 async def search(q: str, request: Request) -> list[dict[str, Any]]:
-    live_domain: str = request.app.state.live_domain
-    anime_domain: str = request.app.state.anime_domain
-    try:
-        cards = await asyncio.to_thread(search_seasons, q, live_domain, anime_domain)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [dataclasses.asdict(c) for c in cards]
+    """Search every registered site; one site being down never kills the page."""
+    sites: dict[str, ContentSite] = request.app.state.sites
+    results = await asyncio.gather(
+        *(asyncio.to_thread(site.search, q) for site in sites.values()),
+        return_exceptions=True,
+    )
+
+    cards: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for site, result in zip(sites.values(), results):
+        if isinstance(result, BaseException):
+            logger.warning("Search failed for site %s: %s", site.id, result)
+            errors.append(f"{site.id}: {result}")
+            continue
+        cards.extend(dataclasses.asdict(c) for c in result)
+
+    if errors and len(errors) == len(sites):
+        raise HTTPException(status_code=502, detail="; ".join(errors))
+    return cards

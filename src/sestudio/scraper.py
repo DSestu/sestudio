@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 
 from sestudio.http_client import new_client
 from sestudio.models import Episode, SeasonCard
+from sestudio.sites.base import DEFAULT_PROVIDER_ORDER
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ _NEWSID_RE = re.compile(r"/(\d+)-")
 _YEAR_RE = re.compile(r"\s*\((\d{4})\)\s*$")
 
 
-def _search_one(
+def search_one(
     query: str, base_url: str, *, is_anime: bool = False
 ) -> list[SeasonCard]:
     """Search a single domain and return SeasonCard list."""
@@ -110,21 +111,8 @@ def _search_one(
     return cards
 
 
-def search_seasons(
-    query: str, base_url: str, anime_domain: str | None = None
-) -> list[SeasonCard]:
-    """Search fstream (and optionally the anime domain) for content matching *query*."""
-    cards = _search_one(query, base_url, is_anime=False)
-    if anime_domain:
-        try:
-            cards += _search_one(query, anime_domain, is_anime=True)
-        except Exception as exc:
-            logger.warning("Anime search failed for %r: %s", query, exc)
-    return cards
-
-
-def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
-    """Fetch a season page and return (season_number, episodes) for the given language."""
+def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode], list[str]]:
+    """Fetch a season page; return (season_number, episodes, available_langs)."""
     logger.debug("Fetching season page: %s (lang=%s)", url, lang)
     with new_client(headers=HEADERS) as client:
         page_resp = client.get(url)
@@ -156,6 +144,15 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
     lang_data: dict[str, dict[str, str]] = data.get(lang, {})  # type: ignore[assignment]
     info_data: dict[str, object] = data.get("info", {})  # type: ignore[assignment]
 
+    # Only report a language that actually has episodes: some titles list a lang
+    # key (e.g. "vf") with an empty map, which otherwise makes the UI think the
+    # language exists and show an empty season instead of switching to a real one.
+    available_langs = sorted(
+        k
+        for k, v in data.items()
+        if k not in ("info", "alt_titles") and isinstance(v, dict) and v
+    )
+
     episodes: list[Episode] = []
     for key, providers in lang_data.items():
         num = int(key)
@@ -172,7 +169,7 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode]]:
 
     episodes.sort(key=lambda e: e.number)
     logger.debug("Found %d episodes for season %d (%s)", len(episodes), season, lang)
-    return season, episodes
+    return season, episodes, available_langs
 
 
 # Maps a substring of an embed URL to the provider that handles it. Matching on
@@ -214,16 +211,8 @@ _TITLE_SUFFIX_RE = re.compile(
 )  # space-dash-space avoids breaking hyphenated titles
 _FILM_PREFIX_RE = re.compile(r"^(?:Film|Movie)\s+", re.IGNORECASE)
 
-# Supported providers and their lang key in the film API response
-_FILM_PROVIDERS = (
-    "uqload",
-    "vidzy",
-    "premium",
-    "netu",
-    "luluvid",
-    "filmoon",
-    "voe",
-)
+# Supported providers, in the shared preference order.
+_FILM_PROVIDERS = DEFAULT_PROVIDER_ORDER
 # The API carries two distinct French dubs — vff (France) and vfq (Québec) — and a
 # title may have either, both, or one of them pointing at a dead wrapper link. So a
 # requested language maps to an *ordered list* of candidate keys rather than a
@@ -286,18 +275,26 @@ def _fetch_film_api(
     return embed_urls, sorted(available)
 
 
-def fetch_page(url: str, lang: str = "vf") -> tuple[int, list[Episode], bool]:
-    """Fetch either a series season or a film page. Returns (season, episodes, is_film)."""
+def fetch_page(
+    url: str, lang: str = "vf"
+) -> tuple[int, list[Episode], bool, list[str]]:
+    """Fetch either a series season or a film page.
+
+    Returns (season, episodes, is_film, available_langs).
+    """
     try:
-        season, episodes = fetch_season(url, lang)
-        return season, episodes, False
+        season, episodes, available_langs = fetch_season(url, lang)
+        return season, episodes, False, available_langs
     except ValueError:
-        film_title, episodes = fetch_film(url, lang)
-        return 0, episodes, True
+        _, episodes, available_langs = fetch_film(url, lang)
+        return 0, episodes, True, available_langs
 
 
-def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode]]:
-    """Fetch a film page (no #serie-config). Returns (film_title, [single Episode])."""
+def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode], list[str]]:
+    """Fetch a film page (no #serie-config).
+
+    Returns (film_title, [single Episode], available_langs).
+    """
     logger.debug("Fetching film page: %s (lang=%s)", url, lang)
 
     m_id = _NEWSID_RE.search(url)
@@ -347,23 +344,7 @@ def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode]]:
         season=0,
         embed_urls=embed_urls,
     )
-    return film_title, [episode]
-
-
-def _fetch_film_available_langs(url: str) -> list[str]:
-    """Return language keys for a film page."""
-    m_id = _NEWSID_RE.search(url)
-    if not m_id:
-        return []
-    news_id = m_id.group(1)
-    with new_client(headers=HEADERS) as client:
-        resp = client.get(url, follow_redirects=True)
-        base_origin = "/".join(str(resp.url).split("/")[:3])
-        try:
-            _, available = _fetch_film_api(client, base_origin, news_id, url, "vf")
-            return available
-        except Exception:
-            return []
+    return film_title, [episode], available_langs
 
 
 def _parse_season_number(soup: BeautifulSoup) -> int:

@@ -24,6 +24,8 @@ export interface CollectionEntry extends CollectionRef {
   poster_url: string
   page_url: string
   lang: string
+  /** Id of the content site page_url belongs to; absent means 'fstream'. */
+  source?: string
   addedAt: number
 }
 

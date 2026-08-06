@@ -32,8 +32,12 @@ type MobileTab = (typeof MOBILE_TABS)[number]
 
 interface Props {
   pageUrl: string
+  /** Id of the content site serving pageUrl; absent means 'fstream'. */
+  source?: string
   /** Other source pages for this title (other languages or mirrors). */
   altPageUrls?: string[]
+  /** Site ids paired positionally with altPageUrls; missing entries mean 'fstream'. */
+  altSources?: string[]
   /** Title identity - SeasonDetail carries neither, so the route supplies them. */
   seriesName: string
   posterUrl: string
@@ -56,11 +60,11 @@ interface Props {
  * old stack of season → player → cast modals.
  */
 export default function WatchView({
-  pageUrl, altPageUrls, seriesName, posterUrl, lang, episode, settings, navigate, onJobsCreated,
-  visible, playerNode,
+  pageUrl, source: sourceProp, altPageUrls, altSources, seriesName, posterUrl, lang, episode,
+  settings, navigate, onJobsCreated, visible, playerNode,
 }: Props) {
-  const { detail, loading, error, setError, activeLang, setActiveLang, langs, sourceUrl } =
-    useSeasonDetail(pageUrl, lang, altPageUrls)
+  const { detail, loading, error, setError, activeLang, setActiveLang, langs, sourceUrl, sourceId } =
+    useSeasonDetail(pageUrl, lang, altPageUrls, sourceProp ?? 'fstream', altSources)
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const [initializedFor, setInitializedFor] = useState<SeasonDetail | null>(null)
   const [currentNumber, setCurrentNumber] = useState<number | null>(null)
@@ -100,6 +104,7 @@ export default function WatchView({
       poster_url: posterUrl,
       page_url: sourceUrl,
       lang: activeLang,
+      source: sourceId,
       // The highest number rather than the count, so a sparse playlist can't
       // make the library think the season has ended early.
       seasonEpisodes: d.episodes.length
@@ -116,7 +121,7 @@ export default function WatchView({
   const nextEp = playlist[index + 1]
 
   const { providers, status, sources, active, select, markFailed, probing } =
-    useProviderSources(current?.embed_urls ?? NO_EMBEDS)
+    useProviderSources(current?.embed_urls ?? NO_EMBEDS, sourceId, detail?.provider_order)
   const source = active ? sources[active] : null
 
   function setCurrent(ep: EpisodeDetail) {
@@ -165,6 +170,7 @@ export default function WatchView({
         series_name: seriesName,
         season: detail.is_film ? 0 : detail.season,
         lang: activeLang,
+        source: sourceId,
       }))
       .filter(i => i.embed_url)
 
@@ -292,6 +298,7 @@ export default function WatchView({
               poster_url: posterUrl,
               page_url: sourceUrl,
               lang: activeLang,
+              source: sourceId,
             }}
           />
         )}

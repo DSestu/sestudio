@@ -116,7 +116,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
 
   const layout = layouts[tab]
   const openTitle = (entry: CollectionEntry) =>
-    onOpen(cardFor(entry.series, entry.season, entry.poster_url, entry.page_url), 0, entry.lang || settings.lang)
+    onOpen(cardFor(entry.series, entry.season, entry.poster_url, entry.page_url, entry.source), 0, entry.lang || settings.lang)
 
   // A saved title carries no year or kind flag of its own, so season 0 stands for
   // "film" here exactly as it does where titles are saved.
@@ -188,6 +188,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
                     poster_url: item.poster_url,
                     page_url: item.page_url,
                     lang: item.lang,
+                    source: item.source,
                   },
                   true,
                 )

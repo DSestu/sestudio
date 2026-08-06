@@ -27,6 +27,8 @@ class SeasonCard:
     # Release year from the search title, 0 when absent. Used to disambiguate
     # remakes when matching against a metadata provider.
     year: int = 0
+    # Id of the ContentSite this card came from.
+    source: str = "fstream"
 
 
 @dataclass

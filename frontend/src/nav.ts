@@ -65,8 +65,8 @@ export function useRoute(): [Route, Navigate] {
 }
 
 /** Params for opening a title in the watch view. */
-export function watchParams(pageUrl: string, lang: string, episode?: number) {
-  return { u: pageUrl, lang, ep: episode }
+export function watchParams(pageUrl: string, lang: string, episode?: number, source?: string) {
+  return { u: pageUrl, lang, ep: episode, src: source }
 }
 
 /**

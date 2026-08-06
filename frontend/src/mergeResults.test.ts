@@ -212,4 +212,26 @@ describe('mergeCards', () => {
       expect(merged).toHaveLength(1)
     })
   })
+
+  describe('source sites', () => {
+    it('never merges same-name titles from different sites by name alone', () => {
+      const merged = mergeCards([
+        card({ newsid: '1', page_url: 'a', source: 'fstream' }),
+        card({ newsid: '2', page_url: 'b', source: 'other-site' }),
+      ])
+      expect(merged).toHaveLength(2)
+    })
+
+    it('merges cards across sites through a shared TMDB id, keeping their sources', () => {
+      const merged = mergeCards(
+        [
+          card({ newsid: '1', page_url: 'a', source: 'fstream' }),
+          card({ newsid: '2', page_url: 'b', source: 'other-site', poster_url: '' }),
+        ],
+        new Map([['1', 111], ['2', 111]]),
+      )
+      expect(merged).toHaveLength(1)
+      expect(merged[0].alts?.[0].source).toBe('other-site')
+    })
+  })
 })

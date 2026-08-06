@@ -15,6 +15,7 @@ from sestudio.providers.premium import PremiumProvider
 from sestudio.providers.uqload import UqloadProvider
 from sestudio.providers.vidzy import VidzyProvider
 from sestudio.providers.voe import VoeProvider
+from sestudio.sites import build_sites
 from sestudio.web.routes import (
     cast,
     downloads,
@@ -61,8 +62,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.state.live_domain = live_domain or "https://fstream.top"
-    app.state.anime_domain = "https://french-manga.net"
+    app.state.sites = build_sites(live_domain)
     app.state.providers = _PROVIDERS
     app.state.proxy_secret = secrets.token_bytes(32)
     app.state.dlna_renderers = {}  # udn -> control location, populated by discovery
@@ -72,7 +72,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     # plain HTTP on this port even when the UI is fronted by HTTPS (Caddy), so
     # it must be the real listen port, not whatever the browser connected to.
     app.state.http_port = 8080
-    app.state.job_store = JobStore(provider_registry=_PROVIDERS)
+    app.state.job_store = JobStore(provider_registry=_PROVIDERS, sites=app.state.sites)
 
     app.include_router(search.router, prefix="/api")
     app.include_router(seasons.router, prefix="/api")
