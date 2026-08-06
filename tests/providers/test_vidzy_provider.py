@@ -129,6 +129,73 @@ def test_vidzy_decodes_pre_reversal_obfuscated_source(httpx_mock: HTTPXMock):
     assert src.provider == "vidzy"
 
 
+# A fourth derivation (found 2026-08-06 on Death Note ep.1 / french-manga.net):
+# the pre-reversal ramp, but with the sum of location.hostname's char codes
+# folded into the key. Outside a browser there is no `location`, so the embed's
+# own decoder throws a ReferenceError and the ramp regex — which required the
+# key to be exactly (seed+i*step)&255 — matched nothing. The embed was reported
+# as available yet failed at resolve time with "0 combinations tried".
+_HOST = "vidzy.live"
+
+
+def _host_sum(hostname: str) -> int:
+    total = 0
+    for char in hostname:
+        total = (total + ord(char)) & 255
+    return total
+
+
+def _encode_domain_bound(url: str, seed: int, step: int, hostname: str) -> str:
+    offset = _host_sum(hostname)
+    xored = bytes(
+        ord(c) ^ ((seed + i * step + offset) & 255) for i, c in enumerate(url)
+    )
+    return base64.b64encode(xored[::-1]).decode()
+
+
+def _packed_domain_bound_embed(payload_b64: str, seed: int, step: int) -> str:
+    src = (
+        f'sources:[{{src:(function(s){{var h=(location&&location.hostname)||"",H=0;'
+        f"for(var j=0;j<h.length;j++){{H=(H+h.charCodeAt(j))&255}}"
+        f'var b=atob(s),a=b.split("").reverse().join(""),r="";'
+        f"for(var i=0;i<a.length;i++){{var kk=({hex(seed)}+i*{step}+H)&255;"
+        f"r+=String.fromCharCode(a.charCodeAt(i)^kk)}}"
+        f'return/^https?:/.test(r)?r:"https://s1.fsvid.lol/troll/master.m3u8"}})'
+        f'("{payload_b64}"),type:"application/x-mpegURL"}}]'
+    )
+    decoy = 'var _fsvHls="https://s1.fsvid.lol/troll/master.m3u8";'
+    return f"<script>eval(function(p,a,c,k,e,d){{}}('{decoy}{src}',10,10,''.split('|')))</script>"
+
+
+def test_vidzy_decodes_domain_bound_source(httpx_mock: HTTPXMock):
+    """A key mixing in location.hostname decodes using the embed's own host."""
+    payload = _encode_domain_bound(_EXPECTED, 0x3D, 89, _HOST)
+    httpx_mock.add_response(
+        url=f"https://{_HOST}/embed-domain.html",
+        method="GET",
+        text=_packed_domain_bound_embed(payload, 0x3D, 89),
+    )
+    src = VidzyProvider().get_stream_url(f"https://{_HOST}/embed-domain.html")
+    assert src.url == _EXPECTED
+
+
+def test_vidzy_decodes_domain_bound_source_without_js_engine(
+    httpx_mock: HTTPXMock, monkeypatch
+):
+    """The Python fallback folds the host offset in too, not just the JS engine."""
+    monkeypatch.setattr(
+        jsdecode, "run_inline_decoder", lambda body, payload, hostname="": None
+    )
+    payload = _encode_domain_bound(_EXPECTED, 0x3D, 89, _HOST)
+    httpx_mock.add_response(
+        url=f"https://{_HOST}/embed-domain-nojs.html",
+        method="GET",
+        text=_packed_domain_bound_embed(payload, 0x3D, 89),
+    )
+    src = VidzyProvider().get_stream_url(f"https://{_HOST}/embed-domain-nojs.html")
+    assert src.url == _EXPECTED
+
+
 def test_vidzy_tries_both_orientations(httpx_mock: HTTPXMock):
     """A reversed payload resolves even when the body has no .reverse() marker.
 
@@ -167,7 +234,9 @@ def test_vidzy_reports_unknown_scheme(httpx_mock: HTTPXMock, monkeypatch):
     The JS engine is disabled here: with it enabled the embed would simply decode
     (that is the point of it), so this pins the *fallback's* failure behaviour.
     """
-    monkeypatch.setattr(jsdecode, "run_inline_decoder", lambda body, payload: None)
+    monkeypatch.setattr(
+        jsdecode, "run_inline_decoder", lambda body, payload, hostname="": None
+    )
     page = _packed_ramp_embed(
         _encode_ramp(_EXPECTED, _SEED, _STEP), _SEED, _STEP
     ).replace(f"({hex(_SEED)}+i*{_STEP})&255", "fresh_scheme(i)")
@@ -216,7 +285,9 @@ def test_vidzy_unmodelled_scheme_fails_without_js_engine(
     httpx_mock: HTTPXMock, monkeypatch
 ):
     """Without the engine the same embed fails — proving the JS path did the work."""
-    monkeypatch.setattr(jsdecode, "run_inline_decoder", lambda body, payload: None)
+    monkeypatch.setattr(
+        jsdecode, "run_inline_decoder", lambda body, payload, hostname="": None
+    )
     page = _packed_quadratic_embed(_encode_quadratic(_EXPECTED))
     httpx_mock.add_response(
         url="https://vidzy.live/embed-quad2.html", method="GET", text=page

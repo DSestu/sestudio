@@ -14,8 +14,11 @@ transform, we are evaluating it.
 Safety: the body is attacker-controlled, so it runs in a fresh context with no
 host bindings, a wall-clock limit and a memory cap. That is sound here because
 the construct is a pure string→string transform — it needs no DOM, no network
-and no filesystem. Neither engine is a browser, so `atob` does not exist and is
-shimmed below; nothing else is injected.
+and no filesystem. Neither engine is a browser, so the browser globals the
+decoders read (`atob`, and `location`/`document` for the domain-bound variants)
+do not exist and are shimmed below; nothing else is injected. The `location`
+shim is inert data — a hostname string the caller supplies — not a real
+navigation object, so it grants the body no capability it did not already have.
 
 Two engines are supported:
 
@@ -75,7 +78,28 @@ var atob=function(input){
 """
 
 
-def _run_quickjs(body: str, payload_b64: str) -> object:
+def _location_shim(hostname: str) -> str:
+    """Inert stand-ins for the browser globals a domain-bound decoder reads.
+
+    Newer embeds key the XOR on `location.hostname`, so a decoder run outside a
+    browser silently decodes garbage — or, as first observed, dies on a
+    ReferenceError. Supplying the hostname the embed was served from reproduces
+    what the page itself would compute.
+    """
+    host = json.dumps(hostname)
+    return (
+        f"var location={{hostname:{host},host:{host},"
+        f"href:'https://'+{host}+'/',origin:'https://'+{host},protocol:'https:'}};"
+        f"var document={{domain:{host},referrer:''}};"
+        "var window=this;window.location=location;window.document=document;"
+    )
+
+
+def _preamble(hostname: str) -> str:
+    return f"{_ATOB_SHIM}\n{_location_shim(hostname)}\n"
+
+
+def _run_quickjs(body: str, payload_b64: str, hostname: str) -> object:
     """Run the decoder in QuickJS, with the payload bound as a variable.
 
     Binding rather than interpolating means the payload cannot terminate a string
@@ -85,12 +109,12 @@ def _run_quickjs(body: str, payload_b64: str) -> object:
     ctx.set_memory_limit(_MEMORY_LIMIT_BYTES)
     ctx.set_time_limit(_TIME_LIMIT_SECONDS)
     ctx.set_max_stack_size(_MAX_STACK_BYTES)
-    ctx.eval(_ATOB_SHIM)
+    ctx.eval(_preamble(hostname))
     ctx.set("__payload", payload_b64)
     return ctx.eval(f"(function(s){{{body}}})(__payload)")
 
 
-def _run_mini_racer(body: str, payload_b64: str) -> object:
+def _run_mini_racer(body: str, payload_b64: str, hostname: str) -> object:
     """Run the decoder in MiniRacer, with the payload as a JSON literal.
 
     MiniRacer has no variable-binding call, so the payload has to travel inside
@@ -100,14 +124,18 @@ def _run_mini_racer(body: str, payload_b64: str) -> object:
     """
     ctx = MiniRacer()
     return ctx.eval(
-        f"{_ATOB_SHIM}\n(function(s){{{body}}})({json.dumps(payload_b64)})",
+        f"{_preamble(hostname)}(function(s){{{body}}})({json.dumps(payload_b64)})",
         timeout_sec=_TIME_LIMIT_SECONDS,
         max_memory=_MEMORY_LIMIT_BYTES,
     )
 
 
-def run_inline_decoder(body: str, payload_b64: str) -> str | None:
+def run_inline_decoder(body: str, payload_b64: str, hostname: str = "") -> str | None:
     """Evaluate `(function(s){<body>})("<payload_b64>")` and return its result.
+
+    *hostname* is the host the embed was served from; domain-bound decoders mix
+    it into the key, and a wrong or empty value decodes to garbage rather than
+    failing loudly, so pass the real one.
 
     Returns None — never raises — when no engine is installed or the body fails
     to run, so the caller can fall back to pattern matching.
@@ -120,7 +148,7 @@ def run_inline_decoder(body: str, payload_b64: str) -> str | None:
         return None
 
     try:
-        result = runner(body, payload_b64)
+        result = runner(body, payload_b64, hostname)
     except Exception as exc:  # noqa: BLE001 - any engine failure is a fallback
         logger.debug("Inline decoder failed to execute in %s: %s", ENGINE_NAME, exc)
         return None

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -52,7 +53,11 @@ class PremiumProvider(StreamProvider):
 
         obf = _INLINE_SRC_RE.search(unpacked)
         if obf:
-            stream_url = _deobfuscate_src(obf.group("body"), obf.group("payload"))
+            stream_url = _deobfuscate_src(
+                obf.group("body"),
+                obf.group("payload"),
+                urlsplit(str(resp.url)).hostname or "",
+            )
         else:
             src = _SRC_RE.search(unpacked)
             if not src:
