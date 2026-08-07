@@ -13,9 +13,10 @@ import json
 import logging
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 
 import httpx
 from bs4 import BeautifulSoup
@@ -28,6 +29,11 @@ from sestudio.sites.base import ContentSite, PageResult, SiteError, StreamCandid
 logger = logging.getLogger(__name__)
 
 ENTRYPOINT = "https://senpai-stream.wiki"
+
+# How long a resolved domain is trusted before the next use re-checks it. The
+# app's periodic refresh normally gets there first; this is the backstop for
+# the CLI and for gaps between ticks.
+DOMAIN_TTL = 900.0
 
 # The site rotates its TLD (.live today), so anything under the brand is ours.
 _BRAND = "senpai-stream"
@@ -85,24 +91,64 @@ class SenpaiSite(ContentSite):
 
     def __init__(self, base_url: str | None = None) -> None:
         self._base_url = base_url.rstrip("/") if base_url else None
+        # An explicitly given domain is the caller's choice to keep.
+        self._pinned = self._base_url is not None
+        self._resolved_at = 0.0
         self._lock = threading.Lock()
 
     # --- domain ------------------------------------------------------------
 
     def base_url(self) -> str:
-        """The current live domain, resolved from the entrypoint on first use.
+        """The live domain, re-resolved from the entrypoint when it goes stale.
 
-        Resolved lazily rather than at startup so booting the app never waits
-        on this site, and so a rotation is picked up by the next process.
+        The site moves to a new TLD often enough that a value cached for the
+        life of the process goes wrong on a long-running server. The app also
+        refreshes this on startup and on a timer (see web/app.py); the TTL here
+        is what covers the CLI and any window between those ticks.
+
+        A pinned domain (passed to the constructor, as tests do) is never
+        re-resolved.
         """
         with self._lock:
-            if self._base_url:
+            if self._base_url and (self._pinned or not self._is_stale()):
                 return self._base_url
-            self._base_url = self._resolve_domain()
-            logger.debug("Resolved senpai domain: %s", self._base_url)
+            try:
+                resolved = self._resolve_domain()
+            except SiteError:
+                # Keep serving the previous domain if the entrypoint is down —
+                # a stale guess beats no site at all.
+                if self._base_url:
+                    logger.warning(
+                        "senpai domain refresh failed; keeping %s", self._base_url
+                    )
+                    self._resolved_at = time.monotonic()
+                    return self._base_url
+                raise
+            if resolved != self._base_url:
+                logger.info("senpai domain is now %s", resolved)
+            self._base_url = resolved
+            self._resolved_at = time.monotonic()
             return self._base_url
 
+    def _is_stale(self) -> bool:
+        return time.monotonic() - self._resolved_at >= DOMAIN_TTL
+
+    def refresh(self) -> None:
+        """Force a re-resolve now, regardless of the TTL."""
+        if self._pinned:
+            return
+        with self._lock:
+            self._resolved_at = 0.0
+        self.base_url()
+
     def _resolve_domain(self) -> str:
+        """Find the live mirror behind the entrypoint.
+
+        The entrypoint has taken two shapes: a small landing page linking to
+        the current mirror, and (since Aug 2026) a straight redirect onto the
+        mirror itself. Both are handled — a redirect away from the entrypoint
+        host is the answer, otherwise the page is scanned for the link.
+        """
         try:
             with new_client() as client:
                 resp = client.get(ENTRYPOINT)
@@ -110,19 +156,42 @@ class SenpaiSite(ContentSite):
         except Exception as exc:
             raise SiteError(f"senpai entrypoint unreachable: {exc}") from exc
 
-        entry_host = urlsplit(str(resp.url)).hostname or ""
+        entry_host = urlsplit(ENTRYPOINT).hostname or ""
+        final_host = urlsplit(str(resp.url)).hostname or ""
+        if final_host and final_host != entry_host and _BRAND in final_host:
+            return f"https://{final_host}"
+
         soup = BeautifulSoup(resp.text, "html.parser")
         for anchor in soup.find_all("a", href=True):
             href = str(anchor["href"])
             if not href.startswith("https://"):
                 continue
             host = urlsplit(href).hostname or ""
-            if host and host != entry_host and _BRAND in host:
+            if host and host not in (entry_host, final_host) and _BRAND in host:
                 return f"https://{host}"
         raise SiteError("senpai entrypoint carried no live domain link")
 
     def owns_url(self, url: str) -> bool:
         return _BRAND in (urlsplit(url).hostname or "")
+
+    def _rebase(self, url: str) -> str:
+        """Move a senpai URL onto the domain that is live right now.
+
+        Library entries, deep links and download jobs keep whatever domain was
+        current when they were stored. Once the site rotates, that host is
+        dead, so re-hosting every senpai URL before use is what keeps saved
+        titles playable across a rotation — the paths themselves are stable.
+        """
+        split = urlsplit(url)
+        if not split.hostname or _BRAND not in split.hostname:
+            return url
+        base = urlsplit(self.base_url())
+        if split.netloc == base.netloc:
+            return url
+        logger.debug("Rebasing senpai URL from %s to %s", split.netloc, base.netloc)
+        return urlunsplit(
+            (base.scheme, base.netloc, split.path, split.query, split.fragment)
+        )
 
     def provider_order(self) -> tuple[str, ...]:
         return (self.id,)
@@ -260,6 +329,7 @@ class SenpaiSite(ContentSite):
     # --- title pages -------------------------------------------------------
 
     def fetch_page(self, url: str, lang: str = "vf") -> PageResult:
+        url = self._rebase(url)
         split = urlsplit(url)
         parts = [p for p in split.path.split("/") if p]
         kind = parts[0] if parts else ""
@@ -359,6 +429,7 @@ class SenpaiSite(ContentSite):
             raise SiteError(f"senpai cannot resolve provider {candidate.provider!r}")
 
         page_url, _, fragment = candidate.embed_url.partition("#")
+        page_url = self._rebase(page_url)
         lang = parse_qs(fragment).get("lang", ["vf"])[0]
 
         with new_client() as client:

@@ -16,3 +16,16 @@ export function watchingContext(item: WatchingItem): string {
     .filter(Boolean)
     .join(' · ')
 }
+
+/** The collection entry a Watching series stands for, for the save toggles. */
+export function entryFor(item: WatchingItem) {
+  return {
+    series: item.series,
+    season: item.season,
+    label: item.series,
+    poster_url: item.poster_url,
+    page_url: item.page_url,
+    lang: item.lang,
+    source: item.source,
+  }
+}

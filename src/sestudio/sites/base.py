@@ -72,6 +72,14 @@ class ContentSite(ABC):
         """Fallback routing when a request carries no source id."""
         return False
 
+    def refresh(self) -> None:
+        """Re-resolve whatever the site caches about itself.
+
+        Called at startup and then periodically. Sites whose domain rotates
+        override this; for the rest it is a no-op. Runs in a worker thread, and
+        raising is fine — the caller logs and carries on with the old value.
+        """
+
     def provider_order(self) -> tuple[str, ...]:
         return DEFAULT_PROVIDER_ORDER
 

@@ -3,9 +3,7 @@ import type { AppSettings } from '../api'
 import type { CollectionEntry } from '../collections'
 import {
   entries as collectionEntries,
-  moveMany,
   refKey,
-  unsaveMany,
   useCollections,
 } from '../collections'
 import EmptyState from '../components/EmptyState'
@@ -206,61 +204,40 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
   const pickedWatching = (): WatchingItem[] =>
     inProgress.filter(i => picked.has(`w-${i.series}-${i.season}`))
 
-  const bulkActions: BulkAction[] = tab === 'watching'
-    ? [
-        {
-          id: 'watched',
-          label: 'Mark watched',
-          icon: sheetIcon.watched,
-          onSelect: () =>
-            runBulk(async () => {
-              for (const item of pickedWatching()) {
-                setWatched(
-                  {
-                    number: item.resume.number,
-                    title: item.resume.title,
-                    embed_urls: {},
-                    series_name: item.series,
-                    season: item.season,
-                    poster_url: item.poster_url,
-                    page_url: item.page_url,
-                    lang: item.lang,
-                    source: item.source,
-                  },
-                  true,
-                )
-              }
-            }),
-        },
-        {
-          id: 'remove',
-          label: 'Remove',
-          icon: sheetIcon.remove,
-          destructive: true,
-          // Same watermark as the single-item action, so both mean the same thing.
-          onSelect: () => runBulk(() => dismissMany(pickedWatching())),
-        },
-      ]
-    : [
-        ...(tab === 'watchlist'
-          ? [
+  const bulkActions: BulkAction[] = [
+    {
+      id: 'watched',
+      label: 'Mark watched',
+      icon: sheetIcon.watched,
+      onSelect: () =>
+        runBulk(async () => {
+          for (const item of pickedWatching()) {
+            setWatched(
               {
-                id: 'favourite',
-                label: 'Move to favourites',
-                icon: sheetIcon.favourite,
-                onSelect: () =>
-                  runBulk(() => moveMany('watchlist', 'favourites', [...picked])),
+                number: item.resume.number,
+                title: item.resume.title,
+                embed_urls: {},
+                series_name: item.series,
+                season: item.season,
+                poster_url: item.poster_url,
+                page_url: item.page_url,
+                lang: item.lang,
+                source: item.source,
               },
-            ]
-          : []),
-        {
-          id: 'remove',
-          label: 'Remove',
-          icon: sheetIcon.remove,
-          destructive: true,
-          onSelect: () => runBulk(() => unsaveMany(tab, [...picked])),
-        },
-      ]
+              true,
+            )
+          }
+        }),
+    },
+    {
+      id: 'remove',
+      label: 'Remove',
+      icon: sheetIcon.remove,
+      destructive: true,
+      // Same watermark as the single-item action, so both mean the same thing.
+      onSelect: () => runBulk(() => dismissMany(pickedWatching())),
+    },
+  ]
 
   /** Arrow keys move between tabs, as the tablist role promises. */
   function onTabKey(e: React.KeyboardEvent, index: number) {
@@ -285,14 +262,20 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
             />
           )}
           <LayoutToggle layout={layout} onChange={next => setLibraryLayout(tab, next)} />
-          <button
-            onClick={() => (selecting ? exitSelection() : setSelecting(true))}
-            aria-pressed={selecting}
-            disabled={counts[tab] === 0}
-            className={`btn btn-sm ${selecting ? 'btn-active' : 'btn-ghost'}`}
-          >
-            {selecting ? 'Done' : 'Select'}
-          </button>
+          {/* Only Watching: a saved title is removed by un-starring it, which
+              the ☆/♥ on every row and card already do one tap at a time.
+              Dropping a series from Watching has no such per-item control on
+              cards, so bulk selection stays here. */}
+          {tab === 'watching' && (
+            <button
+              onClick={() => (selecting ? exitSelection() : setSelecting(true))}
+              aria-pressed={selecting}
+              disabled={counts[tab] === 0}
+              className={`btn btn-sm ${selecting ? 'btn-active' : 'btn-ghost'}`}
+            >
+              {selecting ? 'Done' : 'Select'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -336,7 +319,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
         {/* Select-all lives in the content, not the action bar: as a text link
             down beside the counter it was too easy to miss. Same indeterminate
             checkbox idiom as the playlist's "select all for download". */}
-        {selecting && counts[tab] > 0 && (
+        {selecting && tab === 'watching' && counts[tab] > 0 && (
           <label className="flex items-center gap-2.5 mb-3 px-3 py-2.5 rounded-box bg-base-200/60 ring-1 ring-base-300 cursor-pointer text-sm font-medium">
             <input
               type="checkbox"
@@ -400,11 +383,6 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
                   entry={entry}
                   onOpen={openTitle}
                   meta={metas.get(key)}
-                  selection={
-                    selecting
-                      ? { selected: picked.has(key), onToggle: () => togglePicked(key) }
-                      : undefined
-                  }
                 />
               )
             })}
@@ -416,7 +394,6 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
             items={savedItems(tab, collections, onOpen, settings.lang)
               .filter(i => visibleGridKeys.has(i.key))
               .map(i => withMeta(i, savedGridMeta.get(i.key)))}
-            selection={selecting ? { keys: picked, onToggle: togglePicked } : undefined}
           />
         )}
       </div>

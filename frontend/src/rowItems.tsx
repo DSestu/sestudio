@@ -3,9 +3,9 @@ import type { CollectionEntry, ListName } from './collections'
 import { entries as collectionEntries, useCollections } from './collections'
 import type { WatchingItem } from './watchState'
 import SaveToggles from './components/SaveToggles'
+import RemoveFromWatching from './components/library/RemoveFromWatching'
 import type { MediaCardItem } from './components/MediaCard'
-import WatchingOverflow from './components/library/WatchingOverflow'
-import { watchingContext } from './components/library/watchingLabels'
+import { entryFor } from './components/library/watchingLabels'
 
 /** Opens a title's detail modal, optionally deep-linked to an episode. */
 export type OpenTitle = (card: SeasonCard, episode: number, lang: string) => void
@@ -84,9 +84,14 @@ export function watchingItems(items: WatchingItem[], open: OpenTitle): MediaCard
     progress:
       item.resume.duration > 0 ? item.resume.position / item.resume.duration : undefined,
     onClick: () => onOpen(item),
-    // One control rather than several: a poster card has no room for five, and
-    // the sheet keeps a single definition of what those actions are.
-    actions: <WatchingOverflow item={item} context={watchingContext(item)} onOpen={onOpen} />,
+    // The same ☆/♥ pair the saved tabs put on their cards, so saving works
+    // identically wherever a poster appears, plus a direct remove.
+    actions: (
+      <>
+        <SaveToggles size="sm" entry={entryFor(item)} />
+        <RemoveFromWatching item={item} size="sm" />
+      </>
+    ),
   }))
 }
 

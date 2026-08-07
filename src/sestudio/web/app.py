@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import secrets
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -29,6 +33,11 @@ from sestudio.web.routes import (
 )
 from sestudio.web.worker import JobStore
 
+logger = logging.getLogger(__name__)
+
+# How often the rotating site domains are re-resolved while the server runs.
+SITE_REFRESH_SECONDS = 900
+
 _PROVIDERS = {
     "uqload": UqloadProvider(),
     "vidzy": VidzyProvider(),
@@ -53,8 +62,47 @@ def _frontend_dist() -> Path | None:
     return None
 
 
+async def _refresh_sites(app: FastAPI) -> None:
+    """Re-resolve every site's rotating domain, tolerating failures."""
+    sites = list(app.state.sites.values())
+    results = await asyncio.gather(
+        *(asyncio.to_thread(site.refresh) for site in sites),
+        return_exceptions=True,
+    )
+    for site, result in zip(sites, results):
+        if isinstance(result, BaseException):
+            logger.warning("Could not refresh site %s: %s", site.id, result)
+
+
+async def _refresh_loop(app: FastAPI) -> None:
+    while True:
+        await asyncio.sleep(SITE_REFRESH_SECONDS)
+        await _refresh_sites(app)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    """Resolve rotating domains up front, then keep them fresh.
+
+    Senpai moves to a new TLD often enough that resolving once per process is
+    not enough on a server left running for days. Doing it at startup also
+    means the first search does not pay for the lookup.
+
+    Startup is not blocked by a failure: a site that cannot be reached now
+    falls back to resolving on demand.
+    """
+    await _refresh_sites(app)
+    task = asyncio.create_task(_refresh_loop(app))
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
 def create_app(live_domain: str | None = None) -> FastAPI:
-    app = FastAPI(title="sestudio", docs_url="/api/docs")
+    app = FastAPI(title="sestudio", docs_url="/api/docs", lifespan=_lifespan)
 
     app.add_middleware(
         CORSMiddleware,

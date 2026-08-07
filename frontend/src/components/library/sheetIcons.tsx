@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 
 // Icons for the standard library actions, so callers don't each redraw them.
-// A separate module from ItemActionSheet because component files may only export
+// A separate module from the components that use them, because component
+// files may only export
 // components (fast-refresh rule).
 
 function pathIcon(d: string): ReactNode {

@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sestudio.web.app import create_app
+from tests.web.conftest import FakeSite
 
 
 @pytest.fixture()
@@ -73,3 +74,46 @@ def test_disabled_site_still_resolves_its_pages(client, httpx_mock):
     # 502 (the page is not a real season) rather than a routing refusal —
     # the site was still consulted.
     assert resp.status_code == 502
+
+
+# --- rotating domains are resolved at startup -------------------------------
+
+
+class _CountingSite(FakeSite):
+    """A fake whose refresh() is observable, optionally failing."""
+
+    def __init__(self, site_id: str, fail: bool = False) -> None:
+        self.id = site_id
+        self.display_name = site_id
+        self.refreshed = 0
+        self._fail = fail
+
+    def refresh(self) -> None:
+        self.refreshed += 1
+        if self._fail:
+            raise RuntimeError("entrypoint down")
+
+
+def test_domains_are_resolved_when_the_server_starts(tmp_path, monkeypatch):
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    app = create_app(live_domain="https://fs03.lol")
+    sites = {"a": _CountingSite("a"), "b": _CountingSite("b")}
+    app.state.sites = sites
+
+    # Entering the context runs the lifespan, which is what startup does.
+    with TestClient(app):
+        pass
+
+    assert [s.refreshed for s in sites.values()] == [1, 1]
+
+
+def test_a_site_that_cannot_be_resolved_does_not_block_startup(tmp_path, monkeypatch):
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    app = create_app(live_domain="https://fs03.lol")
+    healthy = _CountingSite("ok")
+    app.state.sites = {"broken": _CountingSite("broken", fail=True), "ok": healthy}
+
+    with TestClient(app) as started:
+        # The app still serves, and the reachable site was still refreshed.
+        assert started.get("/api/sites").status_code == 200
+    assert healthy.refreshed == 1

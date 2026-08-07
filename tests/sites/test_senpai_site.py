@@ -6,6 +6,7 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from sestudio.sites import SiteError, StreamCandidate
+from sestudio.sites import senpai
 from sestudio.sites.senpai import (
     ENTRYPOINT,
     SenpaiSite,
@@ -318,3 +319,114 @@ def test_lang_index_uses_the_sites_own_index_field():
 
 def test_parse_seasons_defaults_to_a_single_season():
     assert _parse_seasons("<html><body>no tabs</body></html>") == [(1, "")]
+
+
+# --- rotating domain --------------------------------------------------------
+
+
+def _entrypoint(host: str) -> str:
+    return f'<a class="url-value" href="https://{host}/?utm_source=wiki">go</a>'
+
+
+def test_domain_is_reresolved_once_the_ttl_lapses(httpx_mock: HTTPXMock, monkeypatch):
+    """A long-running server must not keep serving a rotated-away domain."""
+    httpx_mock.add_response(url=ENTRYPOINT, text=_entrypoint("senpai-stream.live"))
+    httpx_mock.add_response(url=ENTRYPOINT, text=_entrypoint("senpai-stream.xyz"))
+
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(senpai.time, "monotonic", lambda: clock["now"])
+
+    site = SenpaiSite()
+    assert site.base_url() == BASE
+    # Still inside the TTL: no second lookup.
+    clock["now"] += senpai.DOMAIN_TTL - 1
+    assert site.base_url() == BASE
+    # Past it: the new domain is picked up.
+    clock["now"] += 2
+    assert site.base_url() == "https://senpai-stream.xyz"
+
+
+def test_refresh_reresolves_immediately(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(url=ENTRYPOINT, text=_entrypoint("senpai-stream.live"))
+    httpx_mock.add_response(url=ENTRYPOINT, text=_entrypoint("senpai-stream.xyz"))
+    site = SenpaiSite()
+    assert site.base_url() == BASE
+    site.refresh()
+    assert site.base_url() == "https://senpai-stream.xyz"
+
+
+def test_a_pinned_domain_is_never_reresolved():
+    """No mocked entrypoint: any lookup would fail the test."""
+    site = SenpaiSite(BASE)
+    site.refresh()
+    assert site.base_url() == BASE
+
+
+def test_a_failed_refresh_keeps_the_previous_domain(httpx_mock: HTTPXMock):
+    """A stale guess still beats dropping the site entirely."""
+    httpx_mock.add_response(url=ENTRYPOINT, text=_entrypoint("senpai-stream.live"))
+    httpx_mock.add_response(url=ENTRYPOINT, status_code=503)
+    site = SenpaiSite()
+    assert site.base_url() == BASE
+    site.refresh()
+    assert site.base_url() == BASE
+
+
+def test_first_resolution_failure_still_raises(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(url=ENTRYPOINT, status_code=503)
+    with pytest.raises(SiteError):
+        SenpaiSite().refresh()
+
+
+def test_saved_urls_are_moved_onto_the_live_domain(httpx_mock: HTTPXMock):
+    """A library entry saved before a rotation must still resolve."""
+    old = "https://senpai-stream.old/movie/test-film"
+    httpx_mock.add_response(url=MOVIE, text=load_fixture("senpai_movie.html"))
+    page = SenpaiSite(BASE).fetch_page(old, "vf")
+    # Fetched from the current host, and the embed points there too.
+    assert page.episodes[0].embed_urls["senpai"].startswith(MOVIE)
+
+
+def test_rebasing_preserves_the_season_query(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(url=SHOW, text=load_fixture("senpai_show.html"))
+    httpx_mock.add_response(
+        url=f"{BASE}/episode/test-show/1-1", text=load_fixture("senpai_episode.html")
+    )
+    page = SenpaiSite(BASE).fetch_page(
+        "https://senpai-stream.old/tv-show/test-show?sn=1&sid=900", "vf"
+    )
+    assert page.season == 1
+    assert [e.number for e in page.episodes] == [1, 2]
+
+
+def test_rebasing_leaves_other_sites_alone():
+    other = "https://fs03.lol/16676-x.html"
+    assert SenpaiSite(BASE)._rebase(other) == other
+
+
+def test_resolves_when_the_entrypoint_redirects_onto_the_mirror(httpx_mock: HTTPXMock):
+    """Since Aug 2026 the .wiki entrypoint redirects straight to the mirror
+    instead of linking to it, and the page it lands on is the site itself."""
+    httpx_mock.add_response(
+        url=ENTRYPOINT,
+        status_code=301,
+        headers={"Location": "https://senpai-stream.bond/"},
+    )
+    httpx_mock.add_response(
+        url="https://senpai-stream.bond/",
+        text='<a href="https://senpai-stream.bond/movies">Films</a>',
+    )
+    assert SenpaiSite().base_url() == "https://senpai-stream.bond"
+
+
+def test_a_redirect_to_a_foreign_host_is_not_taken_as_the_mirror(
+    httpx_mock: HTTPXMock,
+):
+    """Only the brand's own hosts count, so an interstitial cannot hijack it."""
+    httpx_mock.add_response(
+        url=ENTRYPOINT, status_code=302, headers={"Location": "https://ads.example/x"}
+    )
+    httpx_mock.add_response(
+        url="https://ads.example/x", text=_entrypoint("senpai-stream.live")
+    )
+    assert SenpaiSite().base_url() == BASE

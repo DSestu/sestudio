@@ -2,9 +2,10 @@ import type { TmdbMeta } from '../../api'
 import type { PlayableEpisode } from '../../providers'
 import { minutesLeft, relativeTime } from '../../rowItems'
 import { setWatched, type WatchingItem } from '../../watchState'
+import SaveToggles from '../SaveToggles'
 import DetailRow from './DetailRow'
-import WatchingOverflow from './WatchingOverflow'
-import { episodeLabel, watchingContext } from './watchingLabels'
+import RemoveFromWatching from './RemoveFromWatching'
+import { entryFor, episodeLabel, watchingContext } from './watchingLabels'
 
 interface Props {
   item: WatchingItem
@@ -62,7 +63,6 @@ export default function WatchingRow({ item, onOpen, selection, meta }: Props) {
       }
       onOpen={() => onOpen(item)}
       selection={selection}
-      overflow={<WatchingOverflow item={item} context={context} onOpen={onOpen} />}
       actions={
         <>
           <button onClick={() => onOpen(item)} className="btn btn-primary btn-sm gap-1.5">
@@ -81,6 +81,10 @@ export default function WatchingRow({ item, onOpen, selection, meta }: Props) {
             </svg>
             <span className="hidden sm:inline">Mark watched</span>
           </button>
+          {/* Saving is a one-tap action here rather than something buried in the
+              overflow — the same ☆/♥ pair used everywhere else. */}
+          <SaveToggles size="sm" entry={entryFor(item)} className="justify-center" />
+          <RemoveFromWatching item={item} size="sm" />
         </>
       }
     />
