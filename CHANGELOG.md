@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/DSestu/sestudio/compare/v0.12.0...v0.13.0) (2026-08-07)
+
+
+### New features
+
+* dynamic resolving ([103c585](https://github.com/DSestu/sestudio/commit/103c5850e8f7a11c1c76493f17f02a113fee9250))
+
 ## [0.12.0](https://github.com/DSestu/sestudio/compare/v0.11.0...v0.12.0) (2026-08-06)
 
 
