@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/DSestu/sestudio/compare/v0.13.0...v0.13.1) (2026-08-14)
+
+
+### Bug fixes
+
+* support vidzy's unpacked embed format and flexible src: spacing ([9c7ce8f](https://github.com/DSestu/sestudio/commit/9c7ce8fbd488db217a5ed68f0b4cd484fb2ded5a))
+
 ## [0.13.0](https://github.com/DSestu/sestudio/compare/v0.12.0...v0.13.0) (2026-08-07)
 
 
