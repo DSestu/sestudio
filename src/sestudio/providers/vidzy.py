@@ -47,7 +47,7 @@ _SRC_RE = re.compile(r'src\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']')
 # to exclude one would make the construct fail to match at all. The lazy
 # quantifier still stops at the first `})("<payload>")`.
 _INLINE_SRC_RE = re.compile(
-    r'src:\(function\(s\)\{(?P<body>.{0,4000}?)\}\)\("(?P<payload>[A-Za-z0-9+/=]+)"\)',
+    r'src\s*:\s*\(function\(s\)\{(?P<body>.{0,4000}?)\}\)\("(?P<payload>[A-Za-z0-9+/=]+)"\)',
     re.DOTALL,
 )
 _ARRAY_KEY_RE = re.compile(r"k=\[([\d,]+)\]")
@@ -183,13 +183,15 @@ class VidzyProvider(StreamProvider):
                 f"HTTP {exc.response.status_code} fetching Vidzy embed: {embed_url}"
             ) from exc
 
+        # Try the old packed format first (still in use on some embeds)
         packed_match = re.search(
             r"eval\s*\(function\s*\(p,a,c,k.*?</script>", resp.text, re.DOTALL
         )
-        if not packed_match:
-            raise ProviderError(f"No packed script found in Vidzy embed: {embed_url}")
-
-        unpacked = _unpack(packed_match.group(0))
+        if packed_match:
+            unpacked = _unpack(packed_match.group(0))
+        else:
+            # Newer embeds serve the unpacked script directly
+            unpacked = resp.text
 
         obf_match = _INLINE_SRC_RE.search(unpacked)
         if obf_match:
