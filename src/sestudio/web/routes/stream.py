@@ -43,6 +43,33 @@ _CORS_HEADERS = {
     "Access-Control-Expose-Headers": "*",
 }
 
+# DLNA renderers decide whether they may byte-seek from these headers. Senpai's
+# self-hosted mp4s keep their moov atom at the *end* of the file, so a renderer
+# that won't range-request the tail can never find the index and declares the
+# media unrecognisable — OP=01 (byte seek allowed) is what licenses that fetch.
+_DLNA_MP4_HEADERS = {
+    "contentFeatures.dlna.org": (
+        "DLNA.ORG_OP=01;DLNA.ORG_CI=0;"
+        "DLNA.ORG_FLAGS=01700000000000000000000000000000"
+    ),
+    "transferMode.dlna.org": "Streaming",
+}
+
+
+def _total_size(resp: Any) -> int | None:
+    """Total resource size from a ranged response (Content-Range), else Content-Length."""
+    content_range = resp.headers.get("content-range", "")
+    if "/" in content_range:
+        total = content_range.rsplit("/", 1)[1]
+        if total.isdigit():
+            return int(total)
+    length = resp.headers.get("content-length")
+    # Only trust Content-Length when the server ignored the range (plain 200);
+    # on a 206 it is the fragment size, not the file size.
+    if resp.status_code == 200 and length and length.isdigit():
+        return int(length)
+    return None
+
 
 def _is_playlist(url: str, content_type: str) -> bool:
     path = urllib.parse.urlparse(url).path.lower()
@@ -131,17 +158,6 @@ def proxy_stream(token: str, request: Request) -> Response:
     referer: str = payload["r"]
     provider: str = payload["p"]
 
-    # DLNA renderers (and metadata construction) probe the URL with HEAD before
-    # playing; answer it cheaply with the right content type + range support so
-    # they accept the resource, without opening an upstream connection.
-    if request.method == "HEAD":
-        media_type = _HLS_CONTENT_TYPE if _is_playlist(target_url, "") else "video/mp4"
-        return Response(
-            status_code=200,
-            media_type=media_type,
-            headers={"Accept-Ranges": "bytes", **_CORS_HEADERS},
-        )
-
     upstream_headers = {
         "User-Agent": _UA,
         "Referer": referer,
@@ -153,6 +169,33 @@ def proxy_stream(token: str, request: Request) -> Response:
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "cross-site",
     }
+
+    # DLNA renderers probe with HEAD before playing. Playlists are answered
+    # locally, but mp4 HEADs must carry the real Content-Length: without the
+    # total size a renderer cannot range-request the tail of the file, and
+    # senpai's non-faststart mp4s keep their moov index there. Upstream HEAD
+    # itself is no use — presigned URLs are GET-only (R2 answers HEAD with 403)
+    # — so the size comes from a one-byte ranged GET.
+    if request.method == "HEAD":
+        if _is_playlist(target_url, ""):
+            return Response(
+                status_code=200,
+                media_type=_HLS_CONTENT_TYPE,
+                headers=dict(_CORS_HEADERS),
+            )
+        headers = {"Accept-Ranges": "bytes", **_DLNA_MP4_HEADERS, **_CORS_HEADERS}
+        try:
+            with new_client(
+                headers={**upstream_headers, "Range": "bytes=0-0"}
+            ) as probe:
+                resp = probe.get(target_url)
+            length = _total_size(resp)
+            if length is not None:
+                headers["Content-Length"] = str(length)
+        except Exception as exc:  # noqa: BLE001 — a HEAD without length still helps
+            logger.debug("HEAD size probe failed for %s: %s", provider, exc)
+        return Response(status_code=200, media_type="video/mp4", headers=headers)
+
     range_header = request.headers.get("range")
     if range_header:
         upstream_headers["Range"] = range_header
@@ -186,6 +229,7 @@ def proxy_stream(token: str, request: Request) -> Response:
         )
 
     relay = {h: upstream.headers[h] for h in _RELAY_HEADERS if h in upstream.headers}
+    relay.update(_DLNA_MP4_HEADERS)
     relay.update(_CORS_HEADERS)
 
     def body() -> Iterator[bytes]:
