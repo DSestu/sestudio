@@ -404,3 +404,21 @@ def test_listing_reports_the_folder_that_named_the_title(client, out):
     assert by_series["Inception"] == "Movies"
     # Loose in the root: no folder named it at all.
     assert by_series["Loose"] == ""
+
+
+def test_a_file_without_a_language_folder_gets_one(client, out):
+    # Hand-placed, or fetched before the app sorted files by language. It used
+    # to end up with no language at all, and the watch view — which pairs an
+    # episode with a file by language — could then never play it.
+    _write(out / "Loose Show" / "Season 02" / "S02E06 - Le feu.mp4")
+    downloaded.invalidate()
+
+    (title,) = _titles(client)
+    assert title["langs"] == [downloaded.UNKNOWN_LANG]
+    assert title["files"][0]["lang"] == downloaded.UNKNOWN_LANG
+
+    body = client.get(
+        "/api/downloaded/season", params={"series": "Loose Show", "season": 2}
+    ).json()
+    assert body["available_langs"] == [downloaded.UNKNOWN_LANG]
+    assert body["episodes"][0]["langs"] == [downloaded.UNKNOWN_LANG]

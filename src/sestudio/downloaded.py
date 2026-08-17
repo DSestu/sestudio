@@ -6,12 +6,15 @@ Downloads are written to a fixed shape by ``_episode_path`` in
     <root>/<Series>/Season NN/<LANG>/S01E02 - Title.mp4   # episodes
     <root>/<films dirname>/<LANG>/Title.mp4               # films
 
-so the tree itself is the index, and this module reads it back. What the path
-cannot say — the real (unsanitised) series name, the poster, the site it came
-from — is recorded separately at download time; see ``library.downloaded_files``.
+but that is only the shape *this* tool writes. A collection older than the tool
+sits wherever its owner put it — loose in the root, or under an arrangement of
+their own — so the whole tree is walked and every file is read for what its own
+path says about it.
 
-The scan is deliberately shallow: only the two shapes above are recognised, so a
-user's own folders under the same root are ignored rather than half-understood.
+What the path cannot say — the real (unsanitised) series name, the poster, the
+site it came from — is recorded separately at download time; see
+``library.downloaded_files``. Anything the tool did not download has no such
+record, so the path is the whole of what is known about it.
 """
 
 from __future__ import annotations
@@ -41,6 +44,12 @@ _SEASON_RE = re.compile(r"^(?:Season|Saison|S)\s*(\d{1,3})$", re.IGNORECASE)
 
 # Version folders, as `_episode_path` writes them.
 _LANG_DIRS = frozenset({"vf", "vostfr", "vo", "vf-vostfr", "vfq", "vosta"})
+
+# A file stored outside any language folder — hand-placed, or fetched before the
+# app sorted them — still has to be playable. It gets its own language rather
+# than none: the watch view pairs an episode with a file by language, so a file
+# with no language could never be matched, and its row stayed unclickable.
+UNKNOWN_LANG = "other"
 
 # What counts as something to play. Everything else in the tree — artwork,
 # subtitles, notes — is not the library's business.
@@ -111,7 +120,8 @@ class DownloadedFile:
     #: 0 when the name carries no SxxEyy prefix (films, and renamed files).
     number: int
     title: str
-    #: Lower-cased folder name, or '' for a file stored without a language.
+    #: Lower-cased folder name, or ``UNKNOWN_LANG`` for a file stored without
+    #: one. Never empty, so every file can be matched by language.
     lang: str
     #: Directory that names the title, relative to the root — season and
     #: language folders stripped. '' for a file loose in the root. The client
@@ -196,7 +206,7 @@ def _describe(file: Path, root: Path) -> DownloadedFile:
     dirs = list(rel.parts[:-1])
     stem = file.stem
 
-    lang = ""
+    lang = UNKNOWN_LANG
     if dirs and dirs[-1].lower() in _LANG_DIRS:
         lang = dirs.pop().lower()
 

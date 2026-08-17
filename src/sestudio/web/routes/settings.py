@@ -21,7 +21,6 @@ class SettingsBody(BaseModel):
     disabled_sites: list[str] | None = None
     preferred_site: str | None = None
     autoplay_on_open: bool | None = None
-    downloaded_folder_cards: bool | None = None
     preferred_hosts: list[str] | None = None
     preferred_sites: list[str] | None = None
     collapse_seasons: bool | None = None
@@ -77,8 +76,6 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.tmdb_posters = body.tmdb_posters
     if body.autoplay_on_open is not None:
         cfg.autoplay_on_open = body.autoplay_on_open
-    if body.downloaded_folder_cards is not None:
-        cfg.downloaded_folder_cards = body.downloaded_folder_cards
     if body.collapse_seasons is not None:
         cfg.collapse_seasons = body.collapse_seasons
     if body.preferred_hosts is not None:

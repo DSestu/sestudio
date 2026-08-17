@@ -35,7 +35,11 @@ export interface SubtitleStyle {
   /** 0–1, folded into the text colour. */
   textOpacity: number
   bgColor: string
-  /** 0–1. Opaque-ish boxes beat shadows on busy animation. */
+  /**
+   * 0–1 opacity of the box behind the text. Off by default — the outline alone
+   * keeps the picture unobscured; raise it if a release proves hard to read
+   * over busy animation.
+   */
   bgOpacity: number
   /**
    * vidstack frosts the area behind each cue with `blur(8px)`, which stays
@@ -60,7 +64,7 @@ export const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   textColor: '#ffffff',
   textOpacity: 1,
   bgColor: '#000000',
-  bgOpacity: 0.6,
+  bgOpacity: 0,
   blur: false,
   shadow: true,
   pipFontSize: 2,

@@ -78,9 +78,6 @@ export interface AppSettings {
   /** Start playing as soon as a title is opened. Off means opening a title only
    *  browses it, leaving whatever is already playing alone until you press play. */
   autoplay_on_open?: boolean
-  /** Browse the downloaded shelf as folders — a card per folder, opened to
-   *  reveal what is inside. On by default. */
-  downloaded_folder_cards?: boolean
   /** Show one card per show in search results instead of one per season, with
    *  the season count on the card. On by default. */
   collapse_seasons?: boolean

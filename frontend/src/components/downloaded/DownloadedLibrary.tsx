@@ -54,12 +54,6 @@ function toCard(title: DownloadedTitle): SeasonCard {
   }
 }
 
-/** What to call a folder card: its own name, or the root's stand-in. */
-function folderName(folder: string): string {
-  if (!folder || folder === '/') return 'Download folder'
-  return folder.split('/').pop() || folder
-}
-
 /** "S1–S3 · 24 files · VF, VOSTFR · 41.2 GB" — the whole shelf entry at a glance. */
 function summarise(parts: DownloadedTitle[]): string {
   const files = parts.reduce((n, p) => n + p.files.length, 0)
@@ -139,34 +133,7 @@ export default function DownloadedLibrary({
     }))
   }, [merged, titles])
 
-  // One card per folder, when asked for: the last resort for a collection whose
-  // naming nothing can read. The folders are then the only structure there is,
-  // so they become the shelf — every title inside one folds into its card.
-  const groups: Group[] = useMemo(() => {
-    if (!settings.downloaded_folder_cards) return merges
-    const byFolder = new Map<string, Group>()
-    for (const group of merges) {
-      for (const part of group.parts) {
-        const folder = part.folder || '/'
-        const existing = byFolder.get(folder)
-        if (existing) {
-          existing.parts.push(part)
-          continue
-        }
-        byFolder.set(folder, {
-          key: `folder:${folder}`,
-          // Named for the folder itself, not for whatever the first file
-          // happened to be called.
-          card: { ...group.card, newsid: `folder:${folder}`, series_name: folderName(folder) },
-          parts: [part],
-        })
-      }
-    }
-    return [...byFolder.values()].map(g => ({
-      ...g,
-      parts: [...g.parts].sort((a, b) => a.season - b.season),
-    }))
-  }, [merges, settings.downloaded_folder_cards])
+  const groups: Group[] = merges
 
   // Resolved from the title's name, the same way the library tabs do it, so a
   // downloaded title carries the poster, rating and genres the rest of the app
@@ -178,44 +145,59 @@ export default function DownloadedLibrary({
   }))
   const metas = useTitlesMeta(refs, settings.tmdb_configured)
 
-  // Genres come from TMDB, so a title it never matched has none. Filtering is
-  // therefore opt-in and the count of what it hides is spelled out below —
-  // silently dropping a film you own because a database has not heard of it
-  // would be the worst thing this shelf could do.
+  // Genres come from TMDB, so only matched titles have any; the rest are shown
+  // as folders below, where a genre would mean nothing anyway.
   const availableGenres = [...new Set(
     groups.flatMap(g => metas.get(g.key)?.genres ?? []),
   )].sort()
-  const unmatched = groups.filter(g => !metas.get(g.key)).length
 
-  const visible = useMemo(() => {
+  /** Matches the toolbar's filter, by shown name or by any of its filenames. */
+  const searched = useMemo(() => {
     const needle = query.trim().toLowerCase()
+    if (!needle) return groups
     return groups.filter(g => {
-      if (!matchesAllGenres(metas.get(g.key)?.genres, pickedGenres)) return false
-      if (!needle) return true
       // The shown name first, then the files themselves: on a shelf this size
       // you often remember what a file is called, not what TMDB renamed it to.
       const name = (metas.get(g.key)?.title || g.card.series_name).toLowerCase()
       if (name.includes(needle)) return true
       return g.parts.some(p => p.files.some(f => f.path.toLowerCase().includes(needle)))
     })
-  }, [groups, metas, pickedGenres, query])
+  }, [groups, metas, query])
+
+  // The split the shelf is built around. A title TMDB answered for has a name,
+  // artwork and genres, and belongs on a shelf; one it has never heard of has
+  // only a path, and belongs in the folders it actually sits in. Showing both
+  // the same way is what made this a wall of near-blank cards.
+  const [matched, unmatched] = useMemo(() => {
+    const yes: Group[] = []
+    const no: Group[] = []
+    for (const group of searched) (metas.get(group.key) ? yes : no).push(group)
+    return [yes, no]
+  }, [searched, metas])
+
+  const unmatchedTitles = useMemo(
+    () => unmatched.flatMap(g => g.parts),
+    [unmatched],
+  )
 
   const sorted = useMemo(
     () =>
       sortItems(
-        visible.map(g => ({
-          g,
-          // TMDB's title when it matched: the folder name can be mangled.
-          title: metas.get(g.key)?.title || g.card.series_name,
-          year: metas.get(g.key)?.year,
-          rating: metas.get(g.key)?.rating,
-          // "Recently added" is the default here: a file's mtime is when the
-          // download landed, and a show is as recent as its newest season.
-          addedAt: Math.max(...g.parts.map(p => p.mtime), 0),
-        })),
+        matched
+          .filter(g => matchesAllGenres(metas.get(g.key)?.genres, pickedGenres))
+          .map(g => ({
+            g,
+            // TMDB's title when it matched: the folder name can be mangled.
+            title: metas.get(g.key)?.title || g.card.series_name,
+            year: metas.get(g.key)?.year,
+            rating: metas.get(g.key)?.rating,
+            // "Recently added" is the default here: a file's mtime is when the
+            // download landed, and a show is as recent as its newest season.
+            addedAt: Math.max(...g.parts.map(p => p.mtime), 0),
+          })),
         sort,
       ).map(row => row.g),
-    [visible, sort, metas],
+    [matched, sort, metas, pickedGenres],
   )
 
   function toggleGenre(genre: string) {
@@ -260,6 +242,70 @@ export default function DownloadedLibrary({
   }
   const nameFor = (g: Group) => metas.get(g.key)?.title || g.card.series_name
 
+  // Headings only earn their space when both halves are on screen; with just
+  // one, they label the obvious.
+  const showHeadings = !compact && sorted.length > 0 && unmatchedTitles.length > 0
+
+  /** The matched titles, in whichever card layout is picked. */
+  function renderMatched() {
+    if (layout === 'grid' && !compact) {
+      return (
+          <PosterGrid
+            items={sorted.map(g => ({
+              key: g.key,
+              title: nameFor(g),
+              subtitle: summarise(g.parts),
+              poster_url: posterFor(g),
+              rating: metas.get(g.key)?.rating,
+              genres: metas.get(g.key)?.genres,
+              onClick: () => onOpenTitle(g.parts[0]),
+              actions: (
+                <button
+                  onClick={e => { e.stopPropagation(); setManaging(g.key) }}
+                  aria-label={`Manage files for ${nameFor(g)}`}
+                  title="Files on disk"
+                  className="btn btn-ghost btn-square btn-sm text-base-content/40 hover:text-base-content"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h10" />
+                  </svg>
+                </button>
+              ),
+            }))}
+          />
+      )
+    }
+    return (
+        <div className="flex flex-col gap-2">
+          {sorted.map(g => {
+            const meta = metas.get(g.key)
+            return (
+              <DetailRow
+                key={g.key}
+                poster_url={posterFor(g)}
+                title={nameFor(g)}
+                meta={summarise(g.parts)}
+                submeta={
+                  g.parts.length > 1
+                    ? `${g.parts.length} seasons downloaded`
+                    : undefined
+                }
+                rating={meta?.rating}
+                genres={meta?.genres}
+                synopsis={compact ? undefined : meta?.overview}
+                onOpen={() => onOpenTitle(g.parts[0])}
+                actions={
+                  <button onClick={() => setManaging(g.key)} className="btn btn-sm btn-ghost">
+                    Files
+                  </button>
+                }
+              />
+            )
+          })}
+        </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {!compact && (
@@ -278,21 +324,15 @@ export default function DownloadedLibrary({
           </label>
           <span className="text-base-content/40 text-sm">
             {query || pickedGenres.size
-              ? `${sorted.length} of ${groups.length}`
+              ? `${sorted.length} matched of ${groups.length}`
               : `${groups.length} ${groups.length === 1 ? 'title' : 'titles'} on disk`}
             {regrouping && <span className="ml-2 text-base-content/30">regrouping…</span>}
           </span>
-          {/* The same two offers search makes, on the same settings — grouping
-              is one behaviour, so it is controlled the same way wherever it
+          {/* The same offers search makes, on the same settings — grouping is
+              one behaviour, so it is controlled the same way wherever it
               applies rather than only where you first meet it. */}
           <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
             <SortSelect options={SORTS_FOR.saved} value={sort} onChange={setSort} />
-            <ToolbarToggle
-              label="One card per folder"
-              title="Collapse each folder on disk into a single card, whatever the files inside are called. For a collection whose naming cannot be read automatically, the folders are the only structure there is."
-              checked={settings.downloaded_folder_cards === true}
-              onChange={v => void onUpdateSettings({ downloaded_folder_cards: v })}
-            />
             <ToolbarToggle
               label="One card per show"
               title="Fold a show's seasons into a single card, with the seasons listed behind it. Off lists every downloaded season separately."
@@ -329,17 +369,20 @@ export default function DownloadedLibrary({
             onToggle={toggleGenre}
             onClear={() => setPickedGenres(new Set())}
           />
-          {pickedGenres.size > 0 && unmatched > 0 && (
-            // Said plainly rather than left to be noticed: these are titles the
-            // user owns, hidden by a filter they cannot possibly satisfy.
+          {pickedGenres.size > 0 && unmatched.length > 0 && (
+            // Said plainly rather than left to be noticed: a genre cannot apply
+            // to a title TMDB never answered for, so the folders below stay put.
             <p className="text-xs text-base-content/40">
-              {unmatched} {unmatched === 1 ? 'title has' : 'titles have'} no TMDB match,
-              so {unmatched === 1 ? 'it is' : 'they are'} hidden while a genre is picked.
+              A genre only narrows the matched titles — the folders below are
+              unaffected.
             </p>
           )}
         </div>
       )}
 
+      {/* Browse and tree both show every folder, matched or not, so each
+          replaces the split rather than sitting inside it: the split answers
+          "what do I have", these two answer "what is actually on the disk". */}
       {layout === 'folders' && !compact ? (
         <DownloadedBrowser
           titles={titles}
@@ -354,12 +397,12 @@ export default function DownloadedLibrary({
           onPlay={(title, file) => onOpenTitle(title, file)}
           onDelete={(title, file) => setConfirming({ title, file })}
         />
-      ) : sorted.length === 0 ? (
+      ) : sorted.length === 0 && (compact || unmatchedTitles.length === 0) ? (
         <EmptyState
           title="Nothing matches"
           message={
             query
-              ? `No downloaded title matches “${query}”.`
+              ? `Nothing downloaded matches “${query}”.`
               : 'No downloaded title carries every genre you picked.'
           }
           action={{
@@ -367,57 +410,51 @@ export default function DownloadedLibrary({
             onClick: () => { setQuery(''); setPickedGenres(new Set()) },
           }}
         />
-      ) : layout === 'grid' && !compact ? (
-        <PosterGrid
-          items={sorted.map(g => ({
-            key: g.key,
-            title: nameFor(g),
-            subtitle: summarise(g.parts),
-            poster_url: posterFor(g),
-            rating: metas.get(g.key)?.rating,
-            genres: metas.get(g.key)?.genres,
-            onClick: () => onOpenTitle(g.parts[0]),
-            actions: (
-              <button
-                onClick={e => { e.stopPropagation(); setManaging(g.key) }}
-                aria-label={`Manage files for ${nameFor(g)}`}
-                title="Files on disk"
-                className="btn btn-ghost btn-square btn-sm text-base-content/40 hover:text-base-content"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h10" />
-                </svg>
-              </button>
-            ),
-          }))}
-        />
       ) : (
-        <div className="flex flex-col gap-2">
-          {sorted.map(g => {
-            const meta = metas.get(g.key)
-            return (
-              <DetailRow
-                key={g.key}
-                poster_url={posterFor(g)}
-                title={nameFor(g)}
-                meta={summarise(g.parts)}
-                submeta={
-                  g.parts.length > 1
-                    ? `${g.parts.length} seasons downloaded`
-                    : undefined
-                }
-                rating={meta?.rating}
-                genres={meta?.genres}
-                synopsis={compact ? undefined : meta?.overview}
-                onOpen={() => onOpenTitle(g.parts[0])}
-                actions={
-                  <button onClick={() => setManaging(g.key)} className="btn btn-sm btn-ghost">
-                    Files
-                  </button>
-                }
+        <div className="flex flex-col gap-6">
+          {sorted.length > 0 && (
+            <section className="flex flex-col gap-3">
+              {showHeadings && (
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+                  Matched titles
+                  <span className="ml-2 font-normal normal-case text-base-content/40">
+                    {sorted.length}
+                  </span>
+                </h3>
+              )}
+              {renderMatched()}
+            </section>
+          )}
+
+          {/* Everything TMDB could not name, in the folders it actually sits
+              in. Grouping it into cards was the mess: with no artwork and no
+              real title, a card says nothing a folder name does not say better. */}
+          {!compact && unmatchedTitles.length > 0 && (
+            <section className="flex flex-col gap-3">
+              {showHeadings && (
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+                  Not on TMDB — by folder
+                  <span className="ml-2 font-normal normal-case text-base-content/40">
+                    {unmatchedTitles.reduce((n, t) => n + t.files.length, 0)} files
+                  </span>
+                </h3>
+              )}
+              <DownloadedBrowser
+                titles={unmatchedTitles}
+                filter={query}
+                onPlay={(title, file) => onOpenTitle(title, file)}
+                onDelete={(title, file) => setConfirming({ title, file })}
               />
-            )
-          })}
+            </section>
+          )}
+
+          {/* On the Downloads page the folders are left out, so say what is
+              missing rather than quietly under-reporting the shelf. */}
+          {compact && unmatchedTitles.length > 0 && (
+            <p className="text-xs text-base-content/40">
+              {unmatchedTitles.length} more not matched to TMDB — see Downloaded.
+            </p>
+          )}
         </div>
       )}
 

@@ -72,10 +72,6 @@ class AppConfig:
     # playing — that keeps the floor. Off means opening a title only browses it:
     # the description and episode list, nothing started until you press play.
     autoplay_on_open: bool = True
-    # Browse the downloaded shelf as folders — a card per folder, opened to
-    # reveal what is inside. On by default: most of a personal collection is on
-    # no database, so the arrangement on disk is the structure that exists.
-    downloaded_folder_cards: bool = True
     # Show one card per show in search results instead of one per season, with
     # the season count on the card. On by default: a long-running series
     # otherwise fills the grid with near-identical cards.
@@ -116,7 +112,6 @@ def load_config() -> AppConfig:
             ],
             preferred_sites=[str(s) for s in data.get("preferred_sites", ["senpai"])],
             autoplay_on_open=bool(data.get("autoplay_on_open", True)),
-            downloaded_folder_cards=bool(data.get("downloaded_folder_cards", True)),
             collapse_seasons=bool(data.get("collapse_seasons", True)),
         )
     except Exception as exc:

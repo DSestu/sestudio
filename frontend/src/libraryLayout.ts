@@ -16,10 +16,11 @@ import { putPreference } from './api'
 
 const STORAGE_KEY = 'sestudio.libraryLayout.v1'
 
-/** `tree` and `folders` mirror the folders on disk — an outline and a card
- *  browser over the same structure — so both are offered only by the downloaded
- *  shelf, the one surface whose items are files rather than listings. */
-export type Layout = 'grid' | 'detail' | 'tree' | 'folders'
+/** `folders` and `tree` show the download folder as it really is — as cards to
+ *  walk through, and as an outline — so both are offered only by the downloaded
+ *  shelf, the one surface whose items are files rather than listings. `grid` and
+ *  `detail` there show the mixed shelf: matched titles, then the rest by folder. */
+export type Layout = 'grid' | 'detail' | 'folders' | 'tree'
 export type LayoutTab = 'watching' | 'watchlist' | 'favourites' | 'downloaded'
 /** Every list that has a layout choice — the library's tabs, plus search. */
 export type LayoutSurface = LayoutTab | 'search' | 'browse'
@@ -47,7 +48,7 @@ function coerce(raw: unknown): LayoutPrefs {
   // A blob written before a surface existed simply falls back to its default.
   const pick = (surface: LayoutSurface): Layout =>
     value[surface] === 'grid' || value[surface] === 'detail'
-    || value[surface] === 'tree' || value[surface] === 'folders'
+    || value[surface] === 'folders' || value[surface] === 'tree'
       ? value[surface]
       : DEFAULTS[surface]
   return Object.fromEntries(SURFACES.map(s => [s, pick(s)])) as LayoutPrefs

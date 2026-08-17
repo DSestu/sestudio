@@ -12,9 +12,9 @@ const OPTIONS: { id: Layout; label: string; path: string }[] = [
   // Grid: four squares. Detail: stacked rows. Tree: a branching outline.
   { id: 'grid', label: 'Grid', path: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z' },
   { id: 'detail', label: 'Details', path: 'M4 6h4v4H4zM10 7h10M10 10h6M4 14h4v4H4zM10 15h10M10 18h6' },
-  { id: 'tree', label: 'Tree', path: 'M4 4v14a2 2 0 002 2h3M4 9h5m-5 0V4m5 11h11M9 15v-6m0 6h11M20 9H9' },
-  // Browse: a folder, opened.
+  // Browse: a folder, opened. Tree: a branching outline.
   { id: 'folders', label: 'Browse', path: 'M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6L9 5H6a2 2 0 00-2 2zM9 13h6' },
+  { id: 'tree', label: 'Tree', path: 'M4 4v14a2 2 0 002 2h3M4 9h5m-5 0V4m5 11h11M9 15v-6m0 6h11M20 9H9' },
 ]
 
 const DEFAULT_ONLY: Layout[] = ['grid', 'detail']
