@@ -45,12 +45,23 @@ async def discover(
     min_score: float = 0.0,
     max_score: float = 10.0,
     min_votes: int = 0,
+    from_date: str = "",
+    to_date: str = "",
     page: int = 1,
 ) -> dict[str, Any]:
     """Browse the catalogue with the TMDB site's own sort/filter options."""
     try:
         return await asyncio.to_thread(
-            tmdb.discover, kind, sort_by, genres, min_score, max_score, min_votes, page
+            tmdb.discover,
+            kind,
+            sort_by,
+            genres,
+            min_score,
+            max_score,
+            min_votes,
+            from_date,
+            to_date,
+            page,
         )
     except tmdb.TmdbDisabled as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

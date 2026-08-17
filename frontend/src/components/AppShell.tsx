@@ -21,6 +21,7 @@ const DESTINATIONS: Destination[] = [
   { id: 'home', label: 'Home', icon: icon('M3 12l9-9 9 9M5 10v10h14V10') },
   { id: 'search', label: 'Search', icon: icon('M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z') },
   { id: 'library', label: 'Library', icon: icon('M20.8 6.6a4.5 4.5 0 00-6.4 0L12 9l-2.4-2.4a4.5 4.5 0 10-6.4 6.4L12 21.5l8.8-8.5a4.5 4.5 0 000-6.4z') },
+  { id: 'downloaded', label: 'Downloaded', icon: icon('M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6L9 5H6a2 2 0 00-2 2z') },
   { id: 'downloads', label: 'Downloads', icon: icon('M12 3v12m0 0l-4-4m4 4l4-4M4 19h16') },
 ]
 
@@ -120,7 +121,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
       {/* Mobile tab bar — hidden while the selection bar occupies this slot. */}
       <nav
         aria-label="Primary"
-        className={`fixed bottom-0 inset-x-0 z-40 grid grid-cols-4 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)] ${
+        className={`fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)] ${
           selecting ? 'hidden' : 'md:hidden'
         }`}
       >

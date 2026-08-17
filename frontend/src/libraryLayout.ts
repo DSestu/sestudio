@@ -16,8 +16,11 @@ import { putPreference } from './api'
 
 const STORAGE_KEY = 'sestudio.libraryLayout.v1'
 
-export type Layout = 'grid' | 'detail'
-export type LayoutTab = 'watching' | 'watchlist' | 'favourites'
+/** `tree` and `folders` mirror the folders on disk — an outline and a card
+ *  browser over the same structure — so both are offered only by the downloaded
+ *  shelf, the one surface whose items are files rather than listings. */
+export type Layout = 'grid' | 'detail' | 'tree' | 'folders'
+export type LayoutTab = 'watching' | 'watchlist' | 'favourites' | 'downloaded'
 /** Every list that has a layout choice — the library's tabs, plus search. */
 export type LayoutSurface = LayoutTab | 'search' | 'browse'
 export type LayoutPrefs = Record<LayoutSurface, Layout>
@@ -26,13 +29,16 @@ const DEFAULTS: LayoutPrefs = {
   watching: 'detail',
   watchlist: 'grid',
   favourites: 'grid',
+  // Downloaded titles read better as rows: what matters is which episodes and
+  // languages are on disk, which a poster cannot show.
+  downloaded: 'detail',
   // Search and browse stay poster walls by default: they are scanned, not read.
   search: 'grid',
   browse: 'grid',
 }
 
 const SURFACES: LayoutSurface[] = [
-  'watching', 'watchlist', 'favourites', 'search', 'browse',
+  'watching', 'watchlist', 'favourites', 'downloaded', 'search', 'browse',
 ]
 
 function coerce(raw: unknown): LayoutPrefs {
@@ -41,6 +47,7 @@ function coerce(raw: unknown): LayoutPrefs {
   // A blob written before a surface existed simply falls back to its default.
   const pick = (surface: LayoutSurface): Layout =>
     value[surface] === 'grid' || value[surface] === 'detail'
+    || value[surface] === 'tree' || value[surface] === 'folders'
       ? value[surface]
       : DEFAULTS[surface]
   return Object.fromEntries(SURFACES.map(s => [s, pick(s)])) as LayoutPrefs

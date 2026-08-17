@@ -153,19 +153,47 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode], list[s
         if k not in ("info", "alt_titles") and isinstance(v, dict) and v
     )
 
+    # The payload holds every language at once, so per-episode availability is
+    # free here: a season is rarely uniform, and a fresh episode is often vostfr
+    # before it is vf.
+    langs_by_episode: dict[int, list[str]] = {}
+    for key, block in data.items():
+        if key in ("info", "alt_titles") or not isinstance(block, dict):
+            continue
+        for ep_key, providers in block.items():
+            if not isinstance(providers, dict) or not any(providers.values()):
+                continue
+            langs_by_episode.setdefault(int(ep_key), []).append(key)
+    for langs in langs_by_episode.values():
+        langs.sort()
+
+    def _title_of(num: int) -> str:
+        info = info_data.get(str(num), {})
+        title: str | None = info.get("title") if isinstance(info, dict) else None  # type: ignore[union-attr]
+        return title or f"Episode {num}"
+
     episodes: list[Episode] = []
     for key, providers in lang_data.items():
         num = int(key)
-        info = info_data.get(str(key), {})
-        title: str | None = info.get("title") if isinstance(info, dict) else None  # type: ignore[union-attr]
-        title = title or f"Episode {num}"
         ep = Episode(
             number=num,
-            title=title,
+            title=_title_of(num),
             season=season,
             embed_urls={k: v for k, v in providers.items() if v},
+            langs=langs_by_episode.get(num, []),
         )
         episodes.append(ep)
+
+    # Episodes this language lacks are still listed, without embeds, so the UI
+    # can show that they exist elsewhere instead of hiding them until the
+    # viewer happens to switch language.
+    listed = {e.number for e in episodes}
+    for num, langs in langs_by_episode.items():
+        if num in listed:
+            continue
+        episodes.append(
+            Episode(number=num, title=_title_of(num), season=season, langs=langs)
+        )
 
     episodes.sort(key=lambda e: e.number)
     logger.debug("Found %d episodes for season %d (%s)", len(episodes), season, lang)
@@ -343,6 +371,8 @@ def fetch_film(url: str, lang: str = "vf") -> tuple[str, list[Episode], list[str
         title=film_title,
         season=0,
         embed_urls=embed_urls,
+        # A film is its own season, so the page's languages are the episode's.
+        langs=list(available_langs),
     )
     return film_title, [episode], available_langs
 

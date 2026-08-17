@@ -8,6 +8,7 @@ import httpx
 
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import StreamSource
+from sestudio.providers import subtitles
 from sestudio.providers.base import ProviderError, StreamProvider
 from sestudio.providers.vidzy import (
     _INLINE_SRC_RE,
@@ -67,5 +68,9 @@ class PremiumProvider(StreamProvider):
         if ".m3u8" not in stream_url:
             raise ProviderError(f"Decoded Premium source is not an m3u8: {embed_url}")
         return StreamSource(
-            url=stream_url, referer=REFERER, provider="premium", user_agent=BROWSER_UA
+            url=stream_url,
+            referer=REFERER,
+            provider="premium",
+            user_agent=BROWSER_UA,
+            subtitles=subtitles.extract(resp.text, str(resp.url)),
         )

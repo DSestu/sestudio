@@ -10,6 +10,9 @@ export interface MediaCardItem {
   /** TMDB genres — the first two render as muted text under the caption. */
   genres?: string[]
   poster_url: string
+  /** Marks what kind of thing the card is, over the artwork's top-left corner.
+   *  The downloaded shelf uses it to tell a folder from a file. */
+  badge?: ReactNode
   /** 0..1 — renders a progress bar under the poster when set. */
   progress?: number
   onClick: () => void
@@ -123,6 +126,12 @@ export default function MediaCard({ item, removeContext, selection }: Props) {
           )}
           {item.rating !== undefined && (
             <RatingBadge rating={item.rating} className="absolute top-1.5 right-1.5 z-10" />
+          )}
+          {/* Opposite corner from the rating, so the two never collide. */}
+          {item.badge && (
+            <span className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-7 h-7 rounded-box bg-base-100/85 text-base-content/80 backdrop-blur-sm">
+              {item.badge}
+            </span>
           )}
           {/* Play affordance — hover-only, so it never occupies a touch card. */}
           <span className="pointer-events-none absolute inset-0 hidden [@media(hover:hover)]:flex items-center justify-center bg-base-100/40 opacity-0 group-hover:opacity-100 transition-opacity">

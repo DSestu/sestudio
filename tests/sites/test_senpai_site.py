@@ -155,6 +155,9 @@ def test_fetch_inline_season_needs_no_livewire_call(httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         url=f"{BASE}/episode/test-show/1-1", text=load_fixture("senpai_episode.html")
     )
+    httpx_mock.add_response(
+        url=f"{BASE}/episode/test-show/1-2", text=load_fixture("senpai_episode.html")
+    )
     page = _site().fetch_page(f"{SHOW}?sn=1&sid=900", "vf")
     assert page.season == 1 and not page.is_film
     assert [e.number for e in page.episodes] == [1, 2]
@@ -173,6 +176,9 @@ def test_fetch_other_season_goes_through_livewire(httpx_mock: HTTPXMock):
     )
     httpx_mock.add_response(
         url=f"{BASE}/episode/test-show/2-3", text=load_fixture("senpai_episode.html")
+    )
+    httpx_mock.add_response(
+        url=f"{BASE}/episode/test-show/2-4", text=load_fixture("senpai_episode.html")
     )
     page = _site().fetch_page(f"{SHOW}?sn=2&sid=901", "vf")
     assert page.season == 2
@@ -194,9 +200,31 @@ def test_requested_language_falls_back_to_one_the_title_has(httpx_mock: HTTPXMoc
     httpx_mock.add_response(
         url=f"{BASE}/episode/test-show/1-1", text=load_fixture("senpai_episode.html")
     )
+    httpx_mock.add_response(
+        url=f"{BASE}/episode/test-show/1-2", text=load_fixture("senpai_episode.html")
+    )
     page = _site().fetch_page(f"{SHOW}?sn=1", "vostfr")
     assert page.available_langs == ["vf"]
     assert page.episodes[0].embed_urls["senpai"].endswith("#lang=vf")
+
+
+def test_languages_are_read_per_episode_not_from_the_first(httpx_mock: HTTPXMock):
+    """Episode 2 also carries VOSTFR; probing only episode 1 used to hide it."""
+    httpx_mock.add_response(url=SHOW, text=load_fixture("senpai_show.html"))
+    httpx_mock.add_response(
+        url=f"{BASE}/episode/test-show/1-1", text=load_fixture("senpai_episode.html")
+    )
+    httpx_mock.add_response(
+        url=f"{BASE}/episode/test-show/1-2", text=load_fixture("senpai_movie.html")
+    )
+    page = _site().fetch_page(f"{SHOW}?sn=1", "vostfr")
+
+    assert page.available_langs == ["vf", "vostfr"]
+    assert [e.langs for e in page.episodes] == [["vf"], ["vf", "vostfr"]]
+    # VOSTFR was asked for: the episode that lacks it is listed without an
+    # embed, the one that has it plays in it.
+    assert page.episodes[0].embed_urls == {}
+    assert page.episodes[1].embed_urls["senpai"].endswith("#lang=vostfr")
 
 
 def test_unsupported_page_raises():
@@ -391,6 +419,9 @@ def test_rebasing_preserves_the_season_query(httpx_mock: HTTPXMock):
     httpx_mock.add_response(url=SHOW, text=load_fixture("senpai_show.html"))
     httpx_mock.add_response(
         url=f"{BASE}/episode/test-show/1-1", text=load_fixture("senpai_episode.html")
+    )
+    httpx_mock.add_response(
+        url=f"{BASE}/episode/test-show/1-2", text=load_fixture("senpai_episode.html")
     )
     page = SenpaiSite(BASE).fetch_page(
         "https://senpai-stream.old/tv-show/test-show?sn=1&sid=900", "vf"

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { TmdbPerson } from '../api'
+import type { TmdbCredit, TmdbPerson } from '../api'
 import { getPerson } from '../api'
 import EmptyState from '../components/EmptyState'
 import PosterGrid from '../components/PosterGrid'
+import { isUpcoming } from '../releaseDates'
 import SortSelect from '../components/SortSelect'
 import type { Navigate } from '../nav'
 import type { SortKey } from '../sortItems'
@@ -72,6 +73,42 @@ export default function PersonView({ personId, navigate }: Props) {
     ? person.credits.filter(c => fold(c.title).includes(needle) || fold(c.role).includes(needle))
     : person.credits
   const shown = sortItems(matching, sort)
+  // A filmography read newest-first opens on announced films nobody can watch,
+  // so they move out of the grid into their own section instead of heading it.
+  const released = shown.filter(c => !isUpcoming(c.release_date))
+  const announced = shown.filter(c => isUpcoming(c.release_date))
+
+  /** Open a source search for a credit, pinned to its year so a remake's
+   *  search doesn't return the original under the same title. */
+  function searchCredit(credit: TmdbCredit) {
+    navigate('search', {
+      q: credit.title,
+      ...(credit.year
+        ? { from: `${credit.year - 1}-01-01`, to: `${credit.year + 1}-12-31` }
+        : {}),
+    })
+  }
+
+  /** The credits grid, shared by the released and incoming bands. */
+  function creditsGrid(credits: TmdbCredit[]) {
+    return (
+      <PosterGrid
+        items={credits.map(c => ({
+          key: `${c.kind}-${c.tmdb_id}`,
+          title: c.title,
+          subtitle: [
+            // Dated to the day when it hasn't landed: the year alone wouldn't
+            // say whether it is next week or next decade.
+            isUpcoming(c.release_date) ? c.release_date : c.year || null,
+            c.role || null,
+          ].filter(Boolean).join(' · '),
+          rating: c.rating,
+          poster_url: c.poster_url,
+          onClick: () => searchCredit(c),
+        }))}
+      />
+    )
+  }
 
   const biography = person.biography && (
     <div>
@@ -152,16 +189,25 @@ export default function PersonView({ personId, navigate }: Props) {
         ) : shown.length === 0 ? (
           <p className="text-sm text-base-content/50">No title matches “{query}”.</p>
         ) : (
-          <PosterGrid
-            items={shown.map(c => ({
-              key: `${c.kind}-${c.tmdb_id}`,
-              title: c.title,
-              subtitle: [c.year || null, c.role || null].filter(Boolean).join(' · '),
-              rating: c.rating,
-              poster_url: c.poster_url,
-              onClick: () => navigate('search', { q: c.title }),
-            }))}
-          />
+          <div className="flex flex-col gap-4">
+            {released.length > 0 && creditsGrid(released)}
+            {announced.length > 0 && (
+              <details
+                // Open only when there is nothing else to show, so the section
+                // never buries a filmography that does have watchable titles.
+                open={released.length === 0}
+                className="rounded-box bg-base-200/40 ring-1 ring-base-300"
+              >
+                <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+                  Incoming
+                  <span className="text-base-content/50 font-normal">
+                    {' '}— {announced.length} not released yet
+                  </span>
+                </summary>
+                <div className="px-4 pb-4">{creditsGrid(announced)}</div>
+              </details>
+            )}
+          </div>
         )}
       </section>
     </div>

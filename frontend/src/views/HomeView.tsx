@@ -17,7 +17,7 @@ interface Props {
   onOpen: OpenTitle
   onNavigate: (v: View) => void
   /** Trending cards aren't playable directly — clicking searches for the title. */
-  onSearchTerm: (term: string) => void
+  onSearchTerm: (term: string, year?: number) => void
   /** Open the search view's discover panel pre-filtered on a genre. */
   onDiscoverGenre: (genreId: number) => void
 }
@@ -138,7 +138,7 @@ export default function HomeView({ settings, onOpen, onNavigate, onSearchTerm, o
           subtitle: t.year ? String(t.year) : undefined,
           rating: t.rating,
           poster_url: t.poster_url,
-          onClick: () => onSearchTerm(t.title),
+          onClick: () => onSearchTerm(t.title, t.year),
         }))}
       />
       {genreRows.map(row => (
@@ -151,7 +151,7 @@ export default function HomeView({ settings, onOpen, onNavigate, onSearchTerm, o
             subtitle: c.year ? String(c.year) : undefined,
             rating: c.rating,
             poster_url: c.poster_url,
-            onClick: () => onSearchTerm(c.title),
+            onClick: () => onSearchTerm(c.title, c.year),
           }))}
           onSeeAll={() => onDiscoverGenre(row.id)}
         />

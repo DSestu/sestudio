@@ -2,11 +2,28 @@ import { useState } from 'react'
 import type { DownloadDestination, DownloadItem } from '../api'
 import { useModalBack } from '../useModalBack'
 import ResponsiveModal from './ResponsiveModal'
+import { DEFAULT_HOST_ORDER } from '../downloadPrefs'
+import RankRow from './RankRow'
+
+export interface SiteOption {
+  id: string
+  label: string
+}
 
 interface Props {
   items: DownloadItem[]
   outputRoot: string
   existingFiles: Set<string>
+  /** Sites this title can be fetched from; fewer than two hides the row. */
+  siteOptions?: SiteOption[]
+  /** Saved ranking, most-wanted first. Unranked entries are fallback. */
+  preferredSites?: string[]
+  preferredHosts?: string[]
+  /** Every host that can be ranked, and the order "Reset" restores. */
+  hostOptions?: string[]
+  defaultHosts?: string[]
+  /** Persist a changed ranking; absent hides the whole preference block. */
+  onPreferences?: (patch: { preferred_sites?: string[]; preferred_hosts?: string[] }) => void
   /** Default destination from settings. */
   destination: DownloadDestination
   onConfirm: (destination: DownloadDestination) => Promise<void>
@@ -20,11 +37,11 @@ interface FileTree {
 }
 
 /** Server-side films folder per source site (mirrors the backend's
- *  ContentSite.films_dirname; every current site uses the historical name,
+ *  ContentSite.films_dirname; every current site inherits the shared default,
  *  so unknown sources fall back to it too). */
 const FILMS_DIRNAMES: Record<string, string> = {}
 function filmsDirname(source?: string): string {
-  return FILMS_DIRNAMES[source ?? ''] ?? 'fstream_films'
+  return FILMS_DIRNAMES[source ?? ''] ?? 'sestudio_films'
 }
 
 function buildTree(items: DownloadItem[]): FileTree {
@@ -39,11 +56,22 @@ function buildTree(items: DownloadItem[]): FileTree {
   return tree
 }
 
-export default function ConfirmDownloadModal({ items, outputRoot, existingFiles, destination, onConfirm, onCancel }: Props) {
+export default function ConfirmDownloadModal({
+  items, outputRoot, existingFiles, destination, onConfirm, onCancel,
+  siteOptions = [], preferredSites = [], preferredHosts = [], onPreferences,
+  hostOptions: knownHosts, defaultHosts = DEFAULT_HOST_ORDER,
+}: Props) {
   useModalBack(true, onCancel)
   const [confirming, setConfirming] = useState(false)
   const [dest, setDest] = useState<DownloadDestination>(destination)
   const tree = buildTree(items)
+  // Everything the server can resolve, so an order set here still holds for a
+  // title fetched from elsewhere; the hosts these items carry are folded in so
+  // nothing on offer is missing from the row.
+  const hostOptions = [...new Set([
+    ...(knownHosts ?? []),
+    ...items.flatMap(i => Object.keys(i.all_providers)),
+  ])]
   const episodeCount = items.length
   const filmCount = items.filter(i => i.season === 0).length
   const episodeOnlyCount = episodeCount - filmCount
@@ -117,6 +145,55 @@ export default function ConfirmDownloadModal({ items, outputRoot, existingFiles,
             </span>
           )}
         </div>
+
+        {/* Preference: click a chip to rank it, click a ranked one to unrank.
+            Ranked entries are tried first, unranked ones stay as fallback, so
+            an order can change what is used but never what is possible. */}
+        {onPreferences && (hostOptions.length > 1 || siteOptions.length > 1) && (
+          <div className="px-6 py-3 border-b border-base-300 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wide text-base-content/40">
+                Download from
+              </span>
+              <button
+                onClick={() =>
+                  onPreferences({
+                    preferred_sites: ['senpai'],
+                    preferred_hosts: defaultHosts,
+                  })
+                }
+                className="btn btn-ghost btn-xs ml-auto"
+              >
+                Reset order
+              </button>
+            </div>
+            <p className="text-xs text-base-content/50 leading-snug">
+              Click a chip to add it to the order — first click is choice 1, next
+              is choice 2, and so on; click a numbered chip to take it out.
+              Downloads try your order from the top and fall back to the next
+              one when a site or host fails, so ranking changes what is used
+              first, never what is possible. Unnumbered chips are still tried,
+              after the numbered ones.
+            </p>
+
+            {siteOptions.length > 1 && (
+              <RankRow
+                label="Site"
+                options={siteOptions.map(s => ({ value: s.id, label: s.label }))}
+                order={preferredSites}
+                onChange={order => onPreferences({ preferred_sites: order })}
+              />
+            )}
+            {hostOptions.length > 1 && (
+              <RankRow
+                label="Host"
+                options={hostOptions.map(h => ({ value: h, label: h }))}
+                order={preferredHosts}
+                onChange={order => onPreferences({ preferred_hosts: order })}
+              />
+            )}
+          </div>
+        )}
 
         {/* File tree */}
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">

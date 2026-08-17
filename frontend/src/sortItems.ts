@@ -58,8 +58,9 @@ export const SORTS_FOR = {
   saved: options('added.desc', 'title.asc', 'title.desc', 'year.desc', 'year.asc', 'rating.desc'),
   /** Continue-watching is already ordered by recency; keep that as default. */
   watching: options('watched.desc', 'title.asc', 'title.desc', 'rating.desc'),
-  /** TMDB returns credits roughly by billing/relevance — worth preserving. */
-  credits: options('natural', 'year.desc', 'year.asc', 'title.asc', 'title.desc', 'rating.desc'),
+  /** A filmography is read newest-first; TMDB's own billing/relevance order is
+   *  still offered, just no longer the default. */
+  credits: options('year.desc', 'natural', 'year.asc', 'title.asc', 'title.desc', 'rating.desc'),
 } satisfies Record<string, SortOption[]>
 
 export type SortSurface = keyof typeof SORTS_FOR

@@ -10,7 +10,7 @@ import httpx
 
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import StreamSource
-from sestudio.providers import jsdecode
+from sestudio.providers import jsdecode, subtitles
 from sestudio.providers.base import ProviderError, StreamProvider
 
 logger = logging.getLogger(__name__)
@@ -214,9 +214,12 @@ class VidzyProvider(StreamProvider):
             raise ProviderError(f"Decoded Vidzy source is not an m3u8: {embed_url}")
 
         logger.debug("Vidzy resolved stream: %s", stream_url[:80])
+        # Soft subs live in the *raw* page, not the unpacked script: the
+        # loadTracks call sits in plain markup alongside the packed player.
         return StreamSource(
             url=stream_url,
             referer=REFERER,
             provider="vidzy",
             user_agent=HEADERS["User-Agent"],
+            subtitles=subtitles.extract(resp.text, str(resp.url)),
         )

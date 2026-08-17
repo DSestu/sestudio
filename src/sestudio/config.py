@@ -21,6 +21,20 @@ except ImportError:
     _DEFAULT_TMDB_API_KEY = ""
 
 
+# What a download reaches for first, most-wanted last-resort last. Senpai leads
+# because it serves its own files (no third-party host to go down), then the
+# hosts that have proved most reliable. Anything not listed still runs as
+# fallback, after these.
+DEFAULT_DOWNLOAD_ORDER: list[str] = [
+    "senpai",
+    "premium",
+    "uqload",
+    "vidzy",
+    "netu",
+    "voe",
+]
+
+
 @dataclass
 class AppConfig:
     output_root: str = "."
@@ -46,11 +60,40 @@ class AppConfig:
     # serves its own files rather than third-party embeds, so it is the most
     # dependable default.
     preferred_site: str = "senpai"
+    # Download preference, most-wanted first; see DEFAULT_DOWNLOAD_ORDER.
+    # Anything unlisted still runs as fallback, after the ranked entries, so an
+    # order can change which host is used but never whether a file can be got.
+    preferred_hosts: list[str] = field(
+        default_factory=lambda: list(DEFAULT_DOWNLOAD_ORDER)
+    )
+    # Which site a title is taken from when several carry it.
+    preferred_sites: list[str] = field(default_factory=lambda: ["senpai"])
+    # Start playing as soon as a title is opened, unless something is already
+    # playing — that keeps the floor. Off means opening a title only browses it:
+    # the description and episode list, nothing started until you press play.
+    autoplay_on_open: bool = True
+    # Browse the downloaded shelf as folders — a card per folder, opened to
+    # reveal what is inside. On by default: most of a personal collection is on
+    # no database, so the arrangement on disk is the structure that exists.
+    downloaded_folder_cards: bool = True
+    # Show one card per show in search results instead of one per season, with
+    # the season count on the card. On by default: a long-running series
+    # otherwise fills the grid with near-identical cards.
+    collapse_seasons: bool = True
 
 
 def _config_path() -> Path:
     env = os.environ.get("SESTUDIO_CONFIG")
     return Path(env) if env else _CONFIG_PATH
+
+
+def config_dir() -> Path:
+    """Where this app keeps its own files — settings, library, derived caches.
+
+    Follows ``SESTUDIO_CONFIG`` so a test (or a second instance) that redirects
+    the settings takes everything else with it.
+    """
+    return _config_path().parent
 
 
 def load_config() -> AppConfig:
@@ -68,6 +111,13 @@ def load_config() -> AppConfig:
             tmdb_posters=bool(data.get("tmdb_posters", True)),
             disabled_sites=[str(s) for s in data.get("disabled_sites", []) or []],
             preferred_site=str(data.get("preferred_site", "senpai")),
+            preferred_hosts=[
+                str(h) for h in data.get("preferred_hosts", DEFAULT_DOWNLOAD_ORDER)
+            ],
+            preferred_sites=[str(s) for s in data.get("preferred_sites", ["senpai"])],
+            autoplay_on_open=bool(data.get("autoplay_on_open", True)),
+            downloaded_folder_cards=bool(data.get("downloaded_folder_cards", True)),
+            collapse_seasons=bool(data.get("collapse_seasons", True)),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

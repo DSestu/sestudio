@@ -38,6 +38,10 @@ async def get_season(
                 "filename": ep.filename,
                 "providers": list(ep.embed_urls.keys()),
                 "embed_urls": ep.embed_urls,
+                # Every language this episode exists in, not just the fetched
+                # one; empty when the site cannot say. An episode with no
+                # embeds but a non-empty list exists in another language only.
+                "langs": ep.langs,
             }
             for ep in page.episodes
         ],

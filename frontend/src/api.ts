@@ -1,4 +1,6 @@
 import type { CollectionEntry, ListName } from './collections'
+import type { ReleaseState } from './releaseDates'
+import { effectiveWindow } from './releaseDates'
 import type { PlayerPrefs } from './playerPrefs'
 import type { WatchEntry } from './watchState'
 
@@ -21,6 +23,11 @@ export interface SeasonCard {
   /** The same alternates whole, so the card can list them and open one on its
    *  own when the merge was wrong. `alt_page_urls` is their flattened form. */
   alts?: SeasonCard[]
+  /** The show's other seasons, already merged themselves, when seasons are
+   *  collapsed into one card. Never mixed into `alts`: those are other pages of
+   *  *this* season, which the detail view unions, whereas these are separate
+   *  titles that must stay separately openable. */
+  seasons?: SeasonCard[]
 }
 
 export interface EpisodeDetail {
@@ -29,6 +36,10 @@ export interface EpisodeDetail {
   filename: string
   providers: string[]
   embed_urls: Record<string, string>
+  /** Every language this episode exists in site-wide, not just the fetched one.
+   *  Absent or empty when the site cannot say. No embeds but a non-empty list
+   *  means the episode exists only in another language. */
+  langs?: string[]
 }
 
 export interface SeasonDetail {
@@ -64,6 +75,23 @@ export interface AppSettings {
   /** Site to favour when several carry the same title: listed first, and it
    *  wins the card when listings from different sites are merged. */
   preferred_site?: string
+  /** Start playing as soon as a title is opened. Off means opening a title only
+   *  browses it, leaving whatever is already playing alone until you press play. */
+  autoplay_on_open?: boolean
+  /** Browse the downloaded shelf as folders — a card per folder, opened to
+   *  reveal what is inside. On by default. */
+  downloaded_folder_cards?: boolean
+  /** Show one card per show in search results instead of one per season, with
+   *  the season count on the card. On by default. */
+  collapse_seasons?: boolean
+  /** Download preference, most-wanted first; empty means the built-in order.
+   *  Unranked entries stay available as fallback. */
+  preferred_hosts?: string[]
+  preferred_sites?: string[]
+  /** Every host a download could use, for the ranking control. Read-only. */
+  known_hosts?: string[]
+  /** The shipped order, restored by "Reset". Read-only. */
+  default_hosts?: string[]
 }
 
 export interface SiteInfo {
@@ -114,6 +142,9 @@ export interface TrendingCard {
   kind: string
   title: string
   year: number
+  /** Full release date, ISO `YYYY-MM-DD`; '' when TMDB has none. Only the day
+   *  separates what is out from what is merely announced. */
+  release_date?: string
   rating: number
   poster_url: string
   /** For the browse list's detail layout. Empty when TMDB has none in `fr-FR`. */
@@ -133,6 +164,12 @@ export interface DiscoverFilters {
   /** 10 = no ceiling. A low ceiling finds enjoyably bad films. */
   maxScore: number
   minVotes: number
+  /** Release-date window as ISO `YYYY-MM-DD`; '' on either bound means "open". */
+  fromDate: string
+  toDate: string
+  /** Which side of today to list. Defaults to released: an announced title
+   *  can't be watched, and under a date sort they would fill every page. */
+  releaseState: ReleaseState
 }
 
 export const DEFAULT_DISCOVER_FILTERS: DiscoverFilters = {
@@ -142,6 +179,9 @@ export const DEFAULT_DISCOVER_FILTERS: DiscoverFilters = {
   minScore: 0,
   maxScore: 10,
   minVotes: 0,
+  fromDate: '',
+  toDate: '',
+  releaseState: 'out',
 }
 
 export interface DiscoverPage {
@@ -192,6 +232,16 @@ export async function discoverTitles(filters: DiscoverFilters, page: number): Pr
   if (filters.minScore > 0) params.set('min_score', String(filters.minScore))
   if (filters.maxScore < 10) params.set('max_score', String(filters.maxScore))
   if (filters.minVotes > 0) params.set('min_votes', String(filters.minVotes))
+  // The released/incoming choice tightens the window at the request, not on
+  // the response: under a date sort every title on page one can be an
+  // announcement, and filtering those out client-side would leave the page
+  // empty however far it paged.
+  const window = effectiveWindow(
+    { from: filters.fromDate, to: filters.toDate },
+    filters.releaseState,
+  )
+  if (window.from) params.set('from_date', window.from)
+  if (window.to) params.set('to_date', window.to)
   const res = await fetch(`${BASE}/tmdb/discover?${params}`)
   if (!res.ok) return { page: 1, total_pages: 1, results: [] }
   return res.json()
@@ -260,6 +310,10 @@ export interface DownloadItem {
   to_device?: boolean
   /** Id of the content site that produced the embeds; absent means 'fstream'. */
   source?: string
+  /** Recorded next to the finished file so the local library can show a poster
+   *  and offer a way back to the title. Neither survives in the path. */
+  poster_url?: string
+  page_url?: string
 }
 
 export interface DownloadJob {
@@ -287,10 +341,22 @@ export function jobFileUrl(jobId: string): string {
 
 const BASE = '/api'
 
+/** A sidecar subtitle track served alongside a stream, proxied like the media. */
+export interface StreamSubtitle {
+  proxy_url: string
+  /** Language code as the host wrote it ("fre", "fr", "en") — not normalised. */
+  lang: string
+  label: string
+  /** The host marked this track as the one to enable on load. */
+  default: boolean
+}
+
 export interface StreamSource {
   proxy_url: string
   kind: 'hls' | 'mp4'
   provider: string
+  /** Empty for hardsubbed releases, which is most of them. */
+  subtitles?: StreamSubtitle[]
 }
 
 /**
@@ -374,7 +440,25 @@ export async function searchSeasons(q: string): Promise<SeasonCard[]> {
   return res.json()
 }
 
+/** Site id for a title that lives only on disk — not a real content site. */
+export const DOWNLOADED_SOURCE = 'downloaded'
+
+/** URL that stands in for a title held only on disk, with no site page. */
+export function downloadedPageUrl(series: string, season: number): string {
+  return `downloaded:${series}|${season}`
+}
+
 export async function getSeason(url: string, lang: string, source?: string): Promise<SeasonDetail> {
+  // A title that exists only on disk has no page to fetch, so its season is
+  // built from the files instead. Same payload shape, so every caller — the
+  // watch view, the playlist, the language switcher — is unaware of it.
+  if (source === DOWNLOADED_SOURCE) {
+    const [series, season] = url.replace(/^downloaded:/, '').split('|')
+    const local = new URLSearchParams({ series, season: season ?? '0' })
+    const res = await fetch(`${BASE}/downloaded/season?${local}`)
+    if (!res.ok) throw new Error('That title is no longer on disk.')
+    return res.json()
+  }
   const params = new URLSearchParams({ url, lang })
   if (source) params.set('source', source)
   const res = await fetch(`${BASE}/season?${params}`)
@@ -497,6 +581,64 @@ export async function checkDownloads(items: DownloadItem[]): Promise<string[]> {
   })
   if (!res.ok) throw new Error('Check request failed')
   return res.json()
+}
+
+// --- Local library (what has been downloaded) ------------------------------- #
+
+export interface DownloadedFile {
+  /** Path relative to the download root. The id for playing and deleting. */
+  path: string
+  /** 0 for a film, or a file whose name carries no SxxEyy prefix. */
+  number: number
+  title: string
+  /** '' for a file stored without a language folder. */
+  lang: string
+  size: number
+  mtime: number
+}
+
+export interface DownloadedTitle {
+  key: string
+  /** Directory that named this title, relative to the download root, with the
+   *  season and language folders stripped. '' for a file loose in the root. */
+  folder: string
+  /** The real name when the download was recorded, else the (lossy) folder name. */
+  series: string
+  season: number
+  is_film: boolean
+  poster_url: string
+  /** The page this came from, when known — lets the title open its full listing. */
+  page_url: string
+  source: string
+  langs: string[]
+  files: DownloadedFile[]
+  size: number
+  mtime: number
+}
+
+/** Everything on disk, grouped by title. Newest first. */
+export async function getDownloadedLibrary(): Promise<DownloadedTitle[]> {
+  const res = await fetch(`${BASE}/downloaded`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+/** Playable URL for a downloaded file. Serves inline, with range support. */
+export function downloadedFileUrl(path: string): string {
+  return `${BASE}/downloaded/file?path=${encodeURIComponent(path)}`
+}
+
+/** A still extracted from the file itself, for a title TMDB has no poster for.
+ *  404s when ffmpeg is unavailable, so callers treat it as a best effort. */
+export function downloadedThumbUrl(path: string): string {
+  return `${BASE}/downloaded/thumb?path=${encodeURIComponent(path)}`
+}
+
+export async function deleteDownloadedFile(path: string): Promise<void> {
+  const res = await fetch(`${BASE}/downloaded/file?path=${encodeURIComponent(path)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error('Delete failed')
 }
 
 export async function postDownloads(items: DownloadItem[]): Promise<DownloadJob[]> {

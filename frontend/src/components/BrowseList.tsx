@@ -28,7 +28,7 @@ export default function BrowseList({ cards, genres, onSelect }: Props) {
           <button
             onClick={() => onSelect(card)}
             aria-label={`Search sources for ${card.title}`}
-            className="shrink-0 w-16 sm:w-20 rounded-box overflow-hidden bg-base-300 self-start"
+            className="shrink-0 self-start w-24 sm:w-30 rounded-box overflow-hidden bg-base-300"
           >
             {card.poster_url ? (
               <img src={card.poster_url} alt="" loading="lazy" className="w-full aspect-[2/3] object-cover" />

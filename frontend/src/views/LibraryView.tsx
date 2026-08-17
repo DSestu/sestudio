@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AppSettings } from '../api'
+import { useDownloadedLibrary } from '../downloadedLibrary'
 import type { CollectionEntry } from '../collections'
 import {
   entries as collectionEntries,
@@ -30,12 +31,16 @@ const TABS = [
   { id: 'watching', label: 'Watching' },
   { id: 'watchlist', label: 'Watchlist' },
   { id: 'favourites', label: 'Favourites' },
+  { id: 'downloaded', label: 'Downloaded' },
 ] as const
 
 interface Props {
   settings: AppSettings
   onOpen: OpenTitle
   onNavigate: (v: View) => void
+  /** The downloaded-files listing, built by App so its own view, this tab and
+   *  the Downloads section all show the same thing. */
+  downloadedLibrary: ReactNode
 }
 
 const EMPTY_COPY: Record<LayoutTab, { title: string; message: string }> = {
@@ -51,10 +56,16 @@ const EMPTY_COPY: Record<LayoutTab, { title: string; message: string }> = {
     title: 'No favourites yet',
     message: 'Use the ♥ control on any title you love to keep it here.',
   },
+  // Unused: the local tab renders its own listing, which carries its own empty
+  // state. Present because every tab needs an entry.
+  downloaded: {
+    title: 'Nothing downloaded yet',
+    message: 'Episodes you download are kept here, ready to play offline.',
+  },
 }
 
 /** Everything the user has saved or started, as three tabs with a layout choice. */
-export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
+export default function LibraryView({ settings, onOpen, onNavigate, downloadedLibrary }: Props) {
   const [tab, setTab] = useState<LayoutTab>('watching')
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -67,6 +78,8 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
     watching: defaultSortFor('watching'),
     watchlist: defaultSortFor('saved'),
     favourites: defaultSortFor('saved'),
+    // Unused: the local listing owns its own sort control.
+    downloaded: defaultSortFor('saved'),
   }))
   const [error, setError] = useState<string | null>(null)
   const collections = useCollections()
@@ -111,6 +124,8 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
     })
   }
 
+  // Only for the tab's badge; the listing itself is rendered by App.
+  const downloadedCount = useDownloadedLibrary().length
   const inProgress = watching(watch)
   const saved: Record<'watchlist' | 'favourites', CollectionEntry[]> = {
     watchlist: collectionEntries('watchlist', collections),
@@ -121,6 +136,8 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
     watching: inProgress.length,
     watchlist: saved.watchlist.length,
     favourites: saved.favourites.length,
+    // The local listing counts itself; this tab is never gated on it.
+    downloaded: downloadedCount,
   }
 
   const layout = layouts[tab]
@@ -130,7 +147,8 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
   // A saved title carries no year or kind flag of its own, so season 0 stands for
   // "film" here exactly as it does where titles are saved.
   // Narrowed once: `saved` has no watching list, and `tab` includes it.
-  const savedOnTab: CollectionEntry[] = tab === 'watching' ? [] : saved[tab]
+  const savedOnTab: CollectionEntry[] =
+    tab === 'watching' || tab === 'downloaded' ? [] : saved[tab]
 
   const titles: TitleRef[] = tab === 'watching'
     ? inProgress.map(i => ({ key: `w-${i.series}-${i.season}`, name: i.series, isFilm: i.season === 0 }))
@@ -301,7 +319,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
 
       {/* Below the tabs, above the list: the filter belongs to the tab it acts
           on, and it only appears once TMDB has told us what is in there. */}
-      {counts[tab] > 0 && (
+      {counts[tab] > 0 && tab !== 'downloaded' && (
         <GenreChips
           available={availableGenres}
           selected={pickedGenres}
@@ -333,7 +351,11 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
           </label>
         )}
 
-        {counts[tab] === 0 ? (
+        {/* Downloaded titles bring their own listing, sort and empty state, and
+            carry no TMDB genres to filter on — so they bypass all of the above. */}
+        {tab === 'downloaded' ? (
+          downloadedLibrary
+        ) : counts[tab] === 0 ? (
           <EmptyState
             title={EMPTY_COPY[tab].title}
             message={EMPTY_COPY[tab].message}

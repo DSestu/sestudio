@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ _IMG = "https://image.tmdb.org/t/p"
 # back to the original language per-field when a translation is missing.
 _LANG = "fr-FR"
 _TIMEOUT = 10
+# The only date shape TMDB's discover filters accept.
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _CAST_LIMIT = 8
 _RECOMMENDATION_LIMIT = 12
 # Bumped whenever _normalise gains fields, so stale disk-cache entries
@@ -120,6 +123,10 @@ def _light_card(r: dict[str, Any], kind: str) -> dict[str, Any]:
         "kind": kind,
         "title": r.get("title") or r.get("name") or "",
         "year": int(date[:4]) if date[:4].isdigit() else 0,
+        # The full date as well as the year: a discover page mixes released and
+        # unreleased titles, and only the day tells them apart. "" when TMDB
+        # has no date at all, which reads as "undated", not "upcoming".
+        "release_date": date,
         "rating": round(float(r.get("vote_average") or 0), 1),
         "poster_url": _image(r.get("poster_path"), "w342"),
         "overview": r.get("overview") or "",
@@ -320,12 +327,15 @@ def discover(
     min_score: float = 0.0,
     max_score: float = 10.0,
     min_votes: int = 0,
+    from_date: str = "",
+    to_date: str = "",
     page: int = 1,
 ) -> dict[str, Any]:
     """Browse the TMDB catalogue with the filters the TMDB site itself offers.
 
-    `genres` is a comma-separated list of TMDB genre ids. Not cached: discover
-    pages are cheap, paginated and change with every filter tweak.
+    `genres` is a comma-separated list of TMDB genre ids. `from_date`/`to_date`
+    bound the release date as ``YYYY-MM-DD``, "" meaning "open". Not cached:
+    discover pages are cheap, paginated and change with every filter tweak.
     """
     key = tmdb_key()
     if not key:
@@ -349,6 +359,15 @@ def discover(
         params["vote_average.lte"] = max_score
     if min_votes > 0:
         params["vote_count.gte"] = min_votes
+    # TMDB names the release-date field per media type. Anything that isn't a
+    # plain YYYY-MM-DD is dropped rather than passed on: TMDB answers a
+    # malformed date with an unfiltered page, which would silently look like a
+    # filter that does nothing.
+    date_field = "primary_release_date" if kind == "movie" else "first_air_date"
+    if _ISO_DATE.fullmatch(from_date):
+        params[f"{date_field}.gte"] = from_date
+    if _ISO_DATE.fullmatch(to_date):
+        params[f"{date_field}.lte"] = to_date
     try:
         with _client() as client:
             resp = client.get(f"{_API}/discover/{kind}", params=params)

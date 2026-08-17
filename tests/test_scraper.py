@@ -84,7 +84,13 @@ def test_fetch_season_vostfr_lang(httpx_mock: HTTPXMock, season_html, eps_json):
 
     data = json.loads(eps_json)
     vostfr_count = len(data.get("vostfr", {}))
-    assert len(episodes) == vostfr_count
+    playable = [ep for ep in episodes if ep.embed_urls]
+    assert len(playable) == vostfr_count
+    # The others are still listed, without embeds, saying where they do exist —
+    # so the UI can show a VF-only episode instead of hiding it.
+    for ep in episodes:
+        if not ep.embed_urls:
+            assert ep.langs and "vostfr" not in ep.langs
 
 
 def test_fetch_season_episodes_sorted_by_number(

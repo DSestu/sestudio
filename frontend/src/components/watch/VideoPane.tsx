@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { MediaPlayer, MediaProvider, type MediaPlayerInstance } from '@vidstack/react'
+import { MediaPlayer, MediaProvider, Track, type MediaPlayerInstance } from '@vidstack/react'
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default'
 import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
 import type { StreamSource } from '../../api'
 import type { PlayableEpisode } from '../../providers'
-import { getProgress, saveProgress, setWatched } from '../../watchState'
+import { getProgress, saveProgress, setWatched, watchKey } from '../../watchState'
 import { endBrowserPlayback, sameEpisode, startBrowserPlayback, updateBrowserPlayback, useCastSession } from '../../playbackSession'
 import { setBrowserPlayerControls } from '../../browserPlayerControls'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
+import { applySubtitleStyle } from '../../subtitleStyle'
+import { usePiPWindow } from '../../pipSession'
 
 /** Persist progress at most every SAVE_INTERVAL ms of playback. */
 const SAVE_INTERVAL = 5000
@@ -54,6 +56,10 @@ export default function VideoPane({
   const [displaySource, setDisplaySource] = useState<StreamSource | null>(null)
   if (source && source !== displaySource) setDisplaySource(source)
 
+  // Drives the layout choice below: the small (mobile) layout drops the
+  // timeline, which is wrong for a popped-out window.
+  const pipWindow = usePiPWindow()
+
   // Open/refresh the playback session for the current episode.
   useEffect(() => { startBrowserPlayback(ep) }, [ep])
   useEffect(() => () => endBrowserPlayback(), [])
@@ -87,11 +93,33 @@ export default function VideoPane({
   }, [paused])
   useEffect(() => () => setBrowserPlayerControls(null), [])
 
+  // Push the saved caption appearance onto :root. vidstack's own Caption Styles
+  // menu writes the same variables but only for the session, so without this a
+  // tuned setup is lost on reload.
+  useEffect(() => { applySubtitleStyle() }, [])
+
+  // Remember the subtitle track the user selects. `mode-change` also fires when
+  // a source loads and vidstack applies `preferredLang`, which is harmless — it
+  // just rewrites the same value.
+  useEffect(() => {
+    const tracks = playerRef.current?.textTracks
+    if (!tracks) return
+    const onModeChange = () => {
+      savePlayerPrefs({ subtitleLang: tracks.selected?.language ?? null })
+    }
+    tracks.addEventListener('mode-change', onModeChange)
+    return () => tracks.removeEventListener('mode-change', onModeChange)
+  }, [])
+
   // Re-arm the resume position when the episode changes. Done during render
   // (not in an effect) so it lands in the same pass as the episode switch.
-  const [armedEp, setArmedEp] = useState(ep)
-  if (armedEp !== ep) {
-    setArmedEp(ep)
+  // Keyed on episode identity, not object identity: a re-render of the parent
+  // can hand us an equal-but-new object, and disarming on that would cancel a
+  // running auto-next countdown.
+  const epKey = watchKey(ep.series_name, ep.season, ep.number)
+  const [armedEp, setArmedEp] = useState(epKey)
+  if (armedEp !== epKey) {
+    setArmedEp(epKey)
     setResumeTo(resumePointFor(ep))
     setNextIn(null)
   }
@@ -114,6 +142,12 @@ export default function VideoPane({
     p.volume = prefs.volume
     p.muted = prefs.muted
     p.playbackRate = prefs.rate
+    // vidstack matches `preferredLang` against the track languages itself, so
+    // this re-selects the chosen subtitles on each new source. Left alone when
+    // the user has never picked, so the host's own `default` track still wins.
+    if (prefs.subtitleLang !== undefined) {
+      p.textTracks.preferredLang = prefs.subtitleLang
+    }
     // A freshly loaded source restarts the save throttle.
     lastSaveRef.current = 0
     if (resumeTo !== null) {
@@ -152,6 +186,11 @@ export default function VideoPane({
           }}
           autoPlay={!castedSameEp}
           playsInline
+          // Shortcuts (k/space, f, m, c for captions, arrows to seek) default to
+          // firing only once the player itself has focus. On `document` they work
+          // straight after page load; with two players mounted vidstack routes
+          // input to the most recently active one, so the mini-player is safe.
+          keyTarget="document"
           onCanPlay={handleCanPlay}
           onPlay={() => setPaused(false)}
           onPause={() => setPaused(true)}
@@ -167,8 +206,29 @@ export default function VideoPane({
           onEnded={handleEnded}
           onError={onSourceError}
         >
-          <MediaProvider />
-          <DefaultVideoLayout icons={defaultLayoutIcons} />
+          <MediaProvider>
+            {/* Sidecar subtitles. Keyed by URL so swapping episodes replaces the
+                tracks rather than reusing the previous episode's cues. */}
+            {(displaySource.subtitles ?? []).map((sub) => (
+              <Track
+                key={sub.proxy_url}
+                src={sub.proxy_url}
+                kind="subtitles"
+                label={sub.label}
+                language={sub.lang}
+                default={sub.default}
+                type="vtt"
+              />
+            ))}
+          </MediaProvider>
+          {/* In the PiP window the large layout is forced. The default picks
+              the small (mobile) layout below a width breakpoint, and a 480px
+              PiP window falls under it — that layout drops the timeline and
+              most controls, leaving only a centre play button. */}
+          <DefaultVideoLayout
+            icons={defaultLayoutIcons}
+            smallLayoutWhen={pipWindow ? false : undefined}
+          />
         </MediaPlayer>
       )}
 

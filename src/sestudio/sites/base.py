@@ -58,7 +58,7 @@ class ContentSite(ABC):
     display_name: str
     is_anime: bool = False
     # Download folder for standalone films (season == 0).
-    films_dirname: str = "fstream_films"
+    films_dirname: str = "sestudio_films"
 
     @abstractmethod
     def search(self, query: str) -> list[SeasonCard]:

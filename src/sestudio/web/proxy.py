@@ -102,6 +102,29 @@ _URI_TAGS = (
     "#EXT-X-I-FRAME-STREAM-INF",
 )
 
+_SUBTITLE_MEDIA_RE = re.compile(r"#EXT-X-MEDIA:.*TYPE=SUBTITLES", re.I)
+_GROUP_ID_RE = re.compile(r'GROUP-ID="([^"]*)"')
+
+
+def _subtitle_group(text: str) -> str | None:
+    """The GROUP-ID of the subtitle renditions no variant references, if any.
+
+    Some hosts (the vidzy/premium player family) ship `#EXT-X-MEDIA:TYPE=SUBTITLES`
+    renditions in the master but omit the matching `SUBTITLES="..."` attribute on
+    `#EXT-X-STREAM-INF`. Per the HLS spec a rendition group only exists once a
+    variant references it, so players — hls.js included — correctly ignore them
+    and the subtitles silently vanish. The site's own page patches this in
+    JavaScript before handing the playlist to its player; we do the same here.
+    """
+    if "SUBTITLES=" in text:
+        return None  # already associated — leave a well-formed master alone
+    for line in text.splitlines():
+        if _SUBTITLE_MEDIA_RE.match(line.strip()):
+            group = _GROUP_ID_RE.search(line)
+            if group:
+                return group.group(1)
+    return None
+
 
 def rewrite_playlist(
     text: str,
@@ -115,7 +138,12 @@ def rewrite_playlist(
     path. Segment URIs, nested (master → media) playlist URIs, and the URI="..."
     attribute of key/map/media/i-frame tags are all rewritten; every other line
     (``#EXTINF``, ``#EXT-X-BYTERANGE``, blanks, comments) passes through verbatim.
+
+    Orphaned subtitle renditions are additionally adopted onto the variant lines
+    — see :func:`_subtitle_group` for why that is necessary.
     """
+    orphan_group = _subtitle_group(text)
+
     out: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
@@ -124,6 +152,8 @@ def rewrite_playlist(
             continue
 
         if stripped.startswith("#"):
+            if orphan_group and stripped.startswith("#EXT-X-STREAM-INF"):
+                line = f'{line.rstrip()},SUBTITLES="{orphan_group}"'
             if stripped.startswith(_URI_TAGS) and "URI=" in stripped:
 
                 def _sub(m: re.Match[str]) -> str:

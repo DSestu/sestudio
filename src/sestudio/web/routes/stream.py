@@ -95,6 +95,19 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
             ),
             "kind": kind,
             "provider": cand.provider,
+            # Sidecar subtitles go through the same proxy: they are fetched from
+            # the stream host and need its Referer just as the segments do.
+            "subtitles": [
+                {
+                    "proxy_url": _proxy_url(
+                        secret, sub.url, source.referer, source.provider
+                    ),
+                    "lang": sub.lang,
+                    "label": sub.label,
+                    "default": sub.default,
+                }
+                for sub in source.subtitles
+            ],
         }
         # With a preferred kind, remember the first working source but keep
         # looking for one of the requested kind.

@@ -37,6 +37,10 @@ class Episode:
     title: str
     season: int
     embed_urls: dict[str, str] = field(default_factory=dict)  # provider -> embed url
+    # Languages this episode exists in, site-wide — not just the fetched one. A
+    # season is rarely uniform: the newest episodes often carry vostfr only.
+    # Empty means the site could not say.
+    langs: list[str] = field(default_factory=list)
 
     @property
     def filename(self) -> str:
@@ -47,6 +51,24 @@ class Episode:
 
 
 @dataclass
+class Subtitle:
+    """A sidecar subtitle track served alongside a stream.
+
+    Hosts that carry soft subs (vidzy, premium) declare them outside the media
+    itself — as a `<track>` element or a player `loadTracks([...])` call — so they
+    are resolved with the stream and travel next to it rather than inside it.
+    """
+
+    url: str
+    # BCP-47-ish code as the host wrote it ("fre", "fr", "en"); not normalised,
+    # since it is only ever shown and matched loosely.
+    lang: str
+    label: str
+    # The host marked this track as the one to enable on load.
+    default: bool = False
+
+
+@dataclass
 class StreamSource:
     url: str
     referer: str
@@ -54,3 +76,5 @@ class StreamSource:
     user_agent: str = (
         BROWSER_UA  # browser UA the CDN expects; some hosts 403 without it
     )
+    # Sidecar subtitle tracks, empty when the host serves none (or burns them in).
+    subtitles: list[Subtitle] = field(default_factory=list)

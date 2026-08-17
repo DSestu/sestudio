@@ -296,10 +296,48 @@ def test_rewrite_aes_key_uri():
 
 
 def test_rewrite_map_uri():
-    playlist = "#EXTM3U\n" '#EXT-X-MAP:URI="init.mp4"\n' "#EXTINF:4.0,\nseg0.m4s\n"
+    playlist = '#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:4.0,\nseg0.m4s\n'
     out = _collect_proxied(playlist, base_url="https://cdn.example/hls/media.m3u8")
     assert 'URI="PROXY[https://cdn.example/hls/init.mp4]"' in out
     assert "PROXY[https://cdn.example/hls/seg0.m4s]" in out
+
+
+def test_orphan_subtitle_group_is_adopted_onto_variants():
+    """Subtitle renditions no variant references would otherwise be ignored.
+
+    vidzy/premium masters ship the renditions but omit `SUBTITLES="..."` on the
+    STREAM-INF line; the site patches this in JS before playing, so we do too.
+    """
+    playlist = (
+        "#EXTM3U\n"
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French",'
+        'LANGUAGE="fre",URI="subs/fre.m3u8"\n'
+        "#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360\n"
+        "index.m3u8\n"
+    )
+    out = _collect_proxied(playlist, base_url="https://cdn.example/hls/master.m3u8")
+    assert 'SUBTITLES="subs"' in out
+    # The rendition's own URI is still proxied, and the variant still resolves.
+    assert 'URI="PROXY[https://cdn.example/hls/subs/fre.m3u8]"' in out
+    assert "PROXY[https://cdn.example/hls/index.m3u8]" in out
+
+
+def test_already_associated_master_is_left_alone():
+    playlist = (
+        "#EXTM3U\n"
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French",'
+        'LANGUAGE="fre",URI="subs/fre.m3u8"\n'
+        '#EXT-X-STREAM-INF:BANDWIDTH=800000,SUBTITLES="subs"\n'
+        "index.m3u8\n"
+    )
+    out = _collect_proxied(playlist, base_url="https://cdn.example/hls/master.m3u8")
+    assert out.count('SUBTITLES="subs"') == 1
+
+
+def test_master_without_subtitles_is_unchanged():
+    playlist = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nindex.m3u8\n"
+    out = _collect_proxied(playlist, base_url="https://cdn.example/hls/master.m3u8")
+    assert "SUBTITLES=" not in out
 
 
 def test_rewrite_preserves_byterange_and_blanks():

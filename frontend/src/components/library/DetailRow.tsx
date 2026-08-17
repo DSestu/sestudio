@@ -53,7 +53,7 @@ export default function DetailRow({
         onClick={activate}
         aria-label={selection ? `Select ${title}` : `Open ${title}`}
         {...checkboxProps}
-        className="shrink-0 w-16 sm:w-20 rounded-box overflow-hidden bg-base-300"
+        className="shrink-0 self-start w-24 sm:w-30 rounded-box overflow-hidden bg-base-300"
       >
         {poster_url ? (
           <img src={poster_url} alt="" loading="lazy" className="w-full aspect-[2/3] object-cover" />

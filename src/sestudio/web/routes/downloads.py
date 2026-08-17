@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from sestudio import library, downloaded
 from sestudio.config import load_config
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import StreamSource, sanitize_path_component
@@ -34,6 +35,10 @@ class DownloadRequest(BaseModel):
     lang: str = ""  # VF / VOSTFR / VO — becomes a subfolder in the output path
     # All available providers for this episode, in priority order
     all_providers: dict[str, str] = {}
+    # Recorded alongside the file so the local library can show a poster and
+    # offer a way back to the title's page. Neither survives in the path.
+    poster_url: str = ""
+    page_url: str = ""
     # Download for the browser to collect afterwards instead of into the
     # library: the file goes to a temp dir and is served by /downloads/{id}/file.
     to_device: bool = False
@@ -60,6 +65,34 @@ def _episode_path(root: str, item: DownloadRequest, site: ContentSite) -> Path:
     if item.lang:
         parts.append(sanitize_path_component(item.lang.upper()))
     return Path(*parts) / safe_ep
+
+
+def _record_downloaded_file(root: str, out_path: Path, item: DownloadRequest) -> None:
+    """Note what this download is, keyed by its path under the download root.
+
+    The path records the series only in sanitised form and says nothing about
+    the poster, the page or the site, so the local library reads them back from
+    here. Failures are swallowed: metadata is a nicety, the download is not.
+    """
+    try:
+        relative = out_path.resolve().relative_to(Path(root).resolve()).as_posix()
+    except ValueError:
+        return  # outside the root (a device download) — not part of the library
+    try:
+        library.set_downloaded_file(
+            relative,
+            {
+                "series_name": item.series_name,
+                "season": item.season,
+                "lang": item.lang,
+                "source": item.source,
+                "poster_url": item.poster_url,
+                "page_url": item.page_url,
+            },
+        )
+        downloaded.invalidate()
+    except Exception as exc:  # pragma: no cover - a bad DB must not stop a download
+        logger.warning("Could not record local file %s: %s", relative, exc)
 
 
 def _job_to_dict(job: DownloadJob) -> dict[str, Any]:
@@ -215,12 +248,17 @@ async def post_downloads(
     for item in items:
         site = site_for(sites, item.source)
         # Build ordered candidate list: primary provider first, then the rest
-        # in the site's preference order.
+        # in the site's preference order, with the viewer's ranked hosts ahead
+        # of it. Ranking only reorders the fallback chain — an unranked host is
+        # still tried, just later, so a preference never costs a download.
         candidates = [
             c
             for c in site.stream_candidates(item.all_providers)
             if c.provider != item.provider
         ]
+        if cfg.preferred_hosts:
+            rank = {host: i for i, host in enumerate(cfg.preferred_hosts)}
+            candidates.sort(key=lambda c: rank.get(c.provider, len(rank)))
         if item.provider and item.embed_url:
             candidates.insert(0, StreamCandidate(item.provider, item.embed_url))
 
@@ -260,6 +298,11 @@ async def post_downloads(
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not item.to_device:
+            # Recorded before the skip check below, so re-queueing a file that is
+            # already on disk is also the way to backfill metadata for anything
+            # downloaded before this was kept.
+            _record_downloaded_file(cfg.output_root, out_path, item)
+
             if out_path.exists() and out_path.stat().st_size > 0:
                 logger.info(
                     "Skipping %s: already exists at %s", item.episode_name, out_path

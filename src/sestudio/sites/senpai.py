@@ -76,6 +76,10 @@ def _lang_of_label(label: str) -> str | None:
     return None
 
 
+# Parallelism for the per-episode version probe: one small request each, so a
+# season resolves in about the time of a single page fetch.
+_PROBE_WORKERS = 8
+
 # A requested language maps to an ordered list of acceptable site versions, so a
 # title carrying only VOSTFR still plays when "vo" was asked for.
 _LANG_FALLBACKS: dict[str, tuple[str, ...]] = {
@@ -395,23 +399,41 @@ class SenpaiSite(ContentSite):
         if not episodes:
             raise SiteError(f"No episodes found for senpai season {season} of {slug}")
 
-        # Versions are per-episode on this site; probe the first one and treat
-        # the season as uniform rather than fetching every episode page.
-        langs: list[str] = []
-        try:
-            first = episodes[0].embed_urls[self.id].split("#")[0]
-            _, data = _watch_snapshot(self._get(first))
-            langs = _available_langs(_unwrap(data.get("videos") or []))
-        except Exception as exc:
-            logger.warning("senpai language probe failed for %s: %s", slug, exc)
+        # Versions live on each episode's own page, and a season is not uniform:
+        # a fresh episode is regularly vostfr-only while the rest are dubbed.
+        # Probing only the first one reported its languages as the whole
+        # season's, which hid every vostfr-only episode, so every episode is
+        # probed — in parallel, since it is one small request each.
+        self._probe_langs(episodes)
+        langs = sorted({lang_code for ep in episodes for lang_code in ep.langs})
 
-        _retarget_lang(episodes, self.id, lang, langs)
+        _target_lang(episodes, self.id, lang)
         return PageResult(
             season=season,
             episodes=episodes,
             is_film=False,
             available_langs=langs,
         )
+
+    def _probe_langs(self, episodes: list[Episode]) -> None:
+        """Fill each episode's ``langs`` from its watch page.
+
+        A failed probe leaves ``langs`` empty, which reads as "unknown" rather
+        than "none" everywhere downstream.
+        """
+
+        def probe(episode: Episode) -> None:
+            url = episode.embed_urls.get(self.id, "").split("#")[0]
+            if not url:
+                return
+            try:
+                _, data = _watch_snapshot(self._get(url))
+                episode.langs = _available_langs(_unwrap(data.get("videos") or []))
+            except Exception as exc:
+                logger.warning("senpai language probe failed for %s: %s", url, exc)
+
+        with ThreadPoolExecutor(max_workers=_PROBE_WORKERS) as pool:
+            list(pool.map(probe, episodes))
 
     # --- stream resolution -------------------------------------------------
 
@@ -536,6 +558,41 @@ class SenpaiSite(ContentSite):
 def _clean_text(text: str) -> str:
     """Collapse the non-breaking spaces the site's titles are littered with."""
     return " ".join(text.replace("\xa0", " ").split())
+
+
+def _pick_lang(available: list[str], lang: str) -> str | None:
+    """The best acceptable version for a request, or None when there is none."""
+    for candidate in _LANG_FALLBACKS.get(lang, (lang,)):
+        if candidate in available:
+            return candidate
+    return None
+
+
+def _target_lang(episodes: list[Episode], provider: str, lang: str) -> None:
+    """Point each episode's embed at the requested language, per episode.
+
+    An episode the language does not cover keeps its place in the season but
+    loses its embed: it is listed, not playable here, and its own ``langs`` say
+    where it can be played. When no episode at all carries the request, the
+    whole season falls back instead — otherwise asking for a language the title
+    never had would leave nothing to play.
+    """
+    wanted = lang.casefold()
+    known = sorted({code for ep in episodes for code in ep.langs})
+    if known and not any(_pick_lang(ep.langs, wanted) for ep in episodes):
+        _retarget_lang(episodes, provider, lang, known)
+        return
+
+    for episode in episodes:
+        url = episode.embed_urls.get(provider)
+        # No probe result means unknown, not unavailable: leave the embed alone.
+        if not url or not episode.langs:
+            continue
+        choice = _pick_lang(episode.langs, wanted)
+        if choice is None:
+            episode.embed_urls = {}
+        else:
+            episode.embed_urls[provider] = f"{url.split('#')[0]}#lang={choice}"
 
 
 def _retarget_lang(

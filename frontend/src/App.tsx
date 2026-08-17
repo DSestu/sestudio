@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import type { DownloadJob, SeasonCard } from './api'
+import type { DownloadJob, DownloadedFile, DownloadedTitle, SeasonCard } from './api'
+import { DOWNLOADED_SOURCE, downloadedPageUrl } from './api'
 import { loadCast } from './cast'
 import { refreshDlna } from './dlnaControl'
 import AppShell from './components/AppShell'
 import NowCastingBar from './components/cast/NowCastingBar'
 import MiniPlayer from './components/watch/MiniPlayer'
+import DownloadedLibrary from './components/downloaded/DownloadedLibrary'
 import { hydrateLibrary } from './hydrateLibrary'
+import { DocumentPiPPortal } from './documentPiP'
+import { usePiPWindow } from './pipSession'
 import { createPortalNode } from './portalNode'
 import { useRoute, type Navigate } from './nav'
 import { clearPullback, usePullback } from './pullback'
@@ -28,10 +32,19 @@ export default function App() {
   const [skippedJobs, setSkippedJobs] = useState<DownloadJob[]>([])
 
   // The watch view stays mounted while a title is open so its player keeps
-  // playing when you browse away (mini-player, #20). `activeWatch` is the open
-  // title; the shared node hosts the relocatable <video>.
-  const [activeWatch, setActiveWatch] = useState<Record<string, string | number | undefined> | null>(null)
+  // playing when you browse away (mini-player, #20). The shared node hosts the
+  // relocatable <video>.
+  //
+  // Two titles can be open at once: `browseWatch` is the one the watch route
+  // shows, `playingWatch` the one that owns the player. They are the same title
+  // unless "play on open" is off, in which case opening a title only browses it
+  // and whatever was playing keeps playing until you press play.
+  type WatchRecord = Record<string, string | number | undefined>
+  const [browseWatch, setBrowseWatch] = useState<WatchRecord | null>(null)
+  const [playingWatch, setPlayingWatch] = useState<WatchRecord | null>(null)
   const [playerNode] = useState(createPortalNode)
+  // While a PiP window holds the player, no in-page mount point may claim it.
+  const pipWindow = usePiPWindow()
 
   // Morph the player between the pane and the mini-player when navigating across
   // the watch boundary (#20). Falls back to an instant switch where View
@@ -42,12 +55,12 @@ export default function App() {
       startViewTransition?: (cb: () => void) => unknown
     }).startViewTransition
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (crosses && activeWatch && startVT && !reduce) {
+    if (crosses && playingWatch && startVT && !reduce) {
       startVT.call(document, () => flushSync(() => rawNavigate(view, params)))
     } else {
       rawNavigate(view, params)
     }
-  }, [route.view, activeWatch, rawNavigate])
+  }, [route.view, playingWatch, rawNavigate])
 
   const downloads = useDownloadJobs(downloadTick, () => setSkippedJobs([]))
   const pullback = usePullback()
@@ -69,8 +82,8 @@ export default function App() {
   // URL actually changes, so it doesn't loop or remount unnecessarily.
   if (route.view === 'watch') {
     const u = route.params.get('u') ?? ''
-    if (u && activeWatch?.u !== u) {
-      setActiveWatch({
+    if (u && browseWatch?.u !== u) {
+      const opened: WatchRecord = {
         u,
         t: route.params.get('t') ?? '',
         p: route.params.get('p') ?? '',
@@ -79,9 +92,27 @@ export default function App() {
         alt: route.params.get('alt') ?? undefined,
         src: route.params.get('src') ?? undefined,
         altsrc: route.params.get('altsrc') ?? undefined,
-      })
+      }
+      setBrowseWatch(opened)
+      // Play on open, but never over something: whatever is already playing
+      // keeps the player until it is closed, and this title is only browsed.
+      // Off, nothing is ever claimed automatically.
+      if (settings.autoplay_on_open !== false && !playingWatch) setPlayingWatch(opened)
     }
   }
+
+  // Both records point at the same title unless a second one is being browsed.
+  const browsingPlaying = !!playingWatch && !!browseWatch && playingWatch.u === browseWatch.u
+  // One keyed list, so promoting the browsed title to the playing one reuses
+  // its mounted view (and its selected episode) instead of remounting it.
+  const watchViews: { rec: WatchRecord; owner: boolean; visible: boolean }[] = [
+    ...(playingWatch
+      ? [{ rec: playingWatch, owner: true, visible: route.view === 'watch' && browsingPlaying }]
+      : []),
+    ...(browseWatch && !browsingPlaying
+      ? [{ rec: browseWatch, owner: false, visible: route.view === 'watch' }]
+      : []),
+  ]
 
   /** Open a title in the watch view. Identity travels in the URL so the route
    *  is self-contained (SeasonDetail carries no series name or poster). */
@@ -117,10 +148,47 @@ export default function App() {
   }, [pullback])
 
   /** Run a source search for a title (browse rows, discover, similar titles).
-   *  The query travels in the URL, so back returns to where it was clicked. */
-  function searchFor(term: string) {
-    navigate('search', { q: term })
+   *  The query travels in the URL, so back returns to where it was clicked.
+   *
+   *  A known release year travels with it as a release window, so searching
+   *  for a remake doesn't surface the original under the same name. The window
+   *  is a year either side: sources date a listing by its local release, which
+   *  routinely lands a year off, while a remake is decades away. It shows in
+   *  the search view's filter row and can be cleared there. */
+  function searchFor(term: string, year?: number) {
+    navigate('search', {
+      q: term,
+      ...(year ? { from: `${year - 1}-01-01`, to: `${year + 1}-12-31` } : {}),
+    })
   }
+
+  /** Open a downloaded title on its own page, so the full episode list and the
+   *  language switcher come with it; the local copy is preferred there. */
+  function openDownloadedTitle(title: DownloadedTitle, file?: DownloadedFile) {
+    // A title downloaded before its page was recorded has no site page to go
+    // back to, so it opens on a stand-in URL the season is built from the files
+    // for. Either way this is the ordinary watch route: same episode list, same
+    // player, and the copy on disk is what gets played.
+    const remote = Boolean(title.page_url)
+    navigate('watch', {
+      u: remote ? title.page_url : downloadedPageUrl(title.series, title.season),
+      t: title.series,
+      p: title.poster_url,
+      lang: file?.lang || title.langs[0] || settings.lang,
+      ep: file?.number || undefined,
+      src: remote ? title.source || undefined : DOWNLOADED_SOURCE,
+    })
+  }
+
+  // Built once and handed to each surface that shows it: its own view, a
+  // Library tab, and a section under the download queue.
+  const downloadedLibrary = (
+    <DownloadedLibrary
+      onOpenTitle={openDownloadedTitle}
+      settings={settings}
+      onUpdateSettings={updateSettings}
+    />
+  )
 
   const allJobs = [
     ...downloads.jobs,
@@ -168,8 +236,14 @@ export default function App() {
           />
         )}
         {route.view === 'library' && (
-          <LibraryView settings={settings} onOpen={openTitle} onNavigate={navigate} />
+          <LibraryView
+            settings={settings}
+            onOpen={openTitle}
+            onNavigate={navigate}
+            downloadedLibrary={downloadedLibrary}
+          />
         )}
+        {route.view === 'downloaded' && downloadedLibrary}
         {route.view === 'settings' && (
           <SettingsView settings={settings} onUpdate={updateSettings} />
         )}
@@ -179,45 +253,59 @@ export default function App() {
             onCancel={downloads.cancel}
             onClearHistory={downloads.clear}
             onNavigate={navigate}
+            downloadedLibrary={
+              <DownloadedLibrary
+                onOpenTitle={openDownloadedTitle}
+                settings={settings}
+                onUpdateSettings={updateSettings}
+                compact
+              />
+            }
           />
         )}
         {/* Kept mounted (hidden off-route) so playback continues in the
             mini-player; remounts only when a different title is opened. */}
-        {activeWatch && (
-          <div hidden={route.view !== 'watch'}>
+        {watchViews.map(({ rec, owner, visible }) => (
+          <div key={String(rec.u)} hidden={!visible}>
             <WatchView
-              key={String(activeWatch.u)}
-              pageUrl={String(activeWatch.u ?? '')}
-              source={activeWatch.src ? String(activeWatch.src) : undefined}
-              altPageUrls={String(activeWatch.alt ?? '').split('|').filter(Boolean)}
-              altSources={String(activeWatch.altsrc ?? '').split('|').filter(Boolean)}
-              seriesName={String(activeWatch.t ?? '')}
-              posterUrl={String(activeWatch.p ?? '')}
-              lang={String(activeWatch.lang || settings.lang)}
-              episode={activeWatch.ep !== undefined ? Number(activeWatch.ep) : undefined}
-              visible={route.view === 'watch'}
-              playerNode={playerNode}
+              pageUrl={String(rec.u ?? '')}
+              source={rec.src ? String(rec.src) : undefined}
+              altPageUrls={String(rec.alt ?? '').split('|').filter(Boolean)}
+              altSources={String(rec.altsrc ?? '').split('|').filter(Boolean)}
+              seriesName={String(rec.t ?? '')}
+              posterUrl={String(rec.p ?? '')}
+              lang={String(rec.lang || settings.lang)}
+              episode={rec.ep !== undefined ? Number(rec.ep) : undefined}
+              visible={visible}
+              playerNode={owner ? playerNode : null}
+              onRequestPlayback={ep => setPlayingWatch(ep === undefined ? rec : { ...rec, ep })}
               settings={settings}
+              onUpdateSettings={updateSettings}
               navigate={navigate}
               onJobsCreated={() => setDownloadTick(t => t + 1)}
             />
           </div>
-        )}
+        ))}
       </AppShell>
 
       {/* One persistent Now-Casting surface, on every view. Renders nothing
           unless a cast (Chromecast or DLNA) is active. */}
       <NowCastingBar navigate={navigate} />
 
-      {/* Minimised browser player — shown only when a title is open and we're
-          off the watch view. */}
-      {activeWatch && route.view !== 'watch' && (
+      {/* Minimised browser player — shown whenever the playing title is not the
+          one on screen, which includes browsing a *different* title in the
+          watch view ("play on open" off). */}
+      {playingWatch && !pipWindow && !(route.view === 'watch' && browsingPlaying) && (
         <MiniPlayer
           node={playerNode}
-          onOpen={() => navigate('watch', activeWatch)}
-          onClose={() => setActiveWatch(null)}
+          onOpen={() => navigate('watch', playingWatch)}
+          onClose={() => setPlayingWatch(null)}
         />
       )}
+
+      {/* Holds the player node while a Document PiP window is open. Every other
+          mount point releases it above, since only one may hold the node. */}
+      <DocumentPiPPortal node={playerNode} />
     </>
   )
 }

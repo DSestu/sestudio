@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS preferences (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS downloaded_files (
+    path TEXT PRIMARY KEY,
+    data TEXT NOT NULL
+);
 """
 
 _conn: sqlite3.Connection | None = None
@@ -218,6 +222,44 @@ def set_pref(key: str, value: Any) -> None:
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (key, json.dumps(value)),
         )
+        conn.commit()
+
+
+# --- local files ------------------------------------------------------------ #
+#
+# What a downloaded file's path cannot say: the series name as the site spells
+# it (the folder is sanitised), the poster, and the page it came from. Written
+# when a download is queued and read back when the library is listed; the
+# filesystem, not this table, decides what actually exists.
+
+
+def set_downloaded_file(path: str, data: dict[str, Any]) -> None:
+    """Record the metadata for the file a download will write to *path*."""
+    with _lock:
+        conn = _connect()
+        conn.execute(
+            "INSERT INTO downloaded_files (path, data) VALUES (?, ?) "
+            "ON CONFLICT(path) DO UPDATE SET data=excluded.data",
+            (path, json.dumps(data)),
+        )
+        conn.commit()
+
+
+def downloaded_files() -> dict[str, dict[str, Any]]:
+    """Every recorded file, by path relative to the download root."""
+    with _lock:
+        conn = _connect()
+        return {
+            row["path"]: json.loads(row["data"])
+            for row in conn.execute("SELECT path, data FROM downloaded_files")
+        }
+
+
+def delete_downloaded_file(path: str) -> None:
+    """Forget one file. Safe to call for a path that was never recorded."""
+    with _lock:
+        conn = _connect()
+        conn.execute("DELETE FROM downloaded_files WHERE path = ?", (path,))
         conn.commit()
 
 

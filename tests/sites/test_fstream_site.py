@@ -40,8 +40,8 @@ def test_build_sites_registers_both_instances():
     assert not sites["fstream"].is_anime
     assert sites["french-manga"].is_anime
     # Both DLE instances keep the historical films folder — no disk migration.
-    assert sites["fstream"].films_dirname == "fstream_films"
-    assert sites["french-manga"].films_dirname == "fstream_films"
+    assert sites["fstream"].films_dirname == "sestudio_films"
+    assert sites["french-manga"].films_dirname == "sestudio_films"
 
 
 def test_fetch_page_returns_langs_in_one_pass(httpx_mock: HTTPXMock):

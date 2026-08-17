@@ -123,10 +123,50 @@ function collapse(group: SeasonCard[], preferredSource?: string): SeasonCard {
  * title that the string key misses. Cards with no resolved id fall back to the
  * title, so a partial map is fine and merging need not wait on the lookups.
  */
+/**
+ * Fold a show's seasons into one card, keeping the lowest-numbered as the one
+ * that opens and the rest under `seasons`.
+ *
+ * Deliberately separate from the mirror merge above: `alts` are other pages of
+ * the *same* season, which the detail view unions into one playlist, while
+ * these are distinct seasons that must stay distinct. Films are left alone —
+ * they have no seasons to fold.
+ */
+function collapseSeasons(
+  cards: SeasonCard[],
+  tmdbIds?: Map<string, number>,
+): SeasonCard[] {
+  const groups = new Map<string, SeasonCard[]>()
+  const order: string[] = []
+  for (const card of cards) {
+    const id = tmdbIds?.get(card.newsid)
+    // Year included so a remake never absorbs the original's seasons; it is
+    // already what splitByYear used to keep them apart.
+    const key = card.is_film
+      ? `film|${card.newsid}`
+      : `${id ? `tmdb:${id}` : titleKey(card)}|${card.year || 0}`
+    const group = groups.get(key)
+    if (group) group.push(card)
+    else {
+      groups.set(key, [card])
+      order.push(key)
+    }
+  }
+
+  return order.map(key => {
+    const group = groups.get(key)!
+    if (group.length === 1) return group[0]
+    const byNumber = [...group].sort((a, b) => a.season_number - b.season_number)
+    const [first, ...rest] = byNumber
+    return { ...first, seasons: rest }
+  })
+}
+
 export function mergeCards(
   cards: SeasonCard[],
   tmdbIds?: Map<string, number>,
   preferredSource?: string,
+  seasonsAsOne = false,
 ): SeasonCard[] {
   const groups = new Map<string, SeasonCard[]>()
   for (const card of cards) {
@@ -136,7 +176,9 @@ export function mergeCards(
     else groups.set(key, [card])
   }
 
-  return [...groups.values()]
+  const merged = [...groups.values()]
     .flatMap(group => splitByYear(group).flatMap(splitByPoster))
     .map(group => collapse(group, preferredSource))
+
+  return seasonsAsOne ? collapseSeasons(merged, tmdbIds) : merged
 }

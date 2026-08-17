@@ -1,6 +1,6 @@
 import type { SeasonCard } from '../api'
 import { useTmdb } from '../useTmdb'
-import { kindLabel, saveEntry } from './resultMeta'
+import { kindLabel, saveEntry, seasonsLabel } from './resultMeta'
 import RatingBadge from './RatingBadge'
 import SaveToggles from './SaveToggles'
 import SourcesBadge from './SourcesBadge'
@@ -114,6 +114,9 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich, posters }: 
       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
         {/* Kind is carried by the badge text, not by colour alone */}
         <span className="badge badge-ghost badge-sm">{kindLabel(card)}</span>
+          {seasonsLabel(card) && (
+            <span className="badge badge-outline badge-sm">{seasonsLabel(card)}</span>
+          )}
         {year > 0 && <span className="text-base-content/40 text-xs font-mono">{year}</span>}
         <SourcesBadge card={card} onOpen={onOpenDetail} />
       </div>

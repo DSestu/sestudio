@@ -234,4 +234,46 @@ describe('mergeCards', () => {
       expect(merged[0].alts?.[0].source).toBe('other-site')
     })
   })
+  describe('collapsing seasons', () => {
+    const s = (n: number, over: Partial<SeasonCard> = {}) =>
+      card({
+        newsid: `s${n}`,
+        series_name: 'Naruto',
+        is_film: false,
+        season_number: n,
+        page_url: `s${n}.html`,
+        ...over,
+      })
+
+    it('leaves seasons apart unless asked to fold them', () => {
+      expect(mergeCards([s(1), s(2), s(3)])).toHaveLength(3)
+    })
+
+    it('folds a show into its lowest season, listing the rest under seasons', () => {
+      const merged = mergeCards([s(3), s(1), s(2)], undefined, undefined, true)
+      expect(merged).toHaveLength(1)
+      expect(merged[0].season_number).toBe(1)
+      expect(merged[0].seasons?.map(c => c.season_number)).toEqual([2, 3])
+    })
+
+    it('keeps another show, and a film, out of the fold', () => {
+      const merged = mergeCards(
+        [s(1), s(2), s(1, { series_name: 'Bleach', newsid: 'b1' }), card({ newsid: 'f' })],
+        undefined,
+        undefined,
+        true,
+      )
+      expect(merged).toHaveLength(3)
+    })
+
+    it('never folds a remake into the original', () => {
+      const merged = mergeCards(
+        [s(1, { year: 2002 }), s(2, { year: 2002 }), s(1, { newsid: 'r1', year: 2017 })],
+        undefined,
+        undefined,
+        true,
+      )
+      expect(merged).toHaveLength(2)
+    })
+  })
 })

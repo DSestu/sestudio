@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useBrowserPlayerControls } from '../../browserPlayerControls'
+import { MINI_PLAYER_FONT_SIZE } from '../../subtitleStyle'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
 import { OutPortal } from '../../reversePortal'
 import type { PortalNode } from '../../portalNode'
@@ -67,8 +68,15 @@ export default function MiniPlayer({ node, onOpen, onClose }: Props) {
 
   // The video (with its own controls) is disabled for pointer input in the
   // mini surface; a full-cover button re-opens the watch view instead.
+  // The caption size is overridden on this container rather than globally: the
+  // portalled player is the *same* instance as the watch view's, so a scoped
+  // variable is what distinguishes the two surfaces. It reverts by itself when
+  // the player portals back out.
   const video = (extra: string) => (
-    <div className={`relative bg-black overflow-hidden ${extra}`}>
+    <div
+      className={`relative bg-black overflow-hidden ${extra}`}
+      style={{ '--media-user-font-size': MINI_PLAYER_FONT_SIZE } as CSSProperties}
+    >
       <div className="absolute inset-0 pointer-events-none"><OutPortal node={node} morph /></div>
       <button onClick={onOpen} aria-label="Back to player" className="absolute inset-0" />
     </div>

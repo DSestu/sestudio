@@ -22,6 +22,10 @@ export interface PlayableEpisode {
 // response carries the owning site's own order; prefer that when present.
 const ORDER = ['uqload', 'vidzy', 'premium', 'netu', 'luluvid', 'filmoon', 'voe']
 
+/** The downloaded copy, offered as a host alongside the scraped ones. It is
+ *  never in `ORDER`: it comes from disk, not from a site's embeds. */
+export const DOWNLOADED_PROVIDER = 'downloaded'
+
 /** Sort a provider list into preference order (known providers first). */
 export function orderProviders(list: string[], order?: string[]): string[] {
   const pref = order?.length ? order : ORDER

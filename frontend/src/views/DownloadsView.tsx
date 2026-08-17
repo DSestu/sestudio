@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { DownloadJob } from '../api'
 import DownloadQueue from '../components/DownloadQueue'
 import EmptyState from '../components/EmptyState'
@@ -9,9 +10,13 @@ interface Props {
   onCancel: (id: string) => void
   onClearHistory: () => void
   onNavigate: (v: View) => void
+  /** What the finished jobs became: the same listing the local library shows. */
+  downloadedLibrary: ReactNode
 }
 
-export default function DownloadsView({ jobs, onCancel, onClearHistory, onNavigate }: Props) {
+export default function DownloadsView({
+  jobs, onCancel, onClearHistory, onNavigate, downloadedLibrary,
+}: Props) {
   const deviceDownloads = useDeviceDownloads()
 
   return (
@@ -31,6 +36,14 @@ export default function DownloadsView({ jobs, onCancel, onClearHistory, onNaviga
           onClearHistory={() => { onClearHistory(); clearDeviceDownloads() }}
         />
       )}
+
+      {/* The queue is transient — jobs clear away. This is what they left behind. */}
+      <div className="flex flex-col gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+          Downloaded
+        </h3>
+        {downloadedLibrary}
+      </div>
     </div>
   )
 }

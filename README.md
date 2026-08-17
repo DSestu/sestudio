@@ -198,7 +198,7 @@ Downloads are organised automatically, with a per-language subfolder (VF / VOSTF
 
 ```
 <output_root>/<Series Name>/Season 01/VOSTFR/S01E01 - Title.mp4
-<output_root>/fstream_films/VF/<Film Title>.mp4
+<output_root>/sestudio_films/VF/<Film Title>.mp4
 ```
 
 The "already downloaded" check is per-language, so the same episode in VF and VOSTFR

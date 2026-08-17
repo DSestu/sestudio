@@ -185,6 +185,9 @@ def test_trending_returns_cards(client, httpx_mock: HTTPXMock):
         "kind": "movie",
         "title": "Film",
         "year": 2024,
+        # The day as well as the year, so the client can tell an announced
+        # title from a released one.
+        "release_date": "2024-05-01",
         "rating": 7.2,
         "poster_url": "https://image.tmdb.org/t/p/w342/f.jpg",
         # Absent upstream rather than omitted here, so the client needn't guard.
@@ -238,6 +241,46 @@ def test_discover_passes_filters_and_returns_cards(client, httpx_mock: HTTPXMock
     assert "vote_average.gte=4" in sent
     assert "vote_average.lte=7" in sent
     assert "vote_count.gte=300" in sent
+
+
+def _discover_page():
+    return {"page": 1, "total_pages": 1, "results": []}
+
+
+def test_discover_bounds_release_date_per_media_type(client, httpx_mock: HTTPXMock):
+    """A date window becomes the release-date field of the kind being browsed."""
+    httpx_mock.add_response(url=DISCOVER, json=_discover_page())
+    resp = client.get(
+        "/api/tmdb/discover",
+        params={"kind": "movie", "from_date": "2026-07-01", "to_date": "2026-08-17"},
+    )
+    assert resp.status_code == 200
+    sent = str(httpx_mock.get_requests()[0].url)
+    assert "primary_release_date.gte=2026-07-01" in sent
+    assert "primary_release_date.lte=2026-08-17" in sent
+
+
+def test_discover_dates_series_by_first_air_date(client, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=re.compile(r"https://api\.themoviedb\.org/3/discover/tv\?.*"),
+        json=_discover_page(),
+    )
+    resp = client.get(
+        "/api/tmdb/discover", params={"kind": "tv", "from_date": "2026-07-01"}
+    )
+    assert resp.status_code == 200
+    assert "first_air_date.gte=2026-07-01" in str(httpx_mock.get_requests()[0].url)
+
+
+def test_discover_drops_malformed_dates(client, httpx_mock: HTTPXMock):
+    """TMDB answers a bad date with an unfiltered page — never forward one."""
+    httpx_mock.add_response(url=DISCOVER, json=_discover_page())
+    resp = client.get(
+        "/api/tmdb/discover", params={"from_date": "last month", "to_date": "2026"}
+    )
+    assert resp.status_code == 200
+    sent = str(httpx_mock.get_requests()[0].url)
+    assert "primary_release_date" not in sent
 
 
 def test_discover_rejects_unknown_sort(client):

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Renderer, StreamSource } from '../../api'
-import { dlnaPlay, getCastHttpPort, listRenderers, resolveStream } from '../../api'
+import { dlnaPlay, getCastHttpPort, listRenderers, downloadedFileUrl, resolveStream } from '../../api'
+import { fileFor, downloadedSnapshot } from '../../downloadedLibrary'
 import { castSeek, castToChromecast, loadCast, useCastState } from '../../cast'
 import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
 import { startCastQueue } from '../../castQueue'
@@ -87,6 +88,15 @@ export default function OutputSwitcher({
         index,
         autoplay,
         cast: async (next) => {
+          // Prefer the downloaded copy here too, or autoplay-next would quietly
+          // drop back to scraping partway through a locally-played season.
+          const local = fileFor(
+            downloadedSnapshot(), next.series_name, next.season, next.number, next.lang,
+          )
+          if (local) {
+            await sendTo(downloadedFileUrl(local.path), 'mp4', next.title, mode, udn)
+            return
+          }
           const src = await resolveStream(next.embed_urls, undefined, undefined, next.source)
           await sendTo(src.proxy_url, src.kind, next.title, mode, udn)
         },

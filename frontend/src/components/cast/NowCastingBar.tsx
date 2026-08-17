@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  castSeek, castSeekBy, castSetVolume, castStop, castToggleMute, castPlayPause, useCastState,
+  castSeek, castSeekBy, castSetVolume, castStop, castToggleMute, castPlayPause, castVolumeBy,
+  useCastState,
 } from '../../cast'
 import {
-  dlnaPause, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStop, dlnaToggleMute, useDlnaState,
+  dlnaPause, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStop, dlnaToggleMute,
+  dlnaVolumeBy, useDlnaState,
 } from '../../dlnaControl'
 import { useBrowserPlayerControls } from '../../browserPlayerControls'
 import { getCastQueue } from '../../castQueue'
@@ -74,14 +76,16 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
         title: dlna.title,
         onSeek: dlnaSeek, onSeekBy: dlnaSeekBy,
         onPlayPause: () => (dlna.isPaused ? dlnaResume() : dlnaPause()),
-        onToggleMute: dlnaToggleMute, onSetVolume: dlnaSetVolume, stop: dlnaStop,
+        onToggleMute: dlnaToggleMute, onSetVolume: dlnaSetVolume, onVolumeBy: dlnaVolumeBy,
+        stop: dlnaStop,
       }
     : {
         position: cast.currentTime, duration: cast.duration, isPaused: cast.isPaused,
         muted: cast.muted, volume: cast.volume, canSeek: cast.canSeek,
         canControlVolume: cast.canControlVolume, title: cast.title,
         onSeek: castSeek, onSeekBy: castSeekBy, onPlayPause: castPlayPause,
-        onToggleMute: castToggleMute, onSetVolume: castSetVolume, stop: castStop,
+        onToggleMute: castToggleMute, onSetVolume: castSetVolume, onVolumeBy: castVolumeBy,
+        stop: castStop,
       }
 
   const ep = session?.episode
@@ -235,12 +239,38 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z M15 9a3 3 0 010 6 M18 6a7 7 0 010 12" /></svg>
                     )}
                   </button>
+                  {/* One-point steps flanking the slider. A TV renderer's usable
+                      range is narrow and loud, so dragging overshoots — DLNA only,
+                      where the volume being changed is the TV's own. */}
+                  {target === 'dlna' && (
+                    <button
+                      onClick={() => live.onVolumeBy(-0.01)}
+                      aria-label="Volume down one"
+                      className="btn btn-ghost btn-square btn-sm font-mono shrink-0"
+                    >
+                      −
+                    </button>
+                  )}
                   <input
                     type="range" min={0} max={1} step={0.01}
                     value={live.muted ? 0 : live.volume}
                     onChange={e => live.onSetVolume(Number(e.target.value))}
                     aria-label="Volume" className="range range-primary range-sm flex-1"
                   />
+                  {target === 'dlna' && (
+                    <>
+                      <button
+                        onClick={() => live.onVolumeBy(0.01)}
+                        aria-label="Volume up one"
+                        className="btn btn-ghost btn-square btn-sm font-mono shrink-0"
+                      >
+                        ＋
+                      </button>
+                      <span className="text-xs font-mono tabular-nums text-base-content/50 w-8 text-right shrink-0">
+                        {Math.round((live.muted ? 0 : live.volume) * 100)}
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
             </div>

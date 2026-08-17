@@ -1,6 +1,6 @@
 import type { SeasonCard } from '../api'
 import { useTmdb } from '../useTmdb'
-import { kindLabel, saveEntry } from './resultMeta'
+import { kindLabel, saveEntry, seasonsLabel } from './resultMeta'
 import RatingBadge from './RatingBadge'
 import SaveToggles from './SaveToggles'
 import SourcesBadge from './SourcesBadge'
@@ -70,7 +70,7 @@ function ResultRow({ card, checked, onToggle, onOpenDetail, enrich, posters }: R
       <button
         onClick={() => onOpenDetail(card)}
         aria-label={`Open ${card.series_name}`}
-        className="shrink-0 w-16 sm:w-20 rounded-box overflow-hidden bg-base-300 self-start"
+        className="shrink-0 self-start w-24 sm:w-30 rounded-box overflow-hidden bg-base-300"
       >
         {poster ? (
           <img src={poster} alt="" loading="lazy" className="w-full aspect-[2/3] object-cover" />
@@ -105,6 +105,9 @@ function ResultRow({ card, checked, onToggle, onOpenDetail, enrich, posters }: R
 
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="badge badge-ghost badge-sm">{kindLabel(card)}</span>
+          {seasonsLabel(card) && (
+            <span className="badge badge-outline badge-sm">{seasonsLabel(card)}</span>
+          )}
           {year > 0 && <span className="text-base-content/50 text-xs font-mono">{year}</span>}
           {meta && <RatingBadge rating={meta.rating} />}
           <SourcesBadge card={card} onOpen={onOpenDetail} />

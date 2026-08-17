@@ -7,9 +7,11 @@ import { checkDownloads, getSeason, postDownloads, searchPeople } from '../api'
 import { DEFAULT_DISCOVER_FILTERS } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import DiscoverPanel from '../components/DiscoverPanel'
+import { pickHost } from '../downloadPrefs'
 import EmptyState from '../components/EmptyState'
 import LayoutToggle from '../components/LayoutToggle'
 import SortSelect from '../components/SortSelect'
+import ToolbarToggle from '../components/ToolbarToggle'
 import PeopleResults from '../components/PeopleResults'
 import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
@@ -21,6 +23,9 @@ import { SORTS_FOR, defaultSortFor, sortItems } from '../sortItems'
 import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
 import { replaceParams } from '../nav'
+import ReleaseFilter from '../components/ReleaseFilter'
+import type { ReleaseState } from '../releaseDates'
+import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
 
 interface Props {
   settings: AppSettings
@@ -31,7 +36,7 @@ interface Props {
   /** Save a setting — the results toolbar owns the TMDB-grouping toggle. */
   onUpdateSettings: (patch: Partial<AppSettings>) => void | Promise<void>
   /** Run a fresh source search for a title (a TMDB discover card). */
-  onSearchTerm: (term: string) => void
+  onSearchTerm: (term: string, year?: number) => void
   /** Open a person's profile from the People band. */
   onOpenPerson: (id: number) => void
   onJobsCreated: () => void
@@ -46,8 +51,15 @@ function filtersFrom(params: URLSearchParams): DiscoverFilters {
     minScore: Number(params.get('score')) || 0,
     maxScore: Number(params.get('max')) || 10,
     minVotes: Number(params.get('votes')) || 0,
+    fromDate: params.get('from') ?? '',
+    toDate: params.get('to') ?? '',
+    releaseState: RELEASE_STATES.includes(params.get('rel') as ReleaseState)
+      ? (params.get('rel') as ReleaseState)
+      : DEFAULT_DISCOVER_FILTERS.releaseState,
   }
 }
+
+const RELEASE_STATES: ReleaseState[] = ['out', 'upcoming', 'all']
 
 /** Non-default filters only, so the URL stays clean. */
 function filterParams(f: DiscoverFilters): Record<string, string | number | undefined> {
@@ -58,7 +70,26 @@ function filterParams(f: DiscoverFilters): Record<string, string | number | unde
     score: f.minScore > 0 ? f.minScore : undefined,
     max: f.maxScore < 10 ? f.maxScore : undefined,
     votes: f.minVotes > 0 ? f.minVotes : undefined,
+    from: f.fromDate || undefined,
+    to: f.toDate || undefined,
+    rel: f.releaseState !== DEFAULT_DISCOVER_FILTERS.releaseState ? f.releaseState : undefined,
   }
+}
+
+/** Does a card fall inside the release window?
+ *
+ *  Source listings carry a year and never a date, so a window can only be
+ *  applied to the year it falls in: "last month" keeps this year's titles.
+ *  Rounding outwards rather than dropping them is deliberate — a filter that
+ *  hid every 2026 film because the month can't be checked would be worse than
+ *  one that shows a few too many. A card with no year at all can't be placed,
+ *  so a window excludes it, and the toolbar counts those separately. */
+function inWindow(card: SeasonCard, from: string, to: string): boolean {
+  const year = card.year || 0
+  if (!year) return false
+  const min = yearOf(from)
+  const max = yearOf(to)
+  return (!min || year >= min) && (!max || year <= max)
 }
 
 /** Search view: query, TMDB discovery, results grid, and bulk season download. */
@@ -84,11 +115,25 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   const [existingFiles, setExistingFiles] = useState<Set<string>>(new Set())
 
   // Same title listed per language and per mirror collapses to one result.
-  const [results, regrouping] = useMergedCards(
+  const [merged, regrouping] = useMergedCards(
     rawResults,
     settings.tmdb_configured && settings.tmdb_merge,
     settings.preferred_site,
+    settings.collapse_seasons !== false,
   )
+
+  // The release window narrows what is already on screen — no re-search, since
+  // the sources take no date. Cards whose year is unknown drop out while a
+  // window is set; the toolbar says how many, so they aren't lost silently.
+  const releaseWindow = { from: filters.fromDate, to: filters.toDate }
+  const results = useMemo(
+    () => isAnyDates(releaseWindow)
+      ? merged
+      : merged.filter(c => inWindow(c, filters.fromDate, filters.toDate)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [merged, filters.fromDate, filters.toDate],
+  )
+  const hiddenByYear = merged.length - results.length
 
   // Ratings are only fetched when a sort actually needs them, so the default
   // relevance ordering costs no extra lookups. They share the enrichment
@@ -169,14 +214,17 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         const items = detail.episodes
           .filter(ep => Object.keys(ep.embed_urls).length > 0)
           .map((ep): DownloadItem => ({
-            embed_url: ep.embed_urls['uqload'] ?? ep.embed_urls['vidzy'] ?? ep.embed_urls['netu'] ?? Object.values(ep.embed_urls)[0] ?? '',
-            provider: ep.embed_urls['uqload'] ? 'uqload' : ep.embed_urls['vidzy'] ? 'vidzy' : ep.embed_urls['netu'] ? 'netu' : Object.keys(ep.embed_urls)[0] ?? '',
+            ...pickHost(ep.embed_urls, settings.preferred_hosts),
             all_providers: ep.embed_urls,
             episode_name: ep.filename,
             series_name: card.series_name,
             season: detail.season,
             lang: settings.lang,
             source: detail.source ?? card.source,
+            // Kept next to the file so the local library can show a poster and
+            // reopen the title; the path itself records neither.
+            poster_url: card.poster_url,
+            page_url: card.page_url,
           }))
           .filter(i => Boolean(i.embed_url))
         allItems.push(...items)
@@ -248,6 +296,18 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
               The layout choice works either way. */}
           <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
             <SortSelect options={SORTS_FOR.search} value={sort} onChange={setSort} />
+            <ToolbarToggle
+              label="Play on open"
+              title="Start playing as soon as a title is opened. Off, opening a title only shows its description and episodes, so whatever is already playing keeps running."
+              checked={settings.autoplay_on_open !== false}
+              onChange={v => void onUpdateSettings({ autoplay_on_open: v })}
+            />
+            <ToolbarToggle
+              label="One card per show"
+              title="Fold a show's seasons into a single result, with the season count on the card. Off lists every season separately."
+              checked={settings.collapse_seasons !== false}
+              onChange={v => void onUpdateSettings({ collapse_seasons: v })}
+            />
             {settings.tmdb_configured && (
               <>
                 <ToolbarToggle
@@ -271,6 +331,25 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         </div>
       )}
 
+      {/* Outside the toolbar above, which only exists while something matched:
+          a window that filtered everything out still has to be undoable. */}
+      {lastQuery !== '' && merged.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <ReleaseFilter
+            value={releaseWindow}
+            onChange={r => setFilters(f => ({ ...f, fromDate: r.from, toDate: r.to }))}
+            // Sub-year precision is browse-only: the sources date a listing by
+            // year at best, so say so rather than look broken.
+            note={!isAnyDates(releaseWindow) ? 'results are dated by year only' : undefined}
+          />
+          {hiddenByYear > 0 && (
+            <span className="text-xs text-base-content/40">
+              {hiddenByYear} hidden by this window
+            </span>
+          )}
+        </div>
+      )}
+
       {lastQuery !== '' && <PeopleResults people={people} onOpen={onOpenPerson} />}
 
       {lastQuery === '' ? (
@@ -280,7 +359,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           <DiscoverPanel
             filters={filters}
             onChange={setFilters}
-            onSelect={card => onSearchTerm(card.title)}
+            onSelect={card => onSearchTerm(card.title, card.year)}
           />
         ) : (
           <EmptyState
@@ -308,6 +387,12 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             posters={settings.tmdb_posters}
           />
         )
+      ) : merged.length > 0 ? (
+        // Something matched the query — only the release window is hiding it.
+        <EmptyState
+          title={`Nothing released ${rangeLabel(releaseWindow)}`}
+          message={`${merged.length} result${merged.length !== 1 ? 's' : ''} for “${lastQuery}” fall outside that window. Widen it, or pick Any.`}
+        />
       ) : resolvedQuery === lastQuery ? (
         people.length > 0 ? (
           <EmptyState
@@ -346,36 +431,15 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           outputRoot={settings.output_root}
           existingFiles={existingFiles}
           destination={settings.download_destination}
+          preferredHosts={settings.preferred_hosts}
+          hostOptions={settings.known_hosts}
+          defaultHosts={settings.default_hosts}
+          onPreferences={patch => void onUpdateSettings(patch)}
           onConfirm={confirmDownload}
           onCancel={() => setPendingItems(null)}
         />
       )}
     </div>
-  )
-}
-
-/** A labelled switch for the results toolbar, with an optional busy spinner. */
-function ToolbarToggle({ label, title, checked, onChange, busy }: {
-  label: string
-  title: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-  busy?: boolean
-}) {
-  return (
-    <label
-      className="flex items-center gap-2 text-sm text-base-content/60 hover:text-base-content transition-colors cursor-pointer"
-      title={title}
-    >
-      <input
-        type="checkbox"
-        className="toggle toggle-xs toggle-primary"
-        checked={checked}
-        onChange={e => onChange(e.target.checked)}
-      />
-      {label}
-      {busy && <span className="loading loading-spinner loading-xs" aria-label="Working" />}
-    </label>
   )
 }
 
