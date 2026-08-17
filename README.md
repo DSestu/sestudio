@@ -2,6 +2,12 @@
 
 Download episodes from fstream — via CLI or a local web UI.
 
+With astral uv installed, the server can be launched in a single command:
+
+```bash
+uvx sestudio
+```
+
 ## Casting from a phone
 
 Casting, in general, need the receiving TV to have access to the network address of the sestudio server.
