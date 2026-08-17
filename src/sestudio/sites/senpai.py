@@ -142,7 +142,10 @@ class SenpaiSite(ContentSite):
         if self._pinned:
             return
         with self._lock:
-            self._resolved_at = 0.0
+            # -inf, not 0.0: time.monotonic() starts near zero on a freshly
+            # booted host, where "resolved at 0.0" would still be within the
+            # TTL and the forced refresh would silently do nothing.
+            self._resolved_at = float("-inf")
         self.base_url()
 
     def _resolve_domain(self) -> str:

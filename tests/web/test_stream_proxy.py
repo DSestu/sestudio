@@ -175,21 +175,54 @@ def test_proxy_forwards_range_and_relays_206(httpx_mock: HTTPXMock):
     assert sent.headers["Referer"] == "https://uqload.is/"
 
 
-def test_proxy_head_answers_without_upstream_call(httpx_mock: HTTPXMock):
-    # DLNA renderers probe with HEAD; it must succeed cheaply and issue no upstream request.
+def test_proxy_head_mp4_reports_real_size_and_dlna_features(httpx_mock: HTTPXMock):
+    # DLNA renderers probe with HEAD; the total size (from a 1-byte ranged GET —
+    # presigned hosts 403 upstream HEADs) and byte-seek DLNA features are what
+    # let them fetch the moov index from the tail of non-faststart mp4s.
     client = _client()
     secret = client.app.state.proxy_secret
     mp4 = sign(secret, "https://cdn.example/v.mp4", "https://uqload.is/", "uqload")
+
+    httpx_mock.add_response(
+        url="https://cdn.example/v.mp4",
+        status_code=206,
+        headers={"Content-Range": "bytes 0-0/5000000", "Content-Type": "video/mp4"},
+        content=b"x",
+    )
+
+    resp = client.head("/api/stream/proxy", params={"token": mp4})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("video/mp4")
+    assert resp.headers["accept-ranges"] == "bytes"
+    assert resp.headers["content-length"] == "5000000"
+    assert "DLNA.ORG_OP=01" in resp.headers["contentfeatures.dlna.org"]
+    assert resp.headers["transfermode.dlna.org"] == "Streaming"
+
+    sent = httpx_mock.get_requests()[0]
+    assert sent.headers["Range"] == "bytes=0-0"
+
+
+def test_proxy_head_mp4_survives_probe_failure(httpx_mock: HTTPXMock):
+    # An unreachable upstream must not fail the HEAD — just omit the length.
+    client = _client()
+    secret = client.app.state.proxy_secret
+    mp4 = sign(secret, "https://cdn.example/v.mp4", "https://uqload.is/", "uqload")
+    httpx_mock.add_exception(Exception("upstream down"))
+
+    resp = client.head("/api/stream/proxy", params={"token": mp4})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("video/mp4")
+    assert resp.headers["accept-ranges"] == "bytes"
+
+
+def test_proxy_head_hls_answers_without_upstream_call(httpx_mock: HTTPXMock):
+    client = _client()
+    secret = client.app.state.proxy_secret
     hls = sign(secret, "https://cdn.example/master.m3u8", "https://vidzy.org/", "vidzy")
 
-    r1 = client.head("/api/stream/proxy", params={"token": mp4})
-    assert r1.status_code == 200
-    assert r1.headers["content-type"].startswith("video/mp4")
-    assert r1.headers["accept-ranges"] == "bytes"
-
-    r2 = client.head("/api/stream/proxy", params={"token": hls})
-    assert "mpegurl" in r2.headers["content-type"]
-
+    resp = client.head("/api/stream/proxy", params={"token": hls})
+    assert resp.status_code == 200
+    assert "mpegurl" in resp.headers["content-type"]
     assert httpx_mock.get_requests() == []
 
 
@@ -205,10 +238,12 @@ def test_proxy_sets_cors_headers(httpx_mock: HTTPXMock):
     client = _client()
     secret = client.app.state.proxy_secret
     token = sign(secret, "https://cdn.example/v.mp4", "https://uqload.is/", "uqload")
+    # Two upstream hits: the GET relay, then the HEAD's 1-byte size probe.
     httpx_mock.add_response(
         url="https://cdn.example/v.mp4",
         content=b"x" * 16,
         headers={"Content-Type": "video/mp4"},
+        is_reusable=True,
     )
 
     resp = client.get("/api/stream/proxy", params={"token": token})

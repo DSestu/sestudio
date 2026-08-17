@@ -14,6 +14,14 @@ logger = logging.getLogger(__name__)
 
 _MEDIA_RENDERER = "urn:schemas-upnp-org:device:MediaRenderer:1"
 
+# protocolInfo 4th field for progressive mp4: byte-seek allowed (OP=01), no
+# conversion, streaming-mode flags. Without it renderers assume the stream is
+# unseekable and cannot fetch the moov index from the tail of non-faststart
+# files (senpai's self-hosted mp4s), failing with "media not recognizable".
+_MP4_DLNA_FEATURES = (
+    "DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000"
+)
+
 
 def _local_ipv4s() -> list[str]:
     """Local non-loopback IPv4 addresses, so SSDP can be sent on every interface.
@@ -121,6 +129,9 @@ async def play_on_renderer(
         title,
         override_mime_type=mime_type,
         override_upnp_class="object.item.videoItem",
+        override_dlna_features=(
+            _MP4_DLNA_FEATURES if mime_type == "video/mp4" else "*"
+        ),
     )
     await dmr.async_set_transport_uri(media_url, title, meta_data=metadata)
     await dmr.async_play()
