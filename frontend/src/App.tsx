@@ -24,6 +24,16 @@ import SearchView from './views/SearchView'
 import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
 
+type WatchFields = Record<string, string | number | undefined>
+
+/** Field-by-field equality for the open-watch record. */
+function sameWatch(a: WatchFields | null, b: WatchFields): boolean {
+  if (!a) return false
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  for (const key of keys) if (a[key] !== b[key]) return false
+  return true
+}
+
 export default function App() {
   const [route, rawNavigate] = useRoute()
   const [settings, updateSettings] = useSettings()
@@ -82,17 +92,22 @@ export default function App() {
   // URL actually changes, so it doesn't loop or remount unnecessarily.
   if (route.view === 'watch') {
     const u = route.params.get('u') ?? ''
-    if (u && browseWatch?.u !== u) {
-      const opened: WatchRecord = {
-        u,
-        t: route.params.get('t') ?? '',
-        p: route.params.get('p') ?? '',
-        lang: route.params.get('lang') || settings.lang,
-        ep: route.params.has('ep') ? Number(route.params.get('ep')) : undefined,
-        alt: route.params.get('alt') ?? undefined,
-        src: route.params.get('src') ?? undefined,
-        altsrc: route.params.get('altsrc') ?? undefined,
-      }
+    const opened: WatchRecord = {
+      u,
+      t: route.params.get('t') ?? '',
+      p: route.params.get('p') ?? '',
+      lang: route.params.get('lang') || settings.lang,
+      ep: route.params.has('ep') ? Number(route.params.get('ep')) : undefined,
+      alt: route.params.get('alt') ?? undefined,
+      src: route.params.get('src') ?? undefined,
+      altsrc: route.params.get('altsrc') ?? undefined,
+    }
+    // Every field, not just the URL. Switching source by clicking a language
+    // badge can land on the same page_url with a different lang, and comparing
+    // `u` alone dropped that navigation entirely — the hash changed and the
+    // view did not. Comparing the whole record is also what stops this from
+    // looping, since it only sets state when something actually differs.
+    if (u && !sameWatch(browseWatch, opened)) {
       setBrowseWatch(opened)
       // Play on open, but never over something: whatever is already playing
       // keeps the player until it is closed, and this title is only browsed.
@@ -224,6 +239,7 @@ export default function App() {
             onUpdateSettings={updateSettings}
             onSearchTerm={searchFor}
             onOpenPerson={id => navigate('person', { id })}
+            onOpenDownloaded={openDownloadedTitle}
             onJobsCreated={() => setDownloadTick(t => t + 1)}
             onSkipped={jobs => setSkippedJobs(prev => [...prev, ...jobs])}
           />

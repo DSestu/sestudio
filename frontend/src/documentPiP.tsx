@@ -92,6 +92,63 @@ function syncRoot(target: Window): void {
   }
 }
 
+/** Pointer events a drag needs to finish. `pointerup` is the one that commits. */
+const DRAG_EVENTS = ['pointermove', 'pointerup', 'pointercancel'] as const
+
+/**
+ * Forward pointer events from the PiP window onto the page's document.
+ *
+ * The player's sliders — the timeline, the volume bar — track a drag by
+ * listening on `document`. That is the *page's* document, captured when the
+ * player's module loaded, not the one its controls are now displayed in. So a
+ * press inside the PiP window is seen by the slider element itself, and the
+ * release that would commit the seek is never heard: the timeline looks
+ * interactive and does nothing.
+ *
+ * Re-dispatching a copy on the page's document closes that loop. Coordinates
+ * pass through untouched on purpose — the slider measures itself with
+ * `getBoundingClientRect`, and both it and the event are in the PiP window's
+ * viewport, so they already agree with each other. Translating them would be
+ * the bug.
+ */
+function bridgeDragEvents(win: Window): void {
+  // Typed as PointerEvent rather than tested with `instanceof`: the event comes
+  // from another realm, where the page's PointerEvent constructor is a
+  // different object and the test would always be false. Only pointer events
+  // are bound below, so the type is accurate.
+  const forward = (event: PointerEvent) => {
+    // Only what the user actually did: a copy is dispatched on the page's
+    // document, never back into this one, but the guard keeps that true if
+    // anything ever re-dispatches.
+    if (!event.isTrusted) return
+    document.dispatchEvent(
+      new PointerEvent(event.type, {
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        isPrimary: event.isPrimary,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        screenX: event.screenX,
+        screenY: event.screenY,
+        button: event.button,
+        buttons: event.buttons,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      }),
+    )
+  }
+  // Capture, so a handler inside the player cannot stop the copy being made.
+  // Nothing is unbound: the listeners die with the window they are on.
+  for (const type of DRAG_EVENTS) {
+    win.document.addEventListener(type, forward as EventListener, { capture: true })
+  }
+}
+
 /**
  * Open the PiP window. Must be called directly from a user gesture — the
  * request is rejected otherwise, so it cannot be moved into an effect.
@@ -116,6 +173,7 @@ export async function openDocumentPiP(aspect = 16 / 9): Promise<boolean> {
     })
     copyStyles(win)
     syncRoot(win)
+    bridgeDragEvents(win)
     // After syncRoot, which copies the page's caption variables verbatim — this
     // overrides the size with the PiP-specific one.
     applyPiPSubtitleStyle(win)

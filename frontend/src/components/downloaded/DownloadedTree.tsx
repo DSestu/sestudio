@@ -6,8 +6,15 @@ interface Props {
   titles: DownloadedTitle[]
   /** Path filter from the toolbar; empty shows everything. */
   filter?: string
+  /**
+   * Open the folders a filter left behind, so the matching files are on screen.
+   * False keeps them shut, which is what search wants: the answer there is
+   * "which folder has this", not a row per episode.
+   */
+  expandMatches?: boolean
   onPlay: (title: DownloadedTitle, file: DownloadedFile) => void
-  onDelete: (title: DownloadedTitle, file: DownloadedFile) => void
+  /** Omitted where deleting would be out of place — the button is then absent. */
+  onDelete?: (title: DownloadedTitle, file: DownloadedFile) => void
 }
 
 /** One folder and everything under it, shut until asked.
@@ -72,16 +79,18 @@ function Folder({ node, expanded, onPlay, onDelete }: {
           <span className="text-xs text-base-content/40 tabular-nums shrink-0">
             {fmtSize(file.size)}
           </span>
-          <button
-            onClick={() => onDelete(title, file)}
-            aria-label={`Delete ${file.title} from disk`}
-            title="Delete from disk"
-            className="btn btn-ghost btn-square btn-xs shrink-0 text-base-content/30 hover:text-error opacity-100 [@media(hover:hover)]:opacity-0 group-hover/file:opacity-100 focus:opacity-100 transition-opacity"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
-            </svg>
-          </button>
+          {onDelete && (
+            <button
+              onClick={() => onDelete(title, file)}
+              aria-label={`Delete ${file.title} from disk`}
+              title="Delete from disk"
+              className="btn btn-ghost btn-square btn-xs shrink-0 text-base-content/30 hover:text-error opacity-100 [@media(hover:hover)]:opacity-0 group-hover/file:opacity-100 focus:opacity-100 transition-opacity"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+              </svg>
+            </button>
+          )}
         </li>
       ))}
     </ul>
@@ -89,7 +98,9 @@ function Folder({ node, expanded, onPlay, onDelete }: {
 }
 
 /** The download folder as a tree — every file, where it really lives. */
-export default function DownloadedTree({ titles, filter = '', onPlay, onDelete }: Props) {
+export default function DownloadedTree({
+  titles, filter = '', expandMatches = true, onPlay, onDelete,
+}: Props) {
   const needle = filter.trim().toLowerCase()
   const root = buildFolders(titles, needle)
   return (
@@ -99,7 +110,12 @@ export default function DownloadedTree({ titles, filter = '', onPlay, onDelete }
           No files match “{filter}”.
         </p>
       ) : (
-        <Folder node={root} expanded={needle !== ''} onPlay={onPlay} onDelete={onDelete} />
+        <Folder
+          node={root}
+          expanded={expandMatches && needle !== ''}
+          onPlay={onPlay}
+          onDelete={onDelete}
+        />
       )}
     </div>
   )

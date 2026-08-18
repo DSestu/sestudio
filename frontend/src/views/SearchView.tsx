@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type {
-  AppSettings, DiscoverFilters, DownloadDestination, DownloadItem, DownloadJob, PersonHit,
-  SeasonCard,
+  AppSettings, DiscoverFilters, DownloadDestination, DownloadItem, DownloadJob,
+  DownloadedFile, DownloadedTitle, PersonHit, SeasonCard,
 } from '../api'
 import { checkDownloads, getSeason, postDownloads, searchPeople } from '../api'
 import { DEFAULT_DISCOVER_FILTERS } from '../api'
@@ -22,6 +22,9 @@ import type { SortKey } from '../sortItems'
 import { SORTS_FOR, defaultSortFor, sortItems } from '../sortItems'
 import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
+import DownloadedTree from '../components/downloaded/DownloadedTree'
+import { buildFolders } from '../downloadedFolders'
+import { useDownloadedLibrary } from '../downloadedLibrary'
 import { replaceParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
 import type { ReleaseState } from '../releaseDates'
@@ -39,6 +42,9 @@ interface Props {
   onSearchTerm: (term: string, year?: number) => void
   /** Open a person's profile from the People band. */
   onOpenPerson: (id: number) => void
+  /** Open a title already on disk, rather than a source listing. With a file,
+   *  that exact file plays instead of the title's first. */
+  onOpenDownloaded: (title: DownloadedTitle, file?: DownloadedFile) => void
   onJobsCreated: () => void
   onSkipped: (jobs: DownloadJob[]) => void
 }
@@ -93,12 +99,15 @@ function inWindow(card: SeasonCard, from: string, to: string): boolean {
 }
 
 /** Search view: query, TMDB discovery, results grid, and bulk season download. */
-export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, onOpenPerson, onJobsCreated, onSkipped }: Props) {
+export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, onOpenPerson, onOpenDownloaded, onJobsCreated, onSkipped }: Props) {
   // Raw, as scraped: merging is derived, so flipping the TMDB-identity setting
   // regroups what is already on screen without re-searching.
   const [rawResults, setRawResults] = useState<SeasonCard[]>([])
   // The query being searched for; seeded from the URL so back/reload restores.
   const [lastQuery, setLastQuery] = useState(params.get('q') ?? '')
+  // Copies on disk match instantly — they are already in memory, so they show
+  // while the sites are still being queried.
+  const downloadedTitles = useDownloadedLibrary()
   // The query the current `results` belong to — '' until the first response.
   const [resolvedQuery, setResolvedQuery] = useState('')
   const [filters, setFilters] = useState<DiscoverFilters>(() => filtersFrom(params))
@@ -195,6 +204,14 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   }, [lastQuery, settings.tmdb_configured])
 
   const people = peopleFor.q === lastQuery ? peopleFor.hits : []
+
+  // Matched on the file *paths*, so an episode whose name carries the query
+  // counts even when its folder does not. The answer has to be instant, so it
+  // filters what is already in memory rather than asking the server.
+  const downloadedMatches = useMemo(
+    () => buildFolders(downloadedTitles, lastQuery.trim().toLowerCase()).count,
+    [downloadedTitles, lastQuery],
+  )
 
   // Persist query + filters into the current history entry, so browser back
   // (and reload) land on this exact search instead of an empty one.
@@ -348,6 +365,42 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             </span>
           )}
         </div>
+      )}
+
+      {/* Above the remote results: a copy already on disk is the most
+          actionable answer to a search, and it plays without resolving a host. */}
+      {downloadedMatches > 0 && (
+        // Shut by default: the search is usually aimed at the sites, and local
+        // copies are a sidebar to that. The count on the summary is what makes
+        // it worth opening, so it has to be readable without opening it.
+        <details className="group rounded-box border border-base-300">
+          <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer list-none hover:bg-base-200 rounded-box">
+            <svg
+              className="w-3.5 h-3.5 shrink-0 text-base-content/40 transition-transform group-open:rotate-90"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+              On disk
+            </span>
+            <span className="text-xs text-base-content/40">
+              {downloadedMatches} file{downloadedMatches === 1 ? '' : 's'}
+            </span>
+          </summary>
+          <div className="px-2 pb-2">
+            {/* Folders shut too: a series match can be hundreds of episodes, and
+                the useful answer is which folder holds them. No delete here —
+                this is a search result, not the library. */}
+            <DownloadedTree
+              titles={downloadedTitles}
+              filter={lastQuery}
+              expandMatches={false}
+              onPlay={(title, file) => onOpenDownloaded(title, file)}
+            />
+          </div>
+        </details>
       )}
 
       {lastQuery !== '' && <PeopleResults people={people} onOpen={onOpenPerson} />}

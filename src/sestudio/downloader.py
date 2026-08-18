@@ -11,8 +11,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
+from sestudio.http_client import new_client
 from sestudio.media import ffmpeg_location
-from sestudio.models import StreamSource
+from sestudio.models import StreamSource, sanitize_path_component
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,14 @@ def download(
     if ffmpeg_dir:
         cmd += ["--ffmpeg-location", ffmpeg_dir]
     cmd += [
+        # Subtitles the manifest itself advertises. yt-dlp names them
+        # `<stem>.<lang>.vtt`, matching where download_subtitles puts the sidecar
+        # ones, so both kinds land in the same place. A no-op when there are none.
+        "--write-subs",
+        "--sub-langs",
+        "all",
+        "--sub-format",
+        "vtt",
         "--merge-output-format",
         "mp4",
         "-o",
@@ -164,6 +173,9 @@ def download(
         if proc.returncode == 0:
             _MIN_SIZE = 5 * 1024 * 1024  # 5 MB
             if output_path.exists() and output_path.stat().st_size >= _MIN_SIZE:
+                # Only once the video is known good, so a discarded attempt does
+                # not leave orphaned subtitles behind.
+                download_subtitles(source, output_path)
                 return True
             actual = output_path.stat().st_size if output_path.exists() else 0
             logger.warning(
@@ -199,6 +211,48 @@ def download(
         return False
 
     return False
+
+
+def subtitle_path(output_path: Path, lang: str) -> Path:
+    """Where a sidecar subtitle for *output_path* is written.
+
+    ``<video stem>.<lang>.vtt`` — the convention VLC and mpv look for, so an
+    external player picks it up with no configuration, and one the library can
+    find by globbing the stem.
+    """
+    safe = sanitize_path_component(lang) or "sub"
+    return output_path.with_suffix("").with_name(f"{output_path.stem}.{safe}.vtt")
+
+
+def download_subtitles(source: StreamSource, output_path: Path) -> list[Path]:
+    """Fetch the stream's sidecar subtitles alongside the finished video.
+
+    These are the ones lifted out of the embed page (vidzy's `/srtproxy/` VTTs
+    and the like); yt-dlp cannot see them, because they are never referenced by
+    the manifest it is given. Subtitles carried *inside* the manifest are a
+    separate matter, left to yt-dlp's own ``--write-subs``.
+
+    Failures are logged and skipped rather than raised: the video is the
+    download, and losing its subtitles should not fail the job or delete it.
+    """
+    written: list[Path] = []
+    if not source.subtitles:
+        return written
+
+    headers = {"User-Agent": source.user_agent, "Referer": source.referer}
+    with new_client(headers=headers) as client:
+        for sub in source.subtitles:
+            target = subtitle_path(output_path, sub.lang)
+            try:
+                resp = client.get(sub.url)
+                resp.raise_for_status()
+                target.write_bytes(resp.content)
+            except Exception as exc:  # noqa: BLE001 — best effort, see docstring
+                logger.warning("Could not fetch subtitle %s: %s", sub.url[:80], exc)
+                continue
+            logger.debug("Wrote subtitle %s (%d bytes)", target.name, len(resp.content))
+            written.append(target)
+    return written
 
 
 def _known(value: str | None) -> str:

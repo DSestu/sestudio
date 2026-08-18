@@ -32,3 +32,16 @@ export function orderProviders(list: string[], order?: string[]): string[] {
   const known = pref.filter(p => list.includes(p))
   return [...known, ...list.filter(p => !pref.includes(p))]
 }
+
+/**
+ * The order playback should try hosts in: the viewer's own ranking first, then
+ * the site's, then the built-in default.
+ *
+ * The ranking is the one set for downloads. A host you trust enough to keep a
+ * copy from is the one you want to watch from, and keeping two separate lists
+ * would only mean setting the same preference twice. Each list is a fallback
+ * for the one before it, so an unranked host is still offered — never dropped.
+ */
+export function playbackOrder(preferred?: string[], siteOrder?: string[]): string[] {
+  return [...new Set([...(preferred ?? []), ...(siteOrder ?? []), ...ORDER])]
+}

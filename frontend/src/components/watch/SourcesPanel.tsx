@@ -161,8 +161,14 @@ export default function SourcesPanel({
         {listings.map(listing => {
           // Per-episode when the site said so, else what the listing has at all
           // — a film, or a site that cannot answer per episode, still gets rows.
+          // An explicit per-episode answer wins, including an empty one — that
+          // is the site saying this episode has no versions, and the buttons
+          // should stay struck through. No entry at all means *unknown*, not
+          // none, so fall back to what the site lists overall. Treating unknown
+          // as none disabled every language on a row until it had been opened,
+          // which forced a switch to be two clicks: title first, language after.
           const available = (episodeNumber !== null && listing.epLangs[episodeNumber])
-            || (Object.keys(listing.epLangs).length ? [] : listing.langs)
+            || listing.langs
           // The open row shows what was actually probed, in preference order;
           // the others show what their site lists, untested until they are used.
           const listed = episodeNumber !== null ? (listing.hosts[episodeNumber] ?? []) : []

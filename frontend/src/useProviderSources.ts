@@ -40,9 +40,11 @@ function seedSources(local: StreamSource | null): Record<string, StreamSource> {
 
 /**
  * Probe every provider for an episode on mount, tracking per-provider status.
- * `active` (the provider to actually use) is chosen once probing finishes — the
- * first working provider in preference order — so the caller loads exactly one
- * media at the end. The user can override it by selecting a chip.
+ * `active` (the provider to actually use) is the first one to answer — playback
+ * starts there and then, without waiting for the slower hosts to finish. Only
+ * one media is ever loaded: once something is playing nothing replaces it, and
+ * the rest of the probes only fill in the chips. The user can override by
+ * selecting a chip, and their choice is never overridden.
  *
  * A downloaded copy (`downloadedSource`) short-circuits that: it leads the list, is
  * active from the first render, and is never probed — the file is known to
@@ -112,6 +114,12 @@ export function useProviderSources(
           sourcesRef.current[p] = src
           setSources(prev => ({ ...prev, [p]: src }))
           setStatus(prev => ({ ...prev, [p]: 'ok' }))
+          // Play the first host that answers, rather than waiting for the rest
+          // to finish. Preference order decided which host to *prefer*, not how
+          // long to sit on a black screen for it: one slow host held up every
+          // other one that was already working. Still exactly one media loaded
+          // — nothing switches once something is playing.
+          if (activeRef.current === null) setActiveBoth(p)
         } catch {
           if (cancelled) return
           setStatus(prev => ({ ...prev, [p]: 'failed' }))
@@ -119,13 +127,9 @@ export function useProviderSources(
       }),
     ).then(() => {
       if (cancelled) return
+      // Only the chips' loading state: whatever was going to play started as
+      // soon as it resolved, and if nothing did, `active` is still null.
       setProbing(false)
-      // Load exactly one media: the first working provider, unless the user
-      // already picked one while probing.
-      if (activeRef.current === null) {
-        const firstOk = providers.find(q => sourcesRef.current[q]) ?? null
-        setActiveBoth(firstOk)
-      }
     })
     return () => { cancelled = true; controller.abort() }
   }, [providers, remote, local, embedUrls, source])

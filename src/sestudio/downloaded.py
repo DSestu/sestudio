@@ -345,6 +345,70 @@ def invalidate() -> None:
         _cache.clear()
 
 
+_DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)")
+_durations: dict[tuple[str, int, float], float | None] = {}
+
+
+def duration_of(file: Path) -> float | None:
+    """Length in seconds, or None when it cannot be determined.
+
+    Read from ffmpeg's own report rather than ffprobe: there is no ffprobe
+    alongside the bundled ffmpeg, and asking ffmpeg to describe a file it will
+    not convert costs a fraction of a second.
+
+    Needed for DLNA: a renderer will only offer "jump to a timestamp" for media
+    the server says it can seek by time, and time cannot be turned into a byte
+    offset without knowing how long the file runs.
+    """
+    try:
+        stat = file.stat()
+    except OSError:
+        return None
+    key = (str(file), stat.st_size, stat.st_mtime)
+    if key in _durations:
+        return _durations[key]
+
+    seconds: float | None = None
+    try:
+        binary = ffmpeg_binary()
+        # No output file: ffmpeg describes the input, complains, and exits.
+        result = subprocess.run(
+            [binary, "-nostdin", "-hide_banner", "-i", str(file)],
+            timeout=30,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        match = _DURATION_RE.search(result.stderr.decode("utf-8", "replace"))
+        if match:
+            hours, minutes, rest = match.groups()
+            seconds = int(hours) * 3600 + int(minutes) * 60 + float(rest)
+    except (RuntimeError, OSError, subprocess.SubprocessError):
+        seconds = None
+
+    _durations[key] = seconds
+    return seconds
+
+
+def content_features(time_seekable: bool) -> str:
+    """The ``contentFeatures.dlna.org`` value for a stored file.
+
+    ``DLNA.ORG_OP`` is two flags: time-seek then byte-seek. Byte-seek is always
+    true here — the file is served with Range support. Time-seek is claimed only
+    when the duration is known, because claiming it without being able to answer
+    a ``TimeSeekRange`` request is what makes a renderer sit there doing nothing.
+
+    Advertising this at all is the point: told nothing, a renderer decides for
+    itself whether the media can be seeked, and for anything it cannot index —
+    an mp4 with its moov at the end, a container it half-knows — it decides no,
+    and the TV reports the action as unavailable.
+    """
+    op = "11" if time_seekable else "01"
+    # Streaming transfer mode, plus the usual background-transfer and
+    # connection-stall flags every DLNA server sends.
+    return f"DLNA.ORG_OP={op};DLNA.ORG_FLAGS=01700000000000000000000000000000"
+
+
 def _thumb_dir() -> Path:
     return config_dir() / "thumbs"
 

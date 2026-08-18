@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  castSeek, castSeekBy, castSetVolume, castStop, castToggleMute, castPlayPause, castVolumeBy,
+  castSeek, castSeekBy, castSetTextTrack, castSetVolume, castStop, castToggleMute,
+  castPlayPause, castVolumeBy,
   useCastState,
 } from '../../cast'
 import {
@@ -271,6 +272,45 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                       </span>
                     </>
                   )}
+                </div>
+              )}
+
+              {/* Side-loaded subtitles. Chromecast only: DLNA has no portable
+                  way to carry them, so the row would be a dead control there.
+                  Switching edits the media already playing, so it applies
+                  without reloading and losing position. */}
+              {target === 'chromecast' && cast.textTracks.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <svg
+                    className="w-5 h-5 shrink-0 text-base-content/60"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path strokeLinecap="round" d="M7 13h3M14 13h3" />
+                  </svg>
+                  <button
+                    onClick={() => castSetTextTrack(null)}
+                    aria-pressed={cast.activeTextTrackId === null}
+                    className={`btn btn-sm ${
+                      cast.activeTextTrackId === null ? 'btn-primary' : 'btn-ghost'
+                    }`}
+                  >
+                    Off
+                  </button>
+                  {cast.textTracks.map(track => (
+                    <button
+                      key={track.id}
+                      onClick={() => castSetTextTrack(track.id)}
+                      aria-pressed={cast.activeTextTrackId === track.id}
+                      title={`Show ${track.label} subtitles on the TV`}
+                      className={`btn btn-sm ${
+                        cast.activeTextTrackId === track.id ? 'btn-primary' : 'btn-ghost'
+                      }`}
+                    >
+                      {track.label}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

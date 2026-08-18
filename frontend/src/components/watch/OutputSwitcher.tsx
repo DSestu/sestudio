@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Renderer, StreamSource } from '../../api'
+import type { Renderer, StreamSource, StreamSubtitle } from '../../api'
 import { dlnaPlay, getCastHttpPort, listRenderers, downloadedFileUrl, resolveStream } from '../../api'
 import { fileFor, downloadedSnapshot } from '../../downloadedLibrary'
 import { castSeek, castToChromecast, loadCast, useCastState } from '../../cast'
@@ -53,16 +53,37 @@ export default function OutputSwitcher({
   }, [])
 
   /** Send one episode's stream to the chosen target. */
-  async function sendTo(proxyUrl: string, kind: string, title: string, mode: 'dlna' | 'chromecast', udn?: string) {
+  async function sendTo(
+    proxyUrl: string,
+    kind: string,
+    title: string,
+    mode: 'dlna' | 'chromecast',
+    udn?: string,
+    // Sidecar subtitles to side-load. Empty for a downloaded file, and ignored
+    // on DLNA, which has no portable way to carry them.
+    subtitles: StreamSubtitle[] = [],
+  ) {
     if (mode === 'dlna' && udn) {
       await dlnaPlay(udn, proxyUrl, title, kind)
       dlnaStarted()
     } else {
       // Chromecast can't verify a local CA, so fetch over plain HTTP on the
-      // app's direct port (not the HTTPS front the browser is using).
+      // app's direct port (not the HTTPS front the browser is using). The
+      // receiver fetches the subtitles itself, so they need the same treatment —
+      // an https URL here loads the video with silently missing captions.
       const port = await getCastHttpPort()
-      const absolute = `http://${window.location.hostname}:${port}${proxyUrl}`
-      await castToChromecast(absolute, kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4', title)
+      const onLan = (path: string) => `http://${window.location.hostname}:${port}${path}`
+      await castToChromecast(
+        onLan(proxyUrl),
+        kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
+        title,
+        subtitles.map(sub => ({
+          url: onLan(sub.proxy_url),
+          lang: sub.lang,
+          label: sub.label,
+          default: sub.default,
+        })),
+      )
     }
   }
 
@@ -71,7 +92,7 @@ export default function OutputSwitcher({
     setBusy(true)
     setMsg(`Sending to ${label}…`)
     try {
-      await sendTo(source.proxy_url, source.kind, ep.title, mode, udn)
+      await sendTo(source.proxy_url, source.kind, ep.title, mode, udn, source.subtitles)
       startCastSession(ep, mode)
       // Handoff: continue on the TV from where the browser player was.
       if (handoffAt > 5) {
@@ -98,7 +119,7 @@ export default function OutputSwitcher({
             return
           }
           const src = await resolveStream(next.embed_urls, undefined, undefined, next.source)
-          await sendTo(src.proxy_url, src.kind, next.title, mode, udn)
+          await sendTo(src.proxy_url, src.kind, next.title, mode, udn, src.subtitles)
         },
       })
       setMsg(null)

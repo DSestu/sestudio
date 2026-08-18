@@ -21,6 +21,7 @@ import PosterGrid from '../components/PosterGrid'
 import { setLibraryLayout, useLibraryLayout, type LayoutTab } from '../libraryLayout'
 import type { View } from '../nav'
 import { cardFor, openWatching, savedItems, watchingItems, type OpenTitle } from '../rowItems'
+import { normalizeTitle } from '../normalizeTitle'
 import { setSelectionActive } from '../selectionMode'
 import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
 import type { SortKey } from '../sortItems'
@@ -72,6 +73,10 @@ export default function LibraryView({ settings, onOpen, onNavigate, downloadedLi
   // Per tab: the genres on offer differ between them, so a selection carried
   // across would silently hide everything on the tab you just opened.
   const [pickedGenres, setPickedGenres] = useState<Set<string>>(new Set())
+  // Not per tab, unlike the genres: a title name means the same thing on every
+  // tab, and carrying the text across is how you check which list something is
+  // already on. The input stays on screen, so it is never a hidden filter.
+  const [query, setQuery] = useState('')
   // Per tab as well: "recently added" means nothing on Watching, whose own
   // default is how recently you watched.
   const [sorts, setSorts] = useState<Record<LayoutTab, SortKey>>(() => ({
@@ -162,11 +167,17 @@ export default function LibraryView({ settings, onOpen, onNavigate, downloadedLi
   const matchesGenres = (key: string) =>
     matchesAllGenres(metas.get(key)?.genres, pickedGenres)
 
+  // Accent-insensitive on purpose: the catalogue is French, so typing "tenebres"
+  // has to find "Ténèbres" — nobody reaches for the diacritics mid-search.
+  const needle = normalizeTitle(query)
+  const matchesQuery = (name: string) =>
+    !needle || normalizeTitle(name).includes(needle)
+
   const sort = sorts[tab]
   // Sorted after filtering, so the order describes what is actually shown.
   const visibleWatching = sortItems(
     inProgress
-      .filter(i => matchesGenres(`w-${i.series}-${i.season}`))
+      .filter(i => matchesGenres(`w-${i.series}-${i.season}`) && matchesQuery(i.series))
       .map(i => {
         const meta = metas.get(`w-${i.series}-${i.season}`)
         return { ...i, title: i.series, rating: meta?.rating, year: meta?.year }
@@ -175,7 +186,7 @@ export default function LibraryView({ settings, onOpen, onNavigate, downloadedLi
   )
   const visibleSaved = sortItems(
     savedOnTab
-      .filter(e => matchesGenres(refKey(e)))
+      .filter(e => matchesGenres(refKey(e)) && matchesQuery(e.series))
       .map(e => {
         const meta = metas.get(refKey(e))
         return { ...e, title: e.series, rating: meta?.rating, year: meta?.year }
@@ -317,6 +328,27 @@ export default function LibraryView({ settings, onOpen, onNavigate, downloadedLi
         ))}
       </div>
 
+      {/* Above the genre chips, since it is the coarser filter of the two and
+          the one you reach for first when you know the name. */}
+      {counts[tab] > 0 && tab !== 'downloaded' && (
+        <div className="relative w-full sm:max-w-xs">
+          <input
+            type="search"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Filter by title…"
+            aria-label="Filter library by title"
+            className="input input-sm input-bordered w-full pl-9"
+          />
+          <svg
+            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+          </svg>
+        </div>
+      )}
+
       {/* Below the tabs, above the list: the filter belongs to the tab it acts
           on, and it only appears once TMDB has told us what is in there. */}
       {counts[tab] > 0 && tab !== 'downloaded' && (
@@ -363,12 +395,22 @@ export default function LibraryView({ settings, onOpen, onNavigate, downloadedLi
           />
         ) : visibleCount === 0 ? (
           // Filtered to nothing, which is a different situation from an empty
-          // tab and needs a way back rather than a prompt to go and search.
-          <EmptyState
-            title="No titles match those genres"
-            message="A title has to carry every genre you pick. Try dropping one."
-            action={{ label: 'Clear genres', onClick: () => setPickedGenres(new Set()) }}
-          />
+          // tab and needs a way back rather than a prompt to go and search. The
+          // text filter is named first when it is set, since it is the one the
+          // user just typed and the likelier cause.
+          needle ? (
+            <EmptyState
+              title={`Nothing here matches “${query.trim()}”`}
+              message="It may be on another tab, or not saved yet."
+              action={{ label: 'Clear filter', onClick: () => setQuery('') }}
+            />
+          ) : (
+            <EmptyState
+              title="No titles match those genres"
+              message="A title has to carry every genre you pick. Try dropping one."
+              action={{ label: 'Clear genres', onClick: () => setPickedGenres(new Set()) }}
+            />
+          )
         ) : tab === 'watching' ? (
           layout === 'detail' ? (
             <div className="flex flex-col gap-2">

@@ -19,6 +19,22 @@ type Cast = any
 
 const CAST_SDK = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1'
 
+/** A sidecar subtitle to side-load with the media. */
+export interface CastTextTrack {
+  /** Absolute URL the *receiver* fetches — must be plain HTTP on the LAN. */
+  url: string
+  lang: string
+  label: string
+  default?: boolean
+}
+
+/** A side-loaded track as the UI sees it, once the receiver has it. */
+export interface CastTrackOption {
+  id: number
+  label: string
+  lang: string
+}
+
 export interface CastState {
   available: boolean   // SDK usable (secure context + framework loaded)
   connected: boolean   // an active receiver session exists
@@ -30,12 +46,17 @@ export interface CastState {
   muted: boolean
   canSeek: boolean
   canControlVolume: boolean
+  /** Subtitles sent with the current media; empty when it has none. */
+  textTracks: CastTrackOption[]
+  /** Which of them is showing, or null for off. */
+  activeTextTrackId: number | null
 }
 
 const state: CastState = {
   available: false, connected: false, title: '', isPaused: false,
   currentTime: 0, duration: 0, volume: 1, muted: false,
   canSeek: false, canControlVolume: false,
+  textTracks: [], activeTextTrackId: null,
 }
 let snapshot: CastState = { ...state }
 const listeners = new Set<() => void>()
@@ -132,7 +153,53 @@ export function loadCast(): Promise<boolean> {
 }
 
 /** Open the Chromecast device picker and load the media onto the chosen device. */
-export async function castToChromecast(url: string, contentType: string, title: string): Promise<void> {
+/**
+ * Build the receiver's Track objects for our sidecar subtitles.
+ *
+ * Ids are assigned here (1-based) rather than taken from the source: the Cast
+ * API keys `activeTrackIds` and every later edit on them, so they only have to
+ * be stable within one load.
+ */
+function buildTextTracks(w: Cast, subs: CastTextTrack[]): Cast[] {
+  return subs.map((sub, index) => {
+    const track = new w.chrome.cast.media.Track(index + 1, w.chrome.cast.media.TrackType.TEXT)
+    track.trackContentId = sub.url
+    track.trackContentType = 'text/vtt'
+    track.subtype = w.chrome.cast.media.TextTrackType.SUBTITLES
+    track.language = sub.lang
+    track.name = sub.label
+    return track
+  })
+}
+
+/**
+ * Show one of the side-loaded subtitle tracks, or null to turn them off.
+ *
+ * Applies to the media already playing on the receiver, so it takes effect
+ * without reloading and losing position.
+ */
+export function castSetTextTrack(trackId: number | null): void {
+  const w = window as Cast
+  const session = w.cast?.framework?.CastContext?.getInstance()?.getCurrentSession()
+  const media = session?.getMediaSession?.()
+  if (!media) return
+  const request = new w.chrome.cast.media.EditTracksInfoRequest(
+    trackId === null ? [] : [trackId],
+  )
+  media.editTracksInfo(
+    request,
+    () => { state.activeTextTrackId = trackId; emit() },
+    // A failed edit leaves the receiver as it was, so the UI must not move.
+    () => {},
+  )
+}
+
+export async function castToChromecast(
+  url: string,
+  contentType: string,
+  title: string,
+  subtitles: CastTextTrack[] = [],
+): Promise<void> {
   const ok = await loadCast()
   if (!ok) throw new Error('Chromecast is only available over HTTPS')
   const w = window as Cast
@@ -148,7 +215,25 @@ export async function castToChromecast(url: string, contentType: string, title: 
   const mediaInfo = new w.chrome.cast.media.MediaInfo(url, contentType)
   mediaInfo.metadata = new w.chrome.cast.media.GenericMediaMetadata()
   mediaInfo.metadata.title = title
-  await session.loadMedia(new w.chrome.cast.media.LoadRequest(mediaInfo))
+
+  const tracks = buildTextTracks(w, subtitles)
+  const request = new w.chrome.cast.media.LoadRequest(mediaInfo)
+  if (tracks.length) {
+    mediaInfo.tracks = tracks
+    // Enable whichever the host marked default, else the first — the point of
+    // sending them is that they show without hunting through the TV's menus.
+    const wanted = subtitles.findIndex(s => s.default)
+    request.activeTrackIds = [(wanted === -1 ? 0 : wanted) + 1]
+  }
+  await session.loadMedia(request)
+
+  state.textTracks = subtitles.map((sub, index) => ({
+    id: index + 1,
+    label: sub.label,
+    lang: sub.lang,
+  }))
+  state.activeTextTrackId = tracks.length ? (request.activeTrackIds?.[0] ?? null) : null
+  emit()
 }
 
 // --- Remote controls for the active session ------------------------------- #

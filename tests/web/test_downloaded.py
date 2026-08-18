@@ -422,3 +422,88 @@ def test_a_file_without_a_language_folder_gets_one(client, out):
     ).json()
     assert body["available_langs"] == [downloaded.UNKNOWN_LANG]
     assert body["episodes"][0]["langs"] == [downloaded.UNKNOWN_LANG]
+
+
+# --- DLNA seeking (a TV asks in time, not in bytes) ------------------------- #
+
+
+def _clip(out, name="Old Film.mp4", seconds="8"):
+    from sestudio.media import ffmpeg_binary
+    import subprocess
+
+    try:
+        ff = ffmpeg_binary()
+    except RuntimeError:  # pragma: no cover — depends on the machine
+        pytest.skip("no ffmpeg available")
+    target = out / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            ff,
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=320x240:rate=10",
+            "-t",
+            seconds,
+            "-pix_fmt",
+            "yuv420p",
+            str(target),
+        ],
+        check=True,
+    )
+    downloaded.invalidate()
+    return target
+
+
+def test_advertises_time_and_byte_seek_when_the_duration_is_known(client, out):
+    _clip(out)
+    resp = client.head("/api/downloaded/file", params={"path": "Old Film.mp4"})
+    assert resp.status_code == 200
+    # OP=11: time-seek then byte-seek. Told nothing, a renderer decides for
+    # itself and refuses on anything it cannot index.
+    assert "DLNA.ORG_OP=11" in resp.headers["contentfeatures.dlna.org"]
+    assert resp.headers["accept-ranges"] == "bytes"
+
+
+def test_time_seek_returns_the_matching_byte_range(client, out):
+    clip = _clip(out)
+    size = clip.stat().st_size
+
+    resp = client.get(
+        "/api/downloaded/file",
+        params={"path": "Old Film.mp4"},
+        headers={"TimeSeekRange.dlna.org": "npt=4.000-"},
+    )
+    assert resp.status_code == 206
+    # Answered in time as well as bytes, which is what the renderer reads back.
+    assert "npt=4.000-" in resp.headers["timeseekrange.dlna.org"]
+    assert f"/{size}" in resp.headers["content-range"]
+    # Roughly half the file, since the seek was to half of an 8s clip.
+    offset = int(resp.headers["content-range"].split()[1].split("-")[0])
+    assert 0 < offset < size
+    assert len(resp.content) == size - offset
+
+
+def test_time_seek_accepts_the_clock_spelling(client, out):
+    _clip(out)
+    resp = client.get(
+        "/api/downloaded/file",
+        params={"path": "Old Film.mp4"},
+        headers={"TimeSeekRange.dlna.org": "npt=00:00:02.000-"},
+    )
+    assert resp.status_code == 206
+    assert "npt=2.000-" in resp.headers["timeseekrange.dlna.org"]
+
+
+def test_byte_seek_still_works_untouched(client, out):
+    _clip(out)
+    resp = client.get(
+        "/api/downloaded/file",
+        params={"path": "Old Film.mp4"},
+        headers={"Range": "bytes=0-99"},
+    )
+    assert resp.status_code == 206
+    assert len(resp.content) == 100

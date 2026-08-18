@@ -25,7 +25,7 @@ import type { PortalNode } from '../portalNode'
 import { useSeasonDetail } from '../components/season/useSeasonDetail'
 import { downloadToDevice } from '../deviceDownloads'
 import type { Navigate } from '../nav'
-import { DOWNLOADED_PROVIDER, type PlayableEpisode } from '../providers'
+import { DOWNLOADED_PROVIDER, playbackOrder, type PlayableEpisode } from '../providers'
 import { useProviderSources } from '../useProviderSources'
 import {
   fileFor, fmtSize, langsFor, sanitizeName, titleFor, useDownloadedLibrary,
@@ -234,6 +234,26 @@ export default function WatchView({
   function switchListing(
     next: SourceListing, nextLang?: string, episodeNumber?: number,
   ) {
+    // Carry the alternates across, and fold in the listing being left so it is
+    // reachable from the other side. Without this the route arrives with no
+    // `alt`, the panel rebuilds from the new page alone, and every other site
+    // vanishes until an async re-lookup happens to find it again — switching to
+    // one site looked like it deleted the others.
+    const carried = [
+      ...(altPageUrls ?? []).map((url, i) => ({
+        url,
+        src: (altSources ?? [])[i] || 'fstream',
+      })),
+      { url: sourceUrl, src: sourceId },
+    ]
+    const kept: { url: string; src: string }[] = []
+    const seen = new Set<string>([next.page_url])
+    for (const alt of carried) {
+      if (!alt.url || seen.has(alt.url)) continue
+      seen.add(alt.url)
+      kept.push(alt)
+    }
+
     navigate('watch', {
       u: next.page_url,
       t: seriesName,
@@ -241,6 +261,8 @@ export default function WatchView({
       lang: nextLang ?? activeLang,
       ep: (episodeNumber ?? currentNumber) || undefined,
       src: next.source,
+      alt: kept.length ? kept.map(a => a.url).join('|') : undefined,
+      altsrc: kept.length ? kept.map(a => a.src).join('|') : undefined,
     })
   }
 
@@ -361,7 +383,8 @@ export default function WatchView({
     useProviderSources(
       playing ? (current?.embed_urls ?? NO_EMBEDS) : NO_EMBEDS,
       sourceId,
-      detail?.provider_order,
+      // The download ranking decides playback too — one preference, not two.
+      playbackOrder(settings.preferred_hosts, detail?.provider_order),
       downloadedSource,
     )
   const source = active ? sources[active] : null

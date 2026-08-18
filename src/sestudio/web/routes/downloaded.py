@@ -10,10 +10,12 @@ the path is the whole of what is known about it.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, StreamingResponse
 
 from sestudio import library, downloaded
 from sestudio.config import load_config
@@ -162,8 +164,37 @@ def _resolved(path: str) -> Any:
     return target
 
 
+def _npt_seconds(value: str) -> float | None:
+    """Start position out of a ``TimeSeekRange.dlna.org: npt=…`` header.
+
+    Renderers send either plain seconds or ``HH:MM:SS.mmm``, so both are read.
+    """
+    text = value.strip()
+    if text.lower().startswith("npt="):
+        text = text[4:]
+    start = text.split("-", 1)[0].strip()
+    if not start:
+        return None
+    try:
+        if ":" in start:
+            parts = [float(p) for p in start.split(":")]
+            while len(parts) < 3:
+                parts.insert(0, 0.0)
+            return parts[-3] * 3600 + parts[-2] * 60 + parts[-1]
+        return float(start)
+    except ValueError:
+        return None
+
+
+def _from_offset(target: Path, offset: int) -> Iterator[bytes]:
+    with target.open("rb") as handle:
+        handle.seek(offset)
+        while chunk := handle.read(64 * 1024):
+            yield chunk
+
+
 @router.api_route("/downloaded/file", methods=["GET", "HEAD"])
-async def get_downloaded_file(path: str = Query(...)) -> FileResponse:
+async def get_downloaded_file(request: Request, path: str = Query(...)) -> Response:
     """Stream a downloaded file.
 
     No ``filename`` is passed, so the response carries no ``Content-Disposition``
@@ -173,14 +204,58 @@ async def get_downloaded_file(path: str = Query(...)) -> FileResponse:
 
     HEAD is registered explicitly: a DLNA renderer probes with it before playing,
     and ``@router.get`` alone answers it with 405.
+
+    For a TV, byte ranges are not enough. A renderer decides whether to offer
+    "jump to a timestamp" from what the server advertises, and answers a seek
+    with ``TimeSeekRange.dlna.org`` — in time, not bytes. Told nothing, it works
+    that out from the container alone, which is why seeking worked on some files
+    and was refused on others.
     """
     target = _resolved(path)
+    duration = await asyncio.to_thread(downloaded.duration_of, target)
+    media_type = downloaded.media_type_for(target)
+    headers = {
+        **_CORS_HEADERS,
+        "Accept-Ranges": "bytes",
+        "contentFeatures.dlna.org": downloaded.content_features(duration is not None),
+        # Renderers expect the transfer mode they asked for to be echoed.
+        "transferMode.dlna.org": request.headers.get(
+            "transferMode.dlna.org", "Streaming"
+        ),
+    }
+
+    asked = request.headers.get("TimeSeekRange.dlna.org")
+    start = _npt_seconds(asked) if asked else None
+    if start is not None and duration and duration > 0:
+        size = target.stat().st_size
+        # Proportional: without an index there is nothing better to go on, and
+        # every DLNA server does the same. Exact for constant bitrate, and off
+        # by a little on variable — the renderer corrects itself as it plays.
+        offset = min(max(0, int(size * (start / duration))), max(0, size - 1))
+        last = size - 1
+        headers |= {
+            "Content-Range": f"bytes {offset}-{last}/{size}",
+            "TimeSeekRange.dlna.org": (
+                f"npt={start:.3f}-{duration:.3f}/{duration:.3f}"
+                f" bytes={offset}-{last}/{size}"
+            ),
+            "Content-Length": str(size - offset),
+        }
+        if request.method == "HEAD":
+            return Response(status_code=206, media_type=media_type, headers=headers)
+        return StreamingResponse(
+            _from_offset(target, offset),
+            status_code=206,
+            media_type=media_type,
+            headers=headers,
+        )
+
     return FileResponse(
         target,
         # By extension: a collection that predates this tool is full of mkv and
         # avi, and calling those mp4 would mislead every player that trusts it.
-        media_type=downloaded.media_type_for(target),
-        headers=_CORS_HEADERS,
+        media_type=media_type,
+        headers=headers,
     )
 
 
