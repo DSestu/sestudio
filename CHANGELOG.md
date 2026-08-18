@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/DSestu/sestudio/compare/v0.15.0...v0.16.0) (2026-08-18)
+
+
+### New features
+
+* add notifications & watch list ([9d2a75c](https://github.com/DSestu/sestudio/commit/9d2a75c17f1bef9b9da6f8c81e2545a8c54c9bcd))
+
 ## [0.15.0](https://github.com/DSestu/sestudio/compare/v0.14.0...v0.15.0) (2026-08-18)
 
 
