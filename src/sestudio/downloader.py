@@ -112,6 +112,14 @@ def download(
         "vtt",
         "--merge-output-format",
         "mp4",
+        # `--merge-output-format` only governs *merging* separate audio and video
+        # streams; a single HLS stream is written in its native container, so an
+        # `.mp4` from a TS-segment manifest held MPEG-TS and no browser would
+        # play it (MEDIA_ERR_SRC_NOT_SUPPORTED, and the file's own name lied
+        # about it to every client that trusts the extension). Remuxing puts the
+        # stream in the container the name claims; it is a copy, not a re-encode.
+        "--remux-video",
+        "mp4",
         "-o",
         str(output_path),
         "--progress",

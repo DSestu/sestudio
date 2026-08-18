@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, TrendingCard } from '../api'
+import type { AppSettings, TrendingCard, WatcherEvent } from '../api'
 import { DEFAULT_DISCOVER_FILTERS, discoverTitles, getGenres, getTrending } from '../api'
 import { useCollections } from '../collections'
+import ActivityPeek from '../components/ActivityPeek'
 import EmptyState from '../components/EmptyState'
 import WatchingRow from '../components/library/WatchingRow'
 import MediaRow from '../components/MediaRow'
 import type { View } from '../nav'
+import { useNotifications } from '../notifications'
 import { openWatching, savedItems, type OpenTitle } from '../rowItems'
 import { useWatchState, watching } from '../watchState'
 
@@ -20,6 +22,8 @@ interface Props {
   onSearchTerm: (term: string, year?: number) => void
   /** Open the search view's discover panel pre-filtered on a genre. */
   onDiscoverGenre: (genreId: number) => void
+  /** Open the title a watcher event points at. */
+  onOpenEvent: (event: WatcherEvent) => void
 }
 
 /** The genres Home shows a trending row for (TMDB movie genre ids). */
@@ -32,9 +36,12 @@ interface GenreRow {
 }
 
 /** Landing view: what to resume first, then everything saved. */
-export default function HomeView({ settings, onOpen, onNavigate, onSearchTerm, onDiscoverGenre }: Props) {
+export default function HomeView({
+  settings, onOpen, onNavigate, onSearchTerm, onDiscoverGenre, onOpenEvent,
+}: Props) {
   const watch = useWatchState()
   const collections = useCollections()
+  const { events: activity } = useNotifications()
 
   const [fetchedTrending, setFetchedTrending] = useState<TrendingCard[]>([])
   useEffect(() => {
@@ -77,7 +84,16 @@ export default function HomeView({ settings, onOpen, onNavigate, onSearchTerm, o
   const watchlist = savedItems('watchlist', collections, onOpen, settings.lang)
   const favourites = savedItems('favourites', collections, onOpen, settings.lang)
 
-  if (!inProgress.length && !trending.length && !watchlist.length && !favourites.length) {
+  // Activity counts here too: a fresh install whose only content is a watcher
+  // finding would otherwise be told there is nothing, with the finding hidden
+  // behind the empty state.
+  if (
+    !inProgress.length &&
+    !trending.length &&
+    !watchlist.length &&
+    !favourites.length &&
+    !activity.length
+  ) {
     return (
       <EmptyState
         title="Nothing here yet"
@@ -95,6 +111,10 @@ export default function HomeView({ settings, onOpen, onNavigate, onSearchTerm, o
 
   return (
     <div className="flex flex-col gap-8">
+      {/* First, because news goes stale: a new episode is the most time-sensitive
+          thing Home can offer. Hides itself entirely when nothing is new. */}
+      <ActivityPeek onOpen={onOpenEvent} onSeeAll={() => onNavigate('notifications')} />
+
       {inProgress.length > 0 && (
         <section aria-label="Continue watching">
           <div className="flex items-baseline justify-between gap-3 mb-3">

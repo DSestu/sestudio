@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from sestudio.config import load_config
 from sestudio.providers.filmoon import FilmoonProvider
 from sestudio.providers.luluvid import LuluvidProvider
 from sestudio.providers.netu import NetuProvider
@@ -31,7 +32,9 @@ from sestudio.web.routes import (
     sites,
     stream,
     tmdb,
+    watchers,
 )
+from sestudio.watchers.poller import run_poller, watchers_enabled
 from sestudio.web.worker import JobStore
 
 logger = logging.getLogger(__name__)
@@ -91,15 +94,23 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     Startup is not blocked by a failure: a site that cannot be reached now
     falls back to resolving on demand.
+
+    The watcher poller joins the same task list. It is skipped when
+    SESTUDIO_WATCHERS=0 so tests can enter the lifespan without it reaching the
+    network.
     """
     await _refresh_sites(app)
-    task = asyncio.create_task(_refresh_loop(app))
+    tasks = [asyncio.create_task(_refresh_loop(app))]
+    if watchers_enabled():
+        tasks.append(asyncio.create_task(run_poller(app)))
     try:
         yield
     finally:
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 def create_app(live_domain: str | None = None) -> FastAPI:
@@ -122,7 +133,11 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     # plain HTTP on this port even when the UI is fronted by HTTPS (Caddy), so
     # it must be the real listen port, not whatever the browser connected to.
     app.state.http_port = 8080
-    app.state.job_store = JobStore(provider_registry=_PROVIDERS, sites=app.state.sites)
+    app.state.job_store = JobStore(
+        provider_registry=_PROVIDERS,
+        sites=app.state.sites,
+        watcher_max_concurrent=load_config().watcher_max_concurrent,
+    )
 
     app.include_router(search.router, prefix="/api")
     app.include_router(seasons.router, prefix="/api")
@@ -134,6 +149,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(cast.router, prefix="/api")
     app.include_router(tmdb.router, prefix="/api")
     app.include_router(sites.router, prefix="/api")
+    app.include_router(watchers.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)
     dist = _frontend_dist()

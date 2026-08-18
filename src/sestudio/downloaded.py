@@ -19,6 +19,7 @@ record, so the path is the whole of what is known about it.
 
 from __future__ import annotations
 
+import glob
 import hashlib
 import os
 import re
@@ -347,6 +348,326 @@ def invalidate() -> None:
 
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)")
 _durations: dict[tuple[str, int, float], float | None] = {}
+
+# `  Stream #0:1[0x2](fra): Audio: aac (LC) (mp4a / …), 44100 Hz, stereo, …`
+# The language is in brackets when the muxer recorded one; `und` (or nothing) is
+# what a file assembled by a downloader usually carries.
+_STREAM_RE = re.compile(
+    r"^\s*Stream #0:(\d+)(?:\[[^\]]*\])?(?:\((?P<lang>[^)]*)\))?: "
+    r"(?P<kind>Audio|Subtitle): (?P<codec>[A-Za-z0-9_]+)"
+)
+# `      title           : VF` inside a stream's own Metadata block. This is what
+# a human named the track, and it beats "Track 2" whenever it is there.
+_TITLE_RE = re.compile(r"^\s+title\s*:\s*(.+?)\s*$")
+
+# Subtitles a browser can be given as text. Everything else in this list's place
+# — PGS and VOBSUB — is a picture of a subtitle, and converting one to WebVTT is
+# not a conversion but an OCR job, so those are reported and not offered.
+_TEXT_SUBTITLE_CODECS = frozenset(
+    {
+        "subrip",
+        "srt",
+        "ass",
+        "ssa",
+        "mov_text",
+        "webvtt",
+        "text",
+        "eia_608",
+        "subviewer",
+    }
+)
+
+_tracks: dict[tuple[str, int, float], "MediaTracks"] = {}
+
+
+@dataclass
+class Track:
+    """One audio or subtitle stream inside a file."""
+
+    #: Index among streams of this kind — what ffmpeg's `-map 0:a:N` wants, and
+    #: not the absolute stream number, which counts video too.
+    index: int
+    codec: str
+    #: ISO-ish language as the container spells it, '' when it records none.
+    lang: str
+    #: The track's own name, when it has one.
+    title: str
+    default: bool
+    #: Subtitles only: whether this can be served as WebVTT at all.
+    text: bool = True
+
+    @property
+    def label(self) -> str:
+        """What to show in a track menu.
+
+        The title if the file names one, else the language, else the position —
+        a menu of "Track 1 / Track 2" is poor but still better than blank rows.
+        """
+        return self.title or self.lang.upper() or f"Track {self.index + 1}"
+
+
+@dataclass
+class MediaTracks:
+    audio: list[Track]
+    subtitles: list[Track]
+
+
+def _parse_streams(text: str) -> MediaTracks:
+    """Read ffmpeg's own report of a file into its audio and subtitle tracks.
+
+    Parsed from the human-readable output rather than ffprobe's JSON for the
+    reason ``duration_of`` gives: there is no ffprobe beside the bundled ffmpeg.
+    Titles arrive *after* the stream line they belong to, so the current track is
+    held open until the next stream (or the end) closes it.
+    """
+    audio: list[Track] = []
+    subtitles: list[Track] = []
+    current: Track | None = None
+
+    for line in text.splitlines():
+        match = _STREAM_RE.match(line)
+        if match:
+            kind = match.group("kind")
+            lang = (match.group("lang") or "").strip()
+            codec = match.group("codec").lower()
+            bucket = audio if kind == "Audio" else subtitles
+            current = Track(
+                index=len(bucket),
+                codec=codec,
+                # `und` is the muxer's way of saying it does not know, which is
+                # not a language and should not be offered as one.
+                lang="" if lang.lower() in ("", "und") else lang,
+                title="",
+                default="(default)" in line,
+                text=kind == "Audio" or codec in _TEXT_SUBTITLE_CODECS,
+            )
+            bucket.append(current)
+            continue
+        if current is not None:
+            title = _TITLE_RE.match(line)
+            if title:
+                current.title = title.group(1)
+                current = None  # one title per stream; don't take the next one's
+
+    return MediaTracks(audio=audio, subtitles=subtitles)
+
+
+def tracks_of(file: Path) -> MediaTracks:
+    """The audio and subtitle tracks inside *file*.
+
+    Cached on the file's identity like ``duration_of``, because the answer only
+    changes when the file does, and a probe costs a process.
+    """
+    try:
+        stat = file.stat()
+    except OSError:
+        return MediaTracks(audio=[], subtitles=[])
+    key = (str(file), stat.st_size, stat.st_mtime)
+    if key in _tracks:
+        return _tracks[key]
+
+    found = MediaTracks(audio=[], subtitles=[])
+    try:
+        binary = ffmpeg_binary()
+        result = subprocess.run(
+            [binary, "-nostdin", "-hide_banner", "-i", str(file)],
+            timeout=30,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        found = _parse_streams(result.stderr.decode("utf-8", "replace"))
+    except (RuntimeError, OSError, subprocess.SubprocessError):
+        pass  # no ffmpeg, or an unreadable file: no tracks to offer
+
+    _tracks[key] = found
+    return found
+
+
+def sidecar_subtitles(file: Path) -> list[tuple[str, Path]]:
+    """`(language, path)` for the `.vtt` files sitting beside *file*.
+
+    ``download_subtitles`` and yt-dlp's ``--write-subs`` both write
+    ``<stem>.<lang>.vtt`` here, so the language is read back off the name. These
+    are why the scan can ignore subtitle files and still find them: they are
+    found from the video they belong to, not by walking for them.
+    """
+    found: list[tuple[str, Path]] = []
+    for candidate in sorted(file.parent.glob(f"{glob.escape(file.stem)}.*.vtt")):
+        # `<stem>.<lang>.vtt` — whatever sits between the stem and the suffix.
+        middle = candidate.name[len(file.stem) + 1 : -len(".vtt")]
+        if middle:
+            found.append((middle, candidate))
+    return found
+
+
+def _subtitle_dir() -> Path:
+    return config_dir() / "subs"
+
+
+def _audio_dir() -> Path:
+    return config_dir() / "audio"
+
+
+# Audio a browser and a TV will both take as-is inside an mp4. Anything else —
+# AC-3, E-AC-3, DTS, TrueHD, and the FLAC an anime release often carries — is
+# re-encoded to AAC. Chrome plays none of those (I checked: `canPlayType` for
+# ac-3 and ec-3 both answer ""), so copying them through would produce a file
+# that plays picture and no sound, which is worse than waiting for an encode.
+_BROWSER_SAFE_AUDIO = frozenset({"aac", "mp3"})
+
+
+def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
+    """*file* rebuilt with audio track *index* as its only audio, cached on disk.
+
+    This is the whole of "switch audio track" in a browser. No browser implements
+    `HTMLMediaElement.audioTracks`, so the track cannot be chosen client-side; the
+    server has to hand over a file that already carries the wanted one. Jellyfin
+    does the same thing, and for the same reason.
+
+    The video is always copied, never re-encoded, so this costs about a second
+    for a whole episode. The audio is copied too unless its codec would not play
+    (see ``_BROWSER_SAFE_AUDIO``), which is the only case that spends real time.
+
+    Cached under the file's identity and the track index, so switching back and
+    forth pays once. Returns None when there is no such track, and for the
+    default track — that one is the original file, and a copy of it would be
+    pure waste.
+    """
+    tracks = tracks_of(file)
+    if index <= 0 or index >= len(tracks.audio):
+        return None
+    try:
+        stat = file.stat()
+    except OSError:
+        return None
+
+    codec = tracks.audio[index].codec
+    key = hashlib.sha1(
+        f"{relative}|{int(stat.st_mtime)}|{stat.st_size}|a{index}|{codec}".encode()
+    ).hexdigest()
+    out = _audio_dir() / f"{key}.mp4"
+    if out.is_file() and out.stat().st_size > 0:
+        return out
+
+    try:
+        binary = ffmpeg_binary()
+    except RuntimeError:
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    audio_args = (
+        ["-c:a", "copy"]
+        if codec in _BROWSER_SAFE_AUDIO
+        else ["-c:a", "aac", "-b:a", "192k"]
+    )
+    tmp = out.with_name(f"{key}.{os.getpid()}.{threading.get_ident()}.tmp.mp4")
+    try:
+        result = subprocess.run(
+            [
+                binary,
+                "-nostdin",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(file),
+                "-map",
+                "0:v:0",
+                "-map",
+                f"0:a:{index}",
+                "-c:v",
+                "copy",
+                *audio_args,
+                # Index at the front: this file is served with byte ranges and
+                # cast to renderers, both of which need to seek without first
+                # fetching the tail.
+                "-movflags",
+                "+faststart",
+                str(tmp),
+            ],
+            # Generous: a copy takes a second, but re-encoding the audio of a
+            # long film is minutes, and dying half way would leave the track
+            # permanently unavailable.
+            timeout=1800,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
+            os.replace(tmp, out)
+            return out
+        return None
+    except (OSError, subprocess.SubprocessError):
+        return None
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def extracted_subtitle(file: Path, relative: str, index: int) -> Path | None:
+    """A subtitle track lifted out of *file* as WebVTT, cached on disk.
+
+    Needed because no browser exposes the subtitle tracks inside a container:
+    they have to become the sidecar files a `<track>` element can load. Cached
+    under the file's identity and the track index, exactly as ``thumbnail`` is,
+    so this costs one ffmpeg run per track, once.
+
+    Returns None when the track cannot be text — a PGS or VOBSUB track is an
+    image and only burning it into the video would show it.
+    """
+    tracks = tracks_of(file)
+    if index >= len(tracks.subtitles) or not tracks.subtitles[index].text:
+        return None
+    try:
+        stat = file.stat()
+    except OSError:
+        return None
+
+    key = hashlib.sha1(
+        f"{relative}|{int(stat.st_mtime)}|{stat.st_size}|{index}".encode()
+    ).hexdigest()
+    out = _subtitle_dir() / f"{key}.vtt"
+    if out.is_file() and out.stat().st_size > 0:
+        return out
+
+    try:
+        binary = ffmpeg_binary()
+    except RuntimeError:
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    # Written aside and moved into place, so two players asking for the same
+    # track at once waste work at worst and never read a half-written file.
+    tmp = out.with_name(f"{key}.{os.getpid()}.{threading.get_ident()}.tmp.vtt")
+    try:
+        result = subprocess.run(
+            [
+                binary,
+                "-nostdin",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(file),
+                "-map",
+                f"0:s:{index}",
+                "-f",
+                "webvtt",
+                str(tmp),
+            ],
+            timeout=120,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
+            os.replace(tmp, out)
+            return out
+        return None
+    except (OSError, subprocess.SubprocessError):
+        return None
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def duration_of(file: Path) -> float | None:

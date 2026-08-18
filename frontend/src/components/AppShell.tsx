@@ -23,13 +23,22 @@ const DESTINATIONS: Destination[] = [
   { id: 'library', label: 'Library', icon: icon('M20.8 6.6a4.5 4.5 0 00-6.4 0L12 9l-2.4-2.4a4.5 4.5 0 10-6.4 6.4L12 21.5l8.8-8.5a4.5 4.5 0 000-6.4z') },
   { id: 'downloaded', label: 'Downloaded', icon: icon('M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6L9 5H6a2 2 0 00-2 2z') },
   { id: 'downloads', label: 'Downloads', icon: icon('M12 3v12m0 0l-4-4m4 4l4-4M4 19h16') },
+  { id: 'notifications', label: 'Activity', icon: icon('M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0') },
 ]
+
+/** Destinations that carry a count badge, and which prop feeds it. */
+const BADGES: Partial<Record<Tab, 'download' | 'unread'>> = {
+  downloads: 'download',
+  notifications: 'unread',
+}
 
 interface Props {
   view: View
   onNavigate: (v: Tab) => void
   /** Rendered on the Downloads destination when non-zero. */
   downloadBadge?: number
+  /** Unread watcher events, rendered on the Activity destination when non-zero. */
+  unreadBadge?: number
   /** Navigates to the settings page. */
   onOpenSettings: () => void
   children: ReactNode
@@ -39,7 +48,9 @@ interface Props {
  * App chrome: a persistent rail on `md:` and up, a bottom tab bar below it.
  * The content column scrolls independently on desktop so the rail stays put.
  */
-export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSettings, children }: Props) {
+export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBadge = 0, onOpenSettings, children }: Props) {
+  const badgeFor = (id: Tab) =>
+    BADGES[id] === 'download' ? downloadBadge : BADGES[id] === 'unread' ? unreadBadge : 0
   // When a cast is active the Now-Casting bar sits above the mobile tab bar
   // (and flush to the bottom on desktop), so content needs extra room to clear it.
   const castConnected = useCastState().connected
@@ -69,8 +80,8 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
             >
               {d.icon}
               <span className="flex-1 text-left">{d.label}</span>
-              {d.id === 'downloads' && downloadBadge > 0 && (
-                <span className="badge badge-primary badge-sm">{downloadBadge}</span>
+              {badgeFor(d.id) > 0 && (
+                <span className="badge badge-primary badge-sm">{badgeFor(d.id)}</span>
               )}
             </button>
           ))}
@@ -121,7 +132,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
       {/* Mobile tab bar — hidden while the selection bar occupies this slot. */}
       <nav
         aria-label="Primary"
-        className={`fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)] ${
+        className={`fixed bottom-0 inset-x-0 z-40 grid grid-cols-6 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)] ${
           selecting ? 'hidden' : 'md:hidden'
         }`}
       >
@@ -138,8 +149,8 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, onOpenSe
             {view === d.id && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
             {d.icon}
             {d.label}
-            {d.id === 'downloads' && downloadBadge > 0 && (
-              <span className="absolute top-1.5 right-[22%] badge badge-primary badge-xs">{downloadBadge}</span>
+            {badgeFor(d.id) > 0 && (
+              <span className="absolute top-1.5 right-[18%] badge badge-primary badge-xs">{badgeFor(d.id)}</span>
             )}
           </button>
         ))}

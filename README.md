@@ -45,6 +45,7 @@ close the tab. Stop it with Ctrl-C.
   * [Search across sites](#search-across-sites)
   * [Every version, from every source](#every-version-from-every-source)
   * [Watching](#watching)
+  * [Watchers and notifications](#watchers-and-notifications)
   * [Downloading](#downloading)
   * [Your downloads, as a source](#your-downloads-as-a-source)
   * [Casting](#casting-1)
@@ -108,6 +109,58 @@ the next.
 * Hosts carrying soft subtitles (vidzy, premium) hand them to the player as
   sidecar tracks. HLS alternate renditions (`#EXT-X-MEDIA`) are relayed
   untouched, so a multi-track stream exposes its menus by itself.
+
+### Watchers and notifications
+
+Saved criteria the server re-checks on a schedule. What it finds lands in
+**Activity**, newest first, with an unread badge — and on Home, under *New for
+you*.
+
+Three ways to start one:
+
+| Where | Watches |
+|---|---|
+| **Watch for new episodes**, next to a title | New episodes *and* new languages for that title |
+| **Watch this search**, under the search bar | New results for those search words |
+| **Watch for new releases…**, in Activity → Watchers | Genre + rating + vote count |
+
+The language case is the point of the first one: a watcher reports **VF arriving
+on an episode that already had VOSTFR**, because an item is identified by
+*(episode, language)* rather than by episode alone.
+
+**The first check never tells you anything.** It records what already exists, so
+creating a watcher on a 200-episode series does not report 200 episodes — only
+what turns up afterwards. Seen items are never un-seen either, so a listing that
+briefly disappears and comes back is not reported twice.
+
+**Genre/rating watchers wait until something can actually be watched.** A TMDB
+match alone is not reported: a source has to carry the title first. Candidates
+that nothing carries yet are parked and re-checked daily, so "any thriller rated
+7+ with 500 votes" reports films you can watch, not films you can read about. A
+vote floor does mean brand-new releases are reported a little later, once they
+have been rated — which is why the release window defaults to three months rather
+than a month.
+
+Set **Download automatically** on a watcher and its findings are fetched as they
+land. Those downloads run in a separate lane, capped well below the interactive
+pool (`watcher_max_concurrent`, default 2), so background work never makes a
+download you asked for wait.
+
+Optionally, **WhatsApp** via [CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/):
+add a number and key under Settings → Notifications. One message per watcher per
+check, listing what it found — a whole season arriving is a single message, not
+twenty-four. Unofficial and rate-limited, but it needs no business account or
+template approval. Activity records everything either way.
+
+A watcher that keeps failing backs off, reports itself once, and switches off
+after 20 consecutive failures rather than retrying forever. Senpai's rotating
+domain is handled: item keys hold no hostname, and a stale page URL is re-pointed
+at the current domain automatically.
+
+Checks are spread out on purpose — at most five watchers per minute, sequentially,
+and genre watchers confirm at most ten candidates per check. Set
+`SESTUDIO_WATCHERS=0` to disable the background poller entirely; **Check now** in
+the Watchers list still works.
 
 ### Downloading
 
@@ -198,8 +251,8 @@ Everything lives in `~/.config/sestudio/`:
 
 | File | Contents |
 | --- | --- |
-| `config.json` | Output folder, language, download destination, site and host ranking, TMDB key |
-| `library.db` | SQLite: watch state, watchlist and favourites, the downloaded-file manifest |
+| `config.json` | Output folder, language, download destination, site and host ranking, TMDB key, notification channel |
+| `library.db` | SQLite: watch state, watchlist and favourites, the downloaded-file manifest, watchers and their timeline |
 | `tmdb_cache.json` | Metadata lookups, misses included |
 | `cert.pem` | The self-signed HTTPS certificate |
 

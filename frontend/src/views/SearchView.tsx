@@ -12,6 +12,7 @@ import EmptyState from '../components/EmptyState'
 import LayoutToggle from '../components/LayoutToggle'
 import SortSelect from '../components/SortSelect'
 import ToolbarToggle from '../components/ToolbarToggle'
+import WatchSearchButton from '../components/WatchSearchButton'
 import PeopleResults from '../components/PeopleResults'
 import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
@@ -281,6 +282,14 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   return (
     <div className="flex flex-col gap-5">
       <SearchBar onResults={handleSearchResults} term={params.get('q')} />
+
+      {/* Outside the results toolbar below: a search that found nothing is the
+          best reason to watch it, so this cannot be gated on having results. */}
+      {lastQuery !== '' && (
+        <div className="flex">
+          <WatchSearchButton query={lastQuery} />
+        </div>
+      )}
 
       {results.length > 0 && (
         <div className="flex items-center gap-3">

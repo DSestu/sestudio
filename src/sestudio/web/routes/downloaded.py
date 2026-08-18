@@ -13,6 +13,7 @@ import asyncio
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
@@ -194,7 +195,9 @@ def _from_offset(target: Path, offset: int) -> Iterator[bytes]:
 
 
 @router.api_route("/downloaded/file", methods=["GET", "HEAD"])
-async def get_downloaded_file(request: Request, path: str = Query(...)) -> Response:
+async def get_downloaded_file(
+    request: Request, path: str = Query(...), audio: int | None = None
+) -> Response:
     """Stream a downloaded file.
 
     No ``filename`` is passed, so the response carries no ``Content-Disposition``
@@ -210,8 +213,23 @@ async def get_downloaded_file(request: Request, path: str = Query(...)) -> Respo
     with ``TimeSeekRange.dlna.org`` — in time, not bytes. Told nothing, it works
     that out from the container alone, which is why seeking worked on some files
     and was refused on others.
+
+    ``audio=N`` asks for the file carrying audio track N instead of its first.
+    Answered by swapping in a derived file and serving it through everything
+    below unchanged, so a chosen track seeks, byte-ranges, casts and time-seeks
+    exactly as the original does — none of which would be true of a second,
+    parallel endpoint.
     """
     target = _resolved(path)
+    if audio:
+        alternate = await asyncio.to_thread(
+            downloaded.alternate_audio, target, path, audio
+        )
+        if alternate is None:
+            raise HTTPException(
+                status_code=404, detail="No such audio track, or it could not be built"
+            )
+        target = alternate
     duration = await asyncio.to_thread(downloaded.duration_of, target)
     media_type = downloaded.media_type_for(target)
     headers = {
@@ -256,6 +274,114 @@ async def get_downloaded_file(request: Request, path: str = Query(...)) -> Respo
         # avi, and calling those mp4 would mislead every player that trusts it.
         media_type=media_type,
         headers=headers,
+    )
+
+
+def _track_payload(track: downloaded.Track) -> dict[str, Any]:
+    return {
+        "index": track.index,
+        "codec": track.codec,
+        "lang": track.lang,
+        "label": track.label,
+        "default": track.default,
+        "text": track.text,
+    }
+
+
+@router.get("/downloaded/tracks")
+async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
+    """What is inside one stored file: its audio and subtitle tracks.
+
+    Its own endpoint rather than part of the listing, because each answer costs
+    an ffmpeg probe: a shelf of two hundred titles would pay for two hundred
+    probes to draw cards that show none of this. Asked for when an episode is
+    actually opened, and cached from then on.
+
+    Subtitles come from two places and are returned as one list — tracks inside
+    the container, and the `.vtt` files written beside it, which the filesystem
+    scan deliberately ignores. Whether a subtitle was muxed in or downloaded
+    separately is not something the player should have to care about.
+    """
+    target = _resolved(path)
+    tracks = await asyncio.to_thread(downloaded.tracks_of, target)
+    sidecars = await asyncio.to_thread(downloaded.sidecar_subtitles, target)
+
+    subtitles = [
+        {
+            **_track_payload(track),
+            "url": f"/api/downloaded/subtitle?path={quote(path)}&index={track.index}",
+            "embedded": True,
+        }
+        for track in tracks.subtitles
+    ]
+    subtitles += [
+        {
+            "index": len(tracks.subtitles) + i,
+            "codec": "webvtt",
+            "lang": lang,
+            "label": lang.upper(),
+            "default": False,
+            "text": True,
+            "url": (
+                f"/api/downloaded/subtitle?path={quote(path)}&sidecar={quote(lang)}"
+            ),
+            "embedded": False,
+        }
+        for i, (lang, _file) in enumerate(sidecars)
+    ]
+
+    return {
+        "audio": [_track_payload(track) for track in tracks.audio],
+        "subtitles": subtitles,
+    }
+
+
+@router.get("/downloaded/subtitle")
+async def get_downloaded_subtitle(
+    path: str = Query(...), index: int | None = None, sidecar: str | None = None
+) -> FileResponse:
+    """One subtitle track as WebVTT, ready for a `<track>` element.
+
+    A sidecar is served as it lies; an embedded track is extracted and cached.
+    """
+    target = _resolved(path)
+
+    if sidecar is not None:
+        match = next(
+            (
+                file
+                for lang, file in await asyncio.to_thread(
+                    downloaded.sidecar_subtitles, target
+                )
+                if lang == sidecar
+            ),
+            None,
+        )
+        if match is None:
+            raise HTTPException(status_code=404, detail="No such subtitle file")
+        return FileResponse(match, media_type="text/vtt", headers=dict(_CORS_HEADERS))
+
+    if index is None:
+        raise HTTPException(status_code=400, detail="Pass index= or sidecar=")
+
+    vtt = await asyncio.to_thread(downloaded.extracted_subtitle, target, path, index)
+    if vtt is None:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                "That track cannot be shown as text — a picture-based subtitle "
+                "(PGS or VOBSUB) can only be burnt into the video."
+            ),
+        )
+    return FileResponse(
+        vtt,
+        media_type="text/vtt",
+        headers={
+            **_CORS_HEADERS,
+            # Keyed on the file's mtime, size and track, so a hit is good until
+            # the file changes — at which point the key, and the URL, change too.
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
     )
 
 

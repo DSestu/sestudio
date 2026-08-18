@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -41,6 +42,9 @@ class DownloadJob:
     detail: str = ""  # human-readable note for the current phase
     total_size: str = ""  # e.g. "412.53MiB", as reported by yt-dlp
     fragment: str = ""  # HLS fragment counter, e.g. "42/318"
+    # Which admission lane queued this: "user" starts immediately, "watcher" waits
+    # for a slot so background work cannot crowd out an interactive download.
+    lane: str = "user"
 
 
 class JobStore:
@@ -49,6 +53,7 @@ class JobStore:
         max_workers: int = 20,
         provider_registry: dict[str, StreamProvider] | None = None,
         sites: dict[str, ContentSite] | None = None,
+        watcher_max_concurrent: int = 2,
     ) -> None:
         self._jobs: dict[str, DownloadJob] = {}
         self._cancel_events: dict[str, threading.Event] = {}
@@ -56,6 +61,14 @@ class JobStore:
         self._pool = ThreadPoolExecutor(max_workers=max_workers)
         self._providers: dict[str, StreamProvider] = provider_registry or {}
         self._sites: dict[str, ContentSite] = sites or {}
+        # Watcher jobs are throttled on *admission* rather than inside _run: a
+        # job waiting on a semaphore would still be holding a pool worker, so
+        # enough of them would starve interactive downloads of workers — the
+        # opposite of what the limit is for. Holding them out of the pool
+        # entirely means a user download always finds a free worker.
+        self._lane_limit = max(1, watcher_max_concurrent)
+        self._lane_queue: deque[str] = deque()
+        self._lane_running = 0
 
     def submit(
         self,
@@ -65,6 +78,7 @@ class JobStore:
         all_providers: dict[str, str] | None = None,
         to_device: bool = False,
         site_id: str = "fstream",
+        lane: str = "user",
     ) -> DownloadJob:
         job = DownloadJob(
             id=str(uuid.uuid4()),
@@ -75,14 +89,45 @@ class JobStore:
             tried_providers=[source.provider],
             to_device=to_device,
             site_id=site_id,
+            lane=lane,
         )
         cancel_event = threading.Event()
         with self._lock:
             self._jobs[job.id] = job
             self._cancel_events[job.id] = cancel_event
-        self._pool.submit(self._run, job.id)
-        logger.debug("Queued job %s for %s", job.id, episode_name)
+        if lane == "user":
+            self._pool.submit(self._run, job.id)
+        else:
+            with self._lock:
+                self._lane_queue.append(job.id)
+            self._pump_lane()
+        logger.debug("Queued job %s for %s (%s lane)", job.id, episode_name, lane)
         return job
+
+    def _pump_lane(self) -> None:
+        """Start queued background jobs up to the lane limit."""
+        starting: list[str] = []
+        with self._lock:
+            while self._lane_running < self._lane_limit and self._lane_queue:
+                starting.append(self._lane_queue.popleft())
+                self._lane_running += 1
+        for job_id in starting:
+            self._pool.submit(self._run_lane, job_id)
+
+    def _run_lane(self, job_id: str) -> None:
+        """Run a background job, then let the next one in."""
+        try:
+            self._run(job_id)
+        finally:
+            with self._lock:
+                self._lane_running -= 1
+            self._pump_lane()
+
+    def set_lane_limit(self, limit: int) -> None:
+        """Retune the background limit live, and admit anything that now fits."""
+        with self._lock:
+            self._lane_limit = max(1, int(limit))
+        self._pump_lane()
 
     def cancel(self, job_id: str) -> bool:
         """Cancel a queued or downloading job, clean up partial files. Returns True if found."""
@@ -96,6 +141,10 @@ class JobStore:
             if job.status in ("done", "failed", "cancelled"):
                 return False
             job.status = "cancelled"
+            # A background job still waiting for a slot must leave the queue, or
+            # _pump_lane would later spend a slot starting something cancelled.
+            if job.id in self._lane_queue:
+                self._lane_queue.remove(job.id)
         if event:
             event.set()
         if job:

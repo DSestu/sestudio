@@ -76,6 +76,17 @@ class AppConfig:
     # the season count on the card. On by default: a long-running series
     # otherwise fills the grid with near-identical cards.
     collapse_seasons: bool = True
+    # How many watcher-queued downloads may run at once. Deliberately far below
+    # the worker pool: background work should never be what makes a download you
+    # asked for sit and wait.
+    watcher_max_concurrent: int = 2
+    # Outbound notification when a watcher finds something. Off unless a channel
+    # is configured, so nothing is ever sent by default.
+    notifications_enabled: bool = False
+    # CallMeBot WhatsApp: the number to message, in international form without
+    # the leading '+', and the key their bot replies with.
+    callmebot_phone: str = ""
+    callmebot_apikey: str = ""
 
 
 def _config_path() -> Path:
@@ -113,6 +124,10 @@ def load_config() -> AppConfig:
             preferred_sites=[str(s) for s in data.get("preferred_sites", ["senpai"])],
             autoplay_on_open=bool(data.get("autoplay_on_open", True)),
             collapse_seasons=bool(data.get("collapse_seasons", True)),
+            watcher_max_concurrent=int(data.get("watcher_max_concurrent", 2)),
+            notifications_enabled=bool(data.get("notifications_enabled", False)),
+            callmebot_phone=str(data.get("callmebot_phone", "")),
+            callmebot_apikey=str(data.get("callmebot_apikey", "")),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

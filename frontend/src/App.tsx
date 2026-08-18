@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
-import type { DownloadJob, DownloadedFile, DownloadedTitle, SeasonCard } from './api'
+import type { DownloadJob, DownloadedFile, DownloadedTitle, SeasonCard, WatcherEvent } from './api'
 import { DOWNLOADED_SOURCE, downloadedPageUrl } from './api'
 import { loadCast } from './cast'
 import { refreshDlna } from './dlnaControl'
@@ -16,9 +16,11 @@ import { useRoute, type Navigate } from './nav'
 import { clearPullback, usePullback } from './pullback'
 import { useDownloadJobs } from './useDownloadJobs'
 import { useSettings } from './useSettings'
+import { refreshNotifications, useUnreadCount, watchParamsForEvent } from './notifications'
 import DownloadsView from './views/DownloadsView'
 import HomeView from './views/HomeView'
 import LibraryView from './views/LibraryView'
+import NotificationsView from './views/NotificationsView'
 import PersonView from './views/PersonView'
 import SearchView from './views/SearchView'
 import SettingsView from './views/SettingsView'
@@ -74,15 +76,20 @@ export default function App() {
 
   const downloads = useDownloadJobs(downloadTick, () => setSkippedJobs([]))
   const pullback = usePullback()
+  // Subscribed here rather than only in the view, so the nav badge is live on
+  // every screen — the whole point of a watcher is hearing about it unprompted.
+  const unread = useUnreadCount()
 
   // On load: init the Cast SDK (rejoins an existing Chromecast session) and
   // check for an active DLNA session, so both control bars reappear after reload.
-  useEffect(() => { loadCast(); refreshDlna(); void hydrateLibrary() }, [])
+  useEffect(() => { loadCast(); refreshDlna(); void hydrateLibrary(); void refreshNotifications() }, [])
 
   // Cross-device freshness: re-pull the library when the tab regains focus, so
-  // a change made on another device shows up here (#24).
+  // a change made on another device shows up here (#24). Watchers fire on the
+  // server's own schedule with nothing pushing the result, so the timeline wants
+  // the same treatment.
   useEffect(() => {
-    const onFocus = () => { void hydrateLibrary() }
+    const onFocus = () => { void hydrateLibrary(); void refreshNotifications() }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [])
@@ -162,6 +169,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pullback])
 
+  /** Open the title a watcher event points at, at that episode and language.
+   *  Shared by the Activity feed and Home's peek. */
+  function openEvent(event: WatcherEvent) {
+    navigate('watch', watchParamsForEvent(event, settings.lang))
+  }
+
   /** Run a source search for a title (browse rows, discover, similar titles).
    *  The query travels in the URL, so back returns to where it was clicked.
    *
@@ -216,6 +229,7 @@ export default function App() {
         view={route.view}
         onNavigate={navigate}
         downloadBadge={downloads.activeCount}
+        unreadBadge={unread}
         onOpenSettings={() => navigate('settings')}
       >
         {route.view === 'home' && (
@@ -225,6 +239,7 @@ export default function App() {
             onNavigate={navigate}
             onSearchTerm={searchFor}
             onDiscoverGenre={id => navigate('search', { g: id })}
+            onOpenEvent={openEvent}
           />
         )}
         {route.view === 'search' && (
@@ -260,6 +275,13 @@ export default function App() {
           />
         )}
         {route.view === 'downloaded' && downloadedLibrary}
+        {route.view === 'notifications' && (
+          <NotificationsView
+            tmdbConfigured={settings.tmdb_configured}
+            onOpen={openEvent}
+            navigate={navigate}
+          />
+        )}
         {route.view === 'settings' && (
           <SettingsView settings={settings} onUpdate={updateSettings} />
         )}

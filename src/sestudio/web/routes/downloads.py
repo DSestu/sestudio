@@ -3,22 +3,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import tempfile
 import urllib.parse
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from sestudio import library, downloaded
 from sestudio.config import load_config
 from sestudio.http_client import BROWSER_UA, new_client
-from sestudio.models import StreamSource, sanitize_path_component
-from sestudio.providers.base import ProviderError
-from sestudio.sites import ContentSite, SiteError, StreamCandidate, site_for
+from sestudio.models import sanitize_path_component
+from sestudio.sites import site_for
+from sestudio.web.download_service import DownloadSpec, episode_path, queue_download
 from sestudio.web.proxy import TokenError, verify
 from sestudio.web.worker import DownloadJob
 
@@ -45,54 +42,8 @@ class DownloadRequest(BaseModel):
     # Id of the ContentSite that produced the embeds; it owns their resolution.
     source: str = "fstream"
 
-
-def _episode_path(root: str, item: DownloadRequest, site: ContentSite) -> Path:
-    """Build the output file path, with a per-language subfolder.
-
-    ``<root>/<Series>/Season NN/<LANG>/<file>`` for episodes, or
-    ``<root>/<site films dir>/<LANG>/<file>`` for films. The language folder is
-    omitted when no language is given (e.g. CLI downloads).
-    """
-    safe_ep = sanitize_path_component(item.episode_name)
-    if item.season == 0:
-        parts = [root, site.films_dirname]
-    else:
-        parts = [
-            root,
-            sanitize_path_component(item.series_name),
-            f"Season {item.season:02d}",
-        ]
-    if item.lang:
-        parts.append(sanitize_path_component(item.lang.upper()))
-    return Path(*parts) / safe_ep
-
-
-def _record_downloaded_file(root: str, out_path: Path, item: DownloadRequest) -> None:
-    """Note what this download is, keyed by its path under the download root.
-
-    The path records the series only in sanitised form and says nothing about
-    the poster, the page or the site, so the local library reads them back from
-    here. Failures are swallowed: metadata is a nicety, the download is not.
-    """
-    try:
-        relative = out_path.resolve().relative_to(Path(root).resolve()).as_posix()
-    except ValueError:
-        return  # outside the root (a device download) — not part of the library
-    try:
-        library.set_downloaded_file(
-            relative,
-            {
-                "series_name": item.series_name,
-                "season": item.season,
-                "lang": item.lang,
-                "source": item.source,
-                "poster_url": item.poster_url,
-                "page_url": item.page_url,
-            },
-        )
-        downloaded.invalidate()
-    except Exception as exc:  # pragma: no cover - a bad DB must not stop a download
-        logger.warning("Could not record local file %s: %s", relative, exc)
+    def to_spec(self) -> DownloadSpec:
+        return DownloadSpec(**self.model_dump())
 
 
 def _job_to_dict(job: DownloadJob) -> dict[str, Any]:
@@ -110,6 +61,8 @@ def _job_to_dict(job: DownloadJob) -> dict[str, Any]:
         "fragment": job.fragment,
         "provider": job.source.provider,
         "to_device": job.to_device,
+        # "watcher" marks a job a watcher queued rather than the user.
+        "lane": job.lane,
     }
 
 
@@ -227,7 +180,9 @@ async def check_downloads(items: list[DownloadRequest], request: Request) -> lis
     sites = request.app.state.sites
     existing: list[str] = []
     for item in items:
-        out_path = _episode_path(cfg.output_root, item, site_for(sites, item.source))
+        out_path = episode_path(
+            cfg.output_root, item.to_spec(), site_for(sites, item.source)
+        )
         if out_path.exists() and out_path.stat().st_size > 0:
             existing.append(item.episode_name)
     return existing
@@ -240,99 +195,29 @@ async def post_downloads(
 ) -> list[dict[str, Any]]:
     store = request.app.state.job_store
     cfg = load_config()
+    sites = request.app.state.sites
     results: list[dict[str, Any]] = []
 
-    providers = store._providers
-    sites = request.app.state.sites
-
+    # The queueing itself lives in download_service, which the watcher poller
+    # shares — one path for resolution, paths, metadata and the skip check.
     for item in items:
-        site = site_for(sites, item.source)
-        # Build ordered candidate list: primary provider first, then the rest
-        # in the site's preference order, with the viewer's ranked hosts ahead
-        # of it. Ranking only reorders the fallback chain — an unranked host is
-        # still tried, just later, so a preference never costs a download.
-        candidates = [
-            c
-            for c in site.stream_candidates(item.all_providers)
-            if c.provider != item.provider
-        ]
-        if cfg.preferred_hosts:
-            rank = {host: i for i, host in enumerate(cfg.preferred_hosts)}
-            candidates.sort(key=lambda c: rank.get(c.provider, len(rank)))
-        if item.provider and item.embed_url:
-            candidates.insert(0, StreamCandidate(item.provider, item.embed_url))
-
-        source: StreamSource | None = None
-        last_error: str = "No supported provider available"
-        tried: list[str] = []
-        for cand in candidates:
-            try:
-                source = await asyncio.to_thread(
-                    site.resolve_candidate, cand, providers
-                )
-                tried.append(cand.provider)
-                logger.debug("Resolved %s via %s", item.episode_name, cand.provider)
-                break
-            except (ProviderError, SiteError) as exc:
-                last_error = str(exc)
-                tried.append(cand.provider)
-                logger.warning(
-                    "Provider %s failed for %s: %s — trying next",
-                    cand.provider,
-                    item.episode_name,
-                    exc,
-                )
-
-        if source is None:
-            logger.warning("Could not resolve %s: %s", item.episode_name, last_error)
-            results.append({"episode_name": item.episode_name, "error": last_error})
-            continue
-
-        safe_ep = sanitize_path_component(item.episode_name)
-        if item.to_device:
-            # Staged in a temp dir for the browser to collect; never treated as
-            # part of the library, so the "already downloaded" check is skipped.
-            out_path = Path(tempfile.mkdtemp(prefix="sestudio-device-")) / safe_ep
-        else:
-            out_path = _episode_path(cfg.output_root, item, site)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if not item.to_device:
-            # Recorded before the skip check below, so re-queueing a file that is
-            # already on disk is also the way to backfill metadata for anything
-            # downloaded before this was kept.
-            _record_downloaded_file(cfg.output_root, out_path, item)
-
-            if out_path.exists() and out_path.stat().st_size > 0:
-                logger.info(
-                    "Skipping %s: already exists at %s", item.episode_name, out_path
-                )
-                results.append(
-                    {
-                        "episode_name": item.episode_name,
-                        "status": "skipped",
-                        "error": None,
-                    }
-                )
-                continue
-
-            # Remove any 0-byte remnant from a previous failed attempt
-            if out_path.exists():
-                out_path.unlink()
-
-        # Pass all_providers so the worker can fall back if the initial download fails
-        remaining_providers = {
-            k: v for k, v in item.all_providers.items() if k not in tried
-        }
-        job = store.submit(
-            source,
-            out_path,
-            safe_ep,
-            all_providers=remaining_providers,
-            to_device=item.to_device,
-            site_id=site.id,
+        outcome = await queue_download(
+            item.to_spec(), store=store, sites=sites, cfg=cfg, lane="user"
         )
-        results.append(_job_to_dict(job))
+        if outcome.status == "queued" and outcome.job is not None:
+            results.append(_job_to_dict(outcome.job))
+        elif outcome.status == "skipped":
+            results.append(
+                {
+                    "episode_name": outcome.episode_name,
+                    "status": "skipped",
+                    "error": None,
+                }
+            )
+        else:
+            results.append(
+                {"episode_name": outcome.episode_name, "error": outcome.error}
+            )
 
     return results
 

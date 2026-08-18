@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 /** Destinations that appear in the nav rail / tab bar. */
-export const TABS = ['home', 'search', 'library', 'downloaded', 'downloads'] as const
+export const TABS = ['home', 'search', 'library', 'downloaded', 'downloads', 'notifications'] as const
 export type Tab = (typeof TABS)[number]
 
 /**

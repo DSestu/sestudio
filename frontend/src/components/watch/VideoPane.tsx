@@ -124,6 +124,18 @@ export default function VideoPane({
     setNextIn(null)
   }
 
+  // A new source for the *same* episode — another audio track, or a fallback to
+  // a different host — reloads the media, and a reload starts at zero. Progress
+  // is written every few seconds, so re-arming the resume puts playback back
+  // within a moment of where it was rather than at the beginning. Skipped on the
+  // first source, which the initial state already armed.
+  const srcKey = displaySource?.proxy_url ?? ''
+  const [armedSrc, setArmedSrc] = useState(srcKey)
+  if (armedSrc !== srcKey) {
+    setArmedSrc(srcKey)
+    if (armedSrc && srcKey) setResumeTo(resumePointFor(ep))
+  }
+
   // Tick the auto-next countdown; the advance happens in the timer callback.
   useEffect(() => {
     if (nextIn === null) return

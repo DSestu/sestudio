@@ -6,8 +6,9 @@ interface Props {
   title: string
   /** Primary meta line, e.g. "S01E04 · The Cursed Sword". */
   meta?: string
-  /** Secondary meta line, e.g. "4 of 20 watched · 2 days ago". */
-  submeta?: string
+  /** Secondary meta line, e.g. "4 of 20 watched · 2 days ago". Takes nodes as well
+   *  as text, so a caller can put a badge on it. */
+  submeta?: ReactNode
   /** TMDB score, shown as a badge when a match was found. */
   rating?: number
   /** TMDB genre names. The caller decides how many are worth the space. */
@@ -111,7 +112,16 @@ export default function DetailRow({
           </div>
         )}
 
-        {submeta && <p className="text-xs text-base-content/50 truncate">{submeta}</p>}
+        {/* Text keeps its single truncated line; nodes get a wrapping row, since a
+            badge inside a truncating paragraph lays out badly. */}
+        {submeta &&
+          (typeof submeta === 'string' ? (
+            <p className="text-xs text-base-content/50 truncate">{submeta}</p>
+          ) : (
+            <div className="text-xs text-base-content/50 flex items-center gap-2 flex-wrap">
+              {submeta}
+            </div>
+          ))}
 
         {synopsis && (
           <p className="text-sm text-base-content/70 leading-snug line-clamp-2 sm:line-clamp-3">

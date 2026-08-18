@@ -3,11 +3,15 @@ import { togglePlaylistCollapsed, usePlaylistCollapsed } from '../playlistCollap
 import type {
   AppSettings, DownloadDestination, DownloadItem, EpisodeDetail, SeasonDetail,
 } from '../api'
-import { checkDownloads, DOWNLOADED_SOURCE, downloadedFileUrl, postDownloads } from '../api'
+import type { DownloadedTrack, StreamSubtitle } from '../api'
+import {
+  checkDownloads, DOWNLOADED_SOURCE, downloadedFileUrl, downloadedTracks, postDownloads,
+} from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import { pickHost } from '../downloadPrefs'
 import EmptyState from '../components/EmptyState'
 import SaveToggles from '../components/SaveToggles'
+import WatchToggle from '../components/WatchToggle'
 import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
@@ -35,6 +39,11 @@ import { setWatched, useWatchState, watchKey } from '../watchState'
 
 /** Stable reference — useProviderSources resets on embedUrls identity change. */
 const NO_EMBEDS: Record<string, string> = {}
+
+/** Stable reference for the same reason: the local source is memoised on its
+ *  subtitle list, and a fresh [] each render would restart playback. */
+const NO_SUBTITLES: StreamSubtitle[] = []
+const NO_AUDIO: DownloadedTrack[] = []
 
 // Details is not among them: the TMDB metadata sits above the player on every
 // breakpoint now, so a tab for it would duplicate what is already on screen.
@@ -372,11 +381,62 @@ export default function WatchView({
   const downloadedPath = playing && current
     ? fileFor(downloadedTitles, seriesName, season, current.number, activeLang)?.path
     : undefined
+  // Captions for the copy on disk. A stored file's subtitles are either muxed
+  // into it or sitting beside it as `.vtt`, and neither reaches a `<video>` by
+  // itself — the server lists both and serves them as WebVTT, which is the one
+  // thing a `<track>` element can load. Keyed on the path, so switching episode
+  // drops the previous episode's cues instead of showing them over the new one.
+  // Stored with the path they belong to, so a stale answer for the previous
+  // episode is never read as this one's — and so the reset on switching happens
+  // during render rather than in the effect, which would cost an extra pass.
+  const [subs, setSubs] = useState<{
+    path?: string; list: StreamSubtitle[]; audio: DownloadedTrack[]
+  }>({ list: NO_SUBTITLES, audio: NO_AUDIO })
+  useEffect(() => {
+    if (!downloadedPath) return
+    let live = true
+    downloadedTracks(downloadedPath).then(tracks => {
+      if (!live) return
+      setSubs({
+        path: downloadedPath,
+        audio: tracks.audio,
+        list: tracks.subtitles
+          // A picture-based track has no text to show; it is reported so the
+          // reason is knowable, and skipped so the menu holds nothing dead.
+          .filter(t => t.text && t.url)
+          .map(t => ({
+            proxy_url: t.url as string,
+            lang: t.lang,
+            label: t.label,
+            default: t.default,
+          })),
+      })
+    })
+    return () => { live = false }
+  }, [downloadedPath])
+  const fresh = subs.path === downloadedPath
+  const downloadedSubs = fresh ? subs.list : NO_SUBTITLES
+  const downloadedAudio = fresh ? subs.audio : NO_AUDIO
+
+  // Which audio track to play; 0 (the file's own first) until asked otherwise.
+  // Reset per file, because track 2 of one episode has nothing to do with track
+  // 2 of the next — and a stale index would silently play the wrong language.
+  const [audioIndex, setAudioIndex] = useState(0)
+  const [audioFor, setAudioFor] = useState(downloadedPath)
+  if (audioFor !== downloadedPath) { setAudioFor(downloadedPath); setAudioIndex(0) }
+  // Guards against an index left over from a file that had more tracks.
+  const audioTrack = audioIndex < downloadedAudio.length ? audioIndex : 0
+
   const downloadedSource = useMemo(
     () => (downloadedPath
-      ? { proxy_url: downloadedFileUrl(downloadedPath), kind: 'mp4' as const, provider: DOWNLOADED_PROVIDER }
+      ? {
+        proxy_url: downloadedFileUrl(downloadedPath, audioTrack),
+        kind: 'mp4' as const,
+        provider: DOWNLOADED_PROVIDER,
+        subtitles: downloadedSubs,
+      }
       : null),
-    [downloadedPath],
+    [downloadedPath, downloadedSubs, audioTrack],
   )
 
   const { providers, status, sources, active, select, markFailed, probing } =
@@ -658,17 +718,29 @@ export default function WatchView({
           </p>
         </div>
         {detail && (
-          <SaveToggles
-            entry={{
-              series: seriesName,
-              season,
-              label: seriesName,
-              poster_url: posterUrl,
-              page_url: sourceUrl,
-              lang: activeLang,
-              source: sourceId,
-            }}
-          />
+          <div className="flex items-center gap-2">
+            {/* Labelled, not an icon: between the star and the heart a bare bell
+                read as decoration and nobody found it. */}
+            <WatchToggle
+              pageUrl={sourceUrl}
+              source={sourceId}
+              seriesName={seriesName}
+              posterUrl={posterUrl}
+              isFilm={Boolean(detail.is_film)}
+              variant="button"
+            />
+            <SaveToggles
+              entry={{
+                series: seriesName,
+                season,
+                label: seriesName,
+                poster_url: posterUrl,
+                page_url: sourceUrl,
+                lang: activeLang,
+                source: sourceId,
+              }}
+            />
+          </div>
         )}
       </div>
 
@@ -807,6 +879,28 @@ export default function WatchView({
                     handoffAt={position}
                     onSourceFailed={() => { if (active) markFailed(active) }}
                   />
+                  {/* Audio tracks, for the copy on disk. Only shown when the
+                      file actually has a choice to make, and only while it is
+                      the thing playing — a streamed host serves one track and
+                      has nothing to switch between. The server builds the
+                      chosen track (no browser can pick one), so the first use
+                      of a track pauses briefly and later ones are instant. */}
+                  {active === DOWNLOADED_PROVIDER && downloadedAudio.length > 1 && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="opacity-60">Audio</span>
+                      <select
+                        className="select select-sm select-bordered"
+                        value={audioTrack}
+                        onChange={e => setAudioIndex(Number(e.target.value))}
+                      >
+                        {downloadedAudio.map(track => (
+                          <option key={track.index} value={track.index}>
+                            {track.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                 </div>
               )}
             </div>

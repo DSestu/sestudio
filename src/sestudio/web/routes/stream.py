@@ -49,8 +49,7 @@ _CORS_HEADERS = {
 # media unrecognisable — OP=01 (byte seek allowed) is what licenses that fetch.
 _DLNA_MP4_HEADERS = {
     "contentFeatures.dlna.org": (
-        "DLNA.ORG_OP=01;DLNA.ORG_CI=0;"
-        "DLNA.ORG_FLAGS=01700000000000000000000000000000"
+        "DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000"
     ),
     "transferMode.dlna.org": "Streaming",
 }

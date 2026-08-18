@@ -85,6 +85,17 @@ export interface AppSettings {
    *  Unranked entries stay available as fallback. */
   preferred_hosts?: string[]
   preferred_sites?: string[]
+  /** Send a message when a watcher finds something. Off unless a channel is
+   *  configured, so nothing is ever sent by default. */
+  notifications_enabled?: boolean
+  /** CallMeBot number, international form without the leading '+'. Not secret. */
+  callmebot_phone?: string
+  /** Write-only: sent when saving, never returned. */
+  callmebot_apikey?: string
+  /** Whether a CallMeBot number and key are both stored. Read-only. */
+  callmebot_configured?: boolean
+  /** Concurrent downloads a watcher may run, kept below the interactive pool. */
+  watcher_max_concurrent?: number
   /** Every host a download could use, for the ranking control. Read-only. */
   known_hosts?: string[]
   /** The shipped order, restored by "Reset". Read-only. */
@@ -620,9 +631,52 @@ export async function getDownloadedLibrary(): Promise<DownloadedTitle[]> {
   return res.json()
 }
 
-/** Playable URL for a downloaded file. Serves inline, with range support. */
-export function downloadedFileUrl(path: string): string {
-  return `${BASE}/downloaded/file?path=${encodeURIComponent(path)}`
+/** Playable URL for a downloaded file. Serves inline, with range support.
+ *
+ * `audioIndex` picks an audio track other than the file's first. No browser can
+ * choose a track itself, so the server builds a copy carrying the wanted one —
+ * about a second for a whole episode, cached, and longer only when the track's
+ * codec has to be re-encoded to play at all.
+ */
+export function downloadedFileUrl(path: string, audioIndex?: number): string {
+  const base = `${BASE}/downloaded/file?path=${encodeURIComponent(path)}`
+  return audioIndex ? `${base}&audio=${audioIndex}` : base
+}
+
+/** One audio or subtitle track inside a downloaded file. */
+export interface DownloadedTrack {
+  index: number
+  codec: string
+  lang: string
+  label: string
+  default: boolean
+  /** False for a picture-based subtitle (PGS/VOBSUB), which cannot be shown as text. */
+  text: boolean
+  /** Subtitles only: where to load the WebVTT from. */
+  url?: string
+  /** Subtitles only: inside the container, rather than a `.vtt` beside it. */
+  embedded?: boolean
+}
+
+export interface DownloadedTracks {
+  audio: DownloadedTrack[]
+  subtitles: DownloadedTrack[]
+}
+
+/** What is inside a downloaded file.
+ *
+ * Costs an ffmpeg probe on the server the first time, so it is asked for when an
+ * episode is opened rather than while drawing a shelf. Failure is not worth
+ * surfacing — it only means no track menus — so this resolves to empty lists.
+ */
+export async function downloadedTracks(path: string): Promise<DownloadedTracks> {
+  const empty = { audio: [], subtitles: [] }
+  try {
+    const res = await fetch(`${BASE}/downloaded/tracks?path=${encodeURIComponent(path)}`)
+    return res.ok ? await res.json() : empty
+  } catch {
+    return empty
+  }
 }
 
 /** A still extracted from the file itself, for a title TMDB has no poster for.
@@ -680,4 +734,146 @@ export function subscribeJobProgress(
   }
   es.onerror = () => { es.close(); onDone() }
   return () => es.close()
+}
+
+// --- watchers & notifications ---------------------------------------------- //
+
+export type WatcherKind =
+  | 'series_episodes'
+  | 'title_lang'
+  | 'film_available'
+  | 'saved_search'
+  | 'tmdb_criteria'
+
+export interface Watcher {
+  id: number
+  kind: WatcherKind
+  label: string
+  /** Kind-specific and stored verbatim; the server validates its shape. */
+  config: Record<string, unknown>
+  enabled: boolean
+  auto_download: boolean
+  interval_seconds: number
+  created_at: number
+  next_poll_at: number
+  last_polled_at: number | null
+  last_ok_at: number | null
+  last_error: string | null
+  consecutive_failures: number
+  /** Null until the first successful check, which records a baseline silently. */
+  baselined_at: number | null
+}
+
+export interface WatcherEvent {
+  id: number
+  /** Null once the watcher that produced it was deleted; the row still stands. */
+  watcher_id: number | null
+  watcher_kind: string
+  event_type: 'new_item' | 'watcher_error' | 'watcher_disabled'
+  item_key: string
+  title: string
+  subtitle: string
+  poster_url: string
+  /** Enough to open or download the item without another lookup. */
+  data: {
+    page_url?: string
+    source?: string
+    lang?: string
+    season?: number
+    number?: number
+    is_film?: boolean
+    series_name?: string
+    episode_name?: string
+    kind?: string
+    error?: string
+  }
+  created_at: number
+  read_at: number | null
+  job_id: string | null
+  download_state: '' | 'queued' | 'skipped' | 'error'
+}
+
+export interface NotificationPage {
+  events: WatcherEvent[]
+  unread: number
+}
+
+export interface WatcherPollResult {
+  events: WatcherEvent[]
+  error: string | null
+  failures: number
+  disabled: boolean
+}
+
+export async function getWatchers(): Promise<Watcher[]> {
+  const res = await fetch(`${BASE}/watchers`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+export async function createWatcher(body: {
+  kind: WatcherKind
+  config: Record<string, unknown>
+  label?: string
+  auto_download?: boolean
+  interval_seconds?: number
+}): Promise<Watcher> {
+  const res = await fetch(`${BASE}/watchers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`Could not create watcher: ${res.status}`)
+  return res.json()
+}
+
+export async function patchWatcher(
+  id: number,
+  patch: Partial<Pick<Watcher, 'label' | 'enabled' | 'auto_download' | 'interval_seconds'>> & {
+    config?: Record<string, unknown>
+  },
+): Promise<Watcher> {
+  const res = await fetch(`${BASE}/watchers/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(`Could not update watcher: ${res.status}`)
+  return res.json()
+}
+
+export async function deleteWatcher(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/watchers/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Could not delete watcher: ${res.status}`)
+}
+
+/** Check one watcher now. A watcher's first check reports nothing by design. */
+export async function pollWatcher(id: number): Promise<WatcherPollResult> {
+  const res = await fetch(`${BASE}/watchers/${id}/poll`, { method: 'POST' })
+  if (!res.ok) throw new Error(`Check failed: ${res.status}`)
+  return res.json()
+}
+
+export async function getNotifications(
+  opts: { limit?: number; offset?: number; unreadOnly?: boolean } = {},
+): Promise<NotificationPage> {
+  const q = new URLSearchParams()
+  if (opts.limit !== undefined) q.set('limit', String(opts.limit))
+  if (opts.offset !== undefined) q.set('offset', String(opts.offset))
+  if (opts.unreadOnly) q.set('unread_only', 'true')
+  const res = await fetch(`${BASE}/notifications?${q}`)
+  if (!res.ok) return { events: [], unread: 0 }
+  return res.json()
+}
+
+export async function markNotificationsRead(
+  target: { ids: number[] } | { all: true },
+): Promise<{ marked: number; unread: number }> {
+  const res = await fetch(`${BASE}/notifications/read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(target),
+  })
+  if (!res.ok) throw new Error(`Could not mark read: ${res.status}`)
+  return res.json()
 }
