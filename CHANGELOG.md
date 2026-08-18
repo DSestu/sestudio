@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.0](https://github.com/DSestu/sestudio/compare/v0.13.1...v0.14.0) (2026-08-17)
+
+
+### New features
+
+* Add local folder and local playing ([7a4560a](https://github.com/DSestu/sestudio/commit/7a4560ac5ba564b9099aef41e84c50f2e0a2fa58))
+
+
+### Bug fixes
+
+* make senpai's non-faststart mp4s playable over DLNA ([#44](https://github.com/DSestu/sestudio/issues/44)) ([2c7f672](https://github.com/DSestu/sestudio/commit/2c7f6725825682bdfe43ea187aaee7868a0581ef))
+
 ## [0.13.1](https://github.com/DSestu/sestudio/compare/v0.13.0...v0.13.1) (2026-08-14)
 
 
