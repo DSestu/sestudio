@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/DSestu/sestudio/compare/v0.14.0...v0.15.0) (2026-08-18)
+
+
+### New features
+
+* add local files in search ([bf3aea7](https://github.com/DSestu/sestudio/commit/bf3aea72dbd2e66a9e5de281c384c148d1fed99e))
+
 ## [0.14.0](https://github.com/DSestu/sestudio/compare/v0.13.1...v0.14.0) (2026-08-17)
 
 
