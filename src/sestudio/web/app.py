@@ -132,7 +132,9 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     # The direct HTTP port uvicorn listens on. Cast devices fetch media over
     # plain HTTP on this port even when the UI is fronted by HTTPS (Caddy), so
     # it must be the real listen port, not whatever the browser connected to.
+    # None means "no HTTP server" (serve --no-http): media then goes over HTTPS.
     app.state.http_port = 8080
+    app.state.https_port = None
     app.state.job_store = JobStore(
         provider_registry=_PROVIDERS,
         sites=app.state.sites,

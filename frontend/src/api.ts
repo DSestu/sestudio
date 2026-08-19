@@ -400,11 +400,16 @@ export interface Renderer {
   udn: string
 }
 
-/** The direct HTTP port cast devices should fetch media on (bypasses any HTTPS front). */
-export async function getCastHttpPort(): Promise<number> {
+/**
+ * The direct HTTP port cast devices should fetch media on (bypasses any HTTPS front).
+ *
+ * null when the server runs HTTPS-only (`serve --no-http`) and there is no such
+ * port — callers must then keep the media on the page's own origin.
+ */
+export async function getCastHttpPort(): Promise<number | null> {
   const res = await fetch(`${BASE}/cast/http-port`)
   if (!res.ok) throw new Error(`http-port fetch failed: ${res.status}`)
-  return (await res.json()).http_port
+  return (await res.json()).http_port ?? null
 }
 
 /** Discover DLNA MediaRenderers on the LAN (a ~4s SSDP scan). */

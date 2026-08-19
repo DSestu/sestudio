@@ -47,12 +47,18 @@ async def tls_permission() -> Response:
 
 
 @router.get("/cast/http-port")
-async def http_port(request: Request) -> dict[str, int]:
+async def http_port(request: Request) -> dict[str, int | None]:
     """The direct HTTP port cast devices should fetch media on (see app.state.http_port).
 
     Used by the browser to build a plain-HTTP media URL for Chromecast even when
     the UI itself is served over HTTPS (Caddy) — Chromecast can't verify a local
     CA, so the media must not go through the HTTPS proxy.
+
+    ``null`` when there is no HTTP server at all (``serve --no-http``): the
+    browser must then keep the media on the page's own HTTPS origin. Handing out
+    an ``http://`` URL on the TLS port instead — what this used to do — leaves
+    the receiver fetching plaintext from a TLS socket, so it buffers at 00:00
+    until it times out.
     """
     return {"http_port": request.app.state.http_port}
 
@@ -87,8 +93,14 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
     # point the TV at itself). DLNA is plain HTTP on the direct server port.
     renderer_host = urllib.parse.urlparse(location).hostname or ""
     lan_ip = _local_ip_for(renderer_host)
-    port = request.app.state.http_port
-    media_url = f"http://{lan_ip}:{port}{body.proxy_url}"
+    http_port = request.app.state.http_port
+    if http_port is not None:
+        media_url = f"http://{lan_ip}:{http_port}{body.proxy_url}"
+    else:
+        # HTTPS-only (serve --no-http). A renderer that rejects the self-signed
+        # cert cannot play this, but an https URL is at least well-formed —
+        # http:// on the TLS port never is.
+        media_url = f"https://{lan_ip}:{request.app.state.https_port}{body.proxy_url}"
     mime_type = _MIME_BY_KIND.get(body.kind, "video/mp4")
 
     try:

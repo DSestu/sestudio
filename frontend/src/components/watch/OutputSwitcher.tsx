@@ -11,6 +11,26 @@ import type { PlayableEpisode } from '../../providers'
 const CAST_ICON =
   'M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 11a6 6 0 016 6M3 15a2 2 0 012 2M3 19h.01'
 
+/**
+ * Is *host* a plain-LAN address the app is reached at directly?
+ *
+ * Only then is the plain-HTTP media trick (below) both possible and necessary.
+ * Reached through a public name — a Tailscale Funnel domain, say — the app has a
+ * publicly trusted cert, so the receiver can just use the page's own origin;
+ * rewriting to http://<that name>:<port> would instead point it at a port
+ * nothing serves plaintext on.
+ */
+function isLanHost(host: string): boolean {
+  return (
+    host === 'localhost' ||
+    host.endsWith('.local') ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  )
+}
+
 interface Props {
   episodes: PlayableEpisode[]
   index: number
@@ -67,12 +87,19 @@ export default function OutputSwitcher({
       await dlnaPlay(udn, proxyUrl, title, kind)
       dlnaStarted()
     } else {
-      // Chromecast can't verify a local CA, so fetch over plain HTTP on the
-      // app's direct port (not the HTTPS front the browser is using). The
-      // receiver fetches the subtitles itself, so they need the same treatment —
-      // an https URL here loads the video with silently missing captions.
+      // On a LAN address the app's cert is self-signed and Chromecast can't
+      // verify it, so fetch over plain HTTP on the app's direct port instead
+      // (not the HTTPS front the browser is using). The receiver fetches the
+      // subtitles itself, so they need the same treatment — an https URL here
+      // loads the video with silently missing captions.
+      //
+      // Reached by a public name, or with no HTTP server running at all, that
+      // rewrite has nothing to point at: keep the media on this origin, whose
+      // cert the receiver can verify.
       const port = await getCastHttpPort()
-      const onLan = (path: string) => `http://${window.location.hostname}:${port}${path}`
+      const host = window.location.hostname
+      const base = port !== null && isLanHost(host) ? `http://${host}:${port}` : window.location.origin
+      const onLan = (path: string) => `${base}${path}`
       await castToChromecast(
         onLan(proxyUrl),
         kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',

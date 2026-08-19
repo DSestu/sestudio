@@ -71,6 +71,41 @@ def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
     assert calls["title"] == "Ep 1"
 
 
+def test_play_falls_back_to_https_when_no_http_server(client, monkeypatch):
+    """HTTPS-only (`serve --no-http`): there is no plain-HTTP port to hand out.
+
+    The media URL must move to the HTTPS port, not stay `http://` on it — that
+    is plaintext against a TLS socket, which no renderer or cast device reads.
+    """
+    client.app.state.http_port = None
+    client.app.state.https_port = 8443
+    client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
+    calls = {}
+
+    async def fake_play(location: str, media_url: str, title: str, mime_type: str):
+        calls["media_url"] = media_url
+
+    monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
+    monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
+    resp = client.post(
+        "/api/cast/dlna/play",
+        json={"renderer_udn": "uuid:tv-1", "proxy_url": "/api/stream/proxy?token=abc"},
+    )
+    assert resp.status_code == 200
+    assert calls["media_url"] == "https://192.168.1.20:8443/api/stream/proxy?token=abc"
+
+
+def test_http_port_endpoint_reports_the_real_port(client):
+    assert client.get("/api/cast/http-port").json() == {"http_port": 8080}
+
+
+def test_http_port_is_null_without_an_http_server(client):
+    """The browser needs to know there is no HTTP port so it keeps cast media on
+    the page's own (publicly trusted) HTTPS origin."""
+    client.app.state.http_port = None
+    assert client.get("/api/cast/http-port").json() == {"http_port": None}
+
+
 def test_play_hls_kind_maps_to_hls_mime(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}

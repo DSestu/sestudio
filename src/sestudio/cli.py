@@ -54,9 +54,13 @@ def serve(
     shown = _display_host(host)
 
     # Both servers share one app so a proxy token minted on either site is
-    # valid on the other. Cast media URLs must be plain HTTP (renderers can't
-    # use the self-signed cert), so point app.state.http_port at the HTTP one.
+    # valid on the other. Cast media URLs prefer plain HTTP (renderers can't
+    # use the self-signed cert), so point app.state.http_port at the HTTP one —
+    # and leave it None when there is no HTTP server, so cast media falls back
+    # to HTTPS rather than to an http:// URL on a TLS port that nothing can read.
     servers: list[tuple[str, uvicorn.Config]] = []
+    app.state.http_port = None
+    app.state.https_port = None
     if not no_http:
         servers.append(("http", uvicorn.Config(app, host=host, port=http_port)))
         app.state.http_port = http_port
@@ -76,8 +80,7 @@ def serve(
                 ),
             )
         )
-        if no_http:
-            app.state.http_port = https_port
+        app.state.https_port = https_port
 
     if not servers:
         console.print("[red]Nothing to serve: --no-http and --no-https both set[/red]")
