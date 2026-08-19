@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/DSestu/sestudio/compare/v0.16.0...v0.16.1) (2026-08-19)
+
+
+### Bug fixes
+
+* keep cast media on the page origin when serving HTTPS-only ([c4b3533](https://github.com/DSestu/sestudio/commit/c4b35335b569861f9cd58acf63e2e2d3de8c4225))
+
 ## [0.16.0](https://github.com/DSestu/sestudio/compare/v0.15.0...v0.16.0) (2026-08-18)
 
 
