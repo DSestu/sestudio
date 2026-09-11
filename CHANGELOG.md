@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.2](https://github.com/DSestu/sestudio/compare/v0.16.1...v0.16.2) (2026-09-11)
+
+
+### Bug fixes
+
+* stop mobile layout scrolling horizontally ([bf8bcd5](https://github.com/DSestu/sestudio/commit/bf8bcd56ea1a50ecc9776f2c42ea5cb119ed258c))
+* stop mobile layout scrolling horizontally ([#49](https://github.com/DSestu/sestudio/issues/49)) ([cc412e0](https://github.com/DSestu/sestudio/commit/cc412e004ab828051ebb278e6d3e113a1cfb839b))
+
 ## [0.16.1](https://github.com/DSestu/sestudio/compare/v0.16.0...v0.16.1) (2026-08-19)
 
 
