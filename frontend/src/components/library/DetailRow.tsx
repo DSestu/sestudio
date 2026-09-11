@@ -129,8 +129,11 @@ export default function DetailRow({
           </p>
         )}
 
+        {/* Actions wrap because flex items can't shrink past min-content: on a
+            narrow phone the full set is wider than the viewport, and without
+            wrapping it pushes the whole page into horizontal scroll. */}
         {actions && !selection && (
-          <div className="flex items-center gap-2 mt-1 [&>*]:flex-1 sm:[&>*]:flex-none">
+          <div className="flex flex-wrap items-center gap-2 mt-1 [&>*]:flex-1 sm:[&>*]:flex-none">
             {actions}
           </div>
         )}

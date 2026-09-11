@@ -141,14 +141,16 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
             key={d.id}
             onClick={() => onNavigate(d.id)}
             aria-current={view === d.id ? 'page' : undefined}
-            className={`relative flex flex-col items-center justify-center gap-1 min-h-14 py-2 text-[11px] font-medium transition-colors ${
+            className={`relative flex min-w-0 flex-col items-center justify-center gap-1 min-h-14 px-1 py-2 text-[11px] font-medium transition-colors ${
               view === d.id ? 'text-primary' : 'text-base-content/50'
             }`}
           >
             {/* Active state is icon + label + rail, never colour alone */}
             {view === d.id && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
             {d.icon}
-            {d.label}
+            {/* Labels must be able to shrink, or six 1fr columns overflow the
+                viewport on narrow phones and the whole page scrolls sideways. */}
+            <span className="max-w-full truncate">{d.label}</span>
             {badgeFor(d.id) > 0 && (
               <span className="absolute top-1.5 right-[18%] badge badge-primary badge-xs">{badgeFor(d.id)}</span>
             )}
