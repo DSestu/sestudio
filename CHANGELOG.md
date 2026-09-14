@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.3](https://github.com/DSestu/sestudio/compare/v0.16.2...v0.16.3) (2026-09-14)
+
+
+### Bug fixes
+
+* remount media provider on source-kind swap to unstick downloaded playback ([#51](https://github.com/DSestu/sestudio/issues/51)) ([93279c6](https://github.com/DSestu/sestudio/commit/93279c6372ea157f54b682aee8b8b7ef11211d7f))
+
 ## [0.16.2](https://github.com/DSestu/sestudio/compare/v0.16.1...v0.16.2) (2026-09-11)
 
 
