@@ -218,7 +218,14 @@ export default function VideoPane({
           onEnded={handleEnded}
           onError={onSourceError}
         >
-          <MediaProvider>
+          {/* Keyed on the source kind: vidstack's React outlet renders one
+              <video> for both HLS and plain MP4 and only wires a provider to it
+              when the element mounts. Swapping HLS→MP4 in place (a streamed
+              host claims the screen, then the copy on disk wins the probe)
+              tears down hls.js and never creates the MP4 provider — the player
+              sits on a spinner for ever. Remounting the outlet, not the whole
+              player, keeps fullscreen across the swap. */}
+          <MediaProvider key={displaySource.kind}>
             {/* Sidecar subtitles. Keyed by URL so swapping episodes replaces the
                 tracks rather than reusing the previous episode's cues. */}
             {(displaySource.subtitles ?? []).map((sub) => (
