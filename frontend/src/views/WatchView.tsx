@@ -5,7 +5,8 @@ import type {
 } from '../api'
 import type { DownloadedTrack, StreamSubtitle } from '../api'
 import {
-  checkDownloads, DOWNLOADED_SOURCE, downloadedFileUrl, downloadedTracks, postDownloads,
+  checkDownloads, DOWNLOADED_SOURCE, downloadedAudioReady, downloadedFileUrl, downloadedTracks,
+  postDownloads,
 } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import { pickHost } from '../downloadPrefs'
@@ -427,16 +428,59 @@ export default function WatchView({
   // Guards against an index left over from a file that had more tracks.
   const audioTrack = audioIndex < downloadedAudio.length ? audioIndex : 0
 
+  // Whether playing needs the server's rebuilt copy rather than the file as it
+  // is: any track but the first, or a first track in a codec no browser plays
+  // (AC-3 in a rip — picture and no sound otherwise). Undefined plays the file.
+  const remuxIndex = audioTrack !== 0 || downloadedAudio[audioTrack]?.native === false
+    ? audioTrack
+    : undefined
+  // A rebuilt copy that has to be re-encoded takes minutes, and the file route
+  // waits for it — long past the player's decode check. So the copy is asked
+  // for ahead of time and polled, and the source is only offered once it is
+  // there. Keyed on file and track, so a stale "ready" is never read as this one.
+  const remuxKey = remuxIndex === undefined ? null : `${downloadedPath}|${remuxIndex}`
+  const [audioReadyFor, setAudioReadyFor] = useState<string | null>(null)
+  // What the wait looks like: a fraction while ffmpeg runs, so a minutes-long
+  // re-encode reads as work in progress rather than a page that has hung; a
+  // failure ends the wait with a message instead of a spinner for ever.
+  const [audioProgress, setAudioProgress] = useState<number | null>(null)
+  const [audioFailedFor, setAudioFailedFor] = useState<string | null>(null)
+  useEffect(() => {
+    if (!remuxKey || !downloadedPath || remuxIndex === undefined) return
+    let live = true
+    let timer = 0
+    const check = () => {
+      downloadedAudioReady(downloadedPath, remuxIndex).then(state => {
+        if (!live) return
+        if (state.ready) { setAudioReadyFor(remuxKey); return }
+        if (state.failed) { setAudioFailedFor(remuxKey); return }
+        setAudioProgress(state.progress)
+        timer = window.setTimeout(check, 2000)
+      })
+    }
+    check()
+    return () => { live = false; window.clearTimeout(timer); setAudioProgress(null) }
+  }, [remuxKey, downloadedPath, remuxIndex])
+  const audioFailed = remuxKey !== null && audioFailedFor === remuxKey
+  const preparingAudio = remuxKey !== null && audioReadyFor !== remuxKey && !audioFailed
+  const preparingNotice = !preparingAudio
+    ? null
+    : audioProgress === null
+      ? 'Preparing the audio track — waiting for the server to start re-encoding it…'
+      : `Re-encoding the audio track so the browser can play it… ${Math.round(audioProgress * 100)}%`
+
   const downloadedSource = useMemo(
-    () => (downloadedPath
+    // Held until the tracks are known: offering the file first and swapping to
+    // the rebuilt copy after would play a silent start on every AC-3 rip.
+    () => (downloadedPath && fresh && !preparingAudio
       ? {
-        proxy_url: downloadedFileUrl(downloadedPath, audioTrack),
+        proxy_url: downloadedFileUrl(downloadedPath, remuxIndex),
         kind: 'mp4' as const,
         provider: DOWNLOADED_PROVIDER,
         subtitles: downloadedSubs,
       }
       : null),
-    [downloadedPath, downloadedSubs, audioTrack],
+    [downloadedPath, fresh, preparingAudio, downloadedSubs, remuxIndex],
   )
 
   const { providers, status, sources, active, select, markFailed, probing } =
@@ -686,6 +730,8 @@ export default function WatchView({
             ep={current}
             source={source}
             probing={probing}
+            pending={audioFailed ? null : preparingNotice}
+            failure={audioFailed ? 'The audio track could not be converted for the browser.' : null}
             nextTitle={nextEp?.title ?? null}
             autoplay={autoplay}
             onSourceError={() => { if (active) markFailed(active) }}

@@ -1,5 +1,28 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import RatingBadge from './RatingBadge'
+
+/** A still from the downloaded library is made in the background: the server
+ *  answers 404 until ffmpeg has produced it, rather than holding the request
+ *  open (which starved playback of connections). Retried a few times with a
+ *  cache-buster, so the shelf fills in as each one lands. Other posters (TMDB)
+ *  fail for good and are left alone. */
+const THUMB_RETRIES = 6
+function Poster({ url }: { url: string }) {
+  const [attempt, setAttempt] = useState(0)
+  const retryable = url.includes('/downloaded/thumb')
+  return (
+    <img
+      src={attempt ? `${url}&r=${attempt}` : url}
+      alt=""
+      loading="lazy"
+      className="w-full aspect-[2/3] object-cover"
+      onError={() => {
+        if (!retryable || attempt >= THUMB_RETRIES) return
+        window.setTimeout(() => setAttempt(attempt + 1), 3000 * (attempt + 1))
+      }}
+    />
+  )
+}
 
 export interface MediaCardItem {
   key: string
@@ -113,12 +136,7 @@ export default function MediaCard({ item, removeContext, selection }: Props) {
           }`}
         >
           {item.poster_url ? (
-            <img
-              src={item.poster_url}
-              alt=""
-              loading="lazy"
-              className="w-full aspect-[2/3] object-cover"
-            />
+            <Poster url={item.poster_url} />
           ) : (
             <div className="w-full aspect-[2/3] bg-base-300 flex items-center justify-center text-base-content/30 text-3xl">
               ?

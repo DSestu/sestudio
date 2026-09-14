@@ -517,6 +517,56 @@ def _audio_dir() -> Path:
 _BROWSER_SAFE_AUDIO = frozenset({"aac", "mp3"})
 
 
+def browser_plays(codec: str) -> bool:
+    """Whether a browser takes this audio codec as-is (see ``_BROWSER_SAFE_AUDIO``)."""
+    return codec in _BROWSER_SAFE_AUDIO
+
+
+def _audio_path(file: Path, relative: str, index: int) -> Path | None:
+    """Where the rebuilt file for audio track *index* lives, made or not.
+
+    None when there is no such track, or when it is the first track and plays
+    as it is — then the original file is the answer and nothing is built.
+    """
+    tracks = tracks_of(file)
+    if index < 0 or index >= len(tracks.audio):
+        return None
+    codec = tracks.audio[index].codec
+    if index == 0 and browser_plays(codec):
+        return None
+    try:
+        stat = file.stat()
+    except OSError:
+        return None
+    key = hashlib.sha1(
+        f"{relative}|{int(stat.st_mtime)}|{stat.st_size}|a{index}|{codec}".encode()
+    ).hexdigest()
+    return _audio_dir() / f"{key}.mp4"
+
+
+def cached_alternate_audio(file: Path, relative: str, index: int) -> Path | None:
+    """The rebuilt file for track *index* if already made, else None. No ffmpeg."""
+    out = _audio_path(file, relative, index)
+    if out is not None and out.is_file() and out.stat().st_size > 0:
+        return out
+    return None
+
+
+# How far along each rebuild is, 0..1, keyed on its output path. Written by
+# the thread running ffmpeg, read by the readiness endpoint, so a browser can
+# tell a re-encode in progress from a page that has hung.
+_audio_progress: dict[str, float] = {}
+
+
+def audio_progress(file: Path, relative: str, index: int) -> float | None:
+    """Fraction of the rebuild for track *index* done so far; None if not running."""
+    out = _audio_path(file, relative, index)
+    return None if out is None else _audio_progress.get(str(out))
+
+
+_OUT_TIME_RE = re.compile(r"^out_time_(?:us|ms)=(\d+)")
+
+
 def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
     """*file* rebuilt with audio track *index* as its only audio, cached on disk.
 
@@ -530,25 +580,18 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
     (see ``_BROWSER_SAFE_AUDIO``), which is the only case that spends real time.
 
     Cached under the file's identity and the track index, so switching back and
-    forth pays once. Returns None when there is no such track, and for the
-    default track — that one is the original file, and a copy of it would be
-    pure waste.
+    forth pays once. Returns None when there is no such track, and for a first
+    track that already plays — that one is the original file, and a copy of it
+    would be pure waste. A first track that does *not* play (AC-3 in a rip) is
+    rebuilt like any other: without that, the file plays picture and no sound.
     """
-    tracks = tracks_of(file)
-    if index <= 0 or index >= len(tracks.audio):
+    out = _audio_path(file, relative, index)
+    if out is None:
         return None
-    try:
-        stat = file.stat()
-    except OSError:
-        return None
-
-    codec = tracks.audio[index].codec
-    key = hashlib.sha1(
-        f"{relative}|{int(stat.st_mtime)}|{stat.st_size}|a{index}|{codec}".encode()
-    ).hexdigest()
-    out = _audio_dir() / f"{key}.mp4"
     if out.is_file() and out.stat().st_size > 0:
         return out
+    key = out.stem
+    codec = tracks_of(file).audio[index].codec
 
     try:
         binary = ffmpeg_binary()
@@ -562,13 +605,20 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
         else ["-c:a", "aac", "-b:a", "192k"]
     )
     tmp = out.with_name(f"{key}.{os.getpid()}.{threading.get_ident()}.tmp.mp4")
+    total = duration_of(file)
+    _audio_progress[str(out)] = 0.0
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             [
                 binary,
                 "-nostdin",
                 "-loglevel",
                 "error",
+                # Position reports on stdout, one `out_time_us=` line a second,
+                # so the browser can show how far a minutes-long encode is.
+                "-nostats",
+                "-progress",
+                "pipe:1",
                 "-y",
                 "-i",
                 str(file),
@@ -586,15 +636,27 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
                 "+faststart",
                 str(tmp),
             ],
-            # Generous: a copy takes a second, but re-encoding the audio of a
-            # long film is minutes, and dying half way would leave the track
-            # permanently unavailable.
-            timeout=1800,
-            check=False,
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            text=True,
         )
-        if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
+        # Generous: a copy takes a second, but re-encoding the audio of a long
+        # film is minutes, and dying half way would leave the track permanently
+        # unavailable.
+        watchdog = threading.Timer(1800, proc.kill)
+        watchdog.start()
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                match = _OUT_TIME_RE.match(line)
+                if match and total:
+                    # `out_time_ms` is microseconds too (an old ffmpeg misnomer).
+                    done = int(match.group(1)) / 1_000_000 / total
+                    _audio_progress[str(out)] = min(done, 0.99)
+            returncode = proc.wait()
+        finally:
+            watchdog.cancel()
+        if returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
             os.replace(tmp, out)
             return out
         return None
@@ -602,6 +664,7 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
         return None
     finally:
         tmp.unlink(missing_ok=True)
+        _audio_progress.pop(str(out), None)
 
 
 def extracted_subtitle(file: Path, relative: str, index: int) -> Path | None:
@@ -734,16 +797,11 @@ def _thumb_dir() -> Path:
     return config_dir() / "thumbs"
 
 
-def thumbnail(file: Path, relative: str) -> Path | None:
-    """A cached still from *file*, or None when one cannot be made.
+def _thumb_path(file: Path, relative: str) -> Path | None:
+    """Where the still for *file* lives, made or not; None if the file is gone.
 
-    Most of a personal collection is not on TMDB — a rip with an odd name, a
-    title that never had an English release — and a wall of blank posters is a
-    poor shelf. A frame from the file itself is always available and always
-    right, so it stands in wherever a real poster is missing.
-
-    Cached under the file's path, size and mtime, so replacing a file makes a
-    new still and nothing has to be invalidated by hand.
+    Keyed on the file's path, size and mtime, so replacing a file makes a new
+    still and nothing has to be invalidated by hand.
     """
     try:
         stat = file.stat()
@@ -752,9 +810,31 @@ def thumbnail(file: Path, relative: str) -> Path | None:
     key = hashlib.sha1(
         f"{relative}|{int(stat.st_mtime)}|{stat.st_size}".encode()
     ).hexdigest()
-    out = _thumb_dir() / f"{key}.jpg"
+    return _thumb_dir() / f"{key}.jpg"
+
+
+def cached_thumbnail(file: Path, relative: str) -> Path | None:
+    """The still for *file* if it has already been made, else None. No ffmpeg."""
+    out = _thumb_path(file, relative)
+    if out is not None and out.is_file() and out.stat().st_size > 0:
+        return out
+    return None
+
+
+def thumbnail(file: Path, relative: str) -> Path | None:
+    """A cached still from *file*, or None when one cannot be made.
+
+    Most of a personal collection is not on TMDB — a rip with an odd name, a
+    title that never had an English release — and a wall of blank posters is a
+    poor shelf. A frame from the file itself is always available and always
+    right, so it stands in wherever a real poster is missing.
+    """
+    out = _thumb_path(file, relative)
+    if out is None:
+        return None
     if out.is_file() and out.stat().st_size > 0:
         return out
+    key = out.stem
 
     try:
         binary = ffmpeg_binary()
