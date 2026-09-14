@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -22,6 +23,27 @@ from sestudio import library, downloaded
 from sestudio.config import load_config
 
 router = APIRouter()
+
+# Stills are made in the background, in their own small pool, and a request
+# for one that is not made yet is answered at once with 404 rather than held
+# open until ffmpeg is done. Held open, it cost more than its own wait: a
+# browser allows six connections to a host, opening a folder in the explorer
+# asks for a still per visible card, and a cold one is an ffmpeg run of several
+# seconds — so the six were all sitting on stills when the player asked for
+# the file, its request queued behind them, and its 8s decode check timed out
+# with "No playable source" for a file that plays fine. The card retries a
+# 404 a few times, so the shelf fills in as the pool gets to each one.
+# ponytail: one pool for all clients; per-client fairness if it ever matters.
+_THUMB_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="thumb")
+# What is being made right now, so a card that asks again while it waits does
+# not queue a second ffmpeg run for the same still.
+_THUMBS_PENDING: dict[str, Future[Path | None]] = {}
+
+# Rebuilt-audio copies likewise: one at a time, because a re-encode is a CPU
+# core for minutes and two at once would only make both slower. The browser
+# polls ``/downloaded/audio`` and plays once the copy exists.
+_AUDIO_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="audio")
+_AUDIO_PENDING: dict[str, Future[Path | None]] = {}
 
 # The Google Cast receiver refuses media served without CORS headers, exactly as
 # for the stream proxy; DLNA renderers are indifferent. Harmless for browsers.
@@ -221,15 +243,21 @@ async def get_downloaded_file(
     parallel endpoint.
     """
     target = _resolved(path)
-    if audio:
+    if audio is not None:
+        # Built here if it is not yet — which waits for ffmpeg, minutes for a
+        # re-encode. The browser asks ``/downloaded/audio`` first and only comes
+        # here once that says ready; a renderer that comes straight here waits.
         alternate = await asyncio.to_thread(
             downloaded.alternate_audio, target, path, audio
         )
-        if alternate is None:
+        if alternate is not None:
+            target = alternate
+        elif audio != 0:
             raise HTTPException(
                 status_code=404, detail="No such audio track, or it could not be built"
             )
-        target = alternate
+        # ``audio=0`` on a track that plays as it is: the original file is the
+        # answer, and nothing was built.
     duration = await asyncio.to_thread(downloaded.duration_of, target)
     media_type = downloaded.media_type_for(target)
     headers = {
@@ -288,6 +316,48 @@ def _track_payload(track: downloaded.Track) -> dict[str, Any]:
     }
 
 
+@router.get("/downloaded/audio")
+async def get_downloaded_audio_ready(
+    path: str = Query(...), index: int = Query(..., ge=0)
+) -> dict[str, Any]:
+    """Whether the copy carrying audio track *index* exists yet — and if not,
+    start making it in the background.
+
+    The file route builds the copy itself when asked, but that means waiting on
+    ffmpeg inside the request: seconds for a copy, minutes for the re-encode an
+    AC-3 track needs, and the player's decode check gives up long before. So the
+    browser asks here, polls until ``ready``, and only then loads the file.
+    A first track that plays as it is needs no copy and is ready at once.
+    """
+    target = _resolved(path)
+    tracks = await asyncio.to_thread(downloaded.tracks_of, target)
+    if index >= len(tracks.audio):
+        raise HTTPException(status_code=404, detail="No such audio track")
+    if index == 0 and downloaded.browser_plays(tracks.audio[0].codec):
+        return {"ready": True, "failed": False, "progress": None}
+    if downloaded.cached_alternate_audio(target, path, index) is not None:
+        return {"ready": True, "failed": False, "progress": None}
+    key = f"{path}|{index}"
+    future = _AUDIO_PENDING.get(key)
+    if future is None:
+        future = _AUDIO_POOL.submit(downloaded.alternate_audio, target, path, index)
+        _AUDIO_PENDING[key] = future
+        # A build that worked is forgotten here: the file on disk is its record,
+        # and if that is ever cleared the next ask rebuilds it. One that failed
+        # stays on record, or the next poll would queue the same doomed encode
+        # again, every few seconds, for ever.
+        future.add_done_callback(
+            lambda f, k=key: f.result() is not None and _AUDIO_PENDING.pop(k, None)
+        )
+    failed = future.done() and future.result() is None
+    return {
+        "ready": False,
+        "failed": failed,
+        # 0..1 while ffmpeg runs; None while it is still queued behind another.
+        "progress": downloaded.audio_progress(target, path, index),
+    }
+
+
 @router.get("/downloaded/tracks")
 async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
     """What is inside one stored file: its audio and subtitle tracks.
@@ -331,7 +401,16 @@ async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
     ]
 
     return {
-        "audio": [_track_payload(track) for track in tracks.audio],
+        "audio": [
+            {
+                **_track_payload(track),
+                # Whether a browser plays the codec as it is. False means the
+                # track is only heard through the rebuilt copy (see
+                # ``/downloaded/audio``), so the client asks for that instead.
+                "native": downloaded.browser_plays(track.codec),
+            }
+            for track in tracks.audio
+        ],
         "subtitles": subtitles,
     }
 
@@ -389,13 +468,22 @@ async def get_downloaded_subtitle(
 async def get_downloaded_thumb(path: str = Query(...)) -> FileResponse:
     """A still from a stored file, for a title TMDB has no poster for.
 
-    Generated on first request and cached on disk from then on, so a shelf of
-    unmatched titles costs one ffmpeg run each, once.
+    Generated in the background on first request and cached on disk from then
+    on, so a shelf of unmatched titles costs one ffmpeg run each, once. Until it
+    is made the answer is 404 with ``Retry-After``; see ``_THUMB_POOL``.
     """
     target = _resolved(path)
-    thumb = await asyncio.to_thread(downloaded.thumbnail, target, path)
+    thumb = downloaded.cached_thumbnail(target, path)
     if thumb is None:
-        raise HTTPException(status_code=404, detail="No still could be made")
+        if path not in _THUMBS_PENDING:
+            future = _THUMB_POOL.submit(downloaded.thumbnail, target, path)
+            _THUMBS_PENDING[path] = future
+            future.add_done_callback(lambda _f, p=path: _THUMBS_PENDING.pop(p, None))
+        raise HTTPException(
+            status_code=404,
+            detail="Still not made yet",
+            headers={"Retry-After": "3", "Cache-Control": "no-store"},
+        )
     return FileResponse(
         thumb,
         media_type="image/jpeg",
