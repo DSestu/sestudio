@@ -317,14 +317,80 @@ def test_thumbnail_is_generated_and_cached(client, out, tmp_path):
     )
     downloaded.invalidate()
 
+    from sestudio.web.routes import downloaded as route
+
+    # A cold still is not waited for: the answer is an immediate 404 and the
+    # ffmpeg run happens in the background. Holding the request open instead
+    # tied up the browser's few connections and starved playback.
+    cold = client.get("/api/downloaded/thumb", params={"path": "Old Film.mp4"})
+    assert cold.status_code == 404
+    assert cold.headers["retry-after"] == "3"
+    # Asking again meanwhile does not queue a second run for the same still.
+    client.get("/api/downloaded/thumb", params={"path": "Old Film.mp4"})
+    assert len(route._THUMBS_PENDING) == 1
+    route._THUMBS_PENDING["Old Film.mp4"].result(timeout=60)
+
     resp = client.get("/api/downloaded/thumb", params={"path": "Old Film.mp4"})
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "image/jpeg"
     assert resp.content[:3] == b"\xff\xd8\xff"  # a real JPEG, not an empty file
 
-    # Second call is served from the cache — same bytes, no second ffmpeg run.
+    # Served from the cache from then on — same bytes, no second ffmpeg run.
     again = client.get("/api/downloaded/thumb", params={"path": "Old Film.mp4"})
     assert again.content == resp.content
+
+
+def test_audio_readiness_starts_a_rebuild_only_when_one_is_needed(
+    client, out, monkeypatch
+):
+    """The browser asks here before loading a file with a chosen audio track,
+    because the file route would otherwise wait on ffmpeg inside the request."""
+    from sestudio.web.routes import downloaded as route
+
+    _write(out / "Film.mkv")
+    downloaded.invalidate()
+    tracks = downloaded.MediaTracks(
+        audio=[
+            downloaded.Track(0, "ac3", "fra", "", True),
+            downloaded.Track(1, "aac", "eng", "", False),
+        ],
+        subtitles=[],
+    )
+    monkeypatch.setattr(downloaded, "tracks_of", lambda _f: tracks)
+    built: list[int] = []
+    monkeypatch.setattr(
+        downloaded, "alternate_audio", lambda _f, _r, i: built.append(i) or None
+    )
+
+    # The tracks listing says which ones a browser cannot play as they are.
+    listed = client.get("/api/downloaded/tracks", params={"path": "Film.mkv"}).json()
+    assert [a["native"] for a in listed["audio"]] == [False, True]
+
+    def ask(index: int) -> dict:
+        return client.get(
+            "/api/downloaded/audio", params={"path": "Film.mkv", "index": index}
+        ).json()
+
+    # An AC-3 first track needs the copy: not ready, and the build is queued
+    # once, however often it is asked — including after it has failed, which
+    # is reported rather than retried on every poll.
+    assert ask(0)["ready"] is False
+    for future in list(route._AUDIO_PENDING.values()):
+        future.result(timeout=10)
+    assert ask(0) == {"ready": False, "failed": True, "progress": None}
+    assert built == [0]
+
+    # The second track plays as it is but is not the first, so it too needs a
+    # copy, queued under its own key.
+    assert ask(1)["ready"] is False
+    route._AUDIO_PENDING.clear()
+
+    assert (
+        client.get(
+            "/api/downloaded/audio", params={"path": "Film.mkv", "index": 5}
+        ).status_code
+        == 404
+    )
 
 
 def test_thumbnail_refuses_traversal(client):

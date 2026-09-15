@@ -27,6 +27,11 @@ interface Props {
   ep: PlayableEpisode
   source: StreamSource | null
   probing: boolean
+  /** Why there is no source *yet*, when the wait is expected (a copy being
+   *  rebuilt on the server) rather than a search that came up empty. */
+  pending?: string | null
+  /** Why there will be no source: an expected wait that ended badly. */
+  failure?: string | null
   /** Title of the episode queued after this one, if any. */
   nextTitle: string | null
   autoplay: boolean
@@ -43,7 +48,7 @@ interface Props {
  * fullscreen without a user gesture on `ended`).
  */
 export default function VideoPane({
-  ep, source, probing, nextTitle, autoplay, onSourceError, onAdvance, onPosition,
+  ep, source, probing, pending = null, failure = null, nextTitle, autoplay, onSourceError, onAdvance, onPosition,
 }: Props) {
   const playerRef = useRef<MediaPlayerInstance>(null)
   const lastSaveRef = useRef(0)
@@ -265,13 +270,15 @@ export default function VideoPane({
       )}
 
       {/* Overlays: initial testing / no source / dead source */}
-      {!displaySource && probing && (
-        <div className="flex items-center gap-3 text-white/60">
-          <span className="loading loading-spinner loading-lg" /> Testing sources…
+      {!displaySource && (probing || pending) && (
+        <div className="flex items-center gap-3 text-white/60 px-6 text-center">
+          <span className="loading loading-spinner loading-lg" /> {pending ?? 'Testing sources…'}
         </div>
       )}
-      {!displaySource && !probing && !source && (
-        <p className="text-error text-sm px-6 text-center">No playable source for this episode.</p>
+      {!displaySource && !probing && !pending && !source && (
+        <p className="text-error text-sm px-6 text-center">
+          {failure ?? 'No playable source for this episode.'}
+        </p>
       )}
       {displaySource && !probing && !source && (
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-center px-6">

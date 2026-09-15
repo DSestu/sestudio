@@ -638,14 +638,38 @@ export async function getDownloadedLibrary(): Promise<DownloadedTitle[]> {
 
 /** Playable URL for a downloaded file. Serves inline, with range support.
  *
- * `audioIndex` picks an audio track other than the file's first. No browser can
- * choose a track itself, so the server builds a copy carrying the wanted one —
- * about a second for a whole episode, cached, and longer only when the track's
- * codec has to be re-encoded to play at all.
+ * `audioIndex` asks for the copy the server builds around one audio track. No
+ * browser can choose a track itself, so a track other than the first always
+ * needs one; the first needs one only when its codec would not play (AC-3 in a
+ * rip). Left out, the original file is served as it is. Ask
+ * `downloadedAudioReady` first: a copy that has to be re-encoded takes minutes,
+ * and the file route waits for it.
  */
 export function downloadedFileUrl(path: string, audioIndex?: number): string {
   const base = `${BASE}/downloaded/file?path=${encodeURIComponent(path)}`
-  return audioIndex ? `${base}&audio=${audioIndex}` : base
+  return audioIndex !== undefined ? `${base}&audio=${audioIndex}` : base
+}
+
+export interface AudioReadiness {
+  ready: boolean
+  /** The build was tried and could not be made; polling further is pointless. */
+  failed: boolean
+  /** 0..1 while ffmpeg is re-encoding; null while queued or when not applicable. */
+  progress: number | null
+}
+
+/** Whether the copy carrying audio track `index` exists yet. Asking starts the
+ *  build if it has not; poll until `ready`, then play `downloadedFileUrl`. */
+export async function downloadedAudioReady(path: string, index: number): Promise<AudioReadiness> {
+  const unknown = { ready: false, failed: false, progress: null }
+  try {
+    const res = await fetch(
+      `${BASE}/downloaded/audio?path=${encodeURIComponent(path)}&index=${index}`,
+    )
+    return res.ok ? { ...unknown, ...(await res.json()) } : { ...unknown, failed: true }
+  } catch {
+    return unknown
+  }
 }
 
 /** One audio or subtitle track inside a downloaded file. */
@@ -657,6 +681,9 @@ export interface DownloadedTrack {
   default: boolean
   /** False for a picture-based subtitle (PGS/VOBSUB), which cannot be shown as text. */
   text: boolean
+  /** Audio only: whether a browser plays this codec as it is. False means the
+   *  server has to re-encode it before the track can be heard. */
+  native?: boolean
   /** Subtitles only: where to load the WebVTT from. */
   url?: string
   /** Subtitles only: inside the container, rather than a `.vtt` beside it. */
