@@ -31,6 +31,19 @@ const DECODE_TIMEOUT = 8000
  * Resolves false rather than throwing: an unreadable source is an answer, not
  * an error.
  */
+/**
+ * The same question for a source the server transcodes as it plays. A media
+ * element cannot answer it: no browser but Safari loads an HLS playlist into
+ * one, and hls.js only enters the picture once the player has the source. So
+ * the playlist is fetched instead — the server builds it from the file's own
+ * duration, and answering at all means the file was read.
+ */
+function playlistLoads(url: string, signal: AbortSignal): Promise<boolean> {
+  return fetch(url, { signal })
+    .then(res => res.ok)
+    .catch(() => false)
+}
+
 function canDecode(url: string, signal: AbortSignal): Promise<boolean> {
   return new Promise<boolean>(resolve => {
     const probe = document.createElement('video')
@@ -158,8 +171,9 @@ export function useProviderSources(
       setStatus(prev => ({ ...prev, [p]: 'ok' }))
     }
 
+    const probeLocal = local?.kind === 'hls' ? playlistLoads : canDecode
     const localProbe = local
-      ? canDecode(local.proxy_url, controller.signal).then(ok => {
+      ? probeLocal(local.proxy_url, controller.signal).then(ok => {
           if (cancelled) return
           localPending = false
           if (ok) {

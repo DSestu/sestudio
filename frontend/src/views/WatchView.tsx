@@ -5,8 +5,8 @@ import type {
 } from '../api'
 import type { DownloadedTrack, StreamSubtitle } from '../api'
 import {
-  checkDownloads, DOWNLOADED_SOURCE, downloadedAudioReady, downloadedFileUrl, downloadedTracks,
-  postDownloads,
+  checkDownloads, DOWNLOADED_SOURCE, downloadedAudioReady, downloadedFileUrl, downloadedHlsUrl,
+  downloadedTracks, postDownloads,
 } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import { pickHost } from '../downloadPrefs'
@@ -391,8 +391,8 @@ export default function WatchView({
   // episode is never read as this one's — and so the reset on switching happens
   // during render rather than in the effect, which would cost an extra pass.
   const [subs, setSubs] = useState<{
-    path?: string; list: StreamSubtitle[]; audio: DownloadedTrack[]
-  }>({ list: NO_SUBTITLES, audio: NO_AUDIO })
+    path?: string; list: StreamSubtitle[]; audio: DownloadedTrack[]; hls: boolean
+  }>({ list: NO_SUBTITLES, audio: NO_AUDIO, hls: false })
   useEffect(() => {
     if (!downloadedPath) return
     let live = true
@@ -401,6 +401,7 @@ export default function WatchView({
       setSubs({
         path: downloadedPath,
         audio: tracks.audio,
+        hls: Boolean(tracks.needs_hls),
         list: tracks.subtitles
           // A picture-based track has no text to show; it is reported so the
           // reason is knowable, and skipped so the menu holds nothing dead.
@@ -428,12 +429,16 @@ export default function WatchView({
   // Guards against an index left over from a file that had more tracks.
   const audioTrack = audioIndex < downloadedAudio.length ? audioIndex : 0
 
-  // Whether playing needs the server's rebuilt copy rather than the file as it
-  // is: any track but the first, or a first track in a codec no browser plays
-  // (AC-3 in a rip — picture and no sound otherwise). Undefined plays the file.
-  const remuxIndex = audioTrack !== 0 || downloadedAudio[audioTrack]?.native === false
-    ? audioTrack
-    : undefined
+  // A file the browser cannot open at all — an AVI, a TV recording, a 10-bit
+  // encode, or anything whose audio it will not decode — is played through the
+  // server's HLS route, which transcodes it segment by segment as it goes.
+  const needsHls = fresh && subs.hls
+
+  // Otherwise the file itself plays, and only a track other than its first
+  // needs the server to build a copy around it. Undefined serves the file
+  // untouched. Never both: on HLS the wanted track is encoded into the
+  // segments, so switching costs a new playlist rather than a re-encode.
+  const remuxIndex = !needsHls && audioTrack !== 0 ? audioTrack : undefined
   // A rebuilt copy that has to be re-encoded takes minutes, and the file route
   // waits for it — long past the player's decode check. So the copy is asked
   // for ahead of time and polled, and the source is only offered once it is
@@ -470,17 +475,20 @@ export default function WatchView({
       : `Re-encoding the audio track so the browser can play it… ${Math.round(audioProgress * 100)}%`
 
   const downloadedSource = useMemo(
-    // Held until the tracks are known: offering the file first and swapping to
-    // the rebuilt copy after would play a silent start on every AC-3 rip.
+    // Held until the tracks are known: offering the file first and swapping
+    // after would play a silent start on an AC-3 rip, and would hand the
+    // player a container it cannot open on everything else.
     () => (downloadedPath && fresh && !preparingAudio
       ? {
-        proxy_url: downloadedFileUrl(downloadedPath, remuxIndex),
-        kind: 'mp4' as const,
+        proxy_url: needsHls
+          ? downloadedHlsUrl(downloadedPath, audioTrack)
+          : downloadedFileUrl(downloadedPath, remuxIndex),
+        kind: (needsHls ? 'hls' : 'mp4') as 'hls' | 'mp4',
         provider: DOWNLOADED_PROVIDER,
         subtitles: downloadedSubs,
       }
       : null),
-    [downloadedPath, fresh, preparingAudio, downloadedSubs, remuxIndex],
+    [downloadedPath, fresh, preparingAudio, needsHls, audioTrack, downloadedSubs, remuxIndex],
   )
 
   const { providers, status, sources, active, select, markFailed, probing } =
