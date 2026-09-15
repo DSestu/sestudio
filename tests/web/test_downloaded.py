@@ -393,6 +393,89 @@ def test_audio_readiness_starts_a_rebuild_only_when_one_is_needed(
     )
 
 
+# --- transcoded on the way out, for a file no browser opens ---------------- #
+
+
+def test_the_playlist_lists_the_whole_film_and_warms_its_start(
+    client, out, monkeypatch
+):
+    """A player has to be able to seek before anything is encoded, so every
+    segment is listed up front."""
+    from sestudio.web.routes import downloaded as route
+
+    _write(out / "Film.avi")
+    downloaded.invalidate()
+    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 30.0)
+    built: list[int] = []
+    monkeypatch.setattr(
+        downloaded, "hls_segment", lambda _f, _r, i, audio=0: built.append(i) or None
+    )
+
+    resp = client.get("/api/downloaded/hls", params={"path": "Film.avi"})
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/vnd.apple.mpegurl")
+    lines = resp.text.splitlines()
+    assert lines[0] == "#EXTM3U"
+    # VOD and an end marker: together they say the timeline is complete, which
+    # is what puts a scrub bar over the whole film rather than a live edge.
+    assert "#EXT-X-PLAYLIST-TYPE:VOD" in lines
+    assert lines[-1] == "#EXT-X-ENDLIST"
+    assert lines.count("#EXTINF:6.000,") == 5
+    assert lines[-2].startswith("segment?path=Film.avi&index=4&audio=0")
+
+    # The opening segments start building before anything asks for them: the
+    # player's own first attempt at playing gives up if they are not there.
+    for future in list(route._HLS_PENDING.values()):
+        future.result(timeout=10)
+    assert built == [0, 1, 2]
+    route._HLS_PENDING.clear()
+
+
+def test_a_segment_is_served_once_it_is_built(client, out, monkeypatch):
+    """Waited on rather than deferred: the player is asking for the next second
+    of what it is playing, and that is under a second of work."""
+    from sestudio.web.routes import downloaded as route
+
+    _write(out / "Film.avi")
+    downloaded.invalidate()
+    made = out.parent / "seg.ts"
+    made.write_bytes(b"MPEGTS")
+    monkeypatch.setattr(downloaded, "hls_segment", lambda _f, _r, _i, audio=0: made)
+
+    resp = client.get(
+        "/api/downloaded/segment", params={"path": "Film.avi", "index": 3}
+    )
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "video/mp2t"
+    assert resp.content == b"MPEGTS"
+    route._HLS_PENDING.clear()
+
+
+def test_a_segment_that_cannot_be_built_is_a_404(client, out, monkeypatch):
+    from sestudio.web.routes import downloaded as route
+
+    _write(out / "Film.avi")
+    downloaded.invalidate()
+    monkeypatch.setattr(downloaded, "hls_segment", lambda *a, **k: None)
+
+    resp = client.get(
+        "/api/downloaded/segment", params={"path": "Film.avi", "index": 9999}
+    )
+
+    assert resp.status_code == 404
+    route._HLS_PENDING.clear()
+
+
+def test_hls_refuses_traversal(client):
+    for route in ("hls", "segment"):
+        resp = client.get(
+            f"/api/downloaded/{route}", params={"path": "../../etc/passwd", "index": 0}
+        )
+        assert resp.status_code == 403
+
+
 def test_thumbnail_refuses_traversal(client):
     resp = client.get("/api/downloaded/thumb", params={"path": "../../etc/passwd"})
     assert resp.status_code == 403

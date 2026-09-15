@@ -356,6 +356,16 @@ _STREAM_RE = re.compile(
     r"^\s*Stream #0:(\d+)(?:\[[^\]]*\])?(?:\((?P<lang>[^)]*)\))?: "
     r"(?P<kind>Audio|Subtitle): (?P<codec>[A-Za-z0-9_]+)"
 )
+# The video stream, for deciding whether a browser can play the file at all.
+# Its codec is followed by any number of parenthesised notes — `(High)`,
+# `(avc1 / 0x31637661)` — and then the pixel format, which matters as much as
+# the codec: Chrome plays 8-bit H.264 and not the 10-bit High 10 profile an
+# anime release often carries, and both report `h264`.
+_VIDEO_STREAM_RE = re.compile(
+    r"^\s*Stream #0:\d+(?:\[[^\]]*\])?(?:\([^)]*\))?: Video: (?P<codec>[A-Za-z0-9_]+)"
+    r"(?:\s*\([^)]*\))*,\s*(?P<pix_fmt>[a-z0-9]+)"
+)
+
 # `      title           : VF` inside a stream's own Metadata block. This is what
 # a human named the track, and it beats "Track 2" whenever it is there.
 _TITLE_RE = re.compile(r"^\s+title\s*:\s*(.+?)\s*$")
@@ -410,6 +420,10 @@ class Track:
 class MediaTracks:
     audio: list[Track]
     subtitles: list[Track]
+    #: Codec of the first video stream, '' when the file has none.
+    video: str = ""
+    #: Its pixel format, e.g. `yuv420p` or `yuv420p10le`. See `_VIDEO_STREAM_RE`.
+    video_pix_fmt: str = ""
 
 
 def _parse_streams(text: str) -> MediaTracks:
@@ -422,9 +436,14 @@ def _parse_streams(text: str) -> MediaTracks:
     """
     audio: list[Track] = []
     subtitles: list[Track] = []
+    video = pix_fmt = ""
     current: Track | None = None
 
     for line in text.splitlines():
+        if not video and (found := _VIDEO_STREAM_RE.match(line)):
+            video, pix_fmt = found.group("codec").lower(), found.group("pix_fmt")
+            current = None  # a title after it belongs to the video, not a track
+            continue
         match = _STREAM_RE.match(line)
         if match:
             kind = match.group("kind")
@@ -449,7 +468,9 @@ def _parse_streams(text: str) -> MediaTracks:
                 current.title = title.group(1)
                 current = None  # one title per stream; don't take the next one's
 
-    return MediaTracks(audio=audio, subtitles=subtitles)
+    return MediaTracks(
+        audio=audio, subtitles=subtitles, video=video, video_pix_fmt=pix_fmt
+    )
 
 
 def tracks_of(file: Path) -> MediaTracks:
@@ -520,6 +541,39 @@ _BROWSER_SAFE_AUDIO = frozenset({"aac", "mp3"})
 def browser_plays(codec: str) -> bool:
     """Whether a browser takes this audio codec as-is (see ``_BROWSER_SAFE_AUDIO``)."""
     return codec in _BROWSER_SAFE_AUDIO
+
+
+# Containers a browser will open. Matroska is on the list because Chrome demuxes
+# it (WebM is a subset); AVI, MPEG-TS, ASF and FLV are not, and no codec inside
+# them changes that — Chrome answers `DEMUXER_ERROR_COULD_NOT_OPEN` before it
+# ever looks at a stream.
+_BROWSER_CONTAINERS = frozenset({".mp4", ".m4v", ".webm", ".mkv", ".mov", ".ogv"})
+
+# Video a browser decodes. HEVC is deliberately absent: support for it depends on
+# the machine's hardware, so a file that plays here would fail on the phone.
+_BROWSER_SAFE_VIDEO = frozenset({"h264", "vp8", "vp9", "av1"})
+
+# 8-bit 4:2:0 only. `yuv420p10le` is the High 10 profile an anime release often
+# carries, which reports `h264` and plays in no browser.
+_BROWSER_SAFE_PIX_FMTS = frozenset({"yuv420p", "yuvj420p", ""})
+
+
+def browser_can_play(file: Path) -> bool:
+    """Whether a browser can play *file* as it sits on disk.
+
+    False means playback has to go through :func:`hls_segment` instead, which is
+    the whole reason that exists: a third of a collection assembled over years is
+    XviD in an AVI, or a TV recording in MPEG-TS, and none of it opens in a tab.
+    """
+    if file.suffix.lower() not in _BROWSER_CONTAINERS:
+        return False
+    tracks = tracks_of(file)
+    if tracks.video and (
+        tracks.video not in _BROWSER_SAFE_VIDEO
+        or tracks.video_pix_fmt not in _BROWSER_SAFE_PIX_FMTS
+    ):
+        return False
+    return not tracks.audio or browser_plays(tracks.audio[0].codec)
 
 
 def _audio_path(file: Path, relative: str, index: int) -> Path | None:
@@ -665,6 +719,185 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
     finally:
         tmp.unlink(missing_ok=True)
         _audio_progress.pop(str(out), None)
+
+
+#: Segment length. Six seconds is the usual HLS compromise: short enough that a
+#: seek costs one transcode, long enough that process startup is not most of it.
+HLS_SEGMENT_SECONDS = 6.0
+
+#: Ceiling on the segment cache, evicted oldest-first.
+# ponytail: one global cap; per-title budgets if one film ever starves another.
+_HLS_CACHE_BYTES = 4 * 1024**3
+
+
+def _hls_dir() -> Path:
+    return config_dir() / "hls"
+
+
+def hls_segment_durations(file: Path) -> list[float] | None:
+    """Length of each segment of *file*, or None when its duration is unknown.
+
+    This is the whole trick behind seeking: the playlist built from this lists
+    every segment of the film up front, so the player knows the full timeline
+    before a single frame has been encoded. Jumping an hour in asks for one
+    segment rather than waiting for an hour of video to be transcoded.
+    """
+    total = duration_of(file)
+    if not total or total <= 0:
+        return None
+    whole = int(total // HLS_SEGMENT_SECONDS)
+    last = total - whole * HLS_SEGMENT_SECONDS
+    return [HLS_SEGMENT_SECONDS] * whole + ([last] if last > 0.01 else [])
+
+
+def hls_segment(file: Path, relative: str, index: int, audio: int = 0) -> Path | None:
+    """One transcoded segment of *file*, cached on disk. None if there is no such
+    segment, or it could not be built.
+
+    Each is encoded on its own from the source, which is what makes a seek cheap
+    and is why they are independently decodable: a fresh encode opens on a
+    keyframe. ``-output_ts_offset`` stamps the segment with its real position, so
+    the player stitches them into one timeline instead of a run of clips.
+
+    The video is always re-encoded, even when the codec would have played, since
+    cutting a stream with ``-c:v copy`` only works on the source's own keyframes.
+    Paying for the encode buys segment boundaries we choose.
+    """
+    durations = hls_segment_durations(file)
+    if durations is None or not 0 <= index < len(durations):
+        return None
+    try:
+        stat = file.stat()
+    except OSError:
+        return None
+
+    key = hashlib.sha1(
+        f"{relative}|{int(stat.st_mtime)}|{stat.st_size}"
+        f"|s{index}|a{audio}|{HLS_SEGMENT_SECONDS}".encode()
+    ).hexdigest()
+    out = _hls_dir() / f"{key}.ts"
+    if out.is_file() and out.stat().st_size > 0:
+        # Touched so eviction reads it as recently used, not merely old.
+        out.touch()
+        return out
+
+    try:
+        binary = ffmpeg_binary()
+    except RuntimeError:
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    start = index * HLS_SEGMENT_SECONDS
+
+    tmp = out.with_name(f"{key}.{os.getpid()}.{threading.get_ident()}.tmp.ts")
+    try:
+        result = subprocess.run(
+            [
+                binary,
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                # Before -i: ffmpeg seeks by keyframe and then decodes forward to
+                # the exact position, which costs the same at two hours in as at
+                # the start. After -i it would decode the whole film to get there.
+                "-ss",
+                f"{start:.3f}",
+                "-i",
+                str(file),
+                "-t",
+                f"{durations[index]:.3f}",
+                "-map",
+                "0:v:0",
+                # `?` so a file with no audio, or a missing track, still yields a
+                # segment rather than failing the whole run.
+                "-map",
+                f"0:a:{audio}?",
+                "-sn",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                # Forced, not inherited: a 10-bit source (the x265 anime rips)
+                # would otherwise be encoded 10-bit again, which is the High 10
+                # profile no browser decodes — the very thing being fixed here.
+                "-pix_fmt",
+                "yuv420p",
+                # No B-frames, so decode order matches presentation order. Each
+                # segment here is encoded on its own rather than cut from one
+                # long run, and with reordering on, the frames at a boundary
+                # carry decode timestamps that run backwards against the segment
+                # before them. The browser rejects the append outright:
+                # `CHUNK_DEMUXER_ERROR_APPEND_FAILED: Parsed buffers not in DTS
+                # sequence`, twenty milliseconds into playback.
+                "-bf",
+                "0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "160k",
+                # Downmixed, because a 5.1 AAC track inside MPEG-TS is rejected
+                # by Media Source Extensions: hls.js reports `bufferAppendError`
+                # and nothing plays. Stereo is what a browser is going to output
+                # anyway.
+                "-ac",
+                "2",
+                # Where this segment sits on the film's timeline.
+                "-output_ts_offset",
+                f"{start:.3f}",
+                "-muxdelay",
+                "0",
+                "-muxpreload",
+                "0",
+                "-f",
+                "mpegts",
+                "-y",
+                str(tmp),
+            ],
+            # A segment is a second of work; a minute means something is wrong
+            # and the player is better told so than left waiting.
+            timeout=120,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
+            os.replace(tmp, out)
+            _prune_hls_cache()
+            return out
+        return None
+    except (OSError, subprocess.SubprocessError):
+        return None
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _prune_hls_cache() -> None:
+    """Drop the oldest segments once the cache passes its ceiling.
+
+    Watching a film through leaves about a gigabyte behind, and it is worth
+    keeping: a re-watch, or a seek back to a scene, then costs nothing. Worth
+    keeping, but not for ever.
+    """
+    try:
+        files = [
+            (f.stat().st_mtime, f.stat().st_size, f) for f in _hls_dir().glob("*.ts")
+        ]
+    except OSError:
+        return
+    total = sum(size for _, size, _ in files)
+    if total <= _HLS_CACHE_BYTES:
+        return
+    for _, size, path in sorted(files):
+        try:
+            path.unlink()
+        except OSError:  # pragma: no cover — raced with another prune
+            continue
+        total -= size
+        # To 90%, so this does not run again on the very next segment.
+        if total <= _HLS_CACHE_BYTES * 0.9:
+            return
 
 
 def extracted_subtitle(file: Path, relative: str, index: int) -> Path | None:

@@ -45,6 +45,14 @@ _THUMBS_PENDING: dict[str, Future[Path | None]] = {}
 _AUDIO_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="audio")
 _AUDIO_PENDING: dict[str, Future[Path | None]] = {}
 
+# On-the-fly segments for a file no browser will open. Unlike the two pools
+# above these are waited on rather than answered with a 404: the player has
+# asked for bytes it is about to play, and a segment is under a second of work.
+# Three at a time, so one viewer's read-ahead is not serialised and two viewers
+# cannot take the machine.
+_HLS_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="hls")
+_HLS_PENDING: dict[str, Future[Path | None]] = {}
+
 # The Google Cast receiver refuses media served without CORS headers, exactly as
 # for the stream proxy; DLNA renderers are indifferent. Harmless for browsers.
 _CORS_HEADERS = {
@@ -358,6 +366,94 @@ async def get_downloaded_audio_ready(
     }
 
 
+def _queue_segment(
+    target: Path, path: str, index: int, audio: int
+) -> Future[Path | None]:
+    """The running build for one segment, started if it is not already going.
+
+    Coalesced per segment, so a read-ahead, a retry and the warm-up below never
+    start the same encode twice.
+    """
+    key = f"{path}|{index}|{audio}"
+    future = _HLS_PENDING.get(key)
+    if future is None:
+        future = _HLS_POOL.submit(downloaded.hls_segment, target, path, index, audio)
+        _HLS_PENDING[key] = future
+        future.add_done_callback(lambda _f, k=key: _HLS_PENDING.pop(k, None))
+    return future
+
+
+@router.get("/downloaded/hls")
+async def get_downloaded_hls(path: str = Query(...), audio: int = 0) -> Response:
+    """A playlist for a file a browser cannot open, transcoded as it is played.
+
+    A third of a collection put together over years is XviD in an AVI or a
+    recording in MPEG-TS, and Chrome will not so much as open the container.
+    Converting them all in advance would mean hours of encoding and hundreds of
+    gigabytes, so playback goes through HLS instead: this lists every segment of
+    the film with its duration, and each one is transcoded only when the player
+    actually asks for it.
+
+    Listing them all up front is what makes seeking work. The player knows the
+    whole timeline before a frame has been encoded, so a jump to any point
+    fetches that one segment rather than waiting for everything before it.
+    """
+    target = _resolved(path)
+    durations = await asyncio.to_thread(downloaded.hls_segment_durations, target)
+    if durations is None:
+        raise HTTPException(status_code=404, detail="Length of that file is unknown")
+    quoted = quote(path)
+    lines = [
+        "#EXTM3U",
+        "#EXT-X-VERSION:3",
+        f"#EXT-X-TARGETDURATION:{int(downloaded.HLS_SEGMENT_SECONDS) + 1}",
+        "#EXT-X-MEDIA-SEQUENCE:0",
+        # Says the whole film is there and will not grow, which is what lets the
+        # player offer a scrub bar over the full duration.
+        "#EXT-X-PLAYLIST-TYPE:VOD",
+    ]
+    for index, seconds in enumerate(durations):
+        lines.append(f"#EXTINF:{seconds:.3f},")
+        lines.append(f"segment?path={quoted}&index={index}&audio={audio}")
+    lines.append("#EXT-X-ENDLIST")
+
+    # The opening segments, started now rather than when they are asked for.
+    # The player wants the first one within a moment of reading this, and a cold
+    # one is most of a second — long enough that its own first attempt at
+    # playing gives up for want of data. Begun while the client is still parsing
+    # a playlist of a thousand-odd lines, it is usually ready in time.
+    for index in range(min(3, len(durations))):
+        _queue_segment(target, path, index, audio)
+    return Response(
+        content="\n".join(lines) + "\n",
+        media_type="application/vnd.apple.mpegurl",
+        headers=dict(_CORS_HEADERS),
+    )
+
+
+@router.api_route("/downloaded/segment", methods=["GET", "HEAD"])
+async def get_downloaded_segment(
+    path: str = Query(...), index: int = Query(..., ge=0), audio: int = 0
+) -> Response:
+    """One segment of the playlist above, transcoded now if it is not cached.
+
+    Waited on rather than deferred: the player is asking for the next second of
+    what it is playing. Coalesced per segment, so read-ahead and a retry do not
+    start the same encode twice.
+    """
+    target = _resolved(path)
+    segment = await asyncio.wrap_future(_queue_segment(target, path, index, audio))
+    if segment is None:
+        raise HTTPException(status_code=404, detail="No such segment")
+    return FileResponse(
+        segment,
+        media_type="video/mp2t",
+        # Keyed on the file's identity, so a hit stays good until the file
+        # itself changes — at which point the segment's own URL changes too.
+        headers={**_CORS_HEADERS, "Cache-Control": "public, max-age=31536000"},
+    )
+
+
 @router.get("/downloaded/tracks")
 async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
     """What is inside one stored file: its audio and subtitle tracks.
@@ -401,6 +497,10 @@ async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
     ]
 
     return {
+        # Whether playback has to go through the HLS route above rather than
+        # the file itself. Answered here because the view already asks for this
+        # before it plays anything, so it costs no extra round trip.
+        "needs_hls": not downloaded.browser_can_play(target),
         "audio": [
             {
                 **_track_payload(track),
