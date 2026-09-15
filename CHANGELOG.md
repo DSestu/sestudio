@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.4](https://github.com/DSestu/sestudio/compare/v0.16.3...v0.16.4) (2026-09-15)
+
+
+### Bug fixes
+
+* keep downloaded playback working next to the explorer, and make AC-3 rips audible ([#53](https://github.com/DSestu/sestudio/issues/53)) ([3e0e291](https://github.com/DSestu/sestudio/commit/3e0e29121d2e903ffb2646bbf71f4e8179e49d89))
+
 ## [0.16.3](https://github.com/DSestu/sestudio/compare/v0.16.2...v0.16.3) (2026-09-14)
 
 
