@@ -3,6 +3,7 @@ import type { DownloadedFile, DownloadedTitle } from '../../api'
 import { downloadedThumbUrl } from '../../api'
 import { fmtSize } from '../../downloadedLibrary'
 import { buildFolders, folderAt, sortedChildren, type FolderNode } from '../../downloadedFolders'
+import { currentParams, patchParams } from '../../nav'
 import EmptyState from '../EmptyState'
 import PosterGrid from '../PosterGrid'
 
@@ -35,7 +36,15 @@ interface Props {
  * the same thing as an outline; this one is for looking rather than scanning.
  */
 export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelete }: Props) {
-  const [path, setPath] = useState<string[]>([])
+  // Kept in the URL, so coming back from playing a file (browser back) lands in
+  // the folder it was opened from rather than at the top of the tree again.
+  const [path, setPathState] = useState<string[]>(
+    () => (currentParams().get('dir') ?? '').split('/').filter(Boolean),
+  )
+  function setPath(next: string[]) {
+    setPathState(next)
+    patchParams({ dir: next.join('/') || undefined })
+  }
   const needle = filter.trim().toLowerCase()
   const root = buildFolders(titles, needle)
 
