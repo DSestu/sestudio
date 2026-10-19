@@ -16,8 +16,10 @@ async function probeSource(provider: string, embedUrl: string, signal: AbortSign
   return src
 }
 
-/** How long a local file gets to report its metadata before it counts as dead. */
-const DECODE_TIMEOUT = 8000
+/** How long a local file gets to report its metadata before it counts as dead.
+ *  Generous because a big media disk spins down when idle, and waking it takes
+ *  well past 8s — long enough to fail a file that plays fine a moment later. */
+const DECODE_TIMEOUT = 30000
 
 /**
  * Whether this browser can actually decode what is at *url*.
