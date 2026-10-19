@@ -77,3 +77,19 @@ export function watchParams(pageUrl: string, lang: string, episode?: number, sou
 export function replaceParams(view: View, params?: Record<string, string | number | undefined>) {
   history.replaceState(null, '', hashFor(view, params))
 }
+
+/** The current entry's params, read fresh: replaceParams/patchParams change the
+ *  URL without updating any route state, so a mounting view reads them here. */
+export function currentParams(): URLSearchParams {
+  return parseHash().params
+}
+
+/**
+ * Like replaceParams, but only the given keys change and the rest of the
+ * current entry is kept — for a component nested in a view (the downloaded
+ * shelf inside a Library tab) that must not wipe the params its host owns.
+ */
+export function patchParams(patch: Record<string, string | undefined>) {
+  const { view, params } = parseHash()
+  replaceParams(view, { ...Object.fromEntries(params), ...patch })
+}

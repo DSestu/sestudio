@@ -19,7 +19,7 @@ import TitleRow from '../components/library/TitleRow'
 import WatchingRow from '../components/library/WatchingRow'
 import PosterGrid from '../components/PosterGrid'
 import { setLibraryLayout, useLibraryLayout, type LayoutTab } from '../libraryLayout'
-import type { View } from '../nav'
+import { currentParams, patchParams, type View } from '../nav'
 import { cardFor, openWatching, savedItems, watchingItems, type OpenTitle } from '../rowItems'
 import { normalizeTitle } from '../normalizeTitle'
 import { setSelectionActive } from '../selectionMode'
@@ -67,7 +67,12 @@ const EMPTY_COPY: Record<LayoutTab, { title: string; message: string }> = {
 
 /** Everything the user has saved or started, as three tabs with a layout choice. */
 export default function LibraryView({ settings, onOpen, onNavigate, downloadedLibrary }: Props) {
-  const [tab, setTab] = useState<LayoutTab>('watching')
+  // Kept in the URL, so coming back from a title (browser back) reopens the tab
+  // it was opened from — the Downloaded one most of all, whose filter and folder
+  // are kept there too.
+  const [tab, setTab] = useState<LayoutTab>(
+    () => TABS.find(t => t.id === currentParams().get('tab'))?.id ?? 'watching',
+  )
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   // Per tab: the genres on offer differ between them, so a selection carried
@@ -106,6 +111,7 @@ export default function LibraryView({ settings, onOpen, onNavigate, downloadedLi
 
   function changeTab(next: LayoutTab) {
     setTab(next)
+    patchParams({ tab: next === 'watching' ? undefined : next })
     setPickedGenres(new Set())
     // Selection is per tab, so switching tabs discards it.
     if (selecting) exitSelection()

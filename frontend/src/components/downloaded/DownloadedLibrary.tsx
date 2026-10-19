@@ -21,6 +21,7 @@ import PosterGrid from '../PosterGrid'
 import SortSelect from '../SortSelect'
 import ToolbarToggle from '../ToolbarToggle'
 import DownloadedFilesModal from './DownloadedFilesModal'
+import { currentParams, patchParams } from '../../nav'
 
 /** One shelf entry: the merged card, and every downloaded season behind it. */
 interface Group {
@@ -106,7 +107,13 @@ export default function DownloadedLibrary({
   const [sort, setSort] = useState<SortKey>(defaultSortFor('saved'))
   const [managing, setManaging] = useState<string | null>(null)
   const [pickedGenres, setPickedGenres] = useState<Set<string>>(new Set())
-  const [query, setQuery] = useState('')
+  // Kept in the URL, so coming back from the watch view (browser back) finds
+  // the shelf filtered as it was left. The compact copy has no filter box.
+  const [query, setQueryState] = useState(() => (compact ? '' : currentParams().get('q') ?? ''))
+  function setQuery(next: string) {
+    setQueryState(next)
+    if (!compact) patchParams({ q: next || undefined })
+  }
   const [confirming, setConfirming] = useState<{ title: DownloadedTitle; file: DownloadedFile } | null>(null)
 
   const cards = useMemo(() => titles.map(toCard), [titles])
