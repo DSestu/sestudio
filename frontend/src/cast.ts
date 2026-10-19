@@ -194,12 +194,34 @@ export function castSetTextTrack(trackId: number | null): void {
   )
 }
 
+/**
+ * A Cast SDK rejection as a sentence. The SDK rejects with a bare error code
+ * (`'session_error'`), not an Error, so without this every failure reads as
+ * "Cast failed" and says nothing about whether waiting or retrying would help.
+ */
+export function describeCastError(err: unknown): string {
+  if (err instanceof Error) return err.message
+  const code = typeof err === 'string' ? err : (err as { code?: string } | null)?.code ?? ''
+  switch (code) {
+    case 'cancel': return 'Cancelled — no device was picked.'
+    case 'timeout': return 'The Chromecast did not answer in time. Check it is on and on the same network, then try again.'
+    case 'receiver_unavailable': return 'No Chromecast is reachable from this browser.'
+    case 'session_error': return 'Could not connect to the Chromecast. Try again; if it keeps failing, restart the Chromecast.'
+    case 'load_media_failed': return 'The Chromecast connected but could not open the video — it may not reach the server, or not support this format.'
+    case 'channel_error': return 'Lost the connection to the Chromecast.'
+    default: return code ? `Cast failed (${code}).` : 'Cast failed.'
+  }
+}
+
 export async function castToChromecast(
   url: string,
   contentType: string,
   title: string,
   subtitles: CastTextTrack[] = [],
+  /** Told each step as it starts, so a long wait reads as progress, not a hang. */
+  onStep: (text: string) => void = () => {},
 ): Promise<void> {
+  onStep('Loading the Chromecast library…')
   const ok = await loadCast()
   if (!ok) throw new Error('Chromecast is only available over HTTPS')
   const w = window as Cast
@@ -208,10 +230,13 @@ export async function castToChromecast(
   // picker; only prompt when there is no active session yet.
   let session = context.getCurrentSession()
   if (!session) {
+    onStep('Pick a device in Chrome’s cast window, then the TV starts its player app…')
     await context.requestSession()
     session = context.getCurrentSession()
   }
   if (!session) throw new Error('No Chromecast session')
+  const device = session.getCastDevice?.()?.friendlyName || 'the Chromecast'
+  onStep(`${device} is loading the video from the server…`)
   const mediaInfo = new w.chrome.cast.media.MediaInfo(url, contentType)
   mediaInfo.metadata = new w.chrome.cast.media.GenericMediaMetadata()
   mediaInfo.metadata.title = title
