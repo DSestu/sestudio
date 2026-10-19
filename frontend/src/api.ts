@@ -88,6 +88,8 @@ export interface AppSettings {
   /** Send a message when a watcher finds something. Off unless a channel is
    *  configured, so nothing is ever sent by default. */
   notifications_enabled?: boolean
+  /** Whether the downloaded browser may delete files from disk. Off by default. */
+  allow_file_deletion?: boolean
   /** CallMeBot number, international form without the leading '+'. Not secret. */
   callmebot_phone?: string
   /** Write-only: sent when saving, never returned. */

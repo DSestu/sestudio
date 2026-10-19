@@ -22,7 +22,8 @@ interface Props {
   /** Path filter from the toolbar; empty shows everything. */
   filter?: string
   onPlay: (title: DownloadedTitle, file: DownloadedFile) => void
-  onDelete: (title: DownloadedTitle, file: DownloadedFile) => void
+  /** Left out when deleting is turned off in Settings. */
+  onDelete?: (title: DownloadedTitle, file: DownloadedFile) => void
 }
 
 /**
@@ -78,7 +79,7 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
       subtitle: fmtSize(file.size),
       poster_url: downloadedThumbUrl(file.path),
       onClick: () => onPlay(title, file),
-      onRemove: () => onDelete(title, file),
+      onRemove: onDelete && (() => onDelete(title, file)),
     })),
   ]
 

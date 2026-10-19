@@ -350,6 +350,37 @@ export default function SettingsView({ settings, onUpdate }: Props) {
           </p>
         </div>
       </section>
+
+      <div className="divider my-0" />
+
+      {/* Last and set apart: nothing here is needed day to day, and what it
+          unlocks cannot be undone. */}
+      <section
+        aria-labelledby="settings-danger"
+        className="flex flex-col gap-4 rounded-box border border-error/40 p-4"
+      >
+        <h3
+          id="settings-danger"
+          className="text-xs font-semibold uppercase tracking-wide text-error"
+        >
+          Danger zone
+        </h3>
+        <div>
+          <label className="flex items-center gap-3 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              className="toggle toggle-error toggle-sm"
+              checked={settings.allow_file_deletion === true}
+              onChange={e => onUpdate({ allow_file_deletion: e.target.checked })}
+            />
+            <span>Allow deleting downloaded files</span>
+          </label>
+          <p className="text-xs text-base-content/50 mt-1">
+            Shows a delete button on files in the downloaded browser. Deleted files
+            are removed from the server's disk for good — there is no undo.
+          </p>
+        </div>
+      </section>
     </div>
   )
 }

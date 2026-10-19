@@ -87,6 +87,10 @@ class AppConfig:
     # the leading '+', and the key their bot replies with.
     callmebot_phone: str = ""
     callmebot_apikey: str = ""
+    # Lets the downloaded browser delete files from disk. Off by default: the
+    # media folder holds a collection built over years, and one misclick there
+    # is not undoable.
+    allow_file_deletion: bool = False
 
 
 def _config_path() -> Path:
@@ -128,6 +132,7 @@ def load_config() -> AppConfig:
             notifications_enabled=bool(data.get("notifications_enabled", False)),
             callmebot_phone=str(data.get("callmebot_phone", "")),
             callmebot_apikey=str(data.get("callmebot_apikey", "")),
+            allow_file_deletion=bool(data.get("allow_file_deletion", False)),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)
