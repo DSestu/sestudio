@@ -11,6 +11,7 @@ import { setBrowserPlayerControls } from '../../browserPlayerControls'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
 import { applySubtitleStyle } from '../../subtitleStyle'
 import { usePiPWindow } from '../../pipSession'
+import BufferingInfo from './BufferingInfo'
 
 /** Persist progress at most every SAVE_INTERVAL ms of playback. */
 const SAVE_INTERVAL = 5000
@@ -278,6 +279,7 @@ export default function VideoPane({
             icons={defaultLayoutIcons}
             smallLayoutWhen={pipWindow ? false : undefined}
           />
+          <BufferingInfo source={displaySource} />
         </MediaPlayer>
       )}
 
