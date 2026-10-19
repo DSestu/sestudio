@@ -144,7 +144,7 @@ export default function WatchView({
 
   /** Playable in the language on screen: a host to resolve, or a file on disk. */
   const playableIn = (number: number, embeds: Record<string, string>, lang: string) =>
-    Object.keys(embeds).length > 0 || langsFor(downloadedTitle, number).includes(lang)
+    Object.keys(embeds).length > 0 || langsFor(downloadedTitle, number, lang).includes(lang)
   const playableHere = (e: EpisodeDetail) => playableIn(e.number, e.embed_urls, activeLang)
 
   // On a (re)fetched season: select everything for download and pick the
@@ -642,11 +642,11 @@ export default function WatchView({
   const downloadedLangs = useMemo(() => {
     const out: Record<number, string[]> = {}
     for (const e of detail?.episodes ?? []) {
-      const langs = langsFor(downloadedTitle, e.number)
+      const langs = langsFor(downloadedTitle, e.number, activeLang)
       if (langs.length) out[e.number] = langs
     }
     return out
-  }, [downloadedTitle, detail])
+  }, [downloadedTitle, detail, activeLang])
 
   // The copy on disk, described for the sources panel. Languages are the ones
   // *this episode* is stored in, so a season you only partly downloaded shows
@@ -654,7 +654,7 @@ export default function WatchView({
   const downloadedRow = downloadedTitle
     ? {
         poster_url: downloadedTitle.poster_url || posterUrl,
-        langs: currentNumber === null ? [] : langsFor(downloadedTitle, currentNumber),
+        langs: currentNumber === null ? [] : langsFor(downloadedTitle, currentNumber, activeLang),
         summary: `${downloadedTitle.files.length} ${
           downloadedTitle.files.length === 1 ? 'file' : 'files'
         } · ${fmtSize(downloadedTitle.size)}`,
