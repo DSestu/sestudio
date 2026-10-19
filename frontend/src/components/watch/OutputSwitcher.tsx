@@ -39,7 +39,6 @@ interface Props {
   autoplay: boolean
   /** Browser position (seconds) to resume from when handing off to a TV. */
   handoffAt: number
-  onSourceFailed: () => void
 }
 
 /**
@@ -50,7 +49,7 @@ interface Props {
  * different episode and casting it again swaps what's on the TV.
  */
 export default function OutputSwitcher({
-  episodes, index, source, autoplay, handoffAt, onSourceFailed,
+  episodes, index, source, autoplay, handoffAt,
 }: Props) {
   const [renderers, setRenderers] = useState<Renderer[] | null>(null)
   const [castAvailable, setCastAvailable] = useState(false)
@@ -152,7 +151,8 @@ export default function OutputSwitcher({
       setMsg(null)
       setPicking(false)
     } catch (err) {
-      onSourceFailed() // the device couldn't read this source
+      // Only the TV failed. The browser player is left alone: it was playing
+      // this source fine, and a TV refusing it says nothing about the browser.
       setMsg(err instanceof Error ? err.message : 'Cast failed')
     } finally {
       setBusy(false)

@@ -938,7 +938,6 @@ export default function WatchView({
                     source={source}
                     autoplay={autoplay}
                     handoffAt={position}
-                    onSourceFailed={() => { if (active) markFailed(active) }}
                   />
                   {/* Audio tracks, for the copy on disk. Only shown when the
                       file actually has a choice to make, and only while it is
