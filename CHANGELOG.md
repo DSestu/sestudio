@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.17.0](https://github.com/DSestu/sestudio/compare/v0.16.3...v0.17.0) (2026-10-19)
+
+
+### New features
+
+* play files no browser opens by transcoding them as they are watched ([#55](https://github.com/DSestu/sestudio/issues/55)) ([f0f279c](https://github.com/DSestu/sestudio/commit/f0f279cf3ebb9c30bef48d2ecb9db486e7722e0f))
+
+
+### Bug fixes
+
+* keep downloaded playback working next to the explorer, and make AC-3 rips audible ([#53](https://github.com/DSestu/sestudio/issues/53)) ([3e0e291](https://github.com/DSestu/sestudio/commit/3e0e29121d2e903ffb2646bbf71f4e8179e49d89))
+* restore vidzy and luluvid streams and downloads ([#56](https://github.com/DSestu/sestudio/issues/56)) ([168a0b6](https://github.com/DSestu/sestudio/commit/168a0b6ae1bdcb5bc2e33953898717134f4425d7))
+
 ## [0.16.3](https://github.com/DSestu/sestudio/compare/v0.16.2...v0.16.3) (2026-09-14)
 
 
