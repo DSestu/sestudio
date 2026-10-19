@@ -196,6 +196,46 @@ def test_vidzy_decodes_domain_bound_source_without_js_engine(
     assert src.url == _EXPECTED
 
 
+# A fifth derivation (found 2026-10-19 on One Piece / french-manga.net): the
+# domain-bound ramp plus `BC`, the offsetWidth of a DOM probe. The JS engine has
+# no DOM, so BC is 0 there and the decoder hands back its troll decoy — which
+# contains ".m3u8" and was accepted as the stream.
+def _packed_layout_bound_embed(payload_b64: str, seed: int, step: int) -> str:
+    src = (
+        f'sources:[{{src:(function(s){{var h=(location&&location.hostname)||"",H=0;'
+        f"for(var j=0;j<h.length;j++){{H=(H+h.charCodeAt(j))&255;}}var BC=0;"
+        f'try{{var _p=document.createElement("div");_p.style.cssText="position:absolute;'
+        f'width:calc(1in + 131px)";var _ch=document.createElement("div");'
+        f'_ch.style.cssText="height:1px;width:calc(100% - 57px)";_p.appendChild(_ch);'
+        f"(document.body||document.documentElement).appendChild(_p);BC=_ch.offsetWidth|0;"
+        f"}}catch(e){{}}"
+        f'var b=atob(s),a=b.split("").reverse().join(""),r="";'
+        f"for(var i=0;i<a.length;i++){{var kk=({hex(seed)}+i*{step}+H+BC)&255;"
+        f"r+=String.fromCharCode(a.charCodeAt(i)^kk)}}"
+        f'return /^https?:/.test(r)?r:"https://v6.vidzy.cc/troll/master.m3u8"}})'
+        f'("{payload_b64}"),type:"application/x-mpegURL"}}]'
+    )
+    return f"<script>{src}</script>"
+
+
+def test_vidzy_decodes_layout_bound_source(httpx_mock: HTTPXMock):
+    """The DOM-measured BC term (96 + 131 - 57) is folded into the key."""
+    # The layout offset is just another additive term, so encode with it
+    # folded into the hostname sum's place.
+    xored = bytes(
+        ord(c) ^ ((0x3D + i * 89 + _host_sum(_HOST) + 170) & 255)
+        for i, c in enumerate(_EXPECTED)
+    )
+    payload = base64.b64encode(xored[::-1]).decode()
+    httpx_mock.add_response(
+        url=f"https://{_HOST}/embed-layout.html",
+        method="GET",
+        text=_packed_layout_bound_embed(payload, 0x3D, 89),
+    )
+    src = VidzyProvider().get_stream_url(f"https://{_HOST}/embed-layout.html")
+    assert src.url == _EXPECTED
+
+
 def test_vidzy_tries_both_orientations(httpx_mock: HTTPXMock):
     """A reversed payload resolves even when the body has no .reverse() marker.
 

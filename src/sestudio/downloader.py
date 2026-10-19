@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
-from sestudio.http_client import new_client
+from sestudio.http_client import IMPERSONATE_PROVIDERS, new_client
 from sestudio.media import ffmpeg_location
 from sestudio.models import StreamSource, sanitize_path_component
 
@@ -91,11 +91,17 @@ def download(
         "Sec-Fetch-Mode: cors",
         "--add-header",
         "Sec-Fetch-Site: cross-site",
+        # Luluvid's CDN (*.tnmr.org) 403s any request carrying Accept-Language,
+        # which yt-dlp sends by default; an empty value drops the header.
+        "--add-header",
+        "Accept-Language:",
     ]
     # Some CDNs (e.g. vidzy) 403 requests without a browser User-Agent; use the
     # one the provider resolved with so the download matches the embed fetch.
     if source.user_agent:
         cmd += ["--user-agent", source.user_agent]
+    if source.provider in IMPERSONATE_PROVIDERS:
+        cmd += ["--impersonate", "chrome"]
     # Point yt-dlp at a bundled ffmpeg when the system has none (returns None
     # when a system ffmpeg is on PATH, so yt-dlp uses that instead).
     ffmpeg_dir = ffmpeg_location()

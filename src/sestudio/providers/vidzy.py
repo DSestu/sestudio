@@ -56,7 +56,14 @@ _ARRAY_KEY_RE = re.compile(r"k=\[([\d,]+)\]")
 # differently off-site. The variable name is not fixed, hence the loose match.
 _RAMP_KEY_RE = re.compile(
     r"\(\s*(0x[0-9a-fA-F]+|\d+)\s*\+\s*i\s*\*\s*(\d+)\s*"
-    r"(?:\+\s*[A-Za-z_$][\w$]*\s*)?\)\s*&\s*255"
+    r"(?:\+\s*[A-Za-z_$][\w$]*\s*)*\)\s*&\s*255"
+)
+# Later embeds add a second term, `BC`: the offsetWidth of a hidden child sized
+# calc(100% - Bpx) inside a parent sized calc(1in + Apx), i.e. 96 + A - B in a
+# browser. A JS engine has no DOM, sees 0, and decodes to the troll decoy.
+_LAYOUT_RE = re.compile(
+    r"calc\(\s*1in\s*\+\s*(\d+)px\s*\).*?calc\(\s*100%\s*-\s*(\d+)px\s*\)",
+    re.DOTALL,
 )
 
 
@@ -85,7 +92,9 @@ def _keystreams(body: str, length: int, hostname: str = "") -> Iterator[list[int
             yield [key[i % len(key)] for i in range(length)]
 
     host_offset = _host_offset(hostname)
-    offsets = (0, host_offset) if host_offset else (0,)
+    layout = _LAYOUT_RE.search(body)
+    layout_offset = 96 + int(layout.group(1)) - int(layout.group(2)) if layout else 0
+    offsets = sorted({0, host_offset, layout_offset, host_offset + layout_offset})
     for ramp_match in _RAMP_KEY_RE.finditer(body):
         seed = int(ramp_match.group(1), 0)
         step = int(ramp_match.group(2))
@@ -115,7 +124,9 @@ def _deobfuscate_src(body: str, payload_b64: str, hostname: str = "") -> str:
     the key, so both strategies need it; without it they decode garbage.
     """
     from_js = jsdecode.run_inline_decoder(body, payload_b64, hostname)
-    if from_js and ".m3u8" in from_js:
+    # A wrong key makes the decoder itself return the troll decoy, which still
+    # looks like an m3u8.
+    if from_js and ".m3u8" in from_js and "/troll/" not in from_js:
         logger.debug("Inline decoder executed in JS engine")
         return from_js
 

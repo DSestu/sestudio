@@ -382,7 +382,33 @@ def test_rewrite_preserves_byterange_and_blanks():
     assert "PROXY[https://cdn.example/hls/seg0.ts]" in out
 
 
-def test_proxy_serves_rewritten_playlist_end_to_end(httpx_mock: HTTPXMock):
+def test_proxy_impersonates_chrome_for_vidzy(monkeypatch):
+    """vidzy's CDN 403s non-browser TLS, so its upstream fetch must impersonate."""
+    from sestudio.web.routes import stream
+
+    calls: list[bool] = []
+
+    def fake_new_client(**kwargs):
+        calls.append(kwargs.get("impersonate", False))
+        raise RuntimeError("stop before any network")
+
+    monkeypatch.setattr(stream, "new_client", fake_new_client)
+    client = TestClient(
+        create_app(live_domain="https://fs03.lol"), raise_server_exceptions=False
+    )
+    secret = client.app.state.proxy_secret
+    for provider in ("vidzy", "uqload"):
+        token = sign(secret, "https://cdn.example/v.m3u8", "https://r/", provider)
+        client.get("/api/stream/proxy", params={"token": token})
+
+    assert calls == [True, False]
+
+
+def test_proxy_serves_rewritten_playlist_end_to_end(httpx_mock: HTTPXMock, monkeypatch):
+    from sestudio.web.routes import stream
+
+    # Keep vidzy on the plain httpx transport so httpx_mock can answer.
+    monkeypatch.setattr(stream, "IMPERSONATE_PROVIDERS", frozenset())
     client = _client()
     secret = client.app.state.proxy_secret
     token = sign(

@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from sestudio.http_client import BROWSER_UA, new_client
+from sestudio.http_client import BROWSER_UA, IMPERSONATE_PROVIDERS, new_client
 from sestudio.sites import site_for
 from sestudio.web.proxy import (
     PROXY_TOKEN_TTL,
@@ -198,7 +198,8 @@ def proxy_stream(token: str, request: Request) -> Response:
         headers = {"Accept-Ranges": "bytes", **_DLNA_MP4_HEADERS, **_CORS_HEADERS}
         try:
             with new_client(
-                headers={**upstream_headers, "Range": "bytes=0-0"}
+                headers={**upstream_headers, "Range": "bytes=0-0"},
+                impersonate=provider in IMPERSONATE_PROVIDERS,
             ) as probe:
                 resp = probe.get(target_url)
             length = _total_size(resp)
@@ -212,7 +213,9 @@ def proxy_stream(token: str, request: Request) -> Response:
     if range_header:
         upstream_headers["Range"] = range_header
 
-    client = new_client(headers=upstream_headers)
+    client = new_client(
+        headers=upstream_headers, impersonate=provider in IMPERSONATE_PROVIDERS
+    )
     req = client.build_request("GET", target_url)
     upstream = client.send(req, stream=True)
 

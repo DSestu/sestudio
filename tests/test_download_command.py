@@ -68,3 +68,17 @@ def test_output_path_is_passed_through_unchanged(tmp_path, monkeypatch):
     argv = _argv_for("https://cdn.example.test/hls/master.m3u8", tmp_path, monkeypatch)
 
     assert argv[argv.index("-o") + 1] == str(tmp_path / "S01E01 - Pilot.mp4")
+
+
+def test_accept_language_is_dropped(tmp_path, monkeypatch):
+    """Luluvid's CDN 403s any Accept-Language; yt-dlp sends one unless emptied."""
+    argv = _argv_for("https://cdn.example.test/hls/master.m3u8", tmp_path, monkeypatch)
+
+    assert "Accept-Language:" in argv
+
+
+def test_vidzy_download_impersonates_chrome(tmp_path, monkeypatch):
+    """vidzy's CDN 403s yt-dlp's own TLS fingerprint."""
+    argv = _argv_for("https://cdn.example.test/hls/master.m3u8", tmp_path, monkeypatch)
+
+    assert argv[argv.index("--impersonate") + 1] == "chrome"
