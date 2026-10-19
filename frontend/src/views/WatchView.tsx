@@ -500,6 +500,13 @@ export default function WatchView({
       downloadedSource,
     )
   const source = active ? sources[active] : null
+  // The copy on disk is being read (tracks, then the decode check). On a drive
+  // that spun down this takes many seconds, which a bare spinner reads as a hang.
+  const openingNotice = downloadedPath && (!fresh || status[DOWNLOADED_PROVIDER] === 'loading')
+    ? needsHls
+      ? 'Waking the disk and starting the transcode — a sleeping drive can take up to 30 s…'
+      : 'Waking the disk — a sleeping drive can take up to 30 s to spin up…'
+    : null
 
   function setCurrent(ep: EpisodeDetail) {
     setCurrentNumber(ep.number)
@@ -738,7 +745,7 @@ export default function WatchView({
             ep={current}
             source={source}
             probing={probing}
-            pending={audioFailed ? null : preparingNotice}
+            pending={audioFailed ? null : (preparingNotice ?? openingNotice)}
             failure={audioFailed ? 'The audio track could not be converted for the browser.' : null}
             nextTitle={nextEp?.title ?? null}
             autoplay={autoplay}
