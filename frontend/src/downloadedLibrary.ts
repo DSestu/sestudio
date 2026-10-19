@@ -80,11 +80,16 @@ export function titleFor(
   )
 }
 
+/** The server's language for a file stored without a language folder. */
+const UNKNOWN_LANG = 'other'
+
 /**
  * The stored file for one episode in one language, if there is one.
  *
  * A film is matched on language alone: it is the only file in its title, and
- * its name carries no episode number to match on.
+ * its name carries no episode number to match on. A file of unknown language
+ * stands in for any language: a site calls the same episode "VF", and treating
+ * that as a different version made the copy on disk vanish on switching sites.
  */
 export function fileFor(
   all: DownloadedTitle[],
@@ -95,15 +100,21 @@ export function fileFor(
 ): DownloadedFile | undefined {
   const title = titleFor(all, series, season)
   if (!title) return undefined
-  return title.files.find(
-    f => f.lang === lang && (title.is_film || f.number === number),
-  )
+  const episode = title.files.filter(f => title.is_film || f.number === number)
+  return episode.find(f => f.lang === lang) ?? episode.find(f => f.lang === UNKNOWN_LANG)
 }
 
-/** Languages an episode is stored in, for the playlist's downloaded badges. */
-export function langsFor(title: DownloadedTitle | undefined, number: number): string[] {
+/** Languages an episode is stored in, for the playlist's downloaded badges.
+ *  *current* is the language on screen, which an unknown-language file also
+ *  counts as (see `fileFor`). */
+export function langsFor(
+  title: DownloadedTitle | undefined, number: number, current?: string,
+): string[] {
   if (!title) return []
-  return title.files
+  const langs = title.files
     .filter(f => (title.is_film || f.number === number) && f.lang)
     .map(f => f.lang)
+  return current && langs.includes(UNKNOWN_LANG) && !langs.includes(current)
+    ? [...langs, current]
+    : langs
 }
