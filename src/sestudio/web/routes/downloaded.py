@@ -596,6 +596,12 @@ async def get_downloaded_thumb(path: str = Query(...)) -> FileResponse:
 @router.delete("/downloaded/file")
 async def delete_downloaded_file(path: str = Query(...)) -> dict[str, str]:
     """Delete one downloaded file, and forget what was recorded about it."""
+    # Checked here and not only by hiding the button: anything that can reach
+    # the API could otherwise delete from the collection.
+    if not load_config().allow_file_deletion:
+        raise HTTPException(
+            status_code=403, detail="Deleting files is turned off in Settings"
+        )
     target = _resolved(path)
     await asyncio.to_thread(target.unlink)
     await asyncio.to_thread(library.delete_downloaded_file, path)

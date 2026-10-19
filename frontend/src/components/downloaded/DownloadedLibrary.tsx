@@ -115,6 +115,10 @@ export default function DownloadedLibrary({
     if (!compact) patchParams({ q: next || undefined })
   }
   const [confirming, setConfirming] = useState<{ title: DownloadedTitle; file: DownloadedFile } | null>(null)
+  // No delete control at all unless Settings allows it; the server refuses too.
+  const onDelete = settings.allow_file_deletion
+    ? (title: DownloadedTitle, file: DownloadedFile) => setConfirming({ title, file })
+    : undefined
 
   const cards = useMemo(() => titles.map(toCard), [titles])
   // The very same merge search uses, under the very same settings — including
@@ -395,14 +399,14 @@ export default function DownloadedLibrary({
           titles={titles}
           filter={query}
           onPlay={(title, file) => onOpenTitle(title, file)}
-          onDelete={(title, file) => setConfirming({ title, file })}
+          onDelete={onDelete}
         />
       ) : layout === 'tree' && !compact ? (
         <DownloadedTree
           titles={titles}
           filter={query}
           onPlay={(title, file) => onOpenTitle(title, file)}
-          onDelete={(title, file) => setConfirming({ title, file })}
+          onDelete={onDelete}
         />
       ) : sorted.length === 0 && (compact || unmatchedTitles.length === 0) ? (
         <EmptyState
@@ -450,7 +454,7 @@ export default function DownloadedLibrary({
                 titles={unmatchedTitles}
                 filter={query}
                 onPlay={(title, file) => onOpenTitle(title, file)}
-                onDelete={(title, file) => setConfirming({ title, file })}
+                onDelete={onDelete}
               />
             </section>
           )}
@@ -494,6 +498,7 @@ export default function DownloadedLibrary({
           name={nameFor(managed)}
           titles={managed.parts}
           onClose={() => setManaging(null)}
+          canDelete={settings.allow_file_deletion === true}
           onPlay={(title, file) => {
             setManaging(null)
             // Same destination as the card: the watch view, deep-linked to the

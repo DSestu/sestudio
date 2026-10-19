@@ -21,6 +21,8 @@ interface Props {
   onClose: () => void
   /** Play one stored file, with the season it belongs to. */
   onPlay: (title: DownloadedTitle, file: DownloadedFile) => void
+  /** Whether deleting is turned on in Settings. */
+  canDelete: boolean
 }
 
 /**
@@ -30,7 +32,7 @@ interface Props {
  * Deletion is per file and confirmed: a card in the listing can stand for a
  * whole show, so a delete control up there would take out seasons at a time.
  */
-export default function DownloadedFilesModal({ name, titles, onClose, onPlay }: Props) {
+export default function DownloadedFilesModal({ name, titles, onClose, onPlay, canDelete }: Props) {
   const [confirming, setConfirming] = useState<DownloadedFile | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -118,7 +120,7 @@ export default function DownloadedFilesModal({ name, titles, onClose, onPlay }: 
                           <path d="M8 5v14l11-7z" />
                         </svg>
                       </button>
-                      <button
+                      {canDelete && <button
                         onClick={() => setConfirming(file)}
                         aria-label={`Delete ${file.title} from disk`}
                         title="Delete from disk"
@@ -127,7 +129,7 @@ export default function DownloadedFilesModal({ name, titles, onClose, onPlay }: 
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
                         </svg>
-                      </button>
+                      </button>}
                     </div>
                   )}
                 </li>

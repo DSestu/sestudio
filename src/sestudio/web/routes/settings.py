@@ -28,6 +28,7 @@ class SettingsBody(BaseModel):
     notifications_enabled: bool | None = None
     callmebot_phone: str | None = None
     callmebot_apikey: str | None = None
+    allow_file_deletion: bool | None = None
 
 
 def _known_hosts(request: Request) -> list[str]:
@@ -119,5 +120,7 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.callmebot_phone = "".join(ch for ch in body.callmebot_phone if ch.isdigit())
     if body.callmebot_apikey is not None:
         cfg.callmebot_apikey = body.callmebot_apikey.strip()
+    if body.allow_file_deletion is not None:
+        cfg.allow_file_deletion = body.allow_file_deletion
     save_config(cfg)
     return _public(cfg, request)

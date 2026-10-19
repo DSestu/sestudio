@@ -207,7 +207,18 @@ def test_missing_file_is_404(served):
     assert resp.status_code == 404
 
 
+def _allow_deletion(client):
+    client.put("/api/settings", json={"allow_file_deletion": True})
+
+
+def test_delete_is_refused_unless_turned_on(served, out):
+    resp = served.delete("/api/downloaded/file", params={"path": REL})
+    assert resp.status_code == 403
+    assert (out / REL).exists()
+
+
 def test_delete_removes_one_file_and_its_manifest_row(served, out):
+    _allow_deletion(served)
     sibling = out / "My Show" / "Season 01" / "VF" / "S01E02 - Deux.mp4"
     _write(sibling)
     library.set_downloaded_file(REL, {"series_name": "My Show"})
@@ -222,6 +233,7 @@ def test_delete_removes_one_file_and_its_manifest_row(served, out):
 
 
 def test_delete_refuses_traversal(served):
+    _allow_deletion(served)
     assert (
         served.delete(
             "/api/downloaded/file", params={"path": "../../etc/passwd"}
