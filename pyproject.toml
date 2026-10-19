@@ -37,7 +37,9 @@ dependencies = [
     "mini-racer>=0.14.1",
     "rich>=15.0.0",
     "uvicorn[standard]>=0.34",
-    "yt-dlp>=2026.3.17",
+    # curl-cffi: Chrome TLS impersonation. vidzy's CDN 403s any non-browser TLS
+    # fingerprint (headers alone don't pass), both for yt-dlp and the proxy.
+    "yt-dlp[curl-cffi]>=2026.3.17",
     "async-upnp-client>=0.48.0",
 ]
 
