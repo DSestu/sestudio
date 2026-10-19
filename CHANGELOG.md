@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.18.0](https://github.com/DSestu/sestudio/compare/v0.17.0...v0.18.0) (2026-10-19)
+
+
+### New features
+
+* allow deleting downloaded files only from a danger-zone setting ([#64](https://github.com/DSestu/sestudio/issues/64)) ([06c757c](https://github.com/DSestu/sestudio/commit/06c757c137061a36352f59233736542eae876929))
+* explain what the player is waiting on when it stalls ([#59](https://github.com/DSestu/sestudio/issues/59)) ([1a85af8](https://github.com/DSestu/sestudio/commit/1a85af8a8eaabd9edfa3459148a1b33118ac0871))
+* return to the same downloaded folder and filter when going back ([#63](https://github.com/DSestu/sestudio/issues/63)) ([cfec988](https://github.com/DSestu/sestudio/commit/cfec988f9653829ab8088bd385063d9b1a038030))
+* show each step of a cast and why it failed ([#61](https://github.com/DSestu/sestudio/issues/61)) ([8bd16b2](https://github.com/DSestu/sestudio/commit/8bd16b2e8422b0949ed7d33ec0e0f88784d13dae))
+
+
+### Bug fixes
+
+* keep downloaded files playable when the media disk is asleep ([#57](https://github.com/DSestu/sestudio/issues/57)) ([25da0ab](https://github.com/DSestu/sestudio/commit/25da0ab2de7dea459c39b5ec79f42021108a07e7))
+* keep the browser playing when casting to a TV fails ([#60](https://github.com/DSestu/sestudio/issues/60)) ([8da512b](https://github.com/DSestu/sestudio/commit/8da512b95792ce3ed36a0ea6fd66a0c0e45d747b))
+* play a download with no language folder whatever site is open ([#62](https://github.com/DSestu/sestudio/issues/62)) ([bb187dd](https://github.com/DSestu/sestudio/commit/bb187dd9b7acc9275901288999d76deac00fe881))
+
 ## [0.17.0](https://github.com/DSestu/sestudio/compare/v0.16.3...v0.17.0) (2026-10-19)
 
 
