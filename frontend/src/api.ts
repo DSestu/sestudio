@@ -658,6 +658,14 @@ export interface AudioReadiness {
   progress: number | null
 }
 
+/** Playlist URL for a file no browser can open, transcoded segment by segment
+ *  as it plays. `kind: 'hls'` — the player already speaks it, because every
+ *  streaming host serves HLS too. `audioIndex` picks the track to encode into
+ *  the segments, so switching one costs nothing but a new playlist. */
+export function downloadedHlsUrl(path: string, audioIndex = 0): string {
+  return `${BASE}/downloaded/hls?path=${encodeURIComponent(path)}&audio=${audioIndex}`
+}
+
 /** Whether the copy carrying audio track `index` exists yet. Asking starts the
  *  build if it has not; poll until `ready`, then play `downloadedFileUrl`. */
 export async function downloadedAudioReady(path: string, index: number): Promise<AudioReadiness> {
@@ -693,6 +701,9 @@ export interface DownloadedTrack {
 export interface DownloadedTracks {
   audio: DownloadedTrack[]
   subtitles: DownloadedTrack[]
+  /** The browser cannot open this file as it is (an AVI, a TV recording, a
+   *  10-bit encode), so it has to be played through `downloadedHlsUrl`. */
+  needs_hls?: boolean
 }
 
 /** What is inside a downloaded file.
@@ -702,7 +713,7 @@ export interface DownloadedTracks {
  * surfacing — it only means no track menus — so this resolves to empty lists.
  */
 export async function downloadedTracks(path: string): Promise<DownloadedTracks> {
-  const empty = { audio: [], subtitles: [] }
+  const empty = { audio: [], subtitles: [], needs_hls: false }
   try {
     const res = await fetch(`${BASE}/downloaded/tracks?path=${encodeURIComponent(path)}`)
     return res.ok ? await res.json() : empty

@@ -141,6 +141,30 @@ export default function VideoPane({
     if (armedSrc && srcKey) setResumeTo(resumePointFor(ep))
   }
 
+  // Pending retry of a refused autoplay; cleared on unmount so a torn-down
+  // player never starts playing into nothing.
+  const retryRef = useRef(0)
+  useEffect(() => () => window.clearTimeout(retryRef.current), [])
+
+  /** Ask for playback again after vidstack's own attempt was refused.
+   *
+   *  It asks the moment the player reports it can play. For a source the server
+   *  transcodes as it goes, that lands before the first segment has been
+   *  encoded: the request is refused for want of data, and nothing repeats it,
+   *  so a player that becomes ready half a second later sits there paused.
+   *
+   *  Guarded on `started`, which is false only while nothing has played yet —
+   *  so this can never restart something the viewer paused by hand. */
+  function handleAutoPlayFail() {
+    let tries = 0
+    const retry = () => {
+      const p = playerRef.current
+      if (!p || castedSameEp || p.state.started || !p.paused || tries++ >= 5) return
+      p.play().catch(() => { retryRef.current = window.setTimeout(retry, 500) })
+    }
+    retryRef.current = window.setTimeout(retry, 400)
+  }
+
   // Tick the auto-next countdown; the advance happens in the timer callback.
   useEffect(() => {
     if (nextIn === null) return
@@ -221,6 +245,7 @@ export default function VideoPane({
             if (p) savePlayerPrefs({ rate: p.playbackRate })
           }}
           onEnded={handleEnded}
+          onAutoPlayFail={handleAutoPlayFail}
           onError={onSourceError}
         >
           {/* Keyed on the source kind: vidstack's React outlet renders one
