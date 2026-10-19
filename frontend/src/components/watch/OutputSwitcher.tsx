@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Renderer, StreamSource, StreamSubtitle } from '../../api'
 import { dlnaPlay, getCastHttpPort, listRenderers, downloadedFileUrl, resolveStream } from '../../api'
 import { fileFor, downloadedSnapshot } from '../../downloadedLibrary'
-import { castSeek, castToChromecast, loadCast, useCastState } from '../../cast'
+import { castSeek, castToChromecast, describeCastError, loadCast, useCastState } from '../../cast'
 import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
 import { startCastQueue } from '../../castQueue'
 import { startCastSession } from '../../playbackSession'
@@ -41,6 +41,11 @@ interface Props {
   handoffAt: number
 }
 
+/** A step that runs past this gets a hint that something may be wrong. */
+const SLOW_STEP = 15
+/** How long a DLNA TV gets to start playing once it accepted the video. */
+const DLNA_START_LIMIT = 30
+
 /**
  * "Cast this episode" — sends the currently-browsed episode to a TV
  * (Chromecast/AirPlay or DLNA). Casting is decoupled from the browser player:
@@ -55,6 +60,12 @@ export default function OutputSwitcher({
   const [castAvailable, setCastAvailable] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  // When the step on screen began, so a wait shows its length — the difference
+  // between "still working" and "stuck" is mostly how long it has been.
+  const [stepAt, setStepAt] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  // A DLNA TV that accepted the video, until it reports a position.
+  const [dlnaWait, setDlnaWait] = useState<{ label: string; at: number } | null>(null)
   const [picking, setPicking] = useState(false)
 
   const cast = useCastState()
@@ -71,6 +82,25 @@ export default function OutputSwitcher({
     return () => { cancelled = true }
   }, [])
 
+  const ticking = stepAt !== null || dlnaWait !== null
+  useEffect(() => {
+    if (!ticking) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [ticking])
+
+  // A DLNA TV answers "playing" as soon as it takes the URL, then fetches it on
+  // its own; a format it cannot read just leaves it black, with no error. A
+  // position moving is the only sign it really started. Status is polled every
+  // 2 s, so a position read sooner may still be the previous video's.
+  if (dlnaWait && dlna.position > 0 && now - dlnaWait.at > 2500) setDlnaWait(null)
+
+  function step(text: string) {
+    setMsg(text)
+    setStepAt(Date.now())
+    setNow(Date.now())
+  }
+
   /** Send one episode's stream to the chosen target. */
   async function sendTo(
     proxyUrl: string,
@@ -81,8 +111,10 @@ export default function OutputSwitcher({
     // Sidecar subtitles to side-load. Empty for a downloaded file, and ignored
     // on DLNA, which has no portable way to carry them.
     subtitles: StreamSubtitle[] = [],
+    onStep: (text: string) => void = () => {},
   ) {
     if (mode === 'dlna' && udn) {
+      onStep('Asking the TV to play the video — it connects back to the server to fetch it…')
       await dlnaPlay(udn, proxyUrl, title, kind)
       dlnaStarted()
     } else {
@@ -109,6 +141,7 @@ export default function OutputSwitcher({
           label: sub.label,
           default: sub.default,
         })),
+        onStep,
       )
     }
   }
@@ -116,12 +149,14 @@ export default function OutputSwitcher({
   async function startCast(label: string, mode: 'dlna' | 'chromecast', udn?: string) {
     if (!source) { setMsg('No working source selected.'); return }
     setBusy(true)
-    setMsg(`Sending to ${label}…`)
+    setDlnaWait(null)
+    step(`Sending to ${label}…`)
     try {
-      await sendTo(source.proxy_url, source.kind, ep.title, mode, udn, source.subtitles)
+      await sendTo(source.proxy_url, source.kind, ep.title, mode, udn, source.subtitles, step)
       startCastSession(ep, mode)
       // Handoff: continue on the TV from where the browser player was.
       if (handoffAt > 5) {
+        step(`Jumping to ${Math.floor(handoffAt / 60)}:${String(Math.floor(handoffAt % 60)).padStart(2, '0')} on the TV…`)
         if (mode === 'dlna') {
           await new Promise(r => setTimeout(r, 1500)) // let the renderer load
           await dlnaSeek(handoffAt).catch(() => {})
@@ -150,12 +185,14 @@ export default function OutputSwitcher({
       })
       setMsg(null)
       setPicking(false)
+      if (mode === 'dlna') setDlnaWait({ label, at: Date.now() })
     } catch (err) {
       // Only the TV failed. The browser player is left alone: it was playing
       // this source fine, and a TV refusing it says nothing about the browser.
-      setMsg(err instanceof Error ? err.message : 'Cast failed')
+      setMsg(describeCastError(err))
     } finally {
       setBusy(false)
+      setStepAt(null)
     }
   }
 
@@ -227,7 +264,34 @@ export default function OutputSwitcher({
         </div>
       )}
 
-      {msg && <p role="status" className="text-sm text-base-content/70">{msg}</p>}
+      {msg && (
+        <p role="status" className="text-sm text-base-content/70">
+          {busy && <span className="loading loading-spinner loading-xs mr-2 align-middle" />}
+          {msg}
+          {busy && stepAt !== null && <span className="text-base-content/50"> · {Math.floor((now - stepAt) / 1000)} s</span>}
+          {busy && stepAt !== null && now - stepAt > SLOW_STEP * 1000 && (
+            <span className="block text-warning text-xs mt-1">
+              Taking longer than usual. Check the TV is on and on the same network as the server.
+            </span>
+          )}
+        </p>
+      )}
+      {dlnaWait && (
+        <p role="status" className="text-sm text-base-content/70">
+          {now - dlnaWait.at < DLNA_START_LIMIT * 1000 ? (
+            <>
+              <span className="loading loading-spinner loading-xs mr-2 align-middle" />
+              {dlnaWait.label} accepted the video — waiting for it to start playing
+              <span className="text-base-content/50"> · {Math.floor((now - dlnaWait.at) / 1000)} s</span>
+            </>
+          ) : (
+            <span className="text-warning">
+              {dlnaWait.label} accepted the video but has not started after {DLNA_START_LIMIT} s.
+              Many TVs cannot play MKV or streamed (HLS) video over DLNA — try Chromecast or another source.
+            </span>
+          )}
+        </p>
+      )}
     </div>
   )
 }
