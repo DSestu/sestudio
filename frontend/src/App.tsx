@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import type { DownloadJob, DownloadedFile, DownloadedTitle, SeasonCard, WatcherEvent } from './api'
-import { DOWNLOADED_SOURCE, downloadedPageUrl } from './api'
+import { DOWNLOADED_SOURCE, downloadedPageUrl, downloadedThumbUrl } from './api'
 import { loadCast } from './cast'
 import { refreshDlna } from './dlnaControl'
 import AppShell from './components/AppShell'
@@ -201,7 +201,9 @@ export default function App() {
     navigate('watch', {
       u: remote ? title.page_url : downloadedPageUrl(title.series, title.season),
       t: title.series,
-      p: title.poster_url,
+      // No recorded poster: the frame grab the shelf shows, so the Watching
+      // row this play creates has the same picture.
+      p: title.poster_url || (title.files[0] ? downloadedThumbUrl(title.files[0].path) : ''),
       lang: file?.lang || title.langs[0] || settings.lang,
       ep: file?.number || undefined,
       src: remote ? title.source || undefined : DOWNLOADED_SOURCE,
