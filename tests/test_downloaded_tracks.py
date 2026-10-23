@@ -364,10 +364,14 @@ def test_a_tv_rung_is_a_smaller_frame_at_its_bitrate():
     graph = command[command.index("-filter_complex") + 1]
     assert "scale=854:480:" in graph and "pad=854:480:" in graph
     assert command[command.index("-maxrate") + 1] == "1200k"
-    # The best a TV is sent stays 1080p, uncapped, whatever the source is.
-    best = downloaded.tv_stream_command(Path("film.mkv"), 0.0, 0, None, False, 2160)
+    # Without a rung a TV gets 1080p, uncapped, whatever the source is.
+    best = downloaded.tv_stream_command(Path("film.mkv"), 0.0, 0, None, False)
     assert "pad=1920:1080:" in best[best.index("-filter_complex") + 1]
     assert "-maxrate" not in best
+    # A rung above that is its own frame, for a source that big.
+    big = downloaded.tv_stream_command(Path("film.mkv"), 0.0, 0, None, False, 1440)
+    assert "pad=2560:1440:" in big[big.index("-filter_complex") + 1]
+    assert big[big.index("-maxrate") + 1] == "9000k"
 
 
 def test_there_is_no_segment_past_the_end(tmp_path: Path, monkeypatch):

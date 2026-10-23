@@ -429,6 +429,18 @@ export async function listRenderers(): Promise<Renderer[]> {
   return res.json()
 }
 
+/** Heights a cast of *url* can be sent at, the source's own first; without
+ *  *url*, of what was last sent to a DLNA TV. Empty when unknown. */
+export async function castQualities(url?: string): Promise<number[]> {
+  const query = url ? `?url=${encodeURIComponent(url)}` : ''
+  try {
+    const res = await fetch(`${BASE}/cast/qualities${query}`)
+    return res.ok ? (await res.json()).heights : []
+  } catch {
+    return []
+  }
+}
+
 /** Push a resolved proxy URL to a DLNA renderer and start playback. */
 export async function dlnaPlay(
   rendererUdn: string,

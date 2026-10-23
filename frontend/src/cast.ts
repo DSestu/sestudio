@@ -52,13 +52,15 @@ export interface CastState {
   activeTextTrackId: number | null
   /** The media is one of the server's quality ladders (see `castQuality`). */
   adjustable: boolean
+  /** The URL the receiver is playing, '' when none. */
+  mediaUrl: string
 }
 
 const state: CastState = {
   available: false, connected: false, title: '', isPaused: false,
   currentTime: 0, duration: 0, volume: 1, muted: false,
   canSeek: false, canControlVolume: false,
-  textTracks: [], activeTextTrackId: null, adjustable: false,
+  textTracks: [], activeTextTrackId: null, adjustable: false, mediaUrl: '',
 }
 let snapshot: CastState = { ...state }
 const listeners = new Set<() => void>()
@@ -97,7 +99,8 @@ function bindRemotePlayer(w: Cast) {
       state.muted = !!player.isMuted
       state.canSeek = !!player.canSeek
       state.canControlVolume = !!player.canControlVolume
-      state.adjustable = LADDER_URL.test(player.mediaInfo?.contentId ?? '')
+      state.mediaUrl = player.mediaInfo?.contentId ?? ''
+      state.adjustable = LADDER_URL.test(state.mediaUrl)
       emit()
 
       // Watch-state: persist progress (throttled) for the casting episode
