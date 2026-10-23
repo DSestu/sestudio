@@ -424,6 +424,8 @@ class MediaTracks:
     video: str = ""
     #: Its pixel format, e.g. `yuv420p` or `yuv420p10le`. See `_VIDEO_STREAM_RE`.
     video_pix_fmt: str = ""
+    #: PQ or HLG transfer: shown on an SDR picture without tone-mapping, washed out.
+    video_hdr: bool = False
 
 
 def _parse_streams(text: str) -> MediaTracks:
@@ -437,11 +439,14 @@ def _parse_streams(text: str) -> MediaTracks:
     audio: list[Track] = []
     subtitles: list[Track] = []
     video = pix_fmt = ""
+    hdr = False
     current: Track | None = None
 
     for line in text.splitlines():
         if not video and (found := _VIDEO_STREAM_RE.match(line)):
             video, pix_fmt = found.group("codec").lower(), found.group("pix_fmt")
+            # `yuv420p10le(tv, bt2020nc/bt2020/smpte2084)` — the transfer is last.
+            hdr = "smpte2084" in line or "arib-std-b67" in line
             current = None  # a title after it belongs to the video, not a track
             continue
         match = _STREAM_RE.match(line)
@@ -469,7 +474,11 @@ def _parse_streams(text: str) -> MediaTracks:
                 current = None  # one title per stream; don't take the next one's
 
     return MediaTracks(
-        audio=audio, subtitles=subtitles, video=video, video_pix_fmt=pix_fmt
+        audio=audio,
+        subtitles=subtitles,
+        video=video,
+        video_pix_fmt=pix_fmt,
+        video_hdr=hdr,
     )
 
 
@@ -1024,6 +1033,137 @@ def content_features(time_seekable: bool) -> str:
     # Streaming transfer mode, plus the usual background-transfer and
     # connection-stall flags every DLNA server sends.
     return f"DLNA.ORG_OP={op};DLNA.ORG_FLAGS=01700000000000000000000000000000"
+
+
+#: What the TV stream is sent as. MPEG-TS is the one container every DLNA TV
+#: takes, and the only one that can be written front to back to a pipe and
+#: still be joined part way through.
+TV_MEDIA_TYPE = "video/mpeg"
+
+#: Time-seek only (OP=10): there are no bytes to range over in a stream that
+#: does not exist yet. CI=1 says it is converted, so the TV expects no index.
+TV_CONTENT_FEATURES = (
+    "DLNA.ORG_OP=10;DLNA.ORG_CI=1;DLNA.ORG_FLAGS=01700000000000000000000000000000"
+)
+
+# Into a 1920x1080 frame, letterboxed, the way the TV would show it anyway. A
+# fixed frame is also what a picture subtitle's canvas is drawn against.
+_TV_FIT = (
+    "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2,"
+    "pad=1920:1080:-1:-1"
+)
+# HDR to SDR. Without it a PQ picture on an SDR stream is grey and flat.
+_TV_TONEMAP = (
+    "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,"
+    "tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv"
+)
+
+
+def _same_lang(a: str, b: str) -> bool:
+    # shortcut: two-letter prefix, so fr/fre/fra meet but de/ger do not; map the
+    # ISO 639-2 B/T pairs if a language that differs between them turns up.
+    a, b = a.lower(), b.lower()
+    return bool(a) and bool(b) and (a == b or a[:2] == b[:2])
+
+
+def tv_subtitle(file: Path, lang: str) -> Track | Path | None:
+    """The subtitle to burn into the TV stream for *lang*.
+
+    An embedded track first — text or picture, since burning in takes either —
+    else a `.vtt` beside the file. None when the file has nothing in *lang*.
+    """
+    for track in tracks_of(file).subtitles:
+        if _same_lang(track.lang, lang):
+            return track
+    for found, path in sidecar_subtitles(file):
+        if _same_lang(found, lang):
+            return path
+    return None
+
+
+def _filter_value(value: str) -> str:
+    """*value* escaped for a filter option inside a filtergraph.
+
+    ffmpeg unescapes twice — once for the graph, once for the option — so a
+    Windows drive colon or an apostrophe in a title has to survive both.
+    """
+    for special in ("\\", "'", ":"):
+        value = value.replace(special, "\\" + special)
+    for special in ("\\", "'", "[", "]", ",", ";"):
+        value = value.replace(special, "\\" + special)
+    return value
+
+
+def tv_stream_command(
+    file: Path,
+    start: float,
+    audio: int,
+    subtitle: Track | Path | None,
+    hdr: bool,
+) -> list[str]:
+    """ffmpeg, re-encoding *file* from *start* for a TV, to stdout.
+
+    H.264 and stereo AAC in MPEG-TS at 1080p: what every DLNA TV decodes, and
+    what one core keeps ahead of playback even from a 4K HDR source. Nothing is
+    written to disk — seeking is a new run from the new *start*.
+    """
+    seek = ["-ss", f"{start:.3f}"]
+    inputs = [*seek, "-i", str(file)]
+    video = f"{_TV_FIT},{_TV_TONEMAP + ',' if hdr else ''}format=yuv420p"
+    if isinstance(subtitle, Track) and not subtitle.text:
+        # A picture subtitle is overlaid from a second reading of the same file.
+        # Read from the first, its sparse packets stall the demuxer behind the
+        # audio: a TrueHD film then encodes at a fifth of real time.
+        inputs += [*seek, "-i", str(file)]
+        graph = (
+            f"[0:v:0]{video}[b];[1:s:{subtitle.index}]scale=1920:1080[s];"
+            "[b][s]overlay=eof_action=pass[v]"
+        )
+    elif subtitle is not None:
+        source = file if isinstance(subtitle, Track) else subtitle
+        # Forward slashes: ffmpeg takes them on Windows, and they need no escape.
+        name = _filter_value(str(source).replace("\\", "/"))
+        index = f":si={subtitle.index}" if isinstance(subtitle, Track) else ""
+        # The input seek restarts the clock at zero, and libass times cues by it,
+        # so the film's own time is put back for the render and taken off after.
+        graph = (
+            f"[0:v:0]setpts=PTS+{start:.3f}/TB,{video},"
+            f"subtitles=filename={name}{index},setpts=PTS-STARTPTS[v]"
+        )
+    else:
+        graph = f"[0:v:0]{video}[v]"
+    return [
+        ffmpeg_binary(),
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        *inputs,
+        "-filter_complex",
+        graph,
+        "-map",
+        "[v]",
+        "-map",
+        f"0:a:{audio}?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "21",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ac",
+        "2",
+        # Timestamps on the film's own clock, so a seek reads as that position.
+        "-output_ts_offset",
+        f"{start:.3f}",
+        "-f",
+        "mpegts",
+        "pipe:1",
+    ]
 
 
 def _thumb_dir() -> Path:

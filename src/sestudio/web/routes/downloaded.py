@@ -10,7 +10,8 @@ the path is the whole of what is known about it.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
+import subprocess
+from collections.abc import AsyncIterator, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -309,6 +310,88 @@ async def get_downloaded_file(
         # By extension: a collection that predates this tool is full of mkv and
         # avi, and calling those mp4 would mislead every player that trusts it.
         media_type=media_type,
+        headers=headers,
+    )
+
+
+async def _piped(command: list[str]) -> AsyncIterator[bytes]:
+    """ffmpeg's stdout, chunk by chunk, and ffmpeg killed when the TV hangs up.
+
+    Async so a disconnect cancels it at the ``await`` and the ``finally`` runs
+    there and then — a TV seeks by dropping the connection and opening another,
+    and each one left running would be a 4K decode nobody is watching.
+    """
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    assert proc.stdout is not None
+    try:
+        while chunk := await asyncio.to_thread(proc.stdout.read, 64 * 1024):
+            yield chunk
+    finally:
+        proc.kill()
+        await asyncio.to_thread(proc.wait)
+
+
+@router.api_route("/downloaded/tv", methods=["GET", "HEAD"])
+async def get_downloaded_tv(
+    request: Request,
+    path: str = Query(...),
+    audio: int = Query(0, ge=0),
+    lang: str | None = None,
+) -> Response:
+    """A stored file re-encoded for a TV as it is watched, from where it is asked.
+
+    For what a TV will not read as it is — 10-bit HEVC, Dolby Vision, TrueHD,
+    old DivX — and for captions, which DLNA has no portable way to carry: the
+    *lang* subtitle is burnt into the picture. Nothing is written; ffmpeg's
+    output goes straight to the socket.
+
+    Seeking is by time only. The TV asks with ``TimeSeekRange.dlna.org`` and a
+    fresh encode starts there, which is why this answers in npt and not bytes.
+    """
+    target = _resolved(path)
+    duration = await asyncio.to_thread(downloaded.duration_of, target)
+    asked = request.headers.get("TimeSeekRange.dlna.org")
+    start = (_npt_seconds(asked) if asked else None) or 0.0
+    headers = {
+        **_CORS_HEADERS,
+        "contentFeatures.dlna.org": downloaded.TV_CONTENT_FEATURES,
+        "transferMode.dlna.org": request.headers.get(
+            "transferMode.dlna.org", "Streaming"
+        ),
+    }
+    if duration:
+        start = min(start, max(0.0, duration - 1))
+        if asked:
+            headers["TimeSeekRange.dlna.org"] = (
+                f"npt={start:.3f}-{duration:.3f}/{duration:.3f}"
+            )
+    if request.method == "HEAD":
+        return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)
+
+    tracks = await asyncio.to_thread(downloaded.tracks_of, target)
+    subtitle = (
+        await asyncio.to_thread(downloaded.tv_subtitle, target, lang) if lang else None
+    )
+    try:
+        command = downloaded.tv_stream_command(
+            target, start, audio, subtitle, tracks.video_hdr
+        )
+    except RuntimeError as exc:  # no ffmpeg
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    # LG webOS seeks with a byte range beside the time range, and drops an
+    # answer that is not 206 as unseekable. The bytes are those of the asked
+    # time, not that offset — the TV reads its position from the stream — and
+    # the end is open, since the stream's length is not known until it ends.
+    status = 200
+    first = request.headers.get("Range", "").removeprefix("bytes=").split("-")[0]
+    if first.isdigit() and int(first) > 0:
+        status = 206
+        headers["Content-Range"] = f"bytes {first}-{int(first) + 10**12 - 1}/*"
+    return StreamingResponse(
+        _piped(command),
+        status_code=status,
+        media_type=downloaded.TV_MEDIA_TYPE,
         headers=headers,
     )
 

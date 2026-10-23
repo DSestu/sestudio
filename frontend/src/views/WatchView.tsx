@@ -484,6 +484,10 @@ export default function WatchView({
           ? downloadedHlsUrl(downloadedPath, audioTrack)
           : downloadedFileUrl(downloadedPath, remuxIndex),
         kind: (needsHls ? 'hls' : 'mp4') as 'hls' | 'mp4',
+        // Track 0 untouched: a copy of it would re-encode audio the TV plays.
+        dlna_url: needsHls
+          ? downloadedFileUrl(downloadedPath, audioTrack || undefined)
+          : undefined,
         provider: DOWNLOADED_PROVIDER,
         subtitles: downloadedSubs,
       }

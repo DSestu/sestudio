@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -45,7 +47,9 @@ def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}
 
-    async def fake_play(location: str, media_url: str, title: str, mime_type: str):
+    async def fake_play(
+        location: str, media_url: str, title: str, mime_type: str, duration=None
+    ):
         calls.update(
             location=location, media_url=media_url, title=title, mime_type=mime_type
         )
@@ -82,7 +86,9 @@ def test_play_falls_back_to_https_when_no_http_server(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}
 
-    async def fake_play(location: str, media_url: str, title: str, mime_type: str):
+    async def fake_play(
+        location: str, media_url: str, title: str, mime_type: str, duration=None
+    ):
         calls["media_url"] = media_url
 
     monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
@@ -110,7 +116,9 @@ def test_play_hls_kind_maps_to_hls_mime(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}
 
-    async def fake_play(location: str, media_url: str, title: str, mime_type: str):
+    async def fake_play(
+        location: str, media_url: str, title: str, mime_type: str, duration=None
+    ):
         calls["mime_type"] = mime_type
 
     monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
@@ -125,6 +133,64 @@ def test_play_hls_kind_maps_to_hls_mime(client, monkeypatch):
     )
     assert resp.status_code == 200
     assert calls["mime_type"] == "application/vnd.apple.mpegurl"
+
+
+def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None):
+    """Cast a stored file, with what the probes say about it faked."""
+    client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
+    calls = {}
+
+    async def fake_play(location, media_url, title, mime_type, duration=None):
+        calls.update(media_url=media_url, mime_type=mime_type, duration=duration)
+
+    monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
+    monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
+    monkeypatch.setattr(cast, "_resolved", lambda path: Path("/films") / path)
+    monkeypatch.setattr(cast.downloaded, "browser_can_play", lambda f: playable)
+    monkeypatch.setattr(cast.downloaded, "tv_subtitle", lambda f, lang: subtitle)
+    monkeypatch.setattr(cast.downloaded, "duration_of", lambda f: 8160.0)
+    resp = client.post(
+        "/api/cast/dlna/play",
+        json={
+            "renderer_udn": "uuid:tv-1",
+            "proxy_url": "/api/downloaded/file?path=Matrix%2FThe%20Matrix.mkv&audio=2",
+            "kind": "mp4",
+            "subtitle_lang": lang,
+        },
+    )
+    assert resp.status_code == 200
+    return calls
+
+
+def test_play_stored_file_declares_its_own_mime(client, monkeypatch):
+    calls = _cast_stored(client, monkeypatch, playable=True)
+    assert calls["mime_type"] == "video/x-matroska"
+    assert "/api/downloaded/file?" in calls["media_url"]
+
+
+def test_play_stored_file_a_browser_cannot_play_is_re_encoded(client, monkeypatch):
+    calls = _cast_stored(client, monkeypatch, playable=False)
+    assert calls["media_url"] == (
+        "http://192.168.1.20:8080/api/downloaded/tv?path=Matrix/The%20Matrix.mkv&audio=2"
+    )
+    assert calls["mime_type"] == "video/mpeg"
+    # Handed over so the TV can draw a seek bar for a stream with no length.
+    assert calls["duration"] == 8160.0
+
+
+def test_play_stored_file_with_captions_burns_them_in(client, monkeypatch):
+    calls = _cast_stored(
+        client, monkeypatch, playable=True, subtitle=Path("x.fr.vtt"), lang="fr"
+    )
+    assert "/api/downloaded/tv?" in calls["media_url"]
+    assert calls["media_url"].endswith("&lang=fr")
+
+
+def test_play_stored_file_with_no_track_in_that_language_goes_as_it_is(
+    client, monkeypatch
+):
+    calls = _cast_stored(client, monkeypatch, playable=True, lang="fr")
+    assert "/api/downloaded/file?" in calls["media_url"]
 
 
 def test_play_unknown_renderer_404(client):
@@ -163,7 +229,9 @@ def test_mute_without_session_409(client):
 def test_play_failure_maps_to_502(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
 
-    async def boom(location: str, media_url: str, title: str, mime_type: str):
+    async def boom(
+        location: str, media_url: str, title: str, mime_type: str, duration=None
+    ):
         raise RuntimeError("renderer refused")
 
     monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")

@@ -367,6 +367,11 @@ export interface StreamSource {
   provider: string
   /** Empty for hardsubbed releases, which is most of them. */
   subtitles?: StreamSubtitle[]
+  /** What a DLNA TV is sent instead of `proxy_url`, when they differ. A
+   *  downloaded file the browser needs HLS for goes to the TV as the file
+   *  itself: TVs decode AVI and AC-3 on their own, few play HLS, and the
+   *  playlist route answers their HEAD probe with 405 — UPnP 716. */
+  dlna_url?: string
 }
 
 /**
@@ -427,11 +432,15 @@ export async function dlnaPlay(
   proxyUrl: string,
   title: string,
   kind: string,
+  /** Burnt into the picture when this is a stored file with a track in it. */
+  subtitleLang?: string | null,
 ): Promise<void> {
   const res = await fetch(`${BASE}/cast/dlna/play`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ renderer_udn: rendererUdn, proxy_url: proxyUrl, title, kind }),
+    body: JSON.stringify({
+      renderer_udn: rendererUdn, proxy_url: proxyUrl, title, kind, subtitle_lang: subtitleLang ?? null,
+    }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
