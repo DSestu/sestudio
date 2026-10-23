@@ -437,7 +437,7 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
     assert "#EXT-X-PLAYLIST-TYPE:VOD" in lines
     assert lines[-1] == "#EXT-X-ENDLIST"
     assert lines.count("#EXTINF:6.000,") == 5
-    assert lines[-2] == "segment?path=Film.avi&index=4&audio=0&rung=720"
+    assert lines[-2] == "segment?path=Film.avi&audio=0&rung=720&index=4"
 
     # The opening segments start building before anything asks for them: the
     # player's own first attempt at playing gives up if they are not there.
@@ -469,8 +469,8 @@ def test_a_rung_the_file_lacks_falls_to_the_next_one_down(client, out, monkeypat
         )
         return resp.text.splitlines()[-2]
 
-    assert last_uri(1440).endswith("&rung=0")
-    assert last_uri(500).endswith("&rung=480")
+    assert last_uri(1440).endswith("&rung=0&index=4")
+    assert last_uri(500).endswith("&rung=480&index=4")
 
 
 def test_the_master_offers_the_source_and_every_lighter_step(client, out, monkeypatch):

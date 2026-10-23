@@ -909,15 +909,14 @@ HLS_LADDER = (
 )
 
 
-def hls_variants(file: Path) -> list[tuple[int, int, int, int]]:
-    """The renditions of *file* to offer, best first: (rung, width, height, b/s).
+def ladder(width: int, height: int) -> list[tuple[int, int, int, int]]:
+    """The renditions to offer of a *width* x *height* picture, best first:
+    (rung, width, height, b/s).
 
     Rung 0 is the source's own size; the rest are the ``HLS_LADDER`` steps below
     it, by height. Only the source when the frame size is unknown, since a step
     has to know what it is smaller than.
     """
-    tracks = tracks_of(file)
-    width, height = tracks.video_width, tracks.video_height
     # shortcut: the source rung's bandwidth is a guess from the next step up
     # (it is encoded at a quality, not a rate); measure it if hls.js misjudges.
     above = [kbps for h, kbps in HLS_LADDER if height and h >= height] or [
@@ -940,20 +939,40 @@ def hls_variants(file: Path) -> list[tuple[int, int, int, int]]:
     return variants
 
 
-def hls_segment_durations(file: Path) -> list[float] | None:
-    """Length of each segment of *file*, or None when its duration is unknown.
+def hls_variants(file: Path) -> list[tuple[int, int, int, int]]:
+    """The renditions of *file* to offer (see :func:`ladder`)."""
+    tracks = tracks_of(file)
+    return ladder(tracks.video_width, tracks.video_height)
+
+
+def segment_durations(total: float | None) -> list[float] | None:
+    """Length of each segment of something *total* seconds long, or None when
+    its duration is unknown.
 
     This is the whole trick behind seeking: the playlist built from this lists
     every segment of the film up front, so the player knows the full timeline
     before a single frame has been encoded. Jumping an hour in asks for one
     segment rather than waiting for an hour of video to be transcoded.
     """
-    total = duration_of(file)
     if not total or total <= 0:
         return None
     whole = int(total // HLS_SEGMENT_SECONDS)
     last = total - whole * HLS_SEGMENT_SECONDS
     return [HLS_SEGMENT_SECONDS] * whole + ([last] if last > 0.01 else [])
+
+
+def hls_segment_durations(file: Path) -> list[float] | None:
+    """Length of each segment of *file* (see :func:`segment_durations`)."""
+    return segment_durations(duration_of(file))
+
+
+def _rung_kbps(rung: int, source_height: int) -> int | None:
+    """The bitrate cap for *rung*, 0 for the source, None for a rung that is not
+    on the ladder or would scale the picture up."""
+    kbps = dict(HLS_LADDER).get(rung, 0)
+    if rung and (not kbps or rung >= (source_height or rung)):
+        return None
+    return kbps
 
 
 def hls_segment(
@@ -965,22 +984,13 @@ def hls_segment(
     *rung* is a height from ``HLS_LADDER`` to scale down to and cap the bitrate
     at, or 0 for the source's own size. Every rung is cut at the same times, so
     the player can change rung at any segment boundary.
-
-    Each is encoded on its own from the source, which is what makes a seek cheap
-    and is why they are independently decodable: a fresh encode opens on a
-    keyframe. ``-output_ts_offset`` stamps the segment with its real position, so
-    the player stitches them into one timeline instead of a run of clips.
-
-    The video is always re-encoded, even when the codec would have played, since
-    cutting a stream with ``-c:v copy`` only works on the source's own keyframes.
-    Paying for the encode buys segment boundaries we choose.
     """
     durations = hls_segment_durations(file)
     if durations is None or not 0 <= index < len(durations):
         return None
-    kbps = dict(HLS_LADDER).get(rung, 0)
-    # Unknown rungs, and none that would scale the picture up.
-    if rung and (not kbps or rung >= (tracks_of(file).video_height or rung)):
+    # The probe only for a lighter rung: the source needs no height to compare.
+    kbps = _rung_kbps(rung, tracks_of(file).video_height if rung else 0)
+    if kbps is None:
         return None
     try:
         stat = file.stat()
@@ -994,6 +1004,36 @@ def hls_segment(
         # were rungs keep their names.
         f"{f'|r{rung}' if rung else ''}".encode()
     ).hexdigest()
+    # `?` so a file with no audio, or a missing track, still yields a segment
+    # rather than failing the whole run.
+    maps = ["-map", "0:v:0", "-map", f"0:a:{audio}?"]
+    return _encode_segment(
+        [], str(file), maps, key, index, durations[index], rung, kbps
+    )
+
+
+def _encode_segment(
+    input_opts: list[str],
+    source: str,
+    maps: list[str],
+    key: str,
+    index: int,
+    seconds: float,
+    rung: int,
+    kbps: int,
+) -> Path | None:
+    """Segment *index* of *source* (a file, or a URL ffmpeg reads), cached
+    under *key*.
+
+    Each is encoded on its own from the source, which is what makes a seek cheap
+    and is why they are independently decodable: a fresh encode opens on a
+    keyframe. ``-output_ts_offset`` stamps the segment with its real position, so
+    the player stitches them into one timeline instead of a run of clips.
+
+    The video is always re-encoded, even when the codec would have played, since
+    cutting a stream with ``-c:v copy`` only works on the source's own keyframes.
+    Paying for the encode buys segment boundaries we choose.
+    """
     out = _hls_dir() / f"{key}.ts"
     if out.is_file() and out.stat().st_size > 0:
         # Touched so eviction reads it as recently used, not merely old.
@@ -1019,18 +1059,16 @@ def hls_segment(
                 # Before -i: ffmpeg seeks by keyframe and then decodes forward to
                 # the exact position, which costs the same at two hours in as at
                 # the start. After -i it would decode the whole film to get there.
-                "-ss",
-                f"{start:.3f}",
+                # None at all for the first: on an HLS stream whose clock starts
+                # past zero (1.4 s is usual), `-ss 0` shifts that segment's
+                # video two seconds late and its audio a second early.
+                *(["-ss", f"{start:.3f}"] if start else []),
+                *input_opts,
                 "-i",
-                str(file),
+                source,
                 "-t",
-                f"{durations[index]:.3f}",
-                "-map",
-                "0:v:0",
-                # `?` so a file with no audio, or a missing track, still yields a
-                # segment rather than failing the whole run.
-                "-map",
-                f"0:a:{audio}?",
+                f"{seconds:.3f}",
+                *maps,
                 "-sn",
                 *(["-vf", f"scale=-2:{rung}"] if rung else []),
                 # Pixel format forced, not inherited: a 10-bit source (the x265
@@ -1086,6 +1124,150 @@ def hls_segment(
         return None
     finally:
         tmp.unlink(missing_ok=True)
+
+
+@dataclass
+class StreamProbe:
+    """What ffmpeg reports of a stream it reads over HTTP."""
+
+    duration: float
+    width: int
+    height: int
+    #: The best picture, by height, among the video streams; an HLS master
+    #: lists one per variant, and the first is often the smallest.
+    video: int
+    #: The audio beside it: the same position when every variant carries its
+    #: own, else the first (a shared audio rendition).
+    audio: int
+    hdr: bool
+    hls: bool
+
+
+_probes: dict[str, StreamProbe | None] = {}
+
+
+@functools.cache
+def _extension_picky() -> bool:
+    """Whether this ffmpeg's HLS reader refuses segments by file extension.
+
+    Since 7.1 it does, and proxied segment URLs carry none (hosts that disguise
+    segments as `.png` would fail anyway), so the check is turned off where it
+    exists. Asked of the binary, since the option is an error where it is not.
+    """
+    try:
+        result = subprocess.run(
+            [ffmpeg_binary(), "-hide_banner", "-h", "demuxer=hls"],
+            timeout=15,
+            check=False,
+            capture_output=True,
+        )
+    except (RuntimeError, OSError, subprocess.SubprocessError):
+        return False
+    return b"extension_picky" in result.stdout
+
+
+def stream_input_opts(probe: StreamProbe | None, *, hls: bool) -> list[str]:
+    """ffmpeg input options for reading a stream over HTTP."""
+    # A stalled upstream fails the run rather than hanging the player on it.
+    opts = ["-rw_timeout", "30000000"]
+    if (probe.hls if probe else hls) and _extension_picky():
+        opts += ["-extension_picky", "0"]
+    return opts
+
+
+def probe_stream(url: str, *, hls: bool) -> StreamProbe | None:
+    """Length, picture size and best streams of *url*; None when unreadable.
+
+    Cached per URL: the probe reads the playlist (or the mp4's index) over the
+    network, which is seconds, and every segment would otherwise repeat it.
+    """
+    if url in _probes:
+        return _probes[url]
+    found: StreamProbe | None = None
+    try:
+        result = subprocess.run(
+            [
+                ffmpeg_binary(),
+                "-nostdin",
+                "-hide_banner",
+                *stream_input_opts(None, hls=hls),
+                "-i",
+                url,
+            ],
+            timeout=60,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        found = _parse_stream_probe(result.stderr.decode("utf-8", "replace"), hls)
+    except (RuntimeError, OSError, subprocess.SubprocessError):
+        found = None
+    # A failure is not cached: the host may only have been slow this once.
+    if found is not None:
+        _probes[url] = found
+    return found
+
+
+def _parse_stream_probe(text: str, hls: bool) -> StreamProbe | None:
+    duration = _DURATION_RE.search(text)
+    if not duration:
+        return None
+    hours, minutes, rest = duration.groups()
+    videos: list[tuple[int, int, bool]] = []
+    audios = 0
+    for line in text.splitlines():
+        if _VIDEO_STREAM_RE.match(line):
+            size = _FRAME_SIZE_RE.search(line)
+            w, h = (int(size.group(1)), int(size.group(2))) if size else (0, 0)
+            videos.append((w, h, "smpte2084" in line or "arib-std-b67" in line))
+        elif (match := _STREAM_RE.match(line)) and match.group("kind") == "Audio":
+            audios += 1
+    if not videos:
+        return None
+    best = max(range(len(videos)), key=lambda i: videos[i][1])
+    width, height, hdr = videos[best]
+    return StreamProbe(
+        duration=int(hours) * 3600 + int(minutes) * 60 + float(rest),
+        width=width,
+        height=height,
+        video=best,
+        audio=best if audios == len(videos) else 0,
+        hdr=hdr,
+        hls=hls,
+    )
+
+
+def stream_segment(url: str, index: int, rung: int, *, hls: bool) -> Path | None:
+    """One transcoded segment of the stream at *url*, as :func:`hls_segment`
+    is of a file. None if there is no such segment, or it could not be built.
+
+    *url* is the server's own proxy of a provider's stream, which carries the
+    headers the host wants and decrypts nothing itself: ffmpeg's HLS reader
+    fetches the keys through the same proxy and decrypts as it goes.
+    """
+    probe = probe_stream(url, hls=hls)
+    durations = segment_durations(probe.duration if probe else None)
+    if probe is None or durations is None or not 0 <= index < len(durations):
+        return None
+    kbps = _rung_kbps(rung, probe.height)
+    if kbps is None:
+        return None
+    # shortcut: keyed on the URL, which for a host that signs its links changes
+    # each time the episode is resolved; key on the embed if re-watches matter.
+    key = hashlib.sha1(
+        f"{url}|s{index}|{HLS_SEGMENT_SECONDS}|r{rung}".encode()
+    ).hexdigest()
+    maps = ["-map", f"0:v:{probe.video}", "-map", f"0:a:{probe.audio}?"]
+    return _encode_segment(
+        stream_input_opts(probe, hls=hls),
+        url,
+        maps,
+        key,
+        index,
+        durations[index],
+        rung,
+        kbps,
+    )
 
 
 def _prune_hls_cache() -> None:
@@ -1314,12 +1496,13 @@ def _filter_value(value: str) -> str:
 
 
 def tv_stream_command(
-    file: Path,
+    file: Path | str,
     start: float,
     audio: int,
     subtitle: Track | Path | None,
     hdr: bool,
     rung: int = 0,
+    stream: StreamProbe | None = None,
 ) -> list[str]:
     """ffmpeg, re-encoding *file* from *start* for a TV, to stdout.
 
@@ -1329,11 +1512,18 @@ def tv_stream_command(
 
     A *rung* below 1080 sends a smaller frame capped at that rung's bitrate, for
     a TV on a link that cannot keep up with the full one.
+
+    With *stream*, *file* is a URL of a provider's stream that it describes, and
+    its best picture and the audio beside it are what is sent.
     """
     width, height = _tv_frame(rung)
     kbps = dict(HLS_LADDER).get(height, 0) if height < TV_HEIGHT else 0
-    seek = ["-ss", f"{start:.3f}"]
-    inputs = [*seek, "-i", str(file)]
+    # None from the very start, as for a segment (see ``_encode_segment``).
+    seek = ["-ss", f"{start:.3f}"] if start else []
+    opts = stream_input_opts(stream, hls=False) if stream else []
+    v = stream.video if stream else 0
+    audio = stream.audio if stream else audio
+    inputs = [*seek, *opts, "-i", str(file)]
     video = f"{_tv_fit(width, height)},{_TV_TONEMAP + ',' if hdr else ''}format=yuv420p"
     if isinstance(subtitle, Track) and not subtitle.text:
         # A picture subtitle is overlaid from a second reading of the same file.
@@ -1341,7 +1531,7 @@ def tv_stream_command(
         # audio: a TrueHD film then encodes at a fifth of real time.
         inputs += [*seek, "-i", str(file)]
         graph = (
-            f"[0:v:0]{video}[b];[1:s:{subtitle.index}]scale={width}:{height}[s];"
+            f"[0:v:{v}]{video}[b];[1:s:{subtitle.index}]scale={width}:{height}[s];"
             "[b][s]overlay=eof_action=pass[v]"
         )
     elif subtitle is not None:
@@ -1352,11 +1542,11 @@ def tv_stream_command(
         # The input seek restarts the clock at zero, and libass times cues by it,
         # so the film's own time is put back for the render and taken off after.
         graph = (
-            f"[0:v:0]setpts=PTS+{start:.3f}/TB,{video},"
+            f"[0:v:{v}]setpts=PTS+{start:.3f}/TB,{video},"
             f"subtitles=filename={name}{index},setpts=PTS-STARTPTS[v]"
         )
     else:
-        graph = f"[0:v:0]{video}[v]"
+        graph = f"[0:v:{v}]{video}[v]"
     return [
         ffmpeg_binary(),
         "-nostdin",

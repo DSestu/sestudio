@@ -434,3 +434,64 @@ def test_proxy_serves_rewritten_playlist_end_to_end(httpx_mock: HTTPXMock, monke
     payload = verify(secret, urllib.parse.unquote(inner_token))
     assert payload["u"] == "https://cdn.example/hls/480/index.m3u8"
     assert payload["r"] == "https://vidzy.org/"
+
+
+# --------------------------------------------------------------------------- #
+# Re-encoded at every quality from the source down
+# --------------------------------------------------------------------------- #
+
+
+def test_resolve_offers_the_stream_re_encoded_under_the_same_token():
+    src = StreamSource(
+        url="https://cdn.example/v.mp4", referer="https://uqload.is/", provider="uqload"
+    )
+    client = _client({"uqload": _FakeProvider(source=src)})
+    body = _resolve(client, {"uqload": "https://e/x"}).json()
+
+    token = body["proxy_url"].split("token=", 1)[1]
+    assert body["transcode_url"] == f"/api/stream/hls?token={token}"
+
+
+def test_the_stream_master_is_built_from_what_ffmpeg_reads_through_the_proxy(
+    monkeypatch,
+):
+    from sestudio import downloaded
+
+    client = _client()
+    token = sign(
+        client.app.state.proxy_secret,
+        "https://cdn.example/master.m3u8",
+        "https://vidzy.org/",
+        "vidzy",
+    )
+    read: list[tuple[str, bool]] = []
+
+    def fake_probe(url: str, hls: bool):
+        read.append((url, hls))
+        return downloaded.StreamProbe(30.0, 1280, 720, 1, 1, False, hls)
+
+    monkeypatch.setattr(downloaded, "probe_stream", fake_probe)
+    monkeypatch.setattr(downloaded, "stream_segment", lambda *a, **k: None)
+    quoted = urllib.parse.urlencode({"token": token})
+
+    master = client.get(f"/api/stream/hls?{quoted}")
+    media = client.get(f"/api/stream/hls?{quoted}&rung=360")
+
+    assert master.status_code == 200
+    # ffmpeg reads the server's own proxy, which carries the host's headers.
+    assert read[0] == (f"http://127.0.0.1:8080/api/stream/proxy?{quoted}", True)
+    uris = [line for line in master.text.splitlines() if not line.startswith("#")]
+    assert uris == [f"hls?{quoted}&rung={r}" for r in (0, 480, 360, 240, 144)]
+    assert media.text.splitlines()[-2] == f"segment?{quoted}&rung=360&index=4"
+
+
+def test_a_forged_token_reads_nothing(monkeypatch):
+    from sestudio import downloaded
+
+    monkeypatch.setattr(
+        downloaded, "probe_stream", lambda *a, **k: pytest.fail("probed")
+    )
+    client = _client()
+    for route in ("hls", "segment?index=0&", "tv"):
+        sep = "" if route.endswith("&") else "?"
+        assert client.get(f"/api/stream/{route}{sep}token=abc").status_code == 403

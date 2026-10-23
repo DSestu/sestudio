@@ -9,7 +9,7 @@ import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
 import { setRecast, startCastQueue } from '../../castQueue'
 import { startCastSession } from '../../playbackSession'
 import { loadPlayerPrefs } from '../../playerPrefs'
-import { DOWNLOADED_PROVIDER, type PlayableEpisode } from '../../providers'
+import type { PlayableEpisode } from '../../providers'
 import CastQuality from '../cast/CastQuality'
 
 const CAST_ICON =
@@ -150,7 +150,7 @@ export default function OutputSwitcher({
       const onLan = (path: string) => `${base}${path}`
       // The master playlist lets the Chromecast pick a quality itself; a
       // fixed one is that quality's own playlist.
-      const pinned = quality && proxyUrl.includes('/downloaded/hls') ? `${proxyUrl}&rung=${quality}` : proxyUrl
+      const pinned = quality && /\/(downloaded|stream)\/hls\?/.test(proxyUrl) ? `${proxyUrl}&rung=${quality}` : proxyUrl
       await castToChromecast(
         onLan(pinned),
         kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
@@ -165,12 +165,10 @@ export default function OutputSwitcher({
       )
     }
     // Changing quality mid-cast sends this again from where the TV is.
-    setRecast(proxyUrl.includes('/api/downloaded/')
-      ? async at => {
-        await sendTo(proxyUrl, kind, title, mode, udn, subtitles)
-        await seekTv(mode, at)
-      }
-      : null)
+    setRecast(async at => {
+      await sendTo(proxyUrl, kind, title, mode, udn, subtitles)
+      await seekTv(mode, at)
+    })
   }
 
   async function startCast(label: string, mode: 'dlna' | 'chromecast', udn?: string) {
@@ -209,7 +207,11 @@ export default function OutputSwitcher({
             return
           }
           const src = await resolveStream(next.embed_urls, undefined, undefined, next.source)
-          await sendTo(src.proxy_url, src.kind, next.title, mode, udn, src.subtitles)
+          if (mode === 'chromecast' && src.transcode_url) {
+            await sendTo(src.transcode_url, 'hls', next.title, mode, udn, src.subtitles)
+          } else {
+            await sendTo(src.proxy_url, src.kind, next.title, mode, udn, src.subtitles)
+          }
         },
       })
       setMsg(null)
@@ -244,8 +246,7 @@ export default function OutputSwitcher({
       {/* Device picker — inline, not an overlay */}
       {picking && (
         <div className="rounded-box border border-base-300 bg-base-200 p-3 flex flex-col gap-3">
-          {/* Only a stored file is re-encoded to a lighter quality. */}
-          {source?.provider === DOWNLOADED_PROVIDER && <CastQuality disabled={busy} />}
+          <CastQuality disabled={busy} />
           <div>
             <p className="text-xs uppercase tracking-wide text-base-content/40 mb-1">Chromecast &amp; AirPlay</p>
             {castAvailable ? (

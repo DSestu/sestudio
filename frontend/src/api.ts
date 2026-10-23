@@ -372,6 +372,9 @@ export interface StreamSource {
    *  itself: TVs decode AVI and AC-3 on their own, few play HLS, and the
    *  playlist route answers their HEAD probe with 405 — UPnP 716. */
   dlna_url?: string
+  /** A provider's stream re-encoded by the server as it plays, at every
+   *  quality from the source down (an HLS master). Absent for a stored file. */
+  transcode_url?: string
 }
 
 /**

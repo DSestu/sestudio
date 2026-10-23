@@ -351,6 +351,26 @@ async def get_downloaded_tv(
     """
     target = _resolved(path)
     duration = await asyncio.to_thread(downloaded.duration_of, target)
+    start, headers = tv_seek(request, duration)
+    if request.method == "HEAD":
+        return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)
+
+    tracks = await asyncio.to_thread(downloaded.tracks_of, target)
+    subtitle = (
+        await asyncio.to_thread(downloaded.tv_subtitle, target, lang) if lang else None
+    )
+    try:
+        command = downloaded.tv_stream_command(
+            target, start, audio, subtitle, tracks.video_hdr, rung
+        )
+    except RuntimeError as exc:  # no ffmpeg
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return tv_stream(request, command, headers)
+
+
+def tv_seek(request: Request, duration: float | None) -> tuple[float, dict[str, str]]:
+    """Where a TV asked a re-encoded stream to start, and the DLNA headers that
+    answer it."""
     asked = request.headers.get("TimeSeekRange.dlna.org")
     start = (_npt_seconds(asked) if asked else None) or 0.0
     headers = {
@@ -366,20 +386,13 @@ async def get_downloaded_tv(
             headers["TimeSeekRange.dlna.org"] = (
                 f"npt={start:.3f}-{duration:.3f}/{duration:.3f}"
             )
-    if request.method == "HEAD":
-        return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)
+    return start, headers
 
-    tracks = await asyncio.to_thread(downloaded.tracks_of, target)
-    subtitle = (
-        await asyncio.to_thread(downloaded.tv_subtitle, target, lang) if lang else None
-    )
-    try:
-        command = downloaded.tv_stream_command(
-            target, start, audio, subtitle, tracks.video_hdr, rung
-        )
-    except RuntimeError as exc:  # no ffmpeg
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+def tv_stream(
+    request: Request, command: list[str], headers: dict[str, str]
+) -> StreamingResponse:
+    """ffmpeg's output for a TV, answered the way TVs want a seek answered."""
     # LG webOS seeks with a byte range beside the time range, and drops an
     # answer that is not 206 as unseekable. The bytes are those of the asked
     # time, not that offset — the TV reads its position from the stream — and
@@ -496,25 +509,50 @@ async def get_downloaded_hls(
     if durations is None:
         raise HTTPException(status_code=404, detail="Length of that file is unknown")
     quoted = quote(path)
-    if rung is None:
-        variants = await asyncio.to_thread(downloaded.hls_variants, target)
-        master = ["#EXTM3U"]
-        for step, width, height, bandwidth in variants:
-            size = f",RESOLUTION={width}x{height}" if width and height else ""
-            master.append(f"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth}{size}")
-            master.append(f"hls?path={quoted}&audio={audio}&rung={step}")
-        return Response(
-            content="\n".join(master) + "\n",
-            media_type="application/vnd.apple.mpegurl",
-            headers=dict(_CORS_HEADERS),
-        )
-    # A rung the file has no use for — a fixed choice on a Chromecast asks for
-    # 720p of a 480p file — falls to the nearest the master offers below it,
-    # by real height, so the source counts at its own size.
     variants = await asyncio.to_thread(downloaded.hls_variants, target)
-    if rung not in [step for step, *_ in variants]:
-        fits = [(height, step) for step, _w, height, _b in variants if height <= rung]
-        rung = max(fits)[1] if fits else variants[-1][0]
+    if rung is None:
+        return master_playlist(variants, f"hls?path={quoted}&audio={audio}")
+    rung = offered_rung(variants, rung)
+    response = media_playlist(
+        durations, f"segment?path={quoted}&audio={audio}&rung={rung}"
+    )
+
+    # The opening segments, started now rather than when they are asked for.
+    # The player wants the first one within a moment of reading this, and a cold
+    # one is most of a second — long enough that its own first attempt at
+    # playing gives up for want of data. Begun while the client is still parsing
+    # a playlist of a thousand-odd lines, it is usually ready in time.
+    # Warmed here rather than on the master, so it is the rung the player
+    # actually picked that gets a head start.
+    for index in range(min(3, len(durations))):
+        _queue_segment(target, path, index, audio, rung)
+    return response
+
+
+def master_playlist(variants: list[tuple[int, int, int, int]], uri: str) -> Response:
+    """An HLS master: one entry per quality, each *uri* with its `&rung=`."""
+    lines = ["#EXTM3U"]
+    for step, width, height, bandwidth in variants:
+        size = f",RESOLUTION={width}x{height}" if width and height else ""
+        lines.append(f"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth}{size}")
+        lines.append(f"{uri}&rung={step}")
+    return _playlist(lines)
+
+
+def offered_rung(variants: list[tuple[int, int, int, int]], rung: int) -> int:
+    """*rung* if the master offers it, else the nearest it offers below it.
+
+    A fixed choice on a Chromecast asks for 720p of a 480p film. Compared by
+    real height, so the source counts at its own size.
+    """
+    if rung in [step for step, *_ in variants]:
+        return rung
+    fits = [(height, step) for step, _w, height, _b in variants if height <= rung]
+    return max(fits)[1] if fits else variants[-1][0]
+
+
+def media_playlist(durations: list[float], uri: str) -> Response:
+    """Every segment up front, each *uri* with its `&index=`."""
     lines = [
         "#EXTM3U",
         "#EXT-X-VERSION:3",
@@ -526,18 +564,12 @@ async def get_downloaded_hls(
     ]
     for index, seconds in enumerate(durations):
         lines.append(f"#EXTINF:{seconds:.3f},")
-        lines.append(f"segment?path={quoted}&index={index}&audio={audio}&rung={rung}")
+        lines.append(f"{uri}&index={index}")
     lines.append("#EXT-X-ENDLIST")
+    return _playlist(lines)
 
-    # The opening segments, started now rather than when they are asked for.
-    # The player wants the first one within a moment of reading this, and a cold
-    # one is most of a second — long enough that its own first attempt at
-    # playing gives up for want of data. Begun while the client is still parsing
-    # a playlist of a thousand-odd lines, it is usually ready in time.
-    # Warmed here rather than on the master, so it is the rung the player
-    # actually picked that gets a head start.
-    for index in range(min(3, len(durations))):
-        _queue_segment(target, path, index, audio, rung)
+
+def _playlist(lines: list[str]) -> Response:
     return Response(
         content="\n".join(lines) + "\n",
         media_type="application/vnd.apple.mpegurl",

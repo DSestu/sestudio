@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from sestudio import dlna, downloaded
 from sestudio.web.routes.downloaded import _resolved
+from sestudio.web.routes.stream import transcode_source
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,19 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
             # Sent as it is — mkv, avi… — and a TV told "video/mp4" for one
             # answers "file cannot be recognized", so declare what it really is.
             mime_type = downloaded.media_type_for(stored)
+    elif parsed.path == "/api/stream/proxy":
+        token = urllib.parse.parse_qs(parsed.query).get("token", [""])[0]
+        source, hls = transcode_source(request, token)
+        lighter = 0 < body.quality < downloaded.TV_HEIGHT
+        # Few TVs follow HLS, and a lighter quality is an encode: both get the
+        # provider's stream re-encoded into one continuous one.
+        if hls or lighter:
+            proxy_url = "/api/stream/tv?" + urllib.parse.urlencode({"token": token})
+            if lighter:
+                proxy_url += f"&rung={body.quality}"
+            mime_type = downloaded.TV_MEDIA_TYPE
+            probe = await asyncio.to_thread(downloaded.probe_stream, source, hls=hls)
+            duration = probe.duration if probe else None
 
     # The renderer fetches the stream itself, so build an absolute HTTP URL on
     # our LAN IP facing the renderer (browsing via localhost would otherwise

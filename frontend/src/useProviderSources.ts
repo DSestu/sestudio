@@ -13,7 +13,12 @@ async function probeSource(provider: string, embedUrl: string, signal: AbortSign
   const res = await fetch(src.proxy_url, { method: 'GET', headers: { Range: 'bytes=0-1' }, signal })
   if (!res.ok) throw new Error(`source returned HTTP ${res.status}`)
   await res.body?.cancel().catch(() => {})
-  return src
+  // Played through the server's re-encode, so the player can drop to a
+  // lighter quality on a slow link. A TV is sent the stream itself: the server
+  // decides there whether it needs re-encoding (HLS, or a lighter quality).
+  return src.transcode_url
+    ? { ...src, proxy_url: src.transcode_url, kind: 'hls', dlna_url: src.proxy_url }
+    : src
 }
 
 /** How long a local file gets to report its metadata before it counts as dead.

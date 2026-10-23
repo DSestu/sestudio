@@ -4,12 +4,15 @@ import asyncio
 import logging
 import urllib.parse
 from collections.abc import Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
+from sestudio import downloaded
 from sestudio.http_client import BROWSER_UA, IMPERSONATE_PROVIDERS, new_client
 from sestudio.sites import site_for
 from sestudio.web.proxy import (
@@ -18,6 +21,13 @@ from sestudio.web.proxy import (
     rewrite_playlist,
     sign,
     verify,
+)
+from sestudio.web.routes.downloaded import (
+    master_playlist,
+    media_playlist,
+    offered_rung,
+    tv_seek,
+    tv_stream,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,6 +90,29 @@ def _proxy_url(secret: bytes, target_url: str, referer: str, provider: str) -> s
     return "/api/stream/proxy?" + urllib.parse.urlencode({"token": token})
 
 
+def transcode_source(request: Request, token: str) -> tuple[str, bool]:
+    """The URL ffmpeg reads a proxied stream from, and whether it is HLS.
+
+    The server's own proxy, not the host: it already carries the Referer, the
+    browser-like headers and the TLS fingerprint the host checks, and rewrites
+    a playlist's segments and keys to come back through it.
+    """
+    try:
+        payload = verify(request.app.state.proxy_secret, token)
+    except TokenError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    # shortcut: loopback, so a server bound to one LAN address only cannot
+    # reach itself here; pass the bound host through app state if that happens.
+    port = request.app.state.http_port
+    base = (
+        f"http://127.0.0.1:{port}"
+        if port is not None
+        else f"https://127.0.0.1:{request.app.state.https_port}"
+    )
+    query = urllib.parse.urlencode({"token": token})
+    return f"{base}/api/stream/proxy?{query}", ".m3u8" in payload["u"]
+
+
 class ResolveRequest(BaseModel):
     embed_urls: dict[str, str]  # provider -> embed url
     # Optional "mp4"/"hls": keep looking for a provider serving this kind before
@@ -115,11 +148,13 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
             errors.append(f"{cand.provider}: {exc}")
             continue
         kind = "hls" if ".m3u8" in source.url else "mp4"
+        proxy_url = _proxy_url(secret, source.url, source.referer, source.provider)
         result = {
-            "proxy_url": _proxy_url(
-                secret, source.url, source.referer, source.provider
-            ),
+            "proxy_url": proxy_url,
             "kind": kind,
+            # The same stream re-encoded as it plays, at every quality from the
+            # source down, for a player on a link too slow for the source.
+            "transcode_url": "/api/stream/hls?" + proxy_url.split("?", 1)[1],
             "provider": cand.provider,
             # Sidecar subtitles go through the same proxy: they are fetched from
             # the stream host and need its Referer just as the segments do.
@@ -255,3 +290,79 @@ def proxy_stream(token: str, request: Request) -> Response:
             client.close()
 
     return StreamingResponse(body(), status_code=upstream.status_code, headers=relay)
+
+
+_TRANSCODE_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="stream-hls")
+_TRANSCODE_PENDING: dict[str, Future[Path | None]] = {}
+
+
+def _queue_segment(url: str, index: int, rung: int, hls: bool) -> Future[Path | None]:
+    """The running build for one segment, coalesced as for a stored file."""
+    key = f"{url}|{index}|{rung}"
+    future = _TRANSCODE_PENDING.get(key)
+    if future is None:
+        future = _TRANSCODE_POOL.submit(
+            lambda: downloaded.stream_segment(url, index, rung, hls=hls)
+        )
+        _TRANSCODE_PENDING[key] = future
+        future.add_done_callback(lambda _f, k=key: _TRANSCODE_PENDING.pop(k, None))
+    return future
+
+
+async def _probe(request: Request, token: str) -> tuple[str, downloaded.StreamProbe]:
+    url, hls = transcode_source(request, token)
+    probe = await asyncio.to_thread(downloaded.probe_stream, url, hls=hls)
+    if probe is None:
+        raise HTTPException(status_code=502, detail="Could not read that stream")
+    return url, probe
+
+
+@router.get("/stream/hls")
+async def stream_hls(token: str, request: Request, rung: int | None = None) -> Response:
+    """A provider's stream re-encoded as it plays, as ``/downloaded/hls`` is a
+    stored file: the master without *rung*, that quality's segments with it."""
+    url, probe = await _probe(request, token)
+    durations = downloaded.segment_durations(probe.duration)
+    if durations is None:
+        raise HTTPException(status_code=502, detail="Length of that stream is unknown")
+    query = urllib.parse.urlencode({"token": token})
+    variants = downloaded.ladder(probe.width, probe.height)
+    if rung is None:
+        return master_playlist(variants, f"hls?{query}")
+    rung = offered_rung(variants, rung)
+    response = media_playlist(durations, f"segment?{query}&rung={rung}")
+    # Warmed as a stored file's are: the player wants the first one at once.
+    for index in range(min(3, len(durations))):
+        _queue_segment(url, index, rung, probe.hls)
+    return response
+
+
+@router.get("/stream/segment")
+async def stream_segment(
+    token: str, request: Request, index: int = Query(..., ge=0), rung: int = 0
+) -> Response:
+    """One segment of the playlist above, transcoded now if it is not cached."""
+    url, hls = transcode_source(request, token)
+    segment = await asyncio.wrap_future(_queue_segment(url, index, rung, hls))
+    if segment is None:
+        raise HTTPException(status_code=404, detail="No such segment")
+    return FileResponse(segment, media_type="video/mp2t", headers=dict(_CORS_HEADERS))
+
+
+@router.api_route("/stream/tv", methods=["GET", "HEAD"])
+async def stream_tv(
+    token: str, request: Request, rung: int = Query(0, ge=0)
+) -> Response:
+    """A provider's stream re-encoded for a DLNA TV, as ``/downloaded/tv`` is a
+    stored file. For HLS, which few TVs follow, and for a lighter quality."""
+    url, probe = await _probe(request, token)
+    start, headers = tv_seek(request, probe.duration)
+    if request.method == "HEAD":
+        return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)
+    try:
+        command = downloaded.tv_stream_command(
+            url, start, 0, None, probe.hdr, rung, stream=probe
+        )
+    except RuntimeError as exc:  # no ffmpeg
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return tv_stream(request, command, headers)
