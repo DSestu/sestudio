@@ -88,17 +88,22 @@ export default function BufferingInfo({ source }: { source: StreamSource }) {
 
   const stalled = Math.round((now - since) / 1000)
   const local = source.provider === DOWNLOADED_PROVIDER
+  // A provider's stream played through the server's re-encode: the wait is
+  // the server's, not the host's.
+  const transcoded = source.kind === 'hls' && (local || Boolean(source.transcode_url))
   const what = local
-    ? source.kind === 'hls' ? 'Your file, transcoded by the server as it plays' : 'Your file, sent as is'
-    : `Streaming from ${source.provider}`
-  const server = local ? 'server' : source.provider
+    ? transcoded ? 'Your file, transcoded by the server as it plays' : 'Your file, sent as is'
+    : transcoded
+      ? `From ${source.provider}, re-encoded by the server as it plays`
+      : `Streaming from ${source.provider}`
+  const server = local || transcoded ? 'server' : source.provider
   // Only a chunk that finished during this stall describes it.
   const fresh = fetched && fetchedAt >= since ? fetched : null
 
   let verdict: string
   if (rate === null) verdict = 'Measuring…'
   else if (rate === 0 && !fresh) {
-    verdict = local && source.kind === 'hls'
+    verdict = transcoded
       ? `Nothing has arrived for ${stalled} s — the server is most likely still transcoding this part.`
       : `Nothing has arrived for ${stalled} s — the ${server} or your connection is not answering.`
   } else if (fresh && fresh.wait > 3) {

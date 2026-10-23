@@ -525,3 +525,69 @@ def test_the_tv_stream_encodes_with_the_detected_gpu(monkeypatch):
     command = downloaded.tv_stream_command(Path("film.mkv"), 0.0, 0, None, hdr=False)
     assert command[command.index("-c:v") + 1] == "h264_nvenc"
     assert command[command.index("-cq") + 1] == "21"
+
+
+# An HLS master as ffmpeg reports it: one program per variant, the smallest
+# listed first, each with its own audio.
+_MASTER_REPORT = """\
+Input #0, hls, from 'http://127.0.0.1:8080/api/stream/proxy?token=x':
+  Duration: 00:42:10.50, start: 1.400000, bitrate: 0 kb/s
+  Program 0
+    Metadata:
+      variant_bitrate : 800000
+  Stream #0:0: Video: h264 (Main) ([27][0][0][0] / 0x001B), yuv420p(tv, bt709), 640x360, 25 fps
+  Stream #0:1: Audio: aac (LC) ([15][0][0][0] / 0x000F), 48000 Hz, stereo, fltp
+  Program 1
+    Metadata:
+      variant_bitrate : 5000000
+  Stream #0:2: Video: h264 (High) ([27][0][0][0] / 0x001B), yuv420p(tv, bt709), 1920x1080, 25 fps
+  Stream #0:3: Audio: aac (LC) ([15][0][0][0] / 0x000F), 48000 Hz, stereo, fltp
+"""
+
+
+def test_a_stream_is_read_at_its_best_variant():
+    """The first variant is often the smallest; encoding from it would send the
+    browser 360p as the "source"."""
+    probe = downloaded._parse_stream_probe(_MASTER_REPORT, hls=True)
+
+    assert probe is not None
+    assert (probe.width, probe.height) == (1920, 1080)
+    assert round(probe.duration, 1) == 2530.5
+    # Its own audio, not the small variant's, so only one variant is fetched.
+    assert (probe.video, probe.audio) == (1, 1)
+
+
+def test_a_stream_segment_reads_through_the_proxy_at_the_best_variant(
+    tmp_path: Path, monkeypatch
+):
+    probe = downloaded._parse_stream_probe(_MASTER_REPORT, hls=True)
+    monkeypatch.setattr(downloaded, "probe_stream", lambda url, hls: probe)
+    monkeypatch.setattr(downloaded, "_extension_picky", lambda: True)
+    monkeypatch.setattr(downloaded, "_hls_dir", lambda: tmp_path / "hls")
+    monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        Path(command[-1]).write_bytes(b"segment")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(downloaded.subprocess, "run", fake_run)
+
+    url = "http://127.0.0.1:8080/api/stream/proxy?token=x"
+    assert downloaded.stream_segment(url, 3, 480, hls=True) is not None
+
+    command = commands[0]
+    assert command[command.index("-i") + 1] == url
+    assert command[command.index("-ss") + 1] == "18.000"
+    # Proxied segment URLs carry no file extension for ffmpeg 7.1+ to check.
+    assert command[command.index("-extension_picky") + 1] == "0"
+    assert ["-map", "0:v:1", "-map", "0:a:1?"] == command[
+        command.index("-map") : command.index("-map") + 4
+    ]
+    # The first is read from the start, not sought to 0: on a stream whose clock
+    # starts past zero that seek throws its video and audio seconds apart.
+    downloaded.stream_segment(url, 0, 0, hls=True)
+    assert "-ss" not in commands[1]
+    assert downloaded.stream_segment(url, 999, 0, hls=True) is None
+    assert downloaded.stream_segment(url, 0, 1080, hls=True) is None

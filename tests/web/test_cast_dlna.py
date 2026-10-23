@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sestudio.web.app import create_app
+from sestudio.web.proxy import sign
 from sestudio.web.routes import cast
 
 
@@ -43,6 +44,15 @@ def test_list_renderers_caches_locations(client, monkeypatch):
     )
 
 
+def _proxied(client, url: str = "https://cdn.example/ep1.mp4") -> str:
+    """A proxy path for *url* as `/stream/resolve` mints them: the cast route
+    checks the token before deciding how the TV gets the stream."""
+    token = sign(
+        client.app.state.proxy_secret, url, "https://ref.example/", "voe", ttl=60
+    )
+    return f"/api/stream/proxy?token={token}"
+
+
 def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}
@@ -61,7 +71,7 @@ def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
         "/api/cast/dlna/play",
         json={
             "renderer_udn": "uuid:tv-1",
-            "proxy_url": "/api/stream/proxy?token=abc",
+            "proxy_url": (proxied := _proxied(client)),
             "kind": "mp4",
             "title": "Ep 1",
         },
@@ -70,7 +80,7 @@ def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
     assert resp.json()["status"] == "playing"
     assert calls["location"] == "http://192.168.1.5:8200/desc.xml"
     # The renderer gets our LAN IP (not localhost) so it can actually fetch the stream.
-    assert calls["media_url"] == "http://192.168.1.20:8080/api/stream/proxy?token=abc"
+    assert calls["media_url"] == f"http://192.168.1.20:8080{proxied}"
     assert calls["mime_type"] == "video/mp4"
     assert calls["title"] == "Ep 1"
 
@@ -95,10 +105,10 @@ def test_play_falls_back_to_https_when_no_http_server(client, monkeypatch):
     monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
     resp = client.post(
         "/api/cast/dlna/play",
-        json={"renderer_udn": "uuid:tv-1", "proxy_url": "/api/stream/proxy?token=abc"},
+        json={"renderer_udn": "uuid:tv-1", "proxy_url": (proxied := _proxied(client))},
     )
     assert resp.status_code == 200
-    assert calls["media_url"] == "https://192.168.1.20:8443/api/stream/proxy?token=abc"
+    assert calls["media_url"] == f"https://192.168.1.20:8443{proxied}"
 
 
 def test_http_port_endpoint_reports_the_real_port(client):
@@ -112,27 +122,61 @@ def test_http_port_is_null_without_an_http_server(client):
     assert client.get("/api/cast/http-port").json() == {"http_port": None}
 
 
-def test_play_hls_kind_maps_to_hls_mime(client, monkeypatch):
+def test_play_provider_hls_goes_to_the_tv_re_encoded(client, monkeypatch):
+    """Few TVs follow HLS, so a provider's playlist is sent as one continuous
+    re-encoded stream, with its length so the TV can draw a seek bar."""
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}
 
-    async def fake_play(
-        location: str, media_url: str, title: str, mime_type: str, duration=None
-    ):
-        calls["mime_type"] = mime_type
+    async def fake_play(location, media_url, title, mime_type, duration=None):
+        calls.update(media_url=media_url, mime_type=mime_type, duration=duration)
 
     monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
     monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
+    probe = cast.downloaded.StreamProbe(1320.0, 1920, 1080, 0, 0, False, True)
+    monkeypatch.setattr(cast.downloaded, "probe_stream", lambda url, hls: probe)
+    proxied = _proxied(client, "https://cdn.example/master.m3u8")
+    resp = client.post(
+        "/api/cast/dlna/play",
+        json={"renderer_udn": "uuid:tv-1", "proxy_url": proxied, "kind": "hls"},
+    )
+    assert resp.status_code == 200
+    token = proxied.split("token=", 1)[1]
+    assert calls["media_url"] == f"http://192.168.1.20:8080/api/stream/tv?token={token}"
+    assert calls["mime_type"] == "video/mpeg"
+    assert calls["duration"] == 1320.0
+
+
+def test_play_provider_mp4_at_a_lighter_quality_is_re_encoded(client, monkeypatch):
+    client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
+    calls = {}
+
+    async def fake_play(location, media_url, title, mime_type, duration=None):
+        calls["media_url"] = media_url
+
+    monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
+    monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
+    monkeypatch.setattr(cast.downloaded, "probe_stream", lambda url, hls: None)
     resp = client.post(
         "/api/cast/dlna/play",
         json={
             "renderer_udn": "uuid:tv-1",
-            "proxy_url": "/api/stream/proxy?token=abc",
-            "kind": "hls",
+            "proxy_url": _proxied(client),
+            "quality": 360,
         },
     )
     assert resp.status_code == 200
-    assert calls["mime_type"] == "application/vnd.apple.mpegurl"
+    assert "/api/stream/tv?token=" in calls["media_url"]
+    assert calls["media_url"].endswith("&rung=360")
+
+
+def test_play_with_a_forged_token_is_refused(client):
+    client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
+    resp = client.post(
+        "/api/cast/dlna/play",
+        json={"renderer_udn": "uuid:tv-1", "proxy_url": "/api/stream/proxy?token=abc"},
+    )
+    assert resp.status_code == 403
 
 
 def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None, quality=0):
@@ -252,7 +296,7 @@ def test_play_failure_maps_to_502(client, monkeypatch):
     monkeypatch.setattr(cast.dlna, "play_on_renderer", boom)
     resp = client.post(
         "/api/cast/dlna/play",
-        json={"renderer_udn": "uuid:tv-1", "proxy_url": "/api/stream/proxy?token=abc"},
+        json={"renderer_udn": "uuid:tv-1", "proxy_url": _proxied(client)},
     )
     assert resp.status_code == 502
     assert "renderer refused" in resp.json()["detail"]
