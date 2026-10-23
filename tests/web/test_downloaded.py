@@ -418,6 +418,7 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
     _write(out / "Film.avi")
     downloaded.invalidate()
     monkeypatch.setattr(downloaded, "duration_of", lambda _f: 30.0)
+    monkeypatch.setattr(downloaded, "tracks_of", lambda _f: _hd_tracks())
     built: list[tuple[int, int]] = []
     monkeypatch.setattr(
         downloaded,
@@ -445,6 +446,31 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
     # Of the rung the player picked, not of every rung the master offers.
     assert built == [(0, 720), (1, 720), (2, 720)]
     route._HLS_PENDING.clear()
+
+
+def _hd_tracks():
+    return downloaded.MediaTracks(
+        audio=[], subtitles=[], video_width=1920, video_height=1080
+    )
+
+
+def test_a_rung_the_file_lacks_falls_to_the_next_one_down(client, out, monkeypatch):
+    """A fixed choice made on another title — 1440p, or a height off the
+    ladder — still plays, at the best this file has below it."""
+    _write(out / "Film.avi")
+    downloaded.invalidate()
+    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 30.0)
+    monkeypatch.setattr(downloaded, "tracks_of", lambda _f: _hd_tracks())
+    monkeypatch.setattr(downloaded, "hls_segment", lambda *_a: None)
+
+    def last_uri(rung: int) -> str:
+        resp = client.get(
+            "/api/downloaded/hls", params={"path": "Film.avi", "rung": rung}
+        )
+        return resp.text.splitlines()[-2]
+
+    assert last_uri(1440).endswith("&rung=0")
+    assert last_uri(500).endswith("&rung=480")
 
 
 def test_the_master_offers_the_source_and_every_lighter_step(client, out, monkeypatch):

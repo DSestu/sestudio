@@ -135,7 +135,7 @@ def test_play_hls_kind_maps_to_hls_mime(client, monkeypatch):
     assert calls["mime_type"] == "application/vnd.apple.mpegurl"
 
 
-def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None):
+def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None, quality=0):
     """Cast a stored file, with what the probes say about it faked."""
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}
@@ -156,6 +156,7 @@ def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None):
             "proxy_url": "/api/downloaded/file?path=Matrix%2FThe%20Matrix.mkv&audio=2",
             "kind": "mp4",
             "subtitle_lang": lang,
+            "quality": quality,
         },
     )
     assert resp.status_code == 200
@@ -184,6 +185,19 @@ def test_play_stored_file_with_captions_burns_them_in(client, monkeypatch):
     )
     assert "/api/downloaded/tv?" in calls["media_url"]
     assert calls["media_url"].endswith("&lang=fr")
+
+
+def test_play_stored_file_at_a_lighter_quality_is_re_encoded_down(client, monkeypatch):
+    """The file as stored is the best quality there is, so a lighter one is an
+    encode even when the TV would have taken the file."""
+    calls = _cast_stored(client, monkeypatch, playable=True, quality=480)
+    assert "/api/downloaded/tv?" in calls["media_url"]
+    assert calls["media_url"].endswith("&rung=480")
+
+
+def test_play_stored_file_at_best_quality_goes_as_it_is(client, monkeypatch):
+    calls = _cast_stored(client, monkeypatch, playable=True, quality=1080)
+    assert "/api/downloaded/file?" in calls["media_url"]
 
 
 def test_play_stored_file_with_no_track_in_that_language_goes_as_it_is(
