@@ -434,12 +434,15 @@ export async function dlnaPlay(
   kind: string,
   /** Burnt into the picture when this is a stored file with a track in it. */
   subtitleLang?: string | null,
+  /** A lighter height for a stored file, re-encoded down to it; 0 for the best. */
+  quality = 0,
 ): Promise<void> {
   const res = await fetch(`${BASE}/cast/dlna/play`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       renderer_udn: rendererUdn, proxy_url: proxyUrl, title, kind, subtitle_lang: subtitleLang ?? null,
+      quality,
     }),
   })
   if (!res.ok) {

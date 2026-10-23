@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { Renderer, StreamSource, StreamSubtitle } from '../../api'
-import { dlnaPlay, getCastHttpPort, listRenderers, downloadedFileUrl, resolveStream } from '../../api'
+import {
+  dlnaPlay, getCastHttpPort, listRenderers, downloadedFileUrl, downloadedHlsUrl, resolveStream,
+} from '../../api'
 import { fileFor, downloadedSnapshot } from '../../downloadedLibrary'
 import { castSeek, castToChromecast, describeCastError, loadCast, useCastState } from '../../cast'
 import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
-import { startCastQueue } from '../../castQueue'
+import { setRecast, startCastQueue } from '../../castQueue'
 import { startCastSession } from '../../playbackSession'
 import { loadPlayerPrefs } from '../../playerPrefs'
-import type { PlayableEpisode } from '../../providers'
+import { DOWNLOADED_PROVIDER, type PlayableEpisode } from '../../providers'
+import CastQuality from '../cast/CastQuality'
 
 const CAST_ICON =
   'M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 11a6 6 0 016 6M3 15a2 2 0 012 2M3 19h.01'
@@ -40,6 +43,16 @@ interface Props {
   autoplay: boolean
   /** Browser position (seconds) to resume from when handing off to a TV. */
   handoffAt: number
+}
+
+/** Move what the TV is playing to *at* seconds, once it has taken the video. */
+async function seekTv(mode: 'dlna' | 'chromecast', at: number) {
+  if (mode === 'dlna') {
+    await new Promise(r => setTimeout(r, 1500)) // let the renderer load
+    await dlnaSeek(at).catch(() => {})
+  } else {
+    castSeek(at)
+  }
 }
 
 /** A step that runs past this gets a hint that something may be wrong. */
@@ -114,10 +127,12 @@ export default function OutputSwitcher({
     subtitles: StreamSubtitle[] = [],
     onStep: (text: string) => void = () => {},
   ) {
+    const prefs = loadPlayerPrefs()
+    const quality = prefs.tvQuality ?? 0
     if (mode === 'dlna' && udn) {
       onStep('Asking the TV to play the video — it connects back to the server to fetch it…')
       // The captions picked in the browser player; the server burns them in.
-      await dlnaPlay(udn, proxyUrl, title, kind, loadPlayerPrefs().subtitleLang)
+      await dlnaPlay(udn, proxyUrl, title, kind, prefs.subtitleLang, quality)
       dlnaStarted()
     } else {
       // On a LAN address the app's cert is self-signed and Chromecast can't
@@ -133,8 +148,11 @@ export default function OutputSwitcher({
       const host = window.location.hostname
       const base = port !== null && isLanHost(host) ? `http://${host}:${port}` : window.location.origin
       const onLan = (path: string) => `${base}${path}`
+      // The master playlist lets the Chromecast pick a quality itself; a
+      // fixed one is that quality's own playlist.
+      const pinned = quality && proxyUrl.includes('/downloaded/hls') ? `${proxyUrl}&rung=${quality}` : proxyUrl
       await castToChromecast(
-        onLan(proxyUrl),
+        onLan(pinned),
         kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
         title,
         subtitles.map(sub => ({
@@ -146,6 +164,13 @@ export default function OutputSwitcher({
         onStep,
       )
     }
+    // Changing quality mid-cast sends this again from where the TV is.
+    setRecast(proxyUrl.includes('/api/downloaded/')
+      ? async at => {
+        await sendTo(proxyUrl, kind, title, mode, udn, subtitles)
+        await seekTv(mode, at)
+      }
+      : null)
   }
 
   async function startCast(label: string, mode: 'dlna' | 'chromecast', udn?: string) {
@@ -163,12 +188,7 @@ export default function OutputSwitcher({
       // Handoff: continue on the TV from where the browser player was.
       if (handoffAt > 5) {
         step(`Jumping to ${Math.floor(handoffAt / 60)}:${String(Math.floor(handoffAt % 60)).padStart(2, '0')} on the TV…`)
-        if (mode === 'dlna') {
-          await new Promise(r => setTimeout(r, 1500)) // let the renderer load
-          await dlnaSeek(handoffAt).catch(() => {})
-        } else {
-          castSeek(handoffAt)
-        }
+        await seekTv(mode, handoffAt)
       }
       // Register the playlist so the controller can autoplay the next episode.
       startCastQueue({
@@ -182,7 +202,10 @@ export default function OutputSwitcher({
             downloadedSnapshot(), next.series_name, next.season, next.number, next.lang,
           )
           if (local) {
-            await sendTo(downloadedFileUrl(local.path), 'mp4', next.title, mode, udn)
+            // HLS for a Chromecast, as the first episode went, so the quality
+            // picked applies; a DLNA TV cannot follow HLS and gets the file.
+            if (mode === 'dlna') await sendTo(downloadedFileUrl(local.path), 'mp4', next.title, mode, udn)
+            else await sendTo(downloadedHlsUrl(local.path), 'hls', next.title, mode, udn)
             return
           }
           const src = await resolveStream(next.embed_urls, undefined, undefined, next.source)
@@ -221,6 +244,8 @@ export default function OutputSwitcher({
       {/* Device picker — inline, not an overlay */}
       {picking && (
         <div className="rounded-box border border-base-300 bg-base-200 p-3 flex flex-col gap-3">
+          {/* Only a stored file is re-encoded to a lighter quality. */}
+          {source?.provider === DOWNLOADED_PROVIDER && <CastQuality disabled={busy} />}
           <div>
             <p className="text-xs uppercase tracking-wide text-base-content/40 mb-1">Chromecast &amp; AirPlay</p>
             {castAvailable ? (
