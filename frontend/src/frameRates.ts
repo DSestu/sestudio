@@ -17,3 +17,11 @@ export function withFps(url: string, fps: number): string {
   if (fps) params.set('fps', String(fps))
   return `${path}?${params}`
 }
+
+/** The server's re-encoded playlist a source plays from, if it does: only those
+ *  can be sent at another frame rate. */
+export function ladderUrlOf(source: { kind: string; proxy_url: string } | null | undefined): string | null {
+  return source?.kind === 'hls' && /\/api\/(downloaded|stream)\/hls\?/.test(source.proxy_url)
+    ? source.proxy_url
+    : null
+}

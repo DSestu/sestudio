@@ -450,6 +450,8 @@ export interface MediaOptions {
   fps: number
   /** Frame rates on offer; those above `fps` are drawn by AI. */
   frame_rates: number[]
+  /** The server is still fetching the AI runtime: ask again for its rates. */
+  preparing?: boolean
 }
 
 const NO_OPTIONS: MediaOptions = { heights: [], fps: 0, frame_rates: [] }

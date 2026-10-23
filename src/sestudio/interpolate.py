@@ -10,13 +10,22 @@ caller decides from :func:`status` whether to offer it at all.
 The model is the RIFE v4.26 export vs-mlrt publishes, its "v2" form: one input
 of seven channels (frame A as RGB, frame B as RGB, then a plane holding the time
 point between them, all 0..1) at any size, padded inside the model, and one RGB
-frame out. Fetched once, on first use, into the config directory.
+frame out.
+
+Neither the model nor ONNX Runtime ships with sestudio: tens of megabytes most
+installs never use. Both are fetched on first need into the config directory,
+which outlives any `uvx` environment, and reused by every launch after. That
+first fetch runs in the background (see :func:`status`), so nothing waits on it.
 """
 
 from __future__ import annotations
 
+import importlib
 import logging
+import shutil
 import subprocess
+import sys
+import sysconfig
 import threading
 import time
 from collections.abc import Iterator
@@ -53,6 +62,83 @@ _PROVIDERS = (
 _SCENE_CUT = 40.0
 
 _model_lock = threading.Lock()
+
+
+def runtime_dir() -> Path:
+    """Where ONNX Runtime is installed: one folder per Python version and
+    platform, as its wheels are built for each — a `uvx` on another Python
+    gets its own rather than one that will not import."""
+    tag = f"py{sys.version_info.major}{sys.version_info.minor}"
+    return config_dir() / "runtime" / f"{tag}-{sysconfig.get_platform()}"
+
+
+def _runtime_packages() -> list[str]:
+    # DirectML on Windows reaches NVIDIA, AMD and Intel alike; the plain wheel
+    # carries CoreML on a Mac, and only the CPU on Linux (onnxruntime-gpu,
+    # installed beside sestudio, is picked up first there).
+    ort = "onnxruntime-directml" if sys.platform == "win32" else "onnxruntime"
+    return [f"{ort}>=1.20", "py7zr>=0.22"]
+
+
+def _importable() -> bool:
+    try:
+        import onnxruntime  # noqa: F401
+        import py7zr  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def ensure_runtime() -> bool:
+    """Whether ONNX Runtime imports, installed into :func:`runtime_dir` first
+    if it is not already importable (it is in a dev checkout)."""
+    if _importable():
+        return True
+    target = runtime_dir()
+    if not (target / ".complete").is_file() and not _install_runtime(target):
+        return False
+    # Last, so the environment's own packages (numpy among them) still win.
+    if str(target) not in sys.path:
+        sys.path.append(str(target))
+        importlib.invalidate_caches()
+    return _importable()
+
+
+def _install_runtime(target: Path) -> bool:
+    """Install the runtime into *target*. With uv where it is on the path — a
+    `uvx` environment has no pip — else with this interpreter's pip. Built
+    beside *target* and moved in only once complete, so an interrupted install
+    is never taken for a finished one."""
+    packages = _runtime_packages()
+    building = target.with_name(f"{target.name}.part")
+    shutil.rmtree(building, ignore_errors=True)
+    if uv := shutil.which("uv"):
+        command = [uv, "pip", "install", "--quiet", "--python", sys.executable]
+    else:
+        command = [sys.executable, "-m", "pip", "install", "--quiet"]
+    logger.info("Installing the frame interpolation runtime into %s", target)
+    try:
+        result = subprocess.run(
+            [*command, "--target", str(building), *packages],
+            timeout=900,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("Could not install the interpolation runtime: %s", exc)
+        return False
+    if result.returncode != 0:
+        logger.warning(
+            "Could not install the interpolation runtime: %s",
+            result.stderr.strip()[-500:],
+        )
+        shutil.rmtree(building, ignore_errors=True)
+        return False
+    (building / ".complete").write_text(" ".join(packages), encoding="utf-8")
+    shutil.rmtree(target, ignore_errors=True)
+    building.rename(target)
+    return True
 
 
 def model_path() -> Path:
@@ -111,10 +197,10 @@ def _session() -> Any | None:
 
 
 def _new_session() -> Any | None:
-    try:
-        import onnxruntime as ort
-    except ImportError:
+    if not ensure_runtime():
         return None
+    import onnxruntime as ort
+
     model = ensure_model()
     if model is None:
         return None
@@ -133,11 +219,32 @@ def _new_session() -> Any | None:
         return None
 
 
+#: When the background preparation last started, so a failed one (offline)
+#: is tried again a while later rather than on every ask.
+_prepared_at: list[float] = []
+_prepare_lock = threading.Lock()
+_RETRY_AFTER = 600.0
+
+
+def _prepare() -> None:
+    """Everything a first use needs: the runtime, the model, a session, and
+    the speed this machine draws at."""
+    speed()
+
+
 def status() -> dict[str, Any]:
-    """Whether interpolation can run here, and on what. Loads the model."""
-    session = _session()
+    """Whether interpolation can run here, and on what. Never waits: until the
+    runtime and model are on disk and measured, this starts fetching them in
+    the background and answers "not available" — the frame rates drawn by AI
+    are offered from the next ask once it is done."""
+    session = _session_cache[0] if _session_cache and _speed else None
     if session is None:
-        return {"available": False, "provider": None}
+        with _prepare_lock:
+            now = time.monotonic()
+            if not _prepared_at or now - _prepared_at[0] > _RETRY_AFTER:
+                _prepared_at[:] = [now]
+                threading.Thread(target=_prepare, daemon=True).start()
+        return {"available": False, "provider": None, "preparing": True}
     provider = session.get_providers()[0]
     return {
         "available": True,

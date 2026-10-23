@@ -240,7 +240,8 @@ async def media_options(request: Request, url: str | None = None) -> dict[str, A
     if found is None:
         return none
     variants, fps = found
-    gpu = fps > 0 and (await asyncio.to_thread(interpolate.status)).get("gpu", False)
+    ai = await asyncio.to_thread(interpolate.status) if fps > 0 else {}
+    gpu = ai.get("gpu", False)
     # Judged at the source's size, or 720p for a bigger one: the player drops to
     # a lighter rung when drawing falls behind, so 720p is what has to hold.
     width, height = next(
@@ -262,6 +263,8 @@ async def media_options(request: Request, url: str | None = None) -> dict[str, A
         "heights": [height for _step, _w, height, _b in variants if height],
         "fps": fps,
         "frame_rates": rates,
+        # Fetching the AI runtime on first use: ask again shortly for its rates.
+        "preparing": ai.get("preparing", False),
     }
 
 
@@ -306,7 +309,7 @@ async def cast_live(body: CastLiveRequest, request: Request) -> dict[str, Any]:
     that restarts it, said by ``restarted``, and the caller seeks it back.
     """
     check_fps(body.fps)
-    fps = min(body.fps, downloaded.TV_MAX_FPS)
+    fps = body.fps
     if body.id != "dlna":
         # 0 leaves the rung to the receiver, which picks one from the master.
         request.app.state.live[body.id] = {"rung": body.quality or None, "fps": fps}

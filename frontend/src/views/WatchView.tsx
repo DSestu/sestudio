@@ -16,6 +16,7 @@ import WatchToggle from '../components/WatchToggle'
 import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
+import BrowserFrameRate from '../components/watch/BrowserFrameRate'
 import SourcesPanel from '../components/watch/SourcesPanel'
 import VideoPane from '../components/watch/VideoPane'
 import { useAlternateSources } from '../useAlternateSources'
@@ -900,6 +901,7 @@ export default function WatchView({
                       has nothing to switch between. The server builds the
                       chosen track (no browser can pick one), so the first use
                       of a track pauses briefly and later ones are instant. */}
+                  <BrowserFrameRate source={source} />
                   {active === DOWNLOADED_PROVIDER && downloadedAudio.length > 1 && (
                     <label className="flex items-center gap-2 text-sm">
                       <span className="opacity-60">Audio</span>
