@@ -337,6 +337,7 @@ async def get_downloaded_tv(
     path: str = Query(...),
     audio: int = Query(0, ge=0),
     lang: str | None = None,
+    rung: int = Query(0, ge=0),
 ) -> Response:
     """A stored file re-encoded for a TV as it is watched, from where it is asked.
 
@@ -374,7 +375,7 @@ async def get_downloaded_tv(
     )
     try:
         command = downloaded.tv_stream_command(
-            target, start, audio, subtitle, tracks.video_hdr
+            target, start, audio, subtitle, tracks.video_hdr, rung
         )
     except RuntimeError as exc:  # no ffmpeg
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -507,6 +508,13 @@ async def get_downloaded_hls(
             media_type="application/vnd.apple.mpegurl",
             headers=dict(_CORS_HEADERS),
         )
+    # A rung the file has no use for — a fixed choice on a Chromecast asks for
+    # 720p of a 480p file — falls to the nearest the master offers below it,
+    # by real height, so the source counts at its own size.
+    variants = await asyncio.to_thread(downloaded.hls_variants, target)
+    if rung not in [step for step, *_ in variants]:
+        fits = [(height, step) for step, _w, height, _b in variants if height <= rung]
+        rung = max(fits)[1] if fits else variants[-1][0]
     lines = [
         "#EXTM3U",
         "#EXT-X-VERSION:3",

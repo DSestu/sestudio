@@ -9,7 +9,8 @@ import {
   dlnaVolumeBy, useDlnaState,
 } from '../../dlnaControl'
 import { useBrowserPlayerControls } from '../../browserPlayerControls'
-import { getCastQueue } from '../../castQueue'
+import { canRecast, getCastQueue, recastAt } from '../../castQueue'
+import CastQuality from './CastQuality'
 import type { Navigate } from '../../nav'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
 import { requestPullback } from '../../pullback'
@@ -55,6 +56,8 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   // While dragging the timeline, show the local value instead of live updates.
   const [seeking, setSeeking] = useState<number | null>(null)
   const closeTimer = useRef<number | null>(null)
+  // While the TV is being re-sent the video at another quality.
+  const [switching, setSwitching] = useState(false)
   // Desktop (≥ md) hovers to expand + clicks to open the series; mobile taps
   // the bar to expand. Viewport-based so it matches the md-only chevron.
   const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
@@ -271,6 +274,26 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                         {Math.round((live.muted ? 0 : live.volume) * 100)}
                       </span>
                     </>
+                  )}
+                </div>
+              )}
+
+              {canRecast() && (
+                <div className="flex items-center gap-2">
+                  {/* Re-sent from the current position: a TV cannot change
+                      quality inside a stream, so this restarts it. */}
+                  <CastQuality
+                    disabled={switching}
+                    onChange={() => {
+                      setSwitching(true)
+                      void recastAt(live.position).finally(() => setSwitching(false))
+                    }}
+                  />
+                  {switching && (
+                    <span className="text-xs text-base-content/60">
+                      <span className="loading loading-spinner loading-xs mr-1 align-middle" />
+                      Restarting the TV at the new quality…
+                    </span>
                   )}
                 </div>
               )}

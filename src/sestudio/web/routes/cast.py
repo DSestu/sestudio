@@ -80,6 +80,9 @@ class DlnaPlayRequest(BaseModel):
     title: str = "sestudio"
     #: The browser player's caption language, burnt in for a stored file.
     subtitle_lang: str | None = None
+    #: A lighter rung's height (see ``downloaded.HLS_LADDER``) for a stored
+    #: file, re-encoded down to it; 0 sends the best the TV takes.
+    quality: int = 0
 
 
 @router.post("/cast/dlna/play")
@@ -108,13 +111,21 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
         )
         # What a browser cannot play is what a TV is least likely to, and a
         # caption can only reach the TV inside the picture: both are re-encoded.
-        if burn or not await asyncio.to_thread(downloaded.browser_can_play, target):
+        # A lighter quality is an encode too: the file as stored is the best one.
+        lighter = 0 < body.quality < downloaded.TV_HEIGHT
+        if (
+            burn
+            or lighter
+            or not await asyncio.to_thread(downloaded.browser_can_play, target)
+        ):
             audio = int(query.get("audio", ["0"])[0])
             proxy_url = (
                 f"/api/downloaded/tv?path={urllib.parse.quote(stored)}&audio={audio}"
             )
             if burn:
                 proxy_url += f"&lang={urllib.parse.quote(lang)}"
+            if lighter:
+                proxy_url += f"&rung={body.quality}"
             mime_type = downloaded.TV_MEDIA_TYPE
             duration = await asyncio.to_thread(downloaded.duration_of, target)
         else:

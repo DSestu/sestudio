@@ -34,6 +34,9 @@ export interface PlayerPrefs {
    * each new source as the closest height at or below it. `undefined` — Auto.
    */
   quality?: number
+  /** The same for a cast, kept apart: the TV's link is not the browser's.
+   *  `undefined` — the best the TV takes (Auto on a Chromecast). */
+  tvQuality?: number
 }
 
 const DEFAULTS: PlayerPrefs = { volume: 1, muted: false, rate: 1 }

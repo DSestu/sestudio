@@ -358,6 +358,18 @@ def test_qsv_caps_in_its_bitrate_mode():
     assert args[args.index("-b:v") + 1] == "2500k"
 
 
+def test_a_tv_rung_is_a_smaller_frame_at_its_bitrate():
+    command = downloaded.tv_stream_command(Path("film.mkv"), 0.0, 0, None, False, 480)
+
+    graph = command[command.index("-filter_complex") + 1]
+    assert "scale=854:480:" in graph and "pad=854:480:" in graph
+    assert command[command.index("-maxrate") + 1] == "1200k"
+    # The best a TV is sent stays 1080p, uncapped, whatever the source is.
+    best = downloaded.tv_stream_command(Path("film.mkv"), 0.0, 0, None, False, 2160)
+    assert "pad=1920:1080:" in best[best.index("-filter_complex") + 1]
+    assert "-maxrate" not in best
+
+
 def test_there_is_no_segment_past_the_end(tmp_path: Path, monkeypatch):
     file = tmp_path / "film.avi"
     file.write_bytes(b"x")

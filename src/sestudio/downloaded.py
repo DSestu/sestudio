@@ -1252,12 +1252,25 @@ TV_CONTENT_FEATURES = (
     "DLNA.ORG_OP=10;DLNA.ORG_CI=1;DLNA.ORG_FLAGS=01700000000000000000000000000000"
 )
 
-# Into a 1920x1080 frame, letterboxed, the way the TV would show it anyway. A
-# fixed frame is also what a picture subtitle's canvas is drawn against.
-_TV_FIT = (
-    "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2,"
-    "pad=1920:1080:-1:-1"
-)
+#: Height of the frame a TV is sent at best. Lighter rungs are smaller frames.
+TV_HEIGHT = 1080
+
+
+def _tv_frame(rung: int) -> tuple[int, int]:
+    """The 16:9 frame for *rung* (a height from ``HLS_LADDER``), 1080p for 0."""
+    height = rung if 0 < rung < TV_HEIGHT else TV_HEIGHT
+    return round(height * 16 / 9 / 2) * 2, height
+
+
+def _tv_fit(width: int, height: int) -> str:
+    # Into a fixed frame, letterboxed, the way the TV would show it anyway. A
+    # fixed frame is also what a picture subtitle's canvas is drawn against.
+    return (
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
+        f"pad={width}:{height}:-1:-1"
+    )
+
+
 # HDR to SDR. Without it a PQ picture on an SDR stream is grey and flat.
 _TV_TONEMAP = (
     "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,"
@@ -1306,23 +1319,29 @@ def tv_stream_command(
     audio: int,
     subtitle: Track | Path | None,
     hdr: bool,
+    rung: int = 0,
 ) -> list[str]:
     """ffmpeg, re-encoding *file* from *start* for a TV, to stdout.
 
     H.264 and stereo AAC in MPEG-TS at 1080p: what every DLNA TV decodes, and
     what one core keeps ahead of playback even from a 4K HDR source. Nothing is
     written to disk — seeking is a new run from the new *start*.
+
+    A *rung* below 1080 sends a smaller frame capped at that rung's bitrate, for
+    a TV on a link that cannot keep up with the full one.
     """
+    width, height = _tv_frame(rung)
+    kbps = dict(HLS_LADDER).get(height, 0) if height < TV_HEIGHT else 0
     seek = ["-ss", f"{start:.3f}"]
     inputs = [*seek, "-i", str(file)]
-    video = f"{_TV_FIT},{_TV_TONEMAP + ',' if hdr else ''}format=yuv420p"
+    video = f"{_tv_fit(width, height)},{_TV_TONEMAP + ',' if hdr else ''}format=yuv420p"
     if isinstance(subtitle, Track) and not subtitle.text:
         # A picture subtitle is overlaid from a second reading of the same file.
         # Read from the first, its sparse packets stall the demuxer behind the
         # audio: a TrueHD film then encodes at a fifth of real time.
         inputs += [*seek, "-i", str(file)]
         graph = (
-            f"[0:v:0]{video}[b];[1:s:{subtitle.index}]scale=1920:1080[s];"
+            f"[0:v:0]{video}[b];[1:s:{subtitle.index}]scale={width}:{height}[s];"
             "[b][s]overlay=eof_action=pass[v]"
         )
     elif subtitle is not None:
@@ -1351,11 +1370,11 @@ def tv_stream_command(
         "[v]",
         "-map",
         f"0:a:{audio}?",
-        *_h264_args(h264_encoder(), 21),
+        *_h264_args(h264_encoder(), 21, kbps),
         "-c:a",
         "aac",
         "-b:a",
-        "192k",
+        "96k" if kbps and kbps <= 700 else "192k",
         "-ac",
         "2",
         # Timestamps on the film's own clock, so a seek reads as that position.
