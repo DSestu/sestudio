@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.0](https://github.com/DSestu/sestudio/compare/v0.18.0...v0.19.0) (2026-10-23)
+
+
+### New features
+
+* cast any downloaded file to a DLNA TV, re-encoded as it plays ([#67](https://github.com/DSestu/sestudio/issues/67)) ([0e8fc3f](https://github.com/DSestu/sestudio/commit/0e8fc3f782d4b2e0224e13d68ba5f4ca33ca753c))
+
+
+### Bug fixes
+
+* show the frame grab on Watching rows for unmatched downloads ([#65](https://github.com/DSestu/sestudio/issues/65)) ([40c54ef](https://github.com/DSestu/sestudio/commit/40c54ef2b95b700ac5fd851bc7e4683db7f8a005))
+
 ## [0.18.0](https://github.com/DSestu/sestudio/compare/v0.17.0...v0.18.0) (2026-10-19)
 
 
