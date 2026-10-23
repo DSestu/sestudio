@@ -40,14 +40,7 @@ _THUMB_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="thumb")
 # not queue a second ffmpeg run for the same still.
 _THUMBS_PENDING: dict[str, Future[Path | None]] = {}
 
-# Rebuilt-audio copies likewise: one at a time, because a re-encode is a CPU
-# core for minutes and two at once would only make both slower. The browser
-# polls ``/downloaded/audio`` and plays once the copy exists.
-_AUDIO_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="audio")
-_AUDIO_PENDING: dict[str, Future[Path | None]] = {}
-
-# On-the-fly segments for a file no browser will open. Unlike the two pools
-# above these are waited on rather than answered with a 404: the player has
+# On-the-fly segments of a downloaded file. Unlike the thumbnails above these are waited on rather than answered with a 404: the player has
 # asked for bytes it is about to play, and a segment is under a second of work.
 # Three at a time, so one viewer's read-ahead is not serialised and two viewers
 # cannot take the machine.
@@ -254,8 +247,8 @@ async def get_downloaded_file(
     target = _resolved(path)
     if audio is not None:
         # Built here if it is not yet — which waits for ffmpeg, minutes for a
-        # re-encode. The browser asks ``/downloaded/audio`` first and only comes
-        # here once that says ready; a renderer that comes straight here waits.
+        # re-encode. Only a TV asks for one now (a browser gets the track
+        # encoded into its HLS segments), and it waits.
         alternate = await asyncio.to_thread(
             downloaded.alternate_audio, target, path, audio
         )
@@ -418,48 +411,6 @@ def _track_payload(track: downloaded.Track) -> dict[str, Any]:
         "label": track.label,
         "default": track.default,
         "text": track.text,
-    }
-
-
-@router.get("/downloaded/audio")
-async def get_downloaded_audio_ready(
-    path: str = Query(...), index: int = Query(..., ge=0)
-) -> dict[str, Any]:
-    """Whether the copy carrying audio track *index* exists yet — and if not,
-    start making it in the background.
-
-    The file route builds the copy itself when asked, but that means waiting on
-    ffmpeg inside the request: seconds for a copy, minutes for the re-encode an
-    AC-3 track needs, and the player's decode check gives up long before. So the
-    browser asks here, polls until ``ready``, and only then loads the file.
-    A first track that plays as it is needs no copy and is ready at once.
-    """
-    target = _resolved(path)
-    tracks = await asyncio.to_thread(downloaded.tracks_of, target)
-    if index >= len(tracks.audio):
-        raise HTTPException(status_code=404, detail="No such audio track")
-    if index == 0 and downloaded.browser_plays(tracks.audio[0].codec):
-        return {"ready": True, "failed": False, "progress": None}
-    if downloaded.cached_alternate_audio(target, path, index) is not None:
-        return {"ready": True, "failed": False, "progress": None}
-    key = f"{path}|{index}"
-    future = _AUDIO_PENDING.get(key)
-    if future is None:
-        future = _AUDIO_POOL.submit(downloaded.alternate_audio, target, path, index)
-        _AUDIO_PENDING[key] = future
-        # A build that worked is forgotten here: the file on disk is its record,
-        # and if that is ever cleared the next ask rebuilds it. One that failed
-        # stays on record, or the next poll would queue the same doomed encode
-        # again, every few seconds, for ever.
-        future.add_done_callback(
-            lambda f, k=key: f.result() is not None and _AUDIO_PENDING.pop(k, None)
-        )
-    failed = future.done() and future.result() is None
-    return {
-        "ready": False,
-        "failed": failed,
-        # 0..1 while ffmpeg runs; None while it is still queued behind another.
-        "progress": downloaded.audio_progress(target, path, index),
     }
 
 
@@ -648,20 +599,7 @@ async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
     ]
 
     return {
-        # Whether playback has to go through the HLS route above rather than
-        # the file itself. Answered here because the view already asks for this
-        # before it plays anything, so it costs no extra round trip.
-        "needs_hls": not downloaded.browser_can_play(target),
-        "audio": [
-            {
-                **_track_payload(track),
-                # Whether a browser plays the codec as it is. False means the
-                # track is only heard through the rebuilt copy (see
-                # ``/downloaded/audio``), so the client asks for that instead.
-                "native": downloaded.browser_plays(track.codec),
-            }
-            for track in tracks.audio
-        ],
+        "audio": [_track_payload(track) for track in tracks.audio],
         "subtitles": subtitles,
     }
 

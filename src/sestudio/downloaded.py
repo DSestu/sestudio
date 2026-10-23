@@ -619,29 +619,6 @@ def _audio_path(file: Path, relative: str, index: int) -> Path | None:
     return _audio_dir() / f"{key}.mp4"
 
 
-def cached_alternate_audio(file: Path, relative: str, index: int) -> Path | None:
-    """The rebuilt file for track *index* if already made, else None. No ffmpeg."""
-    out = _audio_path(file, relative, index)
-    if out is not None and out.is_file() and out.stat().st_size > 0:
-        return out
-    return None
-
-
-# How far along each rebuild is, 0..1, keyed on its output path. Written by
-# the thread running ffmpeg, read by the readiness endpoint, so a browser can
-# tell a re-encode in progress from a page that has hung.
-_audio_progress: dict[str, float] = {}
-
-
-def audio_progress(file: Path, relative: str, index: int) -> float | None:
-    """Fraction of the rebuild for track *index* done so far; None if not running."""
-    out = _audio_path(file, relative, index)
-    return None if out is None else _audio_progress.get(str(out))
-
-
-_OUT_TIME_RE = re.compile(r"^out_time_(?:us|ms)=(\d+)")
-
-
 def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
     """*file* rebuilt with audio track *index* as its only audio, cached on disk.
 
@@ -680,20 +657,13 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
         else ["-c:a", "aac", "-b:a", "192k"]
     )
     tmp = out.with_name(f"{key}.{os.getpid()}.{threading.get_ident()}.tmp.mp4")
-    total = duration_of(file)
-    _audio_progress[str(out)] = 0.0
     try:
-        proc = subprocess.Popen(
+        result = subprocess.run(
             [
                 binary,
                 "-nostdin",
                 "-loglevel",
                 "error",
-                # Position reports on stdout, one `out_time_us=` line a second,
-                # so the browser can show how far a minutes-long encode is.
-                "-nostats",
-                "-progress",
-                "pipe:1",
                 "-y",
                 "-i",
                 str(file),
@@ -711,27 +681,15 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
                 "+faststart",
                 str(tmp),
             ],
-            stdout=subprocess.PIPE,
+            # Generous: a copy takes a second, but re-encoding the audio of a long
+            # film is minutes, and dying half way would leave the track permanently
+            # unavailable.
+            timeout=1800,
+            check=False,
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            text=True,
         )
-        # Generous: a copy takes a second, but re-encoding the audio of a long
-        # film is minutes, and dying half way would leave the track permanently
-        # unavailable.
-        watchdog = threading.Timer(1800, proc.kill)
-        watchdog.start()
-        try:
-            assert proc.stdout is not None
-            for line in proc.stdout:
-                match = _OUT_TIME_RE.match(line)
-                if match and total:
-                    # `out_time_ms` is microseconds too (an old ffmpeg misnomer).
-                    done = int(match.group(1)) / 1_000_000 / total
-                    _audio_progress[str(out)] = min(done, 0.99)
-            returncode = proc.wait()
-        finally:
-            watchdog.cancel()
-        if returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
+        if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
             os.replace(tmp, out)
             return out
         return None
@@ -739,7 +697,6 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
         return None
     finally:
         tmp.unlink(missing_ok=True)
-        _audio_progress.pop(str(out), None)
 
 
 #: Segment length. Six seconds is the usual HLS compromise: short enough that a

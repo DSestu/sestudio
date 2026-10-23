@@ -6,8 +6,9 @@ const HEIGHTS = [720, 480, 360, 240, 144]
 
 /** Picks the quality a TV is sent at, and remembers it for the next cast. */
 export default function CastQuality({ onChange, disabled }: {
-  /** Told after the choice is saved, e.g. to re-send what is playing. */
-  onChange?: () => void
+  /** Told the height (0 for the best) after it is saved, e.g. to re-send
+   *  what is playing. */
+  onChange?: (quality: number) => void
   disabled?: boolean
 }) {
   return (
@@ -21,7 +22,7 @@ export default function CastQuality({ onChange, disabled }: {
         onChange={e => {
           const height = Number(e.target.value)
           savePlayerPrefs({ tvQuality: height || undefined })
-          onChange?.()
+          onChange?.(height)
         }}
       >
         <option value={0}>Best</option>

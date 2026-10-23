@@ -171,7 +171,28 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
     # Cache the device so the session can be controlled (play/pause/seek/etc).
     request.app.state.dlna_dmr = dmr
     request.app.state.dlna_title = body.title
+    # Kept so the quality can be changed later from any page, even one opened
+    # after the cast began: only the server knows what the TV was sent.
+    request.app.state.dlna_play = body
     return {"status": "playing", "renderer": body.renderer_udn, "media_url": media_url}
+
+
+class DlnaQualityRequest(BaseModel):
+    quality: int = 0
+
+
+@router.post("/cast/dlna/quality")
+async def dlna_quality(body: DlnaQualityRequest, request: Request) -> dict[str, Any]:
+    """Send what is on the TV again at another quality (see ``DlnaPlayRequest``).
+
+    A TV cannot change quality inside a stream, so this restarts it; the caller
+    seeks back to where it was once the TV has it.
+    """
+    _active_dmr(request)
+    last: DlnaPlayRequest | None = getattr(request.app.state, "dlna_play", None)
+    if last is None:
+        raise HTTPException(status_code=409, detail="No active DLNA session")
+    return await dlna_play(last.model_copy(update={"quality": body.quality}), request)
 
 
 def _active_dmr(request: Request):

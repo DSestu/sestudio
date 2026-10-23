@@ -186,6 +186,7 @@ def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None, qua
 
     async def fake_play(location, media_url, title, mime_type, duration=None):
         calls.update(media_url=media_url, mime_type=mime_type, duration=duration)
+        return object()  # the renderer, kept as the session
 
     monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
     monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
@@ -300,3 +301,22 @@ def test_play_failure_maps_to_502(client, monkeypatch):
     )
     assert resp.status_code == 502
     assert "renderer refused" in resp.json()["detail"]
+
+
+def test_quality_is_changed_by_sending_the_same_video_again(client, monkeypatch):
+    """Any page can change it, even one opened after the cast began: the server
+    holds what the TV was sent."""
+    calls = _cast_stored(client, monkeypatch, playable=True)
+    assert "/api/downloaded/file?" in calls["media_url"]
+
+    resp = client.post("/api/cast/dlna/quality", json={"quality": 360})
+
+    assert resp.status_code == 200
+    assert "/api/downloaded/tv?" in calls["media_url"]
+    assert calls["media_url"].endswith("&rung=360")
+
+
+def test_quality_without_a_cast_is_a_409(client):
+    assert (
+        client.post("/api/cast/dlna/quality", json={"quality": 360}).status_code == 409
+    )

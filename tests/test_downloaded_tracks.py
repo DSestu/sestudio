@@ -395,49 +395,23 @@ def test_a_first_track_no_browser_plays_is_rebuilt(tmp_path: Path, monkeypatch):
         ),
     )
     monkeypatch.setattr(downloaded, "_audio_dir", lambda: tmp_path / "audio")
-    assert downloaded.cached_alternate_audio(video, "film.mkv", 0) is None
-
-    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 100.0)
     monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
     commands: list[list[str]] = []
-    seen: list[float | None] = []
 
-    class FakeFfmpeg:
-        """Reports two positions, then finishes. Progress is read mid-run."""
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        Path(command[-1]).write_bytes(b"mp4")
+        return subprocess.CompletedProcess(command, 0)
 
-        def __init__(self, command, **_kwargs):
-            commands.append(command)
-            self.command = command
-
-        @property
-        def stdout(self):
-            for line in (
-                "out_time_us=25000000\n",
-                "frame=1\n",
-                "out_time_us=75000000\n",
-            ):
-                seen.append(downloaded.audio_progress(video, "film.mkv", 0))
-                yield line
-
-        def wait(self):
-            Path(self.command[-1]).write_bytes(b"mp4")
-            return 0
-
-        def kill(self):  # pragma: no cover — only on the 30-minute watchdog
-            pass
-
-    monkeypatch.setattr(downloaded.subprocess, "Popen", FakeFfmpeg)
+    monkeypatch.setattr(downloaded.subprocess, "run", fake_run)
 
     out = downloaded.alternate_audio(video, "film.mkv", 0)
 
     assert out is not None and out.read_bytes() == b"mp4"
     assert commands[0][commands[0].index("-c:a") + 1] == "aac"
-    # Read before each line: 0 at the start, a quarter after the first report,
-    # unchanged by a non-position line — and gone once the run is over.
-    assert seen == [0.0, 0.25, 0.25]
-    assert downloaded.audio_progress(video, "film.mkv", 0) is None
     # Made once: from here on it is served from the cache.
-    assert downloaded.cached_alternate_audio(video, "film.mkv", 0) == out
+    assert downloaded.alternate_audio(video, "film.mkv", 0) == out
+    assert len(commands) == 1
 
 
 def test_a_stem_with_glob_characters_is_matched_literally(tmp_path: Path):
