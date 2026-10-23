@@ -156,7 +156,8 @@ def test_play_provider_mp4_at_a_lighter_quality_is_re_encoded(client, monkeypatc
 
     monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
     monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
-    monkeypatch.setattr(cast.downloaded, "probe_stream", lambda url, hls: None)
+    probe = cast.downloaded.StreamProbe(1320.0, 1920, 1080, 0, 0, False, False)
+    monkeypatch.setattr(cast.downloaded, "probe_stream", lambda url, hls: probe)
     resp = client.post(
         "/api/cast/dlna/play",
         json={
@@ -194,6 +195,14 @@ def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None, qua
     monkeypatch.setattr(cast.downloaded, "browser_can_play", lambda f: playable)
     monkeypatch.setattr(cast.downloaded, "tv_subtitle", lambda f, lang: subtitle)
     monkeypatch.setattr(cast.downloaded, "duration_of", lambda f: 8160.0)
+    # A 4K film: lighter steps exist both above and below 1080p.
+    monkeypatch.setattr(
+        cast.downloaded,
+        "tracks_of",
+        lambda f: cast.downloaded.MediaTracks(
+            audio=[], subtitles=[], video_width=3840, video_height=2160
+        ),
+    )
     resp = client.post(
         "/api/cast/dlna/play",
         json={
@@ -241,8 +250,33 @@ def test_play_stored_file_at_a_lighter_quality_is_re_encoded_down(client, monkey
 
 
 def test_play_stored_file_at_best_quality_goes_as_it_is(client, monkeypatch):
-    calls = _cast_stored(client, monkeypatch, playable=True, quality=1080)
-    assert "/api/downloaded/file?" in calls["media_url"]
+    """Its own size, or more, is the file itself: nothing to re-encode."""
+    for quality in (2160, 4320):
+        calls = _cast_stored(client, monkeypatch, playable=True, quality=quality)
+        assert "/api/downloaded/file?" in calls["media_url"]
+
+
+def test_play_stored_file_above_1080p_keeps_that_size(client, monkeypatch):
+    calls = _cast_stored(client, monkeypatch, playable=True, quality=1440)
+    assert calls["media_url"].endswith("&rung=1440")
+
+
+def test_the_qualities_offered_are_the_source_and_every_step_below(client, monkeypatch):
+    _cast_stored(client, monkeypatch, playable=True)
+
+    # The video last sent to the TV, for a page opened after the cast began.
+    resp = client.get("/api/cast/qualities")
+    assert resp.json() == {"heights": [2160, 1440, 1080, 720, 480, 360, 240, 144]}
+    # Or any media URL the server handed out.
+    resp = client.get(
+        "/api/cast/qualities",
+        params={"url": "http://192.168.1.20:8080/api/downloaded/hls?path=x.mkv"},
+    )
+    assert resp.json()["heights"][0] == 2160
+
+
+def test_no_qualities_are_offered_before_anything_is_cast(client):
+    assert client.get("/api/cast/qualities").json() == {"heights": []}
 
 
 def test_play_stored_file_with_no_track_in_that_language_goes_as_it_is(

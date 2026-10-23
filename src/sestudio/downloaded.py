@@ -1391,13 +1391,14 @@ TV_CONTENT_FEATURES = (
     "DLNA.ORG_OP=10;DLNA.ORG_CI=1;DLNA.ORG_FLAGS=01700000000000000000000000000000"
 )
 
-#: Height of the frame a TV is sent at best. Lighter rungs are smaller frames.
+#: Height of the frame a TV is sent by default. A rung is its own frame, above
+#: this too when the source is bigger.
 TV_HEIGHT = 1080
 
 
 def _tv_frame(rung: int) -> tuple[int, int]:
     """The 16:9 frame for *rung* (a height from ``HLS_LADDER``), 1080p for 0."""
-    height = rung if 0 < rung < TV_HEIGHT else TV_HEIGHT
+    height = rung if rung > 0 else TV_HEIGHT
     return round(height * 16 / 9 / 2) * 2, height
 
 
@@ -1467,14 +1468,14 @@ def tv_stream_command(
     what one core keeps ahead of playback even from a 4K HDR source. Nothing is
     written to disk — seeking is a new run from the new *start*.
 
-    A *rung* below 1080 sends a smaller frame capped at that rung's bitrate, for
-    a TV on a link that cannot keep up with the full one.
+    A *rung* sends that rung's frame capped at its bitrate: smaller for a TV on
+    a link that cannot keep up, larger than 1080p when the source is.
 
     With *stream*, *file* is a URL of a provider's stream that it describes, and
     its best picture and the audio beside it are what is sent.
     """
     width, height = _tv_frame(rung)
-    kbps = dict(HLS_LADDER).get(height, 0) if height < TV_HEIGHT else 0
+    kbps = dict(HLS_LADDER).get(height, 0) if rung else 0
     # None from the very start, as for a segment (see ``_encode_segment``).
     seek = ["-ss", f"{start:.3f}"] if start else []
     opts = stream_input_opts(stream, hls=False) if stream else []

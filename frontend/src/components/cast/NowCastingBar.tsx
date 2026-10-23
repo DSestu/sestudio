@@ -285,6 +285,8 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                   {/* Re-sent from the current position: a TV cannot change
                       quality inside a stream, so this restarts it. */}
                   <CastQuality
+                    // DLNA: the server knows what it sent the TV.
+                    url={target === 'chromecast' ? cast.mediaUrl : undefined}
                     disabled={switching}
                     onChange={quality => {
                       setSwitching(true)

@@ -241,7 +241,7 @@ export default function OutputSwitcher({
       {/* Device picker — inline, not an overlay */}
       {picking && (
         <div className="rounded-box border border-base-300 bg-base-200 p-3 flex flex-col gap-3">
-          <CastQuality disabled={busy} />
+          <CastQuality url={source?.proxy_url} disabled={busy} />
           <div>
             <p className="text-xs uppercase tracking-wide text-base-content/40 mb-1">Chromecast &amp; AirPlay</p>
             {castAvailable ? (

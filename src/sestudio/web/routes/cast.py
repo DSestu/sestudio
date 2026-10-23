@@ -12,7 +12,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from sestudio import dlna, downloaded
-from sestudio.web.routes.downloaded import _resolved
+from sestudio.web.routes.downloaded import _resolved, offered_rung
 from sestudio.web.routes.stream import transcode_source
 
 logger = logging.getLogger(__name__)
@@ -113,7 +113,15 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
         # What a browser cannot play is what a TV is least likely to, and a
         # caption can only reach the TV inside the picture: both are re-encoded.
         # A lighter quality is an encode too: the file as stored is the best one.
-        lighter = 0 < body.quality < downloaded.TV_HEIGHT
+        # One at or above the file's own size is that best one, not an encode.
+        rung = (
+            offered_rung(
+                await asyncio.to_thread(downloaded.hls_variants, target), body.quality
+            )
+            if body.quality
+            else 0
+        )
+        lighter = rung != 0
         if (
             burn
             or lighter
@@ -126,7 +134,7 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
             if burn:
                 proxy_url += f"&lang={urllib.parse.quote(lang)}"
             if lighter:
-                proxy_url += f"&rung={body.quality}"
+                proxy_url += f"&rung={rung}"
             mime_type = downloaded.TV_MEDIA_TYPE
             duration = await asyncio.to_thread(downloaded.duration_of, target)
         else:
@@ -136,15 +144,23 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
     elif parsed.path == "/api/stream/proxy":
         token = urllib.parse.parse_qs(parsed.query).get("token", [""])[0]
         source, hls = transcode_source(request, token)
-        lighter = 0 < body.quality < downloaded.TV_HEIGHT
+        probe = (
+            await asyncio.to_thread(downloaded.probe_stream, source, hls=hls)
+            if hls or body.quality
+            else None
+        )
+        rung = (
+            offered_rung(downloaded.ladder(probe.width, probe.height), body.quality)
+            if probe and body.quality
+            else 0
+        )
         # Few TVs follow HLS, and a lighter quality is an encode: both get the
         # provider's stream re-encoded into one continuous one.
-        if hls or lighter:
+        if hls or rung:
             proxy_url = "/api/stream/tv?" + urllib.parse.urlencode({"token": token})
-            if lighter:
-                proxy_url += f"&rung={body.quality}"
+            if rung:
+                proxy_url += f"&rung={rung}"
             mime_type = downloaded.TV_MEDIA_TYPE
-            probe = await asyncio.to_thread(downloaded.probe_stream, source, hls=hls)
             duration = probe.duration if probe else None
 
     # The renderer fetches the stream itself, so build an absolute HTTP URL on
@@ -175,6 +191,36 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
     # after the cast began: only the server knows what the TV was sent.
     request.app.state.dlna_play = body
     return {"status": "playing", "renderer": body.renderer_udn, "media_url": media_url}
+
+
+@router.get("/cast/qualities")
+async def cast_qualities(request: Request, url: str | None = None) -> dict[str, Any]:
+    """The heights a cast of *url* can be sent at, the source's own first.
+
+    *url* is any media URL this server hands out for a stored file or a
+    provider's stream. Without it, the video last sent to a DLNA TV, so a page
+    opened after the cast began can still offer the right list. Empty when the
+    size is unknown; the caller then offers fixed steps the server clamps.
+    """
+    if url is None:
+        last: DlnaPlayRequest | None = getattr(request.app.state, "dlna_play", None)
+        if last is None:
+            return {"heights": []}
+        url = last.proxy_url
+    parsed = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qs(parsed.query)
+    if parsed.path.startswith("/api/downloaded/"):
+        target = _resolved(query.get("path", [""])[0])
+        variants = await asyncio.to_thread(downloaded.hls_variants, target)
+    elif parsed.path.startswith("/api/stream/"):
+        source, hls = transcode_source(request, query.get("token", [""])[0])
+        probe = await asyncio.to_thread(downloaded.probe_stream, source, hls=hls)
+        if probe is None:
+            return {"heights": []}
+        variants = downloaded.ladder(probe.width, probe.height)
+    else:
+        return {"heights": []}
+    return {"heights": [height for _step, _w, height, _b in variants if height]}
 
 
 class DlnaQualityRequest(BaseModel):
