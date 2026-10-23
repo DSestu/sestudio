@@ -265,18 +265,57 @@ def test_the_qualities_offered_are_the_source_and_every_step_below(client, monke
     _cast_stored(client, monkeypatch, playable=True)
 
     # The video last sent to the TV, for a page opened after the cast began.
-    resp = client.get("/api/cast/qualities")
-    assert resp.json() == {"heights": [2160, 1440, 1080, 720, 480, 360, 240, 144]}
+    resp = client.get("/api/media/options")
+    assert resp.json()["heights"] == [2160, 1440, 1080, 720, 480, 360, 240, 144]
     # Or any media URL the server handed out.
     resp = client.get(
-        "/api/cast/qualities",
+        "/api/media/options",
         params={"url": "http://192.168.1.20:8080/api/downloaded/hls?path=x.mkv"},
     )
     assert resp.json()["heights"][0] == 2160
 
 
 def test_no_qualities_are_offered_before_anything_is_cast(client):
-    assert client.get("/api/cast/qualities").json() == {"heights": []}
+    assert client.get("/api/media/options").json() == {
+        "heights": [],
+        "fps": 0,
+        "frame_rates": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("source_fps", "gpu", "offered"),
+    [
+        # A film: every rate is above it, drawn by AI — only with a GPU.
+        (23.976, True, [30, 60, 120, 144]),
+        (23.976, False, []),
+        # 60 fps: 30 is a drop and needs nothing; 60 is the source itself.
+        (60.0, False, [30]),
+        (60.0, True, [30, 120, 144]),
+        # Unknown rate: nothing can be worked out from it.
+        (0.0, True, []),
+    ],
+)
+def test_frame_rates_offered_depend_on_the_source_and_the_gpu(
+    client, monkeypatch, source_fps, gpu, offered
+):
+    tracks = cast.downloaded.MediaTracks(
+        audio=[],
+        subtitles=[],
+        video_width=1920,
+        video_height=1080,
+        video_fps=source_fps,
+    )
+    monkeypatch.setattr(cast.downloaded, "tracks_of", lambda f: tracks)
+    monkeypatch.setattr(cast, "_resolved", lambda path: Path("/films") / path)
+    monkeypatch.setattr(cast.interpolate, "status", lambda: {"gpu": gpu})
+
+    body = client.get(
+        "/api/media/options", params={"url": "/api/downloaded/hls?path=x.mkv"}
+    ).json()
+
+    assert body["fps"] == source_fps
+    assert body["frame_rates"] == offered
 
 
 def test_play_stored_file_with_no_track_in_that_language_goes_as_it_is(

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { castQualities } from '../../api'
+import { mediaOptions } from '../../api'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
 
 /** Offered while the source's own size is unknown; the server clamps a pick
@@ -21,7 +21,7 @@ export default function CastQuality({ url, onChange, disabled }: {
   const [saved, setSaved] = useState(() => loadPlayerPrefs().tvQuality ?? 0)
   useEffect(() => {
     let live = true
-    castQualities(url).then(list => { if (live) setHeights(list) })
+    mediaOptions(url).then(options => { if (live) setHeights(options.heights) })
     return () => { live = false }
   }, [url])
 

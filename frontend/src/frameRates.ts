@@ -1,0 +1,19 @@
+/** What to call a frame rate in a menu: a whole number unless it is not
+ *  (23.976 reads as 23.98). */
+export function fpsLabel(fps: number): string {
+  return `${Number.isInteger(fps) ? fps : fps.toFixed(2)} fps`
+}
+
+/** Whether *fps* is drawn by AI from a *source* that has fewer frames. */
+export function isDrawn(fps: number, source: number): boolean {
+  return source > 0 && fps > source + 0.5
+}
+
+/** *url* — one of the server's quality ladders — at *fps*, 0 for the source's own. */
+export function withFps(url: string, fps: number): string {
+  const [path, query = ''] = url.split('?')
+  const params = new URLSearchParams(query)
+  params.delete('fps')
+  if (fps) params.set('fps', String(fps))
+  return `${path}?${params}`
+}

@@ -23,6 +23,7 @@ from sestudio.web.proxy import (
     verify,
 )
 from sestudio.web.routes.downloaded import (
+    check_fps,
     master_playlist,
     media_playlist,
     offered_rung,
@@ -296,13 +297,15 @@ _TRANSCODE_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="stream-h
 _TRANSCODE_PENDING: dict[str, Future[Path | None]] = {}
 
 
-def _queue_segment(url: str, index: int, rung: int, hls: bool) -> Future[Path | None]:
+def _queue_segment(
+    url: str, index: int, rung: int, hls: bool, fps: int = 0
+) -> Future[Path | None]:
     """The running build for one segment, coalesced as for a stored file."""
-    key = f"{url}|{index}|{rung}"
+    key = f"{url}|{index}|{rung}|{fps}"
     future = _TRANSCODE_PENDING.get(key)
     if future is None:
         future = _TRANSCODE_POOL.submit(
-            lambda: downloaded.stream_segment(url, index, rung, hls=hls)
+            lambda: downloaded.stream_segment(url, index, rung, hls=hls, fps=fps)
         )
         _TRANSCODE_PENDING[key] = future
         future.add_done_callback(lambda _f, k=key: _TRANSCODE_PENDING.pop(k, None))
@@ -318,32 +321,41 @@ async def _probe(request: Request, token: str) -> tuple[str, downloaded.StreamPr
 
 
 @router.get("/stream/hls")
-async def stream_hls(token: str, request: Request, rung: int | None = None) -> Response:
+async def stream_hls(
+    token: str, request: Request, rung: int | None = None, fps: int = 0
+) -> Response:
     """A provider's stream re-encoded as it plays, as ``/downloaded/hls`` is a
     stored file: the master without *rung*, that quality's segments with it."""
+    check_fps(fps)
     url, probe = await _probe(request, token)
     durations = downloaded.segment_durations(probe.duration)
     if durations is None:
         raise HTTPException(status_code=502, detail="Length of that stream is unknown")
     query = urllib.parse.urlencode({"token": token})
+    rate = f"&fps={fps}" if fps else ""
     variants = downloaded.ladder(probe.width, probe.height)
     if rung is None:
-        return master_playlist(variants, f"hls?{query}")
+        return master_playlist(variants, f"hls?{query}{rate}", fps, probe.fps)
     rung = offered_rung(variants, rung)
-    response = media_playlist(durations, f"segment?{query}&rung={rung}")
+    response = media_playlist(durations, f"segment?{query}&rung={rung}{rate}")
     # Warmed as a stored file's are: the player wants the first one at once.
     for index in range(min(3, len(durations))):
-        _queue_segment(url, index, rung, probe.hls)
+        _queue_segment(url, index, rung, probe.hls, fps)
     return response
 
 
 @router.get("/stream/segment")
 async def stream_segment(
-    token: str, request: Request, index: int = Query(..., ge=0), rung: int = 0
+    token: str,
+    request: Request,
+    index: int = Query(..., ge=0),
+    rung: int = 0,
+    fps: int = 0,
 ) -> Response:
     """One segment of the playlist above, transcoded now if it is not cached."""
+    check_fps(fps)
     url, hls = transcode_source(request, token)
-    segment = await asyncio.wrap_future(_queue_segment(url, index, rung, hls))
+    segment = await asyncio.wrap_future(_queue_segment(url, index, rung, hls, fps))
     if segment is None:
         raise HTTPException(status_code=404, detail="No such segment")
     return FileResponse(segment, media_type="video/mp2t", headers=dict(_CORS_HEADERS))

@@ -415,18 +415,18 @@ def _track_payload(track: downloaded.Track) -> dict[str, Any]:
 
 
 def _queue_segment(
-    target: Path, path: str, index: int, audio: int, rung: int = 0
+    target: Path, path: str, index: int, audio: int, rung: int = 0, fps: int = 0
 ) -> Future[Path | None]:
     """The running build for one segment, started if it is not already going.
 
     Coalesced per segment, so a read-ahead, a retry and the warm-up below never
     start the same encode twice.
     """
-    key = f"{path}|{index}|{audio}|{rung}"
+    key = f"{path}|{index}|{audio}|{rung}|{fps}"
     future = _HLS_PENDING.get(key)
     if future is None:
         future = _HLS_POOL.submit(
-            downloaded.hls_segment, target, path, index, audio, rung
+            downloaded.hls_segment, target, path, index, audio, rung, fps
         )
         _HLS_PENDING[key] = future
         future.add_done_callback(lambda _f, k=key: _HLS_PENDING.pop(k, None))
@@ -435,7 +435,7 @@ def _queue_segment(
 
 @router.get("/downloaded/hls")
 async def get_downloaded_hls(
-    path: str = Query(...), audio: int = 0, rung: int | None = None
+    path: str = Query(...), audio: int = 0, rung: int | None = None, fps: int = 0
 ) -> Response:
     """A playlist for a downloaded file, transcoded as it is played.
 
@@ -456,16 +456,25 @@ async def get_downloaded_hls(
     fetches that one segment rather than waiting for everything before it.
     """
     target = _resolved(path)
+    check_fps(fps)
     durations = await asyncio.to_thread(downloaded.hls_segment_durations, target)
     if durations is None:
         raise HTTPException(status_code=404, detail="Length of that file is unknown")
     quoted = quote(path)
+    # Only when asked for, so the URLs of the source's own rate stay as they were.
+    rate = f"&fps={fps}" if fps else ""
     variants = await asyncio.to_thread(downloaded.hls_variants, target)
     if rung is None:
-        return master_playlist(variants, f"hls?path={quoted}&audio={audio}")
+        tracks = await asyncio.to_thread(downloaded.tracks_of, target)
+        return master_playlist(
+            variants,
+            f"hls?path={quoted}&audio={audio}{rate}",
+            fps,
+            tracks.video_fps,
+        )
     rung = offered_rung(variants, rung)
     response = media_playlist(
-        durations, f"segment?path={quoted}&audio={audio}&rung={rung}"
+        durations, f"segment?path={quoted}&audio={audio}&rung={rung}{rate}"
     )
 
     # The opening segments, started now rather than when they are asked for.
@@ -476,16 +485,35 @@ async def get_downloaded_hls(
     # Warmed here rather than on the master, so it is the rung the player
     # actually picked that gets a head start.
     for index in range(min(3, len(durations))):
-        _queue_segment(target, path, index, audio, rung)
+        _queue_segment(target, path, index, audio, rung, fps)
     return response
 
 
-def master_playlist(variants: list[tuple[int, int, int, int]], uri: str) -> Response:
-    """An HLS master: one entry per quality, each *uri* with its `&rung=`."""
+def check_fps(fps: int) -> None:
+    if fps and fps not in downloaded.FRAME_RATES:
+        raise HTTPException(status_code=422, detail="No such frame rate")
+
+
+def master_playlist(
+    variants: list[tuple[int, int, int, int]],
+    uri: str,
+    fps: int = 0,
+    source_fps: float = 0.0,
+) -> Response:
+    """An HLS master: one entry per quality, each *uri* with its `&rung=`.
+
+    At an *fps* above *source_fps* each is priced higher, as it is encoded, so
+    the player's choice of quality allows for the frames drawn in between.
+    """
+    rate = fps or source_fps
+    scale = (fps / source_fps) ** 0.5 if fps and source_fps and fps > source_fps else 1
     lines = ["#EXTM3U"]
     for step, width, height, bandwidth in variants:
         size = f",RESOLUTION={width}x{height}" if width and height else ""
-        lines.append(f"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth}{size}")
+        frames = f",FRAME-RATE={rate:.3f}" if rate else ""
+        lines.append(
+            f"#EXT-X-STREAM-INF:BANDWIDTH={int(bandwidth * scale)}{size}{frames}"
+        )
         lines.append(f"{uri}&rung={step}")
     return _playlist(lines)
 
@@ -534,6 +562,7 @@ async def get_downloaded_segment(
     index: int = Query(..., ge=0),
     audio: int = 0,
     rung: int = 0,
+    fps: int = 0,
 ) -> Response:
     """One segment of the playlist above, transcoded now if it is not cached.
 
@@ -542,8 +571,9 @@ async def get_downloaded_segment(
     start the same encode twice.
     """
     target = _resolved(path)
+    check_fps(fps)
     segment = await asyncio.wrap_future(
-        _queue_segment(target, path, index, audio, rung)
+        _queue_segment(target, path, index, audio, rung, fps)
     )
     if segment is None:
         raise HTTPException(status_code=404, detail="No such segment")
