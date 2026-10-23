@@ -19,6 +19,7 @@ record, so the path is the whole of what is known about it.
 
 from __future__ import annotations
 
+import functools
 import glob
 import hashlib
 import os
@@ -743,6 +744,101 @@ def _hls_dir() -> Path:
     return config_dir() / "hls"
 
 
+#: Hardware H.264 encoders, tried in order before falling back to libx264.
+_GPU_ENCODERS = ("h264_nvenc", "h264_qsv", "h264_amf")
+
+
+def _h264_args(encoder: str, quality: int) -> list[str]:
+    """ffmpeg flags encoding 8-bit 4:2:0 H.264 with *encoder* at about *quality* (CRF scale)."""
+    q = str(quality)
+    if encoder == "h264_nvenc":
+        return [
+            "-c:v",
+            encoder,
+            "-preset",
+            "p4",
+            "-rc",
+            "vbr",
+            "-cq",
+            q,
+            "-b:v",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+        ]
+    if encoder == "h264_qsv":
+        # QSV takes nv12, not yuv420p; both are the same 8-bit 4:2:0 once encoded.
+        return [
+            "-c:v",
+            encoder,
+            "-preset",
+            "veryfast",
+            "-global_quality",
+            q,
+            "-pix_fmt",
+            "nv12",
+        ]
+    if encoder == "h264_amf":
+        return [
+            "-c:v",
+            encoder,
+            "-quality",
+            "speed",
+            "-rc",
+            "cqp",
+            "-qp_i",
+            q,
+            "-qp_p",
+            q,
+            "-pix_fmt",
+            "yuv420p",
+        ]
+    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", q, "-pix_fmt", "yuv420p"]
+
+
+@functools.cache
+def h264_encoder() -> str:
+    """The first GPU encoder that actually encodes here, else ``libx264``.
+
+    `ffmpeg -encoders` lists NVENC on a machine with no NVIDIA card, so each is
+    tried on a tenth of a second of black instead. Probed once per process.
+    """
+    try:
+        binary = ffmpeg_binary()
+    except RuntimeError:
+        return "libx264"
+    for encoder in _GPU_ENCODERS:
+        try:
+            result = subprocess.run(
+                [
+                    binary,
+                    "-nostdin",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "color=black:s=256x256:d=0.1",
+                    "-frames:v",
+                    "1",
+                    *_h264_args(encoder, 23),
+                    "-f",
+                    "null",
+                    "-",
+                ],
+                timeout=15,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode == 0:
+            return encoder
+    return "libx264"
+
+
 def hls_segment_durations(file: Path) -> list[float] | None:
     """Length of each segment of *file*, or None when its duration is unknown.
 
@@ -822,17 +918,11 @@ def hls_segment(file: Path, relative: str, index: int, audio: int = 0) -> Path |
                 "-map",
                 f"0:a:{audio}?",
                 "-sn",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "23",
-                # Forced, not inherited: a 10-bit source (the x265 anime rips)
-                # would otherwise be encoded 10-bit again, which is the High 10
-                # profile no browser decodes — the very thing being fixed here.
-                "-pix_fmt",
-                "yuv420p",
+                # Pixel format forced, not inherited: a 10-bit source (the x265
+                # anime rips) would otherwise be encoded 10-bit again, which is
+                # the High 10 profile no browser decodes — the very thing being
+                # fixed here.
+                *_h264_args(h264_encoder(), 23),
                 # No B-frames, so decode order matches presentation order. Each
                 # segment here is encoded on its own rather than cut from one
                 # long run, and with reordering on, the frames at a boundary
@@ -1145,12 +1235,7 @@ def tv_stream_command(
         "[v]",
         "-map",
         f"0:a:{audio}?",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "21",
+        *_h264_args(h264_encoder(), 21),
         "-c:a",
         "aac",
         "-b:a",
