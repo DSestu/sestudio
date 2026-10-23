@@ -684,9 +684,6 @@ export interface DownloadedTrack {
   default: boolean
   /** False for a picture-based subtitle (PGS/VOBSUB), which cannot be shown as text. */
   text: boolean
-  /** Audio only: whether a browser plays this codec as it is. False means the
-   *  server has to re-encode it before the track can be heard. */
-  native?: boolean
   /** Subtitles only: where to load the WebVTT from. */
   url?: string
   /** Subtitles only: inside the container, rather than a `.vtt` beside it. */

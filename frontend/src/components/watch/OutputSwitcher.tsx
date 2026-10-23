@@ -6,7 +6,7 @@ import {
 import { fileFor, downloadedSnapshot } from '../../downloadedLibrary'
 import { castSeek, castToChromecast, describeCastError, loadCast, useCastState } from '../../cast'
 import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
-import { setRecast, startCastQueue } from '../../castQueue'
+import { startCastQueue } from '../../castQueue'
 import { startCastSession } from '../../playbackSession'
 import { loadPlayerPrefs } from '../../playerPrefs'
 import type { PlayableEpisode } from '../../providers'
@@ -164,11 +164,6 @@ export default function OutputSwitcher({
         onStep,
       )
     }
-    // Changing quality mid-cast sends this again from where the TV is.
-    setRecast(async at => {
-      await sendTo(proxyUrl, kind, title, mode, udn, subtitles)
-      await seekTv(mode, at)
-    })
   }
 
   async function startCast(label: string, mode: 'dlna' | 'chromecast', udn?: string) {

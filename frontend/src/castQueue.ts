@@ -17,15 +17,9 @@ interface CastQueue {
 
 let queue: CastQueue | null = null
 let advancing = false
-// Sends what is on the TV again, from *at* seconds, picking up the quality
-// chosen since. Null until something has been cast from this page.
-let recast: ((at: number) => Promise<void>) | null = null
 
 export function startCastQueue(q: CastQueue) { queue = q }
-export function clearCastQueue() { queue = null; recast = null }
-export function setRecast(fn: ((at: number) => Promise<void>) | null) { recast = fn }
-export function canRecast(): boolean { return recast !== null }
-export function recastAt(at: number): Promise<void> { return recast ? recast(at) : Promise.resolve() }
+export function clearCastQueue() { queue = null }
 /** The active cast playlist (for pull-back to the browser player). */
 export function getCastQueue(): { episodes: PlayableEpisode[]; index: number } | null {
   return queue ? { episodes: queue.episodes, index: queue.index } : null

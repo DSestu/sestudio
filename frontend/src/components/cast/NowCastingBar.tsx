@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   castSeek, castSeekBy, castSetTextTrack, castSetVolume, castStop, castToggleMute,
-  castPlayPause, castVolumeBy,
+  castPlayPause, castQuality, castVolumeBy,
   useCastState,
 } from '../../cast'
 import {
-  dlnaPause, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStop, dlnaToggleMute,
+  dlnaPause, dlnaQuality, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStop, dlnaToggleMute,
   dlnaVolumeBy, useDlnaState,
 } from '../../dlnaControl'
 import { useBrowserPlayerControls } from '../../browserPlayerControls'
-import { canRecast, getCastQueue, recastAt } from '../../castQueue'
+import { getCastQueue } from '../../castQueue'
 import CastQuality from './CastQuality'
 import type { Navigate } from '../../nav'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
@@ -278,15 +278,18 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                 </div>
               )}
 
-              {canRecast() && (
+              {/* DLNA always: the server re-sends what it sent. Chromecast when
+                  what it plays is one of the server's quality ladders. */}
+              {(target === 'dlna' || cast.adjustable) && (
                 <div className="flex items-center gap-2">
                   {/* Re-sent from the current position: a TV cannot change
                       quality inside a stream, so this restarts it. */}
                   <CastQuality
                     disabled={switching}
-                    onChange={() => {
+                    onChange={quality => {
                       setSwitching(true)
-                      void recastAt(live.position).finally(() => setSwitching(false))
+                      const resend = target === 'dlna' ? dlnaQuality : castQuality
+                      void resend(quality, live.position).catch(() => {}).finally(() => setSwitching(false))
                     }}
                   />
                   {switching && (

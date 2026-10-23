@@ -50,13 +50,15 @@ export interface CastState {
   textTracks: CastTrackOption[]
   /** Which of them is showing, or null for off. */
   activeTextTrackId: number | null
+  /** The media is one of the server's quality ladders (see `castQuality`). */
+  adjustable: boolean
 }
 
 const state: CastState = {
   available: false, connected: false, title: '', isPaused: false,
   currentTime: 0, duration: 0, volume: 1, muted: false,
   canSeek: false, canControlVolume: false,
-  textTracks: [], activeTextTrackId: null,
+  textTracks: [], activeTextTrackId: null, adjustable: false,
 }
 let snapshot: CastState = { ...state }
 const listeners = new Set<() => void>()
@@ -95,6 +97,7 @@ function bindRemotePlayer(w: Cast) {
       state.muted = !!player.isMuted
       state.canSeek = !!player.canSeek
       state.canControlVolume = !!player.canControlVolume
+      state.adjustable = LADDER_URL.test(player.mediaInfo?.contentId ?? '')
       emit()
 
       // Watch-state: persist progress (throttled) for the casting episode
@@ -262,6 +265,29 @@ export async function castToChromecast(
 }
 
 // --- Remote controls for the active session ------------------------------- #
+
+/** The server's re-encoded playlists, whose quality is the `rung` parameter. */
+const LADDER_URL = /\/api\/(downloaded|stream)\/hls\?/
+
+/** Reload what is playing at another quality (a height, 0 for Auto), from *at*
+ *  seconds. Read off the receiver's own media, so it works after a reload. */
+export async function castQuality(quality: number, at: number): Promise<void> {
+  const w = window as Cast
+  const session = w.cast?.framework.CastContext.getInstance().getCurrentSession()
+  const media = player?.mediaInfo
+  if (!session || !media || !LADDER_URL.test(media.contentId)) return
+  const url = new URL(media.contentId)
+  url.searchParams.delete('rung')
+  if (quality) url.searchParams.set('rung', String(quality))
+  const next = new w.chrome.cast.media.MediaInfo(url.toString(), media.contentType)
+  next.metadata = media.metadata
+  next.tracks = media.tracks
+  const request = new w.chrome.cast.media.LoadRequest(next)
+  request.currentTime = at
+  const active = session.getMediaSession?.()?.activeTrackIds
+  if (active?.length) request.activeTrackIds = active
+  await session.loadMedia(request)
+}
 
 export function castPlayPause() { controller?.playOrPause() }
 export function castToggleMute() { controller?.muteOrUnmute() }
