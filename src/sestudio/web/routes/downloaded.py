@@ -450,25 +450,34 @@ async def get_downloaded_audio_ready(
 
 
 def _queue_segment(
-    target: Path, path: str, index: int, audio: int
+    target: Path, path: str, index: int, audio: int, rung: int = 0
 ) -> Future[Path | None]:
     """The running build for one segment, started if it is not already going.
 
     Coalesced per segment, so a read-ahead, a retry and the warm-up below never
     start the same encode twice.
     """
-    key = f"{path}|{index}|{audio}"
+    key = f"{path}|{index}|{audio}|{rung}"
     future = _HLS_PENDING.get(key)
     if future is None:
-        future = _HLS_POOL.submit(downloaded.hls_segment, target, path, index, audio)
+        future = _HLS_POOL.submit(
+            downloaded.hls_segment, target, path, index, audio, rung
+        )
         _HLS_PENDING[key] = future
         future.add_done_callback(lambda _f, k=key: _HLS_PENDING.pop(k, None))
     return future
 
 
 @router.get("/downloaded/hls")
-async def get_downloaded_hls(path: str = Query(...), audio: int = 0) -> Response:
-    """A playlist for a file a browser cannot open, transcoded as it is played.
+async def get_downloaded_hls(
+    path: str = Query(...), audio: int = 0, rung: int | None = None
+) -> Response:
+    """A playlist for a downloaded file, transcoded as it is played.
+
+    Without *rung*, the master: one entry per quality (see
+    ``downloaded.hls_variants``), so the player can drop to a lighter one when
+    the link slows and climb back when it recovers. With it, that quality's own
+    list of segments.
 
     A third of a collection put together over years is XviD in an AVI or a
     recording in MPEG-TS, and Chrome will not so much as open the container.
@@ -486,6 +495,18 @@ async def get_downloaded_hls(path: str = Query(...), audio: int = 0) -> Response
     if durations is None:
         raise HTTPException(status_code=404, detail="Length of that file is unknown")
     quoted = quote(path)
+    if rung is None:
+        variants = await asyncio.to_thread(downloaded.hls_variants, target)
+        master = ["#EXTM3U"]
+        for step, width, height, bandwidth in variants:
+            size = f",RESOLUTION={width}x{height}" if width and height else ""
+            master.append(f"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth}{size}")
+            master.append(f"hls?path={quoted}&audio={audio}&rung={step}")
+        return Response(
+            content="\n".join(master) + "\n",
+            media_type="application/vnd.apple.mpegurl",
+            headers=dict(_CORS_HEADERS),
+        )
     lines = [
         "#EXTM3U",
         "#EXT-X-VERSION:3",
@@ -497,7 +518,7 @@ async def get_downloaded_hls(path: str = Query(...), audio: int = 0) -> Response
     ]
     for index, seconds in enumerate(durations):
         lines.append(f"#EXTINF:{seconds:.3f},")
-        lines.append(f"segment?path={quoted}&index={index}&audio={audio}")
+        lines.append(f"segment?path={quoted}&index={index}&audio={audio}&rung={rung}")
     lines.append("#EXT-X-ENDLIST")
 
     # The opening segments, started now rather than when they are asked for.
@@ -505,8 +526,10 @@ async def get_downloaded_hls(path: str = Query(...), audio: int = 0) -> Response
     # one is most of a second — long enough that its own first attempt at
     # playing gives up for want of data. Begun while the client is still parsing
     # a playlist of a thousand-odd lines, it is usually ready in time.
+    # Warmed here rather than on the master, so it is the rung the player
+    # actually picked that gets a head start.
     for index in range(min(3, len(durations))):
-        _queue_segment(target, path, index, audio)
+        _queue_segment(target, path, index, audio, rung)
     return Response(
         content="\n".join(lines) + "\n",
         media_type="application/vnd.apple.mpegurl",
@@ -516,7 +539,10 @@ async def get_downloaded_hls(path: str = Query(...), audio: int = 0) -> Response
 
 @router.api_route("/downloaded/segment", methods=["GET", "HEAD"])
 async def get_downloaded_segment(
-    path: str = Query(...), index: int = Query(..., ge=0), audio: int = 0
+    path: str = Query(...),
+    index: int = Query(..., ge=0),
+    audio: int = 0,
+    rung: int = 0,
 ) -> Response:
     """One segment of the playlist above, transcoded now if it is not cached.
 
@@ -525,7 +551,9 @@ async def get_downloaded_segment(
     start the same encode twice.
     """
     target = _resolved(path)
-    segment = await asyncio.wrap_future(_queue_segment(target, path, index, audio))
+    segment = await asyncio.wrap_future(
+        _queue_segment(target, path, index, audio, rung)
+    )
     if segment is None:
         raise HTTPException(status_code=404, detail="No such segment")
     return FileResponse(

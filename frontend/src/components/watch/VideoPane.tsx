@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { MediaPlayer, MediaProvider, Track, type MediaPlayerInstance } from '@vidstack/react'
+import {
+  MediaPlayer, MediaProvider, Track, type MediaPlayerInstance, type VideoQuality,
+} from '@vidstack/react'
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default'
 import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
@@ -31,8 +33,6 @@ interface Props {
   /** Why there is no source *yet*, when the wait is expected (a copy being
    *  rebuilt on the server) rather than a search that came up empty. */
   pending?: string | null
-  /** Why there will be no source: an expected wait that ended badly. */
-  failure?: string | null
   /** Title of the episode queued after this one, if any. */
   nextTitle: string | null
   autoplay: boolean
@@ -49,7 +49,7 @@ interface Props {
  * fullscreen without a user gesture on `ended`).
  */
 export default function VideoPane({
-  ep, source, probing, pending = null, failure = null, nextTitle, autoplay, onSourceError, onAdvance, onPosition,
+  ep, source, probing, pending = null, nextTitle, autoplay, onSourceError, onAdvance, onPosition,
 }: Props) {
   const playerRef = useRef<MediaPlayerInstance>(null)
   const lastSaveRef = useRef(0)
@@ -198,6 +198,19 @@ export default function VideoPane({
     }
   }
 
+  /** Re-selects the remembered quality whenever a source lists its own.
+   *  Setting `selected` switches the rendition without a request event, so
+   *  this never reads back as the user picking. */
+  function handleQualitiesChange(qualities: VideoQuality[]) {
+    const wanted = loadPlayerPrefs().quality
+    if (wanted === undefined || qualities.length < 2) return
+    const fits = qualities.filter(q => q.height <= wanted)
+    const pick = fits.length
+      ? fits.reduce((a, b) => (b.height > a.height ? b : a))
+      : qualities.reduce((a, b) => (b.height < a.height ? b : a))
+    if (!pick.selected) pick.selected = true
+  }
+
   function handleTimeUpdate() {
     const p = playerRef.current
     if (!p) return
@@ -233,6 +246,12 @@ export default function VideoPane({
           // straight after page load; with two players mounted vidstack routes
           // input to the most recently active one, so the mini-player is safe.
           keyTarget="document"
+          onQualitiesChange={handleQualitiesChange}
+          onMediaQualityChangeRequest={(index) => {
+            // -1 is the menu's Auto.
+            const height = index < 0 ? undefined : playerRef.current?.qualities[index]?.height
+            savePlayerPrefs({ quality: height })
+          }}
           onCanPlay={handleCanPlay}
           onPlay={() => setPaused(false)}
           onPause={() => setPaused(true)}
@@ -304,7 +323,7 @@ export default function VideoPane({
       )}
       {!displaySource && !probing && !pending && !source && (
         <p className="text-error text-sm px-6 text-center">
-          {failure ?? 'No playable source for this episode.'}
+          No playable source for this episode.
         </p>
       )}
       {displaySource && !probing && !source && (

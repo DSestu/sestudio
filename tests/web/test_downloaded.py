@@ -418,12 +418,14 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
     _write(out / "Film.avi")
     downloaded.invalidate()
     monkeypatch.setattr(downloaded, "duration_of", lambda _f: 30.0)
-    built: list[int] = []
+    built: list[tuple[int, int]] = []
     monkeypatch.setattr(
-        downloaded, "hls_segment", lambda _f, _r, i, audio=0: built.append(i) or None
+        downloaded,
+        "hls_segment",
+        lambda _f, _r, i, audio=0, rung=0: built.append((i, rung)) or None,
     )
 
-    resp = client.get("/api/downloaded/hls", params={"path": "Film.avi"})
+    resp = client.get("/api/downloaded/hls", params={"path": "Film.avi", "rung": 720})
 
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/vnd.apple.mpegurl")
@@ -434,14 +436,43 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
     assert "#EXT-X-PLAYLIST-TYPE:VOD" in lines
     assert lines[-1] == "#EXT-X-ENDLIST"
     assert lines.count("#EXTINF:6.000,") == 5
-    assert lines[-2].startswith("segment?path=Film.avi&index=4&audio=0")
+    assert lines[-2] == "segment?path=Film.avi&index=4&audio=0&rung=720"
 
     # The opening segments start building before anything asks for them: the
     # player's own first attempt at playing gives up if they are not there.
     for future in list(route._HLS_PENDING.values()):
         future.result(timeout=10)
-    assert built == [0, 1, 2]
+    # Of the rung the player picked, not of every rung the master offers.
+    assert built == [(0, 720), (1, 720), (2, 720)]
     route._HLS_PENDING.clear()
+
+
+def test_the_master_offers_the_source_and_every_lighter_step(client, out, monkeypatch):
+    """The player can only drop to a lighter quality the master lists, and
+    nothing is offered above the source: scaling up costs bits and adds nothing."""
+    _write(out / "Film.avi")
+    downloaded.invalidate()
+    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 30.0)
+    monkeypatch.setattr(
+        downloaded,
+        "tracks_of",
+        lambda _f: downloaded.MediaTracks(
+            audio=[], subtitles=[], video_width=1920, video_height=1080
+        ),
+    )
+
+    resp = client.get("/api/downloaded/hls", params={"path": "Film.avi", "audio": 1})
+
+    assert resp.status_code == 200
+    lines = resp.text.splitlines()
+    uris = [line for line in lines if not line.startswith("#")]
+    assert uris == [
+        f"hls?path=Film.avi&audio=1&rung={rung}"
+        for rung in (0, 720, 480, 360, 240, 144)
+    ]
+    # Sized and priced, which is what the player picks between.
+    assert "#EXT-X-STREAM-INF:BANDWIDTH=2660000,RESOLUTION=1280x720" in lines
+    assert lines[1].endswith("RESOLUTION=1920x1080")
 
 
 def test_a_segment_is_served_once_it_is_built(client, out, monkeypatch):
@@ -453,7 +484,7 @@ def test_a_segment_is_served_once_it_is_built(client, out, monkeypatch):
     downloaded.invalidate()
     made = out.parent / "seg.ts"
     made.write_bytes(b"MPEGTS")
-    monkeypatch.setattr(downloaded, "hls_segment", lambda _f, _r, _i, audio=0: made)
+    monkeypatch.setattr(downloaded, "hls_segment", lambda *_a: made)
 
     resp = client.get(
         "/api/downloaded/segment", params={"path": "Film.avi", "index": 3}

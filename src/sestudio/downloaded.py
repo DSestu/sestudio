@@ -366,6 +366,9 @@ _VIDEO_STREAM_RE = re.compile(
     r"^\s*Stream #0:\d+(?:\[[^\]]*\])?(?:\([^)]*\))?: Video: (?P<codec>[A-Za-z0-9_]+)"
     r"(?:\s*\([^)]*\))*,\s*(?P<pix_fmt>[a-z0-9]+)"
 )
+# `, 1920x1080` on that same line. Searched for rather than matched in place:
+# the pixel format's own notes, `(tv, bt709, progressive)`, sit in between.
+_FRAME_SIZE_RE = re.compile(r",\s*(\d{2,5})x(\d{2,5})\b")
 
 # `      title           : VF` inside a stream's own Metadata block. This is what
 # a human named the track, and it beats "Track 2" whenever it is there.
@@ -427,6 +430,9 @@ class MediaTracks:
     video_pix_fmt: str = ""
     #: PQ or HLG transfer: shown on an SDR picture without tone-mapping, washed out.
     video_hdr: bool = False
+    #: Frame size of the first video stream, 0 when unknown.
+    video_width: int = 0
+    video_height: int = 0
 
 
 def _parse_streams(text: str) -> MediaTracks:
@@ -441,6 +447,7 @@ def _parse_streams(text: str) -> MediaTracks:
     subtitles: list[Track] = []
     video = pix_fmt = ""
     hdr = False
+    width = height = 0
     current: Track | None = None
 
     for line in text.splitlines():
@@ -448,6 +455,8 @@ def _parse_streams(text: str) -> MediaTracks:
             video, pix_fmt = found.group("codec").lower(), found.group("pix_fmt")
             # `yuv420p10le(tv, bt2020nc/bt2020/smpte2084)` — the transfer is last.
             hdr = "smpte2084" in line or "arib-std-b67" in line
+            if size := _FRAME_SIZE_RE.search(line):
+                width, height = int(size.group(1)), int(size.group(2))
             current = None  # a title after it belongs to the video, not a track
             continue
         match = _STREAM_RE.match(line)
@@ -480,6 +489,8 @@ def _parse_streams(text: str) -> MediaTracks:
         video=video,
         video_pix_fmt=pix_fmt,
         video_hdr=hdr,
+        video_width=width,
+        video_height=height,
     )
 
 
@@ -748,9 +759,42 @@ def _hls_dir() -> Path:
 _GPU_ENCODERS = ("h264_nvenc", "h264_qsv", "h264_amf")
 
 
-def _h264_args(encoder: str, quality: int) -> list[str]:
-    """ffmpeg flags encoding 8-bit 4:2:0 H.264 with *encoder* at about *quality* (CRF scale)."""
+def _h264_args(encoder: str, quality: int, kbps: int = 0) -> list[str]:
+    """ffmpeg flags encoding 8-bit 4:2:0 H.264 with *encoder* at about *quality* (CRF scale).
+
+    A *kbps* caps the bitrate there too, which is the point of a lighter rung:
+    on a slow link the cap, not the quality, is what has to hold.
+    """
     q = str(quality)
+    cap = ["-maxrate", f"{kbps}k", "-bufsize", f"{2 * kbps}k"] if kbps else []
+    # QSV's and AMF's constant-quality modes ignore a cap, so a capped rung
+    # runs them in their peak-constrained VBR mode instead.
+    if kbps and encoder == "h264_qsv":
+        return [
+            "-c:v",
+            encoder,
+            "-preset",
+            "veryfast",
+            "-b:v",
+            f"{kbps}k",
+            *cap,
+            "-pix_fmt",
+            "nv12",
+        ]
+    if kbps and encoder == "h264_amf":
+        return [
+            "-c:v",
+            encoder,
+            "-quality",
+            "speed",
+            "-rc",
+            "vbr_peak",
+            "-b:v",
+            f"{kbps}k",
+            *cap,
+            "-pix_fmt",
+            "yuv420p",
+        ]
     if encoder == "h264_nvenc":
         return [
             "-c:v",
@@ -763,6 +807,7 @@ def _h264_args(encoder: str, quality: int) -> list[str]:
             q,
             "-b:v",
             "0",
+            *cap,
             "-pix_fmt",
             "yuv420p",
         ]
@@ -793,7 +838,17 @@ def _h264_args(encoder: str, quality: int) -> list[str]:
             "-pix_fmt",
             "yuv420p",
         ]
-    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", q, "-pix_fmt", "yuv420p"]
+    return [
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        q,
+        *cap,
+        "-pix_fmt",
+        "yuv420p",
+    ]
 
 
 @functools.cache
@@ -839,6 +894,52 @@ def h264_encoder() -> str:
     return "libx264"
 
 
+#: Lighter renditions offered beside the source, as (height, video kb/s). The
+#: classic YouTube steps, at about the bitrate YouTube streams them at (its
+#: upload recommendations are five to eight times this, too much for a slow link).
+HLS_LADDER = (
+    (2160, 16000),
+    (1440, 9000),
+    (1080, 5000),
+    (720, 2500),
+    (480, 1200),
+    (360, 700),
+    (240, 400),
+    (144, 200),
+)
+
+
+def hls_variants(file: Path) -> list[tuple[int, int, int, int]]:
+    """The renditions of *file* to offer, best first: (rung, width, height, b/s).
+
+    Rung 0 is the source's own size; the rest are the ``HLS_LADDER`` steps below
+    it, by height. Only the source when the frame size is unknown, since a step
+    has to know what it is smaller than.
+    """
+    tracks = tracks_of(file)
+    width, height = tracks.video_width, tracks.video_height
+    # shortcut: the source rung's bandwidth is a guess from the next step up
+    # (it is encoded at a quality, not a rate); measure it if hls.js misjudges.
+    above = [kbps for h, kbps in HLS_LADDER if height and h >= height] or [
+        HLS_LADDER[0][1]
+    ]
+    variants = [(0, width, height, int(min(above) * 1.5 + 160) * 1000)]
+    for rung, kbps in HLS_LADDER:
+        if rung < height:
+            # Even, as H.264 4:2:0 needs, and in the source's own shape. The
+            # audio counts too: the player budgets the whole stream.
+            audio = 96 if kbps <= 700 else 160
+            variants.append(
+                (
+                    rung,
+                    round(width * rung / height / 2) * 2,
+                    rung,
+                    (kbps + audio) * 1000,
+                )
+            )
+    return variants
+
+
 def hls_segment_durations(file: Path) -> list[float] | None:
     """Length of each segment of *file*, or None when its duration is unknown.
 
@@ -855,9 +956,15 @@ def hls_segment_durations(file: Path) -> list[float] | None:
     return [HLS_SEGMENT_SECONDS] * whole + ([last] if last > 0.01 else [])
 
 
-def hls_segment(file: Path, relative: str, index: int, audio: int = 0) -> Path | None:
+def hls_segment(
+    file: Path, relative: str, index: int, audio: int = 0, rung: int = 0
+) -> Path | None:
     """One transcoded segment of *file*, cached on disk. None if there is no such
     segment, or it could not be built.
+
+    *rung* is a height from ``HLS_LADDER`` to scale down to and cap the bitrate
+    at, or 0 for the source's own size. Every rung is cut at the same times, so
+    the player can change rung at any segment boundary.
 
     Each is encoded on its own from the source, which is what makes a seek cheap
     and is why they are independently decodable: a fresh encode opens on a
@@ -871,6 +978,10 @@ def hls_segment(file: Path, relative: str, index: int, audio: int = 0) -> Path |
     durations = hls_segment_durations(file)
     if durations is None or not 0 <= index < len(durations):
         return None
+    kbps = dict(HLS_LADDER).get(rung, 0)
+    # Unknown rungs, and none that would scale the picture up.
+    if rung and (not kbps or rung >= (tracks_of(file).video_height or rung)):
+        return None
     try:
         stat = file.stat()
     except OSError:
@@ -878,7 +989,10 @@ def hls_segment(file: Path, relative: str, index: int, audio: int = 0) -> Path |
 
     key = hashlib.sha1(
         f"{relative}|{int(stat.st_mtime)}|{stat.st_size}"
-        f"|s{index}|a{audio}|{HLS_SEGMENT_SECONDS}".encode()
+        f"|s{index}|a{audio}|{HLS_SEGMENT_SECONDS}"
+        # Only on a lighter rung, so the source's segments cached before there
+        # were rungs keep their names.
+        f"{f'|r{rung}' if rung else ''}".encode()
     ).hexdigest()
     out = _hls_dir() / f"{key}.ts"
     if out.is_file() and out.stat().st_size > 0:
@@ -918,11 +1032,12 @@ def hls_segment(file: Path, relative: str, index: int, audio: int = 0) -> Path |
                 "-map",
                 f"0:a:{audio}?",
                 "-sn",
+                *(["-vf", f"scale=-2:{rung}"] if rung else []),
                 # Pixel format forced, not inherited: a 10-bit source (the x265
                 # anime rips) would otherwise be encoded 10-bit again, which is
                 # the High 10 profile no browser decodes — the very thing being
                 # fixed here.
-                *_h264_args(h264_encoder(), 23),
+                *_h264_args(h264_encoder(), 23, kbps),
                 # No B-frames, so decode order matches presentation order. Each
                 # segment here is encoded on its own rather than cut from one
                 # long run, and with reordering on, the frames at a boundary
@@ -935,7 +1050,8 @@ def hls_segment(file: Path, relative: str, index: int, audio: int = 0) -> Path |
                 "-c:a",
                 "aac",
                 "-b:a",
-                "160k",
+                # Thinner on the lowest rungs, where 160k would be a third of it.
+                "96k" if kbps and kbps <= 700 else "160k",
                 # Downmixed, because a 5.1 AAC track inside MPEG-TS is rejected
                 # by Media Source Extensions: hls.js reports `bufferAppendError`
                 # and nothing plays. Stereo is what a browser is going to output

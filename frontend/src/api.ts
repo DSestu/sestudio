@@ -652,43 +652,21 @@ export async function getDownloadedLibrary(): Promise<DownloadedTitle[]> {
  * `audioIndex` asks for the copy the server builds around one audio track. No
  * browser can choose a track itself, so a track other than the first always
  * needs one; the first needs one only when its codec would not play (AC-3 in a
- * rip). Left out, the original file is served as it is. Ask
- * `downloadedAudioReady` first: a copy that has to be re-encoded takes minutes,
- * and the file route waits for it.
+ * rip). Left out, the original file is served as it is. A copy that has to be
+ * re-encoded takes minutes, and the file route waits for it.
  */
 export function downloadedFileUrl(path: string, audioIndex?: number): string {
   const base = `${BASE}/downloaded/file?path=${encodeURIComponent(path)}`
   return audioIndex !== undefined ? `${base}&audio=${audioIndex}` : base
 }
 
-export interface AudioReadiness {
-  ready: boolean
-  /** The build was tried and could not be made; polling further is pointless. */
-  failed: boolean
-  /** 0..1 while ffmpeg is re-encoding; null while queued or when not applicable. */
-  progress: number | null
-}
-
-/** Playlist URL for a file no browser can open, transcoded segment by segment
- *  as it plays. `kind: 'hls'` — the player already speaks it, because every
- *  streaming host serves HLS too. `audioIndex` picks the track to encode into
- *  the segments, so switching one costs nothing but a new playlist. */
+/** Master playlist for a downloaded file, transcoded segment by segment as it
+ *  plays, at every quality from the source down. `kind: 'hls'` — the player
+ *  already speaks it, because every streaming host serves HLS too. `audioIndex`
+ *  picks the track to encode into the segments, so switching one costs nothing
+ *  but a new playlist. */
 export function downloadedHlsUrl(path: string, audioIndex = 0): string {
   return `${BASE}/downloaded/hls?path=${encodeURIComponent(path)}&audio=${audioIndex}`
-}
-
-/** Whether the copy carrying audio track `index` exists yet. Asking starts the
- *  build if it has not; poll until `ready`, then play `downloadedFileUrl`. */
-export async function downloadedAudioReady(path: string, index: number): Promise<AudioReadiness> {
-  const unknown = { ready: false, failed: false, progress: null }
-  try {
-    const res = await fetch(
-      `${BASE}/downloaded/audio?path=${encodeURIComponent(path)}&index=${index}`,
-    )
-    return res.ok ? { ...unknown, ...(await res.json()) } : { ...unknown, failed: true }
-  } catch {
-    return unknown
-  }
 }
 
 /** One audio or subtitle track inside a downloaded file. */
@@ -712,9 +690,6 @@ export interface DownloadedTrack {
 export interface DownloadedTracks {
   audio: DownloadedTrack[]
   subtitles: DownloadedTrack[]
-  /** The browser cannot open this file as it is (an AVI, a TV recording, a
-   *  10-bit encode), so it has to be played through `downloadedHlsUrl`. */
-  needs_hls?: boolean
 }
 
 /** What is inside a downloaded file.
@@ -724,7 +699,7 @@ export interface DownloadedTracks {
  * surfacing — it only means no track menus — so this resolves to empty lists.
  */
 export async function downloadedTracks(path: string): Promise<DownloadedTracks> {
-  const empty = { audio: [], subtitles: [], needs_hls: false }
+  const empty = { audio: [], subtitles: [] }
   try {
     const res = await fetch(`${BASE}/downloaded/tracks?path=${encodeURIComponent(path)}`)
     return res.ok ? await res.json() : empty

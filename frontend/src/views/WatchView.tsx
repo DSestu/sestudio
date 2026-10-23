@@ -5,7 +5,7 @@ import type {
 } from '../api'
 import type { DownloadedTrack, StreamSubtitle } from '../api'
 import {
-  checkDownloads, DOWNLOADED_SOURCE, downloadedAudioReady, downloadedFileUrl, downloadedHlsUrl,
+  checkDownloads, DOWNLOADED_SOURCE, downloadedFileUrl, downloadedHlsUrl,
   downloadedTracks, postDownloads,
 } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
@@ -391,8 +391,8 @@ export default function WatchView({
   // episode is never read as this one's — and so the reset on switching happens
   // during render rather than in the effect, which would cost an extra pass.
   const [subs, setSubs] = useState<{
-    path?: string; list: StreamSubtitle[]; audio: DownloadedTrack[]; hls: boolean
-  }>({ list: NO_SUBTITLES, audio: NO_AUDIO, hls: false })
+    path?: string; list: StreamSubtitle[]; audio: DownloadedTrack[]
+  }>({ list: NO_SUBTITLES, audio: NO_AUDIO })
   useEffect(() => {
     if (!downloadedPath) return
     let live = true
@@ -401,7 +401,6 @@ export default function WatchView({
       setSubs({
         path: downloadedPath,
         audio: tracks.audio,
-        hls: Boolean(tracks.needs_hls),
         list: tracks.subtitles
           // A picture-based track has no text to show; it is reported so the
           // reason is knowable, and skipped so the menu holds nothing dead.
@@ -429,70 +428,25 @@ export default function WatchView({
   // Guards against an index left over from a file that had more tracks.
   const audioTrack = audioIndex < downloadedAudio.length ? audioIndex : 0
 
-  // A file the browser cannot open at all — an AVI, a TV recording, a 10-bit
-  // encode, or anything whose audio it will not decode — is played through the
-  // server's HLS route, which transcodes it segment by segment as it goes.
-  const needsHls = fresh && subs.hls
-
-  // Otherwise the file itself plays, and only a track other than its first
-  // needs the server to build a copy around it. Undefined serves the file
-  // untouched. Never both: on HLS the wanted track is encoded into the
-  // segments, so switching costs a new playlist rather than a re-encode.
-  const remuxIndex = !needsHls && audioTrack !== 0 ? audioTrack : undefined
-  // A rebuilt copy that has to be re-encoded takes minutes, and the file route
-  // waits for it — long past the player's decode check. So the copy is asked
-  // for ahead of time and polled, and the source is only offered once it is
-  // there. Keyed on file and track, so a stale "ready" is never read as this one.
-  const remuxKey = remuxIndex === undefined ? null : `${downloadedPath}|${remuxIndex}`
-  const [audioReadyFor, setAudioReadyFor] = useState<string | null>(null)
-  // What the wait looks like: a fraction while ffmpeg runs, so a minutes-long
-  // re-encode reads as work in progress rather than a page that has hung; a
-  // failure ends the wait with a message instead of a spinner for ever.
-  const [audioProgress, setAudioProgress] = useState<number | null>(null)
-  const [audioFailedFor, setAudioFailedFor] = useState<string | null>(null)
-  useEffect(() => {
-    if (!remuxKey || !downloadedPath || remuxIndex === undefined) return
-    let live = true
-    let timer = 0
-    const check = () => {
-      downloadedAudioReady(downloadedPath, remuxIndex).then(state => {
-        if (!live) return
-        if (state.ready) { setAudioReadyFor(remuxKey); return }
-        if (state.failed) { setAudioFailedFor(remuxKey); return }
-        setAudioProgress(state.progress)
-        timer = window.setTimeout(check, 2000)
-      })
-    }
-    check()
-    return () => { live = false; window.clearTimeout(timer); setAudioProgress(null) }
-  }, [remuxKey, downloadedPath, remuxIndex])
-  const audioFailed = remuxKey !== null && audioFailedFor === remuxKey
-  const preparingAudio = remuxKey !== null && audioReadyFor !== remuxKey && !audioFailed
-  const preparingNotice = !preparingAudio
-    ? null
-    : audioProgress === null
-      ? 'Preparing the audio track — waiting for the server to start re-encoding it…'
-      : `Re-encoding the audio track so the browser can play it… ${Math.round(audioProgress * 100)}%`
-
   const downloadedSource = useMemo(
-    // Held until the tracks are known: offering the file first and swapping
-    // after would play a silent start on an AC-3 rip, and would hand the
-    // player a container it cannot open on everything else.
-    () => (downloadedPath && fresh && !preparingAudio
+    // Held until the tracks are known, so the audio track to encode is.
+    // Always HLS, even for a file the browser could open as it is: the server's
+    // playlist carries every quality from the source down, which is what lets
+    // the player drop to a lighter one on a slow link. The wanted audio track is
+    // encoded into the segments, so switching costs only a new playlist.
+    () => (downloadedPath && fresh
       ? {
-        proxy_url: needsHls
-          ? downloadedHlsUrl(downloadedPath, audioTrack)
-          : downloadedFileUrl(downloadedPath, remuxIndex),
-        kind: (needsHls ? 'hls' : 'mp4') as 'hls' | 'mp4',
-        // Track 0 untouched: a copy of it would re-encode audio the TV plays.
-        dlna_url: needsHls
-          ? downloadedFileUrl(downloadedPath, audioTrack || undefined)
-          : undefined,
+        proxy_url: downloadedHlsUrl(downloadedPath, audioTrack),
+        kind: 'hls' as const,
+        // A TV cannot follow HLS; it gets the file, and the server re-encodes
+        // it on the way if the TV would not play it. Track 0 untouched: a copy
+        // of it would re-encode audio the TV plays.
+        dlna_url: downloadedFileUrl(downloadedPath, audioTrack || undefined),
         provider: DOWNLOADED_PROVIDER,
         subtitles: downloadedSubs,
       }
       : null),
-    [downloadedPath, fresh, preparingAudio, needsHls, audioTrack, downloadedSubs, remuxIndex],
+    [downloadedPath, fresh, audioTrack, downloadedSubs],
   )
 
   const { providers, status, sources, active, select, markFailed, probing } =
@@ -507,9 +461,7 @@ export default function WatchView({
   // The copy on disk is being read (tracks, then the decode check). On a drive
   // that spun down this takes many seconds, which a bare spinner reads as a hang.
   const openingNotice = downloadedPath && (!fresh || status[DOWNLOADED_PROVIDER] === 'loading')
-    ? needsHls
-      ? 'Waking the disk and starting the transcode — a sleeping drive can take up to 30 s…'
-      : 'Waking the disk — a sleeping drive can take up to 30 s to spin up…'
+    ? 'Waking the disk and starting the transcode — a sleeping drive can take up to 30 s…'
     : null
 
   function setCurrent(ep: EpisodeDetail) {
@@ -749,8 +701,7 @@ export default function WatchView({
             ep={current}
             source={source}
             probing={probing}
-            pending={audioFailed ? null : (preparingNotice ?? openingNotice)}
-            failure={audioFailed ? 'The audio track could not be converted for the browser.' : null}
+            pending={openingNotice}
             nextTitle={nextEp?.title ?? null}
             autoplay={autoplay}
             onSourceError={() => { if (active) markFailed(active) }}
