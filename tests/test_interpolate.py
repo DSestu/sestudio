@@ -62,6 +62,13 @@ def test_the_last_frame_repeats_when_the_source_runs_out(drawn):
     assert [int(f[0, 0, 0]) for f in out] == [10, 255, 20, 20]
 
 
+def test_output_ends_with_the_source_however_many_were_asked_for(drawn):
+    """A TV stream asks for frames without end; it must still finish."""
+    out = list(interpolate.frames_at(iter(_frames([10, 20])), 24, 48, 10**9))
+
+    assert len(out) == 4
+
+
 def test_a_higher_rate_segment_is_decoded_drawn_and_encoded(
     tmp_path: Path, monkeypatch
 ):

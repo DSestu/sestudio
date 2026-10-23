@@ -177,7 +177,8 @@ def frames_at(
         position = k * src_fps / out_fps
         while right is not None and position >= index + 1:
             left, right, index = right, next(source, None), index + 1
-        if left is None:
+        # Past the source's last frame: the end, however many were asked for.
+        if left is None or (right is None and position >= index + 1):
             return
         t = position - index
         if t < 1e-3 or right is None:

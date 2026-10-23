@@ -142,7 +142,9 @@ def test_play_provider_hls_goes_to_the_tv_re_encoded(client, monkeypatch):
     )
     assert resp.status_code == 200
     token = proxied.split("token=", 1)[1]
-    assert calls["media_url"] == f"http://192.168.1.20:8080/api/stream/tv?token={token}"
+    assert calls["media_url"] == (
+        f"http://192.168.1.20:8080/api/stream/tv?token={token}&live=dlna"
+    )
     assert calls["mime_type"] == "video/mpeg"
     assert calls["duration"] == 1320.0
 
@@ -168,7 +170,7 @@ def test_play_provider_mp4_at_a_lighter_quality_is_re_encoded(client, monkeypatc
     )
     assert resp.status_code == 200
     assert "/api/stream/tv?token=" in calls["media_url"]
-    assert calls["media_url"].endswith("&rung=360")
+    assert "&rung=360" in calls["media_url"]
 
 
 def test_play_with_a_forged_token_is_refused(client):
@@ -227,6 +229,7 @@ def test_play_stored_file_a_browser_cannot_play_is_re_encoded(client, monkeypatc
     calls = _cast_stored(client, monkeypatch, playable=False)
     assert calls["media_url"] == (
         "http://192.168.1.20:8080/api/downloaded/tv?path=Matrix/The%20Matrix.mkv&audio=2"
+        "&live=dlna"
     )
     assert calls["mime_type"] == "video/mpeg"
     # Handed over so the TV can draw a seek bar for a stream with no length.
@@ -238,7 +241,7 @@ def test_play_stored_file_with_captions_burns_them_in(client, monkeypatch):
         client, monkeypatch, playable=True, subtitle=Path("x.fr.vtt"), lang="fr"
     )
     assert "/api/downloaded/tv?" in calls["media_url"]
-    assert calls["media_url"].endswith("&lang=fr")
+    assert "&lang=fr" in calls["media_url"]
 
 
 def test_play_stored_file_at_a_lighter_quality_is_re_encoded_down(client, monkeypatch):
@@ -246,7 +249,7 @@ def test_play_stored_file_at_a_lighter_quality_is_re_encoded_down(client, monkey
     encode even when the TV would have taken the file."""
     calls = _cast_stored(client, monkeypatch, playable=True, quality=480)
     assert "/api/downloaded/tv?" in calls["media_url"]
-    assert calls["media_url"].endswith("&rung=480")
+    assert "&rung=480" in calls["media_url"]
 
 
 def test_play_stored_file_at_best_quality_goes_as_it_is(client, monkeypatch):
@@ -258,7 +261,7 @@ def test_play_stored_file_at_best_quality_goes_as_it_is(client, monkeypatch):
 
 def test_play_stored_file_above_1080p_keeps_that_size(client, monkeypatch):
     calls = _cast_stored(client, monkeypatch, playable=True, quality=1440)
-    assert calls["media_url"].endswith("&rung=1440")
+    assert "&rung=1440" in calls["media_url"]
 
 
 def test_the_qualities_offered_are_the_source_and_every_step_below(client, monkeypatch):
@@ -376,20 +379,54 @@ def test_play_failure_maps_to_502(client, monkeypatch):
     assert "renderer refused" in resp.json()["detail"]
 
 
-def test_quality_is_changed_by_sending_the_same_video_again(client, monkeypatch):
-    """Any page can change it, even one opened after the cast began: the server
-    holds what the TV was sent."""
+def test_a_tv_playing_the_file_moves_to_the_re_encoded_stream_once(client, monkeypatch):
+    """The file itself has one quality and one rate; changing either moves the
+    TV to the re-encoded stream, which restarts it — the only time it does."""
     calls = _cast_stored(client, monkeypatch, playable=True)
     assert "/api/downloaded/file?" in calls["media_url"]
 
-    resp = client.post("/api/cast/dlna/quality", json={"quality": 360})
+    resp = client.post("/api/cast/live", json={"id": "dlna", "quality": 360})
 
-    assert resp.status_code == 200
+    assert resp.json()["restarted"] is True
     assert "/api/downloaded/tv?" in calls["media_url"]
-    assert calls["media_url"].endswith("&rung=360")
+    assert "&rung=360" in calls["media_url"]
 
 
-def test_quality_without_a_cast_is_a_409(client):
+def test_a_tv_on_the_re_encoded_stream_changes_in_place(client, monkeypatch):
+    """No new play: the stream already open follows the new settings."""
+    calls = _cast_stored(client, monkeypatch, playable=False)
+    sent = calls["media_url"]
+
+    resp = client.post("/api/cast/live", json={"id": "dlna", "quality": 720, "fps": 60})
+
+    assert resp.json() == {"restarted": False}
+    assert calls["media_url"] == sent
+    assert client.app.state.live["dlna"] == {"rung": 720, "fps": 60}
+    # And a page opened later offers from what the TV is now sent.
+    assert client.app.state.dlna_play.quality == 720
+
+
+def test_a_tv_is_never_sent_more_than_60_frames_a_second(client, monkeypatch):
+    _cast_stored(client, monkeypatch, playable=False)
+
+    client.post("/api/cast/live", json={"id": "dlna", "fps": 144})
+
+    assert client.app.state.live["dlna"]["fps"] == 60
+
+
+def test_a_chromecast_keeps_its_settings_under_its_own_id(client):
+    resp = client.post("/api/cast/live", json={"id": "cc-1", "quality": 480, "fps": 30})
+
+    assert resp.json() == {"restarted": False}
+    assert client.app.state.live["cc-1"] == {"rung": 480, "fps": 30}
+    # Best leaves the rung to the receiver's own choice from the master.
+    client.post("/api/cast/live", json={"id": "cc-1"})
+    assert client.app.state.live["cc-1"] == {"rung": None, "fps": 0}
+
+
+def test_live_changes_need_a_cast_and_a_well_formed_id(client):
+    assert client.post("/api/cast/live", json={"id": "dlna"}).status_code == 409
+    assert client.post("/api/cast/live", json={"id": "../x"}).status_code == 422
     assert (
-        client.post("/api/cast/dlna/quality", json={"quality": 360}).status_code == 409
+        client.post("/api/cast/live", json={"id": "cc", "fps": 50}).status_code == 422
     )

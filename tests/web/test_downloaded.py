@@ -716,3 +716,77 @@ def test_tv_seek_with_a_byte_range_is_answered_partial(client, out):
     assert resp.headers["content-range"].startswith("bytes 5431296-")
     assert "npt=4.000-" in resp.headers["timeseekrange.dlna.org"]
     assert resp.content[0] == 0x47
+
+
+def test_tv_stream_follows_a_change_without_the_tv_reconnecting(out):
+    """Quality changed mid-cast: the same stream goes on, its picture smaller
+    from where the encode had got to, its clock carrying on."""
+    import asyncio
+    import re
+    import subprocess
+
+    from sestudio.media import ffmpeg_binary
+    from sestudio.web.routes import downloaded as route
+
+    clip = _clip(out, seconds="20")
+    settings = [(0, 0)]
+    run_from = route.tv_run_from(clip, 0, None, False, 25.0)
+
+    async def collect() -> bytes:
+        got = b""
+        async for chunk in route._live_piped(0.0, lambda: settings[0], run_from):
+            got += chunk
+            if len(got) > 300_000:
+                settings[0] = (360, 0)
+        return got
+
+    stream = out / "tv.ts"
+    stream.write_bytes(asyncio.run(collect()))
+    report = subprocess.run(
+        [ffmpeg_binary(), "-hide_banner", "-i", str(stream), "-vf", "showinfo",
+         "-f", "null", "-"],
+        capture_output=True,
+        text=True,
+    ).stderr  # fmt: skip
+    frames = re.findall(r"pts_time:([\d.]+).*? s:(\d+)x(\d+)", report)
+    sizes = [(int(w), int(h)) for _t, w, h in frames]
+    assert sizes[0] == (1920, 1080) and sizes[-1] == (640, 360)
+    # One switch, and after it the clock goes on instead of starting over.
+    switch = sizes.index((640, 360))
+    assert set(sizes[switch:]) == {(640, 360)}
+    times = [float(t) for t, _w, _h in frames]
+    assert times[switch] >= times[switch - 1] - 0.5
+    assert times[-1] > 15
+
+
+def test_a_chromecast_segment_follows_its_cast_s_changed_settings(
+    client, out, monkeypatch
+):
+    """The receiver keeps the playlist it holds; what changes is what each next
+    segment is made at."""
+    from sestudio.web.routes import downloaded as route
+
+    _write(out / "Film.avi")
+    downloaded.invalidate()
+    monkeypatch.setattr(downloaded, "tracks_of", lambda _f: _hd_tracks())
+    made = out.parent / "seg.ts"
+    made.write_bytes(b"MPEGTS")
+    built: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        downloaded,
+        "hls_segment",
+        lambda _f, _r, _i, _a=0, rung=0, fps=0: built.append((rung, fps)) or made,
+    )
+    params = {"path": "Film.avi", "index": 3, "rung": 0, "live": "cc-1"}
+
+    client.get("/api/downloaded/segment", params=params)
+    client.app.state.live["cc-1"] = {"rung": 500, "fps": 30}
+    client.get("/api/downloaded/segment", params={**params, "index": 4})
+    client.app.state.live["cc-1"] = {"rung": None, "fps": 60}
+    client.get("/api/downloaded/segment", params={**params, "index": 5})
+    client.app.state.live.clear()
+    route._HLS_PENDING.clear()
+
+    # As asked; then the nearest rung the film has to 500, at 30; then the
+    # receiver's own rung back, at 60.
+    assert built == [(0, 0), (480, 30), (0, 60)]

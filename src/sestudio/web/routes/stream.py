@@ -24,9 +24,12 @@ from sestudio.web.proxy import (
 )
 from sestudio.web.routes.downloaded import (
     check_fps,
+    live_settings,
+    segment_settings,
     master_playlist,
     media_playlist,
     offered_rung,
+    tv_run_from,
     tv_seek,
     tv_stream,
 )
@@ -322,7 +325,11 @@ async def _probe(request: Request, token: str) -> tuple[str, downloaded.StreamPr
 
 @router.get("/stream/hls")
 async def stream_hls(
-    token: str, request: Request, rung: int | None = None, fps: int = 0
+    token: str,
+    request: Request,
+    rung: int | None = None,
+    fps: int = 0,
+    live: str | None = None,
 ) -> Response:
     """A provider's stream re-encoded as it plays, as ``/downloaded/hls`` is a
     stored file: the master without *rung*, that quality's segments with it."""
@@ -333,6 +340,7 @@ async def stream_hls(
         raise HTTPException(status_code=502, detail="Length of that stream is unknown")
     query = urllib.parse.urlencode({"token": token})
     rate = f"&fps={fps}" if fps else ""
+    rate += "&" + urllib.parse.urlencode({"live": live}) if live else ""
     variants = downloaded.ladder(probe.width, probe.height)
     if rung is None:
         return master_playlist(variants, f"hls?{query}{rate}", fps, probe.fps)
@@ -351,10 +359,17 @@ async def stream_segment(
     index: int = Query(..., ge=0),
     rung: int = 0,
     fps: int = 0,
+    live: str | None = None,
 ) -> Response:
     """One segment of the playlist above, transcoded now if it is not cached."""
     check_fps(fps)
     url, hls = transcode_source(request, token)
+
+    def variants() -> list[tuple[int, int, int, int]]:
+        probe = downloaded.probe_stream(url, hls=hls)
+        return downloaded.ladder(probe.width, probe.height) if probe else []
+
+    rung, fps = await segment_settings(request, live, rung, fps, variants)
     segment = await asyncio.wrap_future(_queue_segment(url, index, rung, hls, fps))
     if segment is None:
         raise HTTPException(status_code=404, detail="No such segment")
@@ -363,18 +378,21 @@ async def stream_segment(
 
 @router.api_route("/stream/tv", methods=["GET", "HEAD"])
 async def stream_tv(
-    token: str, request: Request, rung: int = Query(0, ge=0)
+    token: str,
+    request: Request,
+    rung: int = Query(0, ge=0),
+    fps: int = 0,
+    live: str | None = None,
 ) -> Response:
     """A provider's stream re-encoded for a DLNA TV, as ``/downloaded/tv`` is a
-    stored file. For HLS, which few TVs follow, and for a lighter quality."""
+    stored file. For HLS, which few TVs follow, and for a lighter quality or
+    another frame rate."""
+    check_fps(fps)
     url, probe = await _probe(request, token)
     start, headers = tv_seek(request, probe.duration)
     if request.method == "HEAD":
         return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)
-    try:
-        command = downloaded.tv_stream_command(
-            url, start, 0, None, probe.hdr, rung, stream=probe
-        )
-    except RuntimeError as exc:  # no ffmpeg
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return tv_stream(request, command, headers)
+    run_from = tv_run_from(url, 0, None, probe.hdr, probe.fps, stream=probe)
+    return tv_stream(
+        request, start, live_settings(request, live, rung, fps), run_from, headers
+    )

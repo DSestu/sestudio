@@ -39,6 +39,8 @@ export interface PlayerPrefs {
   /** The same for a cast, kept apart: the TV's link is not the browser's.
    *  `undefined` — the best the TV takes (Auto on a Chromecast). */
   tvQuality?: number
+  /** Frame rate a cast is sent at; `undefined` — the source's own. */
+  tvFps?: number
 }
 
 const DEFAULTS: PlayerPrefs = { volume: 1, muted: false, rate: 1 }
