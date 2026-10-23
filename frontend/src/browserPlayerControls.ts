@@ -11,6 +11,9 @@ export interface BrowserPlayerControls {
   /** Seek to a position (seconds) and resume — used to hand a stopped cast's
    *  timestamp back to the local player. */
   resumeAt: (seconds: number) => void
+  /** Write the watch position now, before a change that reloads the source
+   *  and resumes from it (another frame rate). */
+  savePosition: () => void
 }
 
 let state: BrowserPlayerControls | null = null

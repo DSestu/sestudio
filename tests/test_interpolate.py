@@ -211,3 +211,79 @@ def test_a_rate_is_sustained_when_drawing_it_fits_the_measured_speed(monkeypatch
     # And nothing is sustained where nothing can be drawn.
     monkeypatch.setattr(interpolate, "speed", lambda: None)
     assert not interpolate.sustains(30, 24, 640, 360)
+
+
+# --- the runtime, installed on first need ---------------------------------- #
+
+
+@pytest.fixture()
+def no_runtime(tmp_path: Path, monkeypatch):
+    """ONNX Runtime importable only from its cache folder, as in a `uvx`
+    environment; uv on the path."""
+    monkeypatch.setattr(interpolate, "config_dir", lambda: tmp_path / "cfg")
+    monkeypatch.setattr(interpolate.sys, "path", list(interpolate.sys.path))
+    monkeypatch.setattr(
+        interpolate,
+        "_importable",
+        lambda: str(interpolate.runtime_dir()) in interpolate.sys.path,
+    )
+    monkeypatch.setattr(interpolate.shutil, "which", lambda name: "/usr/bin/uv")
+
+
+def test_the_runtime_is_installed_once_into_the_config_dir(no_runtime, monkeypatch):
+    import sysconfig
+
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        Path(command[command.index("--target") + 1]).mkdir(parents=True)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(interpolate.subprocess, "run", fake_run)
+
+    assert interpolate.ensure_runtime()
+
+    command = commands[0]
+    # uv, as a uvx environment has no pip, for the interpreter running this.
+    assert command[:3] == ["/usr/bin/uv", "pip", "install"]
+    assert command[command.index("--python") + 1] == interpolate.sys.executable
+    target = interpolate.runtime_dir()
+    # One folder per Python and platform: the wheels differ between them.
+    version = interpolate.sys.version_info
+    assert target.name == f"py{version.major}{version.minor}-{sysconfig.get_platform()}"
+    assert (target / ".complete").is_file()
+
+    # A later launch starts without it on the path, and installs nothing.
+    interpolate.sys.path.remove(str(target))
+    monkeypatch.setattr(
+        interpolate.subprocess, "run", lambda *a, **k: pytest.fail("reinstalled")
+    )
+    assert interpolate.ensure_runtime()
+    assert len(commands) == 1
+
+
+def test_a_failed_install_leaves_nothing_taken_for_finished(no_runtime, monkeypatch):
+    def fake_run(command, **_kwargs):
+        Path(command[command.index("--target") + 1]).mkdir(parents=True)
+        return subprocess.CompletedProcess(command, 1, "", "no network")
+
+    monkeypatch.setattr(interpolate.subprocess, "run", fake_run)
+
+    assert not interpolate.ensure_runtime()
+    runtime = interpolate.runtime_dir()
+    assert not runtime.exists()
+    assert not runtime.with_name(f"{runtime.name}.part").exists()
+
+
+def test_status_never_waits_and_prepares_only_once(monkeypatch):
+    started: list[bool] = []
+    monkeypatch.setattr(interpolate, "_session_cache", [])
+    monkeypatch.setattr(interpolate, "_prepared_at", [])
+    monkeypatch.setattr(interpolate, "_prepare", lambda: started.append(True))
+
+    first = interpolate.status()
+    second = interpolate.status()
+
+    assert first == second == {"available": False, "provider": None, "preparing": True}
+    assert started == [True]

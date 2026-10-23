@@ -5,9 +5,10 @@ import {
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default'
 import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
-import { mediaOptions, type MediaOptions, type StreamSource } from '../../api'
-import { withFps } from '../../frameRates'
-import FrameRateMenu from './FrameRateMenu'
+import type { StreamSource } from '../../api'
+import { useMediaOptions } from '../../useMediaOptions'
+import { useBrowserFps } from '../../browserFps'
+import { ladderUrlOf, withFps } from '../../frameRates'
 import type { PlayableEpisode } from '../../providers'
 import { getProgress, saveProgress, setWatched, watchKey } from '../../watchState'
 import { endBrowserPlayback, sameEpisode, startBrowserPlayback, updateBrowserPlayback, useCastSession } from '../../playbackSession'
@@ -68,31 +69,13 @@ export default function VideoPane({
   // stream it re-encodes) can be sent at another one. Their options say which
   // rates this source and machine allow; the saved pick applies when allowed,
   // and is tried before they are known rather than loading twice.
-  const ladderUrl = displaySource?.kind === 'hls' && /\/api\/(downloaded|stream)\/hls\?/.test(displaySource.proxy_url)
-    ? displaySource.proxy_url
-    : null
-  const [options, setOptions] = useState<{ url: string; value: MediaOptions } | null>(null)
-  useEffect(() => {
-    if (!ladderUrl) return
-    let live = true
-    mediaOptions(ladderUrl).then(value => { if (live) setOptions({ url: ladderUrl, value }) })
-    return () => { live = false }
-  }, [ladderUrl])
-  const known = options?.url === ladderUrl ? options.value : null
-  const [fps, setFps] = useState(() => loadPlayerPrefs().fps ?? 0)
+  const ladderUrl = ladderUrlOf(displaySource)
+  const known = useMediaOptions(ladderUrl ?? undefined, ladderUrl !== null)
+  const fps = useBrowserFps()
   const playingFps = !fps || !known || known.frame_rates.includes(fps) ? fps : 0
   const mediaUrl = displaySource
     ? ladderUrl ? withFps(ladderUrl, playingFps) : displaySource.proxy_url
     : ''
-
-  function changeFps(next: number) {
-    // Written now, not on the next tick of the save throttle: the new playlist
-    // starts at zero and resumes from this.
-    const p = playerRef.current
-    if (p && p.duration > 0) saveProgress(ep, p.currentTime, p.duration)
-    savePlayerPrefs({ fps: next || undefined })
-    setFps(next)
-  }
 
   // Drives the layout choice below: the small (mobile) layout drops the
   // timeline, which is wrong for a popped-out window.
@@ -127,8 +110,13 @@ export default function VideoPane({
         p.currentTime = seconds
         void p.play()
       },
+      savePosition: () => {
+        const p = playerRef.current
+        if (p && p.duration > 0) saveProgress(ep, p.currentTime, p.duration)
+      },
     })
-  }, [paused])
+    // On the episode too, so the position is saved under the one playing.
+  }, [paused, ep])
   useEffect(() => () => setBrowserPlayerControls(null), [])
 
   // Push the saved caption appearance onto :root. vidstack's own Caption Styles
@@ -328,16 +316,7 @@ export default function VideoPane({
               most controls, leaving only a centre play button. */}
           <DefaultVideoLayout
             icons={defaultLayoutIcons}
-            slots={{
-              settingsMenuItemsEnd: known && (
-                <FrameRateMenu
-                  source={known.fps}
-                  rates={known.frame_rates}
-                  value={playingFps}
-                  onChange={changeFps}
-                />
-              ),
-            }}
+
             smallLayoutWhen={pipWindow ? false : undefined}
           />
           <BufferingInfo source={displaySource} />

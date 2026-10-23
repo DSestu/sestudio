@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { mediaOptions } from '../../api'
+import { useState } from 'react'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
+import { useMediaOptions } from '../../useMediaOptions'
 
 /** Offered while the source's own size is unknown; the server clamps a pick
  *  to what the source has. */
@@ -17,13 +17,8 @@ export default function CastQuality({ url, onChange, disabled }: {
   disabled?: boolean
 }) {
   // Heights best first, the source's own first; empty until known.
-  const [heights, setHeights] = useState<number[]>([])
+  const heights = useMediaOptions(url)?.heights ?? []
   const [saved, setSaved] = useState(() => loadPlayerPrefs().tvQuality ?? 0)
-  useEffect(() => {
-    let live = true
-    mediaOptions(url).then(options => { if (live) setHeights(options.heights) })
-    return () => { live = false }
-  }, [url])
 
   const steps = heights.length ? heights.slice(1) : FALLBACK
   // Shown as what the server sends for it: Best when it is this source's size

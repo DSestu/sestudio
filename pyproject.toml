@@ -35,14 +35,6 @@ dependencies = [
     # `-Werror=incompatible-pointer-types`, which MSVC rejects (D8021).
     # jsdecode.py still prefers it when importable, so a manual install works.
     "mini-racer>=0.14.1",
-    # AI frame interpolation (sestudio/interpolate.py), on the GPU each platform
-    # exposes: DirectML on Windows reaches NVIDIA, AMD and Intel alike; the plain
-    # wheel carries CoreML on a Mac. Linux gets the CPU build, too slow to keep up
-    # with playback; swap in onnxruntime-gpu there for an NVIDIA card. py7zr only
-    # unpacks the model, which is published as a .7z.
-    "onnxruntime-directml>=1.20; sys_platform == 'win32'",
-    "onnxruntime>=1.20; sys_platform != 'win32'",
-    "py7zr>=0.22",
     "rich>=15.0.0",
     "uvicorn[standard]>=0.34",
     # curl-cffi: Chrome TLS impersonation. vidzy's CDN 403s any non-browser TLS
@@ -89,6 +81,11 @@ dev = [
     "pytest>=9.0.3",
     "pytest-httpx>=0.36.2",
     "ruff>=0.6.3",
+    # AI frame interpolation's runtime. Not a dependency of the package: it is
+    # tens of megabytes most installs never use, so interpolate.py installs it
+    # into the config directory on first use. Here so its tests run against it.
+    "onnxruntime>=1.20",
+    "py7zr>=0.22",
     # Not a runtime dependency (see the note on mini-racer above), but
     # jsdecode.py still prefers it when present, so the dual-engine tests need
     # it here or the QuickJS branch is never exercised anywhere. Marked to the

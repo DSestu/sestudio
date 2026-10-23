@@ -286,6 +286,23 @@ def test_no_qualities_are_offered_before_anything_is_cast(client):
     }
 
 
+def test_options_say_when_ai_is_still_being_fetched(client, monkeypatch):
+    tracks = cast.downloaded.MediaTracks(
+        audio=[], subtitles=[], video_width=1920, video_height=1080, video_fps=24.0
+    )
+    monkeypatch.setattr(cast.downloaded, "tracks_of", lambda f: tracks)
+    monkeypatch.setattr(cast, "_resolved", lambda path: Path("/films") / path)
+    monkeypatch.setattr(
+        cast.interpolate, "status", lambda: {"available": False, "preparing": True}
+    )
+
+    body = client.get(
+        "/api/media/options", params={"url": "/api/downloaded/hls?path=x.mkv"}
+    ).json()
+
+    assert body["frame_rates"] == [] and body["preparing"] is True
+
+
 @pytest.mark.parametrize(
     ("source_fps", "gpu", "speed", "offered"),
     [
@@ -410,12 +427,13 @@ def test_a_tv_on_the_re_encoded_stream_changes_in_place(client, monkeypatch):
     assert client.app.state.dlna_play.quality == 720
 
 
-def test_a_tv_is_never_sent_more_than_60_frames_a_second(client, monkeypatch):
+def test_a_tv_can_be_sent_any_offered_rate(client, monkeypatch):
+    """No ceiling for TVs: a set that decodes 144 gets 144."""
     _cast_stored(client, monkeypatch, playable=False)
 
     client.post("/api/cast/live", json={"id": "dlna", "fps": 144})
 
-    assert client.app.state.live["dlna"]["fps"] == 60
+    assert client.app.state.live["dlna"]["fps"] == 144
 
 
 def test_a_chromecast_keeps_its_settings_under_its_own_id(client):

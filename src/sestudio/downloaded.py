@@ -1713,10 +1713,6 @@ def tv_stream_command(
     ]
 
 
-#: The most frames a second a TV or a Chromecast is sent: few decode more.
-TV_MAX_FPS = 60
-
-
 def tv_drawn_encode(
     file: Path | str,
     start: float,
@@ -1790,10 +1786,9 @@ def tv_drawn_encode(
 def tv_fps(fps: int, source_fps: float) -> tuple[int, bool]:
     """The rate a TV is sent for an asked *fps*, and whether it is drawn by AI.
 
-    Capped at what TVs decode, and the source's own (0) where it would be drawn
-    on a machine that cannot draw fast enough.
+    The source's own (0) where it would be drawn on a machine that cannot draw
+    fast enough. Not capped at what a TV decodes: that is the viewer's call.
     """
-    fps = min(fps, TV_MAX_FPS)
     fps = _drawable(fps, source_fps)
     return fps, bool(fps and source_fps and fps > source_fps + 0.5)
 
