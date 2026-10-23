@@ -1694,6 +1694,10 @@ def tv_stream_command(
         "-map",
         f"0:a:{audio}?",
         *_h264_args(h264_encoder(), 21, kbps),
+        # Frames in display order, so a change mid-stream can continue right
+        # after the last one sent (see routes/downloaded.py `_live_piped`).
+        "-bf",
+        "0",
         "-c:a",
         "aac",
         "-b:a",
@@ -1765,6 +1769,10 @@ def tv_drawn_encode(
         "-color_trc",
         "bt709",
         *_h264_args(h264_encoder(), 21, kbps),
+        # Frames in display order, so a change mid-stream can continue right
+        # after the last one sent (see routes/downloaded.py `_live_piped`).
+        "-bf",
+        "0",
         "-c:a",
         "aac",
         "-b:a",

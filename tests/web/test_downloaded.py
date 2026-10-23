@@ -719,44 +719,49 @@ def test_tv_seek_with_a_byte_range_is_answered_partial(client, out):
 
 
 def test_tv_stream_follows_a_change_without_the_tv_reconnecting(out):
-    """Quality changed mid-cast: the same stream goes on, its picture smaller
-    from where the encode had got to, its clock carrying on."""
-    import asyncio
-    import re
-    import subprocess
+    """Quality changed mid-cast: the same stream goes on, a new encode at the
+    new settings carrying on at the next frame — none twice, none missing.
 
-    from sestudio.media import ffmpeg_binary
+    Read with the server's own parser, not ffmpeg: the bundled 7.0.2 segfaults
+    reading this output back on GitHub's runners (it encodes it fine)."""
+    import asyncio
+
     from sestudio.web.routes import downloaded as route
 
     clip = _clip(out, seconds="20")
     settings = [(0, 0)]
-    run_from = route.tv_run_from(clip, 0, None, False, 25.0)
+    real = route.tv_run_from(clip, 0, None, False, 10.0)
+    runs: list[tuple[float, tuple[int, int]]] = []
+
+    def run_from(start, wanted):
+        runs.append((start, wanted))
+        return real(start, wanted)
+
+    split = [0]
 
     async def collect() -> bytes:
         got = b""
         async for chunk in route._live_piped(0.0, lambda: settings[0], run_from):
             got += chunk
-            if len(got) > 300_000:
-                settings[0] = (360, 0)
+            if len(got) > 300_000 and not split[0]:
+                # What comes after this chunk is the new encode's.
+                settings[0], split[0] = (360, 0), len(got)
         return got
 
-    stream = out / "tv.ts"
-    stream.write_bytes(asyncio.run(collect()))
-    report = subprocess.run(
-        [ffmpeg_binary(), "-hide_banner", "-i", str(stream), "-vf", "showinfo",
-         "-f", "null", "-"],
-        capture_output=True,
-        text=True,
-    ).stderr  # fmt: skip
-    frames = re.findall(r"pts_time:([\d.]+).*? s:(\d+)x(\d+)", report)
-    sizes = [(int(w), int(h)) for _t, w, h in frames]
-    assert sizes[0] == (1920, 1080) and sizes[-1] == (640, 360)
-    # One switch, and after it the clock goes on instead of starting over.
-    switch = sizes.index((640, 360))
-    assert set(sizes[switch:]) == {(640, 360)}
-    times = [float(t) for t, _w, _h in frames]
-    assert times[switch] >= times[switch - 1] - 0.5
-    assert times[-1] > 15
+    got = asyncio.run(collect())
+    assert split[0] and len(got) > split[0], f"the stream stopped at {len(got)}"
+    # One new encode, at the new settings, from part way in.
+    assert [wanted for _start, wanted in runs] == [(0, 0), (360, 0)]
+    assert runs[1][0] > 0
+    early = [pts / 90_000 for _at, pts in route.frame_starts(got[: split[0]])]
+    late = [pts / 90_000 for _at, pts in route.frame_starts(got[split[0] :])]
+    # Handed over on a packet boundary; the new encode opens with its stream
+    # tables, then its first frame.
+    assert split[0] % 188 == 0
+    step = early[1] - early[0]
+    assert 0 < late[0] - early[-1] <= step + 0.03
+    # 20 s at 10 fps, across both encodes.
+    assert len(early) + len(late) == 200
 
 
 def test_a_chromecast_segment_follows_its_cast_s_changed_settings(

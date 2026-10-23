@@ -10,7 +10,6 @@ the path is the whole of what is known about it.
 from __future__ import annotations
 
 import asyncio
-import re
 import subprocess
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator
@@ -309,16 +308,46 @@ async def get_downloaded_file(
     )
 
 
-_OUT_TIME_RE = re.compile(rb"^out_time_(?:us|ms)=(\d+)")
+#: An MPEG-TS packet, and the PID ffmpeg gives the first video stream.
+_TS_PACKET = 188
+_TS_VIDEO_PID = 0x100
+
+
+def frame_starts(data: bytes) -> list[tuple[int, int]]:
+    """Where each video frame starts in the whole MPEG-TS packets at the head
+    of *data*, as (byte offset, timestamp at 90 kHz).
+
+    Read off the bytes, as that is what a TV has been sent: an encode runs
+    ahead of it, by more than any position ffmpeg reports.
+    """
+    found: list[tuple[int, int]] = []
+    for at in range(0, len(data) - _TS_PACKET + 1, _TS_PACKET):
+        packet = data[at : at + _TS_PACKET]
+        pid = ((packet[1] & 0x1F) << 8) | packet[2]
+        # A frame's first packet, for the video stream, with a payload.
+        if packet[0] != 0x47 or pid != _TS_VIDEO_PID or not packet[1] & 0x40:
+            continue
+        control = (packet[3] >> 4) & 0x3
+        if not control & 0x1:
+            continue
+        payload = 4 + (1 + packet[4] if control & 0x2 else 0)
+        pes = packet[payload:]
+        if len(pes) < 14 or pes[:3] != b"\x00\x00\x01" or not pes[7] & 0x80:
+            continue
+        pts = (
+            ((pes[9] >> 1) & 0x07) << 30
+            | pes[10] << 22
+            | (pes[11] >> 1) << 15
+            | pes[12] << 7
+            | pes[13] >> 1
+        )
+        found.append((at, pts))
+    return found
 
 
 class _TvRun:
     """One encode of a TV stream from a point in the film: a single ffmpeg, or
-    one decoding to raw frames, AI drawing those in between, and one encoding.
-
-    Knows how much of the film it has encoded, which is where the next run
-    starts when the TV's quality or frame rate changes mid-stream.
-    """
+    one decoding to raw frames, AI drawing those in between, and one encoding."""
 
     def __init__(
         self,
@@ -329,17 +358,11 @@ class _TvRun:
         fps: int = 0,
     ) -> None:
         self._fps = fps
-        self._frames = 0
-        self._seconds = 0.0
         self._dec: subprocess.Popen[bytes] | None = None
         if decode is None:
-            # Position reports on stderr, about twice a second.
             self._enc = subprocess.Popen(
-                [encode[0], "-progress", "pipe:2", "-nostats", *encode[1:]],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                encode, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
             )
-            threading.Thread(target=self._watch, daemon=True).start()
         else:
             self._dec = subprocess.Popen(
                 decode, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
@@ -354,13 +377,6 @@ class _TvRun:
                 target=self._feed, args=(size, source_fps), daemon=True
             ).start()
 
-    def _watch(self) -> None:
-        assert self._enc.stderr is not None
-        for line in self._enc.stderr:
-            if match := _OUT_TIME_RE.match(line):
-                # `out_time_ms` is microseconds too (an old ffmpeg misnomer).
-                self._seconds = int(match.group(1)) / 1_000_000
-
     def _feed(self, size: tuple[int, int], source_fps: float) -> None:
         from sestudio import interpolate
 
@@ -370,15 +386,9 @@ class _TvRun:
             frames = interpolate.read_frames(self._dec.stdout, *size)
             for frame in interpolate.frames_at(frames, source_fps, self._fps, 10**9):
                 self._enc.stdin.write(frame.tobytes())
-                self._frames += 1
             self._enc.stdin.close()
         except (OSError, ValueError):  # stopped mid-write
             pass
-
-    @property
-    def encoded(self) -> float:
-        """Seconds of the film this run has encoded so far."""
-        return self._frames / self._fps if self._dec else self._seconds
 
     def read(self, size: int) -> bytes:
         assert self._enc.stdout is not None
@@ -398,10 +408,12 @@ async def _live_piped(
 ) -> AsyncIterator[bytes]:
     """A TV stream, chunk by chunk, that follows its settings as they change.
 
-    *settings* is read between chunks; when it differs, the run in progress is
-    stopped and a new one started where it had got to, its timestamps on the
-    film's clock, so the TV sees one stream go on rather than a new one: no
-    reconnect, no black. It shows once the TV has played what it had buffered.
+    Each frame is held back until the next one starts, so the TV is only ever
+    sent whole frames. *settings* is read between chunks; when it differs, the
+    frame held is dropped, the run in progress stopped, and a new one started at
+    that frame, its timestamps on the film's clock — the TV sees one stream go
+    on: no reconnect, no black, no frame twice or missing. It shows once the TV
+    has played what it had buffered.
 
     Async so a disconnect cancels it at the ``await`` and the ``finally`` runs
     there and then — a TV seeks by dropping the connection and opening another,
@@ -409,15 +421,30 @@ async def _live_piped(
     """
     current = settings()
     run = await asyncio.to_thread(run_from, start, current)
+    # Bytes from the frame being held on; this run's first frame's timestamp,
+    # which is *start*; and the held frame's.
+    held = b""
+    first: int | None = None
+    holding: int | None = None
     try:
         while chunk := await asyncio.to_thread(run.read, 64 * 1024):
-            yield chunk
+            held += chunk
+            starts = frame_starts(held)
+            if starts and first is None:
+                first = starts[0][1]
+            if len(starts) > 1 or (starts and starts[0][0] > 0):
+                at, holding = starts[-1]
+                yield held[:at]
+                held = held[at:]
             wanted = settings()
             if wanted != current:
-                start += run.encoded
+                if first is not None and holding is not None:
+                    start += (holding - first) / 90_000
                 await asyncio.to_thread(run.stop)
-                current = wanted
+                current, held, first, holding = wanted, b"", None, None
                 run = await asyncio.to_thread(run_from, start, current)
+        if held:
+            yield held  # the run's end: its last frame is whole
     finally:
         await asyncio.to_thread(run.stop)
 
