@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Renderer, StreamSource, StreamSubtitle } from '../../api'
 import {
-  dlnaPlay, getCastHttpPort, listRenderers, downloadedFileUrl, downloadedHlsUrl, resolveStream,
+  castLive, dlnaPlay, getCastHttpPort, listRenderers, downloadedFileUrl, downloadedHlsUrl,
+  resolveStream,
 } from '../../api'
 import { fileFor, downloadedSnapshot } from '../../downloadedLibrary'
 import { castSeek, castToChromecast, describeCastError, loadCast, useCastState } from '../../cast'
@@ -10,7 +11,9 @@ import { startCastQueue } from '../../castQueue'
 import { startCastSession } from '../../playbackSession'
 import { loadPlayerPrefs } from '../../playerPrefs'
 import type { PlayableEpisode } from '../../providers'
+import CastFrameRate from '../cast/CastFrameRate'
 import CastQuality from '../cast/CastQuality'
+import { withFps } from '../../frameRates'
 
 const CAST_ICON =
   'M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 11a6 6 0 016 6M3 15a2 2 0 012 2M3 19h.01'
@@ -129,10 +132,11 @@ export default function OutputSwitcher({
   ) {
     const prefs = loadPlayerPrefs()
     const quality = prefs.tvQuality ?? 0
+    const fps = prefs.tvFps ?? 0
     if (mode === 'dlna' && udn) {
       onStep('Asking the TV to play the video — it connects back to the server to fetch it…')
       // The captions picked in the browser player; the server burns them in.
-      await dlnaPlay(udn, proxyUrl, title, kind, prefs.subtitleLang, quality)
+      await dlnaPlay(udn, proxyUrl, title, kind, prefs.subtitleLang, quality, fps)
       dlnaStarted()
     } else {
       // On a LAN address the app's cert is self-signed and Chromecast can't
@@ -148,11 +152,17 @@ export default function OutputSwitcher({
       const host = window.location.hostname
       const base = port !== null && isLanHost(host) ? `http://${host}:${port}` : window.location.origin
       const onLan = (path: string) => `${base}${path}`
-      // The master playlist lets the Chromecast pick a quality itself; a
-      // fixed one is that quality's own playlist.
-      const pinned = quality && /\/(downloaded|stream)\/hls\?/.test(proxyUrl) ? `${proxyUrl}&rung=${quality}` : proxyUrl
+      // The master playlist, under an id of its own: the server holds its
+      // quality and frame rate by it, so either changes later without a
+      // reload (see `castLive`). Best leaves the quality to the Chromecast.
+      let media = proxyUrl
+      if (/\/api\/(downloaded|stream)\/hls\?/.test(proxyUrl)) {
+        const id = crypto.randomUUID()
+        await castLive(id, quality, fps)
+        media = `${withFps(proxyUrl, fps)}&live=${id}`
+      }
       await castToChromecast(
-        onLan(pinned),
+        onLan(media),
         kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
         title,
         subtitles.map(sub => ({
@@ -241,7 +251,10 @@ export default function OutputSwitcher({
       {/* Device picker — inline, not an overlay */}
       {picking && (
         <div className="rounded-box border border-base-300 bg-base-200 p-3 flex flex-col gap-3">
-          <CastQuality url={source?.proxy_url} disabled={busy} />
+          <div className="flex items-center gap-3 flex-wrap">
+            <CastQuality url={source?.proxy_url} disabled={busy} />
+            <CastFrameRate url={source?.proxy_url} disabled={busy} />
+          </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-base-content/40 mb-1">Chromecast &amp; AirPlay</p>
             {castAvailable ? (

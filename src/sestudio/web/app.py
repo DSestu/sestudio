@@ -129,6 +129,10 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.state.dlna_renderers = {}  # udn -> control location, populated by discovery
     app.state.dlna_dmr = None  # active DmrDevice for the current cast session
     app.state.dlna_title = ""
+    # Settings of a cast in progress that can change while it plays, by its
+    # live id ("dlna" for the TV, a random one per Chromecast load): see
+    # routes/downloaded.py `live_settings`.
+    app.state.live = {}
     # The direct HTTP port uvicorn listens on. Cast devices fetch media over
     # plain HTTP on this port even when the UI is fronted by HTTPS (Caddy), so
     # it must be the real listen port, not whatever the browser connected to.

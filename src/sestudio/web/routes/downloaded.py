@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
-from collections.abc import AsyncIterator, Iterator
+import threading
+from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -307,21 +308,200 @@ async def get_downloaded_file(
     )
 
 
-async def _piped(command: list[str]) -> AsyncIterator[bytes]:
-    """ffmpeg's stdout, chunk by chunk, and ffmpeg killed when the TV hangs up.
+#: An MPEG-TS packet, and the PID ffmpeg gives the first video stream.
+_TS_PACKET = 188
+_TS_VIDEO_PID = 0x100
+
+
+def frame_starts(data: bytes) -> list[tuple[int, int]]:
+    """Where each video frame starts in the whole MPEG-TS packets at the head
+    of *data*, as (byte offset, timestamp at 90 kHz).
+
+    Read off the bytes, as that is what a TV has been sent: an encode runs
+    ahead of it, by more than any position ffmpeg reports.
+    """
+    found: list[tuple[int, int]] = []
+    for at in range(0, len(data) - _TS_PACKET + 1, _TS_PACKET):
+        packet = data[at : at + _TS_PACKET]
+        pid = ((packet[1] & 0x1F) << 8) | packet[2]
+        # A frame's first packet, for the video stream, with a payload.
+        if packet[0] != 0x47 or pid != _TS_VIDEO_PID or not packet[1] & 0x40:
+            continue
+        control = (packet[3] >> 4) & 0x3
+        if not control & 0x1:
+            continue
+        payload = 4 + (1 + packet[4] if control & 0x2 else 0)
+        pes = packet[payload:]
+        if len(pes) < 14 or pes[:3] != b"\x00\x00\x01" or not pes[7] & 0x80:
+            continue
+        pts = (
+            ((pes[9] >> 1) & 0x07) << 30
+            | pes[10] << 22
+            | (pes[11] >> 1) << 15
+            | pes[12] << 7
+            | pes[13] >> 1
+        )
+        found.append((at, pts))
+    return found
+
+
+class _TvRun:
+    """One encode of a TV stream from a point in the film: a single ffmpeg, or
+    one decoding to raw frames, AI drawing those in between, and one encoding."""
+
+    def __init__(
+        self,
+        encode: list[str],
+        decode: list[str] | None = None,
+        size: tuple[int, int] = (0, 0),
+        source_fps: float = 0.0,
+        fps: int = 0,
+    ) -> None:
+        self._fps = fps
+        self._dec: subprocess.Popen[bytes] | None = None
+        if decode is None:
+            self._enc = subprocess.Popen(
+                encode, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+            )
+        else:
+            self._dec = subprocess.Popen(
+                decode, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+            )
+            self._enc = subprocess.Popen(
+                encode,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            threading.Thread(
+                target=self._feed, args=(size, source_fps), daemon=True
+            ).start()
+
+    def _feed(self, size: tuple[int, int], source_fps: float) -> None:
+        from sestudio import interpolate
+
+        assert self._dec is not None and self._dec.stdout is not None
+        assert self._enc.stdin is not None
+        try:
+            frames = interpolate.read_frames(self._dec.stdout, *size)
+            for frame in interpolate.frames_at(frames, source_fps, self._fps, 10**9):
+                self._enc.stdin.write(frame.tobytes())
+            self._enc.stdin.close()
+        except (OSError, ValueError):  # stopped mid-write
+            pass
+
+    def read(self, size: int) -> bytes:
+        assert self._enc.stdout is not None
+        return self._enc.stdout.read(size)
+
+    def stop(self) -> None:
+        for proc in (self._enc, self._dec):
+            if proc is not None:
+                proc.kill()
+                proc.wait()
+
+
+async def _live_piped(
+    start: float,
+    settings: Callable[[], tuple[int, int]],
+    run_from: Callable[[float, tuple[int, int]], _TvRun],
+) -> AsyncIterator[bytes]:
+    """A TV stream, chunk by chunk, that follows its settings as they change.
+
+    Each frame is held back until the next one starts, so the TV is only ever
+    sent whole frames. *settings* is read between chunks; when it differs, the
+    frame held is dropped, the run in progress stopped, and a new one started at
+    that frame, its timestamps on the film's clock — the TV sees one stream go
+    on: no reconnect, no black, no frame twice or missing. It shows once the TV
+    has played what it had buffered.
 
     Async so a disconnect cancels it at the ``await`` and the ``finally`` runs
     there and then — a TV seeks by dropping the connection and opening another,
     and each one left running would be a 4K decode nobody is watching.
     """
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    assert proc.stdout is not None
+    current = settings()
+    run = await asyncio.to_thread(run_from, start, current)
+    # Bytes from the frame being held on; this run's first frame's timestamp,
+    # which is *start*; and the held frame's.
+    held = b""
+    first: int | None = None
+    holding: int | None = None
     try:
-        while chunk := await asyncio.to_thread(proc.stdout.read, 64 * 1024):
-            yield chunk
+        while chunk := await asyncio.to_thread(run.read, 64 * 1024):
+            held += chunk
+            starts = frame_starts(held)
+            if starts and first is None:
+                first = starts[0][1]
+            if len(starts) > 1 or (starts and starts[0][0] > 0):
+                at, holding = starts[-1]
+                yield held[:at]
+                held = held[at:]
+            wanted = settings()
+            if wanted != current:
+                if first is not None and holding is not None:
+                    start += (holding - first) / 90_000
+                await asyncio.to_thread(run.stop)
+                current, held, first, holding = wanted, b"", None, None
+                run = await asyncio.to_thread(run_from, start, current)
+        if held:
+            yield held  # the run's end: its last frame is whole
     finally:
-        proc.kill()
-        await asyncio.to_thread(proc.wait)
+        await asyncio.to_thread(run.stop)
+
+
+def live_settings(
+    request: Request, live: str | None, rung: int, fps: int
+) -> Callable[[], tuple[int, int]]:
+    """What a cast with live id *live* is to be sent at now, as (rung, fps):
+    its settings if they were changed while it played, else *rung* and *fps*
+    as it was asked for."""
+
+    def now() -> tuple[int, int]:
+        changed = request.app.state.live.get(live) if live else None
+        if not changed:
+            return rung, fps
+        return (
+            rung if changed.get("rung") is None else changed["rung"],
+            changed.get("fps", fps),
+        )
+
+    return now
+
+
+def tv_run_from(
+    file: Path | str,
+    audio: int,
+    subtitle: downloaded.Track | Path | None,
+    hdr: bool,
+    source_fps: float,
+    stream: downloaded.StreamProbe | None = None,
+) -> Callable[[float, tuple[int, int]], _TvRun]:
+    """How to start a TV run of *file* from a point, at given (rung, fps)."""
+
+    def run_from(start: float, settings: tuple[int, int]) -> _TvRun:
+        rung, asked = settings
+        fps, drawn = downloaded.tv_fps(asked, source_fps)
+        if drawn:
+            return _TvRun(
+                downloaded.tv_drawn_encode(
+                    file, start, audio, rung, fps, source_fps, stream
+                ),
+                downloaded.tv_stream_command(
+                    file, start, audio, subtitle, hdr, rung, stream, raw=True
+                ),
+                downloaded.tv_frame(rung),
+                source_fps,
+                fps,
+            )
+        # Below the source's rate, frames are dropped; at it, nothing to do.
+        drop = fps if fps and source_fps and fps < source_fps - 0.5 else 0
+        return _TvRun(
+            downloaded.tv_stream_command(
+                file, start, audio, subtitle, hdr, rung, stream, fps=drop
+            )
+        )
+
+    return run_from
 
 
 @router.api_route("/downloaded/tv", methods=["GET", "HEAD"])
@@ -331,6 +511,8 @@ async def get_downloaded_tv(
     audio: int = Query(0, ge=0),
     lang: str | None = None,
     rung: int = Query(0, ge=0),
+    fps: int = 0,
+    live: str | None = None,
 ) -> Response:
     """A stored file re-encoded for a TV as it is watched, from where it is asked.
 
@@ -341,8 +523,12 @@ async def get_downloaded_tv(
 
     Seeking is by time only. The TV asks with ``TimeSeekRange.dlna.org`` and a
     fresh encode starts there, which is why this answers in npt and not bytes.
+
+    With *live*, the rung and frame rate follow that cast's settings as they
+    are changed, without the TV reconnecting (see ``_live_piped``).
     """
     target = _resolved(path)
+    check_fps(fps)
     duration = await asyncio.to_thread(downloaded.duration_of, target)
     start, headers = tv_seek(request, duration)
     if request.method == "HEAD":
@@ -352,13 +538,10 @@ async def get_downloaded_tv(
     subtitle = (
         await asyncio.to_thread(downloaded.tv_subtitle, target, lang) if lang else None
     )
-    try:
-        command = downloaded.tv_stream_command(
-            target, start, audio, subtitle, tracks.video_hdr, rung
-        )
-    except RuntimeError as exc:  # no ffmpeg
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return tv_stream(request, command, headers)
+    run_from = tv_run_from(target, audio, subtitle, tracks.video_hdr, tracks.video_fps)
+    return tv_stream(
+        request, start, live_settings(request, live, rung, fps), run_from, headers
+    )
 
 
 def tv_seek(request: Request, duration: float | None) -> tuple[float, dict[str, str]]:
@@ -383,9 +566,17 @@ def tv_seek(request: Request, duration: float | None) -> tuple[float, dict[str, 
 
 
 def tv_stream(
-    request: Request, command: list[str], headers: dict[str, str]
+    request: Request,
+    start: float,
+    settings: Callable[[], tuple[int, int]],
+    run_from: Callable[[float, tuple[int, int]], _TvRun],
+    headers: dict[str, str],
 ) -> StreamingResponse:
-    """ffmpeg's output for a TV, answered the way TVs want a seek answered."""
+    """A TV stream from *start*, answered the way TVs want a seek answered."""
+    try:
+        downloaded.ffmpeg_binary()
+    except RuntimeError as exc:  # no ffmpeg
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     # LG webOS seeks with a byte range beside the time range, and drops an
     # answer that is not 206 as unseekable. The bytes are those of the asked
     # time, not that offset — the TV reads its position from the stream — and
@@ -396,7 +587,7 @@ def tv_stream(
         status = 206
         headers["Content-Range"] = f"bytes {first}-{int(first) + 10**12 - 1}/*"
     return StreamingResponse(
-        _piped(command),
+        _live_piped(start, settings, run_from),
         status_code=status,
         media_type=downloaded.TV_MEDIA_TYPE,
         headers=headers,
@@ -435,7 +626,11 @@ def _queue_segment(
 
 @router.get("/downloaded/hls")
 async def get_downloaded_hls(
-    path: str = Query(...), audio: int = 0, rung: int | None = None, fps: int = 0
+    path: str = Query(...),
+    audio: int = 0,
+    rung: int | None = None,
+    fps: int = 0,
+    live: str | None = None,
 ) -> Response:
     """A playlist for a downloaded file, transcoded as it is played.
 
@@ -463,6 +658,8 @@ async def get_downloaded_hls(
     quoted = quote(path)
     # Only when asked for, so the URLs of the source's own rate stay as they were.
     rate = f"&fps={fps}" if fps else ""
+    # A cast's id, carried down to its segments (see ``segment_settings``).
+    rate += f"&live={quote(live)}" if live else ""
     variants = await asyncio.to_thread(downloaded.hls_variants, target)
     if rung is None:
         tracks = await asyncio.to_thread(downloaded.tracks_of, target)
@@ -487,6 +684,31 @@ async def get_downloaded_hls(
     for index in range(min(3, len(durations))):
         _queue_segment(target, path, index, audio, rung, fps)
     return response
+
+
+async def segment_settings(
+    request: Request,
+    live: str | None,
+    rung: int,
+    fps: int,
+    variants: Callable[[], list[tuple[int, int, int, int]]],
+) -> tuple[int, int]:
+    """The rung and frame rate one segment of a cast is made at: those its URL
+    asks for, or the cast's own once they have been changed while it plays.
+
+    This is what changes a Chromecast's quality without reloading it: the
+    playlists it holds stay as they are, and the next segments it fetches come
+    out at the new settings. A changed rung is taken to the nearest this source
+    has (*variants*); none leaves the receiver's own choice from the master.
+    """
+    changed = request.app.state.live.get(live) if live else None
+    if not changed:
+        return rung, fps
+    if changed.get("rung") is not None:
+        # None to compare with (a stream that would not probe): as asked.
+        if offered := await asyncio.to_thread(variants):
+            rung = offered_rung(offered, changed["rung"])
+    return rung, changed.get("fps", fps)
 
 
 def check_fps(fps: int) -> None:
@@ -558,11 +780,13 @@ def _playlist(lines: list[str]) -> Response:
 
 @router.api_route("/downloaded/segment", methods=["GET", "HEAD"])
 async def get_downloaded_segment(
+    request: Request,
     path: str = Query(...),
     index: int = Query(..., ge=0),
     audio: int = 0,
     rung: int = 0,
     fps: int = 0,
+    live: str | None = None,
 ) -> Response:
     """One segment of the playlist above, transcoded now if it is not cached.
 
@@ -572,6 +796,9 @@ async def get_downloaded_segment(
     """
     target = _resolved(path)
     check_fps(fps)
+    rung, fps = await segment_settings(
+        request, live, rung, fps, lambda: downloaded.hls_variants(target)
+    )
     segment = await asyncio.wrap_future(
         _queue_segment(target, path, index, audio, rung, fps)
     )

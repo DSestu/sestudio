@@ -429,6 +429,19 @@ export async function listRenderers(): Promise<Renderer[]> {
   return res.json()
 }
 
+/** Change the quality and frame rate of a cast in progress without restarting
+ *  it. *id* is "dlna" for the TV, else a Chromecast load's `live=` id. True when
+ *  the TV was restarted anyway (it was playing the file itself): seek it back. */
+export async function castLive(id: string, quality: number, fps: number): Promise<boolean> {
+  const res = await fetch(`${BASE}/cast/live`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, quality, fps }),
+  })
+  if (!res.ok) throw new Error(`Could not change the cast: ${res.status}`)
+  return Boolean((await res.json()).restarted)
+}
+
 /** What a video can be played at. */
 export interface MediaOptions {
   /** Heights, the source's own first; empty when unknown. */
@@ -462,6 +475,8 @@ export async function dlnaPlay(
   subtitleLang?: string | null,
   /** A lighter height for a stored file, re-encoded down to it; 0 for the best. */
   quality = 0,
+  /** A frame rate, 0 for the source's own. */
+  fps = 0,
 ): Promise<void> {
   const res = await fetch(`${BASE}/cast/dlna/play`, {
     method: 'POST',
@@ -469,6 +484,7 @@ export async function dlnaPlay(
     body: JSON.stringify({
       renderer_udn: rendererUdn, proxy_url: proxyUrl, title, kind, subtitle_lang: subtitleLang ?? null,
       quality,
+      fps,
     }),
   })
   if (!res.ok) {

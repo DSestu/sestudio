@@ -1552,7 +1552,7 @@ TV_CONTENT_FEATURES = (
 TV_HEIGHT = 1080
 
 
-def _tv_frame(rung: int) -> tuple[int, int]:
+def tv_frame(rung: int) -> tuple[int, int]:
     """The 16:9 frame for *rung* (a height from ``HLS_LADDER``), 1080p for 0."""
     height = rung if rung > 0 else TV_HEIGHT
     return round(height * 16 / 9 / 2) * 2, height
@@ -1617,6 +1617,8 @@ def tv_stream_command(
     hdr: bool,
     rung: int = 0,
     stream: StreamProbe | None = None,
+    fps: int = 0,
+    raw: bool = False,
 ) -> list[str]:
     """ffmpeg, re-encoding *file* from *start* for a TV, to stdout.
 
@@ -1629,8 +1631,12 @@ def tv_stream_command(
 
     With *stream*, *file* is a URL of a provider's stream that it describes, and
     its best picture and the audio beside it are what is sent.
+
+    An *fps* below the source's drops frames down to it. With *raw*, the
+    picture is written as raw RGB frames instead, picture only, for frames to
+    be drawn between them (see :func:`tv_drawn_encode`).
     """
-    width, height = _tv_frame(rung)
+    width, height = tv_frame(rung)
     kbps = dict(HLS_LADDER).get(height, 0) if rung else 0
     # None from the very start, as for a segment (see ``_encode_segment``).
     seek = ["-ss", f"{start:.3f}"] if start else []
@@ -1638,7 +1644,10 @@ def tv_stream_command(
     v = stream.video if stream else 0
     audio = stream.audio if stream else audio
     inputs = [*seek, *opts, "-i", str(file)]
-    video = f"{_tv_fit(width, height)},{_TV_TONEMAP + ',' if hdr else ''}format=yuv420p"
+    video = (
+        f"{_tv_fit(width, height)},{_TV_TONEMAP + ',' if hdr else ''}"
+        f"{f'fps={fps},' if fps else ''}format={'rgb24' if raw else 'yuv420p'}"
+    )
     if isinstance(subtitle, Track) and not subtitle.text:
         # A picture subtitle is overlaid from a second reading of the same file.
         # Read from the first, its sparse packets stall the demuxer behind the
@@ -1661,12 +1670,22 @@ def tv_stream_command(
         )
     else:
         graph = f"[0:v:{v}]{video}[v]"
+    head = [ffmpeg_binary(), "-nostdin", "-hide_banner", "-loglevel", "error"]
+    if raw:
+        return [
+            *head,
+            *inputs,
+            "-filter_complex",
+            graph,
+            "-map",
+            "[v]",
+            "-an",
+            "-f",
+            "rawvideo",
+            "pipe:1",
+        ]
     return [
-        ffmpeg_binary(),
-        "-nostdin",
-        "-hide_banner",
-        "-loglevel",
-        "error",
+        *head,
         *inputs,
         "-filter_complex",
         graph,
@@ -1675,6 +1694,10 @@ def tv_stream_command(
         "-map",
         f"0:a:{audio}?",
         *_h264_args(h264_encoder(), 21, kbps),
+        # Frames in display order, so a change mid-stream can continue right
+        # after the last one sent (see routes/downloaded.py `_live_piped`).
+        "-bf",
+        "0",
         "-c:a",
         "aac",
         "-b:a",
@@ -1688,6 +1711,91 @@ def tv_stream_command(
         "mpegts",
         "pipe:1",
     ]
+
+
+#: The most frames a second a TV or a Chromecast is sent: few decode more.
+TV_MAX_FPS = 60
+
+
+def tv_drawn_encode(
+    file: Path | str,
+    start: float,
+    audio: int,
+    rung: int,
+    fps: int,
+    source_fps: float,
+    stream: StreamProbe | None = None,
+) -> list[str]:
+    """ffmpeg encoding raw RGB frames on stdin at *fps* — the picture of
+    :func:`tv_stream_command` with ``raw``, frames drawn between — with the
+    audio read again from *file*, for a TV, to stdout."""
+    width, height = tv_frame(rung)
+    kbps = dict(HLS_LADDER).get(height, 0) if rung else 0
+    if kbps:
+        kbps = int(kbps * (fps / source_fps) ** 0.5)
+    seek = ["-ss", f"{start:.3f}"] if start else []
+    opts = stream_input_opts(stream, hls=False) if stream else []
+    audio = stream.audio if stream else audio
+    return [
+        ffmpeg_binary(),
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        f"{width}x{height}",
+        "-r",
+        str(fps),
+        "-i",
+        "pipe:0",
+        *seek,
+        *opts,
+        "-i",
+        str(file),
+        "-map",
+        "0:v",
+        "-map",
+        f"1:a:{audio}?",
+        "-vf",
+        "scale=out_color_matrix=bt709:out_range=tv",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        *_h264_args(h264_encoder(), 21, kbps),
+        # Frames in display order, so a change mid-stream can continue right
+        # after the last one sent (see routes/downloaded.py `_live_piped`).
+        "-bf",
+        "0",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "96k" if kbps and kbps <= 700 else "192k",
+        "-ac",
+        "2",
+        "-output_ts_offset",
+        f"{start:.3f}",
+        "-f",
+        "mpegts",
+        "pipe:1",
+    ]
+
+
+def tv_fps(fps: int, source_fps: float) -> tuple[int, bool]:
+    """The rate a TV is sent for an asked *fps*, and whether it is drawn by AI.
+
+    Capped at what TVs decode, and the source's own (0) where it would be drawn
+    on a machine that cannot draw fast enough.
+    """
+    fps = min(fps, TV_MAX_FPS)
+    fps = _drawable(fps, source_fps)
+    return fps, bool(fps and source_fps and fps > source_fps + 0.5)
 
 
 def _thumb_dir() -> Path:

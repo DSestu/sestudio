@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   castSeek, castSeekBy, castSetTextTrack, castSetVolume, castStop, castToggleMute,
-  castPlayPause, castQuality, castVolumeBy,
+  castPlayPause, castVolumeBy,
   useCastState,
 } from '../../cast'
 import {
-  dlnaPause, dlnaQuality, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStop, dlnaToggleMute,
+  dlnaPause, dlnaResume, dlnaSeek, dlnaSeekBy, dlnaSetVolume, dlnaStop, dlnaToggleMute,
   dlnaVolumeBy, useDlnaState,
 } from '../../dlnaControl'
 import { useBrowserPlayerControls } from '../../browserPlayerControls'
 import { getCastQueue } from '../../castQueue'
+import { castLive } from '../../api'
+import { loadPlayerPrefs } from '../../playerPrefs'
+import CastFrameRate from './CastFrameRate'
 import CastQuality from './CastQuality'
 import type { Navigate } from '../../nav'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
@@ -56,8 +59,15 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   // While dragging the timeline, show the local value instead of live updates.
   const [seeking, setSeeking] = useState<number | null>(null)
   const closeTimer = useRef<number | null>(null)
-  // While the TV is being re-sent the video at another quality.
+  // While a change of quality or frame rate is being sent; then, briefly, a
+  // note that it shows once the TV has played what it had buffered.
   const [switching, setSwitching] = useState(false)
+  const [changed, setChanged] = useState(false)
+  useEffect(() => {
+    if (!changed) return
+    const t = window.setTimeout(() => setChanged(false), 8000)
+    return () => window.clearTimeout(t)
+  }, [changed])
   // Desktop (≥ md) hovers to expand + clicks to open the series; mobile taps
   // the bar to expand. Viewport-based so it matches the md-only chevron.
   const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
@@ -129,6 +139,27 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
     live.stop()
     if (castEp && sameEpisode(castEp, browserSession?.episode)) {
       controls?.resumeAt(pos)
+    }
+  }
+
+  /** Send the saved quality and frame rate to what is casting, in place. A
+   *  TV still playing the file itself is restarted onto the re-encoded stream
+   *  instead, and put back where it was. */
+  async function changeLive() {
+    const prefs = loadPlayerPrefs()
+    const at = live.position
+    setSwitching(true)
+    try {
+      const id = target === 'dlna' ? 'dlna' : cast.liveId
+      if (await castLive(id, prefs.tvQuality ?? 0, prefs.tvFps ?? 0)) {
+        await new Promise(r => setTimeout(r, 1500)) // let the renderer load
+        await dlnaSeek(at)
+      }
+      setChanged(true)
+    } catch {
+      // the bar keeps showing the live state; nothing else to undo
+    } finally {
+      setSwitching(false)
     }
   }
 
@@ -278,26 +309,27 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                 </div>
               )}
 
-              {/* DLNA always: the server re-sends what it sent. Chromecast when
-                  what it plays is one of the server's quality ladders. */}
-              {(target === 'dlna' || cast.adjustable) && (
-                <div className="flex items-center gap-2">
-                  {/* Re-sent from the current position: a TV cannot change
-                      quality inside a stream, so this restarts it. */}
-                  <CastQuality
-                    // DLNA: the server knows what it sent the TV.
-                    url={target === 'chromecast' ? cast.mediaUrl : undefined}
-                    disabled={switching}
-                    onChange={quality => {
-                      setSwitching(true)
-                      const resend = target === 'dlna' ? dlnaQuality : castQuality
-                      void resend(quality, live.position).catch(() => {}).finally(() => setSwitching(false))
-                    }}
-                  />
-                  {switching && (
-                    <span className="text-xs text-base-content/60">
-                      <span className="loading loading-spinner loading-xs mr-1 align-middle" />
-                      Restarting the TV at the new quality…
+              {/* DLNA always: the server knows what it sent. Chromecast when
+                  what it plays is one of the server's re-encoded playlists. */}
+              {(target === 'dlna' || cast.liveId) && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <CastQuality
+                      // DLNA: the server knows what it sent the TV.
+                      url={target === 'chromecast' ? cast.mediaUrl : undefined}
+                      disabled={switching}
+                      onChange={changeLive}
+                    />
+                    <CastFrameRate
+                      url={target === 'chromecast' ? cast.mediaUrl : undefined}
+                      disabled={switching}
+                      onChange={changeLive}
+                    />
+                  </div>
+                  {(switching || changed) && (
+                    <span role="status" className="text-xs text-base-content/60">
+                      {switching && <span className="loading loading-spinner loading-xs mr-1 align-middle" />}
+                      {switching ? 'Sending the change…' : 'Changed — it shows once the TV has played what it had buffered.'}
                     </span>
                   )}
                 </div>

@@ -111,15 +111,6 @@ export const dlnaSetVolume = (level: number) => post('volume', { level })
 export const dlnaToggleMute = () => post('mute', { muted: !snapshot.muted })
 export const dlnaStop = () => { clearCastQueue(); return post('stop') }
 
-/** Send what is on the TV again at another quality (a height, 0 for the best),
- *  then back to *at* seconds: the server holds what was sent, so this works
- *  from any page, including one opened after the cast began. */
-export async function dlnaQuality(quality: number, at: number) {
-  await post('quality', { quality })
-  await new Promise(r => setTimeout(r, 1500)) // let the renderer load
-  await dlnaSeek(at)
-}
-
 /** Nudge the renderer volume by *delta* (e.g. ±0.05), clamped to 0..1. */
 export function dlnaVolumeBy(delta: number) {
   return dlnaSetVolume(Math.max(0, Math.min(1, snapshot.volume + delta)))
