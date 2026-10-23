@@ -199,3 +199,15 @@ def test_no_model_offline_means_no_interpolation(
 
     assert interpolate.ensure_model() is None
     assert not list((tmp_path / "cfg" / "models").iterdir())
+
+
+def test_a_rate_is_sustained_when_drawing_it_fits_the_measured_speed(monkeypatch):
+    monkeypatch.setattr(interpolate, "speed", lambda: 100.0)
+
+    # 24 → 60 at 720p: 36 drawn a second, within 75% of 100.
+    assert interpolate.sustains(60, 24, 1280, 720)
+    # The same at 1080p costs 2.25 times as much: 81, past the budget.
+    assert not interpolate.sustains(60, 24, 1920, 1080)
+    # And nothing is sustained where nothing can be drawn.
+    monkeypatch.setattr(interpolate, "speed", lambda: None)
+    assert not interpolate.sustains(30, 24, 640, 360)
