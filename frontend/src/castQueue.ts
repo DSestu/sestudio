@@ -18,8 +18,7 @@ interface CastQueue {
 let queue: CastQueue | null = null
 let advancing = false
 // Sends what is on the TV again, from *at* seconds, picking up the quality
-// chosen since. Null while that would change nothing: only a stored file is
-// re-encoded to a lighter quality (provider streams go as the host serves them).
+// chosen since. Null until something has been cast from this page.
 let recast: ((at: number) => Promise<void>) | null = null
 
 export function startCastQueue(q: CastQueue) { queue = q }
