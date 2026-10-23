@@ -287,20 +287,23 @@ def test_no_qualities_are_offered_before_anything_is_cast(client):
 
 
 @pytest.mark.parametrize(
-    ("source_fps", "gpu", "offered"),
+    ("source_fps", "gpu", "speed", "offered"),
     [
         # A film: every rate is above it, drawn by AI — only with a GPU.
-        (23.976, True, [30, 60, 120, 144]),
-        (23.976, False, []),
+        (23.976, True, 1000.0, [30, 60, 120, 144]),
+        (23.976, False, 1000.0, []),
+        # A GPU drawing 100 frames a second at 720p: 75 is the budget, so 60
+        # (36 drawn a second) holds and 120 (96) would fall behind.
+        (23.976, True, 100.0, [30, 60]),
         # 60 fps: 30 is a drop and needs nothing; 60 is the source itself.
-        (60.0, False, [30]),
-        (60.0, True, [30, 120, 144]),
+        (60.0, False, 1000.0, [30]),
+        (60.0, True, 1000.0, [30, 120, 144]),
         # Unknown rate: nothing can be worked out from it.
-        (0.0, True, []),
+        (0.0, True, 1000.0, []),
     ],
 )
 def test_frame_rates_offered_depend_on_the_source_and_the_gpu(
-    client, monkeypatch, source_fps, gpu, offered
+    client, monkeypatch, source_fps, gpu, speed, offered
 ):
     tracks = cast.downloaded.MediaTracks(
         audio=[],
@@ -312,6 +315,7 @@ def test_frame_rates_offered_depend_on_the_source_and_the_gpu(
     monkeypatch.setattr(cast.downloaded, "tracks_of", lambda f: tracks)
     monkeypatch.setattr(cast, "_resolved", lambda path: Path("/films") / path)
     monkeypatch.setattr(cast.interpolate, "status", lambda: {"gpu": gpu})
+    monkeypatch.setattr(cast.interpolate, "speed", lambda: speed)
 
     body = client.get(
         "/api/media/options", params={"url": "/api/downloaded/hls?path=x.mkv"}

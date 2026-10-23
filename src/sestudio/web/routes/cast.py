@@ -240,16 +240,28 @@ async def media_options(request: Request, url: str | None = None) -> dict[str, A
     if found is None:
         return none
     variants, fps = found
-    drawn = fps > 0 and (await asyncio.to_thread(interpolate.status)).get("gpu", False)
+    gpu = fps > 0 and (await asyncio.to_thread(interpolate.status)).get("gpu", False)
+    # Judged at the source's size, or 720p for a bigger one: the player drops to
+    # a lighter rung when drawing falls behind, so 720p is what has to hold.
+    width, height = next(
+        ((w, h) for _s, w, h, _b in variants if w and h and h <= 720), (1280, 720)
+    )
+
+    def offered(rate: int) -> bool:
+        if rate < fps - 0.5:
+            return True  # dropping frames costs nothing
+        if rate <= fps + 0.5 or not gpu:
+            return False  # the source's own, or AI that cannot keep up
+        return interpolate.sustains(rate, fps, width, height)
+
+    # A thread: the first ask measures the GPU, which runs the model.
+    rates = await asyncio.to_thread(
+        lambda: [rate for rate in downloaded.FRAME_RATES if fps and offered(rate)]
+    )
     return {
         "heights": [height for _step, _w, height, _b in variants if height],
         "fps": fps,
-        # A rate within half a frame of the source's is the source's own.
-        "frame_rates": [
-            rate
-            for rate in downloaded.FRAME_RATES
-            if fps and (rate < fps - 0.5 or (rate > fps + 0.5 and drawn))
-        ],
+        "frame_rates": rates,
     }
 
 

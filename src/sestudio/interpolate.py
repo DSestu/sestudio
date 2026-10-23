@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -198,6 +199,48 @@ def read_frames(stdout: Any, width: int, height: int) -> Iterator[Any]:
         if len(raw) < size:
             return
         yield np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3)
+
+
+#: The frame drawing speed is measured at, and the share of it a rate may use.
+_BENCH_SIZE = (1280, 720)
+# shortcut: one flat 25% margin for decoding, encoding and the three segments
+# built at once; measure the whole pipeline if offered rates still stutter.
+_HEADROOM = 0.75
+
+_speed: list[float] = []
+_speed_lock = threading.Lock()
+
+
+def speed() -> float | None:
+    """In-between frames this machine draws a second at 720p; None when it
+    cannot draw at all. Measured once, on first ask: the first run is not timed,
+    as that is where a provider compiles for the shape."""
+    if _speed:
+        return _speed[0]
+    with _speed_lock:
+        if not _speed and _session() is not None:
+            import numpy as np
+
+            width, height = _BENCH_SIZE
+            a = np.zeros((height, width, 3), dtype=np.uint8)
+            b = np.full((height, width, 3), 255, dtype=np.uint8)
+            interpolate(a, b, 0.5)
+            runs, start = 5, time.perf_counter()
+            for _ in range(runs):
+                interpolate(a, b, 0.5)
+            _speed.append(runs / (time.perf_counter() - start))
+    return _speed[0] if _speed else None
+
+
+def sustains(fps: float, source_fps: float, width: int, height: int) -> bool:
+    """Whether drawing *source_fps* up to *fps* at *width* x *height* keeps up
+    with playback here. Each second of video needs about *fps* − *source_fps*
+    frames drawn, at a cost that grows with the picture's area."""
+    drawn = speed()
+    if drawn is None:
+        return False
+    area = (width * height) / (_BENCH_SIZE[0] * _BENCH_SIZE[1])
+    return (fps - source_fps) * area <= drawn * _HEADROOM
 
 
 def run_pipeline(
