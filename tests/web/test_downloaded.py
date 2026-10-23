@@ -370,7 +370,7 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
     monkeypatch.setattr(
         downloaded,
         "hls_segment",
-        lambda _f, _r, i, audio=0, rung=0: built.append((i, rung)) or None,
+        lambda _f, _r, i, audio=0, rung=0, fps=0: built.append((i, rung)) or None,
     )
 
     resp = client.get("/api/downloaded/hls", params={"path": "Film.avi", "rung": 720})

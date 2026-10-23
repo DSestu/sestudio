@@ -34,6 +34,8 @@ export interface PlayerPrefs {
    * each new source as the closest height at or below it. `undefined` — Auto.
    */
   quality?: number
+  /** Frame rate last picked in the player; `undefined` — the source's own. */
+  fps?: number
   /** The same for a cast, kept apart: the TV's link is not the browser's.
    *  `undefined` — the best the TV takes (Auto on a Chromecast). */
   tvQuality?: number

@@ -369,6 +369,8 @@ _VIDEO_STREAM_RE = re.compile(
 # `, 1920x1080` on that same line. Searched for rather than matched in place:
 # the pixel format's own notes, `(tv, bt709, progressive)`, sit in between.
 _FRAME_SIZE_RE = re.compile(r",\s*(\d{2,5})x(\d{2,5})\b")
+# `, 23.98 fps` — the stream's frame rate, there when ffmpeg knows it.
+_FPS_RE = re.compile(r",\s*(\d+(?:\.\d+)?)\s*fps\b")
 
 # `      title           : VF` inside a stream's own Metadata block. This is what
 # a human named the track, and it beats "Track 2" whenever it is there.
@@ -433,6 +435,8 @@ class MediaTracks:
     #: Frame size of the first video stream, 0 when unknown.
     video_width: int = 0
     video_height: int = 0
+    #: Its frame rate, 0 when unknown.
+    video_fps: float = 0.0
 
 
 def _parse_streams(text: str) -> MediaTracks:
@@ -448,6 +452,7 @@ def _parse_streams(text: str) -> MediaTracks:
     video = pix_fmt = ""
     hdr = False
     width = height = 0
+    fps = 0.0
     current: Track | None = None
 
     for line in text.splitlines():
@@ -457,6 +462,8 @@ def _parse_streams(text: str) -> MediaTracks:
             hdr = "smpte2084" in line or "arib-std-b67" in line
             if size := _FRAME_SIZE_RE.search(line):
                 width, height = int(size.group(1)), int(size.group(2))
+            if rate := _FPS_RE.search(line):
+                fps = float(rate.group(1))
             current = None  # a title after it belongs to the video, not a track
             continue
         match = _STREAM_RE.match(line)
@@ -491,6 +498,7 @@ def _parse_streams(text: str) -> MediaTracks:
         video_hdr=hdr,
         video_width=width,
         video_height=height,
+        video_fps=fps,
     )
 
 
@@ -866,6 +874,11 @@ HLS_LADDER = (
 )
 
 
+#: Frame rates a viewer can ask for. Above the source's own, the frames in
+#: between are drawn by AI; below it, frames are dropped.
+FRAME_RATES = (30, 60, 120, 144)
+
+
 def ladder(width: int, height: int) -> list[tuple[int, int, int, int]]:
     """The renditions to offer of a *width* x *height* picture, best first:
     (rung, width, height, b/s).
@@ -933,20 +946,23 @@ def _rung_kbps(rung: int, source_height: int) -> int | None:
 
 
 def hls_segment(
-    file: Path, relative: str, index: int, audio: int = 0, rung: int = 0
+    file: Path, relative: str, index: int, audio: int = 0, rung: int = 0, fps: int = 0
 ) -> Path | None:
     """One transcoded segment of *file*, cached on disk. None if there is no such
     segment, or it could not be built.
 
     *rung* is a height from ``HLS_LADDER`` to scale down to and cap the bitrate
     at, or 0 for the source's own size. Every rung is cut at the same times, so
-    the player can change rung at any segment boundary.
+    the player can change rung at any segment boundary. *fps* is the frame rate
+    to send at, 0 for the source's own (see :func:`_encode_segment`).
     """
     durations = hls_segment_durations(file)
     if durations is None or not 0 <= index < len(durations):
         return None
-    # The probe only for a lighter rung: the source needs no height to compare.
-    kbps = _rung_kbps(rung, tracks_of(file).video_height if rung else 0)
+    # The probe only when something has to be compared with the source.
+    tracks = tracks_of(file) if rung or fps else MediaTracks(audio=[], subtitles=[])
+    fps = _drawable(fps, tracks.video_fps)
+    kbps = _rung_kbps(rung, tracks.video_height)
     if kbps is None:
         return None
     try:
@@ -957,15 +973,25 @@ def hls_segment(
     key = hashlib.sha1(
         f"{relative}|{int(stat.st_mtime)}|{stat.st_size}"
         f"|s{index}|a{audio}|{HLS_SEGMENT_SECONDS}"
-        # Only on a lighter rung, so the source's segments cached before there
-        # were rungs keep their names.
-        f"{f'|r{rung}' if rung else ''}".encode()
+        # Only on a lighter rung or another frame rate, so the source's segments
+        # cached before there were either keep their names.
+        f"{f'|r{rung}' if rung else ''}{f'|f{fps}' if fps else ''}".encode()
     ).hexdigest()
     # `?` so a file with no audio, or a missing track, still yields a segment
     # rather than failing the whole run.
     maps = ["-map", "0:v:0", "-map", f"0:a:{audio}?"]
     return _encode_segment(
-        [], str(file), maps, key, index, durations[index], rung, kbps
+        [],
+        str(file),
+        maps,
+        key,
+        index,
+        durations[index],
+        rung,
+        kbps,
+        fps,
+        tracks.video_fps,
+        (tracks.video_width, tracks.video_height),
     )
 
 
@@ -978,9 +1004,16 @@ def _encode_segment(
     seconds: float,
     rung: int,
     kbps: int,
+    fps: int = 0,
+    source_fps: float = 0.0,
+    source_size: tuple[int, int] = (0, 0),
 ) -> Path | None:
     """Segment *index* of *source* (a file, or a URL ffmpeg reads), cached
     under *key*.
+
+    At an *fps* above *source_fps* the frames in between are drawn by AI (see
+    :mod:`sestudio.interpolate`); below it, frames are dropped. Either needs the
+    source's rate, so without it the segment keeps the source's own.
 
     Each is encoded on its own from the source, which is what makes a seek cheap
     and is why they are independently decodable: a fresh encode opens on a
@@ -1003,76 +1036,92 @@ def _encode_segment(
         return None
     out.parent.mkdir(parents=True, exist_ok=True)
     start = index * HLS_SEGMENT_SECONDS
+    width, height = source_size
+    if rung and height:
+        width, height = round(width * rung / height / 2) * 2, rung
+    drawn = bool(fps and source_fps and width and fps > source_fps + 0.5)
+    dropped = bool(fps and source_fps and fps < source_fps - 0.5)
+    if drawn and kbps:
+        # More frames need more bits to look the same; not twice as many, as
+        # the frames drawn in between are close to their neighbours.
+        kbps = int(kbps * (fps / source_fps) ** 0.5)
 
+    # Before -i: ffmpeg seeks by keyframe and then decodes forward to the exact
+    # position, which costs the same at two hours in as at the start. After -i
+    # it would decode the whole film to get there. None at all for the first:
+    # on an HLS stream whose clock starts past zero (1.4 s is usual), `-ss 0`
+    # shifts that segment's video two seconds late and its audio a second early.
+    seek = ["-ss", f"{start:.3f}"] if start else []
+    head = [binary, "-nostdin", "-hide_banner", "-loglevel", "error"]
     tmp = out.with_name(f"{key}.{os.getpid()}.{threading.get_ident()}.tmp.ts")
+    tail = [
+        # Pixel format forced, not inherited: a 10-bit source (the x265 anime
+        # rips) would otherwise be encoded 10-bit again, which is the High 10
+        # profile no browser decodes — the very thing being fixed here.
+        *_h264_args(h264_encoder(), 23, kbps),
+        # No B-frames, so decode order matches presentation order. Each segment
+        # here is encoded on its own rather than cut from one long run, and with
+        # reordering on, the frames at a boundary carry decode timestamps that
+        # run backwards against the segment before them. The browser rejects the
+        # append outright: `CHUNK_DEMUXER_ERROR_APPEND_FAILED: Parsed buffers not
+        # in DTS sequence`, twenty milliseconds into playback.
+        "-bf",
+        "0",
+        "-c:a",
+        "aac",
+        "-b:a",
+        # Thinner on the lowest rungs, where 160k would be a third of it.
+        "96k" if kbps and kbps <= 700 else "160k",
+        # Downmixed, because a 5.1 AAC track inside MPEG-TS is rejected by Media
+        # Source Extensions: hls.js reports `bufferAppendError` and nothing
+        # plays. Stereo is what a browser is going to output anyway.
+        "-ac",
+        "2",
+        # Where this segment sits on the film's timeline.
+        "-output_ts_offset",
+        f"{start:.3f}",
+        "-muxdelay",
+        "0",
+        "-muxpreload",
+        "0",
+        "-f",
+        "mpegts",
+        "-y",
+        str(tmp),
+    ]
     try:
-        result = subprocess.run(
-            [
-                binary,
-                "-nostdin",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                # Before -i: ffmpeg seeks by keyframe and then decodes forward to
-                # the exact position, which costs the same at two hours in as at
-                # the start. After -i it would decode the whole film to get there.
-                # None at all for the first: on an HLS stream whose clock starts
-                # past zero (1.4 s is usual), `-ss 0` shifts that segment's
-                # video two seconds late and its audio a second early.
-                *(["-ss", f"{start:.3f}"] if start else []),
-                *input_opts,
-                "-i",
-                source,
-                "-t",
-                f"{seconds:.3f}",
-                *maps,
-                "-sn",
-                *(["-vf", f"scale=-2:{rung}"] if rung else []),
-                # Pixel format forced, not inherited: a 10-bit source (the x265
-                # anime rips) would otherwise be encoded 10-bit again, which is
-                # the High 10 profile no browser decodes — the very thing being
-                # fixed here.
-                *_h264_args(h264_encoder(), 23, kbps),
-                # No B-frames, so decode order matches presentation order. Each
-                # segment here is encoded on its own rather than cut from one
-                # long run, and with reordering on, the frames at a boundary
-                # carry decode timestamps that run backwards against the segment
-                # before them. The browser rejects the append outright:
-                # `CHUNK_DEMUXER_ERROR_APPEND_FAILED: Parsed buffers not in DTS
-                # sequence`, twenty milliseconds into playback.
-                "-bf",
-                "0",
-                "-c:a",
-                "aac",
-                "-b:a",
-                # Thinner on the lowest rungs, where 160k would be a third of it.
-                "96k" if kbps and kbps <= 700 else "160k",
-                # Downmixed, because a 5.1 AAC track inside MPEG-TS is rejected
-                # by Media Source Extensions: hls.js reports `bufferAppendError`
-                # and nothing plays. Stereo is what a browser is going to output
-                # anyway.
-                "-ac",
-                "2",
-                # Where this segment sits on the film's timeline.
-                "-output_ts_offset",
-                f"{start:.3f}",
-                "-muxdelay",
-                "0",
-                "-muxpreload",
-                "0",
-                "-f",
-                "mpegts",
-                "-y",
-                str(tmp),
-            ],
-            # A segment is a second of work; a minute means something is wrong
-            # and the player is better told so than left waiting.
-            timeout=120,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
+        if drawn:
+            ok = _encode_drawn(
+                head, seek, input_opts, source, maps, seconds, width, height,
+                fps, source_fps, tail,
+            )  # fmt: skip
+        else:
+            filters = [f"scale=-2:{rung}"] if rung else []
+            if dropped:
+                filters.append(f"fps={fps}")
+            result = subprocess.run(
+                [
+                    *head,
+                    *seek,
+                    *input_opts,
+                    "-i",
+                    source,
+                    "-t",
+                    f"{seconds:.3f}",
+                    *maps,
+                    "-sn",
+                    *(["-vf", ",".join(filters)] if filters else []),
+                    *tail,
+                ],
+                # A segment is a second of work; a minute means something is
+                # wrong and the player is better told so than left waiting.
+                timeout=120,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            ok = result.returncode == 0
+        if ok and tmp.is_file() and tmp.stat().st_size > 0:
             os.replace(tmp, out)
             _prune_hls_cache()
             return out
@@ -1081,6 +1130,102 @@ def _encode_segment(
         return None
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def _drawable(fps: int, source_fps: float) -> int:
+    """*fps*, or 0 for the source's own when it would need AI frames this
+    machine cannot draw fast enough (no GPU): drawing would fall far behind
+    playback. Decided before the cache key, so a segment is only ever cached
+    under the rate it really has."""
+    from sestudio import interpolate
+
+    if fps and source_fps and fps > source_fps + 0.5:
+        return fps if interpolate.status().get("gpu") else 0
+    return fps
+
+
+def _encode_drawn(
+    head: list[str],
+    seek: list[str],
+    input_opts: list[str],
+    source: str,
+    maps: list[str],
+    seconds: float,
+    width: int,
+    height: int,
+    fps: int,
+    source_fps: float,
+    tail: list[str],
+) -> bool:
+    """A segment at *fps* with the frames in between drawn by AI.
+
+    One ffmpeg decodes the picture to raw RGB, RIFE fills in the frames, and a
+    second ffmpeg encodes them with the audio read again from the source. The
+    picture is decoded two frames past the segment's end, so its last frames
+    have a right-hand neighbour to be drawn towards.
+    """
+    from sestudio import interpolate
+
+    video, audio = maps[1], maps[3]
+    decode = [
+        *head,
+        *seek,
+        *input_opts,
+        "-i",
+        source,
+        "-t",
+        f"{seconds + 2 / source_fps:.3f}",
+        "-map",
+        video,
+        "-an",
+        "-sn",
+        "-vf",
+        f"scale={width}:{height},format=rgb24",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+    ]
+    encode = [
+        *head,
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        f"{width}x{height}",
+        "-r",
+        str(fps),
+        "-i",
+        "pipe:0",
+        *seek,
+        *input_opts,
+        "-i",
+        source,
+        "-t",
+        f"{seconds:.3f}",
+        "-map",
+        "0:v",
+        "-map",
+        # The same audio track, from the second input.
+        "1:" + audio.split(":", 1)[1],
+        "-sn",
+        # RGB back to the BT.709 YUV an HD picture is tagged as.
+        "-vf",
+        "scale=out_color_matrix=bt709:out_range=tv",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        *tail,
+    ]
+    count = round(seconds * fps)
+    # Generous: drawn frames cost far more than encoded ones, and a GPU that
+    # cannot keep up should still finish rather than leave a hole.
+    return interpolate.run_pipeline(
+        decode, encode, width, height, source_fps, fps, count, timeout=600
+    )
 
 
 @dataclass
@@ -1098,6 +1243,8 @@ class StreamProbe:
     audio: int
     hdr: bool
     hls: bool
+    #: The best picture's frame rate, 0 when unknown.
+    fps: float = 0.0
 
 
 _probes: dict[str, StreamProbe | None] = {}
@@ -1170,19 +1317,21 @@ def _parse_stream_probe(text: str, hls: bool) -> StreamProbe | None:
     if not duration:
         return None
     hours, minutes, rest = duration.groups()
-    videos: list[tuple[int, int, bool]] = []
+    videos: list[tuple[int, int, bool, float]] = []
     audios = 0
     for line in text.splitlines():
         if _VIDEO_STREAM_RE.match(line):
             size = _FRAME_SIZE_RE.search(line)
             w, h = (int(size.group(1)), int(size.group(2))) if size else (0, 0)
-            videos.append((w, h, "smpte2084" in line or "arib-std-b67" in line))
+            rate = _FPS_RE.search(line)
+            hdr = "smpte2084" in line or "arib-std-b67" in line
+            videos.append((w, h, hdr, float(rate.group(1)) if rate else 0.0))
         elif (match := _STREAM_RE.match(line)) and match.group("kind") == "Audio":
             audios += 1
     if not videos:
         return None
     best = max(range(len(videos)), key=lambda i: videos[i][1])
-    width, height, hdr = videos[best]
+    width, height, hdr, fps = videos[best]
     return StreamProbe(
         duration=int(hours) * 3600 + int(minutes) * 60 + float(rest),
         width=width,
@@ -1191,10 +1340,13 @@ def _parse_stream_probe(text: str, hls: bool) -> StreamProbe | None:
         audio=best if audios == len(videos) else 0,
         hdr=hdr,
         hls=hls,
+        fps=fps,
     )
 
 
-def stream_segment(url: str, index: int, rung: int, *, hls: bool) -> Path | None:
+def stream_segment(
+    url: str, index: int, rung: int, *, hls: bool, fps: int = 0
+) -> Path | None:
     """One transcoded segment of the stream at *url*, as :func:`hls_segment`
     is of a file. None if there is no such segment, or it could not be built.
 
@@ -1209,10 +1361,11 @@ def stream_segment(url: str, index: int, rung: int, *, hls: bool) -> Path | None
     kbps = _rung_kbps(rung, probe.height)
     if kbps is None:
         return None
+    fps = _drawable(fps, probe.fps)
     # shortcut: keyed on the URL, which for a host that signs its links changes
     # each time the episode is resolved; key on the embed if re-watches matter.
     key = hashlib.sha1(
-        f"{url}|s{index}|{HLS_SEGMENT_SECONDS}|r{rung}".encode()
+        f"{url}|s{index}|{HLS_SEGMENT_SECONDS}|r{rung}|f{fps}".encode()
     ).hexdigest()
     maps = ["-map", f"0:v:{probe.video}", "-map", f"0:a:{probe.audio}?"]
     return _encode_segment(
@@ -1224,6 +1377,9 @@ def stream_segment(url: str, index: int, rung: int, *, hls: bool) -> Path | None
         durations[index],
         rung,
         kbps,
+        fps,
+        probe.fps,
+        (probe.width, probe.height),
     )
 
 

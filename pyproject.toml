@@ -35,6 +35,14 @@ dependencies = [
     # `-Werror=incompatible-pointer-types`, which MSVC rejects (D8021).
     # jsdecode.py still prefers it when importable, so a manual install works.
     "mini-racer>=0.14.1",
+    # AI frame interpolation (sestudio/interpolate.py), on the GPU each platform
+    # exposes: DirectML on Windows reaches NVIDIA, AMD and Intel alike; the plain
+    # wheel carries CoreML on a Mac. Linux gets the CPU build, too slow to keep up
+    # with playback; swap in onnxruntime-gpu there for an NVIDIA card. py7zr only
+    # unpacks the model, which is published as a .7z.
+    "onnxruntime-directml>=1.20; sys_platform == 'win32'",
+    "onnxruntime>=1.20; sys_platform != 'win32'",
+    "py7zr>=0.22",
     "rich>=15.0.0",
     "uvicorn[standard]>=0.34",
     # curl-cffi: Chrome TLS impersonation. vidzy's CDN 403s any non-browser TLS

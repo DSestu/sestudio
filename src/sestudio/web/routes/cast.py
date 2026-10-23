@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from sestudio import dlna, downloaded
+from sestudio import dlna, downloaded, interpolate
 from sestudio.web.routes.downloaded import _resolved, offered_rung
 from sestudio.web.routes.stream import transcode_source
 
@@ -193,34 +193,52 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
     return {"status": "playing", "renderer": body.renderer_udn, "media_url": media_url}
 
 
-@router.get("/cast/qualities")
-async def cast_qualities(request: Request, url: str | None = None) -> dict[str, Any]:
-    """The heights a cast of *url* can be sent at, the source's own first.
+@router.get("/media/options")
+async def media_options(request: Request, url: str | None = None) -> dict[str, Any]:
+    """What *url* can be played at: its heights, the source's own first, the
+    frame rates on offer, and the source's own rate.
 
     *url* is any media URL this server hands out for a stored file or a
     provider's stream. Without it, the video last sent to a DLNA TV, so a page
-    opened after the cast began can still offer the right list. Empty when the
-    size is unknown; the caller then offers fixed steps the server clamps.
+    opened after the cast began can still offer the right lists. Heights are
+    empty when the size is unknown; the caller then offers fixed steps the
+    server clamps.
+
+    A frame rate above the source's is drawn by AI, so it is only offered where
+    that runs on a GPU: on the CPU it would not keep up with playback.
     """
+    none = {"heights": [], "fps": 0, "frame_rates": []}
     if url is None:
         last: DlnaPlayRequest | None = getattr(request.app.state, "dlna_play", None)
         if last is None:
-            return {"heights": []}
+            return none
         url = last.proxy_url
     parsed = urllib.parse.urlparse(url)
     query = urllib.parse.parse_qs(parsed.query)
     if parsed.path.startswith("/api/downloaded/"):
         target = _resolved(query.get("path", [""])[0])
         variants = await asyncio.to_thread(downloaded.hls_variants, target)
+        fps = (await asyncio.to_thread(downloaded.tracks_of, target)).video_fps
     elif parsed.path.startswith("/api/stream/"):
         source, hls = transcode_source(request, query.get("token", [""])[0])
         probe = await asyncio.to_thread(downloaded.probe_stream, source, hls=hls)
         if probe is None:
-            return {"heights": []}
+            return none
         variants = downloaded.ladder(probe.width, probe.height)
+        fps = probe.fps
     else:
-        return {"heights": []}
-    return {"heights": [height for _step, _w, height, _b in variants if height]}
+        return none
+    drawn = fps > 0 and (await asyncio.to_thread(interpolate.status)).get("gpu", False)
+    return {
+        "heights": [height for _step, _w, height, _b in variants if height],
+        "fps": fps,
+        # A rate within half a frame of the source's is the source's own.
+        "frame_rates": [
+            rate
+            for rate in downloaded.FRAME_RATES
+            if fps and (rate < fps - 0.5 or (rate > fps + 0.5 and drawn))
+        ],
+    }
 
 
 class DlnaQualityRequest(BaseModel):

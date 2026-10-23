@@ -5,7 +5,9 @@ import {
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default'
 import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
-import type { StreamSource } from '../../api'
+import { mediaOptions, type MediaOptions, type StreamSource } from '../../api'
+import { withFps } from '../../frameRates'
+import FrameRateMenu from './FrameRateMenu'
 import type { PlayableEpisode } from '../../providers'
 import { getProgress, saveProgress, setWatched, watchKey } from '../../watchState'
 import { endBrowserPlayback, sameEpisode, startBrowserPlayback, updateBrowserPlayback, useCastSession } from '../../playbackSession'
@@ -61,6 +63,36 @@ export default function VideoPane({
 
   const [displaySource, setDisplaySource] = useState<StreamSource | null>(null)
   if (source && source !== displaySource) setDisplaySource(source)
+
+  // Frame rate: only the server's own playlists (a stored file, or a provider's
+  // stream it re-encodes) can be sent at another one. Their options say which
+  // rates this source and machine allow; the saved pick applies when allowed,
+  // and is tried before they are known rather than loading twice.
+  const ladderUrl = displaySource?.kind === 'hls' && /\/api\/(downloaded|stream)\/hls\?/.test(displaySource.proxy_url)
+    ? displaySource.proxy_url
+    : null
+  const [options, setOptions] = useState<{ url: string; value: MediaOptions } | null>(null)
+  useEffect(() => {
+    if (!ladderUrl) return
+    let live = true
+    mediaOptions(ladderUrl).then(value => { if (live) setOptions({ url: ladderUrl, value }) })
+    return () => { live = false }
+  }, [ladderUrl])
+  const known = options?.url === ladderUrl ? options.value : null
+  const [fps, setFps] = useState(() => loadPlayerPrefs().fps ?? 0)
+  const playingFps = !fps || !known || known.frame_rates.includes(fps) ? fps : 0
+  const mediaUrl = displaySource
+    ? ladderUrl ? withFps(ladderUrl, playingFps) : displaySource.proxy_url
+    : ''
+
+  function changeFps(next: number) {
+    // Written now, not on the next tick of the save throttle: the new playlist
+    // starts at zero and resumes from this.
+    const p = playerRef.current
+    if (p && p.duration > 0) saveProgress(ep, p.currentTime, p.duration)
+    savePlayerPrefs({ fps: next || undefined })
+    setFps(next)
+  }
 
   // Drives the layout choice below: the small (mobile) layout drops the
   // timeline, which is wrong for a popped-out window.
@@ -135,7 +167,7 @@ export default function VideoPane({
   // is written every few seconds, so re-arming the resume puts playback back
   // within a moment of where it was rather than at the beginning. Skipped on the
   // first source, which the initial state already armed.
-  const srcKey = displaySource?.proxy_url ?? ''
+  const srcKey = mediaUrl
   const [armedSrc, setArmedSrc] = useState(srcKey)
   if (armedSrc !== srcKey) {
     setArmedSrc(srcKey)
@@ -236,7 +268,7 @@ export default function VideoPane({
           className="w-full h-full"
           title={ep.title}
           src={{
-            src: displaySource.proxy_url,
+            src: mediaUrl,
             type: displaySource.kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
           }}
           autoPlay={!castedSameEp}
@@ -296,6 +328,16 @@ export default function VideoPane({
               most controls, leaving only a centre play button. */}
           <DefaultVideoLayout
             icons={defaultLayoutIcons}
+            slots={{
+              settingsMenuItemsEnd: known && (
+                <FrameRateMenu
+                  source={known.fps}
+                  rates={known.frame_rates}
+                  value={playingFps}
+                  onChange={changeFps}
+                />
+              ),
+            }}
             smallLayoutWhen={pipWindow ? false : undefined}
           />
           <BufferingInfo source={displaySource} />

@@ -429,15 +429,26 @@ export async function listRenderers(): Promise<Renderer[]> {
   return res.json()
 }
 
-/** Heights a cast of *url* can be sent at, the source's own first; without
- *  *url*, of what was last sent to a DLNA TV. Empty when unknown. */
-export async function castQualities(url?: string): Promise<number[]> {
+/** What a video can be played at. */
+export interface MediaOptions {
+  /** Heights, the source's own first; empty when unknown. */
+  heights: number[]
+  /** The source's own frame rate, 0 when unknown. */
+  fps: number
+  /** Frame rates on offer; those above `fps` are drawn by AI. */
+  frame_rates: number[]
+}
+
+const NO_OPTIONS: MediaOptions = { heights: [], fps: 0, frame_rates: [] }
+
+/** The options for *url*; without it, for what was last sent to a DLNA TV. */
+export async function mediaOptions(url?: string): Promise<MediaOptions> {
   const query = url ? `?url=${encodeURIComponent(url)}` : ''
   try {
-    const res = await fetch(`${BASE}/cast/qualities${query}`)
-    return res.ok ? (await res.json()).heights : []
+    const res = await fetch(`${BASE}/media/options${query}`)
+    return res.ok ? await res.json() : NO_OPTIONS
   } catch {
-    return []
+    return NO_OPTIONS
   }
 }
 
