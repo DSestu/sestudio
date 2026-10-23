@@ -668,3 +668,47 @@ def test_byte_seek_still_works_untouched(client, out):
     )
     assert resp.status_code == 206
     assert len(resp.content) == 100
+
+
+def test_tv_stream_advertises_time_seek_only(client, out):
+    _clip(out)
+    resp = client.head("/api/downloaded/tv", params={"path": "Old Film.mp4"})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "video/mpeg"
+    # Time-seek, no byte-seek: a stream being encoded has no bytes to range over.
+    assert "DLNA.ORG_OP=10" in resp.headers["contentfeatures.dlna.org"]
+
+
+def test_tv_stream_encodes_from_the_asked_time_with_captions_burnt_in(client, out):
+    # An apostrophe and brackets in the folder: both are filtergraph syntax.
+    clip = _clip(out, name="L'été [x]/Old Film.mp4")
+    (clip.parent / "Old Film.fr.vtt").write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:07.000\nBonjour\n", encoding="utf-8"
+    )
+    resp = client.get(
+        "/api/downloaded/tv",
+        params={"path": "L'été [x]/Old Film.mp4", "lang": "fre"},
+        headers={"TimeSeekRange.dlna.org": "npt=4.000-"},
+    )
+    assert resp.status_code == 200
+    assert "npt=4.000-8.000/8.000" in resp.headers["timeseekrange.dlna.org"]
+    # MPEG-TS: 188-byte packets, each opening on the 0x47 sync byte.
+    assert len(resp.content) > 188 and resp.content[0] == 0x47
+    assert resp.content[188] == 0x47
+
+
+def test_tv_seek_with_a_byte_range_is_answered_partial(client, out):
+    # What an LG sends to seek: the time it wants, and a byte offset beside it.
+    _clip(out)
+    resp = client.get(
+        "/api/downloaded/tv",
+        params={"path": "Old Film.mp4"},
+        headers={
+            "TimeSeekRange.dlna.org": "npt=0:00:04.000-",
+            "Range": "bytes=5431296-",
+        },
+    )
+    assert resp.status_code == 206
+    assert resp.headers["content-range"].startswith("bytes 5431296-")
+    assert "npt=4.000-" in resp.headers["timeseekrange.dlna.org"]
+    assert resp.content[0] == 0x47

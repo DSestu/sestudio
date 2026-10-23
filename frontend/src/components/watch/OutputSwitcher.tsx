@@ -6,6 +6,7 @@ import { castSeek, castToChromecast, describeCastError, loadCast, useCastState }
 import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
 import { startCastQueue } from '../../castQueue'
 import { startCastSession } from '../../playbackSession'
+import { loadPlayerPrefs } from '../../playerPrefs'
 import type { PlayableEpisode } from '../../providers'
 
 const CAST_ICON =
@@ -115,7 +116,8 @@ export default function OutputSwitcher({
   ) {
     if (mode === 'dlna' && udn) {
       onStep('Asking the TV to play the video — it connects back to the server to fetch it…')
-      await dlnaPlay(udn, proxyUrl, title, kind)
+      // The captions picked in the browser player; the server burns them in.
+      await dlnaPlay(udn, proxyUrl, title, kind, loadPlayerPrefs().subtitleLang)
       dlnaStarted()
     } else {
       // On a LAN address the app's cert is self-signed and Chromecast can't
@@ -152,7 +154,11 @@ export default function OutputSwitcher({
     setDlnaWait(null)
     step(`Sending to ${label}…`)
     try {
-      await sendTo(source.proxy_url, source.kind, ep.title, mode, udn, source.subtitles, step)
+      if (mode === 'dlna' && source.dlna_url) {
+        await sendTo(source.dlna_url, 'mp4', ep.title, mode, udn, [], step)
+      } else {
+        await sendTo(source.proxy_url, source.kind, ep.title, mode, udn, source.subtitles, step)
+      }
       startCastSession(ep, mode)
       // Handoff: continue on the TV from where the browser player was.
       if (handoffAt > 5) {

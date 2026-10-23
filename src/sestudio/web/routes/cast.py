@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import logging
 import socket
@@ -10,7 +11,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from sestudio import dlna
+from sestudio import dlna, downloaded
+from sestudio.web.routes.downloaded import _resolved
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,8 @@ class DlnaPlayRequest(BaseModel):
     proxy_url: str
     kind: str = "mp4"
     title: str = "sestudio"
+    #: The browser player's caption language, burnt in for a stored file.
+    subtitle_lang: str | None = None
 
 
 @router.post("/cast/dlna/play")
@@ -88,6 +92,36 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
             status_code=404, detail="Unknown renderer — re-scan and try again"
         )
 
+    mime_type = _MIME_BY_KIND.get(body.kind, "video/mp4")
+    proxy_url = body.proxy_url
+    duration: float | None = None
+    parsed = urllib.parse.urlparse(proxy_url)
+    if parsed.path == "/api/downloaded/file":
+        query = urllib.parse.parse_qs(parsed.query)
+        stored = query.get("path", [""])[0]
+        target = _resolved(stored)
+        lang = body.subtitle_lang or ""
+        burn = (
+            bool(lang)
+            and (await asyncio.to_thread(downloaded.tv_subtitle, target, lang))
+            is not None
+        )
+        # What a browser cannot play is what a TV is least likely to, and a
+        # caption can only reach the TV inside the picture: both are re-encoded.
+        if burn or not await asyncio.to_thread(downloaded.browser_can_play, target):
+            audio = int(query.get("audio", ["0"])[0])
+            proxy_url = (
+                f"/api/downloaded/tv?path={urllib.parse.quote(stored)}&audio={audio}"
+            )
+            if burn:
+                proxy_url += f"&lang={urllib.parse.quote(lang)}"
+            mime_type = downloaded.TV_MEDIA_TYPE
+            duration = await asyncio.to_thread(downloaded.duration_of, target)
+        else:
+            # Sent as it is — mkv, avi… — and a TV told "video/mp4" for one
+            # answers "file cannot be recognized", so declare what it really is.
+            mime_type = downloaded.media_type_for(stored)
+
     # The renderer fetches the stream itself, so build an absolute HTTP URL on
     # our LAN IP facing the renderer (browsing via localhost would otherwise
     # point the TV at itself). DLNA is plain HTTP on the direct server port.
@@ -95,16 +129,17 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
     lan_ip = _local_ip_for(renderer_host)
     http_port = request.app.state.http_port
     if http_port is not None:
-        media_url = f"http://{lan_ip}:{http_port}{body.proxy_url}"
+        media_url = f"http://{lan_ip}:{http_port}{proxy_url}"
     else:
         # HTTPS-only (serve --no-http). A renderer that rejects the self-signed
         # cert cannot play this, but an https URL is at least well-formed —
         # http:// on the TLS port never is.
-        media_url = f"https://{lan_ip}:{request.app.state.https_port}{body.proxy_url}"
-    mime_type = _MIME_BY_KIND.get(body.kind, "video/mp4")
+        media_url = f"https://{lan_ip}:{request.app.state.https_port}{proxy_url}"
 
     try:
-        dmr = await dlna.play_on_renderer(location, media_url, body.title, mime_type)
+        dmr = await dlna.play_on_renderer(
+            location, media_url, body.title, mime_type, duration
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"DLNA play failed: {exc}") from exc
 

@@ -368,3 +368,47 @@ def test_a_stem_with_glob_characters_is_matched_literally(tmp_path: Path):
     (tmp_path / "Ep [HD] (1080p).fr.vtt").write_text("WEBVTT\n")
 
     assert [lang for lang, _ in downloaded.sidecar_subtitles(video)] == ["fr"]
+
+
+def test_a_pq_transfer_reads_as_hdr():
+    report = (
+        "  Stream #0:0: Video: hevc (Main 10), yuv420p10le(tv, bt2020nc/bt2020/"
+        "smpte2084), 3840x2144, 59.94 fps\n"
+    )
+    assert downloaded._parse_streams(report).video_hdr
+    assert not downloaded._parse_streams(_MKV_REPORT).video_hdr
+
+
+def test_filter_value_survives_both_unescapes():
+    # Graph level, then option level: `\\:` → `\:` → `:`.
+    assert downloaded._filter_value("R:/Films/L'x[1].mkv") == (
+        "R\\\\:/Films/L\\\\\\'x\\[1\\].mkv"
+    )
+
+
+def test_tv_stream_overlays_a_picture_subtitle_from_a_second_read(monkeypatch):
+    monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
+    pgs = downloaded.Track(
+        index=5,
+        codec="hdmv_pgs_subtitle",
+        lang="fre",
+        title="",
+        default=False,
+        text=False,
+    )
+    command = downloaded.tv_stream_command(Path("film.mkv"), 600.0, 1, pgs, hdr=True)
+    assert command.count("-i") == 2
+    graph = command[command.index("-filter_complex") + 1]
+    assert "[1:s:5]" in graph and "overlay" in graph and "tonemap" in graph
+    assert command[command.index("-output_ts_offset") + 1] == "600.000"
+    assert "0:a:1?" in command
+
+
+def test_tv_stream_renders_a_text_subtitle_on_the_films_clock(monkeypatch):
+    monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
+    srt = downloaded.Track(index=2, codec="subrip", lang="fre", title="", default=False)
+    command = downloaded.tv_stream_command(Path("film.mkv"), 90.0, 0, srt, hdr=False)
+    graph = command[command.index("-filter_complex") + 1]
+    assert command.count("-i") == 1
+    assert "setpts=PTS+90.000/TB" in graph and ":si=2" in graph
+    assert "tonemap" not in graph

@@ -10,6 +10,8 @@ from async_upnp_client.client_factory import UpnpFactory
 from async_upnp_client.profiles.dlna import DmrDevice
 from async_upnp_client.search import async_search
 
+from sestudio.downloaded import TV_CONTENT_FEATURES, TV_MEDIA_TYPE
+
 logger = logging.getLogger(__name__)
 
 _MEDIA_RENDERER = "urn:schemas-upnp-org:device:MediaRenderer:1"
@@ -105,7 +107,11 @@ async def make_device(location: str) -> DmrDevice:
 
 
 async def play_on_renderer(
-    location: str, media_url: str, title: str, mime_type: str
+    location: str,
+    media_url: str,
+    title: str,
+    mime_type: str,
+    duration: float | None = None,
 ) -> DmrDevice:
     """Push *media_url* to the renderer's AVTransport and start playback.
 
@@ -130,9 +136,24 @@ async def play_on_renderer(
         override_mime_type=mime_type,
         override_upnp_class="object.item.videoItem",
         override_dlna_features=(
-            _MP4_DLNA_FEATURES if mime_type == "video/mp4" else "*"
+            # Any single file is byte-seekable; an HLS playlist is not, and the
+            # re-encoded TV stream seeks by time alone.
+            "*"
+            if mime_type == "application/vnd.apple.mpegurl"
+            else TV_CONTENT_FEATURES
+            if mime_type == TV_MEDIA_TYPE
+            else _MP4_DLNA_FEATURES
         ),
     )
+    if duration:
+        # A stream that is being encoded has no length of its own to read, and
+        # without one the TV draws no seek bar.
+        hours, rest = divmod(duration, 3600)
+        metadata = metadata.replace(
+            "<res ",
+            f'<res duration="{int(hours)}:{int(rest // 60):02d}:{rest % 60:06.3f}" ',
+            1,
+        )
     await dmr.async_set_transport_uri(media_url, title, meta_data=metadata)
     await dmr.async_play()
     return dmr
