@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.20.0](https://github.com/DSestu/sestudio/compare/v0.19.0...v0.20.0) (2026-10-23)
+
+
+### New features
+
+* encode live transcodes on the GPU when one is available ([#68](https://github.com/DSestu/sestudio/issues/68)) ([19e7187](https://github.com/DSestu/sestudio/commit/19e7187c83dd84d07b9433ad0394ec28b1d362b6))
+* pick a quality for downloaded files, and let Auto drop it on a slow link ([#70](https://github.com/DSestu/sestudio/issues/70)) ([5f13245](https://github.com/DSestu/sestudio/commit/5f132450bbd1250150e112c69c5b8918b5ad9208))
+* pick the quality a TV is sent, and change it while casting ([#71](https://github.com/DSestu/sestudio/issues/71)) ([1fd7b55](https://github.com/DSestu/sestudio/commit/1fd7b55e7317cf1eaa4f39e05eade26d964b972e))
+* re-encode provider streams at every quality too, and send TVs one stream ([#74](https://github.com/DSestu/sestudio/issues/74)) ([563b3c4](https://github.com/DSestu/sestudio/commit/563b3c4d48d75091e861063e50f1b83e45b6805a))
+
+
+### Bug fixes
+
+* keep the cast quality selector after a page reload, and drop dead code ([#73](https://github.com/DSestu/sestudio/issues/73)) ([4b23ea0](https://github.com/DSestu/sestudio/commit/4b23ea021bd681405f28ddae69173db450c3b0e9))
+
 ## [0.19.0](https://github.com/DSestu/sestudio/compare/v0.18.0...v0.19.0) (2026-10-23)
 
 
