@@ -29,6 +29,11 @@ export interface PlayerPrefs {
    * still merges cleanly when fields are added.
    */
   subtitleStyle?: Partial<SubtitleStyle>
+  /**
+   * Picture height last picked in the player's quality menu, re-applied to
+   * each new source as the closest height at or below it. `undefined` — Auto.
+   */
+  quality?: number
 }
 
 const DEFAULTS: PlayerPrefs = { volume: 1, muted: false, rate: 1 }

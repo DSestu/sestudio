@@ -299,6 +299,65 @@ def test_a_segment_is_encoded_for_its_own_place_in_the_film(
     assert len(commands) == 1
 
 
+def test_the_frame_size_is_read_from_the_video_line():
+    """The ladder is cut below the source, so it has to know how big that is."""
+    tracks = _tracks()
+
+    assert (tracks.video_width, tracks.video_height) == (1920, 1080)
+
+
+def test_a_lighter_rung_is_scaled_and_capped(tmp_path: Path, monkeypatch):
+    file = tmp_path / "film.mkv"
+    file.write_bytes(b"x")
+    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 600.0)
+    monkeypatch.setattr(downloaded, "tracks_of", lambda _f: _tracks())
+    monkeypatch.setattr(downloaded, "_hls_dir", lambda: tmp_path / "hls")
+    monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        Path(command[-1]).write_bytes(b"segment")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(downloaded.subprocess, "run", fake_run)
+
+    light = downloaded.hls_segment(file, "film.mkv", 10, rung=360)
+    source = downloaded.hls_segment(file, "film.mkv", 10)
+
+    command = commands[0]
+    assert command[command.index("-vf") + 1] == "scale=-2:360"
+    # The cap is what holds on a slow link; quality alone would not.
+    assert command[command.index("-maxrate") + 1] == "700k"
+    assert command[command.index("-b:a") + 1] == "96k"
+    # The source rung is the encode there was before rungs existed.
+    assert "-vf" not in commands[1] and "-maxrate" not in commands[1]
+    # Cached apart, so one rung never answers for another.
+    assert light != source
+
+
+def test_no_rung_scales_the_picture_up(tmp_path: Path, monkeypatch):
+    file = tmp_path / "film.mkv"
+    file.write_bytes(b"x")
+    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 600.0)
+    monkeypatch.setattr(downloaded, "tracks_of", lambda _f: _tracks())
+    monkeypatch.setattr(
+        downloaded.subprocess, "run", lambda *a, **k: pytest.fail("ran ffmpeg")
+    )
+
+    assert downloaded.hls_segment(file, "film.mkv", 0, rung=1440) is None
+    assert downloaded.hls_segment(file, "film.mkv", 0, rung=1080) is None
+    assert downloaded.hls_segment(file, "film.mkv", 0, rung=555) is None
+
+
+def test_qsv_caps_in_its_bitrate_mode():
+    """QSV's constant-quality mode ignores a cap, so a capped rung leaves it."""
+    args = downloaded._h264_args("h264_qsv", 23, 2500)
+
+    assert "-global_quality" not in args
+    assert args[args.index("-b:v") + 1] == "2500k"
+
+
 def test_there_is_no_segment_past_the_end(tmp_path: Path, monkeypatch):
     file = tmp_path / "film.avi"
     file.write_bytes(b"x")
