@@ -14,6 +14,15 @@ import pytest
 
 from sestudio import downloaded
 
+_PROBE = downloaded.h264_encoder.__wrapped__
+
+
+@pytest.fixture(autouse=True)
+def _cpu_encoder(monkeypatch):
+    # No GPU probe in tests: it would run, or fake, a real ffmpeg.
+    monkeypatch.setattr(downloaded, "h264_encoder", lambda: "libx264")
+
+
 # An MKV as ffmpeg describes one: named tracks, two languages, forced subtitles.
 # This is the shape a multi-audio release actually arrives in.
 _MKV_REPORT = """\
@@ -412,3 +421,36 @@ def test_tv_stream_renders_a_text_subtitle_on_the_films_clock(monkeypatch):
     assert command.count("-i") == 1
     assert "setpts=PTS+90.000/TB" in graph and ":si=2" in graph
     assert "tonemap" not in graph
+
+
+def test_the_first_gpu_encoder_that_encodes_is_used(monkeypatch):
+    monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
+    tried: list[str] = []
+
+    def fake_run(command, **_kwargs):
+        encoder = command[command.index("-c:v") + 1]
+        tried.append(encoder)
+        # NVENC is listed but there is no NVIDIA card; Intel QSV works.
+        return subprocess.CompletedProcess(command, encoder != "h264_qsv")
+
+    monkeypatch.setattr(downloaded.subprocess, "run", fake_run)
+    assert _PROBE() == "h264_qsv"
+    assert tried == ["h264_nvenc", "h264_qsv"]
+
+
+def test_no_working_gpu_encoder_falls_back_to_libx264(monkeypatch):
+    monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
+
+    def fake_run(command, **_kwargs):
+        raise OSError("no device")
+
+    monkeypatch.setattr(downloaded.subprocess, "run", fake_run)
+    assert _PROBE() == "libx264"
+
+
+def test_the_tv_stream_encodes_with_the_detected_gpu(monkeypatch):
+    monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
+    monkeypatch.setattr(downloaded, "h264_encoder", lambda: "h264_nvenc")
+    command = downloaded.tv_stream_command(Path("film.mkv"), 0.0, 0, None, hdr=False)
+    assert command[command.index("-c:v") + 1] == "h264_nvenc"
+    assert command[command.index("-cq") + 1] == "21"
