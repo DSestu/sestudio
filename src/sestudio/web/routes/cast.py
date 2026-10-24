@@ -361,12 +361,13 @@ async def media_playhead(body: PlayheadRequest, request: Request) -> dict[str, A
     ``swap`` — the next ones are ready: fetch them again to show them now
     rather than after what it buffered at the source's rate. ``ready`` —
     seconds drawn past the segment playing, one after another: how far it can
-    read ahead and be sent AI frames throughout."""
+    read ahead and be sent AI frames throughout. ``shown`` — the segment playing
+    was sent drawn: AI frames are on screen."""
     media = _media_of(request, body.url)
     if not media:
-        return {"swap": False, "ready": 0.0}
-    swap, ready = downloaded_route.playhead(media, body.position)
-    return {"swap": swap, "ready": ready}
+        return {"swap": False, "ready": 0.0, "shown": False}
+    swap, ready, shown = downloaded_route.playhead(media, body.position)
+    return {"swap": swap, "ready": ready, "shown": shown}
 
 
 class CastLiveRequest(BaseModel):

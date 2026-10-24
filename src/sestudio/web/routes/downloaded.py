@@ -794,7 +794,7 @@ def playing_segment(media: str) -> int | None:
     return int(found[0] // downloaded.HLS_SEGMENT_SECONDS)
 
 
-def playhead(media: str, position: float) -> tuple[bool, float]:
+def playhead(media: str, position: float) -> tuple[bool, float, bool]:
     """Note that *media* plays at *position*.
 
     Says whether to swap: the two segments after the one playing are drawn by
@@ -803,13 +803,14 @@ def playhead(media: str, position: float) -> tuple[bool, float]:
     player may keep that one as it was and refetch from the one after, and a
     swap that has happened must not be asked for again. And says how many
     seconds past the one playing are drawn one after another: as far as the
-    player can read ahead without outrunning the GPU.
+    player can read ahead without outrunning the GPU. And whether the one
+    playing was sent drawn: whether AI frames are on screen.
     """
     PLAYHEAD[media] = (position, time.monotonic())
     index = int(position // downloaded.HLS_SEGMENT_SECONDS)
     built = DRAWN.built.get(media)
     if not built:
-        return False, 0.0
+        return False, 0.0, False
     settings, _, sent = built
     end = index + 1
     while DRAWN.ready(media, settings, end) is not None:
@@ -818,7 +819,7 @@ def playhead(media: str, position: float) -> tuple[bool, float]:
     swap = ready >= 2 * downloaded.HLS_SEGMENT_SECONDS and not (
         {index + 1, index + 2} & sent
     )
-    return swap, ready
+    return swap, ready, index in sent
 
 
 def warm(
