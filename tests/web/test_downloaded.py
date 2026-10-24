@@ -784,17 +784,27 @@ def test_a_chromecast_segment_follows_its_cast_s_changed_settings(
     )
     params = {"path": "Film.avi", "index": 3, "rung": 0, "live": "cc-1"}
 
-    client.get("/api/downloaded/segment", params=params)
+    # Never cached: the same URL comes at another rate once changed.
+    first = client.get("/api/downloaded/segment", params=params)
+    assert first.headers["cache-control"] == "no-store"
     client.app.state.live["cc-1"] = {"rung": 500, "fps": 30}
     client.get("/api/downloaded/segment", params={**params, "index": 4})
     client.app.state.live["cc-1"] = {"rung": None, "fps": 60}
     client.get("/api/downloaded/segment", params={**params, "index": 5})
+    # A playlist read now warms its first segments at the changed rate too, so
+    # they do not call off the ones being made at it.
+    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 30.0)
+    client.get(
+        "/api/downloaded/hls", params={"path": "Film.avi", "rung": 0, "live": "cc-1"}
+    )
+    for future, _stop in list(route._HLS_PENDING.values()):
+        future.result(timeout=10)
     client.app.state.live.clear()
     route._HLS_PENDING.clear()
 
     # As asked; then the nearest rung the film has to 500, at 30; then the
-    # receiver's own rung back, at 60.
-    assert built == [(0, 0), (480, 30), (0, 60)]
+    # receiver's own rung back, at 60, which the warm-up keeps.
+    assert built == [(0, 0), (480, 30), (0, 60), (0, 60), (0, 60), (0, 60)]
 
 
 def test_new_settings_call_off_older_segments_of_the_same_media():

@@ -1,6 +1,5 @@
 import type { StreamSource } from '../../api'
 import { setBrowserFps, useBrowserFps } from '../../browserFps'
-import { useBrowserPlayerControls } from '../../browserPlayerControls'
 import { ladderUrlOf } from '../../frameRates'
 import { useMediaOptions } from '../../useMediaOptions'
 import { AiSetupNotice } from '../AiSetupProgress'
@@ -15,7 +14,6 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
   const url = ladderUrlOf(source)
   const options = useMediaOptions(url ?? undefined, url !== null)
   const fps = useBrowserFps()
-  const controls = useBrowserPlayerControls()
   const rates = options?.frame_rates ?? []
   // The AI rates come once the server has set itself up for them: its progress.
   const setup = options?.preparing && <div className="basis-full"><AiSetupNotice /></div>
@@ -25,11 +23,7 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
     source: options.fps,
     rates,
     value: rates.includes(fps) ? fps : 0,
-    onChange: (next: number) => {
-      // The new playlist starts at zero: it resumes where this one is now.
-      controls?.holdPosition()
-      setBrowserFps(next)
-    },
+    onChange: setBrowserFps,
   }
   return (
     <>

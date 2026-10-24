@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  MediaPlayer, MediaProvider, Track, type MediaPlayerInstance, type VideoQuality,
+  isHLSProvider, MediaPlayer, MediaProvider, Track, type MediaPlayerInstance, type VideoQuality,
 } from '@vidstack/react'
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default'
 import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
-import type { StreamSource } from '../../api'
+import { castLive, type StreamSource } from '../../api'
 import { useMediaOptions } from '../../useMediaOptions'
 import { useBrowserFps } from '../../browserFps'
 import { ladderUrlOf, withFps } from '../../frameRates'
@@ -73,9 +73,28 @@ export default function VideoPane({
   const known = useMediaOptions(ladderUrl ?? undefined, ladderUrl !== null)
   const fps = useBrowserFps()
   const playingFps = !fps || !known || known.frame_rates.includes(fps) ? fps : 0
+  // The rate a video loads at. A change while it plays goes to the server under
+  // the video's own `live` id, as a cast's does, and the player fetches again
+  // what it had buffered past the next segment: no reload, no jump.
+  const [loaded, setLoaded] = useState(() => ({ url: ladderUrl, fps: playingFps, live: crypto.randomUUID() }))
+  if (loaded.url !== ladderUrl) setLoaded({ url: ladderUrl, fps: playingFps, live: crypto.randomUUID() })
   const mediaUrl = displaySource
-    ? ladderUrl ? withFps(ladderUrl, playingFps) : displaySource.proxy_url
+    ? ladderUrl ? `${withFps(ladderUrl, loaded.fps)}&live=${loaded.live}` : displaySource.proxy_url
     : ''
+  const sentFps = useRef<Record<string, number>>({})
+  useEffect(() => {
+    if (!loaded.url) return
+    if (playingFps === (sentFps.current[loaded.live] ?? loaded.fps)) return
+    sentFps.current[loaded.live] = playingFps
+    castLive(loaded.live, 0, playingFps).then(() => {
+      const provider = playerRef.current?.provider
+      if (!isHLSProvider(provider) || !provider.instance) return
+      const hls = provider.instance
+      // Same level (or Auto again): hls.js drops what it buffered past the
+      // next segment and fetches it anew, now at the new rate.
+      hls.nextLevel = hls.autoLevelEnabled ? -1 : hls.currentLevel
+    }).catch(() => {})
+  }, [loaded, playingFps])
 
   // Drives the layout choice below: the small (mobile) layout drops the
   // timeline, which is wrong for a popped-out window.
@@ -109,10 +128,6 @@ export default function VideoPane({
         if (!p) return
         p.currentTime = seconds
         void p.play()
-      },
-      holdPosition: () => {
-        const p = playerRef.current
-        if (p && p.currentTime > 0) setResumeTo(p.currentTime)
       },
       position: () => playerRef.current?.currentTime ?? 0,
       bufferedAhead: () => {
@@ -163,8 +178,7 @@ export default function VideoPane({
   const [armedSrc, setArmedSrc] = useState(srcKey)
   if (armedSrc !== srcKey) {
     setArmedSrc(srcKey)
-    // A position held for the change wins over the saved one.
-    if (armedSrc && srcKey) setResumeTo(held => held ?? resumePointFor(ep))
+    if (armedSrc && srcKey) setResumeTo(resumePointFor(ep))
   }
 
   // Pending retry of a refused autoplay; cleared on unmount so a torn-down
