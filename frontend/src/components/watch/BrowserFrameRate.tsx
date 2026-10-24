@@ -3,6 +3,7 @@ import { setBrowserFps, useBrowserFps } from '../../browserFps'
 import { useBrowserPlayerControls } from '../../browserPlayerControls'
 import { ladderUrlOf } from '../../frameRates'
 import { useMediaOptions } from '../../useMediaOptions'
+import { AiSetupNotice } from '../AiSetupProgress'
 import FrameRateDropdown from '../FrameRateDropdown'
 import FrameRatePicker from '../FrameRatePicker'
 
@@ -16,7 +17,9 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
   const fps = useBrowserFps()
   const controls = useBrowserPlayerControls()
   const rates = options?.frame_rates ?? []
-  if (!options?.fps || !rates.length) return null
+  // The AI rates come once the server has set itself up for them: its progress.
+  const setup = options?.preparing && <div className="basis-full"><AiSetupNotice /></div>
+  if (!options?.fps || !rates.length) return setup || null
   const pick = {
     label: 'Frame rate',
     source: options.fps,
@@ -32,6 +35,7 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
     <>
       <div className="md:hidden"><FrameRateDropdown {...pick} /></div>
       <div className="hidden md:block"><FrameRatePicker {...pick} /></div>
+      {setup}
     </>
   )
 }

@@ -8,6 +8,11 @@ const RETRY_MS = 5000
 // share one request. Not while preparing: those are asked again.
 const known = new Map<string | undefined, MediaOptions>()
 
+/** Drop the answers kept, so the next ask sees AI turned on or off. */
+export function forgetMediaOptions() {
+  known.clear()
+}
+
 /** The options of the media at *url* (without one, of what was last sent to a
  *  DLNA TV), or null until known. Asked again every few seconds while the
  *  server is still fetching the AI runtime on first use, so the frame rates it
