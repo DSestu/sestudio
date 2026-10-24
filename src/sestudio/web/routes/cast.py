@@ -248,11 +248,9 @@ async def media_options(request: Request, url: str | None = None) -> dict[str, A
     variants, fps = found
     ai = await asyncio.to_thread(interpolate.status) if fps > 0 else {}
     gpu = ai.get("gpu", False)
-    # Judged at the source's size, or 720p for a bigger one: the player drops to
-    # a lighter rung when drawing falls behind, so 720p is what has to hold.
-    width, height = next(
-        ((w, h) for _s, w, h, _b in variants if w and h and h <= 720), (1280, 720)
-    )
+    # Judged at the source's own size: what is drawn at Source quality, the
+    # player's default, and what has to keep up.
+    width, height = next(((w, h) for _s, w, h, _b in variants if w and h), (1280, 720))
 
     def offered(rate: int) -> bool:
         if rate < fps - 0.5:

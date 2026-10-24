@@ -31,6 +31,23 @@ export function useBrowserAiShown(): boolean {
   )
 }
 
+// The quality the browser player is asked for (see `PlayerPrefs.quality`):
+// undefined the source's own, 0 Auto, else a height. Saved, as the rate is.
+let quality = loadPlayerPrefs().quality
+
+export function setBrowserQuality(next: number | undefined): void {
+  quality = next
+  savePlayerPrefs({ quality: next })
+  listeners.forEach(l => l())
+}
+
+export function useBrowserQuality(): number | undefined {
+  return useSyncExternalStore(
+    cb => { listeners.add(cb); return () => listeners.delete(cb) },
+    () => quality,
+  )
+}
+
 export function useBrowserFps(): number {
   return useSyncExternalStore(
     cb => { listeners.add(cb); return () => listeners.delete(cb) },

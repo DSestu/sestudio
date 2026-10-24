@@ -28,6 +28,19 @@ def out(tmp_path):
     return tmp_path / "out"
 
 
+@pytest.fixture(autouse=True)
+def no_segments_from_other_tests():
+    """Segments are tracked per film name, and every test's film is Film.avi:
+    what one test built must not answer for the next."""
+    from sestudio.web.routes import downloaded as route
+
+    yield
+    for builds in (route.RAW, route.DRAWN):
+        builds.pending.clear()
+        builds.built.clear()
+    route.PLAYHEAD.clear()
+
+
 def _write(path, body=b"VIDEO"):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(body)
@@ -964,3 +977,38 @@ def test_ai_frames_are_drawn_from_the_playhead_and_swapped_in_once_ready(tmp_pat
         route.RAW.built.clear()
         route.DRAWN.pending.clear()
         route.DRAWN.built.clear()
+
+
+def test_tracks_say_whether_a_browser_plays_the_file_as_it_is(client, out, monkeypatch):
+    """Then the source's own quality is the file itself: nothing to encode."""
+    _write(out / "Film.mp4")
+    downloaded.invalidate()
+    monkeypatch.setattr(downloaded, "tracks_of", lambda _f: _hd_tracks())
+    monkeypatch.setattr(downloaded, "sidecar_subtitles", lambda _f: [])
+    for playable in (True, False):
+        monkeypatch.setattr(downloaded, "browser_can_play", lambda _f, p=playable: p)
+        resp = client.get("/api/downloaded/tracks", params={"path": "Film.mp4"})
+        assert resp.json()["playable"] is playable
+
+
+def test_a_segment_already_built_is_answered_without_queueing_again(tmp_path):
+    """Drawn one at a time, a segment asked for again must not wait in line —
+    nor make the one the player needs next wait behind it."""
+    import time
+
+    from sestudio.web.routes import downloaded as route
+
+    builds = route.Builds(1, "test")
+    made = tmp_path / "ai3.ts"
+    made.write_bytes(b"ts")
+    calls: list[int] = []
+    first = builds.queue("film", (0, 0, 60), 3, lambda: calls.append(3) or made)
+    assert first.result(timeout=5) == made
+    # Recorded as built just after the result is out.
+    for _ in range(100):
+        if 3 in builds.built["film"][1]:
+            break
+        time.sleep(0.01)
+    again = builds.queue("film", (0, 0, 60), 3, lambda: pytest.fail("built twice"))
+    assert again.done() and again.result() == made
+    assert calls == [3]

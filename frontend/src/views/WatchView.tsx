@@ -394,7 +394,7 @@ export default function WatchView({
   // episode is never read as this one's — and so the reset on switching happens
   // during render rather than in the effect, which would cost an extra pass.
   const [subs, setSubs] = useState<{
-    path?: string; list: StreamSubtitle[]; audio: DownloadedTrack[]
+    path?: string; list: StreamSubtitle[]; audio: DownloadedTrack[]; playable?: boolean
   }>({ list: NO_SUBTITLES, audio: NO_AUDIO })
   useEffect(() => {
     if (!downloadedPath) return
@@ -404,6 +404,7 @@ export default function WatchView({
       setSubs({
         path: downloadedPath,
         audio: tracks.audio,
+        playable: tracks.playable,
         list: tracks.subtitles
           // A picture-based track has no text to show; it is reported so the
           // reason is knowable, and skipped so the menu holds nothing dead.
@@ -447,9 +448,14 @@ export default function WatchView({
         dlna_url: downloadedFileUrl(downloadedPath, audioTrack || undefined),
         provider: DOWNLOADED_PROVIDER,
         subtitles: downloadedSubs,
+        // The file itself at the source's quality, when a browser plays it as
+        // it is — its first voice only: another needs a copy built around it.
+        direct: subs.playable && audioTrack === 0
+          ? { url: downloadedFileUrl(downloadedPath), kind: 'mp4' as const }
+          : undefined,
       }
       : null),
-    [downloadedPath, fresh, audioTrack, downloadedSubs],
+    [downloadedPath, fresh, audioTrack, downloadedSubs, subs.playable],
   )
 
   const { providers, status, sources, active, select, markFailed, probing } =
@@ -897,7 +903,7 @@ export default function WatchView({
                     autoplay={autoplay}
                     handoffAt={position}
                   >
-                    <BrowserQuality />
+                    <BrowserQuality source={source} />
                     <BrowserFrameRate source={source} />
                   </OutputSwitcher>
                   {/* Audio tracks, for the copy on disk. Only shown when the

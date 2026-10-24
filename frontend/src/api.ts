@@ -378,6 +378,10 @@ export interface StreamSource {
   /** A provider's stream re-encoded by the server as it plays, at every
    *  quality from the source down (an HLS master). Absent for a stored file. */
   transcode_url?: string
+  /** The same video untouched — the host's own stream, or the file as it is —
+   *  when `proxy_url` is the server's re-encoding of it. Played at the
+   *  source's quality and frame rate, which need no encode at all. */
+  direct?: { url: string; kind: 'hls' | 'mp4' }
 }
 
 /**
@@ -573,15 +577,16 @@ export async function castSetTracks(
   return Boolean((await res.json()).restarted)
 }
 
-/** How a restart starts the server again: on the code now in its checkout,
- *  on the latest release through uvx, or the same installed copy. */
-export type RestartWay = 'checkout' | 'uvx' | 'installed'
+/** How a restart starts the server again: the uv command it was launched
+ *  with, run again; uvx on the latest release; or the same Python. */
+export type RestartWay = 'launcher' | 'uvx' | 'python'
 
-/** How the server would restart; null while it does not answer. */
-export async function serverRestartWay(): Promise<RestartWay | null> {
+/** How the server would restart, and the command it would run; null while it
+ *  does not answer. */
+export async function serverRestartWay(): Promise<{ restart: RestartWay; command: string } | null> {
   try {
     const res = await fetch(`${BASE}/server`, { cache: 'no-store' })
-    return res.ok ? (await res.json()).restart : null
+    return res.ok ? await res.json() : null
   } catch {
     return null
   }
@@ -892,6 +897,8 @@ export interface DownloadedTrack {
 export interface DownloadedTracks {
   audio: DownloadedTrack[]
   subtitles: DownloadedTrack[]
+  /** A browser plays the file as it is, its first voice included. */
+  playable?: boolean
 }
 
 /** What is inside a downloaded file.

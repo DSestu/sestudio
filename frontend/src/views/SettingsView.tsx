@@ -6,7 +6,8 @@ import type { AppSettings, RestartWay, SiteInfo } from '../api'
 import { getSites, restartServer, runAiSetup, serverRestartWay } from '../api'
 import type { SubtitleStyle } from '../subtitleStyle'
 import { isSettingUp, useAiSetup } from '../useAiSetup'
-import { loadPlayerPrefs, qualityPref, qualityValue, savePlayerPrefs } from '../playerPrefs'
+import { setBrowserQuality } from '../browserFps'
+import { loadPlayerPrefs, qualityPref, qualityValue } from '../playerPrefs'
 import { forgetMediaOptions } from '../useMediaOptions'
 import {
   DEFAULT_SUBTITLE_STYLE,
@@ -397,15 +398,15 @@ export default function SettingsView({ settings, onUpdate }: Props) {
 }
 
 const RESTART_WAY: Record<RestartWay, string> = {
-  checkout: "Starts it again on the code now in its folder: pull, then restart.",
-  uvx: 'Starts it again with uvx, on the latest release.',
-  installed: 'Starts the same version again.',
+  launcher: 'Runs the command it was started with again, from the same folder:',
+  uvx: 'Starts it again with uvx, on the latest release:',
+  python: 'Starts the same Python again, on the code now in its folder:',
 }
 
 /** Restarts the server, then reloads the page once it answers again. What
  *  plays or casts stops for the few seconds it is away. */
 function RestartServer() {
-  const [way, setWay] = useState<RestartWay | null>(null)
+  const [way, setWay] = useState<{ restart: RestartWay; command: string } | null>(null)
   const [state, setState] = useState<'idle' | 'restarting' | 'failed'>('idle')
   useEffect(() => { void serverRestartWay().then(setWay) }, [])
 
@@ -444,8 +445,11 @@ function RestartServer() {
       <p className="text-xs text-base-content/50 mt-1">
         {state === 'failed'
           ? 'It did not come back. Start it again from where it was launched.'
-          : way ? RESTART_WAY[way] : 'Starts it again on newer code.'}
+          : way ? RESTART_WAY[way.restart] : 'Starts it again on newer code.'}
       </p>
+      {state !== 'failed' && way && (
+        <code className="block text-xs text-base-content/60 mt-1 break-all">{way.command}</code>
+      )}
     </div>
   )
 }
@@ -468,7 +472,7 @@ function VideoQualitySetting() {
         value={value}
         onChange={e => {
           setValue(e.target.value)
-          savePlayerPrefs({ quality: qualityPref(e.target.value) })
+          setBrowserQuality(qualityPref(e.target.value))
         }}
       >
         <option value="source">Source — the video's own picture</option>

@@ -575,9 +575,9 @@ def speed() -> float | None:
     return _speed[0] if _speed else None
 
 
-#: Segments drawn at once (routes/downloaded.py `DRAWN`): measured as they
-#: run, one thread's CPU work overlapping another's turn on the GPU.
-_BENCH_THREADS = 3
+#: Segments drawn at once (routes/downloaded.py `DRAWN`): measured as they run,
+#: one at a time, so a rate is offered only if a segment is drawn in time.
+_BENCH_THREADS = 1
 
 
 def _measure(pairs: int = 6) -> float:

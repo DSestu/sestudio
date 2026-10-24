@@ -1151,6 +1151,27 @@ def _rung_size(rung: int, width: int, height: int) -> tuple[int, int]:
     return width // 2 * 2, height // 2 * 2
 
 
+_SAR_RE = re.compile(r"\bSAR (\d+):(\d+)")
+
+
+def _sar_of(segment: Path) -> str | None:
+    """The pixel shape of *segment*'s picture, as `setsar` takes it ("159/160"),
+    or None when square or unknown."""
+    try:
+        text = subprocess.run(
+            [ffmpeg_binary(), "-hide_banner", "-i", str(segment)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        ).stderr
+    except (OSError, RuntimeError, subprocess.SubprocessError):
+        return None
+    found = _SAR_RE.search(text)
+    if not found or found.group(1) == found.group(2):
+        return None
+    return f"{found.group(1)}/{found.group(2)}"
+
+
 def _draw_segment(
     raw: Path,
     following: Path | None,
@@ -1181,6 +1202,9 @@ def _draw_segment(
         return None
     out.parent.mkdir(parents=True, exist_ok=True)
     width, height = size
+    # Raw frames carry no pixel shape: the source's, put back, or a film with
+    # non-square pixels would widen a little each time AI frames take over.
+    sar = _sar_of(raw)
     if kbps:
         # More frames need more bits to look the same; not twice as many, as
         # the frames drawn in between are close to their neighbours.
@@ -1226,7 +1250,7 @@ def _draw_segment(
         "-sn",
         # RGB back to the BT.709 YUV an HD picture is tagged as.
         "-vf",
-        "scale=out_color_matrix=bt709:out_range=tv",
+        "scale=out_color_matrix=bt709:out_range=tv" + (f",setsar={sar}" if sar else ""),
         "-colorspace",
         "bt709",
         "-color_primaries",
