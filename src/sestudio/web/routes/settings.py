@@ -8,9 +8,10 @@ import threading
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sestudio import interpolate, restart
+from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.config import DEFAULT_DOWNLOAD_ORDER, load_config, save_config, tmdb_key
 
 router = APIRouter()
@@ -35,6 +36,7 @@ class SettingsBody(BaseModel):
     callmebot_apikey: str | None = None
     allow_file_deletion: bool | None = None
     frame_interpolation: bool | None = None
+    ai_max_hold: int | None = Field(default=None, ge=0, le=4)
 
 
 def _known_hosts(request: Request) -> list[str]:
@@ -130,6 +132,11 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.allow_file_deletion = body.allow_file_deletion
     if body.frame_interpolation is not None:
         cfg.frame_interpolation = body.frame_interpolation
+    if body.ai_max_hold is not None and body.ai_max_hold != cfg.ai_max_hold:
+        cfg.ai_max_hold = body.ai_max_hold
+        # Drawn with the old one: forgotten, so what plays is drawn again.
+        for media in list(downloaded_route.DRAWN.built):
+            downloaded_route.DRAWN.call_off(media)
     save_config(cfg)
     return _public(cfg, request)
 

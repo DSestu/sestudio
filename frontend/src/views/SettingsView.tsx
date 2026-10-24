@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
 import RankRow from '../components/RankRow'
 import { DEFAULT_HOST_ORDER } from '../downloadPrefs'
@@ -546,6 +547,14 @@ function AiSection({ settings, onUpdate }: Props) {
           rate, or a lower one, is offered.
         </p>
       </div>
+
+      {enabled && (
+        <AiHeldFrames
+          id="set-ai-max-hold"
+          value={settings.ai_max_hold ?? 0}
+          onChange={hold => void onUpdate({ ai_max_hold: hold })}
+        />
+      )}
 
       {enabled && setup && (
         <>

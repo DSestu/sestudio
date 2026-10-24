@@ -1,15 +1,21 @@
-import type { StreamSource } from '../../api'
+import type { AppSettings, StreamSource } from '../../api'
 import { setBrowserFps, useBrowserAiShown, useBrowserFps } from '../../browserFps'
 import { isDrawn, ladderUrlOf } from '../../frameRates'
 import { useMediaOptions } from '../../useMediaOptions'
+import AiHeldFrames from '../AiHeldFrames'
 import { AiSetupNotice } from '../AiSetupProgress'
 import FrameRateDropdown from '../FrameRateDropdown'
 
 /** The frame rate the browser player plays at, picked beside the cast button
  *  rather than in the player's settings menu — which its small (phone) layout
  *  does not show — as a dropdown, right of the quality's. Hidden for a source
- *  that can only play at its own rate. */
-export default function BrowserFrameRate({ source }: { source: StreamSource | null }) {
+ *  that can only play at its own rate. The AI rates' finer settings, the same
+ *  as in Settings, fold out below it. */
+export default function BrowserFrameRate({ source, settings, onUpdateSettings }: {
+  source: StreamSource | null
+  settings: AppSettings
+  onUpdateSettings: (patch: Partial<AppSettings>) => Promise<unknown> | void
+}) {
   const url = ladderUrlOf(source)
   const options = useMediaOptions(url ?? undefined, url !== null)
   const fps = useBrowserFps()
@@ -35,6 +41,18 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
         <FrameRateDropdown {...pick} />
       </div>
       {setup}
+      {rates.some(rate => isDrawn(rate, options.fps)) && (
+        <details className="basis-full text-sm">
+          <summary className="cursor-pointer text-base-content/60">Advanced AI settings</summary>
+          <div className="mt-2">
+            <AiHeldFrames
+              id="player-ai-max-hold"
+              value={settings.ai_max_hold ?? 0}
+              onChange={hold => void onUpdateSettings({ ai_max_hold: hold })}
+            />
+          </div>
+        </details>
+      )}
     </>
   )
 }

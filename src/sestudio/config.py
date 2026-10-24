@@ -94,6 +94,10 @@ class AppConfig:
     # Frame rates above the source's, drawn by AI on the GPU. On by default;
     # off, nothing of it is fetched or offered.
     frame_interpolation: bool = True
+    # Anime holds each drawing for a few frames: with this above 0, a drawing
+    # repeated for up to that many frames is drawn across as one, so AI frames
+    # smooth it out; held longer, it is a pause and stays still. 0, off.
+    ai_max_hold: int = 0
 
 
 def _config_path() -> Path:
@@ -137,6 +141,7 @@ def load_config() -> AppConfig:
             callmebot_apikey=str(data.get("callmebot_apikey", "")),
             allow_file_deletion=bool(data.get("allow_file_deletion", False)),
             frame_interpolation=bool(data.get("frame_interpolation", True)),
+            ai_max_hold=int(data.get("ai_max_hold", 0)),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

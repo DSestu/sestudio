@@ -351,8 +351,10 @@ class _TvRun:
         size: tuple[int, int] = (0, 0),
         source_fps: float = 0.0,
         fps: int = 0,
+        hold: int = 0,
     ) -> None:
         self._fps = fps
+        self._hold = hold
         self._dec: subprocess.Popen[bytes] | None = None
         if decode is None:
             self._enc = subprocess.Popen(
@@ -379,7 +381,9 @@ class _TvRun:
         assert self._enc.stdin is not None
         try:
             frames = interpolate.read_frames(self._dec.stdout, *size)
-            for frame in interpolate.frames_at(frames, source_fps, self._fps, 10**9):
+            for frame in interpolate.frames_at(
+                frames, source_fps, self._fps, 10**9, self._hold
+            ):
                 self._enc.stdin.write(frame.tobytes())
             self._enc.stdin.close()
         except (OSError, ValueError):  # stopped mid-write
@@ -513,6 +517,7 @@ def tv_run_from(
                 downloaded.tv_frame(rung),
                 source_fps,
                 fps,
+                load_config().ai_max_hold,
             )
         # Below the source's rate, frames are dropped; at it, nothing to do.
         drop = fps if fps and source_fps and fps < source_fps - 0.5 else 0
