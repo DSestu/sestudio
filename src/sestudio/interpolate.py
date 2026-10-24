@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,7 @@ _MODEL_MEMBER = "rife_v2/rife_v4.26.onnx"
 
 #: Providers tried in order; the first this onnxruntime build has wins.
 _PROVIDERS = (
+    "TensorrtExecutionProvider",
     "CUDAExecutionProvider",
     "DmlExecutionProvider",
     "CoreMLExecutionProvider",
@@ -64,24 +66,45 @@ _SCENE_CUT = 40.0
 _model_lock = threading.Lock()
 
 
-def runtime_dir() -> Path:
+def runtime_dir(flavour: str = "") -> Path:
     """Where ONNX Runtime is installed: one folder per Python version and
     platform, as its wheels are built for each — a `uvx` on another Python
-    gets its own rather than one that will not import."""
+    gets its own rather than one that will not import — and per *flavour*
+    (see :func:`_flavours`)."""
     tag = f"py{sys.version_info.major}{sys.version_info.minor}"
-    return config_dir() / "runtime" / f"{tag}-{sysconfig.get_platform()}"
+    return config_dir() / "runtime" / f"{tag}-{sysconfig.get_platform()}{flavour}"
 
 
-def _runtime_packages() -> list[str]:
-    # DirectML on Windows reaches NVIDIA, AMD and Intel alike; the plain wheel
-    # carries CoreML on a Mac, and only the CPU on Linux (onnxruntime-gpu,
-    # installed beside sestudio, is picked up first there).
-    ort = "onnxruntime-directml" if sys.platform == "win32" else "onnxruntime"
-    return [f"{ort}>=1.20", "py7zr>=0.22"]
+def _nvidia() -> bool:
+    """Whether an NVIDIA GPU is here: its driver installs `nvidia-smi`."""
+    if shutil.which("nvidia-smi"):
+        return True
+    system = Path(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+    return sys.platform == "win32" and (system / "nvidia-smi.exe").is_file()
+
+
+def _flavours() -> list[tuple[str, list[str]]]:
+    """The runtimes to install, best first, as (folder suffix, packages).
+
+    An NVIDIA GPU gets NVIDIA's own: TensorRT runs RIFE several times faster on
+    it than DirectML does, at the price of a few gigabytes of CUDA, cuDNN and
+    TensorRT libraries, fetched once. Everything else, and an NVIDIA install
+    that fails, gets the plain one: DirectML on Windows reaches NVIDIA, AMD and
+    Intel alike; the plain wheel carries CoreML on a Mac and the CPU on Linux.
+    `onnx` builds the model's 8-bit wrapper; py7zr unpacks the model.
+    """
+    common = ["onnx>=1.16", "py7zr>=0.22"]
+    plain = "onnxruntime-directml" if sys.platform == "win32" else "onnxruntime"
+    flavours = [("", [f"{plain}>=1.20", *common])]
+    if sys.platform in ("win32", "linux") and _nvidia():
+        nvidia = ["onnxruntime-gpu[cuda,cudnn]>=1.20", "tensorrt-cu12-libs", *common]
+        flavours.insert(0, ("-nvidia", nvidia))
+    return flavours
 
 
 def _importable() -> bool:
     try:
+        import onnx  # noqa: F401
         import onnxruntime  # noqa: F401
         import py7zr  # noqa: F401
     except ImportError:
@@ -94,22 +117,27 @@ def ensure_runtime() -> bool:
     if it is not already importable (it is in a dev checkout)."""
     if _importable():
         return True
-    target = runtime_dir()
-    if not (target / ".complete").is_file() and not _install_runtime(target):
-        return False
-    # Last, so the environment's own packages (numpy among them) still win.
-    if str(target) not in sys.path:
-        sys.path.append(str(target))
-        importlib.invalidate_caches()
-    return _importable()
+    for flavour, packages in _flavours():
+        target = runtime_dir(flavour)
+        if not (target / ".complete").is_file() and not _install_runtime(
+            target, packages
+        ):
+            continue
+        # Last, so the environment's own packages (numpy among them) still win.
+        if str(target) not in sys.path:
+            sys.path.append(str(target))
+            importlib.invalidate_caches()
+        if _importable():
+            return True
+        sys.path.remove(str(target))
+    return False
 
 
-def _install_runtime(target: Path) -> bool:
+def _install_runtime(target: Path, packages: list[str]) -> bool:
     """Install the runtime into *target*. With uv where it is on the path — a
     `uvx` environment has no pip — else with this interpreter's pip. Built
     beside *target* and moved in only once complete, so an interrupted install
     is never taken for a finished one."""
-    packages = _runtime_packages()
     building = target.with_name(f"{target.name}.part")
     shutil.rmtree(building, ignore_errors=True)
     if uv := shutil.which("uv"):
@@ -196,6 +224,99 @@ def _session() -> Any | None:
     return _session_cache[0] if _session_cache else None
 
 
+def wrap(model: Any) -> Any:
+    """RIFE taking two HxWx3 8-bit frames (``a``, ``b``) and a time point
+    (``t``), giving the HxWx3 8-bit frame between (``frame``).
+
+    The conversions either side of the model — to its 0..1 floats in channels
+    first with the time as a seventh plane, and back — then run on the GPU with
+    it. On the CPU they took twice as long as the model, and moving floats to
+    the GPU and back is four times the bytes of the 8-bit frames.
+    """
+    from onnx import TensorProto, checker
+    from onnx import helper as h
+
+    graph = model.graph
+    inner_in, inner_out = graph.input[0].name, graph.output[0].name
+
+    def const(name: str, value: Any, dtype: int = TensorProto.FLOAT) -> Any:
+        values = value if isinstance(value, list) else [value]
+        return h.make_tensor(
+            name, dtype, [len(values)] if isinstance(value, list) else [], values
+        )
+
+    before = [
+        h.make_node("Cast", ["a"], ["w_af"], to=TensorProto.FLOAT),
+        h.make_node("Cast", ["b"], ["w_bf"], to=TensorProto.FLOAT),
+        h.make_node("Concat", ["w_af", "w_bf"], ["w_ab"], axis=2),
+        h.make_node("Mul", ["w_ab", "w_in"], ["w_ab01"]),
+        h.make_node("Shape", ["a"], ["w_shape"]),
+        h.make_node("Slice", ["w_shape", "w_zero", "w_two"], ["w_hw"]),
+        h.make_node("Concat", ["w_hw", "w_one"], ["w_hw1"], axis=0),
+        h.make_node("Expand", ["t", "w_hw1"], ["w_plane"]),
+        h.make_node("Concat", ["w_ab01", "w_plane"], ["w_hwc"], axis=2),
+        h.make_node("Transpose", ["w_hwc"], ["w_chw"], perm=[2, 0, 1]),
+        h.make_node("Unsqueeze", ["w_chw", "w_zero"], [inner_in]),
+    ]
+    after = [
+        h.make_node("Squeeze", [inner_out, "w_zero"], ["w_y"]),
+        h.make_node("Transpose", ["w_y"], ["w_yhwc"], perm=[1, 2, 0]),
+        h.make_node("Mul", ["w_yhwc", "w_out"], ["w_y255"]),
+        h.make_node("Add", ["w_y255", "w_half"], ["w_yr"]),
+        h.make_node("Clip", ["w_yr", "w_lo", "w_hi"], ["w_yc"]),
+        h.make_node("Cast", ["w_yc"], ["frame"], to=TensorProto.UINT8),
+    ]
+    nodes = [*before, *graph.node, *after]
+    del graph.node[:]
+    graph.node.extend(nodes)
+    graph.initializer.extend(
+        [
+            const("w_in", 1 / 255),
+            const("w_out", 255.0),
+            const("w_half", 0.5),
+            const("w_lo", 0.0),
+            const("w_hi", 255.0),
+            const("w_zero", [0], TensorProto.INT64),
+            const("w_two", [2], TensorProto.INT64),
+            const("w_one", [1], TensorProto.INT64),
+        ]
+    )
+    frame = ["height", "width", 3]
+    del graph.input[:]
+    graph.input.extend(
+        [
+            h.make_tensor_value_info("a", TensorProto.UINT8, frame),
+            h.make_tensor_value_info("b", TensorProto.UINT8, frame),
+            h.make_tensor_value_info("t", TensorProto.FLOAT, [1]),
+        ]
+    )
+    del graph.output[:]
+    graph.output.extend([h.make_tensor_value_info("frame", TensorProto.UINT8, frame)])
+    checker.check_model(model)
+    return model
+
+
+def _wrapped(model: Path) -> Path:
+    """*model* wrapped (see :func:`wrap`), built beside it once."""
+    import onnx
+
+    out = model.with_name(f"{model.stem}_u8.onnx")
+    if not out.is_file():
+        building = out.with_suffix(".part")
+        onnx.save(wrap(onnx.load(str(model))), str(building))
+        building.replace(out)
+    return out
+
+
+#: TensorRT, in half precision: one engine for every frame size from 144p to
+#: 4K, compiled once — minutes — and kept beside the model.
+_TENSORRT_SHAPES = {
+    "trt_profile_min_shapes": "a:144x256x3,b:144x256x3,t:1",
+    "trt_profile_opt_shapes": "a:1080x1920x3,b:1080x1920x3,t:1",
+    "trt_profile_max_shapes": "a:2160x5120x3,b:2160x5120x3,t:1",
+}
+
+
 def _new_session() -> Any | None:
     if not ensure_runtime():
         return None
@@ -206,6 +327,30 @@ def _new_session() -> Any | None:
         return None
     available = set(ort.get_available_providers())
     chosen = [p for p in _PROVIDERS if p in available]
+    if "CUDAExecutionProvider" in available and hasattr(ort, "preload_dlls"):
+        # NVIDIA's libraries come as pip packages beside onnxruntime-gpu, which
+        # Windows does not search for DLLs until told to.
+        ort.preload_dlls()
+    try:
+        wrapped = _wrapped(model)
+    except Exception as exc:  # noqa: BLE001 — onnx missing, or a model it rejects
+        logger.warning("Interpolation unavailable: %s", exc)
+        return None
+    providers: list[Any] = [
+        (
+            name,
+            {
+                "trt_fp16_enable": True,
+                "trt_engine_cache_enable": True,
+                "trt_engine_cache_path": str(model.parent / "tensorrt"),
+                "trt_timing_cache_enable": True,
+                **_TENSORRT_SHAPES,
+            },
+        )
+        if name == "TensorrtExecutionProvider"
+        else name
+        for name in chosen
+    ]
     options = ort.SessionOptions()
     if "DmlExecutionProvider" in chosen:
         # DirectML requires both off: it cannot reuse memory patterns across
@@ -213,7 +358,7 @@ def _new_session() -> Any | None:
         options.enable_mem_pattern = False
         options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
     try:
-        return ort.InferenceSession(str(model), options, providers=chosen)
+        return ort.InferenceSession(str(wrapped), options, providers=providers)
     except Exception as exc:  # noqa: BLE001 — a provider that will not load
         logger.warning("Interpolation unavailable: %s", exc)
         return None
@@ -253,17 +398,22 @@ def status() -> dict[str, Any]:
     }
 
 
+# One model call at a time: DirectML takes the whole process down when two
+# threads run the same session at once, and the server builds three segments
+# in parallel. The GPU would run them one after another anyway; the CPU work
+# around each call still overlaps another thread's.
+_run_lock = threading.Lock()
+
+
 def interpolate(a: Any, b: Any, t: float) -> Any:
     """The frame at *t* (0..1) between *a* and *b*, each HxWx3 uint8 RGB."""
     import numpy as np
 
     session = _session()
     assert session is not None, "interpolation is not available"
-    pair = np.concatenate([a, b], axis=2).astype(np.float32) / 255.0
-    plane = np.full((*a.shape[:2], 1), t, dtype=np.float32)
-    x = np.concatenate([pair, plane], axis=2).transpose(2, 0, 1)[None]
-    y = session.run(None, {session.get_inputs()[0].name: x})[0][0]
-    return (y.transpose(1, 2, 0).clip(0, 1) * 255.0 + 0.5).astype(np.uint8)
+    feed = {"a": a, "b": b, "t": np.array([t], dtype=np.float32)}
+    with _run_lock:
+        return session.run(None, feed)[0]
 
 
 def frames_at(
@@ -326,17 +476,45 @@ def speed() -> float | None:
         return _speed[0]
     with _speed_lock:
         if not _speed and _session() is not None:
-            import numpy as np
-
-            width, height = _BENCH_SIZE
-            a = np.zeros((height, width, 3), dtype=np.uint8)
-            b = np.full((height, width, 3), 255, dtype=np.uint8)
-            interpolate(a, b, 0.5)
-            runs, start = 5, time.perf_counter()
-            for _ in range(runs):
-                interpolate(a, b, 0.5)
-            _speed.append(runs / (time.perf_counter() - start))
+            _speed.append(_measure())
     return _speed[0] if _speed else None
+
+
+#: Segments built at once (routes/downloaded.py `_HLS_POOL`): measured as they
+#: run, one thread's CPU work overlapping another's turn on the GPU.
+_BENCH_THREADS = 3
+
+
+def _measure(pairs: int = 6) -> float:
+    """Frames drawn a second by threads drawing at once, each between source
+    frames of its own in turn — as a segment does, converting each once."""
+    import numpy as np
+
+    width, height = _BENCH_SIZE
+    rng = np.random.default_rng(0)
+    # Shape compiled for, outside the timing.
+    warm = rng.integers(0, 255, (height, width, 3), dtype=np.uint8)
+    interpolate(warm, warm, 0.5)
+
+    def work(frames: list[Any]) -> None:
+        for left, right in zip(frames, frames[1:]):
+            interpolate(left, right, 0.5)
+
+    # Made here: a generator is not to be shared between threads.
+    sources = [
+        [
+            rng.integers(0, 255, (height, width, 3), dtype=np.uint8)
+            for _ in range(pairs + 1)
+        ]
+        for _ in range(_BENCH_THREADS)
+    ]
+    threads = [threading.Thread(target=work, args=(f,)) for f in sources]
+    start = time.perf_counter()
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return _BENCH_THREADS * pairs / (time.perf_counter() - start)
 
 
 def sustains(fps: float, source_fps: float, width: int, height: int) -> bool:

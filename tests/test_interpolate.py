@@ -228,6 +228,7 @@ def no_runtime(tmp_path: Path, monkeypatch):
         lambda: str(interpolate.runtime_dir()) in interpolate.sys.path,
     )
     monkeypatch.setattr(interpolate.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(interpolate, "_nvidia", lambda: False)
 
 
 def test_the_runtime_is_installed_once_into_the_config_dir(no_runtime, monkeypatch):
@@ -287,3 +288,68 @@ def test_status_never_waits_and_prepares_only_once(monkeypatch):
 
     assert first == second == {"available": False, "provider": None, "preparing": True}
     assert started == [True]
+
+
+def test_the_wrapped_model_takes_and_gives_8_bit_frames():
+    """The conversions run inside the model: frames in as they are decoded, the
+    frame out as it is encoded — here around a stand-in that answers frame A."""
+    pytest.importorskip("onnx")
+    ort = pytest.importorskip("onnxruntime")
+    from onnx import TensorProto
+    from onnx import helper as h
+
+    # input 1x7xHxW -> its first three channels, as RIFE's output is shaped.
+    stand_in = h.make_model(
+        h.make_graph(
+            [h.make_node("Slice", ["input", "s", "e", "ax"], ["output"])],
+            "stand_in",
+            [h.make_tensor_value_info("input", TensorProto.FLOAT, [1, 7, "h", "w"])],
+            [h.make_tensor_value_info("output", TensorProto.FLOAT, [1, 3, "h", "w"])],
+            [
+                h.make_tensor("s", TensorProto.INT64, [1], [0]),
+                h.make_tensor("e", TensorProto.INT64, [1], [3]),
+                h.make_tensor("ax", TensorProto.INT64, [1], [1]),
+            ],
+        ),
+        opset_imports=[h.make_opsetid("", 16)],
+        # RIFE's own: a newer default is more than onnxruntime reads.
+        ir_version=8,
+    )
+    wrapped = interpolate.wrap(stand_in)
+    session = ort.InferenceSession(
+        wrapped.SerializeToString(), providers=["CPUExecutionProvider"]
+    )
+    rng = np.random.default_rng(3)
+    a = rng.integers(0, 256, (5, 7, 3), dtype=np.uint8)
+    b = rng.integers(0, 256, (5, 7, 3), dtype=np.uint8)
+
+    (frame,) = session.run(None, {"a": a, "b": b, "t": np.array([0.4], np.float32)})
+
+    assert frame.dtype == np.uint8 and frame.shape == (5, 7, 3)
+    # Through 0..1 floats and back, unchanged.
+    assert np.array_equal(frame, a)
+
+
+def test_an_nvidia_gpu_gets_nvidia_s_runtime_first_and_the_plain_one_failing_that(
+    no_runtime, monkeypatch
+):
+    monkeypatch.setattr(interpolate, "_nvidia", lambda: True)
+    monkeypatch.setattr(interpolate.sys, "platform", "win32")
+    tried: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        packages = command[command.index("--target") + 2 :]
+        tried.append(packages)
+        Path(command[command.index("--target") + 1]).mkdir(parents=True)
+        failed = any(p.startswith("onnxruntime-gpu") for p in packages)
+        return subprocess.CompletedProcess(command, 1 if failed else 0, "", "")
+
+    monkeypatch.setattr(interpolate.subprocess, "run", fake_run)
+
+    assert interpolate.ensure_runtime()
+
+    assert tried[0][:2] == ["onnxruntime-gpu[cuda,cudnn]>=1.20", "tensorrt-cu12-libs"]
+    assert tried[1][0] == "onnxruntime-directml>=1.20"
+    # Kept apart, so the plain one installed after is never taken for NVIDIA's.
+    assert not interpolate.runtime_dir("-nvidia").exists()
+    assert (interpolate.runtime_dir() / ".complete").is_file()

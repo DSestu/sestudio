@@ -84,6 +84,7 @@ dev = [
     # AI frame interpolation's runtime. Not a dependency of the package: it is
     # tens of megabytes most installs never use, so interpolate.py installs it
     # into the config directory on first use. Here so its tests run against it.
+    "onnx>=1.16",
     "onnxruntime>=1.20",
     "py7zr>=0.22",
     # Not a runtime dependency (see the note on mini-racer above), but
