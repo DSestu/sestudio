@@ -231,7 +231,7 @@ async def media_options(request: Request, url: str | None = None) -> dict[str, A
     A frame rate above the source's is drawn by AI, so it is only offered where
     that runs on a GPU: on the CPU it would not keep up with playback.
     """
-    none = {"heights": [], "fps": 0, "frame_rates": []}
+    none = {"heights": [], "bandwidths": [], "fps": 0, "frame_rates": []}
     if url is None:
         last: DlnaPlayRequest | None = getattr(request.app.state, "dlna_play", None)
         if last is None:
@@ -262,6 +262,8 @@ async def media_options(request: Request, url: str | None = None) -> dict[str, A
     )
     return {
         "heights": [height for _step, _w, height, _b in variants if height],
+        # Bits a second each needs at the source's rate, as the master lists.
+        "bandwidths": [bits for _step, _w, height, bits in variants if height],
         "fps": fps,
         "frame_rates": rates,
         # Fetching the AI runtime on first use: ask again shortly for its rates.
@@ -292,24 +294,76 @@ async def _variants_for(
 
 @router.get("/media/metrics")
 async def media_metrics(
-    request: Request, url: str | None = None, position: float = 0
+    request: Request,
+    url: str | None = None,
+    position: float = 0,
+    buffered: float = 0,
 ) -> dict[str, Any]:
     """The machine's load, and how many seconds past *position* the server has
-    ready of the media at *url*: its segments built so far. Without *url*, of
-    the DLNA TV: what it has been sent beyond *position*, buffered in the TV.
-    ``ahead`` is None for a URL that is not one of the server's re-encodings."""
+    ready of the media at *url*: ``ahead`` at the source's rate, one segment
+    after another; ``ai_ahead`` drawn by AI, wherever they fall. Of the *buffered* seconds the player holds past *position*,
+    ``client_ai`` were sent drawn. Without *url*, of the DLNA TV: ``ahead`` is
+    what it has been sent beyond *position*, buffered in the TV. None for a URL
+    that is not one of the server's re-encodings."""
     load = await asyncio.to_thread(metrics.system)
     if url is None:
-        return {**load, "ahead": max(0.0, downloaded_route.tv_sent[0] - position)}
+        sent = max(0.0, downloaded_route.tv_sent[0] - position)
+        return {**load, "ahead": sent, "ai_ahead": None, "client_ai": None}
+    media = _media_of(request, url)
+    if not media:
+        return {**load, "ahead": None, "ai_ahead": None, "client_ai": None}
+    raw, drawn = downloaded_route.RAW, downloaded_route.DRAWN
+    return {
+        **load,
+        "ahead": raw.ahead(media, position),
+        "ai_ahead": drawn.beyond(media, position),
+        "client_ai": drawn.sent_within(media, position, position + buffered),
+    }
+
+
+def _media_of(request: Request, url: str) -> str | None:
+    """What segments of the media at *url* are made under: a stored file's
+    path, or a provider's stream as the server reads it."""
     parsed = urllib.parse.urlparse(url)
     query = urllib.parse.parse_qs(parsed.query)
-    media = None
     if parsed.path.startswith("/api/downloaded/"):
-        media = query.get("path", [""])[0]
-    elif parsed.path.startswith("/api/stream/"):
-        media = transcode_source(request, query.get("token", [""])[0])[0]
-    ahead = downloaded_route.built_ahead(media, position) if media else None
-    return {**load, "ahead": ahead}
+        return query.get("path", [""])[0] or None
+    if parsed.path.startswith("/api/stream/"):
+        return transcode_source(request, query.get("token", [""])[0])[0]
+    return None
+
+
+@router.get("/media/ai-shown")
+async def media_ai_shown(
+    request: Request, url: str, position: float
+) -> dict[str, bool]:
+    """Whether the segment playing at *position* of the media at *url* was
+    sent drawn by AI, or at the source's rate while those were not ready: what
+    a Chromecast shows, which it does not say itself."""
+    media = _media_of(request, url)
+    index = int(position // downloaded.HLS_SEGMENT_SECONDS)
+    built = downloaded_route.DRAWN.built.get(media or "")
+    return {"shown": bool(built and index in built[2])}
+
+
+class PlayheadRequest(BaseModel):
+    #: The playlist playing: one of the server's re-encodings.
+    url: str
+    position: float = Field(ge=0)
+
+
+@router.post("/media/playhead")
+async def media_playhead(body: PlayheadRequest, request: Request) -> dict[str, Any]:
+    """Where a browser plays, so AI frames are drawn from just past there.
+    ``swap`` — the next ones are ready: fetch them again to show them now
+    rather than after what it buffered at the source's rate. ``ready`` —
+    seconds drawn past the segment playing, one after another: how far it can
+    read ahead and be sent AI frames throughout."""
+    media = _media_of(request, body.url)
+    if not media:
+        return {"swap": False, "ready": 0.0}
+    swap, ready = downloaded_route.playhead(media, body.position)
+    return {"swap": swap, "ready": ready}
 
 
 class CastLiveRequest(BaseModel):

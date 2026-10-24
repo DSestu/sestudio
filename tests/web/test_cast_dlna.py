@@ -270,6 +270,8 @@ def test_the_qualities_offered_are_the_source_and_every_step_below(client, monke
     # The video last sent to the TV, for a page opened after the cast began.
     resp = client.get("/api/media/options")
     assert resp.json()["heights"] == [2160, 1440, 1080, 720, 480, 360, 240, 144]
+    # One each, priced as the master lists them: the 720p rung's 2500k and audio.
+    assert resp.json()["bandwidths"][3] == 2_660_000
     # Or any media URL the server handed out.
     resp = client.get(
         "/api/media/options",
@@ -281,6 +283,7 @@ def test_the_qualities_offered_are_the_source_and_every_step_below(client, monke
 def test_no_qualities_are_offered_before_anything_is_cast(client):
     assert client.get("/api/media/options").json() == {
         "heights": [],
+        "bandwidths": [],
         "fps": 0,
         "frame_rates": [],
     }
@@ -466,15 +469,25 @@ def test_media_metrics_report_load_and_what_is_ready_ahead(client, monkeypatch):
         "run",
         lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="87, 2048, 24576\n"),
     )
-    # Segments 1, 2 and 4 of a film built at 60 fps: from 7 s in, 1 and 2 hold.
-    monkeypatch.setitem(route._BUILT, "Film.avi", ((0, 0, 60), {1, 2, 4}))
+    # Segments 1, 2 and 4 of a film built: from 7 s in, 1 and 2 hold. Drawn by
+    # AI, 1 alone, and sent so: of the 15 s the player holds, 5 are AI.
+    seg = Path("seg.ts")
+    built = ((0, 0, 60), {1: seg, 2: seg, 4: seg}, set())
+    monkeypatch.setitem(route.RAW.built, "Film.avi", built)
+    monkeypatch.setitem(route.DRAWN.built, "Film.avi", ((0, 0, 60), {1: seg}, {1}))
     body = client.get(
         "/api/media/metrics",
-        params={"url": "/api/downloaded/hls?path=Film.avi&fps=60", "position": 7},
+        params={
+            "url": "/api/downloaded/hls?path=Film.avi&fps=60",
+            "position": 7,
+            "buffered": 15,
+        },
     ).json()
     assert body["gpu"] == {"load": 87.0, "used": 2048 * 2**20, "total": 24576 * 2**20}
     assert 0 <= body["cpu"] <= 100 and body["memory"]["total"] > 0
     assert body["ahead"] == 11.0
+    assert body["ai_ahead"] == 5.0
+    assert body["client_ai"] == 5.0
 
     # A DLNA TV: what it has been sent past where it plays.
     monkeypatch.setattr(route, "tv_sent", [130.0])
@@ -482,3 +495,20 @@ def test_media_metrics_report_load_and_what_is_ready_ahead(client, monkeypatch):
         client.get("/api/media/metrics", params={"position": 100}).json()["ahead"]
         == 30.0
     )
+
+
+def test_a_chromecast_is_said_to_show_ai_frames_where_they_were_sent(
+    client, monkeypatch
+):
+    from sestudio.web.routes import downloaded as route
+
+    seg = Path("seg.ts")
+    monkeypatch.setitem(route.DRAWN.built, "Film.avi", ((0, 0, 60), {2: seg}, {2}))
+    url = "/api/downloaded/hls?path=Film.avi&fps=60"
+
+    def shown(position: float) -> bool:
+        params = {"url": url, "position": position}
+        return client.get("/api/media/ai-shown", params=params).json()["shown"]
+
+    assert shown(13.0) is True  # segment 2, sent drawn
+    assert shown(19.0) is False  # segment 3: the source's rate

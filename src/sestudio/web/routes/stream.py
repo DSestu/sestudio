@@ -4,8 +4,6 @@ import asyncio
 import logging
 import urllib.parse
 from collections.abc import Iterator
-from concurrent.futures import Future, ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -24,8 +22,8 @@ from sestudio.web.proxy import (
 )
 from sestudio.web.routes.downloaded import (
     LIVE_CACHE,
-    Pending,
-    queue_latest,
+    serve_segment,
+    warm,
     check_fps,
     live_settings,
     segment_settings,
@@ -299,24 +297,6 @@ def proxy_stream(token: str, request: Request) -> Response:
     return StreamingResponse(body(), status_code=upstream.status_code, headers=relay)
 
 
-_TRANSCODE_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="stream-hls")
-_TRANSCODE_PENDING: Pending = {}
-
-
-def _queue_segment(
-    url: str, index: int, rung: int, hls: bool, fps: int = 0
-) -> Future[Path | None]:
-    """The running build for one segment, coalesced as for a stored file."""
-    return queue_latest(
-        _TRANSCODE_PENDING,
-        _TRANSCODE_POOL,
-        url,
-        (rung, fps),
-        index,
-        lambda: downloaded.stream_segment(url, index, rung, hls=hls, fps=fps),
-    )
-
-
 async def _probe(request: Request, token: str) -> tuple[str, downloaded.StreamProbe]:
     url, hls = transcode_source(request, token)
     probe = await asyncio.to_thread(downloaded.probe_stream, url, hls=hls)
@@ -350,8 +330,13 @@ async def stream_hls(
     response = media_playlist(durations, f"segment?{query}&rung={rung}{rate}")
     # Warmed as a stored file's are: the player wants the first one at once.
     rung, fps = await segment_settings(request, live, rung, fps, lambda: variants)
-    for index in range(min(3, len(durations))):
-        _queue_segment(url, index, rung, probe.hls, fps)
+    warm(
+        url,
+        (rung, fps),
+        downloaded.draws(fps, probe.fps),
+        len(durations),
+        lambda i: downloaded.stream_segment(url, i, rung, hls=probe.hls, fps=fps),
+    )
     return response
 
 
@@ -373,7 +358,17 @@ async def stream_segment(
         return downloaded.ladder(probe.width, probe.height) if probe else []
 
     rung, fps = await segment_settings(request, live, rung, fps, variants)
-    segment = await asyncio.wrap_future(_queue_segment(url, index, rung, hls, fps))
+    probe = await asyncio.to_thread(downloaded.probe_stream, url, hls=hls)
+    durations = downloaded.segment_durations(probe.duration if probe else None)
+    segment = await serve_segment(
+        url,
+        len(durations or ()),
+        index,
+        (rung, fps),
+        bool(probe and downloaded.draws(fps, probe.fps)),
+        lambda i: downloaded.stream_segment(url, i, rung, hls=hls, fps=fps),
+        lambda i: downloaded.stream_drawn(url, i, rung, hls=hls, fps=fps),
+    )
     if segment is None:
         raise HTTPException(status_code=404, detail="No such segment")
     # Never cached under a live id: the same URL comes at another rate once changed.

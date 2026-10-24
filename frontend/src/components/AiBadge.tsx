@@ -1,13 +1,20 @@
 /** A small sparkle marking a choice whose result AI makes up — here, frames
  *  drawn between the real ones. Styled inline, as it may sit inside the
  *  player's own menus, whose rules would otherwise reshape it. */
-export default function AiBadge() {
+export default function AiBadge({ waiting }: {
+  /** The AI frames are not on screen yet: the source's rate plays meanwhile. */
+  waiting?: boolean
+}) {
   return (
     <span
       role="img"
-      aria-label="Frames drawn by AI"
-      title="Frames in between drawn by AI"
+      aria-label={waiting ? 'AI frames on their way' : 'Frames drawn by AI'}
+      title={waiting
+        ? 'Playing the original frame rate until the AI frames are ready'
+        : 'Frames in between drawn by AI'}
+      className={waiting ? 'animate-pulse' : undefined}
       style={{
+        opacity: waiting ? 0.5 : 1,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',

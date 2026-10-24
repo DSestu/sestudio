@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import threading
+import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -41,20 +42,6 @@ _THUMB_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="thumb")
 # not queue a second ffmpeg run for the same still.
 _THUMBS_PENDING: dict[str, Future[Path | None]] = {}
 
-#: A segment being built: its future, and the event that calls it off.
-Pending = dict[
-    tuple[str, tuple[int, ...], int], tuple[Future[Path | None], threading.Event]
-]
-
-# On-the-fly segments of a downloaded file. Unlike the thumbnails above these are waited on rather than answered with a 404: the player has
-# asked for bytes it is about to play, and a segment is under a second of work.
-# Three at a time, so one viewer's read-ahead is not serialised and two viewers
-# cannot take the machine.
-_HLS_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="hls")
-_HLS_PENDING: Pending = {}
-# Per video, the settings it was last asked for and which segments of it are
-# built at them: how far ahead of the player the server is (``built_ahead``).
-_BUILT: dict[str, tuple[tuple[int, ...], set[int]]] = {}
 
 # The Google Cast receiver refuses media served without CORS headers, exactly as
 # for the stream proxy; DLNA renderers are indifferent. Harmless for browsers.
@@ -620,71 +607,252 @@ def _track_payload(track: downloaded.Track) -> dict[str, Any]:
     }
 
 
-def queue_latest(
-    pending: Pending,
-    pool: ThreadPoolExecutor,
-    media: str,
-    settings: tuple[int, ...],
-    index: int,
-    build: Callable[[], Path | None],
-) -> Future[Path | None]:
-    """The running build for one segment of *media*, started if it is not
-    already going.
+class Builds:
+    """Segments being made in one pool, of each video at one setting at a time.
 
     Coalesced per segment, so a read-ahead, a retry and a playlist's warm-up
     never start the same encode twice. And the first segment asked for at new
-    *settings* (a quality, a frame rate, a voice) calls off what is still being
-    made of *media* at others: the player has moved on, and AI frames nobody
+    settings (a quality, a frame rate, a voice) calls off what is still being
+    made of that video at others: the player has moved on, and AI frames nobody
     will watch would hold the GPU from the ones it is waiting for. Those not
     started yet answer None; one being drawn stops at its next frame.
     """
-    key = (media, settings, index)
-    found = pending.get(key)
-    if found is not None and not found[1].is_set():
-        return found[0]
-    for (other, was, _), (_, stop) in list(pending.items()):
-        if other == media and was != settings:
-            stop.set()
-    if _BUILT.get(media, (None,))[0] != settings:
-        _BUILT[media] = (settings, set())
-    stop = threading.Event()
-    entry = (pool.submit(interpolate.cancellable, stop, build), stop)
-    pending[key] = entry
 
-    def forget(done: Future[Path | None]) -> None:
-        # Not a later build of the same segment, started after this was stopped.
-        if pending.get(key) is entry:
-            del pending[key]
-        built = _BUILT.get(media)
-        if built and built[0] == settings and not done.exception() and done.result():
-            built[1].add(index)
+    def __init__(self, workers: int, name: str) -> None:
+        self.pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix=name)
+        #: Each segment being built: its future, and the event that calls it off.
+        self.pending: dict[
+            tuple[str, tuple[int, ...], int],
+            tuple[Future[Path | None], threading.Event],
+        ] = {}
+        #: Per video: the settings it was last asked at, its segments built at
+        #: them, and which of those a player has been sent.
+        self.built: dict[str, tuple[tuple[int, ...], dict[int, Path], set[int]]] = {}
 
-    entry[0].add_done_callback(forget)
-    return entry[0]
+    def queue(
+        self,
+        media: str,
+        settings: tuple[int, ...],
+        index: int,
+        build: Callable[[], Path | None],
+    ) -> Future[Path | None]:
+        """The running build of segment *index*, started if it is not going."""
+        key = (media, settings, index)
+        found = self.pending.get(key)
+        if found is not None and not found[1].is_set():
+            return found[0]
+        self.mark(media, settings)
+        stop = threading.Event()
+        entry = (self.pool.submit(interpolate.cancellable, stop, build), stop)
+        self.pending[key] = entry
+
+        def forget(done: Future[Path | None]) -> None:
+            # Not a later build of the same segment, started after this was stopped.
+            if self.pending.get(key) is entry:
+                del self.pending[key]
+            built = self.built.get(media)
+            if built and built[0] == settings and not done.exception():
+                if path := done.result():
+                    built[1][index] = path
+
+        entry[0].add_done_callback(forget)
+        return entry[0]
+
+    def mark(self, media: str, settings: tuple[int, ...]) -> None:
+        """Take *settings* as those *media* is now played at."""
+        if self.built.get(media, (None,))[0] == settings:
+            return
+        for (other, was, _), (_, stop) in list(self.pending.items()):
+            if other == media and was != settings:
+                stop.set()
+        self.built[media] = (settings, {}, set())
+
+    def keep(self, media: str, first: int, last: int) -> None:
+        """Call off what is being made of *media* outside *first*..*last*: after
+        a seek, the read-ahead of where the player was."""
+        for (other, _, index), (_, stop) in list(self.pending.items()):
+            if other == media and not first <= index <= last:
+                stop.set()
+
+    def call_off(self, media: str) -> None:
+        """Call off everything being made of *media*, and forget what was."""
+        self.keep(media, 0, -1)
+        self.built.pop(media, None)
+
+    def ready(self, media: str, settings: tuple[int, ...], index: int) -> Path | None:
+        """Segment *index* of *media* at *settings*, if built and still there."""
+        built = self.built.get(media)
+        path = built[1].get(index) if built and built[0] == settings else None
+        return path if path is not None and path.is_file() else None
+
+    def ahead(self, media: str, position: float) -> float:
+        """Seconds of *media* built from *position* on, one segment after another."""
+        built = self.built.get(media, ((), {}, set()))[1]
+        end = int(position // downloaded.HLS_SEGMENT_SECONDS)
+        while end in built:
+            end += 1
+        return max(0.0, end * downloaded.HLS_SEGMENT_SECONDS - position)
+
+    def beyond(self, media: str, position: float) -> float:
+        """Seconds of *media* built past *position*, wherever they fall: drawn
+        ones lie past what the player has buffered, not right after it."""
+        built = self.built.get(media, ((), {}, set()))[1]
+        step = downloaded.HLS_SEGMENT_SECONDS
+        return sum(max(0.0, min(step, (i + 1) * step - position)) for i in built)
+
+    def sent_within(self, media: str, start: float, end: float) -> float:
+        """Seconds between *start* and *end* sent to the player from here."""
+        sent = self.built.get(media, ((), {}, set()))[2]
+        step = downloaded.HLS_SEGMENT_SECONDS
+        return sum(
+            max(0.0, min(end, (i + 1) * step) - max(start, i * step)) for i in sent
+        )
 
 
-def built_ahead(media: str, position: float) -> float:
-    """Seconds of *media* the server has ready from *position* on, at the
-    settings it was last asked for: its segments built one after another."""
+#: Segments at the source's rate, scaled to the quality asked, as the player
+#: asks for them and read ahead of it. Not on a GPU's queue: a segment is
+#: about a second of work, and three at a time keep one viewer's read-ahead
+#: from being serialised without letting two take the machine.
+RAW = Builds(3, "hls")
+#: The same segments at a rate above the source's, drawn by AI from those.
+DRAWN = Builds(3, "hls-ai")
+
+#: Segments made ahead of the one asked for, at the source's rate: the next
+#: ones the player asks for answer at once, so its measure of the connection is
+#: the connection's and not the encode's, and AI frames have their source at
+#: hand. Half a minute, as much as a player buffers.
+READ_AHEAD = 5
+#: And drawn by AI: as many as the GPU can be asked to make before they are due.
+DRAW_AHEAD = 3
+
+
+#: Where each video plays and when that was said: (position, monotonic time).
+PLAYHEAD: dict[str, tuple[float, float]] = {}
+#: How long a playhead is believed for: the player says it every few seconds
+#: while it waits for AI frames, and stops once they are on screen.
+PLAYHEAD_FRESH = 5.0
+
+
+def playing_segment(media: str) -> int | None:
+    """The segment of *media* the player last said it plays, if lately."""
+    found = PLAYHEAD.get(media)
+    if found is None or time.monotonic() - found[1] > PLAYHEAD_FRESH:
+        return None
+    return int(found[0] // downloaded.HLS_SEGMENT_SECONDS)
+
+
+def playhead(media: str, position: float) -> tuple[bool, float]:
+    """Note that *media* plays at *position*.
+
+    Says whether to swap: the two segments after the one playing are drawn by
+    AI, and the player was sent neither so — it is to fetch them again, and
+    show AI frames from the next one on. Neither, not just the first: the
+    player may keep that one as it was and refetch from the one after, and a
+    swap that has happened must not be asked for again. And says how many
+    seconds past the one playing are drawn one after another: as far as the
+    player can read ahead without outrunning the GPU.
+    """
+    PLAYHEAD[media] = (position, time.monotonic())
     index = int(position // downloaded.HLS_SEGMENT_SECONDS)
-    built = _BUILT.get(media, ((), set()))[1]
-    end = index
-    while end in built:
+    built = DRAWN.built.get(media)
+    if not built:
+        return False, 0.0
+    settings, _, sent = built
+    end = index + 1
+    while DRAWN.ready(media, settings, end) is not None:
         end += 1
-    return max(0.0, end * downloaded.HLS_SEGMENT_SECONDS - position)
-
-
-def _queue_segment(
-    target: Path, path: str, index: int, audio: int, rung: int = 0, fps: int = 0
-) -> Future[Path | None]:
-    return queue_latest(
-        _HLS_PENDING,
-        _HLS_POOL,
-        path,
-        (audio, rung, fps),
-        index,
-        lambda: downloaded.hls_segment(target, path, index, audio, rung, fps),
+    ready = (end - index - 1) * downloaded.HLS_SEGMENT_SECONDS
+    swap = ready >= 2 * downloaded.HLS_SEGMENT_SECONDS and not (
+        {index + 1, index + 2} & sent
     )
+    return swap, ready
+
+
+def warm(
+    media: str,
+    settings: tuple[int, ...],
+    draws: bool,
+    count: int,
+    raw: Callable[[int], Path | None],
+) -> None:
+    """Start the opening segments of *media* before they are asked for, at the
+    source's rate. Not while it plays: a playlist read then — another quality's,
+    as the player weighs a switch — would call off what is being made for where
+    it plays."""
+    if any(other == media for other, _, _ in list(RAW.pending)):
+        return
+    plain = (*settings[:-1], 0) if draws else settings
+    for index in range(min(3, count)):
+        RAW.queue(media, plain, index, lambda i=index: raw(i))
+
+
+async def serve_segment(
+    media: str,
+    count: int,
+    index: int,
+    settings: tuple[int, ...],
+    draws: bool,
+    raw: Callable[[int], Path | None],
+    drawn: Callable[[int], Path | None],
+) -> Path | None:
+    """Segment *index* of *media* (of *count*) for a player, at *settings* —
+    whose last is the frame rate.
+
+    With *draws* — a rate above the source's that this machine draws — it is
+    the AI one when that is ready, and the source's rate otherwise, at once:
+    the player never waits on the GPU, so it never stalls nor reads the wait
+    as a slow connection and drops quality. A seek plays at once at the
+    source's rate while the frames past it are drawn. The AI one is taken only
+    with the next ready too, unless the last was AI already, so playback does
+    not flick between the two each segment when the GPU barely keeps up.
+    """
+    last = min(count - 1, index + READ_AHEAD)
+    RAW.keep(media, index - 1, last)
+    # Drawn at any rate, from the same segments at the source's: switching
+    # between AI rates keeps them.
+    plain = (*settings[:-1], 0) if draws else settings
+
+    def raw_build(j: int) -> Future[Path | None]:
+        return RAW.queue(media, plain, j, lambda: raw(j))
+
+    asked = raw_build(index)
+    for j in range(index + 1, last + 1):
+        raw_build(j)
+    if not draws:
+        DRAWN.call_off(media)
+        return await asyncio.wrap_future(asked)
+
+    def drawn_build(j: int) -> Callable[[], Path | None]:
+        sources = [raw_build(k) for k in (j, j + 1) if k < count]
+
+        def build() -> Path | None:
+            for source in sources:
+                source.result()  # on disk, then drawn from there
+            return drawn(j)
+
+        return build
+
+    DRAWN.mark(media, settings)
+    # From just past what plays, where the player says (see ``playhead``): it
+    # swaps what it buffered at the source's rate for these as they are ready.
+    # Else from just past what it asked for.
+    playing = playing_segment(media)
+    first = (index if playing is None else min(index, playing)) + 1
+    end = index + DRAW_AHEAD
+    DRAWN.keep(media, first, end)
+    for j in range(first, min(count, end + 1)):
+        DRAWN.queue(media, settings, j, drawn_build(j))
+    found = DRAWN.ready(media, settings, index)
+    sent = DRAWN.built[media][2]
+    if found and (
+        index - 1 in sent
+        or index + 1 >= count
+        or DRAWN.ready(media, settings, index + 1)
+    ):
+        sent.add(index)
+        return found
+    sent.discard(index)
+    return await asyncio.wrap_future(asked)
 
 
 @router.get("/downloaded/hls")
@@ -747,8 +915,14 @@ async def get_downloaded_hls(
     # actually picked that gets a head start.
     # At a live id's settings, if changed: others would call off its builds.
     rung, fps = await segment_settings(request, live, rung, fps, lambda: variants)
-    for index in range(min(3, len(durations))):
-        _queue_segment(target, path, index, audio, rung, fps)
+    tracks = await asyncio.to_thread(downloaded.tracks_of, target)
+    warm(
+        path,
+        (audio, rung, fps),
+        downloaded.draws(fps, tracks.video_fps),
+        len(durations),
+        lambda i: downloaded.hls_segment(target, path, i, audio, rung, fps),
+    )
     return response
 
 
@@ -869,8 +1043,16 @@ async def get_downloaded_segment(
     rung, fps = await segment_settings(
         request, live, rung, fps, lambda: downloaded.hls_variants(target)
     )
-    segment = await asyncio.wrap_future(
-        _queue_segment(target, path, index, audio, rung, fps)
+    durations = await asyncio.to_thread(downloaded.hls_segment_durations, target)
+    tracks = await asyncio.to_thread(downloaded.tracks_of, target) if fps else None
+    segment = await serve_segment(
+        path,
+        len(durations or ()),
+        index,
+        (audio, rung, fps),
+        bool(tracks and downloaded.draws(fps, tracks.video_fps)),
+        lambda i: downloaded.hls_segment(target, path, i, audio, rung, fps),
+        lambda i: downloaded.hls_drawn(target, path, i, audio, rung, fps),
     )
     if segment is None:
         raise HTTPException(status_code=404, detail="No such segment")

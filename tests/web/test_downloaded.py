@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -388,11 +390,11 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
 
     # The opening segments start building before anything asks for them: the
     # player's own first attempt at playing gives up if they are not there.
-    for future, _stop in list(route._HLS_PENDING.values()):
+    for future, _stop in list(route.RAW.pending.values()):
         future.result(timeout=10)
     # Of the rung the player picked, not of every rung the master offers.
     assert built == [(0, 720), (1, 720), (2, 720)]
-    route._HLS_PENDING.clear()
+    route.RAW.pending.clear()
 
 
 def _hd_tracks():
@@ -466,7 +468,7 @@ def test_a_segment_is_served_once_it_is_built(client, out, monkeypatch):
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "video/mp2t"
     assert resp.content == b"MPEGTS"
-    route._HLS_PENDING.clear()
+    route.RAW.pending.clear()
 
 
 def test_a_segment_that_cannot_be_built_is_a_404(client, out, monkeypatch):
@@ -481,7 +483,7 @@ def test_a_segment_that_cannot_be_built_is_a_404(client, out, monkeypatch):
     )
 
     assert resp.status_code == 404
-    route._HLS_PENDING.clear()
+    route.RAW.pending.clear()
 
 
 def test_hls_refuses_traversal(client):
@@ -797,10 +799,10 @@ def test_a_chromecast_segment_follows_its_cast_s_changed_settings(
     client.get(
         "/api/downloaded/hls", params={"path": "Film.avi", "rung": 0, "live": "cc-1"}
     )
-    for future, _stop in list(route._HLS_PENDING.values()):
+    for future, _stop in list(route.RAW.pending.values()):
         future.result(timeout=10)
     client.app.state.live.clear()
-    route._HLS_PENDING.clear()
+    route.RAW.pending.clear()
 
     # As asked; then the nearest rung the film has to 500, at 30; then the
     # receiver's own rung back, at 60, which the warm-up keeps.
@@ -808,21 +810,17 @@ def test_a_chromecast_segment_follows_its_cast_s_changed_settings(
 
 
 def test_new_settings_call_off_older_segments_of_the_same_media():
-    from concurrent.futures import ThreadPoolExecutor
     import threading
     from pathlib import Path
 
     from sestudio.web.routes import downloaded as route
 
-    pool = ThreadPoolExecutor(max_workers=1)
-    pending: route.Pending = {}
+    builds = route.Builds(1, "test")
     gate = threading.Event()
-    running = route.queue_latest(
-        pending, pool, "a", (0, 60), 0, lambda: gate.wait(5) and Path("x")
-    )
-    queued = route.queue_latest(pending, pool, "a", (0, 60), 1, lambda: Path("y"))
-    other = route.queue_latest(pending, pool, "b", (0, 60), 0, lambda: Path("b"))
-    latest = route.queue_latest(pending, pool, "a", (0, 120), 0, lambda: Path("z"))
+    running = builds.queue("a", (0, 60), 0, lambda: gate.wait(5) and Path("x"))
+    queued = builds.queue("a", (0, 60), 1, lambda: Path("y"))
+    other = builds.queue("b", (0, 60), 0, lambda: Path("b"))
+    latest = builds.queue("a", (0, 120), 0, lambda: Path("z"))
     gate.set()
 
     # Queued at the old rate: never built. Another film: untouched.
@@ -830,6 +828,139 @@ def test_new_settings_call_off_older_segments_of_the_same_media():
     assert other.result(timeout=5) == Path("b")
     assert latest.result(timeout=5) == Path("z")
     # Back to the old rate: the stopped segment is built afresh, not reused.
-    again = route.queue_latest(pending, pool, "a", (0, 60), 0, lambda: Path("x2"))
+    again = builds.queue("a", (0, 60), 0, lambda: Path("x2"))
     assert again is not running
     assert again.result(timeout=5) == Path("x2")
+
+
+def test_ai_frames_are_sent_once_ready_and_the_source_s_rate_until_then(tmp_path):
+    """The player never waits on the GPU: a segment not drawn yet goes at the
+    source's rate, and drawn ones take over once two in a row are ready."""
+    import asyncio
+
+    from sestudio.web.routes import downloaded as route
+
+    def made(name: str) -> Path:
+        path = tmp_path / name
+        path.write_bytes(b"ts")
+        return path
+
+    def serve(index: int) -> str:
+        found = asyncio.run(
+            route.serve_segment(
+                "film", 20, index, (0, 0, 60), True,
+                lambda i: made(f"raw{i}"),
+                # One the GPU could not draw.
+                lambda i: None if i == 5 else made(f"ai{i}"),
+            )
+        )  # fmt: skip
+        return found.name
+
+    def settle() -> None:
+        for future, _stop in list(route.DRAWN.pending.values()):
+            future.result(timeout=10)
+
+    try:
+        # A start, or a seek: at once, at the source's rate.
+        assert serve(0) == "raw0"
+        settle()
+        # Each drawn by the time it is asked for, as they are a segment ahead.
+        for i in (1, 2, 3, 4):
+            assert serve(i) == f"ai{i}"
+            settle()
+        settle()
+        # Not drawn: the source's rate rather than a wait. And not straight
+        # back to AI on the next alone: only with the one after it ready too.
+        assert serve(5) == "raw5"
+        settle()
+        assert serve(6) == "ai6"
+        # Back to the source's own rate: nothing more is drawn.
+        asyncio.run(
+            route.serve_segment(
+                "film", 20, 7, (0, 0, 0), False, lambda i: made(f"raw{i}"),
+                lambda i: pytest.fail("drew at the source's rate"),
+            )
+        )  # fmt: skip
+        assert "film" not in route.DRAWN.built
+    finally:
+        route.RAW.pending.clear()
+        route.RAW.built.clear()
+        route.DRAWN.pending.clear()
+        route.DRAWN.built.clear()
+
+
+def test_a_playlist_read_while_playing_leaves_what_is_being_made_alone():
+    """Players read another quality's playlist as they weigh a switch: warming
+    its start would call off the segments being made for where it plays."""
+    import threading
+
+    from sestudio.web.routes import downloaded as route
+
+    gate = threading.Event()
+    try:
+        playing = route.RAW.queue("film", (0, 720, 0), 40, lambda: gate.wait(5))
+        route.warm("film", (0, 360, 120), True, 100, lambda i: pytest.fail("warmed"))
+        assert not route.RAW.pending[("film", (0, 720, 0), 40)][1].is_set()
+        gate.set()
+        playing.result(timeout=5)
+        # Nothing playing: the opening segments, at the source's rate for a
+        # rate AI draws, as the segments themselves will be asked for.
+        warmed: list[int] = []
+        route.warm("new", (0, 720, 120), True, 100, lambda i: warmed.append(i))
+        for future, _stop in list(route.RAW.pending.values()):
+            future.result(timeout=5)
+        assert sorted(warmed) == [0, 1, 2]
+        assert route.RAW.built["new"][0] == (0, 720, 0)
+    finally:
+        gate.set()
+        route.RAW.pending.clear()
+        route.RAW.built.clear()
+
+
+def test_ai_frames_are_drawn_from_the_playhead_and_swapped_in_once_ready(tmp_path):
+    """The player says where it plays: drawing starts just past there, and once
+    the next two are ready it is told to fetch them again, as AI frames."""
+    import asyncio
+
+    from sestudio.web.routes import downloaded as route
+
+    def made(name: str) -> Path:
+        path = tmp_path / name
+        path.write_bytes(b"ts")
+        return path
+
+    drawn: list[int] = []
+
+    def draw(i: int) -> Path:
+        drawn.append(i)
+        return made(f"ai{i}")
+
+    def serve(index: int) -> str:
+        found = asyncio.run(
+            route.serve_segment(
+                "film", 20, index, (0, 0, 60), True,
+                lambda i: made(f"raw{i}"), draw,
+            )
+        )  # fmt: skip
+        return found.name
+
+    try:
+        # Playing in segment 3 with the player's buffer reaching segment 5.
+        assert route.playhead("film", 20.0) == (False, 0.0)
+        assert serve(5) == "raw5"
+        for future, _stop in list(route.DRAWN.pending.values()):
+            future.result(timeout=10)
+        # Drawn from just past the playhead, not past the buffer.
+        assert sorted(drawn) == [4, 5, 6, 7, 8]
+        # Told to swap, with 4 to 8 drawn; fetched again, they come drawn.
+        assert route.playhead("film", 21.0) == (True, 30.0)
+        assert [serve(4), serve(5)] == ["ai4", "ai5"]
+        # Swapped: not asked again, even with the first kept as it was.
+        route.DRAWN.built["film"][2].discard(4)
+        assert route.playhead("film", 22.0) == (False, 30.0)
+    finally:
+        route.PLAYHEAD.clear()
+        route.RAW.pending.clear()
+        route.RAW.built.clear()
+        route.DRAWN.pending.clear()
+        route.DRAWN.built.clear()

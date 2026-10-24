@@ -15,6 +15,8 @@ export interface BrowserPlayerControls {
   position: () => number
   /** Seconds buffered past that. */
   bufferedAhead: () => number
+  /** The height playing, 0 until known. */
+  height: () => number
 }
 
 let state: BrowserPlayerControls | null = null

@@ -449,6 +449,8 @@ export async function castLive(id: string, quality: number, fps: number): Promis
 export interface MediaOptions {
   /** Heights, the source's own first; empty when unknown. */
   heights: number[]
+  /** Bits a second each of those needs at the source's rate. */
+  bandwidths: number[]
   /** The source's own frame rate, 0 when unknown. */
   fps: number
   /** Frame rates on offer; those above `fps` are drawn by AI. */
@@ -457,7 +459,7 @@ export interface MediaOptions {
   preparing?: boolean
 }
 
-const NO_OPTIONS: MediaOptions = { heights: [], fps: 0, frame_rates: [] }
+const NO_OPTIONS: MediaOptions = { heights: [], bandwidths: [], fps: 0, frame_rates: [] }
 
 /** The options for *url*; without it, for what was last sent to a DLNA TV. */
 export async function mediaOptions(url?: string): Promise<MediaOptions> {
@@ -478,19 +480,58 @@ export interface MediaMetrics {
   memory: { used: number; total: number }
   /** Load (percent) and memory (bytes) of an NVIDIA GPU; null for any other. */
   gpu: { load: number; used: number; total: number } | null
-  /** Seconds ready past the position given; null when it cannot be told. */
+  /** Seconds ready past the position given, at the source's rate; null when
+   *  it cannot be told. For a DLNA TV, what it has been sent past it. */
   ahead: number | null
+  /** The same, drawn by AI. */
+  ai_ahead: number | null
+  /** Seconds of the player's buffer that were sent drawn by AI. */
+  client_ai: number | null
 }
 
-/** The metrics while *url* plays at *position*; without *url*, the DLNA TV's. */
-export async function mediaMetrics(url: string | undefined, position: number): Promise<MediaMetrics | null> {
-  const query = new URLSearchParams({ position: String(position) })
+/** The metrics while *url* plays at *position*, the player holding *buffered*
+ *  seconds past it; without *url*, the DLNA TV's. */
+export async function mediaMetrics(
+  url: string | undefined, position: number, buffered = 0,
+): Promise<MediaMetrics | null> {
+  const query = new URLSearchParams({ position: String(position), buffered: String(buffered) })
   if (url) query.set('url', url)
   try {
     const res = await fetch(`${BASE}/media/metrics?${query}`)
     return res.ok ? await res.json() : null
   } catch {
     return null
+  }
+}
+
+/** Whether the frames at *position* of *url* were sent drawn by AI: what a
+ *  Chromecast shows, which it does not say itself. */
+export async function mediaAiShown(url: string, position: number): Promise<boolean> {
+  const query = new URLSearchParams({ url, position: String(position) })
+  try {
+    const res = await fetch(`${BASE}/media/ai-shown?${query}`)
+    return res.ok ? Boolean((await res.json()).shown) : false
+  } catch {
+    return false
+  }
+}
+
+/** Tell the server where *url* plays, so it draws AI frames from just past
+ *  there. `swap` when the next ones are ready: fetch them again to show them;
+ *  `ready`, seconds drawn past the segment playing, one after another. */
+export async function mediaPlayhead(
+  url: string, position: number,
+): Promise<{ swap: boolean; ready: number }> {
+  const none = { swap: false, ready: 0 }
+  try {
+    const res = await fetch(`${BASE}/media/playhead`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, position }),
+    })
+    return res.ok ? await res.json() : none
+  } catch {
+    return none
   }
 }
 
