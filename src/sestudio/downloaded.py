@@ -23,6 +23,7 @@ import functools
 import glob
 import contextlib
 import hashlib
+import io
 import os
 import re
 import subprocess
@@ -32,7 +33,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from sestudio.config import config_dir
+from sestudio.config import config_dir, load_config
 from sestudio.media import ffmpeg_binary
 
 # `S01E02`, the prefix written by `Episode.filename` — matched anywhere in the
@@ -1172,6 +1173,40 @@ def _sar_of(segment: Path) -> str | None:
     return f"{found.group(1)}/{found.group(2)}"
 
 
+def _last_frames(segment: Path, size: tuple[int, int], count: int, fps: float) -> list:
+    """The last *count* frames of *segment* at *size*, as :func:`_draw_segment`
+    reads its own: none if they cannot be read."""
+    from sestudio import interpolate
+
+    width, height = size
+    try:
+        out = subprocess.run(
+            [
+                ffmpeg_binary(),
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-sseof",
+                f"-{(count + 1) / fps:.3f}",
+                "-i",
+                str(segment),
+                "-map",
+                "0:v:0",
+                "-vf",
+                f"scale={width}:{height},format=rgb24",
+                "-f",
+                "rawvideo",
+                "pipe:1",
+            ],
+            capture_output=True,
+            timeout=30,
+        ).stdout
+    except (OSError, RuntimeError, subprocess.SubprocessError):
+        return []
+    return list(interpolate.read_frames(io.BytesIO(out), width, height))[-count:]
+
+
 def _draw_segment(
     raw: Path,
     following: Path | None,
@@ -1181,6 +1216,8 @@ def _draw_segment(
     source_fps: float,
     size: tuple[int, int],
     kbps: int,
+    previous: Path | None = None,
+    hold: int = 0,
 ) -> Path | None:
     """Segment *index* at *fps*, with the frames in between drawn by AI.
 
@@ -1189,10 +1226,14 @@ def _draw_segment(
     frames a right-hand neighbour. Read from disk rather than the source, so
     drawing never waits on a host, and from a picture already scaled down: a
     lighter rung is cheaper to draw. The audio is *raw*'s, copied.
+
+    With *hold* (see ``AppConfig.ai_max_hold``), held drawings are drawn across
+    as one: *previous*, the segment before, says where one held into this
+    segment started, and *following* where the last one ends.
     """
     from sestudio import interpolate
 
-    out = _hls_dir() / f"{raw.stem}-f{fps}.ts"
+    out = _hls_dir() / f"{raw.stem}-f{fps}{f'-h{hold}' if hold else ''}.ts"
     if out.is_file() and out.stat().st_size > 0:
         out.touch()
         return out
@@ -1216,7 +1257,9 @@ def _draw_segment(
         "-i",
         f"concat:{raw}|{following}" if following else str(raw),
         "-t",
-        f"{seconds + 2 / source_fps:.3f}",
+        # Past the end, so the last in-betweens have their right side: a
+        # drawing held up to *hold* frames needs as many more.
+        f"{seconds + (hold + 2) / source_fps:.3f}",
         "-map",
         "0:v:0",
         "-an",
@@ -1274,12 +1317,13 @@ def _draw_segment(
         "-y",
         str(tmp),
     ]
+    before = _last_frames(previous, size, hold, source_fps) if previous and hold else []
     try:
         # Generous: drawn frames cost far more than encoded ones, and a GPU that
         # cannot keep up should still finish rather than leave a hole.
         ok = interpolate.run_pipeline(
             decode, encode, width, height, source_fps, fps,
-            round(seconds * fps), timeout=600,
+            round(seconds * fps), timeout=600, hold=hold, before=before,
         )  # fmt: skip
         if ok and tmp.is_file() and tmp.stat().st_size > 0:
             os.replace(tmp, out)
@@ -1313,10 +1357,15 @@ def hls_drawn(
     following = None if last else hls_segment(file, relative, index + 1, audio, rung)
     if raw is None:
         return None
+    hold = load_config().ai_max_hold
+    previous = (
+        hls_segment(file, relative, index - 1, audio, rung) if hold and index else None
+    )
     size = _rung_size(rung, tracks.video_width, tracks.video_height)
     return _draw_segment(
-        raw, following, index, durations[index], fps, tracks.video_fps, size, kbps
-    )
+        raw, following, index, durations[index], fps, tracks.video_fps, size, kbps,
+        previous, hold,
+    )  # fmt: skip
 
 
 @dataclass
@@ -1490,10 +1539,13 @@ def stream_drawn(
     following = None if last else stream_segment(url, index + 1, rung, hls=hls)
     if raw is None:
         return None
+    hold = load_config().ai_max_hold
+    previous = stream_segment(url, index - 1, rung, hls=hls) if hold and index else None
     size = _rung_size(rung, probe.width, probe.height)
     return _draw_segment(
-        raw, following, index, durations[index], fps, probe.fps, size, kbps
-    )
+        raw, following, index, durations[index], fps, probe.fps, size, kbps,
+        previous, hold,
+    )  # fmt: skip
 
 
 def _prune_hls_cache() -> None:

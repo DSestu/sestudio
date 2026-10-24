@@ -21,6 +21,7 @@ first fetch runs in the background (see :func:`status`), so nothing waits on it.
 from __future__ import annotations
 
 import importlib
+import itertools
 import logging
 import os
 import shutil
@@ -29,7 +30,7 @@ import sys
 import sysconfig
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,10 @@ _PROVIDERS = (
 #: taken for a cut. RIFE across a cut draws a ghost of both shots, so the frames
 #: in between repeat the earlier one instead.
 _SCENE_CUT = 40.0
+#: And below which the second is the first again: anime holds each drawing for
+#: two or three frames, and compression noise keeps the copies from being equal.
+#: Measured on an episode: copies sit near 0.1, new drawings above 1.
+_HELD = 1.0
 
 _model_lock = threading.Lock()
 
@@ -511,8 +516,50 @@ def interpolate(a: Any, b: Any, t: float) -> Any:
         return session.run(None, feed)[0]
 
 
+def _differ(a: Any, b: Any) -> float:
+    """Mean absolute difference (0..255) of two frames, over a pixel in 8 each way."""
+    import numpy as np
+
+    return float(np.abs(a[::8, ::8].astype(np.int16) - b[::8, ::8]).mean())
+
+
+def _drawings(
+    source: Iterator[Any], hold: int, before: Sequence[Any] = ()
+) -> Iterator[tuple[int, Any]]:
+    """The frames of *source* the in-betweens are drawn from, each with its number.
+
+    Every frame, unless *hold*: then one repeating the drawing before it is
+    skipped, so the in-betweens span the whole drawing (anime draws on twos and
+    threes), unless the drawing is held longer than *hold* frames: a pause,
+    which stays still. *before* are the frames just ahead of *source*: a drawing
+    started there is drawn from where it started, not from the first frame.
+    """
+    drawing: Any = None
+    start = last = -len(before) - 1  # the drawing's number, and the last sent's
+    i, frame = last, None
+    for i, frame in enumerate(itertools.chain(before, source), -len(before)):
+        if drawing is None or not hold or _differ(drawing, frame) >= _HELD:
+            start, drawing = i, frame
+        elif i - start < hold:
+            if i == 0:
+                last = start
+                yield start, drawing
+            continue
+        if i >= 0:
+            last = i
+            yield i, frame
+    # Held to the end: still to its last frame, the next drawing unknown.
+    if last < i and i >= 0:
+        yield i, frame
+
+
 def frames_at(
-    source: Iterator[Any], src_fps: float, out_fps: float, count: int
+    source: Iterator[Any],
+    src_fps: float,
+    out_fps: float,
+    count: int,
+    hold: int = 0,
+    before: Sequence[Any] = (),
 ) -> Iterator[Any]:
     """*count* frames at *out_fps* from *source* frames at *src_fps*.
 
@@ -520,25 +567,28 @@ def frames_at(
     on a source frame is that frame, one between two is drawn by RIFE, and one
     across a cut repeats the frame before it. *source* must run at least one
     frame past the last output time, so the final in-between has its right side.
+    With *hold*, drawings repeated for up to that many frames are drawn between
+    as one: see :func:`_drawings`, and *before* there.
     """
-    import numpy as np
-
-    left = next(source, None)
-    right = next(source, None)
-    index = 0  # of *left* on the source's clock
+    drawings = _drawings(source, hold, before)
+    left = next(drawings, None)
+    right = next(drawings, None)
     for k in range(count):
         position = k * src_fps / out_fps
-        while right is not None and position >= index + 1:
-            left, right, index = right, next(source, None), index + 1
+        while right is not None and position >= right[0]:
+            left, right = right, next(drawings, None)
         # Past the source's last frame: the end, however many were asked for.
-        if left is None or (right is None and position >= index + 1):
+        if left is None or (right is None and position >= left[0] + 1):
             return
-        t = position - index
-        if t < 1e-3 or right is None:
-            yield left
+        if right is None:
+            yield left[1]
             continue
-        cut = float(np.abs(left[::8, ::8].astype(np.int16) - right[::8, ::8]).mean())
-        yield left if cut > _SCENE_CUT else interpolate(left, right, t)
+        t = (position - left[0]) / (right[0] - left[0])
+        if t < 1e-3:
+            yield left[1]
+            continue
+        cut = _differ(left[1], right[1])
+        yield left[1] if cut > _SCENE_CUT else interpolate(left[1], right[1], t)
 
 
 def read_frames(stdout: Any, width: int, height: int) -> Iterator[Any]:
@@ -648,11 +698,13 @@ def run_pipeline(
     out_fps: float,
     count: int,
     timeout: float,
+    hold: int = 0,
+    before: Sequence[Any] = (),
 ) -> bool:
     """Decode with one ffmpeg, interpolate, and feed another that encodes.
 
     True when the encoder finished cleanly. Both are killed past *timeout*, as
-    a plain segment encode would be.
+    a plain segment encode would be. *hold* and *before* as :func:`frames_at`.
     """
     dec = subprocess.Popen(decode, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     enc = subprocess.Popen(encode, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -662,7 +714,7 @@ def run_pipeline(
         assert dec.stdout is not None and enc.stdin is not None
         frames = read_frames(dec.stdout, width, height)
         stop = getattr(_stop, "event", None)
-        for frame in frames_at(frames, src_fps, out_fps, count):
+        for frame in frames_at(frames, src_fps, out_fps, count, hold, before):
             if stop is not None and stop.is_set():
                 return False
             enc.stdin.write(frame.tobytes())

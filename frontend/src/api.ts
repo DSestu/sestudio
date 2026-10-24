@@ -93,6 +93,9 @@ export interface AppSettings {
   /** Offer frame rates above the source's, drawn by AI. On by default; off,
    *  the server neither fetches nor offers them. */
   frame_interpolation?: boolean
+  /** Drawings held up to this many frames are drawn across as one by AI
+   *  (anime); 0, off. */
+  ai_max_hold?: number
   /** CallMeBot number, international form without the leading '+'. Not secret. */
   callmebot_phone?: string
   /** Write-only: sent when saving, never returned. */

@@ -904,7 +904,7 @@ export default function WatchView({
                     handoffAt={position}
                   >
                     <BrowserQuality source={source} />
-                    <BrowserFrameRate source={source} />
+                    <BrowserFrameRate source={source} settings={settings} onUpdateSettings={onUpdateSettings} />
                   </OutputSwitcher>
                   {/* Audio tracks, for the copy on disk. Only shown when the
                       file actually has a choice to make, and only while it is

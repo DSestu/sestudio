@@ -114,3 +114,19 @@ def test_frame_interpolation_defaults_on_and_persists(client):
     client.put("/api/settings", json={"frame_interpolation": False})
     assert client.get("/api/settings").json()["frame_interpolation"] is False
     assert client.get("/api/settings/ai").json()["enabled"] is False
+
+
+def test_ai_max_hold_persists_and_drops_segments_drawn_with_the_old_one(
+    client, tmp_path
+):
+    from sestudio.web.routes import downloaded as downloaded_route
+
+    assert client.get("/api/settings").json()["ai_max_hold"] == 0
+    drawn = downloaded_route.DRAWN
+    drawn.built["film.mkv"] = ((0, 0, 60), {3: tmp_path / "seg.ts"}, set())
+
+    resp = client.put("/api/settings", json={"ai_max_hold": 3})
+
+    assert resp.json()["ai_max_hold"] == 3
+    assert "film.mkv" not in drawn.built
+    assert client.put("/api/settings", json={"ai_max_hold": 9}).status_code == 422

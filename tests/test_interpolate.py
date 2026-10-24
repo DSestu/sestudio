@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from sestudio import downloaded, interpolate
+from sestudio.config import AppConfig
 
 
 def _frames(values: list[int]) -> list[np.ndarray]:
@@ -69,6 +70,50 @@ def test_output_ends_with_the_source_however_many_were_asked_for(drawn):
     assert len(out) == 4
 
 
+def test_a_drawing_held_on_twos_is_drawn_across_as_one(drawn):
+    """Anime: each drawing shown twice (and close enough not to be a cut). With a hold of 2 the in-betweens span
+    both frames, instead of repeating the drawing then jumping."""
+    out = list(interpolate.frames_at(iter(_frames([0, 0, 30, 30, 31])), 24, 48, 8, 2))
+
+    assert len(out) == 8
+    assert drawn == [(0, 30, 0.25), (0, 30, 0.5), (0, 30, 0.75)] + [
+        (30, 31, t) for t in (0.25, 0.5, 0.75)
+    ]
+
+
+def test_without_a_hold_repeats_stay_as_they_were(drawn):
+    list(interpolate.frames_at(iter(_frames([0, 0, 30])), 24, 48, 4))
+
+    assert drawn == [(0, 0, 0.5), (0, 30, 0.5)]
+
+
+def test_a_pause_longer_than_the_hold_stays_still(drawn):
+    """Held four frames with a hold of 2: a pause, kept still, then moving
+    from its last frame as without a hold."""
+    out = list(interpolate.frames_at(iter(_frames([0, 0, 0, 0, 30])), 24, 48, 8, 2))
+
+    assert len(out) == 8
+    assert (0, 30, 0.5) == drawn[-1]
+    assert all(right == 0 for _, right, _ in drawn[:-1])
+
+
+def test_a_drawing_started_before_the_segment_is_drawn_from_there(drawn):
+    """The segment opens on the second frame of a drawing: the in-betweens
+    carry on from where the last segment left off, not from the start."""
+    out = list(
+        interpolate.frames_at(iter(_frames([0, 30, 30])), 24, 48, 2, 2, _frames([0]))
+    )
+
+    assert len(out) == 2
+    assert drawn == [(0, 30, 0.5), (0, 30, 0.75)]
+
+
+def test_a_held_drawing_still_runs_to_the_end_of_the_source(drawn):
+    out = list(interpolate.frames_at(iter(_frames([0, 0, 0])), 24, 48, 10**9, 3))
+
+    assert len(out) == 6
+
+
 def test_a_higher_rate_segment_is_drawn_from_the_source_rate_s_on_disk(
     tmp_path: Path, monkeypatch
 ):
@@ -96,8 +141,11 @@ def test_a_higher_rate_segment_is_drawn_from_the_source_rate_s_on_disk(
     monkeypatch.setattr(downloaded, "hls_segment", raw)
     seen: dict = {}
 
-    def fake_pipeline(decode, encode, width, height, src_fps, out_fps, count, timeout):
+    def fake_pipeline(
+        decode, encode, width, height, src_fps, out_fps, count, timeout, **held
+    ):
         seen.update(decode=decode, encode=encode, size=(width, height), count=count)
+        seen.update(held)
         Path(encode[-1]).write_bytes(b"segment")
         return True
 
@@ -125,6 +173,59 @@ def test_a_higher_rate_segment_is_drawn_from_the_source_rate_s_on_disk(
     assert encode[encode.index("-output_ts_offset") + 1] == "12.000"
     # Priced up for the extra frames: 2500k at sqrt(60/24).
     assert encode[encode.index("-maxrate") + 1] == "3952k"
+
+
+def test_with_a_hold_the_segment_before_says_where_a_drawing_started(
+    tmp_path: Path, monkeypatch
+):
+    """Anime mode: the last frames of the segment before are read, the next
+    one is read further, and the result is cached apart from the plain one."""
+    file = tmp_path / "film.mkv"
+    file.write_bytes(b"x")
+    tracks = downloaded.MediaTracks(
+        audio=[], subtitles=[], video_width=1920, video_height=1080, video_fps=24.0
+    )
+    monkeypatch.setattr(downloaded, "tracks_of", lambda _f: tracks)
+    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 600.0)
+    monkeypatch.setattr(downloaded, "_hls_dir", lambda: tmp_path / "hls")
+    monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
+    monkeypatch.setattr(downloaded, "h264_encoder", lambda: "libx264")
+    monkeypatch.setattr(downloaded, "_sar_of", lambda _segment: None)
+    monkeypatch.setattr(interpolate, "status", lambda: {"gpu": True})
+    monkeypatch.setattr(downloaded, "load_config", lambda: AppConfig(ai_max_hold=3))
+    asked: list[int] = []
+
+    def raw(_f, _r, index, audio=0, rung=0, fps=0):
+        asked.append(index)
+        path = tmp_path / f"raw{index}.ts"
+        path.write_bytes(b"ts")
+        return path
+
+    monkeypatch.setattr(downloaded, "hls_segment", raw)
+    tails: list[tuple[Path, int]] = []
+
+    def last_frames(segment, _size, count, _fps):
+        tails.append((segment, count))
+        return ["tail"]
+
+    monkeypatch.setattr(downloaded, "_last_frames", last_frames)
+    seen: dict = {}
+
+    def fake_pipeline(decode, encode, *_args, **held):
+        seen.update(decode=decode, encode=encode, **held)
+        Path(encode[-1]).write_bytes(b"segment")
+        return True
+
+    monkeypatch.setattr(interpolate, "run_pipeline", fake_pipeline)
+
+    out = downloaded.hls_drawn(file, "film.mkv", 2, rung=720, fps=60)
+
+    assert out is not None and out.name.endswith("-f60-h3.ts")
+    assert sorted(asked) == [1, 2, 3]
+    assert tails == [(tmp_path / "raw1.ts", 3)]
+    assert seen["hold"] == 3 and seen["before"] == ["tail"]
+    # Three frames more past the end: a drawing held there ends within them.
+    assert seen["decode"][seen["decode"].index("-t") + 1] == f"{6 + 5 / 24:.3f}"
 
 
 def test_without_a_gpu_the_source_rate_is_sent(tmp_path: Path, monkeypatch):
