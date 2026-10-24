@@ -23,6 +23,7 @@ from sestudio.web.proxy import (
     verify,
 )
 from sestudio.web.routes.downloaded import (
+    LIVE_CACHE,
     Pending,
     queue_latest,
     check_fps,
@@ -348,6 +349,7 @@ async def stream_hls(
     rung = offered_rung(variants, rung)
     response = media_playlist(durations, f"segment?{query}&rung={rung}{rate}")
     # Warmed as a stored file's are: the player wants the first one at once.
+    rung, fps = await segment_settings(request, live, rung, fps, lambda: variants)
     for index in range(min(3, len(durations))):
         _queue_segment(url, index, rung, probe.hls, fps)
     return response
@@ -374,7 +376,9 @@ async def stream_segment(
     segment = await asyncio.wrap_future(_queue_segment(url, index, rung, hls, fps))
     if segment is None:
         raise HTTPException(status_code=404, detail="No such segment")
-    return FileResponse(segment, media_type="video/mp2t", headers=dict(_CORS_HEADERS))
+    # Never cached under a live id: the same URL comes at another rate once changed.
+    headers = {**_CORS_HEADERS, **({"Cache-Control": LIVE_CACHE} if live else {})}
+    return FileResponse(segment, media_type="video/mp2t", headers=headers)
 
 
 @router.api_route("/stream/tv", methods=["GET", "HEAD"])

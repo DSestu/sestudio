@@ -689,6 +689,7 @@ def _queue_segment(
 
 @router.get("/downloaded/hls")
 async def get_downloaded_hls(
+    request: Request,
     path: str = Query(...),
     audio: int = 0,
     rung: int | None = None,
@@ -744,6 +745,8 @@ async def get_downloaded_hls(
     # a playlist of a thousand-odd lines, it is usually ready in time.
     # Warmed here rather than on the master, so it is the rung the player
     # actually picked that gets a head start.
+    # At a live id's settings, if changed: others would call off its builds.
+    rung, fps = await segment_settings(request, live, rung, fps, lambda: variants)
     for index in range(min(3, len(durations))):
         _queue_segment(target, path, index, audio, rung, fps)
     return response
@@ -772,6 +775,10 @@ async def segment_settings(
         if offered := await asyncio.to_thread(variants):
             rung = offered_rung(offered, changed["rung"])
     return rung, changed.get("fps", fps)
+
+
+FOREVER = "public, max-age=31536000"
+LIVE_CACHE = "no-store"
 
 
 def check_fps(fps: int) -> None:
@@ -872,7 +879,8 @@ async def get_downloaded_segment(
         media_type="video/mp2t",
         # Keyed on the file's identity, so a hit stays good until the file
         # itself changes — at which point the segment's own URL changes too.
-        headers={**_CORS_HEADERS, "Cache-Control": "public, max-age=31536000"},
+        # Not under a live id: the same URL comes at another rate once changed.
+        headers={**_CORS_HEADERS, "Cache-Control": LIVE_CACHE if live else FOREVER},
     )
 
 

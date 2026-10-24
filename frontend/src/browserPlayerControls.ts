@@ -11,10 +11,6 @@ export interface BrowserPlayerControls {
   /** Seek to a position (seconds) and resume — used to hand a stopped cast's
    *  timestamp back to the local player. */
   resumeAt: (seconds: number) => void
-  /** Carry the position playing now across a change that reloads the source
-   *  (another frame rate), rather than the watch progress — which is saved
-   *  every few seconds, and not at all in the first 30. */
-  holdPosition: () => void
   /** Where it plays now, in seconds. */
   position: () => number
   /** Seconds buffered past that. */
