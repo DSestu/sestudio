@@ -4,7 +4,7 @@ import base64
 import logging
 import re
 from collections.abc import Iterator
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import httpx
 
@@ -51,6 +51,28 @@ _INLINE_SRC_RE = re.compile(
     re.DOTALL,
 )
 _ARRAY_KEY_RE = re.compile(r"k=\[([\d,]+)\]")
+
+# The player page asks this "gate" for a key and adds it to every stream URL as
+# `gk=`: without it the CDN serves the first nine segments (about 90 s) and
+# answers 403 past them. Valid a day; carried down into every playlist and
+# segment URL the host serves after it.
+_GATE_RE = re.compile(r"https://[\w.-]+/gate\.php")
+# What the page reports of the browser it runs in: canvas text widths, WebGL,
+# pixel ratio, screen width, CPU cores, and the site it is embedded in. A
+# desktop Chrome's; the gate checks they are there, not what they are.
+# shortcut: fixed values, one fingerprint for every viewer; vary them if the
+# gate starts refusing it.
+_GATE_PARAMS = {
+    "v": "p1",
+    "cw": "141.48",
+    "cw2": "155.03",
+    "wg": "1",
+    "dpr": "1",
+    "sw": "1920",
+    "hw": "8",
+    "ft": "https://fstream.top",
+    "rf": "fstream.top",
+}
 # The trailing `+ H` term is the domain binding: some embeds add the sum of
 # `location.hostname`'s char codes to the ramp, so the same payload decodes
 # differently off-site. The variable name is not fixed, hence the loose match.
@@ -180,6 +202,29 @@ def _unpack(packed: str) -> str:
     return result
 
 
+def _with_gate_key(page: str, stream_url: str) -> str:
+    """*stream_url* with the key the page's gate hands a player (see
+    ``_GATE_RE``), or as it is when there is no gate or it would not answer:
+    the start of the video still plays then."""
+    gate = _GATE_RE.search(page)
+    if not gate:
+        return stream_url
+    try:
+        with new_client(impersonate=True) as client:
+            resp = client.get(
+                gate.group(0),
+                params=_GATE_PARAMS,
+                headers={"Origin": REFERER.rstrip("/"), "Referer": REFERER},
+            )
+            key = resp.json().get("gk")
+    except (httpx.HTTPError, ValueError, AttributeError) as exc:
+        logger.warning("Vidzy gate gave no key, past ~90 s will be refused: %s", exc)
+        return stream_url
+    if not key:
+        return stream_url
+    return f"{stream_url}{'&' if '?' in stream_url else '?'}gk={quote(key, safe='')}"
+
+
 class VidzyProvider(StreamProvider):
     def get_stream_url(self, embed_url: str) -> StreamSource:
         logger.debug("Fetching Vidzy embed: %s", embed_url)
@@ -224,6 +269,7 @@ class VidzyProvider(StreamProvider):
         if ".m3u8" not in stream_url:
             raise ProviderError(f"Decoded Vidzy source is not an m3u8: {embed_url}")
 
+        stream_url = _with_gate_key(resp.text, stream_url)
         logger.debug("Vidzy resolved stream: %s", stream_url[:80])
         # Soft subs live in the *raw* page, not the unpacked script: the
         # loadTracks call sits in plain markup alongside the packed player.

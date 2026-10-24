@@ -649,6 +649,20 @@ class Builds:
         #: Per video: the settings it was last asked at, its segments built at
         #: them, and which of those a player has been sent.
         self.built: dict[str, tuple[tuple[int, ...], dict[int, Path], set[int]]] = {}
+        #: Segments that could not be built, and when: not tried again for
+        #: ``RETRY_AFTER`` seconds (see ``failing``).
+        self.failed: dict[tuple[str, tuple[int, ...], int], float] = {}
+
+    def failing(self, media: str) -> bool:
+        """Whether a segment of *media* failed lately: a host refusing, or a
+        source gone. Then nothing more is read ahead of it, and one that failed
+        answers None at once — every retry of a player, and each segment
+        queued ahead, would otherwise start an encode the host refuses again."""
+        now = time.monotonic()
+        return any(
+            other == media and now - at < RETRY_AFTER
+            for (other, _, _), at in list(self.failed.items())
+        )
 
     def queue(
         self,
@@ -664,7 +678,9 @@ class Builds:
             return found[0]
         self.mark(media, settings)
         # Built already: answered at once rather than in line behind the others.
-        if (path := self.ready(media, settings, index)) is not None:
+        # Failed lately: answered at once too, as it was.
+        path = self.ready(media, settings, index)
+        if path is not None or time.monotonic() - self.failed.get(key, 0) < RETRY_AFTER:
             made: Future[Path | None] = Future()
             made.set_result(path)
             return made
@@ -677,9 +693,14 @@ class Builds:
             if self.pending.get(key) is entry:
                 del self.pending[key]
             built = self.built.get(media)
-            if built and built[0] == settings and not done.exception():
-                if path := done.result():
-                    built[1][index] = path
+            path = None if done.exception() else done.result()
+            if built and built[0] == settings and path:
+                built[1][index] = path
+            # Called off is not failed: the player moved on.
+            if path is None and not stop.is_set():
+                self.failed[key] = time.monotonic()
+            else:
+                self.failed.pop(key, None)
 
         entry[0].add_done_callback(forget)
         return entry[0]
@@ -745,6 +766,9 @@ RAW = Builds(3, "hls")
 #: each takes as many times longer: a GPU that keeps up overall still finishes
 #: each one after the player has gone past it, and none is ever shown.
 DRAWN = Builds(1, "hls-ai")
+
+#: Seconds a segment that could not be built is not tried again.
+RETRY_AFTER = 10.0
 
 #: Segments made ahead of the one asked for, at the source's rate: the next
 #: ones the player asks for answer at once, so its measure of the connection is
@@ -845,6 +869,9 @@ async def serve_segment(
         return RAW.queue(media, plain, j, lambda: raw(j))
 
     asked = raw_build(index)
+    if RAW.failing(media):
+        # Nothing more asked of a source that is refusing: just this one.
+        return await asyncio.wrap_future(asked)
     for j in range(index + 1, last + 1):
         raw_build(j)
     if not draws:
