@@ -731,9 +731,9 @@ def test_tv_stream_follows_a_change_without_the_tv_reconnecting(out):
     from sestudio.web.routes import downloaded as route
 
     clip = _clip(out, seconds="20")
-    settings = [(0, 0)]
-    real = route.tv_run_from(clip, 0, None, False, 10.0)
-    runs: list[tuple[float, tuple[int, int]]] = []
+    settings = [(0, 0, 0, None)]
+    real = route.tv_run_from(clip, False, 10.0)
+    runs: list[tuple[float, route.TvSettings]] = []
 
     def run_from(start, wanted):
         runs.append((start, wanted))
@@ -747,13 +747,13 @@ def test_tv_stream_follows_a_change_without_the_tv_reconnecting(out):
             got += chunk
             if len(got) > 300_000 and not split[0]:
                 # What comes after this chunk is the new encode's.
-                settings[0], split[0] = (360, 0), len(got)
+                settings[0], split[0] = (360, 0, 0, None), len(got)
         return got
 
     got = asyncio.run(collect())
     assert split[0] and len(got) > split[0], f"the stream stopped at {len(got)}"
     # One new encode, at the new settings, from part way in.
-    assert [wanted for _start, wanted in runs] == [(0, 0), (360, 0)]
+    assert [wanted for _start, wanted in runs] == [(0, 0, 0, None), (360, 0, 0, None)]
     assert runs[1][0] > 0
     early = [pts / 90_000 for _at, pts in route.frame_starts(got[: split[0]])]
     late = [pts / 90_000 for _at, pts in route.frame_starts(got[split[0] :])]

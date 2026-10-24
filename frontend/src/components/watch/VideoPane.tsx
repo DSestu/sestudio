@@ -51,6 +51,17 @@ interface Props {
  * autoplay transition preserves fullscreen (the browser won't let us re-enter
  * fullscreen without a user gesture on `ended`).
  */
+/** Play the rendition of *qualities* at *height*, or the closest below it (the
+ *  lightest if none is). Setting `selected` switches without a request event. */
+function pickQuality(qualities: readonly VideoQuality[], height: number): void {
+  if (!qualities.length) return
+  const fits = qualities.filter(q => q.height <= height)
+  const pick = fits.length
+    ? fits.reduce((a, b) => (b.height > a.height ? b : a))
+    : qualities.reduce((a, b) => (b.height < a.height ? b : a))
+  if (!pick.selected) pick.selected = true
+}
+
 /** Drop what hls.js buffered past the next segment and fetch it again: the
  *  same level (or Auto again) asked for, which it takes as a switch. */
 function refetchAhead(player: MediaPlayerInstance | null): void {
@@ -184,8 +195,17 @@ export default function VideoPane({
 
   // Expose play/pause + paused state to out-of-view surfaces (the mini-player).
   const [paused, setPaused] = useState(true)
+  const [qualities, setQualities] = useState<number[]>([])
   useEffect(() => {
     setBrowserPlayerControls({
+      qualities,
+      setQuality: (height: number | undefined) => {
+        savePlayerPrefs({ quality: height })
+        const p = playerRef.current
+        if (!p) return
+        if (height === 0) p.qualities.autoSelect()
+        else pickQuality(p.qualities.toArray(), height ?? Infinity)
+      },
       isPaused: paused,
       playPause: () => {
         const p = playerRef.current
@@ -205,7 +225,7 @@ export default function VideoPane({
       },
       height: () => playerRef.current?.state.quality?.height ?? 0,
     })
-  }, [paused])
+  }, [paused, qualities])
   useEffect(() => () => setBrowserPlayerControls(null), [])
 
   // Push the saved caption appearance onto :root. vidstack's own Caption Styles
@@ -310,14 +330,11 @@ export default function VideoPane({
   /** Re-selects the remembered quality whenever a source lists its own.
    *  Setting `selected` switches the rendition without a request event, so
    *  this never reads back as the user picking. */
-  function handleQualitiesChange(qualities: VideoQuality[]) {
+  function handleQualitiesChange(list: VideoQuality[]) {
+    setQualities([...new Set(list.map(q => q.height))].sort((a, b) => b - a))
     const wanted = loadPlayerPrefs().quality
-    if (wanted === undefined || qualities.length < 2) return
-    const fits = qualities.filter(q => q.height <= wanted)
-    const pick = fits.length
-      ? fits.reduce((a, b) => (b.height > a.height ? b : a))
-      : qualities.reduce((a, b) => (b.height < a.height ? b : a))
-    if (!pick.selected) pick.selected = true
+    // The source's own picture unless Auto (0) was picked: its best rendition.
+    if (wanted !== 0 && list.length > 1) pickQuality(list, wanted ?? Infinity)
   }
 
   function handleTimeUpdate() {
@@ -361,11 +378,6 @@ export default function VideoPane({
           // input to the most recently active one, so the mini-player is safe.
           keyTarget="document"
           onQualitiesChange={handleQualitiesChange}
-          onMediaQualityChangeRequest={(index) => {
-            // -1 is the menu's Auto.
-            const height = index < 0 ? undefined : playerRef.current?.qualities[index]?.height
-            savePlayerPrefs({ quality: height })
-          }}
           onCanPlay={handleCanPlay}
           onPlay={() => setPaused(false)}
           onPause={() => setPaused(true)}

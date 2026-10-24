@@ -4,12 +4,11 @@ import { isDrawn, ladderUrlOf } from '../../frameRates'
 import { useMediaOptions } from '../../useMediaOptions'
 import { AiSetupNotice } from '../AiSetupProgress'
 import FrameRateDropdown from '../FrameRateDropdown'
-import FrameRatePicker from '../FrameRatePicker'
 
 /** The frame rate the browser player plays at, picked beside the cast button
  *  rather than in the player's settings menu — which its small (phone) layout
- *  does not show. A dropdown on a phone, a row of buttons wider. Hidden for a
- *  source that can only play at its own rate. */
+ *  does not show — as a dropdown, right of the quality's. Hidden for a source
+ *  that can only play at its own rate. */
 export default function BrowserFrameRate({ source }: { source: StreamSource | null }) {
   const url = ladderUrlOf(source)
   const options = useMediaOptions(url ?? undefined, url !== null)
@@ -31,8 +30,10 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
   }
   return (
     <>
-      <div className="md:hidden"><FrameRateDropdown {...pick} /></div>
-      <div className="hidden md:block"><FrameRatePicker {...pick} /></div>
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-base-content/60">Frame rate</span>
+        <FrameRateDropdown {...pick} />
+      </div>
       {setup}
     </>
   )

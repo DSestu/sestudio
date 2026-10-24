@@ -392,7 +392,7 @@ async def stream_tv(
     start, headers = tv_seek(request, probe.duration)
     if request.method == "HEAD":
         return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)
-    run_from = tv_run_from(url, 0, None, probe.hdr, probe.fps, stream=probe)
+    run_from = tv_run_from(url, probe.hdr, probe.fps, stream=probe)
     return tv_stream(
         request, start, live_settings(request, live, rung, fps), run_from, headers
     )

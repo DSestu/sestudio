@@ -535,6 +535,64 @@ export async function mediaPlayhead(
   }
 }
 
+/** The audio and caption tracks of the stored file being cast, and those
+ *  playing. */
+export interface CastTracks {
+  audio: { index: number; label: string }[]
+  subtitles: { lang: string; label: string }[]
+  audio_now: number
+  /** The language of the captions burnt into a TV's picture; null for none. */
+  lang_now: string | null
+}
+
+/** The tracks of what a Chromecast plays (*url*, its playlist) or, without
+ *  it, of what was sent to the DLNA TV. Empty for a provider's stream. */
+export async function castTracks(url?: string): Promise<CastTracks> {
+  const query = url ? `?url=${encodeURIComponent(url)}` : ''
+  const none = { audio: [], subtitles: [], audio_now: 0, lang_now: null }
+  try {
+    const res = await fetch(`${BASE}/cast/tracks${query}`)
+    return res.ok ? await res.json() : none
+  } catch {
+    return none
+  }
+}
+
+/** Change a cast's audio track, or the captions burnt into a TV's picture
+ *  ("" for none), in place. True when the TV was restarted for it, to be put
+ *  back where it was. */
+export async function castSetTracks(
+  id: string, change: { audio?: number; lang?: string },
+): Promise<boolean> {
+  const res = await fetch(`${BASE}/cast/tracks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ...change }),
+  })
+  if (!res.ok) throw new Error(`Could not change the cast: ${res.status}`)
+  return Boolean((await res.json()).restarted)
+}
+
+/** How a restart starts the server again: on the code now in its checkout,
+ *  on the latest release through uvx, or the same installed copy. */
+export type RestartWay = 'checkout' | 'uvx' | 'installed'
+
+/** How the server would restart; null while it does not answer. */
+export async function serverRestartWay(): Promise<RestartWay | null> {
+  try {
+    const res = await fetch(`${BASE}/server`, { cache: 'no-store' })
+    return res.ok ? (await res.json()).restart : null
+  } catch {
+    return null
+  }
+}
+
+/** Restart the server on newer code. It is gone for a few seconds after. */
+export async function restartServer(): Promise<void> {
+  const res = await fetch(`${BASE}/server/restart`, { method: 'POST' })
+  if (!res.ok) throw new Error(`Could not restart: ${res.status}`)
+}
+
 /** Push a resolved proxy URL to a DLNA renderer and start playback. */
 export async function dlnaPlay(
   rendererUdn: string,

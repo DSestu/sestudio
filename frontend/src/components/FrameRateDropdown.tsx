@@ -1,11 +1,15 @@
 import { useRef } from 'react'
 import { fpsLabel, GLOW_EASE, isDrawn, LIVE_GLOW } from '../frameRates'
 import AiBadge from './AiBadge'
-import { LiveTag } from './FrameRatePicker'
 
 /** The frame rate picker folded into one button, for a phone's width: the
  *  rate playing, opening onto the others. A native select cannot hold the AI
  *  mark, so this is a menu. */
+/** "Live" beside a rate whose AI frames are on screen. */
+function LiveTag() {
+  return <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">live</span>
+}
+
 export default function FrameRateDropdown({ label, source, rates, value, onChange, waiting, live, disabled, inline }: {
   /** What it picks, for screen readers: the button itself shows only a rate. */
   label: string

@@ -113,6 +113,7 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
         query = urllib.parse.parse_qs(parsed.query)
         stored = query.get("path", [""])[0]
         target = _resolved(stored)
+        audio = int(query.get("audio", ["0"])[0])
         lang = body.subtitle_lang or ""
         burn = (
             bool(lang)
@@ -134,13 +135,17 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
         # Another frame rate is an encode too, and the file has only its own.
         tracks = await asyncio.to_thread(downloaded.tracks_of, target)
         rate = _other_rate(body.fps, tracks.video_fps)
+        # And a voice other than the file's default, which is the one a TV
+        # plays of the file itself.
+        default = next((t.index for t in tracks.audio if t.default), 0)
+        voice = len(tracks.audio) > 1 and audio != default
         if (
             burn
             or lighter
             or rate
+            or voice
             or not await asyncio.to_thread(downloaded.browser_can_play, target)
         ):
-            audio = int(query.get("audio", ["0"])[0])
             proxy_url = (
                 f"/api/downloaded/tv?path={urllib.parse.quote(stored)}&audio={audio}"
             )
@@ -389,7 +394,8 @@ async def cast_live(body: CastLiveRequest, request: Request) -> dict[str, Any]:
     fps = body.fps
     if body.id != "dlna":
         # 0 leaves the rung to the receiver, which picks one from the master.
-        request.app.state.live[body.id] = {"rung": body.quality or None, "fps": fps}
+        live = request.app.state.live.setdefault(body.id, {})
+        live.update(rung=body.quality or None, fps=fps)
         return {"restarted": False}
     _active_dmr(request)
     last: DlnaPlayRequest | None = getattr(request.app.state, "dlna_play", None)
@@ -400,9 +406,88 @@ async def cast_live(body: CastLiveRequest, request: Request) -> dict[str, Any]:
         return {**await dlna_play(wanted, request), "restarted": True}
     found = await _variants_for(request, last.proxy_url)
     rung = offered_rung(found[0], body.quality) if found and body.quality else 0
-    request.app.state.live["dlna"] = {"rung": rung, "fps": fps}
+    request.app.state.live.setdefault("dlna", {}).update(rung=rung, fps=fps)
     request.app.state.dlna_play = wanted
     return {"restarted": False}
+
+
+def _cast_file(request: Request, url: str | None) -> tuple[str, str, int, str | None]:
+    """What is cast, for its tracks: its live id, the stored file's path ("" for
+    anything else), and the audio track and captions it was sent with. Without
+    *url*, the DLNA TV's."""
+    live, lang = "dlna", None
+    if url is None:
+        last: DlnaPlayRequest | None = getattr(request.app.state, "dlna_play", None)
+        if last is None:
+            return live, "", 0, None
+        url, lang = last.proxy_url, last.subtitle_lang
+    parsed = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qs(parsed.query)
+    if parsed.path.startswith("/api/stream/"):
+        return query.get("live", [""])[0], "", 0, None
+    live = query.get("live", [live])[0]
+    return live, query.get("path", [""])[0], int(query.get("audio", ["0"])[0]), lang
+
+
+@router.get("/cast/tracks")
+async def cast_tracks(request: Request, url: str | None = None) -> dict[str, Any]:
+    """The audio and caption tracks of the stored file being cast — at *url*,
+    a Chromecast's playlist, or without it the DLNA TV's — and those playing.
+    Empty for a provider's stream, which comes with one of each."""
+    live, path, audio, lang = _cast_file(request, url)
+    if not path:
+        return {"audio": [], "subtitles": [], "audio_now": 0, "lang_now": None}
+    from sestudio.web.routes.downloaded import get_downloaded_tracks
+
+    found = await get_downloaded_tracks(path)
+    changed = request.app.state.live.get(live) or {}
+    return {
+        **found,
+        "audio_now": changed.get("audio", audio),
+        "lang_now": changed["lang"] if "lang" in changed else lang,
+    }
+
+
+class CastTracksRequest(BaseModel):
+    #: "dlna" for the TV, else the id a Chromecast load carries as `live=`.
+    id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    #: The audio track to hear; None leaves it.
+    audio: int | None = Field(default=None, ge=0)
+    #: The language of the captions burnt into a TV's picture, "" for none;
+    #: None leaves them. A Chromecast shows its own, changed on the receiver.
+    lang: str | None = Field(default=None, max_length=16)
+
+
+@router.post("/cast/tracks")
+async def cast_set_tracks(body: CastTracksRequest, request: Request) -> dict[str, Any]:
+    """Change the audio track or captions of a cast in progress, in place, as
+    ``/cast/live`` changes its quality — or, for a TV still playing the file
+    itself, by restarting it on the re-encoded stream (``restarted``)."""
+    changes: dict[str, Any] = {}
+    if body.audio is not None:
+        changes["audio"] = body.audio
+    if body.lang is not None:
+        changes["lang"] = body.lang or None
+    if body.id != "dlna" or getattr(request.app.state, "dlna_live", False):
+        request.app.state.live.setdefault(body.id, {}).update(changes)
+        return {"restarted": False}
+    _active_dmr(request)
+    last: DlnaPlayRequest | None = getattr(request.app.state, "dlna_play", None)
+    if last is None:
+        raise HTTPException(status_code=409, detail="No active DLNA session")
+    parsed = urllib.parse.urlparse(last.proxy_url)
+    query = urllib.parse.parse_qs(parsed.query)
+    if "audio" in changes:
+        query["audio"] = [str(changes["audio"])]
+    wanted = last.model_copy(
+        update={
+            "proxy_url": parsed._replace(
+                query=urllib.parse.urlencode(query, doseq=True)
+            ).geturl(),
+            "subtitle_lang": changes.get("lang", last.subtitle_lang),
+        }
+    )
+    return {**await dlna_play(wanted, request), "restarted": True}
 
 
 def _active_dmr(request: Request):

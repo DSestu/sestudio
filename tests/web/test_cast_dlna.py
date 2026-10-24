@@ -310,14 +310,14 @@ def test_options_say_when_ai_is_still_being_fetched(client, monkeypatch):
     ("source_fps", "gpu", "speed", "offered"),
     [
         # A film: every rate is above it, drawn by AI — only with a GPU.
-        (23.976, True, 1000.0, [30, 60, 90, 120, 144]),
+        (23.976, True, 1000.0, [30, 60, 70, 90, 120, 144]),
         (23.976, False, 1000.0, []),
         # A GPU drawing 100 frames a second at 720p: 75 is the budget, so 90
         # (66 drawn a second) holds and 120 (96) would fall behind.
-        (23.976, True, 100.0, [30, 60, 90]),
+        (23.976, True, 100.0, [30, 60, 70, 90]),
         # 60 fps: 30 is a drop and needs nothing; 60 is the source itself.
         (60.0, False, 1000.0, [30]),
-        (60.0, True, 1000.0, [30, 90, 120, 144]),
+        (60.0, True, 1000.0, [30, 70, 90, 120, 144]),
         # Unknown rate: nothing can be worked out from it.
         (0.0, True, 1000.0, []),
     ],
@@ -512,3 +512,38 @@ def test_a_chromecast_is_said_to_show_ai_frames_where_they_were_sent(
 
     assert shown(13.0) is True  # segment 2, sent drawn
     assert shown(19.0) is False  # segment 3: the source's rate
+
+
+def test_a_cast_s_voice_and_captions_change_in_place(client, monkeypatch):
+    """Listed from the file being cast, with those playing; changed as its
+    quality is, the next segments or the next part of the TV's stream coming
+    with them, and kept when the quality changes after."""
+    from sestudio.web.routes import downloaded as route
+
+    async def tracks(path):
+        assert path == "Film.mkv"
+        return {"audio": [{"index": 0}, {"index": 1}], "subtitles": [{"lang": "fr"}]}
+
+    monkeypatch.setattr(route, "get_downloaded_tracks", tracks)
+    url = "/api/downloaded/hls?path=Film.mkv&audio=1&live=cc-7"
+
+    found = client.get("/api/cast/tracks", params={"url": url}).json()
+    assert len(found["audio"]) == 2
+    assert (found["audio_now"], found["lang_now"]) == (1, None)
+
+    assert client.post("/api/cast/tracks", json={"id": "cc-7", "audio": 0}).json() == {
+        "restarted": False
+    }
+    client.post("/api/cast/live", json={"id": "cc-7", "quality": 480, "fps": 0})
+    assert client.app.state.live["cc-7"] == {"audio": 0, "rung": 480, "fps": 0}
+    assert client.get("/api/cast/tracks", params={"url": url}).json()["audio_now"] == 0
+
+    # A TV's stream: its voice and the captions burnt in, "" for none.
+    client.app.state.dlna_live = True
+    client.post("/api/cast/tracks", json={"id": "dlna", "audio": 1, "lang": "fr"})
+    request = type("R", (), {"app": client.app})()
+    now = route.live_settings(request, "dlna", 0, 0)
+    assert now() == (0, 0, 1, "fr")
+    client.post("/api/cast/tracks", json={"id": "dlna", "lang": ""})
+    assert now() == (0, 0, 1, None)
+    client.app.state.live.clear()

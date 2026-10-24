@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import threading
 
@@ -98,12 +99,17 @@ def serve(
         )
 
     # Run all but the last server in daemon threads; the last runs in the main
-    # thread so Ctrl-C (its signal handlers) stops the whole process.
-    for _scheme, cfg in servers[:-1]:
-        bg = uvicorn.Server(cfg)
+    # thread so Ctrl-C (its signal handlers) stops the whole process. Kept on
+    # the app, so a restart from the settings page can stop them.
+    app.state.servers = [uvicorn.Server(cfg) for _scheme, cfg in servers]
+    for bg in app.state.servers[:-1]:
         bg.install_signal_handlers = lambda: None
         threading.Thread(target=bg.run, daemon=True).start()
-    uvicorn.Server(servers[-1][1]).run()
+    app.state.servers[-1].run()
+    if getattr(app.state, "restarting", False):
+        # Replaced (see the settings page's restart): out at once, rather than
+        # wait on the threads still finishing segments nobody will watch.
+        os._exit(0)
 
 
 def _display_host(host: str) -> str:

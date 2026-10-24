@@ -18,6 +18,7 @@ import EpisodeList from '../components/watch/EpisodeList'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
 import BrowserFrameRate from '../components/watch/BrowserFrameRate'
 import BrowserPerformance from '../components/watch/BrowserPerformance'
+import BrowserQuality from '../components/watch/BrowserQuality'
 import SourcesPanel from '../components/watch/SourcesPanel'
 import VideoPane from '../components/watch/VideoPane'
 import { useAlternateSources } from '../useAlternateSources'
@@ -896,6 +897,7 @@ export default function WatchView({
                     autoplay={autoplay}
                     handoffAt={position}
                   >
+                    <BrowserQuality />
                     <BrowserFrameRate source={source} />
                   </OutputSwitcher>
                   {/* Audio tracks, for the copy on disk. Only shown when the
@@ -922,8 +924,11 @@ export default function WatchView({
                   )}
                 </div>
               )}
-              {playing && current && <BrowserPerformance source={source} />}
             </div>
+
+            {/* Below the pinned player rather than inside it: opening it then
+                pushes what follows down instead of covering it. */}
+            {playing && current && <BrowserPerformance source={source} />}
 
             {/* Where the video comes from: the site first, then the hosts that
                 site offers — left to right, site → host, which is also the order

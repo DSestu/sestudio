@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import os
+import threading
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from sestudio import interpolate
+from sestudio import interpolate, restart
 from sestudio.config import DEFAULT_DOWNLOAD_ORDER, load_config, save_config, tmdb_key
 
 router = APIRouter()
@@ -142,3 +144,32 @@ async def post_ai_setup() -> dict[str, Any]:
     """Run the frame interpolation setup again, from scratch."""
     await asyncio.to_thread(interpolate.setup)
     return await asyncio.to_thread(interpolate.info)
+
+
+@router.get("/server")
+async def get_server() -> dict[str, str]:
+    """How a restart would start the server again (see ``restart.command``)."""
+    return {"restart": restart.command()[1]}
+
+
+@router.post("/server/restart")
+async def restart_server(request: Request) -> dict[str, str]:
+    """Start the server again on newer code: the checkout's as it is now, or
+    the latest release through uvx. The next one is started first and waits
+    for this one to let go of its ports; this one stops once it has answered."""
+    servers = getattr(request.app.state, "servers", None)
+    if not servers:
+        raise HTTPException(status_code=409, detail="Not started by `sestudio`")
+    how = await asyncio.to_thread(restart.spawn)
+
+    def stop() -> None:
+        request.app.state.restarting = True
+        for server in servers:
+            server.should_exit = True
+        # A TV's stream never ends and a segment being drawn can take minutes:
+        # past a few seconds, out regardless, so the next one can start.
+        threading.Timer(10, os._exit, (0,)).start()
+
+    # After this answer has gone out.
+    asyncio.get_running_loop().call_later(0.5, stop)
+    return {"restart": how}

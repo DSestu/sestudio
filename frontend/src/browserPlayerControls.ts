@@ -17,6 +17,11 @@ export interface BrowserPlayerControls {
   bufferedAhead: () => number
   /** The height playing, 0 until known. */
   height: () => number
+  /** Heights the source plays at, best first; empty when it has one. */
+  qualities: number[]
+  /** Play at *height*, or the closest below; 0 for Auto, undefined for the
+   *  source's own picture. Remembered. */
+  setQuality: (height: number | undefined) => void
 }
 
 let state: BrowserPlayerControls | null = null
