@@ -17,13 +17,13 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
   if (!options?.fps || !rates.length) return null
   return (
     <FrameRatePicker
+      label="Frame rate"
       source={options.fps}
       rates={rates}
       value={rates.includes(fps) ? fps : 0}
       onChange={next => {
-        // The new playlist starts at zero and resumes from the saved position:
-        // saved now, not on the next tick of the player's save throttle.
-        controls?.savePosition()
+        // The new playlist starts at zero: it resumes where this one is now.
+        controls?.holdPosition()
         setBrowserFps(next)
       }}
     />

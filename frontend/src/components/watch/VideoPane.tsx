@@ -110,13 +110,12 @@ export default function VideoPane({
         p.currentTime = seconds
         void p.play()
       },
-      savePosition: () => {
+      holdPosition: () => {
         const p = playerRef.current
-        if (p && p.duration > 0) saveProgress(ep, p.currentTime, p.duration)
+        if (p && p.currentTime > 0) setResumeTo(p.currentTime)
       },
     })
-    // On the episode too, so the position is saved under the one playing.
-  }, [paused, ep])
+  }, [paused])
   useEffect(() => () => setBrowserPlayerControls(null), [])
 
   // Push the saved caption appearance onto :root. vidstack's own Caption Styles
@@ -159,7 +158,8 @@ export default function VideoPane({
   const [armedSrc, setArmedSrc] = useState(srcKey)
   if (armedSrc !== srcKey) {
     setArmedSrc(srcKey)
-    if (armedSrc && srcKey) setResumeTo(resumePointFor(ep))
+    // A position held for the change wins over the saved one.
+    if (armedSrc && srcKey) setResumeTo(held => held ?? resumePointFor(ep))
   }
 
   // Pending retry of a refused autoplay; cleared on unmount so a torn-down

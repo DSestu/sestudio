@@ -18,6 +18,7 @@ export default function CastFrameRate({ url, onChange, disabled }: {
   if (!options?.fps || !rates.length) return null
   return (
     <FrameRatePicker
+      label="TV frame rate"
       source={options.fps}
       rates={rates}
       // A rate this source does not offer plays as the source's own.
