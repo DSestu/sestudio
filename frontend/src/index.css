@@ -74,3 +74,9 @@
   --depth: 1;
   --noise: 0;
 };
+
+/* Quality is picked beside the cast button (BrowserQuality), where a phone's
+   small layout shows it too: the player's own menu would be a second one. */
+.vds-quality-menu {
+  display: none !important;
+}

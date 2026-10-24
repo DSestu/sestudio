@@ -402,8 +402,8 @@ tv_sent = [0.0]
 
 async def _live_piped(
     start: float,
-    settings: Callable[[], tuple[int, int]],
-    run_from: Callable[[float, tuple[int, int]], _TvRun],
+    settings: Callable[[], TvSettings],
+    run_from: Callable[[float, TvSettings], _TvRun],
 ) -> AsyncIterator[bytes]:
     """A TV stream, chunk by chunk, that follows its settings as they change.
 
@@ -451,37 +451,56 @@ async def _live_piped(
         await asyncio.to_thread(run.stop)
 
 
-def live_settings(
-    request: Request, live: str | None, rung: int, fps: int
-) -> Callable[[], tuple[int, int]]:
-    """What a cast with live id *live* is to be sent at now, as (rung, fps):
-    its settings if they were changed while it played, else *rung* and *fps*
-    as it was asked for."""
+#: What a TV is sent at: rung, frame rate, audio track, and the language of
+#: the captions burnt in (None for none).
+TvSettings = tuple[int, int, int, str | None]
 
-    def now() -> tuple[int, int]:
+
+def live_settings(
+    request: Request,
+    live: str | None,
+    rung: int,
+    fps: int,
+    audio: int = 0,
+    lang: str | None = None,
+) -> Callable[[], TvSettings]:
+    """What a cast with live id *live* is to be sent at now: its settings if
+    they were changed while it played, else those it was asked for."""
+
+    def now() -> TvSettings:
         changed = request.app.state.live.get(live) if live else None
         if not changed:
-            return rung, fps
+            return rung, fps, audio, lang
         return (
             rung if changed.get("rung") is None else changed["rung"],
             changed.get("fps", fps),
+            changed.get("audio", audio),
+            changed["lang"] if "lang" in changed else lang,
         )
 
     return now
 
 
+def live_audio(request: Request, live: str | None, audio: int) -> int:
+    """The audio track a cast with live id *live* is to hear now: changed
+    while it played, or *audio* as its URL asks."""
+    changed = request.app.state.live.get(live) if live else None
+    return audio if not changed else changed.get("audio", audio)
+
+
 def tv_run_from(
     file: Path | str,
-    audio: int,
-    subtitle: downloaded.Track | Path | None,
     hdr: bool,
     source_fps: float,
     stream: downloaded.StreamProbe | None = None,
-) -> Callable[[float, tuple[int, int]], _TvRun]:
-    """How to start a TV run of *file* from a point, at given (rung, fps)."""
+    subtitle_of: Callable[[str], downloaded.Track | Path | None] | None = None,
+) -> Callable[[float, TvSettings], _TvRun]:
+    """How to start a TV run of *file* from a point, at given settings: the
+    captions burnt in are *subtitle_of* their language."""
 
-    def run_from(start: float, settings: tuple[int, int]) -> _TvRun:
-        rung, asked = settings
+    def run_from(start: float, settings: TvSettings) -> _TvRun:
+        rung, asked, audio, lang = settings
+        subtitle = subtitle_of(lang) if lang and subtitle_of else None
         fps, drawn = downloaded.tv_fps(asked, source_fps)
         if drawn:
             return _TvRun(
@@ -526,8 +545,9 @@ async def get_downloaded_tv(
     Seeking is by time only. The TV asks with ``TimeSeekRange.dlna.org`` and a
     fresh encode starts there, which is why this answers in npt and not bytes.
 
-    With *live*, the rung and frame rate follow that cast's settings as they
-    are changed, without the TV reconnecting (see ``_live_piped``).
+    With *live*, the rung, frame rate, audio track and captions follow that
+    cast's settings as they are changed, without the TV reconnecting (see
+    ``_live_piped``).
     """
     target = _resolved(path)
     check_fps(fps)
@@ -537,13 +557,14 @@ async def get_downloaded_tv(
         return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)
 
     tracks = await asyncio.to_thread(downloaded.tracks_of, target)
-    subtitle = (
-        await asyncio.to_thread(downloaded.tv_subtitle, target, lang) if lang else None
+    run_from = tv_run_from(
+        target,
+        tracks.video_hdr,
+        tracks.video_fps,
+        subtitle_of=lambda wanted: downloaded.tv_subtitle(target, wanted),
     )
-    run_from = tv_run_from(target, audio, subtitle, tracks.video_hdr, tracks.video_fps)
-    return tv_stream(
-        request, start, live_settings(request, live, rung, fps), run_from, headers
-    )
+    settings = live_settings(request, live, rung, fps, audio, lang)
+    return tv_stream(request, start, settings, run_from, headers)
 
 
 def tv_seek(request: Request, duration: float | None) -> tuple[float, dict[str, str]]:
@@ -570,8 +591,8 @@ def tv_seek(request: Request, duration: float | None) -> tuple[float, dict[str, 
 def tv_stream(
     request: Request,
     start: float,
-    settings: Callable[[], tuple[int, int]],
-    run_from: Callable[[float, tuple[int, int]], _TvRun],
+    settings: Callable[[], TvSettings],
+    run_from: Callable[[float, TvSettings], _TvRun],
     headers: dict[str, str],
 ) -> StreamingResponse:
     """A TV stream from *start*, answered the way TVs want a seek answered."""
@@ -915,6 +936,7 @@ async def get_downloaded_hls(
     # actually picked that gets a head start.
     # At a live id's settings, if changed: others would call off its builds.
     rung, fps = await segment_settings(request, live, rung, fps, lambda: variants)
+    audio = live_audio(request, live, audio)
     tracks = await asyncio.to_thread(downloaded.tracks_of, target)
     warm(
         path,
@@ -1043,6 +1065,7 @@ async def get_downloaded_segment(
     rung, fps = await segment_settings(
         request, live, rung, fps, lambda: downloaded.hls_variants(target)
     )
+    audio = live_audio(request, live, audio)
     durations = await asyncio.to_thread(downloaded.hls_segment_durations, target)
     tracks = await asyncio.to_thread(downloaded.tracks_of, target) if fps else None
     segment = await serve_segment(

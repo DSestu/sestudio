@@ -30,8 +30,10 @@ export interface PlayerPrefs {
    */
   subtitleStyle?: Partial<SubtitleStyle>
   /**
-   * Picture height last picked in the player's quality menu, re-applied to
-   * each new source as the closest height at or below it. `undefined` — Auto.
+   * The quality the player plays at, picked beside it or in the settings, and
+   * re-applied to each new source. `undefined` — the source's own picture (the
+   * best it has); 0 — Auto, following the connection; a height — the closest
+   * at or below it.
    */
   quality?: number
   /** Frame rate last picked in the player; `undefined` — the source's own. */
@@ -41,6 +43,16 @@ export interface PlayerPrefs {
   tvQuality?: number
   /** Frame rate a cast is sent at; `undefined` — the source's own. */
   tvFps?: number
+}
+
+/** The picked quality as the dropdown holds it: "source", "auto", or a height. */
+export function qualityValue(quality: number | undefined): string {
+  return quality === undefined ? 'source' : quality === 0 ? 'auto' : String(quality)
+}
+
+/** The preference a dropdown value stands for (see `PlayerPrefs.quality`). */
+export function qualityPref(value: string): number | undefined {
+  return value === 'source' ? undefined : value === 'auto' ? 0 : Number(value)
 }
 
 const DEFAULTS: PlayerPrefs = { volume: 1, muted: false, rate: 1 }

@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import AiSetupProgress from '../components/AiSetupProgress'
 import RankRow from '../components/RankRow'
 import { DEFAULT_HOST_ORDER } from '../downloadPrefs'
-import type { AppSettings, SiteInfo } from '../api'
-import { getSites, runAiSetup } from '../api'
+import type { AppSettings, RestartWay, SiteInfo } from '../api'
+import { getSites, restartServer, runAiSetup, serverRestartWay } from '../api'
 import type { SubtitleStyle } from '../subtitleStyle'
 import { isSettingUp, useAiSetup } from '../useAiSetup'
+import { loadPlayerPrefs, qualityPref, qualityValue, savePlayerPrefs } from '../playerPrefs'
 import { forgetMediaOptions } from '../useMediaOptions'
 import {
   DEFAULT_SUBTITLE_STYLE,
@@ -90,6 +91,8 @@ export default function SettingsView({ settings, onUpdate }: Props) {
             Used when opening a title; a title without it falls back to what it has.
           </p>
         </div>
+
+        <VideoQualitySetting />
 
         <div>
           <label className="flex items-center gap-3 cursor-pointer text-sm">
@@ -387,7 +390,95 @@ export default function SettingsView({ settings, onUpdate }: Props) {
             are removed from the server's disk for good — there is no undo.
           </p>
         </div>
+        <RestartServer />
       </section>
+    </div>
+  )
+}
+
+const RESTART_WAY: Record<RestartWay, string> = {
+  checkout: "Starts it again on the code now in its folder: pull, then restart.",
+  uvx: 'Starts it again with uvx, on the latest release.',
+  installed: 'Starts the same version again.',
+}
+
+/** Restarts the server, then reloads the page once it answers again. What
+ *  plays or casts stops for the few seconds it is away. */
+function RestartServer() {
+  const [way, setWay] = useState<RestartWay | null>(null)
+  const [state, setState] = useState<'idle' | 'restarting' | 'failed'>('idle')
+  useEffect(() => { void serverRestartWay().then(setWay) }, [])
+
+  async function run() {
+    if (!window.confirm('Restart the server? Playback and casts stop for a few seconds.')) return
+    setState('restarting')
+    try {
+      await restartServer()
+    } catch {
+      setState('failed')
+      return
+    }
+    // Gone, then back: the new one waits for this one to let go of its ports.
+    await new Promise(r => setTimeout(r, 1500))
+    for (let i = 0; i < 120; i++) {
+      if (await serverRestartWay()) {
+        window.location.reload()
+        return
+      }
+      await new Promise(r => setTimeout(r, 1000))
+    }
+    setState('failed')
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="btn btn-sm btn-error btn-outline gap-2"
+        disabled={state === 'restarting'}
+        onClick={() => { void run() }}
+      >
+        {state === 'restarting' && <span className="loading loading-spinner loading-xs" />}
+        {state === 'restarting' ? 'Restarting…' : 'Restart server'}
+      </button>
+      <p className="text-xs text-base-content/50 mt-1">
+        {state === 'failed'
+          ? 'It did not come back. Start it again from where it was launched.'
+          : way ? RESTART_WAY[way] : 'Starts it again on newer code.'}
+      </p>
+    </div>
+  )
+}
+
+/** Heights offered in the settings, before any video says which it has. */
+const QUALITY_STEPS = [2160, 1440, 1080, 720, 480, 360, 240, 144]
+
+/** The quality the player starts each video at: the same remembered choice
+ *  as the dropdown beside the player, so changing either changes both. */
+function VideoQualitySetting() {
+  const [value, setValue] = useState(() => qualityValue(loadPlayerPrefs().quality))
+  return (
+    <div>
+      <label htmlFor="set-quality" className="text-sm text-base-content/60 mb-1 block">
+        Video quality
+      </label>
+      <select
+        id="set-quality"
+        className="select select-bordered w-full"
+        value={value}
+        onChange={e => {
+          setValue(e.target.value)
+          savePlayerPrefs({ quality: qualityPref(e.target.value) })
+        }}
+      >
+        <option value="source">Source — the video's own picture</option>
+        <option value="auto">Auto — follows the connection</option>
+        {QUALITY_STEPS.map(h => <option key={h} value={h}>{h}p</option>)}
+      </select>
+      <p className="text-xs text-base-content/50 mt-1">
+        Where each video starts. A video without that quality plays the closest
+        below it; the dropdown beside the player changes this too.
+      </p>
     </div>
   )
 }
