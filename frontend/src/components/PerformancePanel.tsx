@@ -111,7 +111,7 @@ export default function PerformancePanel({ url, position, clientAhead }: {
     }
   }
   if (clientAhead && last) {
-    graphs.push({ label: 'Buffered in the player', values: client, max: buffered, text: seconds })
+    graphs.push({ label: 'Playable ahead', values: client, max: buffered, text: seconds })
   }
 
   return (
