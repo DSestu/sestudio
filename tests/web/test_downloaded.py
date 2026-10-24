@@ -388,7 +388,7 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
 
     # The opening segments start building before anything asks for them: the
     # player's own first attempt at playing gives up if they are not there.
-    for future in list(route._HLS_PENDING.values()):
+    for future, _stop in list(route._HLS_PENDING.values()):
         future.result(timeout=10)
     # Of the rung the player picked, not of every rung the master offers.
     assert built == [(0, 720), (1, 720), (2, 720)]
@@ -795,3 +795,31 @@ def test_a_chromecast_segment_follows_its_cast_s_changed_settings(
     # As asked; then the nearest rung the film has to 500, at 30; then the
     # receiver's own rung back, at 60.
     assert built == [(0, 0), (480, 30), (0, 60)]
+
+
+def test_new_settings_call_off_older_segments_of_the_same_media():
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    from pathlib import Path
+
+    from sestudio.web.routes import downloaded as route
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    pending: route.Pending = {}
+    gate = threading.Event()
+    running = route.queue_latest(
+        pending, pool, "a", (0, 60), 0, lambda: gate.wait(5) and Path("x")
+    )
+    queued = route.queue_latest(pending, pool, "a", (0, 60), 1, lambda: Path("y"))
+    other = route.queue_latest(pending, pool, "b", (0, 60), 0, lambda: Path("b"))
+    latest = route.queue_latest(pending, pool, "a", (0, 120), 0, lambda: Path("z"))
+    gate.set()
+
+    # Queued at the old rate: never built. Another film: untouched.
+    assert queued.result(timeout=5) is None
+    assert other.result(timeout=5) == Path("b")
+    assert latest.result(timeout=5) == Path("z")
+    # Back to the old rate: the stopped segment is built afresh, not reused.
+    again = route.queue_latest(pending, pool, "a", (0, 60), 0, lambda: Path("x2"))
+    assert again is not running
+    assert again.result(timeout=5) == Path("x2")

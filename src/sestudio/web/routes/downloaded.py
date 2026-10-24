@@ -21,7 +21,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
-from sestudio import library, downloaded
+from sestudio import downloaded, interpolate, library
 from sestudio.config import load_config
 
 router = APIRouter()
@@ -41,12 +41,17 @@ _THUMB_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="thumb")
 # not queue a second ffmpeg run for the same still.
 _THUMBS_PENDING: dict[str, Future[Path | None]] = {}
 
+#: A segment being built: its future, and the event that calls it off.
+Pending = dict[
+    tuple[str, tuple[int, ...], int], tuple[Future[Path | None], threading.Event]
+]
+
 # On-the-fly segments of a downloaded file. Unlike the thumbnails above these are waited on rather than answered with a 404: the player has
 # asked for bytes it is about to play, and a segment is under a second of work.
 # Three at a time, so one viewer's read-ahead is not serialised and two viewers
 # cannot take the machine.
 _HLS_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="hls")
-_HLS_PENDING: dict[str, Future[Path | None]] = {}
+_HLS_PENDING: Pending = {}
 
 # The Google Cast receiver refuses media served without CORS headers, exactly as
 # for the stream proxy; DLNA renderers are indifferent. Harmless for browsers.
@@ -605,23 +610,55 @@ def _track_payload(track: downloaded.Track) -> dict[str, Any]:
     }
 
 
+def queue_latest(
+    pending: Pending,
+    pool: ThreadPoolExecutor,
+    media: str,
+    settings: tuple[int, ...],
+    index: int,
+    build: Callable[[], Path | None],
+) -> Future[Path | None]:
+    """The running build for one segment of *media*, started if it is not
+    already going.
+
+    Coalesced per segment, so a read-ahead, a retry and a playlist's warm-up
+    never start the same encode twice. And the first segment asked for at new
+    *settings* (a quality, a frame rate, a voice) calls off what is still being
+    made of *media* at others: the player has moved on, and AI frames nobody
+    will watch would hold the GPU from the ones it is waiting for. Those not
+    started yet answer None; one being drawn stops at its next frame.
+    """
+    key = (media, settings, index)
+    found = pending.get(key)
+    if found is not None and not found[1].is_set():
+        return found[0]
+    for (other, was, _), (_, stop) in list(pending.items()):
+        if other == media and was != settings:
+            stop.set()
+    stop = threading.Event()
+    entry = (pool.submit(interpolate.cancellable, stop, build), stop)
+    pending[key] = entry
+
+    def forget(_done: Future[Path | None]) -> None:
+        # Not a later build of the same segment, started after this was stopped.
+        if pending.get(key) is entry:
+            del pending[key]
+
+    entry[0].add_done_callback(forget)
+    return entry[0]
+
+
 def _queue_segment(
     target: Path, path: str, index: int, audio: int, rung: int = 0, fps: int = 0
 ) -> Future[Path | None]:
-    """The running build for one segment, started if it is not already going.
-
-    Coalesced per segment, so a read-ahead, a retry and the warm-up below never
-    start the same encode twice.
-    """
-    key = f"{path}|{index}|{audio}|{rung}|{fps}"
-    future = _HLS_PENDING.get(key)
-    if future is None:
-        future = _HLS_POOL.submit(
-            downloaded.hls_segment, target, path, index, audio, rung, fps
-        )
-        _HLS_PENDING[key] = future
-        future.add_done_callback(lambda _f, k=key: _HLS_PENDING.pop(k, None))
-    return future
+    return queue_latest(
+        _HLS_PENDING,
+        _HLS_POOL,
+        path,
+        (audio, rung, fps),
+        index,
+        lambda: downloaded.hls_segment(target, path, index, audio, rung, fps),
+    )
 
 
 @router.get("/downloaded/hls")
