@@ -16,7 +16,7 @@ import { setBrowserPlayerControls } from '../../browserPlayerControls'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
 import { applySubtitleStyle } from '../../subtitleStyle'
 import { usePiPWindow } from '../../pipSession'
-import BufferingInfo from './BufferingInfo'
+import BufferingInfo, { bufferedAhead } from './BufferingInfo'
 
 /** Persist progress at most every SAVE_INTERVAL ms of playback. */
 const SAVE_INTERVAL = 5000
@@ -113,6 +113,11 @@ export default function VideoPane({
       holdPosition: () => {
         const p = playerRef.current
         if (p && p.currentTime > 0) setResumeTo(p.currentTime)
+      },
+      position: () => playerRef.current?.currentTime ?? 0,
+      bufferedAhead: () => {
+        const p = playerRef.current
+        return p ? bufferedAhead(p.state.buffered, p.state.currentTime) : 0
       },
     })
   }, [paused])

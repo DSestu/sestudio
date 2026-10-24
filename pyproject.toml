@@ -41,6 +41,7 @@ dependencies = [
     # fingerprint (headers alone don't pass), both for yt-dlp and the proxy.
     "yt-dlp[curl-cffi]>=2026.3.17",
     "async-upnp-client>=0.48.0",
+    "psutil>=5.9",
 ]
 
 [project.urls]

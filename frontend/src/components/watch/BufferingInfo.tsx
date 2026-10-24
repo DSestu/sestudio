@@ -21,7 +21,7 @@ interface Fetched {
 }
 
 /** Seconds of media buffered ahead of *t*, in the range that contains it. */
-function bufferedAhead(buffered: TimeRanges, t: number): number {
+export function bufferedAhead(buffered: TimeRanges, t: number): number {
   for (let i = 0; i < buffered.length; i++) {
     if (buffered.start(i) <= t + 0.5 && t < buffered.end(i)) return buffered.end(i) - t
   }

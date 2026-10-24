@@ -75,12 +75,19 @@ def runtime_dir(flavour: str = "") -> Path:
     return config_dir() / "runtime" / f"{tag}-{sysconfig.get_platform()}{flavour}"
 
 
+def nvidia_smi() -> str | None:
+    """`nvidia-smi`, which an NVIDIA driver installs, or None without one."""
+    if found := shutil.which("nvidia-smi"):
+        return found
+    smi = Path(
+        os.environ.get("SystemRoot", r"C:\Windows"), "System32", "nvidia-smi.exe"
+    )
+    return str(smi) if sys.platform == "win32" and smi.is_file() else None
+
+
 def _nvidia() -> bool:
-    """Whether an NVIDIA GPU is here: its driver installs `nvidia-smi`."""
-    if shutil.which("nvidia-smi"):
-        return True
-    system = Path(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
-    return sys.platform == "win32" and (system / "nvidia-smi.exe").is_file()
+    """Whether an NVIDIA GPU is here."""
+    return nvidia_smi() is not None
 
 
 def _flavours() -> list[tuple[str, list[str]]]:

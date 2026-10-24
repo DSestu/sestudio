@@ -15,6 +15,10 @@ export interface BrowserPlayerControls {
    *  (another frame rate), rather than the watch progress — which is saved
    *  every few seconds, and not at all in the first 30. */
   holdPosition: () => void
+  /** Where it plays now, in seconds. */
+  position: () => number
+  /** Seconds buffered past that. */
+  bufferedAhead: () => number
 }
 
 let state: BrowserPlayerControls | null = null

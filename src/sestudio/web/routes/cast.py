@@ -11,7 +11,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from sestudio import dlna, downloaded, interpolate
+from sestudio import dlna, downloaded, interpolate, metrics
+from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.web.routes.downloaded import _resolved, check_fps, offered_rung
 from sestudio.web.routes.stream import transcode_source
 
@@ -287,6 +288,28 @@ async def _variants_for(
             return None
         return downloaded.ladder(probe.width, probe.height), probe.fps
     return None
+
+
+@router.get("/media/metrics")
+async def media_metrics(
+    request: Request, url: str | None = None, position: float = 0
+) -> dict[str, Any]:
+    """The machine's load, and how many seconds past *position* the server has
+    ready of the media at *url*: its segments built so far. Without *url*, of
+    the DLNA TV: what it has been sent beyond *position*, buffered in the TV.
+    ``ahead`` is None for a URL that is not one of the server's re-encodings."""
+    load = await asyncio.to_thread(metrics.system)
+    if url is None:
+        return {**load, "ahead": max(0.0, downloaded_route.tv_sent[0] - position)}
+    parsed = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qs(parsed.query)
+    media = None
+    if parsed.path.startswith("/api/downloaded/"):
+        media = query.get("path", [""])[0]
+    elif parsed.path.startswith("/api/stream/"):
+        media = transcode_source(request, query.get("token", [""])[0])[0]
+    ahead = downloaded_route.built_ahead(media, position) if media else None
+    return {**load, "ahead": ahead}
 
 
 class CastLiveRequest(BaseModel):

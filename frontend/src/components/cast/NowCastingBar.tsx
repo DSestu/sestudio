@@ -13,6 +13,7 @@ import { getCastQueue } from '../../castQueue'
 import { castLive } from '../../api'
 import { loadPlayerPrefs } from '../../playerPrefs'
 import CastFrameRate from './CastFrameRate'
+import CastPerformance from './CastPerformance'
 import CastQuality from './CastQuality'
 import type { Navigate } from '../../nav'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
@@ -326,6 +327,10 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                       onChange={changeLive}
                     />
                   </div>
+                  <CastPerformance
+                    url={target === 'chromecast' ? cast.mediaUrl : undefined}
+                    position={live.position}
+                  />
                   {(switching || changed) && (
                     <span role="status" className="text-xs text-base-content/60">
                       {switching && <span className="loading loading-spinner loading-xs mr-1 align-middle" />}

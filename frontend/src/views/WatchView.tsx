@@ -17,6 +17,7 @@ import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
 import BrowserFrameRate from '../components/watch/BrowserFrameRate'
+import BrowserPerformance from '../components/watch/BrowserPerformance'
 import SourcesPanel from '../components/watch/SourcesPanel'
 import VideoPane from '../components/watch/VideoPane'
 import { useAlternateSources } from '../useAlternateSources'
@@ -921,6 +922,7 @@ export default function WatchView({
                   )}
                 </div>
               )}
+              {playing && current && <BrowserPerformance source={source} />}
             </div>
 
             {/* Where the video comes from: the site first, then the hosts that
