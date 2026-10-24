@@ -894,14 +894,15 @@ export default function WatchView({
                     source={source}
                     autoplay={autoplay}
                     handoffAt={position}
-                  />
+                  >
+                    <BrowserFrameRate source={source} />
+                  </OutputSwitcher>
                   {/* Audio tracks, for the copy on disk. Only shown when the
                       file actually has a choice to make, and only while it is
                       the thing playing — a streamed host serves one track and
                       has nothing to switch between. The server builds the
                       chosen track (no browser can pick one), so the first use
                       of a track pauses briefly and later ones are instant. */}
-                  <BrowserFrameRate source={source} />
                   {active === DOWNLOADED_PROVIDER && downloadedAudio.length > 1 && (
                     <label className="flex items-center gap-2 text-sm">
                       <span className="opacity-60">Audio</span>

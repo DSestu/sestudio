@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Renderer, StreamSource, StreamSubtitle } from '../../api'
 import {
   castLive, dlnaPlay, getCastHttpPort, listRenderers, downloadedFileUrl, downloadedHlsUrl,
@@ -46,6 +46,8 @@ interface Props {
   autoplay: boolean
   /** Browser position (seconds) to resume from when handing off to a TV. */
   handoffAt: number
+  /** Set beside the cast button, on its row (the browser's frame rate). */
+  children?: ReactNode
 }
 
 /** Move what the TV is playing to *at* seconds, once it has taken the video. */
@@ -71,7 +73,7 @@ const DLNA_START_LIMIT = 30
  * different episode and casting it again swaps what's on the TV.
  */
 export default function OutputSwitcher({
-  episodes, index, source, autoplay, handoffAt,
+  episodes, index, source, autoplay, handoffAt, children,
 }: Props) {
   const [renderers, setRenderers] = useState<Renderer[] | null>(null)
   const [castAvailable, setCastAvailable] = useState(false)
@@ -241,6 +243,7 @@ export default function OutputSwitcher({
           </svg>
           {casting ? 'Cast this episode' : 'Send to TV'}
         </button>
+        {children}
         {casting && (
           <span className="text-xs text-base-content/50">
             Casting continues below — this swaps what’s on the TV.
