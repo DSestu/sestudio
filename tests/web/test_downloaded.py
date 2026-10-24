@@ -38,6 +38,7 @@ def no_segments_from_other_tests():
     for builds in (route.RAW, route.DRAWN):
         builds.pending.clear()
         builds.built.clear()
+        builds.failed.clear()
     route.PLAYHEAD.clear()
 
 
@@ -1012,3 +1013,40 @@ def test_a_segment_already_built_is_answered_without_queueing_again(tmp_path):
     again = builds.queue("film", (0, 0, 60), 3, lambda: pytest.fail("built twice"))
     assert again.done() and again.result() == made
     assert calls == [3]
+
+
+def test_a_failing_source_is_not_hammered(tmp_path, monkeypatch):
+    """A host refusing every segment: each retry of the player, and each
+    segment read ahead, would start another refused encode. A failure is kept
+    for a while instead, and nothing is read ahead meanwhile."""
+    import asyncio
+    import time
+
+    from sestudio.web.routes import downloaded as route
+
+    tried: list[int] = []
+
+    def refused(i: int) -> None:
+        tried.append(i)
+        time.sleep(0.1)  # an encode that gets as far as asking the host
+
+    def serve(index: int):
+        return asyncio.run(
+            route.serve_segment(
+                "film", 20, index, (0, 0, 0), False, refused, lambda i: None
+            )
+        )
+
+    assert serve(3) is None
+    for future, _stop in list(route.RAW.pending.values()):
+        future.result(timeout=5)
+    first = sorted(tried)
+    assert first == [3, 4, 5, 6, 7, 8]  # the first time, read ahead as usual
+    # Retried at once: answered from the failure, nothing started.
+    assert serve(3) is None and serve(4) is None
+    assert sorted(tried) == first
+    # Past the wait, tried again.
+    clock = route.time.monotonic() + route.RETRY_AFTER + 1
+    monkeypatch.setattr(route.time, "monotonic", lambda: clock)
+    assert serve(3) is None
+    assert tried.count(3) == 2
