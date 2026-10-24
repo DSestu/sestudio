@@ -960,18 +960,21 @@ def test_ai_frames_are_drawn_from_the_playhead_and_swapped_in_once_ready(tmp_pat
 
     try:
         # Playing in segment 3 with the player's buffer reaching segment 5.
-        assert route.playhead("film", 20.0) == (False, 0.0)
+        assert route.playhead("film", 20.0) == (False, 0.0, False)
         assert serve(5) == "raw5"
         for future, _stop in list(route.DRAWN.pending.values()):
             future.result(timeout=10)
         # Drawn from just past the playhead, not past the buffer.
         assert sorted(drawn) == [4, 5, 6, 7, 8]
         # Told to swap, with 4 to 8 drawn; fetched again, they come drawn.
-        assert route.playhead("film", 21.0) == (True, 30.0)
+        assert route.playhead("film", 21.0) == (True, 30.0, False)
         assert [serve(4), serve(5)] == ["ai4", "ai5"]
         # Swapped: not asked again, even with the first kept as it was.
         route.DRAWN.built["film"][2].discard(4)
-        assert route.playhead("film", 22.0) == (False, 30.0)
+        assert route.playhead("film", 22.0) == (False, 30.0, False)
+        # Playing segment 5, sent drawn: AI on screen; 4, kept as it was: not.
+        assert route.playhead("film", 31.0)[2] is True
+        assert route.playhead("film", 25.0)[2] is False
     finally:
         route.PLAYHEAD.clear()
         route.RAW.pending.clear()

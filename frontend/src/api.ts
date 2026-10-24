@@ -522,11 +522,12 @@ export async function mediaAiShown(url: string, position: number): Promise<boole
 
 /** Tell the server where *url* plays, so it draws AI frames from just past
  *  there. `swap` when the next ones are ready: fetch them again to show them;
- *  `ready`, seconds drawn past the segment playing, one after another. */
+ *  `ready`, seconds drawn past the segment playing, one after another;
+ *  `shown`, the segment playing was sent drawn — AI frames on screen. */
 export async function mediaPlayhead(
   url: string, position: number,
-): Promise<{ swap: boolean; ready: number }> {
-  const none = { swap: false, ready: 0 }
+): Promise<{ swap: boolean; ready: number; shown: boolean }> {
+  const none = { swap: false, ready: 0, shown: false }
   try {
     const res = await fetch(`${BASE}/media/playhead`, {
       method: 'POST',

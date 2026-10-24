@@ -72,9 +72,19 @@ function refetchAhead(player: MediaPlayerInstance | null): void {
 }
 
 /** How many seconds hls.js reads ahead, changed as it plays. */
-function setReadAhead(player: MediaPlayerInstance | null, seconds: number): void {
+/** hls.js's read-ahead: *seconds* and no more, or its own when null — half a
+ *  minute, and up to 60 MB (600 s at most) of a quality whose bitrate is low.
+ *  Both bounds: the second alone has a player buffer two minutes of the
+ *  source's rate past the AI frames it is waiting for. */
+function readAheadLimits(seconds: number | null) {
+  return { maxBufferLength: seconds ?? 30, maxMaxBufferLength: seconds ?? 600 }
+}
+
+function setReadAhead(player: MediaPlayerInstance | null, seconds: number | null): void {
   const provider = player?.provider
-  if (isHLSProvider(provider) && provider.instance) provider.instance.config.maxBufferLength = seconds
+  if (isHLSProvider(provider) && provider.instance) {
+    Object.assign(provider.instance.config, readAheadLimits(seconds))
+  }
 }
 
 export default function VideoPane({
@@ -128,8 +138,6 @@ export default function VideoPane({
     castLive(loaded.live, 0, playingFps).then(() => refetchAhead(playerRef.current)).catch(() => {})
   }, [loaded, playingFps])
 
-  // Whether AI frames are on screen, from the frames the video decodes a
-  // second: the server sends the source's rate until the drawn ones are ready.
   const sourceFps = known?.fps ?? 0
 
   // While AI frames are asked for, say where it plays every few seconds: the
@@ -137,27 +145,34 @@ export default function VideoPane({
   // drawn, which is how far the player reads ahead — never so far that it
   // asks for segments not drawn yet and is sent the source's rate — and
   // whether to swap: fetch again what it buffered at the source's rate, so
-  // AI frames show from the next segment rather than after that plays out.
+  // AI frames show from the next segment rather than after that plays out —
+  // and whether the segment playing was sent drawn, which is what the frame
+  // rate's LIVE mark shows: the server knows what it sent each segment as.
   // Swapped once until they show: a refetch empties the buffer past the next
   // segment, and asked twice it would empty it again before it refilled.
   const aiShown = useBrowserAiShown()
   const drawing = Boolean(ladderUrl && sourceFps && playingFps > sourceFps)
   useEffect(() => {
-    if (!drawing || !ladderUrl) return
+    if (!drawing || !ladderUrl) {
+      setBrowserAiShown(false)
+      return
+    }
     let live = true
     let swapped = false
     const tell = async () => {
       const p = playerRef.current
       if (!p || p.paused) return
-      const { swap, ready } = await mediaPlayhead(ladderUrl, p.currentTime)
+      const { swap, ready, shown } = await mediaPlayhead(ladderUrl, p.currentTime)
       if (!live) return
+      setBrowserAiShown(shown)
       setReadAhead(p, Math.min(30, Math.max(8, ready - 6)))
       if (swap && !swapped && !aiShown) {
         swapped = true
         refetchAhead(p)
       }
     }
-    const timer = window.setInterval(() => { void tell() }, 2000)
+    // Each second: LIVE follows within one of a segment's start.
+    const timer = window.setInterval(() => { void tell() }, 1000)
     return () => { live = false; window.clearInterval(timer) }
   }, [drawing, ladderUrl, aiShown])
 
@@ -165,29 +180,12 @@ export default function VideoPane({
   // than a segment to start with while AI frames are asked for — whatever it
   // holds at the source's rate plays before them. The check-in above raises it
   // as far as the server has them drawn.
-  const readAhead = sourceFps && playingFps > sourceFps ? 8 : 30
+  const readAhead = sourceFps && playingFps > sourceFps ? 8 : null
   const readAheadRef = useRef(readAhead)
   useEffect(() => {
     readAheadRef.current = readAhead
     setReadAhead(playerRef.current, readAhead)
   }, [readAhead])
-
-  useEffect(() => {
-    setBrowserAiShown(false)
-    if (!sourceFps || playingFps <= sourceFps) return
-    let last: { frames: number; at: number } | null = null
-    const timer = window.setInterval(() => {
-      const video = playerRef.current?.el?.querySelector('video')
-      if (!video || video.paused || video.seeking) { last = null; return }
-      const now = { frames: video.getVideoPlaybackQuality().totalVideoFrames, at: performance.now() }
-      if (last && now.at > last.at) {
-        const rate = (now.frames - last.frames) / ((now.at - last.at) / 1000)
-        setBrowserAiShown(rate > sourceFps * 1.2)
-      }
-      last = now
-    }, 1000)
-    return () => window.clearInterval(timer)
-  }, [sourceFps, playingFps, loaded.live])
 
   // Drives the layout choice below: the small (mobile) layout drops the
   // timeline, which is wrong for a popped-out window.
@@ -383,7 +381,7 @@ export default function VideoPane({
           ref={playerRef}
           onProviderChange={provider => {
             if (isHLSProvider(provider)) {
-              provider.config = { ...provider.config, maxBufferLength: readAheadRef.current }
+              provider.config = { ...provider.config, ...readAheadLimits(readAheadRef.current) }
             }
           }}
           className="w-full h-full"
