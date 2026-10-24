@@ -452,3 +452,33 @@ def test_live_changes_need_a_cast_and_a_well_formed_id(client):
     assert (
         client.post("/api/cast/live", json={"id": "cc", "fps": 50}).status_code == 422
     )
+
+
+def test_media_metrics_report_load_and_what_is_ready_ahead(client, monkeypatch):
+    import subprocess
+
+    from sestudio import interpolate
+    from sestudio.web.routes import downloaded as route
+
+    monkeypatch.setattr(interpolate, "nvidia_smi", lambda: "nvidia-smi")
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="87, 2048, 24576\n"),
+    )
+    # Segments 1, 2 and 4 of a film built at 60 fps: from 7 s in, 1 and 2 hold.
+    monkeypatch.setitem(route._BUILT, "Film.avi", ((0, 0, 60), {1, 2, 4}))
+    body = client.get(
+        "/api/media/metrics",
+        params={"url": "/api/downloaded/hls?path=Film.avi&fps=60", "position": 7},
+    ).json()
+    assert body["gpu"] == {"load": 87.0, "used": 2048 * 2**20, "total": 24576 * 2**20}
+    assert 0 <= body["cpu"] <= 100 and body["memory"]["total"] > 0
+    assert body["ahead"] == 11.0
+
+    # A DLNA TV: what it has been sent past where it plays.
+    monkeypatch.setattr(route, "tv_sent", [130.0])
+    assert (
+        client.get("/api/media/metrics", params={"position": 100}).json()["ahead"]
+        == 30.0
+    )

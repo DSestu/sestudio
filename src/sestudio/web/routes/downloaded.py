@@ -52,6 +52,9 @@ Pending = dict[
 # cannot take the machine.
 _HLS_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="hls")
 _HLS_PENDING: Pending = {}
+# Per video, the settings it was last asked for and which segments of it are
+# built at them: how far ahead of the player the server is (``built_ahead``).
+_BUILT: dict[str, tuple[tuple[int, ...], set[int]]] = {}
 
 # The Google Cast receiver refuses media served without CORS headers, exactly as
 # for the stream proxy; DLNA renderers are indifferent. Harmless for browsers.
@@ -406,6 +409,10 @@ class _TvRun:
                 proc.wait()
 
 
+#: How far into the film the TV stream has been sent, in seconds.
+tv_sent = [0.0]
+
+
 async def _live_piped(
     start: float,
     settings: Callable[[], tuple[int, int]],
@@ -425,6 +432,7 @@ async def _live_piped(
     and each one left running would be a 4K decode nobody is watching.
     """
     current = settings()
+    tv_sent[0] = start
     run = await asyncio.to_thread(run_from, start, current)
     # Bytes from the frame being held on; this run's first frame's timestamp,
     # which is *start*; and the held frame's.
@@ -441,6 +449,8 @@ async def _live_piped(
                 at, holding = starts[-1]
                 yield held[:at]
                 held = held[at:]
+                if first is not None:
+                    tv_sent[0] = start + (holding - first) / 90_000
             wanted = settings()
             if wanted != current:
                 if first is not None and holding is not None:
@@ -635,17 +645,33 @@ def queue_latest(
     for (other, was, _), (_, stop) in list(pending.items()):
         if other == media and was != settings:
             stop.set()
+    if _BUILT.get(media, (None,))[0] != settings:
+        _BUILT[media] = (settings, set())
     stop = threading.Event()
     entry = (pool.submit(interpolate.cancellable, stop, build), stop)
     pending[key] = entry
 
-    def forget(_done: Future[Path | None]) -> None:
+    def forget(done: Future[Path | None]) -> None:
         # Not a later build of the same segment, started after this was stopped.
         if pending.get(key) is entry:
             del pending[key]
+        built = _BUILT.get(media)
+        if built and built[0] == settings and not done.exception() and done.result():
+            built[1].add(index)
 
     entry[0].add_done_callback(forget)
     return entry[0]
+
+
+def built_ahead(media: str, position: float) -> float:
+    """Seconds of *media* the server has ready from *position* on, at the
+    settings it was last asked for: its segments built one after another."""
+    index = int(position // downloaded.HLS_SEGMENT_SECONDS)
+    built = _BUILT.get(media, ((), set()))[1]
+    end = index
+    while end in built:
+        end += 1
+    return max(0.0, end * downloaded.HLS_SEGMENT_SECONDS - position)
 
 
 def _queue_segment(

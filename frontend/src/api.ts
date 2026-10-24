@@ -467,6 +467,30 @@ export async function mediaOptions(url?: string): Promise<MediaOptions> {
   }
 }
 
+/** What the server's machine is doing, and how far ahead it has a video ready. */
+export interface MediaMetrics {
+  /** CPU load, percent. */
+  cpu: number
+  /** Memory in use and installed, bytes. */
+  memory: { used: number; total: number }
+  /** Load (percent) and memory (bytes) of an NVIDIA GPU; null for any other. */
+  gpu: { load: number; used: number; total: number } | null
+  /** Seconds ready past the position given; null when it cannot be told. */
+  ahead: number | null
+}
+
+/** The metrics while *url* plays at *position*; without *url*, the DLNA TV's. */
+export async function mediaMetrics(url: string | undefined, position: number): Promise<MediaMetrics | null> {
+  const query = new URLSearchParams({ position: String(position) })
+  if (url) query.set('url', url)
+  try {
+    const res = await fetch(`${BASE}/media/metrics?${query}`)
+    return res.ok ? await res.json() : null
+  } catch {
+    return null
+  }
+}
+
 /** Push a resolved proxy URL to a DLNA renderer and start playback. */
 export async function dlnaPlay(
   rendererUdn: string,
