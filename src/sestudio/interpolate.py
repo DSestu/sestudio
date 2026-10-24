@@ -309,9 +309,11 @@ def _wrapped(model: Path) -> Path:
 
 
 #: TensorRT, in half precision: one engine for every frame size from 144p to
-#: 4K, compiled once — minutes — and kept beside the model.
+#: 4K, compiled once — minutes — and kept beside the model. The floor sits well
+#: below 144x256: a 144p rung of a narrower picture (254 wide, or 192 at 4:3)
+#: falls outside a 256-wide profile and TensorRT refuses it.
 _TENSORRT_SHAPES = {
-    "trt_profile_min_shapes": "a:144x256x3,b:144x256x3,t:1",
+    "trt_profile_min_shapes": "a:64x64x3,b:64x64x3,t:1",
     "trt_profile_opt_shapes": "a:1080x1920x3,b:1080x1920x3,t:1",
     "trt_profile_max_shapes": "a:2160x5120x3,b:2160x5120x3,t:1",
 }
