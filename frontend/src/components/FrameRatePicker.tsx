@@ -26,10 +26,12 @@ export default function FrameRatePicker({ label, source, rates, value, onChange,
             type="button"
             disabled={disabled}
             aria-pressed={value === fps}
+            title={fps ? undefined : 'The original frame rate'}
             onClick={() => onChange(fps)}
             className={`btn btn-sm gap-1.5 ${value === fps ? 'btn-primary' : 'btn-ghost border-base-300'}`}
           >
-            {fps ? fpsLabel(fps) : `Original · ${fpsLabel(source)}`}
+            {/* "fps" once, on the source's own rate: the rest read as numbers. */}
+            {fps ? fps : fpsLabel(source)}
             {isDrawn(fps, source) && <AiBadge />}
           </button>
         ))}

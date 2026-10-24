@@ -876,7 +876,7 @@ HLS_LADDER = (
 
 #: Frame rates a viewer can ask for. Above the source's own, the frames in
 #: between are drawn by AI; below it, frames are dropped.
-FRAME_RATES = (30, 60, 120, 144)
+FRAME_RATES = (30, 60, 90, 120, 144)
 
 
 def ladder(width: int, height: int) -> list[tuple[int, int, int, int]]:
