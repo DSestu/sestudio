@@ -353,3 +353,40 @@ def test_an_nvidia_gpu_gets_nvidia_s_runtime_first_and_the_plain_one_failing_tha
     # Kept apart, so the plain one installed after is never taken for NVIDIA's.
     assert not interpolate.runtime_dir("-nvidia").exists()
     assert (interpolate.runtime_dir() / ".complete").is_file()
+
+
+def test_turned_off_it_is_never_available_and_fetches_nothing(tmp_path, monkeypatch):
+    from sestudio.config import AppConfig, save_config
+
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    save_config(AppConfig(frame_interpolation=False))
+    started: list[bool] = []
+    monkeypatch.setattr(interpolate, "_prepared_at", [])
+    monkeypatch.setattr(interpolate, "_prepare", lambda: started.append(True))
+
+    assert interpolate.status()["available"] is False
+    assert interpolate.status()["disabled"] is True
+    assert started == []
+
+
+def test_the_setup_reports_ready_or_why_it_failed(monkeypatch):
+    monkeypatch.setattr(interpolate, "_setup", dict(interpolate._setup, step="idle"))
+    monkeypatch.setattr(interpolate, "speed", lambda: 42.0)
+    interpolate._prepare()
+    assert interpolate._setup["step"] == "ready"
+    assert interpolate._setup["error"] is None
+
+    def offline() -> None:
+        interpolate._failed("Could not fetch the interpolation model", "no network")
+
+    monkeypatch.setattr(interpolate, "speed", offline)
+    interpolate._prepare()
+    assert interpolate._setup["step"] == "failed"
+    assert "no network" in interpolate._setup["error"]
+
+
+def test_a_setup_already_running_is_not_started_twice(monkeypatch):
+    monkeypatch.setattr(interpolate, "_setup", dict(interpolate._setup, step="model"))
+    monkeypatch.setattr(interpolate, "speed", lambda: pytest.fail("started twice"))
+    interpolate._prepare()
+    assert interpolate._setup["step"] == "model"

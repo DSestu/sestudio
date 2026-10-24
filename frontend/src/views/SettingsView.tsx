@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import AiSetupProgress from '../components/AiSetupProgress'
 import RankRow from '../components/RankRow'
 import { DEFAULT_HOST_ORDER } from '../downloadPrefs'
 import type { AppSettings, SiteInfo } from '../api'
-import { getSites } from '../api'
+import { getSites, runAiSetup } from '../api'
 import type { SubtitleStyle } from '../subtitleStyle'
+import { isSettingUp, useAiSetup } from '../useAiSetup'
+import { forgetMediaOptions } from '../useMediaOptions'
 import {
   DEFAULT_SUBTITLE_STYLE,
   FONT_FAMILIES,
@@ -56,6 +59,10 @@ export default function SettingsView({ settings, onUpdate }: Props) {
   return (
     <div className="flex flex-col gap-6 max-w-xl">
       <h2 className="text-xl font-semibold tracking-tight">Settings</h2>
+
+      <AiSection settings={settings} onUpdate={onUpdate} />
+
+      <div className="divider my-0" />
 
       <section aria-labelledby="settings-playback" className="flex flex-col gap-4">
         <h3
@@ -382,6 +389,109 @@ export default function SettingsView({ settings, onUpdate }: Props) {
         </div>
       </section>
     </div>
+  )
+}
+
+/** An execution provider as the user knows it: "TensorRT", "DirectML". */
+function engineName(provider: string): string {
+  const name = provider.replace(/ExecutionProvider$/, '')
+  return ({ Tensorrt: 'TensorRT', Dml: 'DirectML', ROCM: 'ROCm' } as Record<string, string>)[name] ?? name
+}
+
+/**
+ * AI frame rates: on or off, and the local setup they need — its progress,
+ * what it found, and a way to run it (again).
+ */
+function AiSection({ settings, onUpdate }: Props) {
+  const [setup, setSetup] = useAiSetup()
+  const [error, setError] = useState('')
+  const enabled = settings.frame_interpolation !== false
+  const busy = isSettingUp(setup)
+  const engine = setup?.providers[0]
+  const status = !setup ? '…'
+    : busy ? 'Setting up'
+      : setup.step === 'ready' ? 'Ready'
+        : setup.step === 'failed' ? 'Failed'
+          : 'Not set up yet'
+
+  function run() {
+    if (setup?.step !== 'idle' && !window.confirm(
+      'Download the model again and rebuild the GPU engine? AI frame rates are off until it is done.',
+    )) return
+    setError('')
+    runAiSetup().then(setSetup, (e: Error) => setError(e.message))
+  }
+
+  return (
+    <section aria-labelledby="settings-ai" className="flex flex-col gap-4">
+      <h3
+        id="settings-ai"
+        className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
+      >
+        AI frame rates
+      </h3>
+
+      <div>
+        <label className="flex items-center gap-3 cursor-pointer text-sm">
+          <input
+            type="checkbox"
+            className="toggle toggle-primary toggle-sm"
+            checked={enabled}
+            onChange={e => {
+              // Pickers ask again, so the AI rates come or go at once.
+              forgetMediaOptions()
+              void onUpdate({ frame_interpolation: e.target.checked })
+            }}
+          />
+          <span>Offer frame rates drawn by AI</span>
+        </label>
+        <p className="text-xs text-base-content/50 mt-1">
+          Smoother motion: frames in between the real ones are drawn on the
+          server's GPU. Off means nothing is downloaded and only the video's own
+          rate, or a lower one, is offered.
+        </p>
+      </div>
+
+      {enabled && setup && (
+        <>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-base-content/60">Status</dt>
+            <dd>{status}</dd>
+            <dt className="text-base-content/60">NVIDIA GPU</dt>
+            <dd>{setup.nvidia_gpu ?? 'None found'}</dd>
+            <dt className="text-base-content/60">Engine</dt>
+            <dd>{engine ? engineName(engine) : '—'}</dd>
+            <dt className="text-base-content/60">Runtime</dt>
+            <dd>{setup.runtime ?? '—'}</dd>
+            <dt className="text-base-content/60">Speed</dt>
+            <dd>{setup.speed ? `${Math.round(setup.speed)} frames drawn a second at 720p` : '—'}</dd>
+          </dl>
+
+          {engine === 'CPUExecutionProvider' && (
+            <p className="text-xs text-warning">
+              No GPU reachable: the CPU is far too slow to keep up, so no AI frame
+              rate is offered.
+            </p>
+          )}
+          {(setup.error || error) && !busy && (
+            <p className="text-xs text-error break-words">{error || setup.error}</p>
+          )}
+
+          <AiSetupProgress setup={setup} />
+
+          <div>
+            <button onClick={run} disabled={busy} className="btn btn-sm">
+              {setup.step === 'idle' ? 'Set up now' : 'Reinstall'}
+            </button>
+            <p className="text-xs text-base-content/50 mt-1">
+              Otherwise the setup runs by itself the first time a video is opened.
+              Reinstalling fetches the model and rebuilds the GPU engine; the
+              runtime itself is only reinstalled if it is not in use.
+            </p>
+          </div>
+        </>
+      )}
+    </section>
   )
 }
 

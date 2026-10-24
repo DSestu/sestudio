@@ -90,6 +90,9 @@ export interface AppSettings {
   notifications_enabled?: boolean
   /** Whether the downloaded browser may delete files from disk. Off by default. */
   allow_file_deletion?: boolean
+  /** Offer frame rates above the source's, drawn by AI. On by default; off,
+   *  the server neither fetches nor offers them. */
+  frame_interpolation?: boolean
   /** CallMeBot number, international form without the leading '+'. Not secret. */
   callmebot_phone?: string
   /** Write-only: sent when saving, never returned. */
@@ -578,6 +581,38 @@ export async function putSettings(patch: Partial<AppSettings>): Promise<AppSetti
     body: JSON.stringify(patch),
   })
   if (!res.ok) throw new Error('Settings save failed')
+  return res.json()
+}
+
+/** Where the AI frame interpolation setup is, and what it found. */
+export interface AiSetup {
+  enabled: boolean
+  /** "idle" before it ever ran; "starting", "runtime", "model" or "measure"
+   *  while it runs; then "ready" or "failed". */
+  step: string
+  /** 0..1 where the step can tell (the model download), else null. */
+  progress: number | null
+  error: string | null
+  /** The NVIDIA GPU's name; null without one (another GPU may still serve). */
+  nvidia_gpu: string | null
+  /** The ONNX Runtime loaded, e.g. "onnxruntime 1.22.0"; null before. */
+  runtime: string | null
+  /** Execution providers of the session, the one in use first. */
+  providers: string[]
+  /** Frames drawn a second at 720p; null until measured. */
+  speed: number | null
+}
+
+export async function getAiSetup(): Promise<AiSetup> {
+  const res = await fetch(`${BASE}/settings/ai`)
+  if (!res.ok) throw new Error('AI status fetch failed')
+  return res.json()
+}
+
+/** Run the AI setup again, from scratch. */
+export async function runAiSetup(): Promise<AiSetup> {
+  const res = await fetch(`${BASE}/settings/ai/setup`, { method: 'POST' })
+  if (!res.ok) throw new Error('AI setup failed to start')
   return res.json()
 }
 

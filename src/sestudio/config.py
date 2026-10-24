@@ -91,6 +91,9 @@ class AppConfig:
     # media folder holds a collection built over years, and one misclick there
     # is not undoable.
     allow_file_deletion: bool = False
+    # Frame rates above the source's, drawn by AI on the GPU. On by default;
+    # off, nothing of it is fetched or offered.
+    frame_interpolation: bool = True
 
 
 def _config_path() -> Path:
@@ -133,6 +136,7 @@ def load_config() -> AppConfig:
             callmebot_phone=str(data.get("callmebot_phone", "")),
             callmebot_apikey=str(data.get("callmebot_apikey", "")),
             allow_file_deletion=bool(data.get("allow_file_deletion", False)),
+            frame_interpolation=bool(data.get("frame_interpolation", True)),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

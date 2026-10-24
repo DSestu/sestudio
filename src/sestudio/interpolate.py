@@ -35,7 +35,7 @@ from typing import Any
 
 import httpx
 
-from sestudio.config import config_dir
+from sestudio.config import config_dir, load_config
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,18 @@ _PROVIDERS = (
 _SCENE_CUT = 40.0
 
 _model_lock = threading.Lock()
+
+#: Where the first-use setup is, for the web UI: ``step`` is "idle" before it
+#: ever ran, one of :data:`_BUSY` while it runs, then "ready" or "failed";
+#: ``progress`` is 0..1 where a step can tell (the model download), else None.
+_setup: dict[str, Any] = {"step": "idle", "progress": None, "error": None}
+_BUSY = ("starting", "runtime", "model", "measure")
+
+
+def _failed(what: str, exc: object) -> None:
+    """Log a setup failure and keep it for the web UI."""
+    logger.warning("%s: %s", what, exc)
+    _setup["error"] = f"{what}: {exc}"
 
 
 def runtime_dir(flavour: str = "") -> Path:
@@ -126,10 +138,10 @@ def ensure_runtime() -> bool:
         return True
     for flavour, packages in _flavours():
         target = runtime_dir(flavour)
-        if not (target / ".complete").is_file() and not _install_runtime(
-            target, packages
-        ):
-            continue
+        if not (target / ".complete").is_file():
+            _setup.update(step="runtime", progress=None)
+            if not _install_runtime(target, packages):
+                continue
         # Last, so the environment's own packages (numpy among them) still win.
         if str(target) not in sys.path:
             sys.path.append(str(target))
@@ -161,11 +173,11 @@ def _install_runtime(target: Path, packages: list[str]) -> bool:
             text=True,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        logger.warning("Could not install the interpolation runtime: %s", exc)
+        _failed("Could not install the interpolation runtime", exc)
         return False
     if result.returncode != 0:
-        logger.warning(
-            "Could not install the interpolation runtime: %s",
+        _failed(
+            "Could not install the interpolation runtime",
             result.stderr.strip()[-500:],
         )
         shutil.rmtree(building, ignore_errors=True)
@@ -195,12 +207,16 @@ def ensure_model() -> Path | None:
             return None
         out.parent.mkdir(parents=True, exist_ok=True)
         archive = out.with_suffix(".7z.part")
+        _setup.update(step="model", progress=0.0)
         try:
             with httpx.stream("GET", MODEL_URL, follow_redirects=True, timeout=60) as r:
                 r.raise_for_status()
+                total = int(r.headers.get("content-length") or 0)
                 with archive.open("wb") as f:
                     for chunk in r.iter_bytes():
                         f.write(chunk)
+                        if total:
+                            _setup["progress"] = min(1.0, f.tell() / total)
             with py7zr.SevenZipFile(archive) as z:
                 z.extract(path=out.parent, targets=[_MODEL_MEMBER])
             unpacked = out.parent / _MODEL_MEMBER
@@ -208,7 +224,7 @@ def ensure_model() -> Path | None:
             unpacked.parent.rmdir()  # the archive's folder, now empty
             return out
         except Exception as exc:  # noqa: BLE001 — any failure means "not available"
-            logger.warning("Could not fetch the interpolation model: %s", exc)
+            _failed("Could not fetch the interpolation model", exc)
             return None
         finally:
             archive.unlink(missing_ok=True)
@@ -334,6 +350,9 @@ def _new_session() -> Any | None:
     model = ensure_model()
     if model is None:
         return None
+    # Building the session, then the first run (where TensorRT compiles its
+    # engine — minutes, once) and the timing: one step to the user.
+    _setup.update(step="measure", progress=None)
     available = set(ort.get_available_providers())
     chosen = [p for p in _PROVIDERS if p in available]
     if "CUDAExecutionProvider" in available and hasattr(ort, "preload_dlls"):
@@ -343,7 +362,7 @@ def _new_session() -> Any | None:
     try:
         wrapped = _wrapped(model)
     except Exception as exc:  # noqa: BLE001 — onnx missing, or a model it rejects
-        logger.warning("Interpolation unavailable: %s", exc)
+        _failed("Interpolation unavailable", exc)
         return None
     providers: list[Any] = [
         (
@@ -369,7 +388,7 @@ def _new_session() -> Any | None:
     try:
         return ort.InferenceSession(str(wrapped), options, providers=providers)
     except Exception as exc:  # noqa: BLE001 — a provider that will not load
-        logger.warning("Interpolation unavailable: %s", exc)
+        _failed("Interpolation unavailable", exc)
         return None
 
 
@@ -382,15 +401,82 @@ _RETRY_AFTER = 600.0
 
 def _prepare() -> None:
     """Everything a first use needs: the runtime, the model, a session, and
-    the speed this machine draws at."""
-    speed()
+    the speed this machine draws at. Once at a time."""
+    with _setup_lock:
+        if _setup["step"] in _BUSY:
+            return
+        _setup.update(step="starting", progress=None, error=None)
+    try:
+        ready = speed() is not None
+    except Exception as exc:  # noqa: BLE001 — shown in the UI, not raised in a thread
+        _failed("Interpolation setup failed", exc)
+        ready = False
+    _setup.update(step="ready" if ready else "failed", progress=None)
+
+
+_setup_lock = threading.Lock()
+
+
+def setup() -> None:
+    """Run the setup again now, from scratch: the model, its TensorRT engine and
+    the speed are fetched, built and measured anew. The runtime too, unless
+    this process has already loaded it — its libraries are in use then (and
+    locked on Windows), so it is kept until the next start."""
+    if _setup["step"] in _BUSY:
+        return
+    _session_cache.clear()
+    _speed.clear()
+    if "onnxruntime" not in sys.modules:
+        for folder in (config_dir() / "runtime").glob(f"{runtime_dir().name}*"):
+            shutil.rmtree(folder, ignore_errors=True)
+    shutil.rmtree(model_path().parent, ignore_errors=True)
+    with _prepare_lock:
+        _prepared_at[:] = [time.monotonic()]
+    threading.Thread(target=_prepare, daemon=True).start()
+
+
+def _gpu_name() -> str | None:
+    """The NVIDIA GPU's name, as its driver reports it; None without one."""
+    if not _nvidia():
+        return None
+    system = Path(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+    smi = shutil.which("nvidia-smi") or str(system / "nvidia-smi.exe")
+    try:
+        out = subprocess.run(
+            [smi, "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.splitlines()[0] if out else None
+
+
+def info() -> dict[str, Any]:
+    """Everything the settings page shows: whether it is on, where the setup
+    is, and what it found. Never starts the setup."""
+    session = _session_cache[0] if _session_cache else None
+    ort = sys.modules.get("onnxruntime")
+    return {
+        "enabled": load_config().frame_interpolation,
+        **_setup,
+        "nvidia_gpu": _gpu_name(),
+        "runtime": f"onnxruntime {ort.__version__}" if ort else None,
+        "providers": session.get_providers() if session else [],
+        "speed": _speed[0] if _speed else None,
+    }
 
 
 def status() -> dict[str, Any]:
     """Whether interpolation can run here, and on what. Never waits: until the
     runtime and model are on disk and measured, this starts fetching them in
     the background and answers "not available" — the frame rates drawn by AI
-    are offered from the next ask once it is done."""
+    are offered from the next ask once it is done. Turned off in the settings,
+    it is never available and fetches nothing."""
+    if not load_config().frame_interpolation:
+        return {"available": False, "provider": None, "disabled": True}
     session = _session_cache[0] if _session_cache and _speed else None
     if session is None:
         with _prepare_lock:

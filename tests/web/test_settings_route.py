@@ -107,3 +107,10 @@ def test_preferred_sites_ignores_sites_this_build_does_not_have(client):
         "/api/settings", json={"preferred_sites": ["senpai", "not-a-site"]}
     )
     assert resp.json()["preferred_sites"] == ["senpai"]
+
+
+def test_frame_interpolation_defaults_on_and_persists(client):
+    assert client.get("/api/settings").json()["frame_interpolation"] is True
+    client.put("/api/settings", json={"frame_interpolation": False})
+    assert client.get("/api/settings").json()["frame_interpolation"] is False
+    assert client.get("/api/settings/ai").json()["enabled"] is False

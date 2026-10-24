@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from typing import Any
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from sestudio import interpolate
 from sestudio.config import DEFAULT_DOWNLOAD_ORDER, load_config, save_config, tmdb_key
 
 router = APIRouter()
@@ -29,6 +31,7 @@ class SettingsBody(BaseModel):
     callmebot_phone: str | None = None
     callmebot_apikey: str | None = None
     allow_file_deletion: bool | None = None
+    frame_interpolation: bool | None = None
 
 
 def _known_hosts(request: Request) -> list[str]:
@@ -122,5 +125,20 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.callmebot_apikey = body.callmebot_apikey.strip()
     if body.allow_file_deletion is not None:
         cfg.allow_file_deletion = body.allow_file_deletion
+    if body.frame_interpolation is not None:
+        cfg.frame_interpolation = body.frame_interpolation
     save_config(cfg)
     return _public(cfg, request)
+
+
+@router.get("/settings/ai")
+async def get_ai() -> dict[str, Any]:
+    """Frame interpolation: on or off, its setup's progress, what it found."""
+    return await asyncio.to_thread(interpolate.info)
+
+
+@router.post("/settings/ai/setup")
+async def post_ai_setup() -> dict[str, Any]:
+    """Run the frame interpolation setup again, from scratch."""
+    await asyncio.to_thread(interpolate.setup)
+    return await asyncio.to_thread(interpolate.info)
