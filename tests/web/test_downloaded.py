@@ -864,7 +864,10 @@ def test_ai_frames_are_sent_once_ready_and_the_source_s_rate_until_then(tmp_path
         # A start, or a seek: at once, at the source's rate.
         assert serve(0) == "raw0"
         settle()
-        assert [serve(i) for i in (1, 2, 3, 4)] == ["ai1", "ai2", "ai3", "ai4"]
+        # Each drawn by the time it is asked for, as they are a segment ahead.
+        for i in (1, 2, 3, 4):
+            assert serve(i) == f"ai{i}"
+            settle()
         settle()
         # Not drawn: the source's rate rather than a wait. And not straight
         # back to AI on the next alone: only with the one after it ready too.
