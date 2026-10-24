@@ -4,6 +4,11 @@ export function fpsLabel(fps: number): string {
   return `${Number.isInteger(fps) ? fps : fps.toFixed(2)} fps`
 }
 
+/** Outline and glow, in the AI mark's colours, on a picked rate whose AI
+ *  frames are on screen; eased in and out as they come and go. */
+export const LIVE_GLOW = 'ring-2 ring-fuchsia-500 ring-offset-1 ring-offset-base-100 shadow-[0_0_14px_2px_rgba(219,39,119,0.55)]'
+export const GLOW_EASE = 'transition-shadow duration-500'
+
 /** Whether *fps* is drawn by AI from a *source* that has fewer frames. */
 export function isDrawn(fps: number, source: number): boolean {
   return source > 0 && fps > source + 0.5

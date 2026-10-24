@@ -1,6 +1,6 @@
 import type { StreamSource } from '../../api'
-import { setBrowserFps, useBrowserFps } from '../../browserFps'
-import { ladderUrlOf } from '../../frameRates'
+import { setBrowserFps, useBrowserAiShown, useBrowserFps } from '../../browserFps'
+import { isDrawn, ladderUrlOf } from '../../frameRates'
 import { useMediaOptions } from '../../useMediaOptions'
 import { AiSetupNotice } from '../AiSetupProgress'
 import FrameRateDropdown from '../FrameRateDropdown'
@@ -14,6 +14,7 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
   const url = ladderUrlOf(source)
   const options = useMediaOptions(url ?? undefined, url !== null)
   const fps = useBrowserFps()
+  const aiShown = useBrowserAiShown()
   const rates = options?.frame_rates ?? []
   // The AI rates come once the server has set itself up for them: its progress.
   const setup = options?.preparing && <div className="basis-full"><AiSetupNotice /></div>
@@ -24,6 +25,9 @@ export default function BrowserFrameRate({ source }: { source: StreamSource | nu
     rates,
     value: rates.includes(fps) ? fps : 0,
     onChange: setBrowserFps,
+    // AI asked for, the source's rate on screen meanwhile.
+    waiting: isDrawn(fps, options.fps) && rates.includes(fps) && !aiShown,
+    live: isDrawn(fps, options.fps) && rates.includes(fps) && aiShown,
   }
   return (
     <>

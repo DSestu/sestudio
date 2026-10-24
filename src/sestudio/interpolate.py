@@ -575,7 +575,7 @@ def speed() -> float | None:
     return _speed[0] if _speed else None
 
 
-#: Segments built at once (routes/downloaded.py `_HLS_POOL`): measured as they
+#: Segments drawn at once (routes/downloaded.py `DRAWN`): measured as they
 #: run, one thread's CPU work overlapping another's turn on the GPU.
 _BENCH_THREADS = 3
 

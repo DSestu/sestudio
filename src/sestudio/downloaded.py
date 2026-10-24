@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import functools
 import glob
+import contextlib
 import hashlib
 import os
 import re
@@ -704,7 +705,10 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
     except (OSError, subprocess.SubprocessError):
         return None
     finally:
-        tmp.unlink(missing_ok=True)
+        # Windows can hold a file a moment past its writer (an antivirus scan):
+        # left for the cache's pruning rather than failing the segment.
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
 
 
 #: Segment length. Six seconds is the usual HLS compromise: short enough that a
@@ -953,15 +957,16 @@ def hls_segment(
 
     *rung* is a height from ``HLS_LADDER`` to scale down to and cap the bitrate
     at, or 0 for the source's own size. Every rung is cut at the same times, so
-    the player can change rung at any segment boundary. *fps* is the frame rate
-    to send at, 0 for the source's own (see :func:`_encode_segment`).
+    the player can change rung at any segment boundary. *fps* is a frame rate
+    below the source's to drop to; any other plays at the source's own, and
+    :func:`hls_drawn` draws the frames above it from this segment.
     """
     durations = hls_segment_durations(file)
     if durations is None or not 0 <= index < len(durations):
         return None
     # The probe only when something has to be compared with the source.
     tracks = tracks_of(file) if rung or fps else MediaTracks(audio=[], subtitles=[])
-    fps = _drawable(fps, tracks.video_fps)
+    fps = _dropped(fps, tracks.video_fps)
     kbps = _rung_kbps(rung, tracks.video_height)
     if kbps is None:
         return None
@@ -991,7 +996,6 @@ def hls_segment(
         kbps,
         fps,
         tracks.video_fps,
-        (tracks.video_width, tracks.video_height),
     )
 
 
@@ -1006,14 +1010,9 @@ def _encode_segment(
     kbps: int,
     fps: int = 0,
     source_fps: float = 0.0,
-    source_size: tuple[int, int] = (0, 0),
 ) -> Path | None:
     """Segment *index* of *source* (a file, or a URL ffmpeg reads), cached
-    under *key*.
-
-    At an *fps* above *source_fps* the frames in between are drawn by AI (see
-    :mod:`sestudio.interpolate`); below it, frames are dropped. Either needs the
-    source's rate, so without it the segment keeps the source's own.
+    under *key*, at *fps* if that is below *source_fps* (frames dropped).
 
     Each is encoded on its own from the source, which is what makes a seek cheap
     and is why they are independently decodable: a fresh encode opens on a
@@ -1036,15 +1035,7 @@ def _encode_segment(
         return None
     out.parent.mkdir(parents=True, exist_ok=True)
     start = index * HLS_SEGMENT_SECONDS
-    width, height = source_size
-    if rung and height:
-        width, height = round(width * rung / height / 2) * 2, rung
-    drawn = bool(fps and source_fps and width and fps > source_fps + 0.5)
     dropped = bool(fps and source_fps and fps < source_fps - 0.5)
-    if drawn and kbps:
-        # More frames need more bits to look the same; not twice as many, as
-        # the frames drawn in between are close to their neighbours.
-        kbps = int(kbps * (fps / source_fps) ** 0.5)
 
     # Before -i: ffmpeg seeks by keyframe and then decodes forward to the exact
     # position, which costs the same at two hours in as at the start. After -i
@@ -1089,39 +1080,32 @@ def _encode_segment(
         "-y",
         str(tmp),
     ]
+    filters = [f"scale=-2:{rung}"] if rung else []
+    if dropped:
+        filters.append(f"fps={fps}")
     try:
-        if drawn:
-            ok = _encode_drawn(
-                head, seek, input_opts, source, maps, seconds, width, height,
-                fps, source_fps, tail,
-            )  # fmt: skip
-        else:
-            filters = [f"scale=-2:{rung}"] if rung else []
-            if dropped:
-                filters.append(f"fps={fps}")
-            result = subprocess.run(
-                [
-                    *head,
-                    *seek,
-                    *input_opts,
-                    "-i",
-                    source,
-                    "-t",
-                    f"{seconds:.3f}",
-                    *maps,
-                    "-sn",
-                    *(["-vf", ",".join(filters)] if filters else []),
-                    *tail,
-                ],
-                # A segment is a second of work; a minute means something is
-                # wrong and the player is better told so than left waiting.
-                timeout=120,
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            ok = result.returncode == 0
-        if ok and tmp.is_file() and tmp.stat().st_size > 0:
+        result = subprocess.run(
+            [
+                *head,
+                *seek,
+                *input_opts,
+                "-i",
+                source,
+                "-t",
+                f"{seconds:.3f}",
+                *maps,
+                "-sn",
+                *(["-vf", ",".join(filters)] if filters else []),
+                *tail,
+            ],
+            # A segment is a second of work; a minute means something is
+            # wrong and the player is better told so than left waiting.
+            timeout=120,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
             os.replace(tmp, out)
             _prune_hls_cache()
             return out
@@ -1129,7 +1113,10 @@ def _encode_segment(
     except (OSError, subprocess.SubprocessError):
         return None
     finally:
-        tmp.unlink(missing_ok=True)
+        # Windows can hold a file a moment past its writer (an antivirus scan):
+        # left for the cache's pruning rather than failing the segment.
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
 
 
 def _drawable(fps: int, source_fps: float) -> int:
@@ -1144,39 +1131,70 @@ def _drawable(fps: int, source_fps: float) -> int:
     return fps
 
 
-def _encode_drawn(
-    head: list[str],
-    seek: list[str],
-    input_opts: list[str],
-    source: str,
-    maps: list[str],
+def _dropped(fps: int, source_fps: float) -> int:
+    """*fps* if it is below *source_fps*, so frames are dropped; else 0, the
+    source's own. Frames above it are drawn apart, by :func:`hls_drawn`."""
+    return fps if fps and source_fps and fps < source_fps - 0.5 else 0
+
+
+def draws(fps: int, source_fps: float) -> bool:
+    """Whether *fps* is above *source_fps* and this machine can draw it."""
+    return bool(fps and source_fps and fps > source_fps + 0.5) and bool(
+        _drawable(fps, source_fps)
+    )
+
+
+def _rung_size(rung: int, width: int, height: int) -> tuple[int, int]:
+    """The picture size of *rung* (0 for the source's own), even both ways."""
+    if rung and height:
+        return round(width * rung / height / 2) * 2, rung
+    return width // 2 * 2, height // 2 * 2
+
+
+def _draw_segment(
+    raw: Path,
+    following: Path | None,
+    index: int,
     seconds: float,
-    width: int,
-    height: int,
     fps: int,
     source_fps: float,
-    tail: list[str],
-) -> bool:
-    """A segment at *fps* with the frames in between drawn by AI.
+    size: tuple[int, int],
+    kbps: int,
+) -> Path | None:
+    """Segment *index* at *fps*, with the frames in between drawn by AI.
 
-    One ffmpeg decodes the picture to raw RGB, RIFE fills in the frames, and a
-    second ffmpeg encodes them with the audio read again from the source. The
-    picture is decoded two frames past the segment's end, so its last frames
-    have a right-hand neighbour to be drawn towards.
+    Made from *raw* — the same segment at the source's rate, already at the size
+    and quality being sent — and *following*, the next, which gives its last
+    frames a right-hand neighbour. Read from disk rather than the source, so
+    drawing never waits on a host, and from a picture already scaled down: a
+    lighter rung is cheaper to draw. The audio is *raw*'s, copied.
     """
     from sestudio import interpolate
 
-    video, audio = maps[1], maps[3]
+    out = _hls_dir() / f"{raw.stem}-f{fps}.ts"
+    if out.is_file() and out.stat().st_size > 0:
+        out.touch()
+        return out
+    try:
+        binary = ffmpeg_binary()
+    except RuntimeError:
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    width, height = size
+    if kbps:
+        # More frames need more bits to look the same; not twice as many, as
+        # the frames drawn in between are close to their neighbours.
+        kbps = int(kbps * (fps / source_fps) ** 0.5)
+    head = [binary, "-nostdin", "-hide_banner", "-loglevel", "error"]
+    tmp = out.with_name(f"{out.stem}.{os.getpid()}.{threading.get_ident()}.tmp.ts")
     decode = [
         *head,
-        *seek,
-        *input_opts,
         "-i",
-        source,
+        f"concat:{raw}|{following}" if following else str(raw),
         "-t",
         f"{seconds + 2 / source_fps:.3f}",
         "-map",
-        video,
+        "0:v:0",
         "-an",
         "-sn",
         "-vf",
@@ -1197,17 +1215,14 @@ def _encode_drawn(
         str(fps),
         "-i",
         "pipe:0",
-        *seek,
-        *input_opts,
         "-i",
-        source,
-        "-t",
-        f"{seconds:.3f}",
+        str(raw),
         "-map",
         "0:v",
         "-map",
-        # The same audio track, from the second input.
-        "1:" + audio.split(":", 1)[1],
+        "1:a?",
+        "-t",
+        f"{seconds:.3f}",
         "-sn",
         # RGB back to the BT.709 YUV an HD picture is tagged as.
         "-vf",
@@ -1218,13 +1233,65 @@ def _encode_drawn(
         "bt709",
         "-color_trc",
         "bt709",
-        *tail,
+        *_h264_args(h264_encoder(), 23, kbps),
+        # No B-frames, as in _encode_segment.
+        "-bf",
+        "0",
+        "-c:a",
+        "copy",
+        "-output_ts_offset",
+        f"{index * HLS_SEGMENT_SECONDS:.3f}",
+        "-muxdelay",
+        "0",
+        "-muxpreload",
+        "0",
+        "-f",
+        "mpegts",
+        "-y",
+        str(tmp),
     ]
-    count = round(seconds * fps)
-    # Generous: drawn frames cost far more than encoded ones, and a GPU that
-    # cannot keep up should still finish rather than leave a hole.
-    return interpolate.run_pipeline(
-        decode, encode, width, height, source_fps, fps, count, timeout=600
+    try:
+        # Generous: drawn frames cost far more than encoded ones, and a GPU that
+        # cannot keep up should still finish rather than leave a hole.
+        ok = interpolate.run_pipeline(
+            decode, encode, width, height, source_fps, fps,
+            round(seconds * fps), timeout=600,
+        )  # fmt: skip
+        if ok and tmp.is_file() and tmp.stat().st_size > 0:
+            os.replace(tmp, out)
+            _prune_hls_cache()
+            return out
+        return None
+    except OSError:
+        return None
+    finally:
+        # Windows can hold a file a moment past its writer (an antivirus scan):
+        # left for the cache's pruning rather than failing the segment.
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
+
+
+def hls_drawn(
+    file: Path, relative: str, index: int, audio: int = 0, rung: int = 0, fps: int = 0
+) -> Path | None:
+    """Segment *index* of *file* at *fps*, above the source's rate, drawn from
+    :func:`hls_segment`'s at the source's rate. None where this machine cannot
+    draw, or there is no such segment."""
+    durations = hls_segment_durations(file)
+    if durations is None or not 0 <= index < len(durations):
+        return None
+    tracks = tracks_of(file)
+    kbps = _rung_kbps(rung, tracks.video_height)
+    if kbps is None or not draws(fps, tracks.video_fps):
+        return None
+    raw = hls_segment(file, relative, index, audio, rung)
+    last = index + 1 >= len(durations)
+    following = None if last else hls_segment(file, relative, index + 1, audio, rung)
+    if raw is None:
+        return None
+    size = _rung_size(rung, tracks.video_width, tracks.video_height)
+    return _draw_segment(
+        raw, following, index, durations[index], fps, tracks.video_fps, size, kbps
     )
 
 
@@ -1361,7 +1428,7 @@ def stream_segment(
     kbps = _rung_kbps(rung, probe.height)
     if kbps is None:
         return None
-    fps = _drawable(fps, probe.fps)
+    fps = _dropped(fps, probe.fps)
     # shortcut: keyed on the URL, which for a host that signs its links changes
     # each time the episode is resolved; key on the embed if re-watches matter.
     key = hashlib.sha1(
@@ -1379,7 +1446,29 @@ def stream_segment(
         kbps,
         fps,
         probe.fps,
-        (probe.width, probe.height),
+    )
+
+
+def stream_drawn(
+    url: str, index: int, rung: int, *, hls: bool, fps: int = 0
+) -> Path | None:
+    """Segment *index* of the stream at *url* at *fps*, as :func:`hls_drawn`
+    is of a file: drawn from the segments :func:`stream_segment` made."""
+    probe = probe_stream(url, hls=hls)
+    durations = segment_durations(probe.duration if probe else None)
+    if probe is None or durations is None or not 0 <= index < len(durations):
+        return None
+    kbps = _rung_kbps(rung, probe.height)
+    if kbps is None or not draws(fps, probe.fps):
+        return None
+    raw = stream_segment(url, index, rung, hls=hls)
+    last = index + 1 >= len(durations)
+    following = None if last else stream_segment(url, index + 1, rung, hls=hls)
+    if raw is None:
+        return None
+    size = _rung_size(rung, probe.width, probe.height)
+    return _draw_segment(
+        raw, following, index, durations[index], fps, probe.fps, size, kbps
     )
 
 
@@ -1473,7 +1562,10 @@ def extracted_subtitle(file: Path, relative: str, index: int) -> Path | None:
     except (OSError, subprocess.SubprocessError):
         return None
     finally:
-        tmp.unlink(missing_ok=True)
+        # Windows can hold a file a moment past its writer (an antivirus scan):
+        # left for the cache's pruning rather than failing the segment.
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
 
 
 def duration_of(file: Path) -> float | None:

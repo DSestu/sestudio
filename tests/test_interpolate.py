@@ -69,9 +69,11 @@ def test_output_ends_with_the_source_however_many_were_asked_for(drawn):
     assert len(out) == 4
 
 
-def test_a_higher_rate_segment_is_decoded_drawn_and_encoded(
+def test_a_higher_rate_segment_is_drawn_from_the_source_rate_s_on_disk(
     tmp_path: Path, monkeypatch
 ):
+    """Scaled down first, then drawn: from the segments at the source's rate,
+    already at the quality sent, rather than from the source over again."""
     file = tmp_path / "film.mkv"
     file.write_bytes(b"x")
     tracks = downloaded.MediaTracks(
@@ -82,6 +84,16 @@ def test_a_higher_rate_segment_is_decoded_drawn_and_encoded(
     monkeypatch.setattr(downloaded, "_hls_dir", lambda: tmp_path / "hls")
     monkeypatch.setattr(downloaded, "ffmpeg_binary", lambda: "ffmpeg")
     monkeypatch.setattr(downloaded, "h264_encoder", lambda: "libx264")
+    monkeypatch.setattr(interpolate, "status", lambda: {"gpu": True})
+    asked: list[tuple[int, int, int]] = []
+
+    def raw(_f, _r, index, audio=0, rung=0, fps=0):
+        asked.append((index, rung, fps))
+        path = tmp_path / f"raw{index}.ts"
+        path.write_bytes(b"ts")
+        return path
+
+    monkeypatch.setattr(downloaded, "hls_segment", raw)
     seen: dict = {}
 
     def fake_pipeline(decode, encode, width, height, src_fps, out_fps, count, timeout):
@@ -90,23 +102,23 @@ def test_a_higher_rate_segment_is_decoded_drawn_and_encoded(
         return True
 
     monkeypatch.setattr(interpolate, "run_pipeline", fake_pipeline)
-    monkeypatch.setattr(interpolate, "status", lambda: {"gpu": True})
-    monkeypatch.setattr(
-        downloaded.subprocess, "run", lambda *a, **k: pytest.fail("plain encode")
-    )
 
-    assert downloaded.hls_segment(file, "film.mkv", 2, audio=1, rung=720, fps=60)
+    assert downloaded.hls_drawn(file, "film.mkv", 2, audio=1, rung=720, fps=60)
 
+    # This segment and the next, at 720p and the source's rate.
+    assert asked == [(2, 720, 0), (3, 720, 0)]
     decode, encode = seen["decode"], seen["encode"]
-    # Scaled before drawing: a lighter rung is cheaper to interpolate.
+    assert decode[decode.index("-i") + 1] == (
+        f"concat:{tmp_path / 'raw2.ts'}|{tmp_path / 'raw3.ts'}"
+    )
     assert seen["size"] == (1280, 720)
-    assert "scale=1280:720,format=rgb24" in decode
     # Two frames past the end, so the last ones have a right-hand side.
     assert decode[decode.index("-t") + 1] == f"{6 + 2 / 24:.3f}"
     assert seen["count"] == 360
     assert encode[encode.index("-r") + 1] == "60"
-    # The chosen audio track, from the source read a second time.
-    assert "1:a:1?" in encode
+    # The audio already made, copied.
+    assert encode[encode.index("-c:a") + 1] == "copy"
+    assert encode[encode.index("-output_ts_offset") + 1] == "12.000"
     # Priced up for the extra frames: 2500k at sqrt(60/24).
     assert encode[encode.index("-maxrate") + 1] == "3952k"
 
@@ -137,6 +149,7 @@ def test_without_a_gpu_the_source_rate_is_sent(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(downloaded.subprocess, "run", fake_run)
 
+    assert downloaded.hls_drawn(file, "film.mkv", 2, fps=60) is None
     assert downloaded.hls_segment(file, "film.mkv", 2, fps=60)
     assert "-vf" not in commands[0]
 

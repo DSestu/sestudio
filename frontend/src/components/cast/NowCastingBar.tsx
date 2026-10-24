@@ -323,6 +323,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
                     />
                     <CastFrameRate
                       url={target === 'chromecast' ? cast.mediaUrl : undefined}
+                      position={live.position}
                       disabled={switching}
                       onChange={changeLive}
                     />

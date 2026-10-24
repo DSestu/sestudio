@@ -5,9 +5,9 @@ import {
 import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/layouts/default'
 import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
-import { castLive, type StreamSource } from '../../api'
+import { castLive, mediaPlayhead, type StreamSource } from '../../api'
 import { useMediaOptions } from '../../useMediaOptions'
-import { useBrowserFps } from '../../browserFps'
+import { setBrowserAiShown, useBrowserAiShown, useBrowserFps } from '../../browserFps'
 import { ladderUrlOf, withFps } from '../../frameRates'
 import type { PlayableEpisode } from '../../providers'
 import { getProgress, saveProgress, setWatched, watchKey } from '../../watchState'
@@ -51,6 +51,21 @@ interface Props {
  * autoplay transition preserves fullscreen (the browser won't let us re-enter
  * fullscreen without a user gesture on `ended`).
  */
+/** Drop what hls.js buffered past the next segment and fetch it again: the
+ *  same level (or Auto again) asked for, which it takes as a switch. */
+function refetchAhead(player: MediaPlayerInstance | null): void {
+  const provider = player?.provider
+  if (!isHLSProvider(provider) || !provider.instance) return
+  const hls = provider.instance
+  hls.nextLevel = hls.autoLevelEnabled ? -1 : hls.currentLevel
+}
+
+/** How many seconds hls.js reads ahead, changed as it plays. */
+function setReadAhead(player: MediaPlayerInstance | null, seconds: number): void {
+  const provider = player?.provider
+  if (isHLSProvider(provider) && provider.instance) provider.instance.config.maxBufferLength = seconds
+}
+
 export default function VideoPane({
   ep, source, probing, pending = null, nextTitle, autoplay, onSourceError, onAdvance, onPosition,
 }: Props) {
@@ -86,15 +101,69 @@ export default function VideoPane({
     if (!loaded.url) return
     if (playingFps === (sentFps.current[loaded.live] ?? loaded.fps)) return
     sentFps.current[loaded.live] = playingFps
-    castLive(loaded.live, 0, playingFps).then(() => {
-      const provider = playerRef.current?.provider
-      if (!isHLSProvider(provider) || !provider.instance) return
-      const hls = provider.instance
-      // Same level (or Auto again): hls.js drops what it buffered past the
-      // next segment and fetches it anew, now at the new rate.
-      hls.nextLevel = hls.autoLevelEnabled ? -1 : hls.currentLevel
-    }).catch(() => {})
+    castLive(loaded.live, 0, playingFps).then(() => refetchAhead(playerRef.current)).catch(() => {})
   }, [loaded, playingFps])
+
+  // Whether AI frames are on screen, from the frames the video decodes a
+  // second: the server sends the source's rate until the drawn ones are ready.
+  const sourceFps = known?.fps ?? 0
+
+  // While AI frames are asked for, say where it plays every few seconds: the
+  // server draws from just past there. It answers how far ahead it has them
+  // drawn, which is how far the player reads ahead — never so far that it
+  // asks for segments not drawn yet and is sent the source's rate — and
+  // whether to swap: fetch again what it buffered at the source's rate, so
+  // AI frames show from the next segment rather than after that plays out.
+  // Swapped once until they show: a refetch empties the buffer past the next
+  // segment, and asked twice it would empty it again before it refilled.
+  const aiShown = useBrowserAiShown()
+  const drawing = Boolean(ladderUrl && sourceFps && playingFps > sourceFps)
+  useEffect(() => {
+    if (!drawing || !ladderUrl) return
+    let live = true
+    let swapped = false
+    const tell = async () => {
+      const p = playerRef.current
+      if (!p || p.paused) return
+      const { swap, ready } = await mediaPlayhead(ladderUrl, p.currentTime)
+      if (!live) return
+      setReadAhead(p, Math.min(30, Math.max(8, ready - 6)))
+      if (swap && !swapped && !aiShown) {
+        swapped = true
+        refetchAhead(p)
+      }
+    }
+    const timer = window.setInterval(() => { void tell() }, 2000)
+    return () => { live = false; window.clearInterval(timer) }
+  }, [drawing, ladderUrl, aiShown])
+
+  // Seconds the player reads ahead: hls.js's own half minute, or little more
+  // than a segment to start with while AI frames are asked for — whatever it
+  // holds at the source's rate plays before them. The check-in above raises it
+  // as far as the server has them drawn.
+  const readAhead = sourceFps && playingFps > sourceFps ? 8 : 30
+  const readAheadRef = useRef(readAhead)
+  useEffect(() => {
+    readAheadRef.current = readAhead
+    setReadAhead(playerRef.current, readAhead)
+  }, [readAhead])
+
+  useEffect(() => {
+    setBrowserAiShown(false)
+    if (!sourceFps || playingFps <= sourceFps) return
+    let last: { frames: number; at: number } | null = null
+    const timer = window.setInterval(() => {
+      const video = playerRef.current?.el?.querySelector('video')
+      if (!video || video.paused || video.seeking) { last = null; return }
+      const now = { frames: video.getVideoPlaybackQuality().totalVideoFrames, at: performance.now() }
+      if (last && now.at > last.at) {
+        const rate = (now.frames - last.frames) / ((now.at - last.at) / 1000)
+        setBrowserAiShown(rate > sourceFps * 1.2)
+      }
+      last = now
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [sourceFps, playingFps, loaded.live])
 
   // Drives the layout choice below: the small (mobile) layout drops the
   // timeline, which is wrong for a popped-out window.
@@ -134,6 +203,7 @@ export default function VideoPane({
         const p = playerRef.current
         return p ? bufferedAhead(p.state.buffered, p.state.currentTime) : 0
       },
+      height: () => playerRef.current?.state.quality?.height ?? 0,
     })
   }, [paused])
   useEffect(() => () => setBrowserPlayerControls(null), [])
@@ -272,6 +342,11 @@ export default function VideoPane({
       {displaySource && (
         <MediaPlayer
           ref={playerRef}
+          onProviderChange={provider => {
+            if (isHLSProvider(provider)) {
+              provider.config = { ...provider.config, maxBufferLength: readAheadRef.current }
+            }
+          }}
           className="w-full h-full"
           title={ep.title}
           src={{
