@@ -102,6 +102,8 @@ def test_a_higher_rate_segment_is_drawn_from_the_source_rate_s_on_disk(
         return True
 
     monkeypatch.setattr(interpolate, "run_pipeline", fake_pipeline)
+    # A film with non-square pixels, as its segments carry them.
+    monkeypatch.setattr(downloaded, "_sar_of", lambda _segment: "159/160")
 
     assert downloaded.hls_drawn(file, "film.mkv", 2, audio=1, rung=720, fps=60)
 
@@ -116,6 +118,8 @@ def test_a_higher_rate_segment_is_drawn_from_the_source_rate_s_on_disk(
     assert decode[decode.index("-t") + 1] == f"{6 + 2 / 24:.3f}"
     assert seen["count"] == 360
     assert encode[encode.index("-r") + 1] == "60"
+    # Their shape put back: raw frames carry none, and the picture would widen.
+    assert encode[encode.index("-vf") + 1].endswith(",setsar=159/160")
     # The audio already made, copied.
     assert encode[encode.index("-c:a") + 1] == "copy"
     assert encode[encode.index("-output_ts_offset") + 1] == "12.000"

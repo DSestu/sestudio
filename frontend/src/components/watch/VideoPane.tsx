@@ -7,7 +7,7 @@ import '@vidstack/react/player/styles/default/theme.css'
 import '@vidstack/react/player/styles/default/layouts/video.css'
 import { castLive, mediaPlayhead, type StreamSource } from '../../api'
 import { useMediaOptions } from '../../useMediaOptions'
-import { setBrowserAiShown, useBrowserAiShown, useBrowserFps } from '../../browserFps'
+import { setBrowserAiShown, useBrowserAiShown, useBrowserFps, useBrowserQuality } from '../../browserFps'
 import { ladderUrlOf, withFps } from '../../frameRates'
 import type { PlayableEpisode } from '../../providers'
 import { getProgress, saveProgress, setWatched, watchKey } from '../../watchState'
@@ -102,14 +102,27 @@ export default function VideoPane({
   // The rate a video loads at. A change while it plays goes to the server under
   // the video's own `live` id, as a cast's does, and the player fetches again
   // what it had buffered past the next segment: no reload, no jump.
-  const [loaded, setLoaded] = useState(() => ({ url: ladderUrl, fps: playingFps, live: crypto.randomUUID() }))
-  if (loaded.url !== ladderUrl) setLoaded({ url: ladderUrl, fps: playingFps, live: crypto.randomUUID() })
-  const mediaUrl = displaySource
-    ? ladderUrl ? `${withFps(ladderUrl, loaded.fps)}&live=${loaded.live}` : displaySource.proxy_url
-    : ''
+  // At the source's own quality and frame rate, the video untouched — the
+  // host's stream, or the file — when there is such a thing: nothing to encode.
+  // Anything else, AI frames on the source's quality included, is the server's
+  // re-encoding; moving between the two reloads the player where it was.
+  const quality = useBrowserQuality()
+  const direct = displaySource?.direct
+  const untouched = Boolean(direct) && quality === undefined && !playingFps
+  const [loaded, setLoaded] = useState(() => ({
+    url: ladderUrl, untouched, fps: playingFps, live: crypto.randomUUID(),
+  }))
+  if (loaded.url !== ladderUrl || loaded.untouched !== untouched) {
+    setLoaded({ url: ladderUrl, untouched, fps: playingFps, live: crypto.randomUUID() })
+  }
+  const mediaUrl = !displaySource ? ''
+    : untouched && direct ? direct.url
+      : ladderUrl ? `${withFps(ladderUrl, loaded.fps)}&live=${loaded.live}`
+        : displaySource.proxy_url
+  const mediaKind = untouched && direct ? direct.kind : displaySource?.kind
   const sentFps = useRef<Record<string, number>>({})
   useEffect(() => {
-    if (!loaded.url) return
+    if (!loaded.url || loaded.untouched) return
     if (playingFps === (sentFps.current[loaded.live] ?? loaded.fps)) return
     sentFps.current[loaded.live] = playingFps
     castLive(loaded.live, 0, playingFps).then(() => refetchAhead(playerRef.current)).catch(() => {})
@@ -199,13 +212,6 @@ export default function VideoPane({
   useEffect(() => {
     setBrowserPlayerControls({
       qualities,
-      setQuality: (height: number | undefined) => {
-        savePlayerPrefs({ quality: height })
-        const p = playerRef.current
-        if (!p) return
-        if (height === 0) p.qualities.autoSelect()
-        else pickQuality(p.qualities.toArray(), height ?? Infinity)
-      },
       isPaused: paused,
       playPause: () => {
         const p = playerRef.current
@@ -227,6 +233,14 @@ export default function VideoPane({
     })
   }, [paused, qualities])
   useEffect(() => () => setBrowserPlayerControls(null), [])
+
+  // A quality picked while it plays: Auto, or the rendition closest below.
+  useEffect(() => {
+    const p = playerRef.current
+    if (!p || p.qualities.length < 2) return
+    if (quality === 0) p.qualities.autoSelect()
+    else pickQuality(p.qualities.toArray(), quality ?? Infinity)
+  }, [quality, mediaUrl])
 
   // Push the saved caption appearance onto :root. vidstack's own Caption Styles
   // menu writes the same variables but only for the session, so without this a
@@ -259,16 +273,19 @@ export default function VideoPane({
     setNextIn(null)
   }
 
-  // A new source for the *same* episode — another audio track, or a fallback to
-  // a different host — reloads the media, and a reload starts at zero. Progress
-  // is written every few seconds, so re-arming the resume puts playback back
-  // within a moment of where it was rather than at the beginning. Skipped on the
-  // first source, which the initial state already armed.
+  // A new source for the *same* episode — another audio track, a fallback to a
+  // different host, the untouched stream for the re-encoded one or back —
+  // reloads the media, and a reload starts at zero: it resumes where it played,
+  // or failing that where progress was last saved. Skipped on the first
+  // source, which the initial state already armed.
   const srcKey = mediaUrl
   const [armedSrc, setArmedSrc] = useState(srcKey)
+  const [heldAt, setHeldAt] = useState<{ key: string; at: number } | null>(null)
   if (armedSrc !== srcKey) {
     setArmedSrc(srcKey)
-    if (armedSrc && srcKey) setResumeTo(resumePointFor(ep))
+    if (armedSrc && srcKey) {
+      setResumeTo(heldAt?.key === epKey ? heldAt.at : resumePointFor(ep))
+    }
   }
 
   // Pending retry of a refused autoplay; cleared on unmount so a torn-down
@@ -342,6 +359,11 @@ export default function VideoPane({
     if (!p) return
     updateBrowserPlayback(p.currentTime, p.duration)
     onPosition(p.currentTime)
+    // Held to the second, for a reload of this episode (see `armedSrc`).
+    const second = Math.floor(p.currentTime)
+    if (second > 0 && (heldAt?.key !== epKey || heldAt.at !== second)) {
+      setHeldAt({ key: epKey, at: second })
+    }
     const now = Date.now()
     if (now - lastSaveRef.current >= SAVE_INTERVAL) {
       lastSaveRef.current = now
@@ -368,7 +390,7 @@ export default function VideoPane({
           title={ep.title}
           src={{
             src: mediaUrl,
-            type: displaySource.kind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
+            type: mediaKind === 'hls' ? 'application/x-mpegurl' : 'video/mp4',
           }}
           autoPlay={!castedSameEp}
           playsInline
@@ -425,7 +447,12 @@ export default function VideoPane({
 
             smallLayoutWhen={pipWindow ? false : undefined}
           />
-          <BufferingInfo source={displaySource} />
+          {/* Untouched, nothing is being encoded: what it waits on is the host. */}
+          <BufferingInfo
+            source={untouched && direct
+              ? { ...displaySource, kind: direct.kind, transcode_url: undefined }
+              : displaySource}
+          />
         </MediaPlayer>
       )}
 

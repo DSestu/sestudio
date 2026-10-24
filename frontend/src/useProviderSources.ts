@@ -17,7 +17,13 @@ async function probeSource(provider: string, embedUrl: string, signal: AbortSign
   // lighter quality on a slow link. A TV is sent the stream itself: the server
   // decides there whether it needs re-encoding (HLS, or a lighter quality).
   return src.transcode_url
-    ? { ...src, proxy_url: src.transcode_url, kind: 'hls', dlna_url: src.proxy_url }
+    ? {
+      ...src,
+      proxy_url: src.transcode_url,
+      kind: 'hls',
+      dlna_url: src.proxy_url,
+      direct: { url: src.proxy_url, kind: src.kind },
+    }
     : src
 }
 

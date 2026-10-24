@@ -663,6 +663,11 @@ class Builds:
         if found is not None and not found[1].is_set():
             return found[0]
         self.mark(media, settings)
+        # Built already: answered at once rather than in line behind the others.
+        if (path := self.ready(media, settings, index)) is not None:
+            made: Future[Path | None] = Future()
+            made.set_result(path)
+            return made
         stop = threading.Event()
         entry = (self.pool.submit(interpolate.cancellable, stop, build), stop)
         self.pending[key] = entry
@@ -735,8 +740,11 @@ class Builds:
 #: about a second of work, and three at a time keep one viewer's read-ahead
 #: from being serialised without letting two take the machine.
 RAW = Builds(3, "hls")
-#: The same segments at a rate above the source's, drawn by AI from those.
-DRAWN = Builds(3, "hls-ai")
+#: The same segments at a rate above the source's, drawn by AI from those —
+#: one at a time, nearest first. Drawn side by side they share the GPU and
+#: each takes as many times longer: a GPU that keeps up overall still finishes
+#: each one after the player has gone past it, and none is ever shown.
+DRAWN = Builds(1, "hls-ai")
 
 #: Segments made ahead of the one asked for, at the source's rate: the next
 #: ones the player asks for answer at once, so its measure of the connection is
@@ -1134,6 +1142,9 @@ async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
     return {
         "audio": [_track_payload(track) for track in tracks.audio],
         "subtitles": subtitles,
+        # Whether a browser plays the file as it is, its first voice included:
+        # then the source's own quality needs no re-encoding at all.
+        "playable": await asyncio.to_thread(downloaded.browser_can_play, target),
     }
 
 

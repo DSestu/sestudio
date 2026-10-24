@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import os
+import subprocess
 import threading
 from typing import Any
 
@@ -148,8 +149,10 @@ async def post_ai_setup() -> dict[str, Any]:
 
 @router.get("/server")
 async def get_server() -> dict[str, str]:
-    """How a restart would start the server again (see ``restart.command``)."""
-    return {"restart": restart.command()[1]}
+    """How a restart would start the server again, and the command it would run
+    (see ``restart.command``)."""
+    argv, how, _cwd = await asyncio.to_thread(restart.command)
+    return {"restart": how, "command": subprocess.list2cmdline(argv)}
 
 
 @router.post("/server/restart")
