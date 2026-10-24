@@ -23,6 +23,8 @@ from sestudio.web.proxy import (
     verify,
 )
 from sestudio.web.routes.downloaded import (
+    Pending,
+    queue_latest,
     check_fps,
     live_settings,
     segment_settings,
@@ -297,22 +299,21 @@ def proxy_stream(token: str, request: Request) -> Response:
 
 
 _TRANSCODE_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="stream-hls")
-_TRANSCODE_PENDING: dict[str, Future[Path | None]] = {}
+_TRANSCODE_PENDING: Pending = {}
 
 
 def _queue_segment(
     url: str, index: int, rung: int, hls: bool, fps: int = 0
 ) -> Future[Path | None]:
     """The running build for one segment, coalesced as for a stored file."""
-    key = f"{url}|{index}|{rung}|{fps}"
-    future = _TRANSCODE_PENDING.get(key)
-    if future is None:
-        future = _TRANSCODE_POOL.submit(
-            lambda: downloaded.stream_segment(url, index, rung, hls=hls, fps=fps)
-        )
-        _TRANSCODE_PENDING[key] = future
-        future.add_done_callback(lambda _f, k=key: _TRANSCODE_PENDING.pop(k, None))
-    return future
+    return queue_latest(
+        _TRANSCODE_PENDING,
+        _TRANSCODE_POOL,
+        url,
+        (rung, fps),
+        index,
+        lambda: downloaded.stream_segment(url, index, rung, hls=hls, fps=fps),
+    )
 
 
 async def _probe(request: Request, token: str) -> tuple[str, downloaded.StreamProbe]:

@@ -29,7 +29,7 @@ import sys
 import sysconfig
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -530,6 +530,22 @@ def sustains(fps: float, source_fps: float, width: int, height: int) -> bool:
     return (fps - source_fps) * area <= drawn * _HEADROOM
 
 
+_stop = threading.local()
+
+
+def cancellable(stop: threading.Event, build: Callable[[], Any]) -> Any:
+    """*build*, run with *stop* as its way out: None at once if *stop* is set
+    before it starts, and any drawing it does ends at the next frame once
+    *stop* is set. For a segment no player wants any more."""
+    if stop.is_set():
+        return None
+    _stop.event = stop
+    try:
+        return build()
+    finally:
+        _stop.event = None
+
+
 def run_pipeline(
     decode: list[str],
     encode: list[str],
@@ -552,7 +568,10 @@ def run_pipeline(
     try:
         assert dec.stdout is not None and enc.stdin is not None
         frames = read_frames(dec.stdout, width, height)
+        stop = getattr(_stop, "event", None)
         for frame in frames_at(frames, src_fps, out_fps, count):
+            if stop is not None and stop.is_set():
+                return False
             enc.stdin.write(frame.tobytes())
         enc.stdin.close()
         return enc.wait() == 0
