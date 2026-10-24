@@ -307,14 +307,14 @@ def test_options_say_when_ai_is_still_being_fetched(client, monkeypatch):
     ("source_fps", "gpu", "speed", "offered"),
     [
         # A film: every rate is above it, drawn by AI — only with a GPU.
-        (23.976, True, 1000.0, [30, 60, 120, 144]),
+        (23.976, True, 1000.0, [30, 60, 90, 120, 144]),
         (23.976, False, 1000.0, []),
-        # A GPU drawing 100 frames a second at 720p: 75 is the budget, so 60
-        # (36 drawn a second) holds and 120 (96) would fall behind.
-        (23.976, True, 100.0, [30, 60]),
+        # A GPU drawing 100 frames a second at 720p: 75 is the budget, so 90
+        # (66 drawn a second) holds and 120 (96) would fall behind.
+        (23.976, True, 100.0, [30, 60, 90]),
         # 60 fps: 30 is a drop and needs nothing; 60 is the source itself.
         (60.0, False, 1000.0, [30]),
-        (60.0, True, 1000.0, [30, 120, 144]),
+        (60.0, True, 1000.0, [30, 90, 120, 144]),
         # Unknown rate: nothing can be worked out from it.
         (0.0, True, 1000.0, []),
     ],
