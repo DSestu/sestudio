@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.21.0](https://github.com/DSestu/sestudio/compare/v0.20.0...v0.21.0) (2026-10-24)
+
+
+### New features
+
+* cast at another frame rate, and change quality or rate without a restart ([#78](https://github.com/DSestu/sestudio/issues/78)) ([92c8d98](https://github.com/DSestu/sestudio/commit/92c8d98dd9fd12edcb374957f1380df647f44aa1))
+* change the browser player's frame rate in place, as a cast does ([#90](https://github.com/DSestu/sestudio/issues/90)) ([72d0fc8](https://github.com/DSestu/sestudio/commit/72d0fc81deaa4f7fd6e23dc8e66fabfbb84e343f))
+* fetch the AI runtime on first use, uncap TVs, and move the rate picker ([#80](https://github.com/DSestu/sestudio/issues/80)) ([233a433](https://github.com/DSestu/sestudio/commit/233a433fb31c1f3771c873ed306a0139f73971c6))
+* offer 90 fps, and trim the frame rate picker to numbers and a sparkle ([#83](https://github.com/DSestu/sestudio/issues/83)) ([6382c3a](https://github.com/DSestu/sestudio/commit/6382c3a5dd231040a268da1140e829ba7bd49f92))
+* offer every cast quality up to the source's own, above 1080p too ([#75](https://github.com/DSestu/sestudio/issues/75)) ([5c9d409](https://github.com/DSestu/sestudio/commit/5c9d409647cdf7d09c84d8d94995305b3644d07f))
+* offer only the frame rates this GPU can draw in time ([#79](https://github.com/DSestu/sestudio/issues/79)) ([3a6c745](https://github.com/DSestu/sestudio/commit/3a6c745392498103f93c2c09d7444a0250a7a115))
+* pick a frame rate up to 144 fps, the frames in between drawn by AI ([#77](https://github.com/DSestu/sestudio/issues/77)) ([f4b2a53](https://github.com/DSestu/sestudio/commit/f4b2a533628e9fcc41352353d4937a1d4a326c85))
+* pick the frame rate from a dropdown beside the cast button on a phone ([#84](https://github.com/DSestu/sestudio/issues/84)) ([047b5ad](https://github.com/DSestu/sestudio/commit/047b5ad9ad7066160a6d3ae421269eb1a35d27b1))
+* play the source's rate until AI frames are ready, and swap to them as they are ([#91](https://github.com/DSestu/sestudio/issues/91)) ([0199ced](https://github.com/DSestu/sestudio/commit/0199ced97ee160aa27880fbbf885a064c6a3e495))
+* quality, frame rate, voice and captions as dropdowns, Source by default, and a restart button ([#92](https://github.com/DSestu/sestudio/issues/92)) ([8ed7d80](https://github.com/DSestu/sestudio/commit/8ed7d80275e9258a5a355a80ddc545ec817b042d))
+* show live GPU, CPU, memory and buffer graphs while AI draws frames ([#87](https://github.com/DSestu/sestudio/issues/87)) ([f3b144a](https://github.com/DSestu/sestudio/commit/f3b144aaeca221fa16fce661c695a5f9d8a46e15))
+* show the AI setup's progress, and run it again or turn it off from the settings ([#88](https://github.com/DSestu/sestudio/issues/88)) ([59e4aea](https://github.com/DSestu/sestudio/commit/59e4aeabf1b8381597f566d4d1b509117640126f))
+* smooth anime's held drawings with AI frames, up to a hold set in Settings and under the player ([#96](https://github.com/DSestu/sestudio/issues/96)) ([0314ec1](https://github.com/DSestu/sestudio/commit/0314ec13ed36cb50dc1f8181be27f17483dde1c7))
+
+
+### Bug fixes
+
+* call the player's buffer graph what it shows, seconds playable ahead ([#89](https://github.com/DSestu/sestudio/issues/89)) ([6ff7bdd](https://github.com/DSestu/sestudio/commit/6ff7bddb1caf18e0a22fe8fda03fcbddeffbf268))
+* cap the player's buffer by size too while AI is on, and show LIVE for segments sent as AI ([#95](https://github.com/DSestu/sestudio/issues/95)) ([5078d94](https://github.com/DSestu/sestudio/commit/5078d945aacba3aee10fef4ab6d74bd81daf964c))
+* draw AI frames in time for the player, play Source untouched, and restart with the launch command ([#93](https://github.com/DSestu/sestudio/issues/93)) ([302b0ff](https://github.com/DSestu/sestudio/commit/302b0ff7f3d7cd0e2dfd80414172489846fb24cc))
+* keep the position when changing frame rate, and name the TV's rate ([#82](https://github.com/DSestu/sestudio/issues/82)) ([826efb6](https://github.com/DSestu/sestudio/commit/826efb6b7edd1fe0ffadf42f33f97e664b4d8b9e))
+* let TensorRT draw frames for 144p pictures narrower than 256 pixels ([#85](https://github.com/DSestu/sestudio/issues/85)) ([6ad37cb](https://github.com/DSestu/sestudio/commit/6ad37cb15c856f3534c80359745611b3ad5a0c2c))
+* unlock vidzy streams past 90 s with its gate key, and stop hammering a refusing source ([#94](https://github.com/DSestu/sestudio/issues/94)) ([17281ad](https://github.com/DSestu/sestudio/commit/17281add6e77a6fb3b8487914e9cb25e67605c2f))
+
+
+### Performance improvements
+
+* draw AI frames on TensorRT on NVIDIA, and convert them on the GPU ([#81](https://github.com/DSestu/sestudio/issues/81)) ([958f3ef](https://github.com/DSestu/sestudio/commit/958f3ef8ac4c1dc6ab462e5a0d9a0f989aebc364))
+* stop building segments at a setting the player has left ([#86](https://github.com/DSestu/sestudio/issues/86)) ([10daff5](https://github.com/DSestu/sestudio/commit/10daff56e9be4ba98b0324decb9c79f4ab46cf23))
+
 ## [0.20.0](https://github.com/DSestu/sestudio/compare/v0.19.0...v0.20.0) (2026-10-23)
 
 
