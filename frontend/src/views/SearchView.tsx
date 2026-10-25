@@ -5,6 +5,8 @@ import type {
 } from '../api'
 import { cachedSearchSources, checkDownloads, getSeason, postDownloads, retrySearchSources, searchPeople } from '../api'
 import SourceChips from '../components/search/SourceChips'
+import SourcesPanel from '../components/search/SourcesPanel'
+import ResponsiveModal from '../components/ResponsiveModal'
 import { countBySource, filterBySources, formatSources, parseSources } from '../sourceFilter'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import DiscoverPanel from '../components/DiscoverPanel'
@@ -31,7 +33,7 @@ import ReleaseFilter from '../components/ReleaseFilter'
 import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
 import { KINDS, type Kind, matchesKind, parseKind } from '../titleSearch'
 import { KindSegments, OptionsButton } from '../components/search/SearchParts'
-import { OPTIONS_ID, setSearchOptionsSummary, useSearchOptions } from '../searchOptions'
+import { OPTIONS_ID, setSearchOptionsSummary, setSourcesPanel, useSearchOptions } from '../searchOptions'
 import { useScrolledDown } from '../useScrolledDown'
 
 interface Props {
@@ -130,7 +132,9 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     [merged],
   )
   const folded = useScrolledDown() && lastQuery !== ''
-  const optionsOpen = useSearchOptions().open
+  const { open: optionsOpen, sourcesOpen } = useSearchOptions()
+  // The phone has no room for a side panel: the same list opens as a sheet.
+  const [sheetOpen, setSheetOpen] = useState(false)
   // What the Options button says while the fold is shut, so a filter hidden
   // inside it is never invisible.
   useEffect(() => {
@@ -260,6 +264,20 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       onClear={() => setPicked(new Set())}
       onRetry={ids => void retrySources(ids)}
       retrying={retrying}
+      onShowAll={() => (window.matchMedia('(min-width: 768px)').matches ? setSourcesPanel(!sourcesOpen) : setSheetOpen(true))}
+    />
+  )
+  const panel = (onClose: () => void) => (
+    <SourcesPanel
+      sources={sources}
+      counts={sourceCounts}
+      picked={picked}
+      onToggle={toggleSource}
+      onOnly={id => setPicked(new Set([id]))}
+      onClear={() => setPicked(new Set())}
+      onRetry={ids => void retrySources(ids)}
+      retrying={retrying}
+      onClose={onClose}
     />
   )
 
@@ -323,7 +341,8 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex items-start">
+    <div className="flex-1 min-w-0 flex flex-col gap-5">
       {/* Desktop searches from the bar pinned above every page; this one
           stays mounted there all the same, as it runs the page's search. */}
       {/* Phone: the search alone on one row, the kinds alone on the next.
@@ -359,7 +378,8 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         )}
         {lastQuery !== '' && chips('flex mt-3')}
       </div>
-      {lastQuery !== '' && chips('hidden md:flex')}
+      {/* Desktop: the panel lists every source, so the row steps aside for it. */}
+      {lastQuery !== '' && !sourcesOpen && chips('hidden md:flex')}
 
       {/* Every control the results have, folded behind the one Options button
           (in the pinned bar on desktop, beside the kinds on phones). Inline, so
@@ -628,6 +648,29 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           onCancel={() => setPendingItems(null)}
         />
       )}
+
+      {sheetOpen && (
+        <ResponsiveModal onClose={() => setSheetOpen(false)} boxClassName="max-h-[80dvh] overflow-y-auto">
+          {panel(() => setSheetOpen(false))}
+        </ResponsiveModal>
+      )}
+    </div>
+
+    {/* Desktop: every source as a histogram, beside the results. It pushes the
+        grid narrower on wide windows and floats over it on narrower ones. */}
+    {lastQuery !== '' && (
+      <aside
+        aria-label="Sources"
+        inert={!sourcesOpen}
+        className={`hidden md:block shrink-0 overflow-hidden rounded-box border-base-300 bg-base-200 transition-[width,margin,opacity] duration-[320ms] ease-smooth motion-reduce:transition-none
+          fixed right-4 top-20 z-30 shadow-2xl min-[1100px]:sticky min-[1100px]:right-auto min-[1100px]:top-24 min-[1100px]:z-auto min-[1100px]:shadow-none min-[1100px]:bg-base-200/60
+          ${sourcesOpen ? 'w-72 border opacity-100 min-[1100px]:ml-6' : 'w-0 opacity-0'}`}
+      >
+        <div className={`w-72 max-h-[calc(100dvh-7rem)] overflow-y-auto p-4 transition-transform duration-[320ms] ease-smooth motion-reduce:transition-none ${sourcesOpen ? 'translate-x-0' : 'translate-x-4'}`}>
+          {panel(() => setSourcesPanel(false))}
+        </div>
+      </aside>
+    )}
     </div>
   )
 }

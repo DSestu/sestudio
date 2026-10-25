@@ -1,4 +1,5 @@
 import type { SourceReport } from '../../api'
+import { sourceHue, sourceInitials } from '../../sourceLook'
 
 interface Props {
   sources: SourceReport[]
@@ -9,32 +10,21 @@ interface Props {
   onClear: () => void
   onRetry: (ids: string[]) => void
   retrying: boolean
+  /** Opens every source at once: the side panel, or the phone's sheet. */
+  onShowAll: () => void
   /** Must set the display (`flex`, or `hidden md:flex`). */
   className?: string
 }
 
-/** A hue from the name, so each source keeps its colour everywhere. */
-function hue(name: string): number {
-  let h = 7
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
-  return h % 360
-}
-
-/** Two letters, so FStream (FS) and French-Manga (FM) don't both read "F". */
-function initials(name: string): string {
-  const words = name.split(/[\s\-_.]+/).filter(Boolean)
-  return (words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2)).toUpperCase()
-}
-
 export function SourceAvatar({ name, small = false }: { name: string; small?: boolean }) {
-  const h = hue(name)
+  const h = sourceHue(name)
   return (
     <span
       aria-hidden="true"
       className={`${small ? 'w-4 h-4 text-[8px]' : 'w-5 h-5 text-[9px]'} shrink-0 rounded-full grid place-items-center font-extrabold`}
       style={{ background: `oklch(78% .11 ${h})`, color: `oklch(20% .05 ${h})` }}
     >
-      {initials(name)}
+      {sourceInitials(name)}
     </span>
   )
 }
@@ -45,7 +35,7 @@ export function SourceAvatar({ name, small = false }: { name: string; small?: bo
  * found nothing stay out of the row; ones that failed or timed out share one
  * chip that retries them.
  */
-export default function SourceChips({ sources, counts, picked, onToggle, onClear, onRetry, retrying, className = 'flex' }: Props) {
+export default function SourceChips({ sources, counts, picked, onToggle, onClear, onRetry, retrying, onShowAll, className = 'flex' }: Props) {
   const answered = sources.filter(s => s.status === 'ok')
   const failed = sources.filter(s => s.status === 'failed' || s.status === 'timeout')
   // Nothing to choose between: one source, or none.
@@ -62,7 +52,7 @@ export default function SourceChips({ sources, counts, picked, onToggle, onClear
       {order.map(s => {
         const n = count(s.id)
         const on = picked.has(s.id)
-        const h = hue(s.name)
+        const h = sourceHue(s.name)
         return (
           <button
             key={s.id}
@@ -100,6 +90,17 @@ export default function SourceChips({ sources, counts, picked, onToggle, onClear
           {failed.length === 1 ? `${failed[0].name} didn't answer` : `${failed.length} didn't answer`}
         </button>
       )}
+      <button
+        type="button"
+        onClick={onShowAll}
+        title="All sources, with what each found"
+        className="shrink-0 self-stretch flex items-center gap-1.5 rounded-box px-3 text-sm text-primary bg-base-200 hover:bg-base-300 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zM15 5v14" />
+        </svg>
+        All {sources.length}
+      </button>
       {picked.size > 0 && (
         <button type="button" onClick={onClear} className="shrink-0 self-center px-2 text-sm text-primary hover:underline">
           Clear
