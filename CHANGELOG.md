@@ -1,5 +1,75 @@
 # Changelog
 
+## [1.0.0](https://github.com/DSestu/sestudio/compare/v0.20.0...v1.0.0) (2026-10-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove the senpai stream source; fstream is now the default site ([#98](https://github.com/DSestu/sestudio/issues/98))
+
+### New features
+
+* add KissKH as a source for Asian dramas, films and anime, with its own Home rows and French subtitles ([#99](https://github.com/DSestu/sestudio/issues/99)) ([b719f86](https://github.com/DSestu/sestudio/commit/b719f8614dbf6133714a62819bb28f6662ed81cb))
+* add UniqueStream as a source, and browse every catalogue from a new Discover tab ([#100](https://github.com/DSestu/sestudio/issues/100)) ([611e858](https://github.com/DSestu/sestudio/commit/611e8582951611948f740f7a6ae646c26fa2d8f9))
+* browse FStream, French-Manga and KissKH from Discover, and link each source to its site ([#102](https://github.com/DSestu/sestudio/issues/102)) ([c43b205](https://github.com/DSestu/sestudio/commit/c43b2055aba5f3c5e50afcd7226bca9c233f94fd))
+* cast at another frame rate, and change quality or rate without a restart ([#78](https://github.com/DSestu/sestudio/issues/78)) ([92c8d98](https://github.com/DSestu/sestudio/commit/92c8d98dd9fd12edcb374957f1380df647f44aa1))
+* change the browser player's frame rate in place, as a cast does ([#90](https://github.com/DSestu/sestudio/issues/90)) ([72d0fc8](https://github.com/DSestu/sestudio/commit/72d0fc81deaa4f7fd6e23dc8e66fabfbb84e343f))
+* fetch the AI runtime on first use, uncap TVs, and move the rate picker ([#80](https://github.com/DSestu/sestudio/issues/80)) ([233a433](https://github.com/DSestu/sestudio/commit/233a433fb31c1f3771c873ed306a0139f73971c6))
+* fold the search page's controls behind one Options button ([#114](https://github.com/DSestu/sestudio/issues/114)) ([053098c](https://github.com/DSestu/sestudio/commit/053098ccd41e90a2ec1b48620f54ec072faec9c2))
+* give desktop Discover its rail and heading, and search one bar on every page ([#105](https://github.com/DSestu/sestudio/issues/105)) ([f849cf0](https://github.com/DSestu/sestudio/commit/f849cf0312b5e27dc6bda11aa5248287e1582eae))
+* give every empty search page a way out, and suggest the title a typo meant ([#123](https://github.com/DSestu/sestudio/issues/123)) ([2e6c5f6](https://github.com/DSestu/sestudio/commit/2e6c5f6d4e33d52547dd8d2b9969806f7c94a868))
+* give the phone search its own row and the kinds their own line, with counts ([#113](https://github.com/DSestu/sestudio/issues/113)) ([f712728](https://github.com/DSestu/sestudio/commit/f712728a10a140fc7725c7558794a71c950e3409))
+* list a mixed search as one row per kind, each with See all ([#118](https://github.com/DSestu/sestudio/issues/118)) ([955a82f](https://github.com/DSestu/sestudio/commit/955a82f36933ff8a914fb3775f0eaee98f9d087e))
+* list every search result in the phone Discover menu, under a frosted button that counts what's left ([#110](https://github.com/DSestu/sestudio/issues/110)) ([cc1c2b4](https://github.com/DSestu/sestudio/commit/cc1c2b48176f66a819d53093b8b0c3a540606236))
+* list the episodes on disk whose title matches a search, by show ([#121](https://github.com/DSestu/sestudio/issues/121)) ([9361d19](https://github.com/DSestu/sestudio/commit/9361d19810532d78193f8287a65cae3bce27ec01))
+* offer 90 fps, and trim the frame rate picker to numbers and a sparkle ([#83](https://github.com/DSestu/sestudio/issues/83)) ([6382c3a](https://github.com/DSestu/sestudio/commit/6382c3a5dd231040a268da1140e829ba7bd49f92))
+* offer every cast quality up to the source's own, above 1080p too ([#75](https://github.com/DSestu/sestudio/issues/75)) ([5c9d409](https://github.com/DSestu/sestudio/commit/5c9d409647cdf7d09c84d8d94995305b3644d07f))
+* offer only the frame rates this GPU can draw in time ([#79](https://github.com/DSestu/sestudio/issues/79)) ([3a6c745](https://github.com/DSestu/sestudio/commit/3a6c745392498103f93c2c09d7444a0250a7a115))
+* open every source of a search as a histogram, in a side panel or a sheet ([#116](https://github.com/DSestu/sestudio/issues/116)) ([ae14bd9](https://github.com/DSestu/sestudio/commit/ae14bd9768650556ab1f9a9c34a527c05bbef588))
+* pick a frame rate up to 144 fps, the frames in between drawn by AI ([#77](https://github.com/DSestu/sestudio/issues/77)) ([f4b2a53](https://github.com/DSestu/sestudio/commit/f4b2a533628e9fcc41352353d4937a1d4a326c85))
+* pick the frame rate from a dropdown beside the cast button on a phone ([#84](https://github.com/DSestu/sestudio/issues/84)) ([047b5ad](https://github.com/DSestu/sestudio/commit/047b5ad9ad7066160a6d3ae421269eb1a35d27b1))
+* play the source's rate until AI frames are ready, and swap to them as they are ([#91](https://github.com/DSestu/sestudio/issues/91)) ([0199ced](https://github.com/DSestu/sestudio/commit/0199ced97ee160aa27880fbbf885a064c6a3e495))
+* put the results page first in every search preview, remember recent searches, and grow the phone menu to the top while searching ([#107](https://github.com/DSestu/sestudio/issues/107)) ([baece96](https://github.com/DSestu/sestudio/commit/baece9617e215adc795fd6c431635a5e77890c4b))
+* quality, frame rate, voice and captions as dropdowns, Source by default, and a restart button ([#92](https://github.com/DSestu/sestudio/issues/92)) ([8ed7d80](https://github.com/DSestu/sestudio/commit/8ed7d80275e9258a5a355a80ddc545ec817b042d))
+* rate every source's Discover cards by their TMDB match ([#103](https://github.com/DSestu/sestudio/issues/103)) ([b1b1ee9](https://github.com/DSestu/sestudio/commit/b1b1ee9f49cf91704fb7335d85554ee281c79ef6))
+* remove the senpai stream source; fstream is now the default site ([#98](https://github.com/DSestu/sestudio/issues/98)) ([dfb57bc](https://github.com/DSestu/sestudio/commit/dfb57bc71b487684403f5013c8a428b505292978))
+* report how each source fared in a search, and stop waiting on a slow one ([#111](https://github.com/DSestu/sestudio/issues/111)) ([ece34b0](https://github.com/DSestu/sestudio/commit/ece34b0e1d21f5eeb41bf73c2ab0d7e88e2f646d))
+* save Discover cards to the watchlist and favourites again ([#106](https://github.com/DSestu/sestudio/issues/106)) ([2c88aaf](https://github.com/DSestu/sestudio/commit/2c88aafca94350e1978830be75f4cbdde9864b1a))
+* show a searched-for person as the top match, and only people with a face ([#122](https://github.com/DSestu/sestudio/issues/122)) ([efddd6e](https://github.com/DSestu/sestudio/commit/efddd6ea0a126a7e60f57dd1fbd4e7e4e1afb661))
+* show how many results each source found, and filter by clicking them ([#115](https://github.com/DSestu/sestudio/issues/115)) ([0eaaa9c](https://github.com/DSestu/sestudio/commit/0eaaa9ca9f79d738bb8e29ee6ce542fd9ce2ea5e))
+* show live GPU, CPU, memory and buffer graphs while AI draws frames ([#87](https://github.com/DSestu/sestudio/issues/87)) ([f3b144a](https://github.com/DSestu/sestudio/commit/f3b144aaeca221fa16fce661c695a5f9d8a46e15))
+* show the AI setup's progress, and run it again or turn it off from the settings ([#88](https://github.com/DSestu/sestudio/issues/88)) ([59e4aea](https://github.com/DSestu/sestudio/commit/59e4aeabf1b8381597f566d4d1b509117640126f))
+* show the search's clear top match big, with Play next to it ([#117](https://github.com/DSestu/sestudio/issues/117)) ([7c7b5a8](https://github.com/DSestu/sestudio/commit/7c7b5a86d0f50ee2e3ea9cdd985887ad3aa4b2ac))
+* smooth anime's held drawings with AI frames, up to a hold set in Settings and under the player ([#96](https://github.com/DSestu/sestudio/issues/96)) ([0314ec1](https://github.com/DSestu/sestudio/commit/0314ec13ed36cb50dc1f8181be27f17483dde1c7))
+* switch Discover sources on phones from a menu that slides out of the tab bar ([#104](https://github.com/DSestu/sestudio/issues/104)) ([556b6ef](https://github.com/DSestu/sestudio/commit/556b6efb8923916e325bad2ab52c952fb32b6542))
+* tell a search what's on disk as shows, and resume the top match from there ([#119](https://github.com/DSestu/sestudio/issues/119)) ([59d2579](https://github.com/DSestu/sestudio/commit/59d2579e9cac97b85b1273b2c1564e2d40606e68))
+* walk a top match's seasons and episodes on disk from the search page ([#120](https://github.com/DSestu/sestudio/issues/120)) ([d356aa4](https://github.com/DSestu/sestudio/commit/d356aa4f0ca1e663f99223eb7bff1288290d8e97))
+
+
+### Bug fixes
+
+* call the player's buffer graph what it shows, seconds playable ahead ([#89](https://github.com/DSestu/sestudio/issues/89)) ([6ff7bdd](https://github.com/DSestu/sestudio/commit/6ff7bddb1caf18e0a22fe8fda03fcbddeffbf268))
+* cap the player's buffer by size too while AI is on, and show LIVE for segments sent as AI ([#95](https://github.com/DSestu/sestudio/issues/95)) ([5078d94](https://github.com/DSestu/sestudio/commit/5078d945aacba3aee10fef4ab6d74bd81daf964c))
+* draw AI frames in time for the player, play Source untouched, and restart with the launch command ([#93](https://github.com/DSestu/sestudio/issues/93)) ([302b0ff](https://github.com/DSestu/sestudio/commit/302b0ff7f3d7cd0e2dfd80414172489846fb24cc))
+* keep the position when changing frame rate, and name the TV's rate ([#82](https://github.com/DSestu/sestudio/issues/82)) ([826efb6](https://github.com/DSestu/sestudio/commit/826efb6b7edd1fe0ffadf42f33f97e664b4d8b9e))
+* let Discover switch catalogue instead of snapping back to the current one ([#101](https://github.com/DSestu/sestudio/issues/101)) ([840cc5a](https://github.com/DSestu/sestudio/commit/840cc5ab03e405d5863d3e0bb5c72e6a1c8f5032))
+* let TensorRT draw frames for 144p pictures narrower than 256 pixels ([#85](https://github.com/DSestu/sestudio/issues/85)) ([6ad37cb](https://github.com/DSestu/sestudio/commit/6ad37cb15c856f3534c80359745611b3ad5a0c2c))
+* show FStream titles with their quotes instead of backslashes ([#112](https://github.com/DSestu/sestudio/issues/112)) ([1504269](https://github.com/DSestu/sestudio/commit/15042696c1facb3f5fb9a6046b6c29090e027d6f))
+* switch to another site when senpai's ad gate blocks a title, and stop logging players hanging up ([#97](https://github.com/DSestu/sestudio/issues/97)) ([785dcc8](https://github.com/DSestu/sestudio/commit/785dcc8288aaae6e34b5f67f5647e9cb1b9d3299))
+* unlock vidzy streams past 90 s with its gate key, and stop hammering a refusing source ([#94](https://github.com/DSestu/sestudio/issues/94)) ([17281ad](https://github.com/DSestu/sestudio/commit/17281add6e77a6fb3b8487914e9cb25e67605c2f))
+
+
+### Miscellaneous Chores
+
+* add build.sh and build.bat to rebuild the frontend by hand ([#108](https://github.com/DSestu/sestudio/issues/108)) ([ddf4857](https://github.com/DSestu/sestudio/commit/ddf4857d965646e61ec45aff344724768e2b90d1))
+* move Claude's repo memories into CLAUDE.md so they follow the repo ([#109](https://github.com/DSestu/sestudio/issues/109)) ([e6d5838](https://github.com/DSestu/sestudio/commit/e6d58387f0aad9074db423261cc2ba76f8e72e28))
+
+
+### Performance improvements
+
+* draw AI frames on TensorRT on NVIDIA, and convert them on the GPU ([#81](https://github.com/DSestu/sestudio/issues/81)) ([958f3ef](https://github.com/DSestu/sestudio/commit/958f3ef8ac4c1dc6ab462e5a0d9a0f989aebc364))
+* stop building segments at a setting the player has left ([#86](https://github.com/DSestu/sestudio/issues/86)) ([10daff5](https://github.com/DSestu/sestudio/commit/10daff56e9be4ba98b0324decb9c79f4ab46cf23))
+
 ## [0.20.0](https://github.com/DSestu/sestudio/compare/v0.19.0...v0.20.0) (2026-10-23)
 
 
