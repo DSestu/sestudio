@@ -174,3 +174,19 @@ def test_search_fails_only_when_every_site_fails(client):
     resp = client.get("/api/search?q=goblin")
     assert resp.status_code == 502
     assert "broken: failed" in resp.json()["detail"]
+
+
+def test_search_unescapes_quotes_in_titles(client, httpx_mock: HTTPXMock):
+    """The site's engine sends "l\\'ombre"; the card must read "l'ombre"."""
+    httpx_mock.add_response(url="https://fs03.lol", method="GET", text="")
+    httpx_mock.add_response(
+        url="https://fs03.lol/engine/ajax/search.php",
+        method="POST",
+        text="""
+<div class='search-item' onclick="location.href='/5-dans-l-ombre-des-dunes.html'">
+  <div class='search-info'><div class='search-title'>Dans l\\'ombre des dunes (2022)</div></div>
+</div>""",
+    )
+    card = client.get("/api/search?q=dunes").json()["cards"][0]
+    assert card["title"] == "Dans l'ombre des dunes"
+    assert card["series_name"] == "Dans l'ombre des dunes"
