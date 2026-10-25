@@ -9,6 +9,7 @@ interface Props {
   onOpenDetail: (card: SeasonCard) => void
   enrich: boolean
   posters: boolean
+  onDisk: ReadonlySet<string>
   /** "See all": show just this kind, as the full grid. */
   onSeeAll: (kind: Kind) => void
 }
