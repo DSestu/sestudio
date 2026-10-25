@@ -25,6 +25,8 @@ import NotificationsView from './views/NotificationsView'
 import PersonView from './views/PersonView'
 import SearchView from './views/SearchView'
 import { DiscoverMenu } from './components/discover/SourcePicker'
+import DesktopSearch from './components/search/DesktopSearch'
+import { type Kind, parseKind } from './titleSearch'
 import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
 
@@ -191,6 +193,11 @@ export default function App() {
    *  is a year either side: sources date a listing by its local release, which
    *  routinely lands a year off, while a remake is decades away. It shows in
    *  the search view's filter row and can be cleared there. */
+  /** The full results page for a typed search, narrowed to a kind. */
+  function searchTitles(term: string, kind: Kind) {
+    navigate('search', { q: term, only: kind === 'all' ? undefined : kind })
+  }
+
   function searchFor(term: string, year?: number) {
     navigate('search', {
       q: term,
@@ -244,6 +251,23 @@ export default function App() {
         catalogs={catalogs}
         catalogId={route.view === 'search' && !route.params.get('q') ? catalogId : ''}
         onOpenCatalog={openCatalog}
+        searchBar={
+          <DesktopSearch
+            // A fresh bar per visit, holding the query and kind of the page it is on.
+            key={route.visit}
+            catalogs={catalogs}
+            merge={{
+              preferredSite: settings.preferred_site,
+              mergeByTmdb: settings.tmdb_configured && settings.tmdb_merge,
+              collapseSeasons: settings.collapse_seasons !== false,
+            }}
+            query={route.view === 'search' ? route.params.get('q') ?? '' : ''}
+            kind={parseKind(route.params.get('only'))}
+            barless={route.view === 'watch'}
+            onOpenCard={card => openTitle(card, 0, settings.lang)}
+            onSearch={searchTitles}
+          />
+        }
       >
         {route.view === 'home' && (
           <HomeView
@@ -259,10 +283,10 @@ export default function App() {
         )}
         {route.view === 'search' && (
           <SearchView
-            // Remount when the query in the URL changes (navigation, back),
-            // so the view re-seeds itself from the URL. Typing only rewrites
-            // the current entry and never remounts.
-            key={route.params.get('q') ?? ''}
+            // Remount on every navigation (a catalogue, back), so the view
+            // re-seeds itself from the URL: typing rewrites the entry quietly,
+            // so the URL a catalogue link lands on may look unchanged to it.
+            key={route.visit}
             settings={settings}
             params={route.params}
             onOpenDetail={card => openTitle(card, 0, settings.lang)}
@@ -350,7 +374,7 @@ export default function App() {
           collapseSeasons={settings.collapse_seasons !== false}
           onOpenCatalog={openCatalog}
           onOpenCard={card => openTitle(card, 0, settings.lang)}
-          onSearchTerm={searchFor}
+          onSearchTerm={searchTitles}
         />
       </AppShell>
 

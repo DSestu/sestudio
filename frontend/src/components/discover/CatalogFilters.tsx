@@ -62,7 +62,8 @@ export default function CatalogFilters({ fields, values, onChange, onClear }: Pr
           Filters
           {active > 0 && <span className="badge badge-primary badge-sm">{active}</span>}
         </button>
-        {fields.filter(f => f.type === 'select').map(f => (
+        {/* A quick field shows as chips below instead, on screens with room. */}
+        {fields.filter(f => f.type === 'select' && !f.quick).map(f => (
           <label key={f.key} className={`${chip} cursor-pointer max-md:hidden`}>
             <span className="text-base-content/50">{f.label}</span>
             <select
@@ -88,6 +89,7 @@ export default function CatalogFilters({ fields, values, onChange, onClear }: Pr
         {fields.filter(f => f.type !== 'select').flatMap(f => {
           const pills = summaries(f, valueOf(f, values))
           if (!pills.length || valueOf(f, values) === f.default) {
+            if (f.quick) return []
             return [
               <button key={f.key} onClick={() => setOpen(true)} className={`${chip} text-base-content/70 max-md:hidden`}>
                 {f.label} <span aria-hidden="true">▾</span>
@@ -99,13 +101,18 @@ export default function CatalogFilters({ fields, values, onChange, onClear }: Pr
               key={`${f.key}-${p.label}`}
               onClick={() => onChange(f, p.without)}
               aria-label={`Remove ${p.label}`}
-              className={`${chip} bg-base-300 border-transparent`}
+              className={`${chip} bg-base-300 border-transparent ${f.quick ? 'md:hidden' : ''}`}
             >
               {p.label} <span aria-hidden="true">✕</span>
             </button>
           ))
         })}
       </div>
+      {fields.filter(f => f.quick).map(f => (
+        <div key={f.key} className="hidden md:block" role="group" aria-label={f.label}>
+          <FieldControl field={f} value={valueOf(f, values)} onChange={v => onChange(f, v)} compact />
+        </div>
+      ))}
       {open && (
         <FiltersSheet
           fields={fields}
@@ -140,9 +147,15 @@ function FiltersSheet({ fields, values, onChange, onClear, onClose }: Props & { 
   )
 }
 
-function FieldControl({ field, value, onChange }: { field: FilterField; value: string; onChange: (v: string) => void }) {
+function FieldControl({ field, value, onChange, compact = false }: {
+  field: FilterField
+  value: string
+  onChange: (v: string) => void
+  /** Smaller chips, for a row on the page rather than the sheet. */
+  compact?: boolean
+}) {
   const option = (active: boolean) =>
-    `badge badge-lg cursor-pointer transition-colors ${active ? 'badge-primary' : 'badge-ghost hover:badge-outline'}`
+    `badge ${compact ? '' : 'badge-lg'} cursor-pointer transition-colors ${active ? 'badge-primary' : 'badge-ghost hover:badge-outline'}`
 
   if (field.type === 'range') {
     const [lo, hi] = rangeOf(field, value)
@@ -198,10 +211,11 @@ function FieldControl({ field, value, onChange }: { field: FilterField; value: s
     )
   }
 
-  // A short choice reads at a glance as chips; a long one (years) is a picker.
-  if (field.options.length <= 6) {
+  // A short choice reads at a glance as chips; a long one (years) is a picker,
+  // unless it is the one people reach for most.
+  if (field.options.length <= 6 || field.quick) {
     return (
-      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={field.label}>
+      <div className={`flex flex-wrap ${compact ? 'gap-1' : 'gap-1.5'}`} role="radiogroup" aria-label={field.label}>
         {field.options.map(o => (
           <button
             key={o.value}

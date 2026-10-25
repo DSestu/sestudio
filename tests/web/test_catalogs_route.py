@@ -41,7 +41,7 @@ def app():
 def test_lists_and_serves_a_catalogue(app):
     client = TestClient(app)
     assert client.get("/api/catalogs").json() == [
-        {"id": "fake", "label": "Fake", "description": ""}
+        {"id": "fake", "label": "Fake", "description": "", "url": ""}
     ]
     assert client.get("/api/catalogs/fake/schema").json()[0]["key"] == "sort"
     assert client.get("/api/catalogs/fake/shelves").json()[0]["title"] == "Shelf"

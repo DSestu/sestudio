@@ -54,7 +54,12 @@ async def _call(fn: Callable[..., T], *args: Any) -> T:
 async def list_catalogs(request: Request) -> list[dict[str, str]]:
     """The catalogues to browse, in the order the UI lists them."""
     return [
-        {"id": cid, "label": cat.label, "description": cat.description}
+        {
+            "id": cid,
+            "label": cat.label,
+            "description": cat.description,
+            "url": cat.home_url,
+        }
         for cid, cat in _enabled(request).items()
     ]
 

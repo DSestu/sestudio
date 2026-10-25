@@ -28,6 +28,7 @@ import { useDownloadedLibrary } from '../downloadedLibrary'
 import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
 import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
+import { matchesKind, parseKind } from '../titleSearch'
 
 interface Props {
   settings: AppSettings
@@ -107,13 +108,16 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   // The release window narrows what is already on screen — no re-search, since
   // the sources take no date. Cards whose year is unknown drop out while a
   // window is set; the toolbar says how many, so they aren't lost silently.
+  // The kind chosen in the search bar (desktop) or the Discover menu (phone).
+  const kind = parseKind(params.get('only'))
+  const ofKind = useMemo(() => merged.filter(c => matchesKind(c, kind)), [merged, kind])
   const results = useMemo(
     () => isAnyDates(releaseWindow)
-      ? merged
-      : merged.filter(c => inWindow(c, releaseWindow.from, releaseWindow.to)),
-    [merged, releaseWindow],
+      ? ofKind
+      : ofKind.filter(c => inWindow(c, releaseWindow.from, releaseWindow.to)),
+    [ofKind, releaseWindow],
   )
-  const hiddenByYear = merged.length - results.length
+  const hiddenByYear = ofKind.length - results.length
 
   // Ratings are only fetched when a sort actually needs them, so the default
   // relevance ordering costs no extra lookups. They share the enrichment
@@ -252,7 +256,11 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
   return (
     <div className="flex flex-col gap-5">
-      <SearchBar onResults={handleSearchResults} term={params.get('q')} />
+      {/* Desktop searches from the bar pinned above every page; this one
+          stays mounted there all the same, as it runs the page's search. */}
+      <div className="md:hidden">
+        <SearchBar onResults={handleSearchResults} term={params.get('q')} />
+      </div>
 
       {/* Outside the results toolbar below: a search that found nothing is the
           best reason to watch it, so this cannot be gated on having results. */}
@@ -423,6 +431,12 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             posters={settings.tmdb_posters}
           />
         )
+      ) : merged.length > 0 && ofKind.length === 0 ? (
+        // Something matched the query, just not of the kind picked in the bar.
+        <EmptyState
+          title={`No ${kind} for “${lastQuery}”`}
+          message={`${merged.length} other result${merged.length !== 1 ? 's' : ''} matched. Pick Everything to see ${merged.length !== 1 ? 'them' : 'it'}.`}
+        />
       ) : merged.length > 0 ? (
         // Something matched the query — only the release window is hiding it.
         <EmptyState
