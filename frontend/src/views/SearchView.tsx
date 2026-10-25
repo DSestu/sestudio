@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type {
   AppSettings, CatalogInfo, DownloadDestination, DownloadItem, DownloadJob,
-  DownloadedFile, DownloadedTitle, PersonHit, SeasonCard,
+  DownloadedFile, DownloadedTitle, PersonHit, SeasonCard, SourceReport,
 } from '../api'
-import { checkDownloads, getSeason, postDownloads, searchPeople } from '../api'
+import { cachedSearchSources, checkDownloads, getSeason, postDownloads, retrySearchSources, searchPeople } from '../api'
+import SourceChips from '../components/search/SourceChips'
+import { countBySource, filterBySources, formatSources, parseSources } from '../sourceFilter'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import DiscoverPanel from '../components/DiscoverPanel'
 import { pickHost } from '../downloadPrefs'
@@ -92,6 +94,11 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     to: params.get('to') ?? '',
   }))
   const [sort, setSort] = useState<SortKey>(defaultSortFor('search'))
+  // How each source fared, and which ones the chips narrow the results to
+  // (in the URL, like the other filters; a new query starts unfiltered).
+  const [sources, setSources] = useState<SourceReport[]>([])
+  const [picked, setPicked] = useState(() => parseSources(params.get('src')))
+  const [retrying, setRetrying] = useState(false)
   // Tagged with the query they belong to, so a stale set is never shown and
   // no synchronous reset is needed when the query changes.
   const [peopleFor, setPeopleFor] = useState<{ q: string; hits: PersonHit[] }>(
@@ -133,13 +140,16 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     setSearchOptionsSummary(parts.join(' · '))
   }, [sort, releaseWindow])
   useEffect(() => () => setSearchOptionsSummary(''), [])
-  const results = useMemo(
+  const inWindowResults = useMemo(
     () => isAnyDates(releaseWindow)
       ? ofKind
       : ofKind.filter(c => inWindow(c, releaseWindow.from, releaseWindow.to)),
     [ofKind, releaseWindow],
   )
-  const hiddenByYear = ofKind.length - results.length
+  const hiddenByYear = ofKind.length - inWindowResults.length
+  // What each source would show if picked, then the results the picked ones have.
+  const sourceCounts = useMemo(() => countBySource(inWindowResults), [inWindowResults])
+  const results = useMemo(() => filterBySources(inWindowResults, picked), [inWindowResults, picked])
 
   // Ratings are only fetched when a sort actually needs them, so the default
   // relevance ordering costs no extra lookups. They share the enrichment
@@ -179,6 +189,8 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
   function handleSearchResults(cards: SeasonCard[], query: string) {
     setRawResults(cards)
+    setSources(cachedSearchSources(query))
+    if (query !== lastQuery) setPicked(new Set())
     setLastQuery(query)
     setResolvedQuery(query)
     setCheckedIds(prev => {
@@ -214,8 +226,42 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   // (and reload) land on this exact search instead of an empty one.
   useEffect(() => {
     // Patched, not replaced: the discover panel keeps its filters in the same URL.
-    patchParams({ q: lastQuery || undefined, from: releaseWindow.from || undefined, to: releaseWindow.to || undefined })
-  }, [lastQuery, releaseWindow])
+    patchParams({ q: lastQuery || undefined, from: releaseWindow.from || undefined, to: releaseWindow.to || undefined, src: formatSources(picked) })
+  }, [lastQuery, releaseWindow, picked])
+
+  function toggleSource(id: string) {
+    setPicked(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function retrySources(ids: string[]) {
+    setRetrying(true)
+    try {
+      const answer = await retrySearchSources(lastQuery, ids)
+      setRawResults(answer.cards)
+      setSources(answer.sources)
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  // Drawn twice: inside the phone's sticky header, and above the page on desktop.
+  const chips = (className: string) => (
+    <SourceChips
+      className={className}
+      sources={sources}
+      counts={sourceCounts}
+      picked={picked}
+      onToggle={toggleSource}
+      onClear={() => setPicked(new Set())}
+      onRetry={ids => void retrySources(ids)}
+      retrying={retrying}
+    />
+  )
 
   async function resolveChecked() {
     if (!checkedIds.size) return
@@ -311,7 +357,9 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             <OptionsButton square />
           </div>
         )}
+        {lastQuery !== '' && chips('flex mt-3')}
       </div>
+      {lastQuery !== '' && chips('hidden md:flex')}
 
       {/* Every control the results have, folded behind the one Options button
           (in the pinned bar on desktop, beside the kinds on phones). Inline, so
@@ -516,6 +564,12 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             posters={settings.tmdb_posters}
           />
         )
+      ) : inWindowResults.length > 0 ? (
+        // Something matched; only the source chips are hiding it.
+        <EmptyState
+          title="Nothing from these sources"
+          message={`${inWindowResults.length} result${inWindowResults.length !== 1 ? 's' : ''} came from other sources. Clear the source filter to see ${inWindowResults.length !== 1 ? 'them' : 'it'}.`}
+        />
       ) : merged.length > 0 && ofKind.length === 0 ? (
         // Something matched the query, just not of the kind picked in the bar.
         <EmptyState

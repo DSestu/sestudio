@@ -686,8 +686,9 @@ export interface SearchResponse {
   sources: SourceReport[]
 }
 
-async function searchAll(q: string): Promise<SearchResponse> {
-  const res = await fetch(`${BASE}/search?q=${encodeURIComponent(q)}`)
+async function searchAll(q: string, sites: string[] = []): Promise<SearchResponse> {
+  const only = sites.length ? `&sites=${encodeURIComponent(sites.join(','))}` : ''
+  const res = await fetch(`${BASE}/search?q=${encodeURIComponent(q)}${only}`)
   if (!res.ok) throw new Error(`Search failed: ${res.status}`)
   return res.json()
 }
@@ -711,6 +712,30 @@ export async function searchSeasonsCached(q: string): Promise<SeasonCard[]> {
   const results = await searchAll(q)
   searchCache.set(q, results)
   return results.cards
+}
+
+/** How each source fared for a search already answered this session. */
+export function cachedSearchSources(q: string): SourceReport[] {
+  return searchCache.get(q)?.sources ?? []
+}
+
+/** Search `sites` again for `q` and fold their fresh answer into the cached
+ *  one, replacing what they returned before. Sites that fail again stay failed. */
+export async function retrySearchSources(q: string, sites: string[]): Promise<SearchResponse> {
+  const before = searchCache.get(q) ?? { cards: [], sources: [] }
+  let fresh: SearchResponse
+  try {
+    fresh = await searchAll(q, sites)
+  } catch {
+    return before
+  }
+  const redone = new Set(fresh.sources.map(s => s.id))
+  const merged: SearchResponse = {
+    cards: [...before.cards.filter(c => !c.source || !redone.has(c.source)), ...fresh.cards],
+    sources: before.sources.map(s => fresh.sources.find(f => f.id === s.id) ?? s),
+  }
+  searchCache.set(q, merged)
+  return merged
 }
 
 /** Site id for a title that lives only on disk — not a real content site. */
