@@ -134,6 +134,7 @@ class FstreamSite(ContentSite, Catalog):
                     "select",
                     [{"value": "", "label": "All"}]
                     + [{"value": p, "label": label} for label, p in kind.genres],
+                    quick=True,
                 )
             )
         if kind.collections:

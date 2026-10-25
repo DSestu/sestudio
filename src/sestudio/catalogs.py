@@ -43,6 +43,9 @@ class FilterField:
     reload: bool = False
     # A multi the catalogue can only combine so far (0 = unlimited).
     max_selected: int = 0
+    # The field people reach for most (genres): shown as one-click chips
+    # where the screen has room, rather than behind a dropdown.
+    quick: bool = False
 
 
 class Catalog(ABC):
@@ -50,6 +53,8 @@ class Catalog(ABC):
     label: str
     # One line under the catalogue's name, saying what it lists.
     description: str = ""
+    # The catalogue's own website, for a link out of the app ("" for none).
+    home_url: str = ""
 
     def available(self) -> bool:
         return True
@@ -171,6 +176,7 @@ class TmdbCatalog(Catalog):
     id = "tmdb"
     label = "TMDB"
     description = "Every film & series · rated"
+    home_url = "https://www.themoviedb.org"
 
     def __init__(self) -> None:
         self._shelves = TtlCache(600)
@@ -220,6 +226,7 @@ class TmdbCatalog(Catalog):
                 "Genres",
                 "multi",
                 [{"value": str(g["id"]), "label": g["name"]} for g in genres],
+                quick=True,
             ),
             FilterField(
                 "years",

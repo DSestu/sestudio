@@ -16,9 +16,13 @@ const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person']
 export interface Route {
   view: View
   params: URLSearchParams
+  /** Counts navigations: a link or the back button, never replaceParams. A
+   *  view keyed by it starts afresh from the URL each time it is navigated to,
+   *  even when the URL it lands on is one it already showed. */
+  visit: number
 }
 
-function parseHash(): Route {
+function parseHash(): Omit<Route, 'visit'> {
   const raw = window.location.hash.replace(/^#\/?/, '')
   const [path, query] = raw.split('?')
   return {
@@ -43,11 +47,21 @@ export type Navigate = (view: View, params?: Record<string, string | number | un
  * back button behave. Deliberately hand-rolled — a router would be the only
  * runtime dependency added for five routes.
  */
+let visits = 0
+// The hash the route state was last taken from, so the hashchange that follows
+// navigate() re-affirms its visit instead of counting a second one.
+let routedHash = ''
+
+function visit(): Route {
+  routedHash = window.location.hash
+  return { ...parseHash(), visit: ++visits }
+}
+
 export function useRoute(): [Route, Navigate] {
-  const [route, setRoute] = useState<Route>(parseHash)
+  const [route, setRoute] = useState<Route>(visit)
 
   useEffect(() => {
-    const onHash = () => setRoute(parseHash())
+    const onHash = () => { if (window.location.hash !== routedHash) setRoute(visit()) }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
@@ -58,7 +72,7 @@ export function useRoute(): [Route, Navigate] {
     // Update synchronously so a caller can wrap navigate() in a View Transition
     // and have the new DOM captured; the hashchange listener re-affirms state
     // for the browser back/forward buttons.
-    setRoute(parseHash())
+    setRoute(visit())
   }
 
   return [route, navigate]

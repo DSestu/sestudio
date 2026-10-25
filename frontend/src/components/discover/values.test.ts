@@ -5,7 +5,7 @@ import { valueOf, withValue } from './values'
 
 const sort: FilterField = {
   key: 'sort', label: 'Sort', type: 'select', options: [], default: 'trending',
-  min: 0, max: 0, step: 1, reload: false, max_selected: 0,
+  min: 0, max: 0, step: 1, reload: false, max_selected: 0, quick: false,
 }
 
 describe('catalogue filter values', () => {
@@ -23,8 +23,8 @@ describe('catalogue filter values', () => {
 
 describe('pickCatalog', () => {
   const catalogs = [
-    { id: 'uniquestream', label: 'UniqueStream', description: '' },
-    { id: 'tmdb', label: 'TMDB', description: '' },
+    { id: 'uniquestream', label: 'UniqueStream', description: '', url: '' },
+    { id: 'tmdb', label: 'TMDB', description: '', url: '' },
   ]
 
   it('prefers the asked-for catalogue, else falls back to the first', () => {

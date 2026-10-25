@@ -14,7 +14,7 @@ import MediaRow from './MediaRow'
 import PosterGrid from './PosterGrid'
 
 /** URL params the search view owns; every other one is a catalogue filter. */
-const RESERVED = new Set(['q', 'from', 'to', 'cat', 'all'])
+const RESERVED = new Set(['q', 'from', 'to', 'cat', 'all', 'only'])
 
 interface Props {
   catalogs: CatalogInfo[]

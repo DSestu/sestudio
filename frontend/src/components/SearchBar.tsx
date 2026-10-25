@@ -27,7 +27,8 @@ export default function SearchBar({ onResults, term }: Props) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      // Hidden on desktop, where the pinned search bar answers the shortcut.
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f' && inputRef.current?.offsetParent) {
         e.preventDefault()
         inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         inputRef.current?.focus()
@@ -64,7 +65,7 @@ export default function SearchBar({ onResults, term }: Props) {
     <div>
       <div className="relative">
         <svg
-          className="pointer-events-none absolute z-10 left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/40"
+          className="pointer-events-none absolute z-10 left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-primary"
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
@@ -76,7 +77,7 @@ export default function SearchBar({ onResults, term }: Props) {
           aria-label="Search series or films"
           value={query}
           onChange={e => { setQuery(e.target.value); setError(null) }}
-          className="input input-bordered w-full h-12 sm:h-14 pl-12 pr-12 text-base sm:text-lg rounded-box"
+          className="input w-full h-12 sm:h-14 pl-12 pr-12 text-base sm:text-lg rounded-box border-2 border-primary/80 ring-4 ring-primary/15 focus-within:border-primary"
         />
         {loading && (
           <span className="absolute right-4 top-1/2 -translate-y-1/2 loading loading-spinner loading-sm text-base-content/50" aria-label="Searching" />

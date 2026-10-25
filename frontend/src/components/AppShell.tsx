@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { type FocusEvent, type ReactNode, useState } from 'react'
 import type { CatalogInfo } from '../api'
 import { useBrowserPlayerControls } from '../browserPlayerControls'
 import { useCastState } from '../cast'
@@ -49,6 +49,9 @@ interface Props {
   /** The catalogue on screen, '' when Discover isn't browsing one. */
   catalogId?: string
   onOpenCatalog?: (id: string) => void
+  /** Desktop's search bar, pinned above every page (the player gets none, so
+   *  it renders there without one). */
+  searchBar?: ReactNode
   children: ReactNode
 }
 
@@ -56,7 +59,7 @@ interface Props {
  * App chrome: a persistent rail on `md:` and up, a bottom tab bar below it.
  * The content column scrolls independently on desktop so the rail stays put.
  */
-export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBadge = 0, onOpenSettings, catalogs = [], catalogId = '', onOpenCatalog, children }: Props) {
+export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBadge = 0, onOpenSettings, catalogs = [], catalogId = '', onOpenCatalog, searchBar, children }: Props) {
   const badgeFor = (id: Tab) =>
     BADGES[id] === 'download' ? downloadBadge : BADGES[id] === 'unread' ? unreadBadge : 0
   // When a cast is active the Now-Casting bar sits above the mobile tab bar
@@ -71,6 +74,18 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   const selecting = useSelectionActive()
   // On phones Discover is a menu of catalogues, unfolded from its tab.
   const menuOpen = useDiscoverMenuOpen()
+  // The rail's catalogues show on Discover, and peek open from anywhere else
+  // while the pointer or keyboard focus is on the Discover group.
+  const [peek, setPeek] = useState(false)
+  const catalogsOpen = view === 'search' || peek
+  const peekProps = {
+    onMouseEnter: () => setPeek(true),
+    onMouseLeave: () => setPeek(false),
+    onFocus: () => setPeek(true),
+    onBlur: (e: FocusEvent<HTMLDivElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) setPeek(false)
+    },
+  }
   return (
     <div className="min-h-dvh bg-base-100 md:flex">
       {/* Desktop rail */}
@@ -78,7 +93,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
         <Wordmark className="px-2" />
         <nav aria-label="Primary" className="flex flex-col gap-1">
           {DESTINATIONS.map(d => (
-            <Fragment key={d.id}>
+            <div key={d.id} className="flex flex-col gap-1" {...(d.id === 'search' ? peekProps : {})}>
             <button
               onClick={() => onNavigate(d.id)}
               aria-current={view === d.id ? 'page' : undefined}
@@ -90,32 +105,32 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
             >
               {d.icon}
               <span className="flex-1 text-left">{d.label}</span>
+              {d.id === 'search' && catalogs.length > 0 && (
+                <svg
+                  className={`w-3.5 h-3.5 transition-transform duration-300 motion-reduce:transition-none ${catalogsOpen ? '' : '-rotate-90'}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+                </svg>
+              )}
               {badgeFor(d.id) > 0 && (
                 <span className="badge badge-primary badge-sm">{badgeFor(d.id)}</span>
               )}
             </button>
-            {/* Catalogues sit right under Discover, always one click away. */}
+            {/* Catalogues sit right under Discover, folded away (animated)
+                whenever Discover is neither the page on screen nor hovered. */}
             {d.id === 'search' && catalogs.length > 0 && (
-              <div className="ml-[1.4rem] pl-3 mb-1 flex flex-col gap-0.5 border-l border-base-300" aria-label="Catalogues">
-                {/* TMDB first: it finds titles on the sources below, playing none itself. */}
-                {[...catalogs.filter(c => c.id === 'tmdb'), ...catalogs.filter(c => c.id !== 'tmdb')].map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => onOpenCatalog?.(c.id)}
-                    aria-current={c.id === catalogId ? 'page' : undefined}
-                    title={c.description}
-                    className={`rounded-box px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                      c.id === catalogId
-                        ? 'bg-base-300 text-base-content'
-                        : 'text-base-content/60 hover:bg-base-300/60 hover:text-base-content'
-                    }`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
+                  catalogsOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                }`}
+              >
+                <div className="min-h-0 overflow-hidden" inert={!catalogsOpen}>
+                  <RailCatalogs catalogs={catalogs} catalogId={catalogId} onOpenCatalog={onOpenCatalog} />
+                </div>
               </div>
             )}
-            </Fragment>
+            </div>
           ))}
         </nav>
         <div className="mt-auto">
@@ -156,6 +171,17 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
             : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-10'
         }`}
       >
+        {searchBar && (
+          // No backdrop blur here: it would trap the search's fixed backdrop
+          // inside the bar instead of letting it dim the page.
+          <div
+            className={view === 'watch'
+              ? 'hidden md:block relative z-40'
+              : 'hidden md:block sticky top-0 z-30 -mt-5 mb-5 -mx-6 lg:-mx-8 px-6 lg:px-8 border-b border-base-300 bg-base-100'}
+          >
+            <div className={view === 'watch' ? '' : 'mx-auto max-w-6xl'}>{searchBar}</div>
+          </div>
+        )}
         {/* The watch view (player + playlist) fills the available width; the
             grid/list views stay capped for readability. */}
         <div className={`mx-auto w-full ${view === 'watch' ? '' : 'max-w-6xl'}`}>{children}</div>
@@ -195,6 +221,61 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
           )
         })}
       </nav>
+    </div>
+  )
+}
+
+/** The rail's catalogue list: TMDB set apart on top, as it plays nothing
+ *  itself, then the video sources with what each holds. */
+function RailCatalogs({ catalogs, catalogId, onOpenCatalog }: {
+  catalogs: CatalogInfo[]
+  catalogId: string
+  onOpenCatalog?: (id: string) => void
+}) {
+  const tmdb = catalogs.find(c => c.id === 'tmdb')
+  const sites = catalogs.filter(c => c.id !== 'tmdb')
+  return (
+    <div className="ml-[1.4rem] pl-2 mt-1 mb-2 flex flex-col gap-0.5 border-l border-base-300" aria-label="Catalogues">
+      {tmdb && (
+        <button
+          onClick={() => onOpenCatalog?.(tmdb.id)}
+          aria-current={tmdb.id === catalogId ? 'page' : undefined}
+          title={tmdb.description}
+          className={`mb-1 flex items-center gap-2 rounded-box border px-2 py-1.5 text-left text-[13px] font-semibold transition-colors ${
+            tmdb.id === catalogId
+              ? 'border-info/60 bg-info/15'
+              : 'border-info/30 bg-info/5 hover:bg-info/10'
+          }`}
+        >
+          <span className="w-6 h-6 shrink-0 rounded-md bg-[#0d253f] text-[#90cea1] flex items-center justify-center text-[7px] font-extrabold" aria-hidden="true">
+            TMDB
+          </span>
+          <span className="min-w-0 flex-1 truncate">{tmdb.label}</span>
+          <span className="badge badge-xs border-0 bg-success/15 text-success font-semibold">Finds</span>
+        </button>
+      )}
+      <p className="px-2 pt-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-base-content/40">Video sources</p>
+      {sites.map(c => (
+        <button
+          key={c.id}
+          onClick={() => onOpenCatalog?.(c.id)}
+          aria-current={c.id === catalogId ? 'page' : undefined}
+          title={c.description}
+          className={`flex items-center gap-2 rounded-box px-2 py-1.5 text-left transition-colors ${
+            c.id === catalogId
+              ? 'bg-base-300 text-base-content'
+              : 'text-base-content/60 hover:bg-base-300/60 hover:text-base-content'
+          }`}
+        >
+          <span className="w-6 h-6 shrink-0 rounded-md bg-primary/15 text-primary flex items-center justify-center text-xs font-extrabold" aria-hidden="true">
+            {c.label.slice(0, 1)}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[13px] font-medium leading-tight">{c.label}</span>
+            <span className="block truncate text-[10.5px] leading-tight text-base-content/45">{c.description}</span>
+          </span>
+        </button>
+      ))}
     </div>
   )
 }

@@ -436,6 +436,7 @@ class UniqueStreamSite(ContentSite, Catalog):
                     for g in lists.get("genres") or []
                 ],
                 max_selected=2,
+                quick=True,
             ),
             FilterField(
                 "audio",

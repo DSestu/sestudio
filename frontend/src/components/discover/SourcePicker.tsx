@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import type { CatalogInfo, SeasonCard } from '../../api'
-import { searchSeasonsCached } from '../../api'
 import { closeDiscoverMenu, closeDiscoverMenuThen, openDiscoverMenu, useDiscoverMenuOpen } from '../../discoverMenu'
-import { useMergedCards } from '../../useMergedCards'
 import { useModalBack } from '../../useModalBack'
 import { recentCatalogs } from '../../useCatalogs'
-import { useTitlesMeta, type TitleRef } from '../../useTitlesMeta'
-import RatingBadge from '../RatingBadge'
+import { type Kind, SEARCH_FIELD, useTitleSearch } from '../../titleSearch'
+import { KindChips, SearchIcon, TitleResults } from '../search/SearchParts'
 
 // TMDB lists titles to look up on the sites rather than playing any itself,
 // so it is set apart from the video sources wherever they are listed.
@@ -14,11 +12,11 @@ const TMDB = 'tmdb'
 // With this few video sources the full list is already short; "Recent" would
 // only repeat it.
 const RECENT_FROM = 5
-const RESULTS_SHOWN = 8
 
 /**
- * The phone's Discover heading: names the open catalogue, and opens the
- * Discover menu to change it. (Desktop lists catalogues in the rail.)
+ * The Discover heading: names the open catalogue and what it holds. On a phone
+ * it opens the Discover menu to change it; on desktop the rail does that, so
+ * the heading links out to the catalogue's own site instead.
  */
 export default function SourcePicker({ catalogs, catalogId }: { catalogs: CatalogInfo[]; catalogId: string }) {
   const current = catalogs.find(c => c.id === catalogId)
@@ -26,12 +24,37 @@ export default function SourcePicker({ catalogs, catalogId }: { catalogs: Catalo
   const open = useDiscoverMenuOpen()
 
   return (
-    <div className="md:hidden flex flex-col gap-2">
+    <div className="flex flex-col gap-2">
+      <div className="hidden md:flex items-end gap-4">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            {current?.label ?? catalogId}
+            {isTmdb && <TmdbBadge />}
+          </h2>
+          {current?.description && (
+            <p className="text-sm text-base-content/50">{current.description}</p>
+          )}
+        </div>
+        {current?.url && (
+          <a
+            href={current.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-full border border-base-300 px-3 h-8 text-xs text-base-content/60 hover:text-base-content hover:border-base-content/30"
+          >
+            {new URL(current.url).hostname.replace(/^www\./, '')}
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 5h6v6M19 5l-8 8M10 5H5v14h14v-5" />
+            </svg>
+            <span className="sr-only">(opens in a new tab)</span>
+          </a>
+        )}
+      </div>
       <button
         onClick={openDiscoverMenu}
         aria-expanded={open}
         aria-controls="discover-menu"
-        className="self-start text-left rounded-box -mx-1 px-1 active:bg-base-200"
+        className="md:hidden self-start text-left rounded-box -mx-1 px-1 active:bg-base-200"
       >
         <span className="flex items-center gap-2 text-xl font-bold">
           {current?.label ?? catalogId}
@@ -47,7 +70,7 @@ export default function SourcePicker({ catalogs, catalogId }: { catalogs: Catalo
       </button>
       {isTmdb && (
         <p className="text-xs text-info/80 rounded-box border border-info/25 bg-info/5 px-3 py-2">
-          Tap a title to find it on your video sources.
+          <span className="md:hidden">Tap</span><span className="max-md:hidden">Click</span> a title to find it on your video sources.
         </p>
       )}
     </div>
@@ -73,7 +96,7 @@ interface MenuProps {
   collapseSeasons?: boolean
   onOpenCatalog: (id: string) => void
   onOpenCard: (card: SeasonCard) => void
-  onSearchTerm: (term: string) => void
+  onSearchTerm: (term: string, kind: Kind) => void
 }
 
 /**
@@ -95,12 +118,16 @@ export function DiscoverMenu({
     return () => { root.style.overflow = before }
   }, [open])
   const [query, setQuery] = useState('')
+  const [kind, setKind] = useState<Kind>('all')
   const q = query.trim()
+  const search = useTitleSearch(
+    q, kind, { preferredSite, mergeByTmdb, collapseSeasons }, catalogs.some(c => c.id === TMDB),
+  )
   // A folded menu forgets the search, so it reopens on the list.
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (!open) setQuery('')
+    if (!open) { setQuery(''); setKind('all') }
   }
 
   const tmdb = catalogs.find(c => c.id === TMDB)
@@ -159,14 +186,12 @@ export function DiscoverMenu({
             role="search"
             onSubmit={e => {
               e.preventDefault()
-              if (q) closeDiscoverMenuThen(() => onSearchTerm(q))
+              if (q) closeDiscoverMenuThen(() => onSearchTerm(q, kind))
             }}
             className="px-4 pt-4 pb-3 shrink-0"
           >
-            <label className="input input-bordered flex items-center gap-2 w-full">
-              <svg className="w-4 h-4 text-base-content/40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-              </svg>
+            <label className={SEARCH_FIELD}>
+              <SearchIcon />
               <input
                 type="search"
                 value={query}
@@ -174,21 +199,23 @@ export function DiscoverMenu({
                 placeholder="Search titles on every source"
                 aria-label="Search titles on every source"
                 enterKeyHint="search"
-                className="grow"
+                className="grow bg-transparent outline-none text-sm min-w-0"
               />
             </label>
+            {q && <div className="mt-3"><KindChips value={kind} onChange={setKind} /></div>}
           </form>
 
           {q ? (
-            <TitleResults
-              query={q}
-              catalogs={catalogs}
-              preferredSite={preferredSite}
-              mergeByTmdb={mergeByTmdb}
-              collapseSeasons={collapseSeasons}
-              onOpen={card => closeDiscoverMenuThen(() => onOpenCard(card))}
-              onSeeAll={() => closeDiscoverMenuThen(() => onSearchTerm(q))}
-            />
+            <div className="min-h-0 overflow-y-auto overscroll-contain px-2 pb-4">
+              <TitleResults
+                search={search}
+                query={q}
+                catalogs={catalogs}
+                listId="discover-menu-results"
+                onOpen={card => closeDiscoverMenuThen(() => onOpenCard(card))}
+                onSeeAll={() => closeDiscoverMenuThen(() => onSearchTerm(q, kind))}
+              />
+            </div>
           ) : (
             <>
               {tmdb && (
@@ -238,7 +265,7 @@ export function DiscoverMenu({
   )
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <h4 className="mt-4 mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-base-content/50">
       {children}
@@ -252,92 +279,5 @@ function Initial({ label }: { label: string }) {
     <span className="w-8 h-8 shrink-0 rounded-lg bg-primary/15 text-primary flex items-center justify-center text-sm font-extrabold" aria-hidden="true">
       {label.slice(0, 1)}
     </span>
-  )
-}
-
-interface Answer {
-  query: string
-  cards: SeasonCard[]
-  failed: boolean
-}
-
-/** What the sites have for the typed title, one row per title, best first. */
-function TitleResults({ query, catalogs, preferredSite, mergeByTmdb = false, collapseSeasons = true, onOpen, onSeeAll }: {
-  query: string
-  catalogs: CatalogInfo[]
-  preferredSite?: string
-  mergeByTmdb?: boolean
-  collapseSeasons?: boolean
-  onOpen: (card: SeasonCard) => void
-  onSeeAll: () => void
-}) {
-  const [answer, setAnswer] = useState<Answer | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    const timer = setTimeout(() => {
-      searchSeasonsCached(query)
-        .then(cards => { if (!cancelled) setAnswer({ query, cards, failed: false }) })
-        .catch(() => { if (!cancelled) setAnswer({ query, cards: [], failed: true }) })
-    }, 300)
-    return () => { cancelled = true; clearTimeout(timer) }
-  }, [query])
-
-  const current = answer?.query === query ? answer : null
-  const [merged] = useMergedCards(current?.cards ?? [], mergeByTmdb, preferredSite, collapseSeasons)
-  const shown = merged.slice(0, RESULTS_SHOWN)
-  const refs: TitleRef[] = shown.map(c => ({ key: c.newsid, name: c.series_name, isFilm: c.is_film }))
-  const metas = useTitlesMeta(refs, catalogs.some(c => c.id === TMDB), true)
-  const label = (id?: string) => catalogs.find(c => c.id === (id || 'fstream'))?.label ?? id ?? ''
-
-  if (!current) {
-    return (
-      <div className="flex justify-center py-10" aria-busy="true" aria-label="Searching">
-        <span className="loading loading-spinner loading-md text-base-content/40" />
-      </div>
-    )
-  }
-  if (current.failed) {
-    return <p role="alert" className="px-5 py-8 text-sm text-error">Search failed — is the server reachable?</p>
-  }
-  if (!merged.length) {
-    return <p role="status" className="px-5 py-8 text-sm text-base-content/50 text-center">Nothing found for “{query}”.</p>
-  }
-  return (
-    <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-5">
-      <SectionTitle>Titles</SectionTitle>
-      <ul className="flex flex-col">
-        {shown.map(card => {
-          const sources = [...new Set([card.source, ...(card.alts ?? []).map(a => a.source)].map(label))]
-          const seasons = card.seasons?.length ?? 0
-          return (
-            <li key={card.newsid} className="border-b border-base-300 last:border-0">
-              <button onClick={() => onOpen(card)} className="flex w-full gap-3 py-2.5 text-left">
-                {card.poster_url ? (
-                  <img src={card.poster_url} alt="" loading="lazy" className="w-10 aspect-[2/3] rounded object-cover shrink-0" />
-                ) : (
-                  <span className="w-10 aspect-[2/3] rounded bg-base-300 shrink-0" />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold truncate">{card.series_name}</span>
-                  <span className="block text-xs text-base-content/50">
-                    {[card.is_film ? 'Film' : 'Series', card.year || null, seasons > 1 ? `${seasons} seasons` : null]
-                      .filter(Boolean).join(' · ')}
-                  </span>
-                  <span className="mt-1 flex flex-wrap gap-1">
-                    {sources.map(s => (
-                      <span key={s} className="badge badge-sm badge-ghost">{s}</span>
-                    ))}
-                  </span>
-                </span>
-                <RatingBadge rating={metas.get(card.newsid)?.rating ?? 0} className="self-start shrink-0" />
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-      <button onClick={onSeeAll} className="mt-3 w-full text-center text-sm font-semibold text-primary py-2">
-        See all {merged.length} result{merged.length === 1 ? '' : 's'} →
-      </button>
-    </div>
   )
 }

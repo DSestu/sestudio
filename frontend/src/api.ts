@@ -246,6 +246,8 @@ export interface CatalogInfo {
   id: string
   label: string
   description: string
+  /** The catalogue's own website ("" when it has none). */
+  url: string
 }
 
 /** One filter a catalogue offers. Values travel as strings: a multi is
@@ -263,6 +265,8 @@ export interface FilterField {
   reload: boolean
   /** How many a multi can combine (0 = unlimited). */
   max_selected: number
+  /** Shown as one-click chips where there is room (genres). */
+  quick: boolean
 }
 
 /** Non-default filter values, by field key. */
