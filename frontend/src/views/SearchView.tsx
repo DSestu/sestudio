@@ -9,7 +9,6 @@ import DiscoverPanel from '../components/DiscoverPanel'
 import { pickHost } from '../downloadPrefs'
 import EmptyState from '../components/EmptyState'
 import LayoutToggle from '../components/LayoutToggle'
-import SortSelect from '../components/SortSelect'
 import ToolbarToggle from '../components/ToolbarToggle'
 import WatchSearchButton from '../components/WatchSearchButton'
 import PeopleResults from '../components/PeopleResults'
@@ -29,7 +28,8 @@ import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
 import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
 import { KINDS, type Kind, matchesKind, parseKind } from '../titleSearch'
-import { KindSegments } from '../components/search/SearchParts'
+import { KindSegments, OptionsButton } from '../components/search/SearchParts'
+import { OPTIONS_ID, setSearchOptionsSummary, useSearchOptions } from '../searchOptions'
 import { useScrolledDown } from '../useScrolledDown'
 
 interface Props {
@@ -64,6 +64,8 @@ interface Props {
  *  hid every 2026 film because the month can't be checked would be worse than
  *  one that shows a few too many. A card with no year at all can't be placed,
  *  so a window excludes it, and the toolbar counts those separately. */
+const optionsHeading = 'text-xs font-semibold uppercase tracking-wide text-base-content/50'
+
 function inWindow(card: SeasonCard, from: string, to: string): boolean {
   const year = card.year || 0
   if (!year) return false
@@ -121,6 +123,16 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     [merged],
   )
   const folded = useScrolledDown() && lastQuery !== ''
+  const optionsOpen = useSearchOptions().open
+  // What the Options button says while the fold is shut, so a filter hidden
+  // inside it is never invisible.
+  useEffect(() => {
+    const parts: string[] = []
+    if (sort !== defaultSortFor('search')) parts.push(SORTS_FOR.search.find(o => o.value === sort)?.label ?? '')
+    if (!isAnyDates(releaseWindow)) parts.push(rangeLabel(releaseWindow))
+    setSearchOptionsSummary(parts.join(' · '))
+  }, [sort, releaseWindow])
+  useEffect(() => () => setSearchOptionsSummary(''), [])
   const results = useMemo(
     () => isAnyDates(releaseWindow)
       ? ofKind
@@ -288,106 +300,143 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         </div>
         {/* Desktop has these in the pinned bar. */}
         {lastQuery !== '' && (
-          <div className={`transition-[margin] duration-[260ms] ease-smooth motion-reduce:transition-none ${folded ? 'mt-0' : 'mt-3'}`}>
-            <KindSegments
-              value={kind}
-              onChange={k => onSearch(lastQuery, k)}
-              counts={resolvedQuery === lastQuery ? kindCounts : undefined}
-            />
+          <div className={`flex items-center gap-2 transition-[margin] duration-[260ms] ease-smooth motion-reduce:transition-none ${folded ? 'mt-0' : 'mt-3'}`}>
+            <div className="flex-1 min-w-0">
+              <KindSegments
+                value={kind}
+                onChange={k => onSearch(lastQuery, k)}
+                counts={resolvedQuery === lastQuery ? kindCounts : undefined}
+              />
+            </div>
+            <OptionsButton square />
           </div>
         )}
       </div>
 
-      {/* Outside the results toolbar below: a search that found nothing is the
-          best reason to watch it, so this cannot be gated on having results. */}
+      {/* Every control the results have, folded behind the one Options button
+          (in the pinned bar on desktop, beside the kinds on phones). Inline, so
+          opening it pushes the page down instead of covering it. Not gated on
+          having results: a window that filtered everything out still has to be
+          undoable, and a search that found nothing is the best one to watch. */}
       {lastQuery !== '' && (
-        <div className="flex">
-          <WatchSearchButton query={lastQuery} />
-        </div>
-      )}
-
-      {results.length > 0 && (
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setCheckedIds(allChecked ? new Set() : new Set(results.map(c => c.newsid)))}
-            className="flex items-center gap-2 text-sm text-base-content/60 hover:text-base-content transition-colors"
-          >
-            <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-              allChecked ? 'bg-primary border-primary'
-                : someChecked ? 'bg-primary/30 border-primary'
-                : 'border-base-content/30'
-            }`}>
-              {allChecked && (
-                <svg className="w-3 h-3 text-primary-content" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-              {!allChecked && someChecked && <span className="w-2 h-0.5 bg-primary block" />}
-            </span>
-            {allChecked ? 'Deselect all' : 'Select all'}
-          </button>
-          <span className="text-base-content/40 text-sm">
-            {results.length} result{results.length !== 1 ? 's' : ''}
-          </span>
-
-          {/* View controls, right-aligned as one group. The TMDB switches live
-              here rather than in Settings because they change what this list
-              looks like, so they belong next to the list they change; they are
-              hidden without a key, since neither can do anything without one.
-              The layout choice works either way. */}
-          <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
-            <SortSelect options={SORTS_FOR.search} value={sort} onChange={setSort} />
-            <ToolbarToggle
-              label="Play on open"
-              title="Start playing as soon as a title is opened. Off, opening a title only shows its description and episodes, so whatever is already playing keeps running."
-              checked={settings.autoplay_on_open !== false}
-              onChange={v => void onUpdateSettings({ autoplay_on_open: v })}
-            />
-            <ToolbarToggle
-              label="One card per show"
-              title="Fold a show's seasons into a single result, with the season count on the card. Off lists every season separately."
-              checked={settings.collapse_seasons !== false}
-              onChange={v => void onUpdateSettings({ collapse_seasons: v })}
-            />
-            {settings.tmdb_configured && (
-              <>
-                <ToolbarToggle
-                  label="TMDB posters"
-                  title="Let TMDB artwork stand in for the source's own posters. Ratings, years, genres and synopses come from TMDB either way."
-                  checked={settings.tmdb_posters}
-                  onChange={v => void onUpdateSettings({ tmdb_posters: v })}
-                />
-                <ToolbarToggle
-                  label="Group by TMDB match"
-                  title="Identify a title by its TMDB match rather than its name, so differently-spelled listings of one title group together. Costs a lookup per result."
-                  checked={settings.tmdb_merge}
-                  onChange={v => void onUpdateSettings({ tmdb_merge: v })}
-                  // Regrouping waits on a lookup per result, so it is not instant
-                  busy={regrouping}
-                />
-              </>
-            )}
-            <LayoutToggle layout={layout} onChange={next => setLibraryLayout('search', next)} />
+        <div
+          id={OPTIONS_ID}
+          className={`grid transition-[grid-template-rows,opacity,margin] duration-[240ms] ease-smooth motion-reduce:transition-none ${
+            optionsOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr] opacity-0 -mt-5'}`}
+          inert={!optionsOpen}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div className="flex flex-col gap-4 rounded-box border border-base-300 bg-base-200/60 p-4">
+              <div className="grid gap-5 md:grid-cols-3">
+                <section aria-label="Sort" className="flex flex-col gap-2">
+                  <h3 className={optionsHeading}>Sort</h3>
+                  <div role="radiogroup" aria-label="Sort" className="flex flex-wrap gap-1.5">
+                    {SORTS_FOR.search.map(o => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={o.value === sort}
+                        onClick={() => setSort(o.value)}
+                        className={`badge cursor-pointer transition-colors ${o.value === sort ? 'badge-primary' : 'badge-ghost hover:badge-outline'}`}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                <section aria-label="Released" className="flex flex-col gap-2">
+                  <h3 className={optionsHeading}>Released</h3>
+                  <ReleaseFilter
+                    hideLabel
+                    value={releaseWindow}
+                    onChange={setReleaseWindow}
+                    // Sub-year precision is browse-only: the sources date a listing by
+                    // year at best, so say so rather than look broken.
+                    note={!isAnyDates(releaseWindow) ? 'results are dated by year only' : undefined}
+                  />
+                  {hiddenByYear > 0 && (
+                    <span className="text-xs text-base-content/40">
+                      {hiddenByYear} hidden by this window
+                    </span>
+                  )}
+                </section>
+                {/* The TMDB switches live here rather than in Settings because
+                    they change what this list looks like; they are hidden
+                    without a key, since neither can do anything without one. */}
+                <section aria-label="Display" className="flex flex-col gap-2.5">
+                  <h3 className={optionsHeading}>Display</h3>
+                  <LayoutToggle layout={layout} onChange={next => setLibraryLayout('search', next)} />
+                  <ToolbarToggle
+                    label="One card per show"
+                    title="Fold a show's seasons into a single result, with the season count on the card. Off lists every season separately."
+                    checked={settings.collapse_seasons !== false}
+                    onChange={v => void onUpdateSettings({ collapse_seasons: v })}
+                  />
+                  {settings.tmdb_configured && (
+                    <>
+                      <ToolbarToggle
+                        label="TMDB posters"
+                        title="Let TMDB artwork stand in for the source's own posters. Ratings, years, genres and synopses come from TMDB either way."
+                        checked={settings.tmdb_posters}
+                        onChange={v => void onUpdateSettings({ tmdb_posters: v })}
+                      />
+                      <ToolbarToggle
+                        label="Group by TMDB match"
+                        title="Identify a title by its TMDB match rather than its name, so differently-spelled listings of one title group together. Costs a lookup per result."
+                        checked={settings.tmdb_merge}
+                        onChange={v => void onUpdateSettings({ tmdb_merge: v })}
+                        // Regrouping waits on a lookup per result, so it is not instant
+                        busy={regrouping}
+                      />
+                    </>
+                  )}
+                  <ToolbarToggle
+                    label="Play on open"
+                    title="Start playing as soon as a title is opened. Off, opening a title only shows its description and episodes, so whatever is already playing keeps running."
+                    checked={settings.autoplay_on_open !== false}
+                    onChange={v => void onUpdateSettings({ autoplay_on_open: v })}
+                  />
+                </section>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 border-t border-base-300 pt-3">
+                <span className="text-base-content/50 text-sm">
+                  {results.length} result{results.length !== 1 ? 's' : ''}
+                </span>
+                {results.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCheckedIds(allChecked ? new Set() : new Set(results.map(c => c.newsid)))}
+                    className="btn btn-sm gap-2"
+                  >
+                    <span className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                      allChecked ? 'bg-primary border-primary'
+                        : someChecked ? 'bg-primary/30 border-primary'
+                        : 'border-base-content/30'
+                    }`}>
+                      {allChecked && (
+                        <svg className="w-3 h-3 text-primary-content" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                      {!allChecked && someChecked && <span className="w-2 h-0.5 bg-primary block" />}
+                    </span>
+                    {allChecked ? 'Deselect all' : 'Select all'}
+                  </button>
+                )}
+                <WatchSearchButton query={lastQuery} />
+                {(sort !== defaultSortFor('search') || !isAnyDates(releaseWindow)) && (
+                  <button
+                    type="button"
+                    onClick={() => { setSort(defaultSortFor('search')); setReleaseWindow({ from: '', to: '' }) }}
+                    className="ml-auto text-sm text-primary hover:underline"
+                  >
+                    Reset all
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Outside the toolbar above, which only exists while something matched:
-          a window that filtered everything out still has to be undoable. */}
-      {lastQuery !== '' && merged.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <ReleaseFilter
-            value={releaseWindow}
-            onChange={setReleaseWindow}
-            // Sub-year precision is browse-only: the sources date a listing by
-            // year at best, so say so rather than look broken.
-            note={!isAnyDates(releaseWindow) ? 'results are dated by year only' : undefined}
-          />
-          {hiddenByYear > 0 && (
-            <span className="text-xs text-base-content/40">
-              {hiddenByYear} hidden by this window
-            </span>
-          )}
         </div>
       )}
 

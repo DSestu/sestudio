@@ -3,6 +3,7 @@ import type { SeasonCard } from '../../api'
 import type { Kind, RecentSearch, TitleSearch } from '../../titleSearch'
 import { KINDS, PREVIEW_ROWS, kindLabel } from '../../titleSearch'
 import RatingBadge from '../RatingBadge'
+import { OPTIONS_ID, toggleSearchOptions, useSearchOptions } from '../../searchOptions'
 
 // The pieces every title search is drawn with, on desktop and on phones. A
 // preview keeps one job per state (pick a past search, go to the results
@@ -256,5 +257,49 @@ export function RecentSearchChips({ items, onPick, onClear }: {
         ))}
       </div>
     </div>
+  )
+}
+
+/** Opens the search page's Options fold. Closed, it says what isn't at its
+ *  default; `square` is the phone's icon-only version, with a dot instead. */
+export function OptionsButton({ square = false }: { square?: boolean }) {
+  const { open, summary } = useSearchOptions()
+  const icon = (
+    <svg className={`w-4 h-4 shrink-0 transition-transform duration-[240ms] ease-smooth motion-reduce:transition-none ${!square && open ? 'rotate-180' : ''}`}
+      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      {square
+        ? <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+        : <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />}
+    </svg>
+  )
+  const label = summary ? `Options, ${summary}` : 'Options'
+  if (square) {
+    return (
+      <button
+        type="button"
+        onClick={toggleSearchOptions}
+        aria-expanded={open}
+        aria-controls={OPTIONS_ID}
+        aria-label={label}
+        className={`btn btn-square relative shrink-0 ${open ? 'btn-active' : 'bg-base-200 border-transparent'}`}
+      >
+        {icon}
+        {summary && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-base-200" aria-hidden="true" />}
+      </button>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggleSearchOptions}
+      aria-expanded={open}
+      aria-controls={OPTIONS_ID}
+      aria-label={label}
+      className={`btn btn-sm rounded-full gap-2 font-normal ${open ? 'btn-active' : 'btn-ghost border-base-300'}`}
+    >
+      Options
+      {summary && !open && <span className="badge badge-sm bg-primary/15 text-primary border-0">{summary}</span>}
+      {icon}
+    </button>
   )
 }
