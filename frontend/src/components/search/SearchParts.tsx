@@ -35,7 +35,40 @@ export function KindChips({ value, onChange, small = false }: { value: Kind; onC
   )
 }
 
-const sectionTitle = 'px-2 text-[11px] font-bold uppercase tracking-wide text-base-content/50'
+/** The phone's kind picker: equal segments on one line that never wraps, each
+ *  with its result count under the label, and a thumb that slides to the pick. */
+export function KindSegments({ value, onChange, counts }: { value: Kind; onChange: (kind: Kind) => void; counts?: Record<Kind, number> }) {
+  const index = KINDS.findIndex(k => k.value === value)
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Kind"
+      className="relative grid rounded-box bg-base-200 p-0.5"
+      style={{ gridTemplateColumns: `repeat(${KINDS.length}, minmax(0, 1fr))` }}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0.5 left-0.5 rounded-box bg-primary transition-transform duration-[260ms] ease-smooth motion-reduce:transition-none"
+        style={{ width: `calc((100% - 0.25rem) / ${KINDS.length})`, transform: `translateX(${index * 100}%)` }}
+      />
+      {KINDS.map(k => (
+        <button
+          key={k.value}
+          type="button"
+          role="radio"
+          aria-checked={k.value === value}
+          onClick={() => onChange(k.value)}
+          className={`relative py-1.5 text-sm leading-tight transition-colors duration-200 ${k.value === value ? 'text-primary-content font-semibold' : 'text-base-content/60'}`}
+        >
+          {k.value === 'all' ? 'All' : k.label}
+          {counts && <span className="block text-[10px] tabular-nums opacity-75">{counts[k.value]}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const sectionTitle ='px-2 text-[11px] font-bold uppercase tracking-wide text-base-content/50'
 
 interface ResultsProps {
   search: TitleSearch

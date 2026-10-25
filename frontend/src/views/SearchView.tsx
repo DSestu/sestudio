@@ -28,8 +28,9 @@ import { useDownloadedLibrary } from '../downloadedLibrary'
 import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
 import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
-import { type Kind, matchesKind, parseKind } from '../titleSearch'
-import { KindChips } from '../components/search/SearchParts'
+import { KINDS, type Kind, matchesKind, parseKind } from '../titleSearch'
+import { KindSegments } from '../components/search/SearchParts'
+import { useScrolledDown } from '../useScrolledDown'
 
 interface Props {
   settings: AppSettings
@@ -114,6 +115,12 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   // The kind chosen in the search bar (desktop) or the Discover menu (phone).
   const kind = parseKind(params.get('only'))
   const ofKind = useMemo(() => merged.filter(c => matchesKind(c, kind)), [merged, kind])
+  // Shown under each kind on phones, so the row says where the results are.
+  const kindCounts = useMemo(
+    () => Object.fromEntries(KINDS.map(k => [k.value, merged.filter(c => matchesKind(c, k.value)).length])) as Record<Kind, number>,
+    [merged],
+  )
+  const folded = useScrolledDown() && lastQuery !== ''
   const results = useMemo(
     () => isAnyDates(releaseWindow)
       ? ofKind
@@ -261,10 +268,34 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     <div className="flex flex-col gap-5">
       {/* Desktop searches from the bar pinned above every page; this one
           stays mounted there all the same, as it runs the page's search. */}
-      <div className="md:hidden flex flex-col gap-3">
-        <SearchBar onResults={handleSearchResults} term={params.get('q')} />
+      {/* Phone: the search alone on one row, the kinds alone on the next.
+          With a query the pair sticks under the top bar, and scrolling down
+          folds the search away so only the kinds stay. */}
+      <div
+        className={`md:hidden flex flex-col ${lastQuery !== ''
+          ? 'sticky top-14 z-20 -mx-4 -mt-5 px-4 pt-3 pb-3 border-b border-base-300 bg-base-100/95 backdrop-blur'
+          : ''}`}
+      >
+        <div
+          className={`grid transition-[grid-template-rows,opacity] duration-[260ms] ease-smooth motion-reduce:transition-none ${
+            folded ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr]'}`}
+          inert={folded}
+        >
+          {/* Padding inside the clip, so the field's focus ring isn't cut. */}
+          <div className="min-h-0 overflow-hidden -m-1 p-1">
+            <SearchBar onResults={handleSearchResults} term={params.get('q')} />
+          </div>
+        </div>
         {/* Desktop has these in the pinned bar. */}
-        {lastQuery !== '' && <KindChips value={kind} onChange={k => onSearch(lastQuery, k)} />}
+        {lastQuery !== '' && (
+          <div className={`transition-[margin] duration-[260ms] ease-smooth motion-reduce:transition-none ${folded ? 'mt-0' : 'mt-3'}`}>
+            <KindSegments
+              value={kind}
+              onChange={k => onSearch(lastQuery, k)}
+              counts={resolvedQuery === lastQuery ? kindCounts : undefined}
+            />
+          </div>
+        )}
       </div>
 
       {/* Outside the results toolbar below: a search that found nothing is the

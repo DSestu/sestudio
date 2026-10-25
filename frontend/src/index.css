@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
+/* One easing for every UI motion: fast start, soft landing, no bounce. Used as
+   `ease-smooth` (see docs/SPEC-search-page.md, motion). */
+@theme {
+  --ease-smooth: cubic-bezier(.2, .8, .2, 1);
+}
+
 /* Bottom-sheet modals clear the home indicator / notch inset on mobile. */
 @supports (padding: env(safe-area-inset-bottom)) {
   .modal-bottom .modal-box {
