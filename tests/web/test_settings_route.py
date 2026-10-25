@@ -87,7 +87,7 @@ def test_collapse_seasons_defaults_on_and_persists(client):
 def test_download_preferences_default_to_the_shipped_order_and_persist(client):
     body = client.get("/api/settings").json()
     assert body["preferred_hosts"] == DEFAULT_DOWNLOAD_ORDER
-    assert body["preferred_sites"] == ["senpai"]
+    assert body["preferred_sites"] == ["fstream"]
     # The client needs both to render the ranking: what can be ranked, and
     # what "reset" goes back to.
     assert body["default_hosts"] == DEFAULT_DOWNLOAD_ORDER
@@ -104,9 +104,9 @@ def test_download_preferences_default_to_the_shipped_order_and_persist(client):
 
 def test_preferred_sites_ignores_sites_this_build_does_not_have(client):
     resp = client.put(
-        "/api/settings", json={"preferred_sites": ["senpai", "not-a-site"]}
+        "/api/settings", json={"preferred_sites": ["fstream", "not-a-site"]}
     )
-    assert resp.json()["preferred_sites"] == ["senpai"]
+    assert resp.json()["preferred_sites"] == ["fstream"]
 
 
 def test_frame_interpolation_defaults_on_and_persists(client):

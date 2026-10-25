@@ -87,16 +87,8 @@ def _next_after_failure(watcher: Watcher, failures: int, now: int) -> int:
 
 
 def _site_base(site: ContentSite) -> str:
-    """The site's current origin.
-
-    Sites disagree on shape: fstream holds ``base_url`` as a string, senpai
-    exposes it as a method that re-resolves a rotating domain.
-    """
-    value = getattr(site, "base_url", "")
-    try:
-        return str(value() if callable(value) else value)
-    except Exception:  # a domain lookup that fails leaves the URL as it was
-        return ""
+    """The site's current origin."""
+    return str(getattr(site, "base_url", ""))
 
 
 def _rehost(site: ContentSite, url: str) -> str:

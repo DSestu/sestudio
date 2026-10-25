@@ -153,7 +153,7 @@ twenty-four. Unofficial and rate-limited, but it needs no business account or
 template approval. Activity records everything either way.
 
 A watcher that keeps failing backs off, reports itself once, and switches off
-after 20 consecutive failures rather than retrying forever. Senpai's rotating
+after 20 consecutive failures rather than retrying forever. A site's rotating
 domain is handled: item keys hold no hostname, and a stale page URL is re-pointed
 at the current domain automatically.
 
@@ -172,11 +172,8 @@ stay as fallback — an order changes what is *used*, never what is *possible*.
 The shipped order is:
 
 ```
-senpai › premium › uqload › vidzy › netu › voe
+premium › uqload › vidzy › netu › voe
 ```
-
-Senpai leads because it serves its own files, so there is no third-party host to
-be down.
 
 Files land in a per-language folder:
 
@@ -212,14 +209,12 @@ back into the browser where the TV left off. See
 | --- | --- | --- |
 | FStream | `fstream` | Live-action and anime |
 | French-Manga | `french-manga` | Anime |
-| Senpai Stream | `senpai` | Serves its own files — no third-party host to fail |
 
 **Hosts** — where a stream is actually resolved from:
 
 | Host | Resolved by |
 | --- | --- |
 | `uqload`, `vidzy`, `premium`, `netu`, `luluvid`, `filmoon`, `voe` | The shared provider registry |
-| `senpai` | The site itself, as pre-signed files |
 
 ---
 
