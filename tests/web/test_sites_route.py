@@ -16,6 +16,7 @@ def client(tmp_path, monkeypatch):
     app = create_app(live_domain="https://fs03.lol")
     app.state.sites.pop("french-manga")
     app.state.sites.pop("kisskh")
+    app.state.sites.pop("uniquestream")
     return TestClient(app)
 
 

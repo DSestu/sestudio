@@ -11,8 +11,9 @@ from sestudio import cli
 def test_serve_is_the_entrypoint() -> None:
     """`main` hands the serve function straight to Fire, so bare `sestudio` serves
     and `sestudio -h` documents serve's own options."""
-    with patch("sestudio.cli.Fire") as mock_fire, patch.object(
-        cli.sys, "argv", ["sestudio"]
+    with (
+        patch("sestudio.cli.Fire") as mock_fire,
+        patch.object(cli.sys, "argv", ["sestudio"]),
     ):
         cli.main()
     mock_fire.assert_called_once()
@@ -21,8 +22,9 @@ def test_serve_is_the_entrypoint() -> None:
 
 def test_dash_h_is_normalised_to_help() -> None:
     """`-h` collides with Fire's flag abbreviations, so main rewrites it to --help."""
-    with patch("sestudio.cli.Fire") as mock_fire, patch.object(
-        cli.sys, "argv", ["sestudio", "-h"]
+    with (
+        patch("sestudio.cli.Fire") as mock_fire,
+        patch.object(cli.sys, "argv", ["sestudio", "-h"]),
     ):
         cli.main()
     assert mock_fire.call_args.kwargs["command"] == ["--help"]
@@ -31,8 +33,9 @@ def test_dash_h_is_normalised_to_help() -> None:
 def test_leading_serve_token_is_stripped() -> None:
     """`sestudio serve ...` stays backward-compatible: the leading `serve` is
     dropped so its flags bind correctly (not swallowed into a positional)."""
-    with patch("sestudio.cli.Fire") as mock_fire, patch.object(
-        cli.sys, "argv", ["sestudio", "serve", "--http-port", "8081"]
+    with (
+        patch("sestudio.cli.Fire") as mock_fire,
+        patch.object(cli.sys, "argv", ["sestudio", "serve", "--http-port", "8081"]),
     ):
         cli.main()
     assert mock_fire.call_args.kwargs["command"] == ["--http-port", "8081"]

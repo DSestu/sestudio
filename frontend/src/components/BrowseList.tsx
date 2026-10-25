@@ -1,33 +1,26 @@
-import type { TmdbGenre, TrendingCard } from '../api'
+import type { CatalogCard } from '../api'
 import RatingBadge from './RatingBadge'
 
 interface Props {
-  cards: TrendingCard[]
-  /** The kind's genre list, for turning a card's genre ids into names. */
-  genres: TmdbGenre[]
-  onSelect: (card: TrendingCard) => void
+  cards: CatalogCard[]
+  onSelect: (card: CatalogCard) => void
 }
 
 /**
  * Browse results as rows with the synopsis, genres and year — the reading
  * layout, against the poster grid's scanning layout.
- *
- * A browse card is a TMDB title rather than a source listing, so a row opens a
- * source search for it instead of playing anything.
  */
-export default function BrowseList({ cards, genres, onSelect }: Props) {
-  const names = new Map(genres.map(g => [g.id, g.name]))
-
+export default function BrowseList({ cards, onSelect }: Props) {
   return (
     <div className="flex flex-col gap-2">
       {cards.map(card => (
         <div
-          key={`${card.kind}-${card.tmdb_id}`}
+          key={card.key}
           className="flex gap-3 p-3 rounded-box bg-base-200/40 ring-1 ring-base-300 hover:ring-primary/40 transition"
         >
           <button
             onClick={() => onSelect(card)}
-            aria-label={`Search sources for ${card.title}`}
+            aria-label={`Open ${card.title}`}
             className="shrink-0 self-start w-24 sm:w-30 rounded-box overflow-hidden bg-base-300"
           >
             {card.poster_url ? (
@@ -43,23 +36,19 @@ export default function BrowseList({ cards, genres, onSelect }: Props) {
             </button>
 
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="badge badge-ghost badge-sm">
-                {card.kind === 'movie' ? 'Film' : 'Series'}
-              </span>
+              {card.open.card && (
+                <span className="badge badge-ghost badge-sm">
+                  {card.open.card.is_film ? 'Film' : 'Series'}
+                </span>
+              )}
               {card.year > 0 && (
                 <span className="text-base-content/50 text-xs font-mono">{card.year}</span>
               )}
               <RatingBadge rating={card.rating} />
             </div>
 
-            {card.genre_ids.length > 0 && (
-              <p className="text-xs text-base-content/50">
-                {card.genre_ids
-                  .map(id => names.get(id))
-                  .filter(Boolean)
-                  .slice(0, 4)
-                  .join(' · ')}
-              </p>
+            {card.genres.length > 0 && (
+              <p className="text-xs text-base-content/50">{card.genres.slice(0, 4).join(' · ')}</p>
             )}
 
             {card.overview && (

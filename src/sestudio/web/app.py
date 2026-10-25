@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from sestudio.config import load_config
+from sestudio.models import StreamSource
 from sestudio.providers.filmoon import FilmoonProvider
 from sestudio.providers.luluvid import LuluvidProvider
 from sestudio.providers.netu import NetuProvider
@@ -20,9 +21,11 @@ from sestudio.providers.premium import PremiumProvider
 from sestudio.providers.uqload import UqloadProvider
 from sestudio.providers.vidzy import VidzyProvider
 from sestudio.providers.voe import VoeProvider
+from sestudio.catalogs import build_catalogs
 from sestudio.sites import build_sites
 from sestudio.web.routes import (
     cast,
+    catalogs,
     downloads,
     library,
     downloaded,
@@ -35,6 +38,7 @@ from sestudio.web.routes import (
     watchers,
 )
 from sestudio.watchers.poller import run_poller, watchers_enabled
+from sestudio.web.routes.stream import _proxy_url
 from sestudio.web.worker import JobStore
 
 logger = logging.getLogger(__name__)
@@ -124,6 +128,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     )
 
     app.state.sites = build_sites(live_domain)
+    app.state.catalogs = build_catalogs(app.state.sites)
     app.state.providers = _PROVIDERS
     app.state.proxy_secret = secrets.token_bytes(32)
     app.state.dlna_renderers = {}  # udn -> control location, populated by discovery
@@ -139,10 +144,27 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     # None means "no HTTP server" (serve --no-http): media then goes over HTTPS.
     app.state.http_port = 8080
     app.state.https_port = None
+
+    def local_proxy(source: StreamSource) -> str | None:
+        """This server's proxy URL for a stream, for yt-dlp to download from.
+
+        shortcut: plain HTTP only; with --no-http such streams download from
+        the host directly (and fail to decrypt) until yt-dlp is told to trust
+        the self-signed cert.
+        """
+        port = app.state.http_port
+        if port is None:
+            return None
+        path = _proxy_url(
+            app.state.proxy_secret, source.url, source.referer, source.provider
+        )
+        return f"http://127.0.0.1:{port}{path}"
+
     app.state.job_store = JobStore(
         provider_registry=_PROVIDERS,
         sites=app.state.sites,
         watcher_max_concurrent=load_config().watcher_max_concurrent,
+        local_proxy=local_proxy,
     )
 
     app.include_router(search.router, prefix="/api")
@@ -155,6 +177,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(cast.router, prefix="/api")
     app.include_router(tmdb.router, prefix="/api")
     app.include_router(sites.router, prefix="/api")
+    app.include_router(catalogs.router, prefix="/api")
     app.include_router(watchers.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)

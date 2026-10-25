@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from sestudio.models import Episode, SeasonCard, StreamSource
@@ -50,6 +51,14 @@ class BrowseRow:
     cards: list[SeasonCard]
 
 
+@dataclass(frozen=True)
+class ProxyFix:
+    """Extra request headers and a body rewrite for one proxied resource."""
+
+    headers: dict[str, str]
+    transform: Callable[[bytes], bytes]
+
+
 class SiteError(Exception):
     """Raised by a site for scrape/parse failures (routes map it to 502)."""
 
@@ -94,6 +103,15 @@ class ContentSite(ABC):
 
     def provider_order(self) -> tuple[str, ...]:
         return DEFAULT_PROVIDER_ORDER
+
+    def proxy_fix(self, url: str) -> ProxyFix | None:
+        """How the stream proxy must fetch and rewrite this upstream URL, if at all.
+
+        For hosts whose media only plays after their own player rewrites part
+        of it (an obfuscated HLS key). The proxy reads such a body whole, so a
+        site returns a fix only for the small resources that need one.
+        """
+        return None
 
     def stream_candidates(self, embed_urls: dict[str, str]) -> list[StreamCandidate]:
         """Order an episode's provider→embed map into resolvable candidates."""

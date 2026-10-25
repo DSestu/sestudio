@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, BrowseRow, TrendingCard, WatcherEvent } from '../api'
-import { DEFAULT_DISCOVER_FILTERS, discoverTitles, getBrowseRows, getGenres, getTrending } from '../api'
+import type { AppSettings, BrowseRow, Shelf, WatcherEvent } from '../api'
+import { getBrowseRows, getShelves } from '../api'
 import { useCollections } from '../collections'
 import ActivityPeek from '../components/ActivityPeek'
 import EmptyState from '../components/EmptyState'
@@ -18,67 +18,36 @@ interface Props {
   settings: AppSettings
   onOpen: OpenTitle
   onNavigate: (v: View) => void
-  /** Trending cards aren't playable directly — clicking searches for the title. */
+  /** A catalogue card that isn't a site's own title searches for it. */
   onSearchTerm: (term: string, year?: number) => void
-  /** Open the search view's discover panel pre-filtered on a genre. */
-  onDiscoverGenre: (genreId: number) => void
+  /** The catalogue last browsed, whose first shelf Home shows. */
+  catalogId: string
+  catalogLabel: string
+  onOpenCatalog: (id: string) => void
   /** Open the title a watcher event points at. */
   onOpenEvent: (event: WatcherEvent) => void
 }
 
-/** The genres Home shows a trending row for (TMDB movie genre ids). */
-const HOME_GENRE_IDS = [28, 35, 878, 27, 16, 18] // Action, Comédie, SF, Horreur, Animation, Drame
-
-interface GenreRow {
-  id: number
-  name: string
-  cards: TrendingCard[]
-}
-
 /** Landing view: what to resume first, then everything saved. */
 export default function HomeView({
-  settings, onOpen, onNavigate, onSearchTerm, onDiscoverGenre, onOpenEvent,
+  settings, onOpen, onNavigate, onSearchTerm, catalogId, catalogLabel, onOpenCatalog, onOpenEvent,
 }: Props) {
   const watch = useWatchState()
   const collections = useCollections()
   const { events: activity } = useNotifications()
 
-  const [fetchedTrending, setFetchedTrending] = useState<TrendingCard[]>([])
+  // One shelf from the catalogue last browsed — a way into Discover, not a
+  // copy of it. Tagged with its catalogue so a switch never shows a stale one.
+  const [shelf, setShelf] = useState<{ id: string; shelf: Shelf | null }>({ id: '', shelf: null })
   useEffect(() => {
-    if (!settings.tmdb_configured) return
+    if (!catalogId) return
     let cancelled = false
-    getTrending().then(t => { if (!cancelled) setFetchedTrending(t) }).catch(() => {})
+    getShelves(catalogId)
+      .then(s => { if (!cancelled) setShelf({ id: catalogId, shelf: s[0] ?? null }) })
+      .catch(() => {}) // optional polish — a failed fetch just hides the row
     return () => { cancelled = true }
-  }, [settings.tmdb_configured])
-  // Derived, so turning the key off hides the row without a state write.
-  const trending = settings.tmdb_configured ? fetchedTrending : []
-
-  // One "trending" row per genre — TMDB's trending API can't filter by genre,
-  // so these are the currently most popular films of each one (discover).
-  const [fetchedGenreRows, setFetchedGenreRows] = useState<GenreRow[]>([])
-  useEffect(() => {
-    if (!settings.tmdb_configured) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const genres = await getGenres('movie')
-        const picked = HOME_GENRE_IDS
-          .map(id => genres.find(g => g.id === id))
-          .filter((g): g is NonNullable<typeof g> => Boolean(g))
-        const rows = await Promise.all(picked.map(async g => ({
-          id: g.id,
-          name: g.name,
-          cards: (await discoverTitles({ ...DEFAULT_DISCOVER_FILTERS, genres: [g.id] }, 1))
-            .results.slice(0, 12),
-        })))
-        if (!cancelled) setFetchedGenreRows(rows.filter(r => r.cards.length > 0))
-      } catch {
-        // Genre rows are optional polish — a failed fetch just hides them.
-      }
-    })()
-    return () => { cancelled = true }
-  }, [settings.tmdb_configured])
-  const genreRows = settings.tmdb_configured ? fetchedGenreRows : []
+  }, [catalogId])
+  const discover = shelf.id === catalogId ? shelf.shelf : null
 
   // Rows the sites list themselves — their titles open directly, TMDB or not.
   const [browseRows, setBrowseRows] = useState<BrowseRow[]>([])
@@ -97,8 +66,8 @@ export default function HomeView({
   // behind the empty state.
   if (
     !inProgress.length &&
-    !trending.length &&
     !browseRows.length &&
+    !discover?.cards.length &&
     !watchlist.length &&
     !favourites.length &&
     !activity.length
@@ -107,7 +76,7 @@ export default function HomeView({
       <EmptyState
         title="Nothing here yet"
         message="Search for a series or film to start watching, casting or downloading."
-        action={{ label: 'Search', onClick: () => onNavigate('search') }}
+        action={{ label: 'Discover', onClick: () => onNavigate('search') }}
       />
     )
   }
@@ -159,17 +128,6 @@ export default function HomeView({
         items={strip(favourites)}
         onSeeAll={favourites.length > 12 ? () => onNavigate('library') : undefined}
       />
-      <MediaRow
-        title="Trending this week"
-        items={trending.map(t => ({
-          key: `tr-${t.tmdb_id}`,
-          title: t.title,
-          subtitle: t.year ? String(t.year) : undefined,
-          rating: t.rating,
-          poster_url: t.poster_url,
-          onClick: () => onSearchTerm(t.title, t.year),
-        }))}
-      />
       {browseRows.map(row => (
         <MediaRow
           key={`browse-${row.source}-${row.title}`}
@@ -183,21 +141,22 @@ export default function HomeView({
           }))}
         />
       ))}
-      {genreRows.map(row => (
+      {discover && (
         <MediaRow
-          key={`genre-${row.id}`}
-          title={row.name}
-          items={row.cards.map(c => ({
-            key: `g${row.id}-${c.tmdb_id}`,
+          title={`${discover.title} on ${catalogLabel}`}
+          items={discover.cards.slice(0, 18).map(c => ({
+            key: c.key,
             title: c.title,
             subtitle: c.year ? String(c.year) : undefined,
-            rating: c.rating,
+            rating: c.rating || undefined,
             poster_url: c.poster_url,
-            onClick: () => onSearchTerm(c.title, c.year),
+            onClick: () => c.open.card
+              ? onOpen(c.open.card, 0, settings.lang)
+              : onSearchTerm(c.open.search?.term ?? c.title, c.open.search?.year || undefined),
           }))}
-          onSeeAll={() => onDiscoverGenre(row.id)}
+          onSeeAll={() => onOpenCatalog(catalogId)}
         />
-      ))}
+      )}
     </div>
   )
 }

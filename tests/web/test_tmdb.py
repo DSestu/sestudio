@@ -158,7 +158,7 @@ def test_without_a_key_the_feature_reports_disabled(client, monkeypatch):
     assert resp.status_code == 503
 
 
-def test_trending_returns_cards(client, httpx_mock: HTTPXMock):
+def test_trending_returns_cards(httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         url=TRENDING,
         json={
@@ -175,9 +175,7 @@ def test_trending_returns_cards(client, httpx_mock: HTTPXMock):
             ]
         },
     )
-    resp = client.get("/api/tmdb/trending")
-    assert resp.status_code == 200
-    cards = resp.json()
+    cards = tmdb.catalog()
     # People are filtered out — only playable media types are shown.
     assert len(cards) == 1
     assert cards[0] == {
@@ -196,7 +194,7 @@ def test_trending_returns_cards(client, httpx_mock: HTTPXMock):
     }
 
 
-def test_discover_passes_filters_and_returns_cards(client, httpx_mock: HTTPXMock):
+def test_discover_passes_filters_and_returns_cards(httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         url=DISCOVER,
         json={
@@ -215,20 +213,15 @@ def test_discover_passes_filters_and_returns_cards(client, httpx_mock: HTTPXMock
             ],
         },
     )
-    resp = client.get(
-        "/api/tmdb/discover",
-        params={
-            "kind": "movie",
-            "sort_by": "vote_average.desc",
-            "genres": "18,80",
-            "min_score": 4,
-            "max_score": 7,
-            "min_votes": 300,
-            "page": 2,
-        },
+    data = tmdb.discover(
+        "movie",
+        "vote_average.desc",
+        "18,80",
+        min_score=4,
+        max_score=7,
+        min_votes=300,
+        page=2,
     )
-    assert resp.status_code == 200
-    data = resp.json()
     assert data["page"] == 2
     assert data["total_pages"] == 40
     assert data["results"][0]["title"] == "Chef d'œuvre"
@@ -247,45 +240,82 @@ def _discover_page():
     return {"page": 1, "total_pages": 1, "results": []}
 
 
-def test_discover_bounds_release_date_per_media_type(client, httpx_mock: HTTPXMock):
+def test_discover_bounds_release_date_per_media_type(httpx_mock: HTTPXMock):
     """A date window becomes the release-date field of the kind being browsed."""
     httpx_mock.add_response(url=DISCOVER, json=_discover_page())
-    resp = client.get(
-        "/api/tmdb/discover",
-        params={"kind": "movie", "from_date": "2026-07-01", "to_date": "2026-08-17"},
-    )
-    assert resp.status_code == 200
+    tmdb.discover("movie", from_date="2026-07-01", to_date="2026-08-17")
     sent = str(httpx_mock.get_requests()[0].url)
     assert "primary_release_date.gte=2026-07-01" in sent
     assert "primary_release_date.lte=2026-08-17" in sent
 
 
-def test_discover_dates_series_by_first_air_date(client, httpx_mock: HTTPXMock):
+def test_discover_dates_series_by_first_air_date(httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         url=re.compile(r"https://api\.themoviedb\.org/3/discover/tv\?.*"),
         json=_discover_page(),
     )
-    resp = client.get(
-        "/api/tmdb/discover", params={"kind": "tv", "from_date": "2026-07-01"}
-    )
-    assert resp.status_code == 200
+    tmdb.discover("tv", from_date="2026-07-01")
     assert "first_air_date.gte=2026-07-01" in str(httpx_mock.get_requests()[0].url)
 
 
-def test_discover_drops_malformed_dates(client, httpx_mock: HTTPXMock):
+def test_discover_drops_malformed_dates(httpx_mock: HTTPXMock):
     """TMDB answers a bad date with an unfiltered page — never forward one."""
     httpx_mock.add_response(url=DISCOVER, json=_discover_page())
-    resp = client.get(
-        "/api/tmdb/discover", params={"from_date": "last month", "to_date": "2026"}
-    )
-    assert resp.status_code == 200
+    tmdb.discover("movie", from_date="last month", to_date="2026")
     sent = str(httpx_mock.get_requests()[0].url)
     assert "primary_release_date" not in sent
 
 
-def test_discover_rejects_unknown_sort(client):
-    resp = client.get("/api/tmdb/discover", params={"sort_by": "hackable.desc"})
-    assert resp.status_code == 422
+def test_discover_rejects_unknown_sort():
+    with pytest.raises(ValueError):
+        tmdb.discover("movie", "hackable.desc")
+
+
+def test_catalogue_maps_generic_filters_onto_tmdb(client, httpx_mock: HTTPXMock):
+    """The catalogue speaks generic sorts and a release choice; TMDB gets its
+    own per-kind field names and a request bounded to the chosen side of today."""
+    httpx_mock.add_response(
+        url=re.compile(r"https://api\.themoviedb\.org/3/genre/tv/list\?.*"),
+        json={"genres": [{"id": 18, "name": "Drame"}]},
+        is_reusable=True,
+    )
+    httpx_mock.add_response(
+        url=re.compile(r"https://api\.themoviedb\.org/3/discover/tv\?.*"),
+        json={
+            "page": 1,
+            "total_pages": 3,
+            "results": [
+                {
+                    "id": 5,
+                    "name": "Série",
+                    "genre_ids": [18],
+                    "first_air_date": "2999-01-01",
+                }
+            ],
+        },
+    )
+    resp = client.get(
+        "/api/catalogs/tmdb/discover",
+        params={
+            "kind": "tv",
+            "sort": "date.desc",
+            "release": "upcoming",
+            "years": "1900,2010",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["has_more"] is True
+    card = data["cards"][0]
+    assert card["genres"] == ["Drame"]
+    assert card["badge"] == "2999-01-01"
+    assert card["open"] == {"search": {"term": "Série", "year": 2999}}
+    sent = next(
+        r for r in httpx_mock.get_requests() if "/discover/" in str(r.url)
+    ).url.params
+    assert sent["sort_by"] == "first_air_date.desc"
+    assert sent["first_air_date.lte"] == "2010-12-31"
+    assert sent["first_air_date.gte"] > "2020-01-01"  # tomorrow, not 1900
 
 
 def test_genres_are_cached_per_process(client, httpx_mock: HTTPXMock):

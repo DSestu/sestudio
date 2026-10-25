@@ -78,3 +78,6 @@ class StreamSource:
     )
     # Sidecar subtitle tracks, empty when the host serves none (or burns them in).
     subtitles: list[Subtitle] = field(default_factory=list)
+    # Only playable through the app's own stream proxy, which applies the site's
+    # proxy_fix (an obfuscated HLS key): downloads read it from there too.
+    via_proxy: bool = False

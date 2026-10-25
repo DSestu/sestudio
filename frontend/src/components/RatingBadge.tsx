@@ -19,7 +19,7 @@ export default function RatingBadge({ rating, className = '' }: Props) {
   return (
     <span
       className={`badge badge-sm gap-0.5 border-none font-medium ${tone(rating)} ${className}`}
-      title={`TMDB rating ${rating}/10`}
+      title={`Rating ${rating}/10`}
     >
       ★ {rating.toFixed(1)}
     </span>

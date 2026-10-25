@@ -16,6 +16,7 @@ import { useRoute, type Navigate } from './nav'
 import { clearPullback, usePullback } from './pullback'
 import { useDownloadJobs } from './useDownloadJobs'
 import { useSettings } from './useSettings'
+import { pickCatalog, rememberCatalog, useCatalogs } from './useCatalogs'
 import { refreshNotifications, useUnreadCount, watchParamsForEvent } from './notifications'
 import DownloadsView from './views/DownloadsView'
 import HomeView from './views/HomeView'
@@ -39,6 +40,10 @@ function sameWatch(a: WatchFields | null, b: WatchFields): boolean {
 export default function App() {
   const [route, rawNavigate] = useRoute()
   const [settings, updateSettings] = useSettings()
+  const catalogs = useCatalogs(settings)
+  // The catalogue Discover shows: the URL's, else the last one browsed.
+  const catalogId = pickCatalog(catalogs, route.view === 'search' ? route.params.get('cat') : null)
+  useEffect(() => { if (catalogId) rememberCatalog(catalogId) }, [catalogId])
 
   const [downloadTick, setDownloadTick] = useState(0)
   const [skippedJobs, setSkippedJobs] = useState<DownloadJob[]>([])
@@ -135,6 +140,8 @@ export default function App() {
       ? [{ rec: browseWatch, owner: false, visible: route.view === 'watch' }]
       : []),
   ]
+
+  const openCatalog = (id: string) => navigate('search', { cat: id })
 
   /** Open a title in the watch view. Identity travels in the URL so the route
    *  is self-contained (SeasonDetail carries no series name or poster). */
@@ -233,6 +240,9 @@ export default function App() {
         downloadBadge={downloads.activeCount}
         unreadBadge={unread}
         onOpenSettings={() => navigate('settings')}
+        catalogs={catalogs}
+        catalogId={route.view === 'search' && !route.params.get('q') ? catalogId : ''}
+        onOpenCatalog={openCatalog}
       >
         {route.view === 'home' && (
           <HomeView
@@ -240,7 +250,9 @@ export default function App() {
             onOpen={openTitle}
             onNavigate={navigate}
             onSearchTerm={searchFor}
-            onDiscoverGenre={id => navigate('search', { g: id })}
+            catalogId={catalogId}
+            catalogLabel={catalogs.find(c => c.id === catalogId)?.label ?? ''}
+            onOpenCatalog={openCatalog}
             onOpenEvent={openEvent}
           />
         )}
@@ -255,6 +267,9 @@ export default function App() {
             onOpenDetail={card => openTitle(card, 0, settings.lang)}
             onUpdateSettings={updateSettings}
             onSearchTerm={searchFor}
+            catalogs={catalogs}
+            catalogId={catalogId}
+            onSwitchCatalog={openCatalog}
             onOpenPerson={id => navigate('person', { id })}
             onOpenDownloaded={openDownloadedTitle}
             onJobsCreated={() => setDownloadTick(t => t + 1)}

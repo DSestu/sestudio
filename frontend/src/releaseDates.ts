@@ -8,9 +8,6 @@ export interface DateRange {
   to: string
 }
 
-/** Which side of today's line a list should show. */
-export type ReleaseState = 'out' | 'upcoming' | 'all'
-
 export const ANY_DATES: DateRange = { from: '', to: '' }
 
 export function isAnyDates(r: DateRange): boolean {
@@ -32,12 +29,6 @@ export function todayIso(): string {
   return iso(new Date())
 }
 
-export function daysFromToday(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + days)
-  return iso(d)
-}
-
 export function monthsAgo(months: number): string {
   const d = new Date()
   d.setMonth(d.getMonth() - months)
@@ -50,26 +41,6 @@ export function monthsAgo(months: number): string {
  *  never dated, so treating "undated" as "announced" would file them wrongly. */
 export function isUpcoming(releaseDate: string | undefined): boolean {
   return Boolean(releaseDate) && releaseDate! > todayIso()
-}
-
-/**
- * The window actually sent to TMDB: the user's own bounds, tightened by
- * whichever side of today they asked for.
- *
- * Bounding the *request* rather than only the response matters — under a
- * "Newest" sort every title on page one is an unreleased announcement, so a
- * client-side filter would leave the page empty however far it paged.
- */
-export function effectiveWindow(range: DateRange, state: ReleaseState): DateRange {
-  const today = todayIso()
-  if (state === 'out') {
-    return { from: range.from, to: range.to && range.to < today ? range.to : today }
-  }
-  if (state === 'upcoming') {
-    const tomorrow = daysFromToday(1)
-    return { from: range.from > tomorrow ? range.from : tomorrow, to: range.to }
-  }
-  return range
 }
 
 /** "since 2026-07-17", "2020-01-01 – 2024-12-31", "up to 1999-12-31". */
