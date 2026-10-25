@@ -15,17 +15,24 @@ interface Props {
   /** Let a TMDB poster stand in for the source's own. Artwork only: the rating,
    *  year and genres come from the same lookup either way. */
   posters?: boolean
+  /** One line that scrolls sideways instead of a wrapping grid: a kind's row
+   *  on the search page. */
+  row?: boolean
 }
 
-export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail, enrich, posters }: Props) {
+export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail, enrich, posters, row }: Props) {
   if (!cards.length) return null
 
   // Two across on a phone, so the always-visible touch controls fit (#26).
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+    <div className={row
+      ? 'flex gap-3 sm:gap-4 overflow-x-auto snap-x scroll-px-1 px-1 -mx-1 pb-2'
+      : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4'}
+    >
       {cards.map(card => (
         <ResultCard
           key={card.newsid}
+          className={row ? 'w-36 sm:w-40 shrink-0 snap-start' : ''}
           card={card}
           checked={checkedIds.has(card.newsid)}
           onToggle={() => onToggle(card.newsid)}
@@ -46,9 +53,10 @@ interface CardProps {
   onOpenDetail: (card: SeasonCard) => void
   enrich: boolean
   posters: boolean
+  className: string
 }
 
-function ResultCard({ card, checked, onToggle, onOpenDetail, enrich, posters }: CardProps) {
+function ResultCard({ card, checked, onToggle, onOpenDetail, enrich, posters, className }: CardProps) {
   // Falls back to the source's own poster/title when TMDB is off or unmatched.
   const meta = useTmdb(card.series_name, card.year ?? 0, card.is_film, enrich)
   const poster = (posters ? meta?.poster_url : '') || card.poster_url
@@ -58,7 +66,7 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich, posters }: 
   const genres = (meta?.genres ?? []).slice(0, 2)
 
   return (
-    <div className="group relative">
+    <div className={`group relative ${className}`}>
       {/* Selection — checkbox overlay, sits outside the poster button */}
       <button
         onClick={onToggle}

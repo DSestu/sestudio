@@ -18,6 +18,7 @@ import WatchSearchButton from '../components/WatchSearchButton'
 import PeopleResults from '../components/PeopleResults'
 import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
+import KindRows from '../components/search/KindRows'
 import { setLibraryLayout, useLibraryLayout } from '../libraryLayout'
 import { useMergedCards } from '../useMergedCards'
 import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
@@ -591,6 +592,17 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             onOpenDetail={onOpenDetail}
             enrich={settings.tmdb_configured}
             posters={settings.tmdb_posters}
+          />
+        ) : kind === 'all' && KINDS.filter(k => k.value !== 'all' && gridCards.some(c => matchesKind(c, k.value))).length > 1 ? (
+          // A mixed result reads by kind: one row each, "See all" for the rest.
+          <KindRows
+            cards={gridCards}
+            checkedIds={checkedIds}
+            onToggle={toggleCard}
+            onOpenDetail={onOpenDetail}
+            enrich={settings.tmdb_configured}
+            posters={settings.tmdb_posters}
+            onSeeAll={k => { onSearch(lastQuery, k); window.scrollTo({ top: 0 }) }}
           />
         ) : (
           <ResultsGrid
