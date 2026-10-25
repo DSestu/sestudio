@@ -227,6 +227,13 @@ def test_languages_are_read_per_episode_not_from_the_first(httpx_mock: HTTPXMock
     assert page.episodes[1].embed_urls["senpai"].endswith("#lang=vostfr")
 
 
+def test_ad_gated_page_says_so(httpx_mock: HTTPXMock):
+    gated = f'<form method="POST" action="{BASE}/watch-start/1-abc"></form>'
+    httpx_mock.add_response(url=MOVIE, text=gated)
+    with pytest.raises(SiteError, match="ads"):
+        _site().fetch_page(MOVIE, "vf")
+
+
 def test_unsupported_page_raises():
     with pytest.raises(SiteError):
         _site().fetch_page(f"{BASE}/peoples/someone", "vf")

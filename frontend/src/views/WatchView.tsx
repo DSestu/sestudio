@@ -33,7 +33,7 @@ import type { PortalNode } from '../portalNode'
 import { useSeasonDetail } from '../components/season/useSeasonDetail'
 import { downloadToDevice } from '../deviceDownloads'
 import type { Navigate } from '../nav'
-import { DOWNLOADED_PROVIDER, playbackOrder, type PlayableEpisode } from '../providers'
+import { DOWNLOADED_PROVIDER, orderProviders, playbackOrder, type PlayableEpisode } from '../providers'
 import { useProviderSources } from '../useProviderSources'
 import {
   fileFor, fmtSize, langsFor, sanitizeName, titleFor, useDownloadedLibrary,
@@ -204,6 +204,20 @@ export default function WatchView({
     [siteSources],
   )
   const listings = useSourceListings(siteListings, activeLang)
+
+  // The open site could not serve the title at all (senpai's ad gate, a dead
+  // mirror) and nothing it came with could either: move to the best-ranked
+  // other site whose listing loaded, rather than stop on an error.
+  const fallbackIds = error && !detail
+    ? listings.filter(l => !l.current && !l.failed && Object.keys(l.embeds).length).map(l => l.source)
+    : []
+  const fallbackTo = orderProviders(fallbackIds, settings.preferred_sites)[0]
+  useEffect(() => {
+    const next = listings.find(l => l.source === fallbackTo && !l.current)
+    if (next) switchListing(next)
+    // Once per site found: `listings` changes identity on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fallbackTo])
 
   // Languages belong to the title, not to the site you happen to be on: senpai
   // carries VF only for most anime, so a VOSTFR that exists elsewhere would stay
