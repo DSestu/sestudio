@@ -38,9 +38,10 @@ import { KindSegments, OptionsButton } from '../components/search/SearchParts'
 import { OPTIONS_ID, setSearchOptionsSummary, setSourcesPanel, useSearchOptions } from '../searchOptions'
 import { useScrolledDown } from '../useScrolledDown'
 import { useTopMatch } from '../useTopMatch'
-import { matchKey } from '../topMatch'
+import { matchKey, splitYear } from '../topMatch'
 import { useWatchState } from '../watchState'
 import TopMatchHero, { TopMatchSkeleton } from '../components/search/TopMatchHero'
+import PersonHero from '../components/search/PersonHero'
 
 interface Props {
   settings: AppSettings
@@ -251,6 +252,13 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   }, [lastQuery, settings.tmdb_configured])
 
   const people = peopleFor.q === lastQuery ? peopleFor.hits : []
+  // A person is only worth showing with a face. When no title matches the
+  // search exactly, TMDB's first person (its most popular) is who it meant,
+  // and takes the hero slot ("villeneuve").
+  const withPhoto = people.filter(p => p.profile_url)
+  const exactTitle = results.some(c => matchKey(c.series_name) === matchKey(splitYear(lastQuery).title))
+  const personHero = !exactTitle && !topMatch.hero && !topMatch.pending && people[0]?.profile_url ? people[0] : null
+  const morePeople = personHero ? withPhoto.filter(p => p !== personHero) : withPhoto
 
   // On disk, matched in memory so the answer is instant: episodes whose own
   // title matches (E3), and shows the search names that neither those nor the hero cover.
@@ -565,7 +573,9 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
       {lastQuery !== '' && resolvedQuery === lastQuery && (topMatch.pending
         ? <TopMatchSkeleton />
-        : topMatch.hero && (
+        : personHero ? (
+          <PersonHero person={personHero} onOpen={onOpenPerson} onSearchTerm={onSearchTerm} />
+        ) : topMatch.hero && (
           <TopMatchHero card={topMatch.hero} meta={topMatch.meta} disk={heroDisk} posters={settings.tmdb_posters} onOpen={onOpenDetail}>
             {heroDisk && heroDisk.show.episodes > 1 && (
               <DiskRail
@@ -579,7 +589,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           </TopMatchHero>
         ))}
 
-      {lastQuery !== '' && <PeopleResults people={people} onOpen={onOpenPerson} />}
+      {lastQuery !== '' && <PeopleResults people={morePeople} title={personHero ? `Also named “${lastQuery}”` : undefined} onOpen={onOpenPerson} />}
 
       {lastQuery === '' ? (
         // No query: browse a catalogue instead of a blank page, so discovery
@@ -651,7 +661,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           message={`${merged.length} result${merged.length !== 1 ? 's' : ''} for “${lastQuery}” fall outside that window. Widen it, or pick Any.`}
         />
       ) : resolvedQuery === lastQuery ? (
-        people.length > 0 ? (
+        withPhoto.length > 0 ? (
           <EmptyState
             title={`No titles match “${lastQuery}”`}
             message="That looks like a person's name — open one above to browse their filmography."

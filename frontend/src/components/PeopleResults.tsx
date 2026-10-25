@@ -2,6 +2,8 @@ import type { PersonHit } from '../api'
 
 interface Props {
   people: PersonHit[]
+  /** The band's heading; "People" unless the hero is one of them. */
+  title?: string
   onOpen: (id: number) => void
 }
 
@@ -13,13 +15,13 @@ interface Props {
  * grid. Each card names a few of their titles, which is what tells two people
  * of the same name apart.
  */
-export default function PeopleResults({ people, onOpen }: Props) {
+export default function PeopleResults({ people, title = 'People', onOpen }: Props) {
   if (!people.length) return null
 
   return (
     <section aria-label="People" className="flex flex-col gap-2">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-        People
+        {title}
       </h3>
       {/* A horizontal band, so people never push the title results off-screen. */}
       <ul className="flex gap-3 overflow-x-auto pb-1">
