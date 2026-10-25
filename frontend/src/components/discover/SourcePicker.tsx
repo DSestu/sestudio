@@ -1,17 +1,19 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { CatalogInfo, SeasonCard } from '../../api'
 import { closeDiscoverMenu, closeDiscoverMenuThen, openDiscoverMenu, useDiscoverMenuOpen } from '../../discoverMenu'
 import { useModalBack } from '../../useModalBack'
-import { recentCatalogs } from '../../useCatalogs'
-import { type Kind, SEARCH_FIELD, useTitleSearch } from '../../titleSearch'
-import { KindChips, SearchIcon, TitleResults } from '../search/SearchParts'
+import { useSourcePosters } from './sourcePosters'
+import { type Kind, SEARCH_FIELD, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
+import { RecentSearchChips, SearchIcon, TitleResults } from '../search/SearchParts'
 
 // TMDB lists titles to look up on the sites rather than playing any itself,
 // so it is set apart from the video sources wherever they are listed.
 const TMDB = 'tmdb'
-// With this few video sources the full list is already short; "Recent" would
-// only repeat it.
-const RECENT_FROM = 5
+
+// From the tab bar's top edge to the top of the screen. min and max both, so
+// the height animates (min-height grows) and stays put whatever the results.
+const FULL_HEIGHT =
+  'min-h-[calc(100dvh_-_3.5rem_-_1px_-_env(safe-area-inset-bottom)_-_env(safe-area-inset-top))] max-h-[calc(100dvh_-_3.5rem_-_1px_-_env(safe-area-inset-bottom)_-_env(safe-area-inset-top))]'
 
 /**
  * The Discover heading: names the open catalogue and what it holds. On a phone
@@ -109,6 +111,19 @@ export function DiscoverMenu({
 }: MenuProps) {
   const open = useDiscoverMenuOpen()
   useModalBack(open, closeDiscoverMenu)
+  // Bars floating over the tab bar (casting, the mini-player) ride up with the
+  // menu rather than end up under it: they lift by --discover-lift.
+  const panel = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const root = document.documentElement
+    const el = panel.current
+    if (!open || !el) { root.style.setProperty('--discover-lift', '0px'); return }
+    const lift = () => root.style.setProperty('--discover-lift', `${el.offsetHeight}px`)
+    lift()
+    const watch = new ResizeObserver(lift)
+    watch.observe(el)
+    return () => { watch.disconnect(); root.style.setProperty('--discover-lift', '0px') }
+  }, [open])
   // The page under the menu must not scroll with it.
   useEffect(() => {
     if (!open) return
@@ -123,37 +138,38 @@ export function DiscoverMenu({
   const search = useTitleSearch(
     q, kind, { preferredSite, mergeByTmdb, collapseSeasons }, catalogs.some(c => c.id === TMDB),
   )
+  // Searching, the panel grows to the top of the screen and stays there, so
+  // the keyboard can't cover the results and their count can't resize it. It
+  // drops back when the keyboard goes away with nothing typed.
+  const [expanded, setExpanded] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+  const foldIfEmpty = () => { if (!input.current?.value.trim()) setExpanded(false) }
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!expanded || !vv) return
+    let last = vv.height
+    const onResize = () => {
+      // The keyboard closed but the field kept focus (Android's back key).
+      if (vv.height > last + 100) input.current?.blur()
+      last = vv.height
+    }
+    vv.addEventListener('resize', onResize)
+    return () => vv.removeEventListener('resize', onResize)
+  }, [expanded])
   // A folded menu forgets the search, so it reopens on the list.
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (!open) { setQuery(''); setKind('all') }
+    if (!open) { setQuery(''); setKind('all'); setExpanded(false) }
   }
 
   const tmdb = catalogs.find(c => c.id === TMDB)
   const sites = catalogs.filter(c => c.id !== TMDB)
-  const recent = sites.length >= RECENT_FROM
-    ? recentCatalogs().flatMap(id => sites.filter(c => c.id === id))
-    : []
+  const posters = useSourcePosters(sites.map(c => c.id), open)
+  const recentSearches = useRecentSearches()
   const choose = (id: string) =>
     id === catalogId && onDiscover ? closeDiscoverMenu() : closeDiscoverMenuThen(() => onOpenCatalog(id))
   const isOn = (id: string) => id === catalogId
-
-  const row = (c: CatalogInfo) => (
-    <button
-      key={c.id}
-      onClick={() => choose(c.id)}
-      aria-current={isOn(c.id) ? 'true' : undefined}
-      className={`flex w-full items-center gap-3 rounded-box px-3 py-2.5 text-left ${isOn(c.id) ? 'bg-base-300' : 'active:bg-base-300/60'}`}
-    >
-      <Initial label={c.label} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{c.label}</span>
-        <span className="block text-xs text-base-content/50 truncate">{c.description}</span>
-      </span>
-      {isOn(c.id) && <span className="text-primary font-bold" aria-hidden="true">✓</span>}
-    </button>
-  )
 
   return (
     <div className="md:hidden">
@@ -174,11 +190,12 @@ export function DiscoverMenu({
         }`}
       >
         <div
+          ref={panel}
           role="dialog"
           aria-label="Discover"
-          className={`flex flex-col max-h-[70dvh] rounded-t-box border-t border-base-300 bg-base-200 transition-transform duration-300 ease-out motion-reduce:transition-none ${
+          className={`flex flex-col rounded-t-box border-t border-base-300 bg-base-200 transition-[translate,min-height,max-height] duration-300 ease-out motion-reduce:transition-none ${
             open ? 'translate-y-0' : 'translate-y-full'
-          }`}
+          } ${expanded ? FULL_HEIGHT : 'min-h-0 max-h-[70dvh]'}`}
         >
           {/* Results preview as you type; Enter (the keyboard's Search key)
               goes to the full results page. */}
@@ -193,8 +210,11 @@ export function DiscoverMenu({
             <label className={SEARCH_FIELD}>
               <SearchIcon />
               <input
+                ref={input}
                 type="search"
                 value={query}
+                onFocus={() => setExpanded(true)}
+                onBlur={foldIfEmpty}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="Search titles on every source"
                 aria-label="Search titles on every source"
@@ -202,7 +222,6 @@ export function DiscoverMenu({
                 className="grow bg-transparent outline-none text-sm min-w-0"
               />
             </label>
-            {q && <div className="mt-3"><KindChips value={kind} onChange={setKind} /></div>}
           </form>
 
           {q ? (
@@ -210,7 +229,8 @@ export function DiscoverMenu({
               <TitleResults
                 search={search}
                 query={q}
-                catalogs={catalogs}
+                kind={kind}
+                onKind={setKind}
                 listId="discover-menu-results"
                 onOpen={card => closeDiscoverMenuThen(() => onOpenCard(card))}
                 onSeeAll={() => closeDiscoverMenuThen(() => onSearchTerm(q, kind))}
@@ -218,6 +238,15 @@ export function DiscoverMenu({
             </div>
           ) : (
             <>
+              {recentSearches.length > 0 && (
+                <div className="px-2 pb-3 shrink-0">
+                  <RecentSearchChips
+                    items={recentSearches}
+                    onPick={r => closeDiscoverMenuThen(() => onSearchTerm(r.term, r.kind))}
+                    onClear={clearRecentSearches}
+                  />
+                </div>
+              )}
               {tmdb && (
                 <div className="px-4 pb-3 border-b border-base-300 shrink-0">
                   <button
@@ -232,30 +261,42 @@ export function DiscoverMenu({
                       <span className="flex items-center gap-2 text-sm font-bold">{tmdb.label} <TmdbBadge /></span>
                       <span className="block text-xs text-base-content/60 truncate">{tmdb.description}</span>
                     </span>
-                    {isOn(TMDB) && <span className="text-primary font-bold" aria-hidden="true">✓</span>}
+                    <span className={isOn(TMDB) ? 'text-primary font-bold' : 'text-info/70'} aria-hidden="true">{isOn(TMDB) ? '✓' : '›'}</span>
                   </button>
                 </div>
               )}
               <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">
-                {recent.length > 0 && (
-                  <>
-                    <SectionTitle>Recent</SectionTitle>
-                    <div className="grid grid-cols-3 gap-2">
-                      {recent.map(c => (
-                        <button
-                          key={c.id}
-                          onClick={() => choose(c.id)}
-                          className={`flex flex-col items-center gap-1 rounded-box bg-base-300 p-2 text-xs font-semibold ${isOn(c.id) ? 'ring-2 ring-primary' : ''}`}
-                        >
-                          <Initial label={c.label} />
-                          {c.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <SectionTitle>Video sources</SectionTitle>
-                <div className="flex flex-col gap-0.5">{sites.map(row)}</div>
+                <SectionTitle>Browse a source</SectionTitle>
+                {/* Tiles that look like what they open onto: each shows the
+                    first posters of that source's Discover page. */}
+                <div className="grid grid-cols-2 gap-2">
+                  {sites.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => choose(c.id)}
+                      aria-current={isOn(c.id) ? 'true' : undefined}
+                      className={`overflow-hidden rounded-box border text-left active:scale-[.98] transition-transform ${
+                        isOn(c.id) ? 'border-primary' : 'border-base-300'
+                      } bg-base-300`}
+                    >
+                      <span className="flex h-16 gap-0.5" aria-hidden="true">
+                        {[0, 1, 2].map(i => {
+                          const src = posters.get(c.id)?.[i]
+                          return src
+                            ? <img key={i} src={src} alt="" loading="lazy" className="min-w-0 flex-1 object-cover" />
+                            : <span key={i} className="flex-1 bg-base-100/60" />
+                        })}
+                      </span>
+                      <span className="block px-2.5 py-2">
+                        <span className="flex items-center gap-1 text-sm font-semibold">
+                          <span className="truncate">{c.label}</span>
+                          <span className="ml-auto text-base-content/50" aria-hidden="true">{isOn(c.id) ? '✓' : '›'}</span>
+                        </span>
+                        <span className="block truncate text-[11px] text-base-content/50">{c.description.split(' · ')[0]}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </>
           )}
@@ -270,14 +311,5 @@ function SectionTitle({ children }: { children: ReactNode }) {
     <h4 className="mt-4 mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-base-content/50">
       {children}
     </h4>
-  )
-}
-
-/** A source's initial on a tile, so a long list scans by more than text. */
-function Initial({ label }: { label: string }) {
-  return (
-    <span className="w-8 h-8 shrink-0 rounded-lg bg-primary/15 text-primary flex items-center justify-center text-sm font-extrabold" aria-hidden="true">
-      {label.slice(0, 1)}
-    </span>
   )
 }

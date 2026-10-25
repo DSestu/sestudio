@@ -3,26 +3,9 @@ import type { AppSettings, CatalogInfo } from './api'
 import { getCatalogs } from './api'
 
 const LAST_KEY = 'sestudio.catalog'
-const RECENT_KEY = 'sestudio.catalogs.recent'
-const RECENT_MAX = 3
-
-/** The catalogues browsed last, most recent first. */
-export function recentCatalogs(): string[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
-  } catch {
-    return []
-  }
-}
-
 /** Remember the catalogue last browsed, so Discover and Home reopen on it. */
 export function rememberCatalog(id: string) {
-  try {
-    localStorage.setItem(LAST_KEY, id)
-    const recent = [id, ...recentCatalogs().filter(r => r !== id)].slice(0, RECENT_MAX)
-    localStorage.setItem(RECENT_KEY, JSON.stringify(recent))
-  } catch { /* private mode */ }
+  try { localStorage.setItem(LAST_KEY, id) } catch { /* private mode */ }
 }
 
 /** The catalogue to show: the asked-for one when it exists, else the last
