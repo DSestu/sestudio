@@ -127,8 +127,12 @@ export default function DiscoverPanel({ catalogs, catalogId, onSwitchCatalog, on
     // Closing the filters sheet steps back over the history entry it pushed,
     // which restores the URL from before the sheet opened: write it again.
     const reassert = () => {
-      const onDiscover = window.location.hash.startsWith('#/search') && !currentParams().get('q')
-      if (onDiscover) patchParams(patch)
+      const params = currentParams()
+      // Switching catalogue also fires popstate, before this panel unmounts:
+      // writing back then would undo the switch.
+      const onThisCatalog = window.location.hash.startsWith('#/search') && !params.get('q')
+        && (params.get('cat') ?? catalogId) === catalogId
+      if (onThisCatalog) patchParams(patch)
     }
     window.addEventListener('popstate', reassert)
     return () => window.removeEventListener('popstate', reassert)
