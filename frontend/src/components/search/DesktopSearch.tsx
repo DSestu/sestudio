@@ -2,7 +2,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import type { CatalogInfo, SeasonCard } from '../../api'
 import type { Kind, MergeOptions, RecentSearch } from '../../titleSearch'
 import { PREVIEW_ROWS, SEARCH_FIELD, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
-import { KindChips, RecentSearchList, SearchIcon, TitleResults } from './SearchParts'
+import { KindChips, OptionsButton, RecentSearchList, SearchIcon, TitleResults } from './SearchParts'
 
 interface Props {
   catalogs: CatalogInfo[]
@@ -139,7 +139,10 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
         <div className="relative z-10 flex items-center gap-4 h-16">
           {field}
           {onResults ? (
-            <KindChips value={pageKind} onChange={k => onSearch(query, k)} />
+            <>
+              <KindChips value={pageKind} onChange={k => onSearch(query, k)} />
+              <OptionsButton />
+            </>
           ) : (
             <span className="text-xs text-base-content/40">
               on {catalogs.filter(c => c.id !== 'tmdb').length} sources{catalogs.some(c => c.id === 'tmdb') ? ' + TMDB' : ''}

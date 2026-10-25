@@ -26,6 +26,9 @@ interface Props {
   value: DateRange
   onChange: (next: DateRange) => void
   label?: string
+  /** The label still names the group for screen readers, but isn't drawn —
+   *  for a caller that draws its own heading. */
+  hideLabel?: boolean
   /** Shown next to the controls where the window can only be applied by year. */
   note?: string
 }
@@ -35,7 +38,7 @@ interface Props {
  * common case ("what's out recently"), and a from/to pair for anything else.
  */
 export default function ReleaseFilter({
-  value, onChange, label = 'Released', note,
+  value, onChange, label = 'Released', hideLabel = false, note,
 }: Props) {
   function set(patch: Partial<DateRange>) {
     const next = { ...value, ...patch }
@@ -47,7 +50,7 @@ export default function ReleaseFilter({
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2" role="group" aria-label={label}>
-      <span className="text-sm text-base-content/70 whitespace-nowrap">{label}</span>
+      {!hideLabel && <span className="text-sm text-base-content/70 whitespace-nowrap">{label}</span>}
 
       <div className="flex flex-wrap gap-1.5">
         {presets().map(p => {
