@@ -203,3 +203,34 @@ export function resumePoint(show: DiskShow, history: WatchEntry[]): DiskResume |
   }
   return { ...order[0], resume: false }
 }
+
+export interface EpisodeHit {
+  season: DiskSeason
+  episode: DiskEpisode
+  copy: DiskCopy
+}
+
+/** The plainest of an episode's copies ("x.mp4" over "x.ia.mp4"): the original. */
+export function plainCopy(episode: DiskEpisode): DiskCopy {
+  return episode.copies.reduce((a, b) => (b.file.title.length < a.file.title.length ? b : a))
+}
+
+/**
+ * Episodes on disk whose own title matches a search ("myst" → South Park's
+ * "Mysterion Rises"), grouped by show. The show the search names is left out:
+ * every one of its episodes would match, and it has the hero for that.
+ */
+export function episodeHits(shows: DiskShow[], query: string): { show: DiskShow; hits: EpisodeHit[] }[] {
+  const want = matchKey(query)
+  if (want.length < 3) return []
+  return shows
+    .filter(show => show.key !== want)
+    .map(show => ({
+      show,
+      hits: show.seasons.flatMap(season => season.episodes
+        .map(episode => ({ season, episode, copy: plainCopy(episode) }))
+        // A film's one file is titled after the film: match it like an episode.
+        .filter(hit => matchKey(hit.copy.file.title).includes(want))),
+    }))
+    .filter(g => g.hits.length > 0)
+}

@@ -1,6 +1,6 @@
 import { type RefObject, useLayoutEffect, useRef, useState } from 'react'
 import { downloadedThumbUrl } from '../../api'
-import { type DiskCopy, type DiskEpisode, type DiskResume, type DiskSeason, type DiskShow } from '../../diskShows'
+import { type DiskCopy, type DiskEpisode, type DiskResume, type DiskSeason, type DiskShow, plainCopy } from '../../diskShows'
 import { matchKey } from '../../topMatch'
 import type { WatchEntry } from '../../watchState'
 
@@ -102,8 +102,7 @@ export default function DiskRail({ show, history, at, onPlay }: Props) {
             const entry = entryFor(season, ep)
             const resume = at.season.season === season.season && at.episode.number === ep.number
             const progress = entry && !entry.watched && entry.duration > 0 ? entry.position / entry.duration : 0
-            // Copies differ by a suffix ("x.ia.mp4" next to "x.mp4"): the plainest name is the original.
-            const copy = ep.copies.reduce((a, b) => (b.file.title.length < a.file.title.length ? b : a))
+            const copy = plainCopy(ep)
             return (
               <div key={ep.number} role="listitem" data-resume={resume || undefined} className="w-40 shrink-0 snap-start">
               <button type="button" onClick={() => onPlay(copy)} className="group w-full text-left">
