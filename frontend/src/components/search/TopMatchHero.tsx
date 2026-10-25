@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { SeasonCard, TmdbMeta } from '../../api'
 import RatingBadge from '../RatingBadge'
 import SaveToggles from '../SaveToggles'
@@ -12,6 +13,8 @@ interface Props {
   onOpen: (card: SeasonCard) => void
   /** Set when the title is on disk: what is there, and Play picks it up from disk. */
   disk?: { line: string; play: string; onPlay: () => void }
+  /** Under the card: the seasons and episodes on disk. */
+  children?: ReactNode
 }
 
 /** The skeleton the hero slot holds while it waits on votes, at the same
@@ -26,7 +29,7 @@ export function TopMatchSkeleton() {
  * The search's top match, shown big with Play next to it, over a blurred copy
  * of its own artwork. Only drawn when one result is clearly the one meant.
  */
-export default function TopMatchHero({ card, meta, posters, onOpen, disk }: Props) {
+export default function TopMatchHero({ card, meta, posters, onOpen, disk, children }: Props) {
   const poster = (posters ? meta?.poster_url : '') || card.poster_url
   const backdrop = meta?.backdrop_url || poster
   const year = meta?.year || card.year || 0
@@ -75,6 +78,7 @@ export default function TopMatchHero({ card, meta, posters, onOpen, disk }: Prop
           </div>
         </div>
       </div>
+      {children && <div className="relative px-1 pb-4 sm:px-3 sm:pb-5">{children}</div>}
     </section>
   )
 }
