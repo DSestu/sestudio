@@ -28,47 +28,6 @@ async def enrich(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.get("/tmdb/trending")
-async def trending() -> list[dict[str, Any]]:
-    """Trending titles this week, for the home screen browse row."""
-    try:
-        return await asyncio.to_thread(tmdb.catalog)
-    except tmdb.TmdbDisabled as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@router.get("/tmdb/discover")
-async def discover(
-    kind: str = "movie",
-    sort_by: str = "popularity.desc",
-    genres: str = "",
-    min_score: float = 0.0,
-    max_score: float = 10.0,
-    min_votes: int = 0,
-    from_date: str = "",
-    to_date: str = "",
-    page: int = 1,
-) -> dict[str, Any]:
-    """Browse the catalogue with the TMDB site's own sort/filter options."""
-    try:
-        return await asyncio.to_thread(
-            tmdb.discover,
-            kind,
-            sort_by,
-            genres,
-            min_score,
-            max_score,
-            min_votes,
-            from_date,
-            to_date,
-            page,
-        )
-    except tmdb.TmdbDisabled as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
 @router.get("/tmdb/genres")
 async def genre_list(kind: str = "movie") -> list[dict[str, Any]]:
     """Genre ids and names, for the discover filter chips."""

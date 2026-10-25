@@ -1,4 +1,4 @@
-import type { DateRange, ReleaseState } from '../releaseDates'
+import type { DateRange } from '../releaseDates'
 import { ANY_DATES, monthsAgo } from '../releaseDates'
 
 // A release-date window, shared by the catalogue browser and the search
@@ -18,14 +18,6 @@ function presets(): { label: string; range: DateRange }[] {
   ]
 }
 
-/** The released/unreleased choice. "Released" leads because an announcement is
- *  not watchable, which is what this list is for. */
-const STATES: { value: ReleaseState; label: string; title: string }[] = [
-  { value: 'out', label: 'Released', title: 'Only titles that are out' },
-  { value: 'upcoming', label: 'Incoming', title: 'Only titles announced but not released yet' },
-  { value: 'all', label: 'All', title: 'Both, with the unreleased ones grouped under Incoming' },
-]
-
 function same(a: DateRange, b: DateRange): boolean {
   return a.from === b.from && a.to === b.to
 }
@@ -33,21 +25,17 @@ function same(a: DateRange, b: DateRange): boolean {
 interface Props {
   value: DateRange
   onChange: (next: DateRange) => void
-  /** Omitted where the surface can't tell released from unreleased — source
-   *  listings carry a year, never a date, so the choice would be a lie there. */
-  state?: ReleaseState
-  onStateChange?: (next: ReleaseState) => void
   label?: string
   /** Shown next to the controls where the window can only be applied by year. */
   note?: string
 }
 
 /**
- * Release-date filter: the released/incoming choice, one-click presets for the
+ * Release-date filter: one-click presets for the
  * common case ("what's out recently"), and a from/to pair for anything else.
  */
 export default function ReleaseFilter({
-  value, onChange, state, onStateChange, label = 'Released', note,
+  value, onChange, label = 'Released', note,
 }: Props) {
   function set(patch: Partial<DateRange>) {
     const next = { ...value, ...patch }
@@ -60,24 +48,6 @@ export default function ReleaseFilter({
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2" role="group" aria-label={label}>
       <span className="text-sm text-base-content/70 whitespace-nowrap">{label}</span>
-
-      {state && onStateChange && (
-        <div className="join" role="group" aria-label="Release status">
-          {STATES.map(s => (
-            <button
-              key={s.value}
-              onClick={() => onStateChange(s.value)}
-              aria-pressed={state === s.value}
-              title={s.title}
-              className={`join-item btn btn-xs ${
-                state === s.value ? 'btn-primary' : 'btn-ghost border-base-300'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="flex flex-wrap gap-1.5">
         {presets().map(p => {

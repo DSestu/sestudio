@@ -1,6 +1,4 @@
 import type { CollectionEntry, ListName } from './collections'
-import type { ReleaseState } from './releaseDates'
-import { effectiveWindow } from './releaseDates'
 import type { PlayerPrefs } from './playerPrefs'
 import type { WatchEntry } from './watchState'
 
@@ -171,41 +169,6 @@ export interface TrendingCard {
 
 export type TmdbKind = 'movie' | 'tv'
 
-export interface DiscoverFilters {
-  kind: TmdbKind
-  sortBy: string
-  /** TMDB genre ids. */
-  genres: number[]
-  minScore: number
-  /** 10 = no ceiling. A low ceiling finds enjoyably bad films. */
-  maxScore: number
-  minVotes: number
-  /** Release-date window as ISO `YYYY-MM-DD`; '' on either bound means "open". */
-  fromDate: string
-  toDate: string
-  /** Which side of today to list. Defaults to released: an announced title
-   *  can't be watched, and under a date sort they would fill every page. */
-  releaseState: ReleaseState
-}
-
-export const DEFAULT_DISCOVER_FILTERS: DiscoverFilters = {
-  kind: 'movie',
-  sortBy: 'popularity.desc',
-  genres: [],
-  minScore: 0,
-  maxScore: 10,
-  minVotes: 0,
-  fromDate: '',
-  toDate: '',
-  releaseState: 'out',
-}
-
-export interface DiscoverPage {
-  page: number
-  total_pages: number
-  results: TrendingCard[]
-}
-
 export interface TmdbGenre {
   id: number
   name: string
@@ -224,43 +187,6 @@ export interface TmdbPerson {
   profile_url: string
   birthday: string
   credits: TmdbCredit[]
-}
-
-/** TMDB names date/title sort fields differently per media type. */
-function sortParam(kind: TmdbKind, sortBy: string): string {
-  if (sortBy.startsWith('date.')) {
-    return (kind === 'movie' ? 'primary_release_date' : 'first_air_date') + sortBy.slice('date'.length)
-  }
-  if (sortBy.startsWith('title.')) {
-    return (kind === 'movie' ? 'title' : 'name') + sortBy.slice('title'.length)
-  }
-  return sortBy
-}
-
-/** One page of the TMDB catalogue under the given sort/filters. */
-export async function discoverTitles(filters: DiscoverFilters, page: number): Promise<DiscoverPage> {
-  const params = new URLSearchParams({
-    kind: filters.kind,
-    sort_by: sortParam(filters.kind, filters.sortBy),
-    page: String(page),
-  })
-  if (filters.genres.length) params.set('genres', filters.genres.join(','))
-  if (filters.minScore > 0) params.set('min_score', String(filters.minScore))
-  if (filters.maxScore < 10) params.set('max_score', String(filters.maxScore))
-  if (filters.minVotes > 0) params.set('min_votes', String(filters.minVotes))
-  // The released/incoming choice tightens the window at the request, not on
-  // the response: under a date sort every title on page one can be an
-  // announcement, and filtering those out client-side would leave the page
-  // empty however far it paged.
-  const window = effectiveWindow(
-    { from: filters.fromDate, to: filters.toDate },
-    filters.releaseState,
-  )
-  if (window.from) params.set('from_date', window.from)
-  if (window.to) params.set('to_date', window.to)
-  const res = await fetch(`${BASE}/tmdb/discover?${params}`)
-  if (!res.ok) return { page: 1, total_pages: 1, results: [] }
-  return res.json()
 }
 
 export async function getGenres(kind: TmdbKind): Promise<TmdbGenre[]> {
@@ -308,8 +234,71 @@ export async function enrichTitle(
   return res.json()
 }
 
-export async function getTrending(): Promise<TrendingCard[]> {
-  const res = await fetch(`${BASE}/tmdb/trending`)
+/** A browsable catalogue (a site's own, or TMDB's). */
+export interface CatalogInfo {
+  id: string
+  label: string
+  description: string
+}
+
+/** One filter a catalogue offers. Values travel as strings: a multi is
+ *  comma-joined, a range is "lo,hi"; a range bound at its extreme is open. */
+export interface FilterField {
+  key: string
+  label: string
+  type: 'select' | 'multi' | 'range'
+  options: { value: string; label: string }[]
+  default: string
+  min: number
+  max: number
+  step: number
+  /** Other fields' options depend on this one: refetch the schema on change. */
+  reload: boolean
+  /** How many a multi can combine (0 = unlimited). */
+  max_selected: number
+}
+
+/** Non-default filter values, by field key. */
+export type CatalogValues = Record<string, string>
+
+export interface CatalogCard {
+  key: string
+  title: string
+  year: number
+  poster_url: string
+  rating: number
+  overview: string
+  /** A date to show over the poster (an announced release, a next airing). */
+  badge: string
+  genres: string[]
+  /** A site's own title opens directly; a TMDB title is searched for. */
+  open: { card?: SeasonCard; search?: { term: string; year: number } }
+}
+
+export interface Shelf {
+  id: string
+  title: string
+  cards: CatalogCard[]
+  /** The filters listing this shelf in full ("See all"). */
+  values: CatalogValues
+}
+
+export interface CatalogPage {
+  cards: CatalogCard[]
+  page: number
+  has_more: boolean
+  /** Set when the catalogue had to ignore part of the request. */
+  note: string
+}
+
+/** The server's `detail` for a failed request, or its status. */
+async function errorDetail(res: Response): Promise<string> {
+  const body = await res.json().catch(() => null)
+  return body?.detail ?? `HTTP ${res.status}`
+}
+
+export async function getCatalogs(): Promise<CatalogInfo[]> {
+  const res = await fetch(`${BASE}/catalogs`)
   if (!res.ok) return []
   return res.json()
 }
@@ -324,6 +313,25 @@ export interface BrowseRow {
 export async function getBrowseRows(): Promise<BrowseRow[]> {
   const res = await fetch(`${BASE}/browse`)
   if (!res.ok) return []
+  return res.json()
+}
+
+export async function getCatalogSchema(id: string, values: CatalogValues): Promise<FilterField[]> {
+  const res = await fetch(`${BASE}/catalogs/${id}/schema?${new URLSearchParams(values)}`)
+  if (!res.ok) throw new Error(await errorDetail(res))
+  return res.json()
+}
+
+export async function getShelves(id: string): Promise<Shelf[]> {
+  const res = await fetch(`${BASE}/catalogs/${id}/shelves`)
+  if (!res.ok) throw new Error(await errorDetail(res))
+  return res.json()
+}
+
+export async function discoverCatalog(id: string, values: CatalogValues, page: number): Promise<CatalogPage> {
+  const params = new URLSearchParams({ ...values, page: String(page) })
+  const res = await fetch(`${BASE}/catalogs/${id}/discover?${params}`)
+  if (!res.ok) throw new Error(await errorDetail(res))
   return res.json()
 }
 

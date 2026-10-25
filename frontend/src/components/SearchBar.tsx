@@ -77,7 +77,7 @@ export default function SearchBar({ onResults, term }: Props) {
         <input
           ref={inputRef}
           type="search"
-          placeholder="Search series or films…"
+          placeholder="Search all sources…"
           aria-label="Search series or films"
           value={query}
           onChange={e => { setQuery(e.target.value); setError(null) }}

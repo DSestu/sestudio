@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import threading
 import uuid
 from collections import deque
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -54,7 +56,11 @@ class JobStore:
         provider_registry: dict[str, StreamProvider] | None = None,
         sites: dict[str, ContentSite] | None = None,
         watcher_max_concurrent: int = 2,
+        local_proxy: Callable[[StreamSource], str | None] | None = None,
     ) -> None:
+        # Maps a via_proxy stream to this server's own proxy URL for it, or
+        # None when the server has no plain-HTTP listener to reach.
+        self._local_proxy = local_proxy
         self._jobs: dict[str, DownloadJob] = {}
         self._cancel_events: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
@@ -220,9 +226,14 @@ class JobStore:
             if cancel_event and cancel_event.is_set():
                 return
 
+            source = job.source
+            if source.via_proxy and self._local_proxy is not None:
+                proxied = self._local_proxy(source)
+                if proxied:
+                    source = dataclasses.replace(source, url=proxied)
             try:
                 ok = download(
-                    job.source,
+                    source,
                     job.output_path,
                     on_progress=on_progress,
                     cancel_event=cancel_event,

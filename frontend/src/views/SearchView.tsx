@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type {
-  AppSettings, DiscoverFilters, DownloadDestination, DownloadItem, DownloadJob,
+  AppSettings, CatalogInfo, DownloadDestination, DownloadItem, DownloadJob,
   DownloadedFile, DownloadedTitle, PersonHit, SeasonCard,
 } from '../api'
 import { checkDownloads, getSeason, postDownloads, searchPeople } from '../api'
-import { DEFAULT_DISCOVER_FILTERS } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import DiscoverPanel from '../components/DiscoverPanel'
 import { pickHost } from '../downloadPrefs'
@@ -26,9 +25,8 @@ import { downloadToDevice } from '../deviceDownloads'
 import DownloadedTree from '../components/downloaded/DownloadedTree'
 import { buildFolders } from '../downloadedFolders'
 import { useDownloadedLibrary } from '../downloadedLibrary'
-import { replaceParams } from '../nav'
+import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
-import type { ReleaseState } from '../releaseDates'
 import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
 
 interface Props {
@@ -41,6 +39,10 @@ interface Props {
   onUpdateSettings: (patch: Partial<AppSettings>) => void | Promise<void>
   /** Run a fresh source search for a title (a TMDB discover card). */
   onSearchTerm: (term: string, year?: number) => void
+  /** The catalogues to browse while the query is empty, and the open one. */
+  catalogs: CatalogInfo[]
+  catalogId: string
+  onSwitchCatalog: (id: string) => void
   /** Open a person's profile from the People band. */
   onOpenPerson: (id: number) => void
   /** Open a title already on disk, rather than a source listing. With a file,
@@ -48,39 +50,6 @@ interface Props {
   onOpenDownloaded: (title: DownloadedTitle, file?: DownloadedFile) => void
   onJobsCreated: () => void
   onSkipped: (jobs: DownloadJob[]) => void
-}
-
-function filtersFrom(params: URLSearchParams): DiscoverFilters {
-  return {
-    kind: params.get('kind') === 'tv' ? 'tv' : 'movie',
-    sortBy: params.get('sort') ?? DEFAULT_DISCOVER_FILTERS.sortBy,
-    genres: (params.get('g') ?? '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0),
-    minScore: Number(params.get('score')) || 0,
-    maxScore: Number(params.get('max')) || 10,
-    minVotes: Number(params.get('votes')) || 0,
-    fromDate: params.get('from') ?? '',
-    toDate: params.get('to') ?? '',
-    releaseState: RELEASE_STATES.includes(params.get('rel') as ReleaseState)
-      ? (params.get('rel') as ReleaseState)
-      : DEFAULT_DISCOVER_FILTERS.releaseState,
-  }
-}
-
-const RELEASE_STATES: ReleaseState[] = ['out', 'upcoming', 'all']
-
-/** Non-default filters only, so the URL stays clean. */
-function filterParams(f: DiscoverFilters): Record<string, string | number | undefined> {
-  return {
-    kind: f.kind === 'tv' ? 'tv' : undefined,
-    sort: f.sortBy !== DEFAULT_DISCOVER_FILTERS.sortBy ? f.sortBy : undefined,
-    g: f.genres.length ? f.genres.join(',') : undefined,
-    score: f.minScore > 0 ? f.minScore : undefined,
-    max: f.maxScore < 10 ? f.maxScore : undefined,
-    votes: f.minVotes > 0 ? f.minVotes : undefined,
-    from: f.fromDate || undefined,
-    to: f.toDate || undefined,
-    rel: f.releaseState !== DEFAULT_DISCOVER_FILTERS.releaseState ? f.releaseState : undefined,
-  }
 }
 
 /** Does a card fall inside the release window?
@@ -100,7 +69,7 @@ function inWindow(card: SeasonCard, from: string, to: string): boolean {
 }
 
 /** Search view: query, TMDB discovery, results grid, and bulk season download. */
-export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, onOpenPerson, onOpenDownloaded, onJobsCreated, onSkipped }: Props) {
+export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, catalogs, catalogId, onSwitchCatalog, onOpenPerson, onOpenDownloaded, onJobsCreated, onSkipped }: Props) {
   // Raw, as scraped: merging is derived, so flipping the TMDB-identity setting
   // regroups what is already on screen without re-searching.
   const [rawResults, setRawResults] = useState<SeasonCard[]>([])
@@ -111,7 +80,11 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   const downloadedTitles = useDownloadedLibrary()
   // The query the current `results` belong to — '' until the first response.
   const [resolvedQuery, setResolvedQuery] = useState('')
-  const [filters, setFilters] = useState<DiscoverFilters>(() => filtersFrom(params))
+  // Narrows typed-search results by year; seeded from the URL like the query.
+  const [releaseWindow, setReleaseWindow] = useState(() => ({
+    from: params.get('from') ?? '',
+    to: params.get('to') ?? '',
+  }))
   const [sort, setSort] = useState<SortKey>(defaultSortFor('search'))
   // Tagged with the query they belong to, so a stale set is never shown and
   // no synchronous reset is needed when the query changes.
@@ -135,13 +108,11 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   // The release window narrows what is already on screen — no re-search, since
   // the sources take no date. Cards whose year is unknown drop out while a
   // window is set; the toolbar says how many, so they aren't lost silently.
-  const releaseWindow = { from: filters.fromDate, to: filters.toDate }
   const results = useMemo(
     () => isAnyDates(releaseWindow)
       ? merged
-      : merged.filter(c => inWindow(c, filters.fromDate, filters.toDate)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [merged, filters.fromDate, filters.toDate],
+      : merged.filter(c => inWindow(c, releaseWindow.from, releaseWindow.to)),
+    [merged, releaseWindow],
   )
   const hiddenByYear = merged.length - results.length
 
@@ -217,8 +188,9 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   // Persist query + filters into the current history entry, so browser back
   // (and reload) land on this exact search instead of an empty one.
   useEffect(() => {
-    replaceParams('search', { q: lastQuery || undefined, ...filterParams(filters) })
-  }, [lastQuery, filters])
+    // Patched, not replaced: the discover panel keeps its filters in the same URL.
+    patchParams({ q: lastQuery || undefined, from: releaseWindow.from || undefined, to: releaseWindow.to || undefined })
+  }, [lastQuery, releaseWindow])
 
   async function resolveChecked() {
     if (!checkedIds.size) return
@@ -363,7 +335,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <ReleaseFilter
             value={releaseWindow}
-            onChange={r => setFilters(f => ({ ...f, fromDate: r.from, toDate: r.to }))}
+            onChange={setReleaseWindow}
             // Sub-year precision is browse-only: the sources date a listing by
             // year at best, so say so rather than look broken.
             note={!isAnyDates(releaseWindow) ? 'results are dated by year only' : undefined}
@@ -378,7 +350,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
       {/* Above the remote results: a copy already on disk is the most
           actionable answer to a search, and it plays without resolving a host. */}
-      {downloadedMatches > 0 && (
+      {lastQuery !== '' && downloadedMatches > 0 && (
         // Shut by default: the search is usually aimed at the sites, and local
         // copies are a sidebar to that. The count on the summary is what makes
         // it worth opening, so it has to be readable without opening it.
@@ -415,13 +387,17 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       {lastQuery !== '' && <PeopleResults people={people} onOpen={onOpenPerson} />}
 
       {lastQuery === '' ? (
-        // No query: browse the TMDB catalogue instead of a blank page, so
-        // suggestions and search flow into each other.
-        settings.tmdb_configured ? (
+        // No query: browse a catalogue instead of a blank page, so discovery
+        // and search flow into each other.
+        catalogs.length > 0 ? (
           <DiscoverPanel
-            filters={filters}
-            onChange={setFilters}
-            onSelect={card => onSearchTerm(card.title, card.year)}
+            // Remount per catalogue: its filters, schema and lists are its own.
+            key={catalogId}
+            catalogs={catalogs}
+            catalogId={catalogId}
+            onSwitchCatalog={onSwitchCatalog}
+            onOpenCard={onOpenDetail}
+            onSearchTerm={onSearchTerm}
           />
         ) : (
           <EmptyState

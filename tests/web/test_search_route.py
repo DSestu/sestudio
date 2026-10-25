@@ -24,6 +24,7 @@ def client():
     # Isolate the test to the primary site; the others are exercised elsewhere.
     app.state.sites.pop("french-manga")
     app.state.sites.pop("kisskh")
+    app.state.sites.pop("uniquestream")
     return TestClient(app)
 
 

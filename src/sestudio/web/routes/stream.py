@@ -254,6 +254,13 @@ def proxy_stream(token: str, request: Request) -> Response:
     if range_header:
         upstream_headers["Range"] = range_header
 
+    # A site whose player fetches and rewrites part of its media its own way
+    # (an obfuscated HLS key) gets the same treatment here.
+    site = request.app.state.sites.get(provider)
+    fix = site.proxy_fix(target_url) if site is not None else None
+    if fix is not None:
+        upstream_headers.update(fix.headers)
+
     client = new_client(
         headers=upstream_headers, impersonate=provider in IMPERSONATE_PROVIDERS
     )
@@ -295,6 +302,19 @@ def proxy_stream(token: str, request: Request) -> Response:
             content=rewritten,
             status_code=upstream.status_code,
             media_type=_HLS_CONTENT_TYPE,
+            headers=dict(_CORS_HEADERS),
+        )
+
+    if fix is not None:  # a small body, read whole to be rewritten
+        try:
+            raw = upstream.read()
+        finally:
+            upstream.close()
+            client.close()
+        return Response(
+            content=fix.transform(raw) if upstream.is_success else raw,
+            status_code=upstream.status_code,
+            media_type="application/octet-stream",
             headers=dict(_CORS_HEADERS),
         )
 

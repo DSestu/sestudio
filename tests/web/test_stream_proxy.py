@@ -495,3 +495,34 @@ def test_a_forged_token_reads_nothing(monkeypatch):
     for route in ("hls", "segment?index=0&", "tv"):
         sep = "" if route.endswith("&") else "?"
         assert client.get(f"/api/stream/{route}{sep}token=abc").status_code == 403
+
+
+def test_proxy_applies_the_sites_fix(httpx_mock: HTTPXMock):
+    from sestudio.sites.base import ProxyFix
+
+    app = create_app(live_domain="https://fs03.lol")
+    site = app.state.sites["uniquestream"]
+    site.proxy_fix = lambda url: (
+        ProxyFix({"x-am-media-id": "m"}, lambda body: body.upper())
+        if url.endswith("key.bin")
+        else None
+    )
+    httpx_mock.add_response(
+        url="https://cdn/keys/key.bin",
+        match_headers={"x-am-media-id": "m"},
+        content=b"secret",
+    )
+    httpx_mock.add_response(url="https://cdn/seg.ts", content=b"segment")
+    client = TestClient(app)
+
+    def fetch(url: str) -> bytes:
+        token = sign(
+            app.state.proxy_secret,
+            url,
+            "https://anime.uniquestream.net/",
+            "uniquestream",
+        )
+        return client.get("/api/stream/proxy", params={"token": token}).content
+
+    assert fetch("https://cdn/keys/key.bin") == b"SECRET"
+    assert fetch("https://cdn/seg.ts") == b"segment"
