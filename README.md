@@ -209,12 +209,14 @@ back into the browser where the TV left off. See
 | --- | --- | --- |
 | FStream | `fstream` | Live-action and anime |
 | French-Manga | `french-manga` | Anime |
+| KissKH | `kisskh` | Asian dramas, films and anime (VOSTFR); its own Home rows |
 
 **Hosts** — where a stream is actually resolved from:
 
 | Host | Resolved by |
 | --- | --- |
 | `uqload`, `vidzy`, `premium`, `netu`, `luluvid`, `filmoon`, `voe` | The shared provider registry |
+| `kisskh` | The KissKH site itself (its own files) |
 
 ---
 

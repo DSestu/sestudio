@@ -130,6 +130,45 @@ def _run_mini_racer(body: str, payload_b64: str, hostname: str) -> object:
     )
 
 
+def call_script_function(
+    script: str, function: str, args: list[object], hostname: str = ""
+) -> str | None:
+    """Load a whole site script, then return ``function(*args)``.
+
+    For sites whose request signer is a global defined by one of their own
+    scripts (kisskh's ``common.js``). Same sandbox and caps as the inline
+    decoders; *function* must be a bare identifier and *args* travel as a JSON
+    literal, so neither can inject code. Returns None on any failure.
+    """
+    if not function.isidentifier():
+        return None
+    call = f"{function}.apply(null,{json.dumps(args)})"
+    try:
+        if quickjs is not None:
+            ctx = quickjs.Context()
+            ctx.set_memory_limit(_MEMORY_LIMIT_BYTES)
+            ctx.set_time_limit(_TIME_LIMIT_SECONDS)
+            ctx.set_max_stack_size(_MAX_STACK_BYTES)
+            ctx.eval(_preamble(hostname))
+            ctx.eval(script)
+            result = ctx.eval(call)
+        elif MiniRacer is not None:
+            ctx = MiniRacer()
+            limits = {
+                "timeout_sec": _TIME_LIMIT_SECONDS,
+                "max_memory": _MEMORY_LIMIT_BYTES,
+            }
+            ctx.eval(_preamble(hostname), **limits)
+            ctx.eval(script, **limits)
+            result = ctx.eval(call, **limits)
+        else:
+            return None
+    except Exception as exc:  # noqa: BLE001 - any engine failure reads as "no result"
+        logger.debug("Script function %s failed in %s: %s", function, ENGINE_NAME, exc)
+        return None
+    return result if isinstance(result, str) else None
+
+
 def run_inline_decoder(body: str, payload_b64: str, hostname: str = "") -> str | None:
     """Evaluate `(function(s){<body>})("<payload_b64>")` and return its result.
 

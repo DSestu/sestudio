@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sestudio.sites.base import (
     DEFAULT_PROVIDER_ORDER,
+    BrowseRow,
     ContentSite,
     PageResult,
     SiteError,
@@ -10,6 +11,7 @@ from sestudio.sites.base import (
 
 __all__ = [
     "DEFAULT_PROVIDER_ORDER",
+    "BrowseRow",
     "ContentSite",
     "PageResult",
     "SiteError",
@@ -26,6 +28,7 @@ def build_sites(fstream_domain: str | None = None) -> dict[str, ContentSite]:
     # Imported here, not at module level: scraper imports sites.base, so a
     # top-level import of fstream (which imports scraper) would be circular.
     from sestudio.sites.fstream import FstreamSite
+    from sestudio.sites.kisskh import KisskhSite
 
     return {
         "fstream": FstreamSite(
@@ -34,6 +37,7 @@ def build_sites(fstream_domain: str | None = None) -> dict[str, ContentSite]:
         "french-manga": FstreamSite(
             "french-manga", "French-Manga", ANIME_DOMAIN, is_anime=True
         ),
+        "kisskh": KisskhSite(),
     }
 
 
