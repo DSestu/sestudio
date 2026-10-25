@@ -3,6 +3,7 @@ import type { CatalogCard, CatalogInfo, CatalogValues, FilterField, SeasonCard, 
 import { discoverCatalog, getCatalogSchema, getShelves } from '../api'
 import type { MediaCardItem } from './MediaCard'
 import { setLibraryLayout, useLibraryLayout } from '../libraryLayout'
+import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
 import { currentParams, patchParams } from '../nav'
 import BrowseList from './BrowseList'
 import CatalogFilters from './discover/CatalogFilters'
@@ -162,6 +163,26 @@ export default function DiscoverPanel({ catalogs, catalogId, onSwitchCatalog, on
   }, [catalogId, valuesKey, browsing, attempt])
   const current = fetched?.key === valuesKey ? fetched : null
 
+  // A site's own cards are matched on TMDB, whose rating then leads: the
+  // sites rate titles on scales of their own, when at all. TMDB's catalogue
+  // exists exactly when a key is set, and its cards are TMDB's already.
+  const matchOnTmdb = catalogId !== 'tmdb' && catalogs.some(c => c.id === 'tmdb')
+  const shown = browsing ? current?.cards ?? [] : shelves?.flatMap(s => s.cards) ?? []
+  const refs: TitleRef[] = shown.flatMap(c =>
+    c.open.card ? [{ key: c.key, name: c.open.card.series_name, isFilm: c.open.card.is_film }] : [],
+  )
+  const metas = useTitlesMeta(refs, matchOnTmdb, true)
+  const enrich = (c: CatalogCard): CatalogCard => {
+    const meta = metas.get(c.key)
+    if (!meta) return c
+    return {
+      ...c,
+      rating: meta.rating || c.rating,
+      genres: c.genres.length ? c.genres : meta.genres,
+      overview: c.overview || meta.overview,
+    }
+  }
+
   const inflight = useRef(false)
   async function loadMore() {
     if (!current?.hasMore || inflight.current) return
@@ -255,7 +276,7 @@ export default function DiscoverPanel({ catalogs, catalogId, onSwitchCatalog, on
               <MediaRow
                 key={s.id}
                 title={s.title}
-                items={s.cards.map(item)}
+                items={s.cards.map(c => item(enrich(c)))}
                 onSeeAll={() => { setSeeAll(true); change(s.values) }}
               />
             ))}
@@ -279,9 +300,9 @@ export default function DiscoverPanel({ catalogs, catalogId, onSwitchCatalog, on
               Nothing matches these filters.
             </p>
           ) : layout === 'detail' ? (
-            <BrowseList cards={current.cards} onSelect={open} />
+            <BrowseList cards={current.cards.map(enrich)} onSelect={open} />
           ) : (
-            <PosterGrid items={current.cards.map(item)} />
+            <PosterGrid items={current.cards.map(c => item(enrich(c)))} />
           )}
           {current?.hasMore && current.cards.length > 0 && (
             <div ref={sentinelRef} className="flex justify-center py-4" aria-hidden="true">

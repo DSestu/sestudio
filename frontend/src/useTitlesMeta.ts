@@ -38,8 +38,16 @@ async function eachLimited<T>(
  * Lookups share the enrichment cache, so titles already seen elsewhere in the
  * app are free. Returns an empty map while disabled, without clearing what was
  * resolved — re-enabling is then instant.
+ *
+ * `progressive` publishes each match as it lands instead of the whole batch at
+ * once: for badges on a long list, where waiting on the slowest lookup would
+ * leave every card bare. Not for the genre filter, whose chips need them all.
  */
-export function useTitlesMeta(titles: TitleRef[], enabled: boolean): Map<string, TmdbMeta> {
+export function useTitlesMeta(
+  titles: TitleRef[],
+  enabled: boolean,
+  progressive = false,
+): Map<string, TmdbMeta> {
   const [metas, setMetas] = useState<Map<string, TmdbMeta>>(EMPTY)
   const batch = titles.map(t => t.key).join('|')
 
@@ -49,7 +57,9 @@ export function useTitlesMeta(titles: TitleRef[], enabled: boolean): Map<string,
     const found = new Map<string, TmdbMeta>()
     void eachLimited(titles, CONCURRENCY, async title => {
       const meta = await lookupTmdb(title.name, 0, title.isFilm)
-      if (meta) found.set(title.key, meta)
+      if (!meta) return
+      found.set(title.key, meta)
+      if (progressive && !cancelled) setMetas(new Map(found))
     }).then(() => { if (!cancelled) setMetas(found) })
     return () => { cancelled = true }
     // `batch` identifies `titles` for this purpose and is stable across the
