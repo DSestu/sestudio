@@ -1,5 +1,7 @@
 import type { CatalogCard } from '../api'
 import RatingBadge from './RatingBadge'
+import { saveEntry } from './resultMeta'
+import SaveToggles from './SaveToggles'
 
 interface Props {
   cards: CatalogCard[]
@@ -45,6 +47,9 @@ export default function BrowseList({ cards, onSelect }: Props) {
                 <span className="text-base-content/50 text-xs font-mono">{card.year}</span>
               )}
               <RatingBadge rating={card.rating} />
+              {card.open.card && (
+                <SaveToggles size="sm" className="ml-auto" entry={saveEntry(card.open.card, card.poster_url)} />
+              )}
             </div>
 
             {card.genres.length > 0 && (

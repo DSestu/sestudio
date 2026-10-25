@@ -12,6 +12,8 @@ import { withValue } from './discover/values'
 import LayoutToggle from './LayoutToggle'
 import MediaRow from './MediaRow'
 import PosterGrid from './PosterGrid'
+import { saveEntry } from './resultMeta'
+import SaveToggles from './SaveToggles'
 
 /** URL params the search view owns; every other one is a catalogue filter. */
 const RESERVED = new Set(['q', 'from', 'to', 'cat', 'all', 'only'])
@@ -85,6 +87,8 @@ export default function DiscoverPanel({ catalogs, catalogId, onOpenCard, onSearc
     genres: c.genres,
     poster_url: c.poster_url,
     onClick: () => open(c),
+    // Only a site's own title can be saved: a TMDB card has no page to reopen.
+    actions: c.open.card && <SaveToggles size="sm" entry={saveEntry(c.open.card, c.poster_url)} />,
   })
 
   // Only the fields marked `reload` change the schema itself (TMDB's genres
