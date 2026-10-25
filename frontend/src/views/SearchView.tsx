@@ -20,6 +20,7 @@ import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
 import KindRows from '../components/search/KindRows'
 import DiskRail from '../components/search/DiskRail'
+import EpisodeHits from '../components/search/EpisodeHits'
 import { setLibraryLayout, useLibraryLayout } from '../libraryLayout'
 import { useMergedCards } from '../useMergedCards'
 import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
@@ -27,10 +28,8 @@ import type { SortKey } from '../sortItems'
 import { SORTS_FOR, defaultSortFor, sortItems } from '../sortItems'
 import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
-import DownloadedTree from '../components/downloaded/DownloadedTree'
-import { buildFolders } from '../downloadedFolders'
 import { fmtSize, useDownloadedLibrary } from '../downloadedLibrary'
-import { episodeCode, groupOnDisk, resumePoint } from '../diskShows'
+import { episodeCode, episodeHits, groupOnDisk, resumePoint } from '../diskShows'
 import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
 import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
@@ -253,13 +252,13 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
   const people = peopleFor.q === lastQuery ? peopleFor.hits : []
 
-  // Matched on the file *paths*, so an episode whose name carries the query
-  // counts even when its folder does not. The answer has to be instant, so it
-  // filters what is already in memory rather than asking the server.
-  const downloadedMatches = useMemo(
-    () => buildFolders(downloadedTitles, lastQuery.trim().toLowerCase()).count,
-    [downloadedTitles, lastQuery],
-  )
+  // On disk, matched in memory so the answer is instant: episodes whose own
+  // title matches (E3), and shows the search names that neither those nor the hero cover.
+  const hits = useMemo(() => episodeHits(diskShows, lastQuery), [diskShows, lastQuery])
+  const namedOnDisk = useMemo(() => {
+    const want = matchKey(lastQuery)
+    return want.length < 2 ? [] : diskShows.filter(s => s.key.includes(want) && s !== heroDisk?.show && !hits.some(g => g.show === s))
+  }, [diskShows, lastQuery, heroDisk, hits])
 
   // Persist query + filters into the current history entry, so browser back
   // (and reload) land on this exact search instead of an empty one.
@@ -545,38 +544,23 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
       {/* Above the remote results: a copy already on disk is the most
           actionable answer to a search, and it plays without resolving a host. */}
-      {lastQuery !== '' && downloadedMatches > 0 && (
-        // Shut by default: the search is usually aimed at the sites, and local
-        // copies are a sidebar to that. The count on the summary is what makes
-        // it worth opening, so it has to be readable without opening it.
-        <details className="group rounded-box border border-base-300">
-          <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer list-none hover:bg-base-200 rounded-box">
-            <svg
-              className="w-3.5 h-3.5 shrink-0 text-base-content/40 transition-transform group-open:rotate-90"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-            <span className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-              On disk
-            </span>
-            <span className="text-xs text-base-content/40">
-              {downloadedMatches} file{downloadedMatches === 1 ? '' : 's'}
-            </span>
-          </summary>
-          <div className="px-2 pb-2">
-            {/* Folders shut too: a series match can be hundreds of episodes, and
-                the useful answer is which folder holds them. No delete here —
-                this is a search result, not the library. */}
-            <DownloadedTree
-              titles={downloadedTitles}
-              filter={lastQuery}
-              expandMatches={false}
-              onPlay={(title, file) => onOpenDownloaded(title, file)}
-            />
-          </div>
-        </details>
+      {lastQuery !== '' && hits.length > 0 && (
+        <EpisodeHits
+          groups={hits}
+          onPlay={copy => onOpenDownloaded(copy.title, copy.file)}
+          onOpenShow={copy => onOpenDownloaded(copy.title)}
+        />
+      )}
+      {/* Shows on disk the search names, beyond the one the hero already covers:
+          their cards carry the pill, and the library lists them all. */}
+      {lastQuery !== '' && namedOnDisk.length > 0 && (
+        <p className="flex items-center gap-2 px-1 text-sm text-base-content/70">
+          <svg className="w-4 h-4 shrink-0 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 1.1.9 2 2 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H6a2 2 0 00-2 2z" />
+          </svg>
+          <span className="truncate">On disk: {namedOnDisk.map(s => s.name).join(' · ')}</span>
+          <a href={`#/downloaded?q=${encodeURIComponent(lastQuery)}`} className="ml-auto shrink-0 text-primary hover:underline">All on disk ›</a>
+        </p>
       )}
 
       {lastQuery !== '' && resolvedQuery === lastQuery && (topMatch.pending

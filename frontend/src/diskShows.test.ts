@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { DownloadedFile, DownloadedTitle } from './api'
-import { episodeCode, groupOnDisk, resumePoint } from './diskShows'
+import { episodeCode, episodeHits, groupOnDisk, resumePoint } from './diskShows'
 import type { WatchEntry } from './watchState'
 
-const file = (path: string, number: number, size = 100): DownloadedFile => ({ path, number, title: '', lang: 'other', size, mtime: 0 })
+const file = (path: string, number: number, size = 100, title = ''): DownloadedFile => ({ path, number, title, lang: 'other', size, mtime: 0 })
 const title = (series: string, season: number, folder: string, files: DownloadedFile[], is_film = false): DownloadedTitle => ({
   key: `${series}|S${season}`, folder, series, season, is_film, poster_url: '', page_url: '', source: '',
   langs: ['other'], files, size: files.reduce((n, f) => n + f.size, 0), mtime: 0,
@@ -89,5 +89,32 @@ describe('resumePoint', () => {
   it('finds a cut episode by its number', () => {
     const r = resumePoint(op, [watch('One Piece', 1, 42, true)])!
     expect(episodeCode(r.season, r.episode)).toBe('Kaï E69')
+  })
+})
+
+describe('episodeHits', () => {
+  // Shaped like the real "myst" search: South Park episodes, a Loki episode, a film.
+  const shows = groupOnDisk([
+    title('South Park', 3, 'South Park', [file('sp/a', 10, 1, 'Chinpokomon'), file('sp/b', 11, 1, 'Starvin Marvin')]),
+    title('South Park', 14, 'South Park', [file('sp/c', 12, 1, 'Mysterion Rises'), file('sp/c2', 12, 1, 'Mysterion Rises.ia')]),
+    title('Loki', 1, 'Loki', [file('loki/e5', 5, 1, 'Journey Into Mystery')]),
+    title('911 Mysteries', 0, '', [file('911.mkv', 0, 1, '911 Mysteries')], true),
+    title('Mystery Men', 0, '', [file('mm.mkv', 0, 1, 'Mystery Men')], true),
+  ])
+
+  it('finds episodes by their own title, grouped by show, a copy counted once', () => {
+    const hits = episodeHits(shows, 'myst')
+    expect(hits.map(g => [g.show.name, g.hits.map(h => episodeCode(h.season, h.episode))])).toEqual([
+      ['South Park', ['S14 E12']],
+      ['Loki', ['S01 E05']],
+      ['911 Mysteries', ['S00 E00']],
+      ['Mystery Men', ['S00 E00']],
+    ])
+    expect(hits[0].hits[0].copy.file.title).toBe('Mysterion Rises')
+  })
+
+  it('leaves out the show the search names, and too-short searches', () => {
+    expect(episodeHits(shows, 'Mystery Men').map(g => g.show.name)).toEqual([])
+    expect(episodeHits(shows, 'my')).toEqual([])
   })
 })
