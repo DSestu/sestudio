@@ -1,9 +1,8 @@
 /** The shipped ranking, and what "reset" goes back to. Mirrors the backend's
- *  DEFAULT_DOWNLOAD_ORDER: senpai first because it serves its own files, so
- *  there is no third-party host to be down, then the most reliable hosts.
+ *  DEFAULT_DOWNLOAD_ORDER: the most reliable hosts first.
  *  The server sends its own copy as `default_hosts`; this is the fallback for
  *  a client that asked before settings arrived. */
-export const DEFAULT_HOST_ORDER = ['senpai', 'premium', 'uqload', 'vidzy', 'netu', 'voe']
+export const DEFAULT_HOST_ORDER = ['premium', 'uqload', 'vidzy', 'netu', 'voe']
 
 /**
  * The host to download an episode from: the viewer's ranking first, then the

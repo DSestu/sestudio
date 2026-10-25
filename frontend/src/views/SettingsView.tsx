@@ -315,8 +315,7 @@ export default function SettingsView({ settings, onUpdate }: Props) {
             out. A download tries your order from the top and moves to the next
             one whenever a site or host fails, so the order decides what is used
             first, never what is possible. Unnumbered entries are still tried,
-            after the numbered ones. Senpai Stream leads by default because it
-            serves its own files, so there is no third-party host to be down.
+            after the numbered ones.
           </p>
           <div className="flex flex-col gap-2">
             <RankRow
@@ -335,7 +334,7 @@ export default function SettingsView({ settings, onUpdate }: Props) {
           <button
             onClick={() =>
               void onUpdate({
-                preferred_sites: ['senpai'],
+                preferred_sites: ['fstream'],
                 preferred_hosts: settings.default_hosts ?? DEFAULT_HOST_ORDER,
               })
             }

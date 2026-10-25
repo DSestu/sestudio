@@ -21,12 +21,10 @@ except ImportError:
     _DEFAULT_TMDB_API_KEY = ""
 
 
-# What a download reaches for first, most-wanted last-resort last. Senpai leads
-# because it serves its own files (no third-party host to go down), then the
-# hosts that have proved most reliable. Anything not listed still runs as
+# What a download reaches for first, most-wanted last-resort last: the hosts
+# that have proved most reliable. Anything not listed still runs as
 # fallback, after these.
 DEFAULT_DOWNLOAD_ORDER: list[str] = [
-    "senpai",
     "premium",
     "uqload",
     "vidzy",
@@ -56,10 +54,8 @@ class AppConfig:
     # site still resolves streams, so saved library entries keep working.
     disabled_sites: list[str] = field(default_factory=list)
     # The site to favour when several carry the same title: its results are
-    # listed first, and it wins the card when listings are merged. Senpai
-    # serves its own files rather than third-party embeds, so it is the most
-    # dependable default.
-    preferred_site: str = "senpai"
+    # listed first, and it wins the card when listings are merged.
+    preferred_site: str = "fstream"
     # Download preference, most-wanted first; see DEFAULT_DOWNLOAD_ORDER.
     # Anything unlisted still runs as fallback, after the ranked entries, so an
     # order can change which host is used but never whether a file can be got.
@@ -67,7 +63,7 @@ class AppConfig:
         default_factory=lambda: list(DEFAULT_DOWNLOAD_ORDER)
     )
     # Which site a title is taken from when several carry it.
-    preferred_sites: list[str] = field(default_factory=lambda: ["senpai"])
+    preferred_sites: list[str] = field(default_factory=lambda: ["fstream"])
     # Start playing as soon as a title is opened, unless something is already
     # playing — that keeps the floor. Off means opening a title only browses it:
     # the description and episode list, nothing started until you press play.
@@ -128,11 +124,11 @@ def load_config() -> AppConfig:
             tmdb_merge=bool(data.get("tmdb_merge", False)),
             tmdb_posters=bool(data.get("tmdb_posters", True)),
             disabled_sites=[str(s) for s in data.get("disabled_sites", []) or []],
-            preferred_site=str(data.get("preferred_site", "senpai")),
+            preferred_site=str(data.get("preferred_site", "fstream")),
             preferred_hosts=[
                 str(h) for h in data.get("preferred_hosts", DEFAULT_DOWNLOAD_ORDER)
             ],
-            preferred_sites=[str(s) for s in data.get("preferred_sites", ["senpai"])],
+            preferred_sites=[str(s) for s in data.get("preferred_sites", ["fstream"])],
             autoplay_on_open=bool(data.get("autoplay_on_open", True)),
             collapse_seasons=bool(data.get("collapse_seasons", True)),
             watcher_max_concurrent=int(data.get("watcher_max_concurrent", 2)),

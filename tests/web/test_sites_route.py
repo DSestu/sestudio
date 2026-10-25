@@ -15,7 +15,6 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
     app = create_app(live_domain="https://fs03.lol")
     app.state.sites.pop("french-manga")
-    app.state.sites.pop("senpai")
     return TestClient(app)
 
 
@@ -41,8 +40,8 @@ def test_unknown_site_ids_are_rejected(client):
     assert resp.json()["disabled_sites"] == ["fstream"]
 
 
-def test_senpai_is_the_default_preferred_source(client):
-    assert client.get("/api/settings").json()["preferred_site"] == "senpai"
+def test_fstream_is_the_default_preferred_source(client):
+    assert client.get("/api/settings").json()["preferred_site"] == "fstream"
 
 
 def test_preferred_source_can_be_changed(client):
@@ -53,7 +52,7 @@ def test_preferred_source_can_be_changed(client):
 
 def test_unknown_preferred_source_is_ignored(client):
     client.put("/api/settings", json={"preferred_site": "nope"})
-    assert client.get("/api/settings").json()["preferred_site"] == "senpai"
+    assert client.get("/api/settings").json()["preferred_site"] == "fstream"
 
 
 def test_disabled_site_is_skipped_by_search(client, httpx_mock):

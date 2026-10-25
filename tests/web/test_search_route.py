@@ -23,7 +23,6 @@ def client():
     app = create_app(live_domain="https://fs03.lol")
     # Isolate the test to the primary site; the others are exercised elsewhere.
     app.state.sites.pop("french-manga")
-    app.state.sites.pop("senpai")
     return TestClient(app)
 
 

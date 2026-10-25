@@ -42,9 +42,8 @@ class SettingsBody(BaseModel):
 def _known_hosts(request: Request) -> list[str]:
     """Every host a download could use, preferred ones first.
 
-    Sites that serve their own files (senpai) resolve under their own id, so
-    they belong on this list beside the third-party hosts — ranking is one
-    chain, not two.
+    Sites that serve their own files resolve under their own id, so they belong
+    on this list beside the third-party hosts — ranking is one chain, not two.
     """
     hosts = set(request.app.state.providers)
     for site in request.app.state.sites.values():

@@ -158,7 +158,7 @@ export default function ConfirmDownloadModal({
               <button
                 onClick={() =>
                   onPreferences({
-                    preferred_sites: ['senpai'],
+                    preferred_sites: ['fstream'],
                     preferred_hosts: defaultHosts,
                   })
                 }

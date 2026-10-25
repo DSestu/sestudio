@@ -144,7 +144,7 @@ def test_manifest_supplies_the_unsanitised_name_and_poster(client, out):
             "series_name": "My Show: Origins",
             "season": 1,
             "lang": "vf",
-            "source": "senpai",
+            "source": "fstream",
             "poster_url": "https://example.test/p.jpg",
             "page_url": "https://example.test/show",
         },
@@ -156,7 +156,7 @@ def test_manifest_supplies_the_unsanitised_name_and_poster(client, out):
     assert title["series"] == "My Show: Origins"
     assert title["poster_url"] == "https://example.test/p.jpg"
     assert title["page_url"] == "https://example.test/show"
-    assert title["source"] == "senpai"
+    assert title["source"] == "fstream"
 
 
 def test_falls_back_to_the_folder_name_without_a_manifest(client, out):
