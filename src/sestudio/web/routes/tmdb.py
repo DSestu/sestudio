@@ -55,3 +55,12 @@ async def person(person_id: int) -> dict[str, Any] | None:
         return await asyncio.to_thread(tmdb.person, person_id)
     except tmdb.TmdbDisabled as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/tmdb/suggest")
+async def suggest(q: str) -> dict[str, Any] | None:
+    """The title a mistyped search most likely meant ("dnue" → Dune), or null."""
+    try:
+        return await asyncio.to_thread(tmdb.suggest, q)
+    except tmdb.TmdbDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

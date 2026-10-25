@@ -219,6 +219,17 @@ export async function searchPeople(q: string): Promise<PersonHit[]> {
 }
 
 /** A person's profile and filmography, or null when unknown / TMDB disabled. */
+/** The title a mistyped search most likely meant ("dnue" → Dune), or null.
+ *  Asked only once a search has come back empty. */
+export async function suggestTitle(q: string): Promise<TrendingCard | null> {
+  try {
+    const res = await fetch(`${BASE}/tmdb/suggest?q=${encodeURIComponent(q)}`)
+    return res.ok ? await res.json() : null
+  } catch {
+    return null
+  }
+}
+
 export async function getPerson(id: number): Promise<TmdbPerson | null> {
   const res = await fetch(`${BASE}/tmdb/person/${id}`)
   if (!res.ok) return null

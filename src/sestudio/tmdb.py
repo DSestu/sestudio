@@ -4,6 +4,8 @@ import json
 import logging
 import re
 import threading
+import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -318,6 +320,85 @@ def search_people(query: str) -> list[dict[str, Any]]:
             }
         )
     return people
+
+
+# How many spellings a suggestion tries at most: a typo search fans out one
+# TMDB request per spelling, so a long query is cut off rather than flooding it.
+_SUGGEST_MAX_VARIANTS = 24
+
+
+def _fold(text: str) -> str:
+    """Lower-cased, accents and punctuation gone: "Dune : Part Two" → "dune part two"."""
+    plain = unicodedata.normalize("NFD", text)
+    plain = "".join(c for c in plain if not unicodedata.combining(c)).lower()
+    return " ".join(re.sub(r"[^\w]+", " ", plain).split())
+
+
+def _one_edit_spellings(query: str) -> list[str]:
+    """*query* with two neighbouring letters swapped, or one letter dropped —
+    the typos fast typing makes ("dnue", "south prak", "dunne")."""
+    q = _fold(query)
+    swaps = [
+        q[:i] + q[i + 1] + q[i] + q[i + 2 :]
+        for i in range(len(q) - 1)
+        if q[i] != q[i + 1]
+    ]
+    drops = [q[:i] + q[i + 1 :] for i in range(len(q))]
+    seen = {q}
+    out = []
+    for v in swaps + drops:
+        v = " ".join(v.split())
+        if len(v) >= 2 and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out[:_SUGGEST_MAX_VARIANTS]
+
+
+def suggest(query: str) -> dict[str, Any] | None:
+    """The title a mistyped search most likely meant, or None.
+
+    TMDB's search does no fuzzy matching ("dnue" finds nothing), so this tries
+    the query's one-typo-away spellings and keeps one only when it is exactly a
+    real title; among those, the most popular wins. Called only when a search
+    came back empty, so the fan-out is rare.
+    """
+    key = tmdb_key()
+    if not key:
+        raise TmdbDisabled("No TMDB API key configured")
+    spellings = _one_edit_spellings(query)
+    if not spellings:
+        return None
+
+    def search(client: httpx.Client, spelling: str) -> list[dict[str, Any]]:
+        try:
+            resp = client.get(
+                f"{_API}/search/multi",
+                params={"api_key": key, "language": _LANG, "query": spelling},
+            )
+            resp.raise_for_status()
+            return resp.json().get("results") or []
+        except httpx.HTTPError as exc:
+            logger.warning("TMDB suggest search failed for %r: %s", spelling, exc)
+            return []
+
+    best: tuple[float, dict[str, Any]] | None = None
+    with _client() as client, ThreadPoolExecutor(max_workers=8) as pool:
+        for spelling, results in zip(
+            spellings, pool.map(lambda s: search(client, s), spellings)
+        ):
+            for r in results:
+                kind = r.get("media_type")
+                title = r.get("title") or r.get("name") or ""
+                original = r.get("original_title") or r.get("original_name") or ""
+                if kind not in ("movie", "tv") or spelling not in (
+                    _fold(title),
+                    _fold(original),
+                ):
+                    continue
+                popularity = float(r.get("popularity") or 0)
+                if best is None or popularity > best[0]:
+                    best = (popularity, {**_light_card(r, kind), "title": title})
+    return best[1] if best else None
 
 
 def discover(

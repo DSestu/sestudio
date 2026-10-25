@@ -442,3 +442,75 @@ def test_people_search_without_a_key_is_503(client, monkeypatch):
     monkeypatch.delenv("TMDB_API_KEY", raising=False)
     monkeypatch.setattr(config, "_DEFAULT_TMDB_API_KEY", "", raising=False)
     assert client.get("/api/tmdb/people?q=tarantino").status_code == 503
+
+
+MULTI = re.compile(r"https://api\.themoviedb\.org/3/search/multi\?.*")
+
+
+def _multi_by_query(found: dict[str, list[dict]]):
+    """A search/multi stand-in answering per spelling; anything else finds nothing."""
+
+    def respond(request):
+        import httpx
+
+        return httpx.Response(
+            200, json={"results": found.get(request.url.params["query"], [])}
+        )
+
+    return respond
+
+
+def test_suggest_finds_the_title_a_typo_meant(client, httpx_mock: HTTPXMock):
+    httpx_mock.add_callback(
+        _multi_by_query(
+            {
+                "dune": [
+                    {
+                        "media_type": "movie",
+                        "id": 1,
+                        "title": "Dune",
+                        "release_date": "2021-09-15",
+                        "popularity": 90,
+                    },
+                    {
+                        "media_type": "movie",
+                        "id": 2,
+                        "title": "Dune",
+                        "release_date": "1984-12-14",
+                        "popularity": 20,
+                    },
+                ],
+            }
+        ),
+        url=MULTI,
+        is_reusable=True,
+    )
+    hit = client.get("/api/tmdb/suggest?q=dnue").json()
+    assert (hit["title"], hit["year"]) == ("Dune", 2021)
+
+
+def test_suggest_only_takes_an_exact_title(client, httpx_mock: HTTPXMock):
+    """A spelling that merely appears inside a title is no suggestion."""
+    httpx_mock.add_callback(
+        _multi_by_query(
+            {
+                "dune": [
+                    {
+                        "media_type": "movie",
+                        "id": 3,
+                        "title": "Dune Drifter",
+                        "popularity": 5,
+                    }
+                ]
+            }
+        ),
+        url=MULTI,
+        is_reusable=True,
+    )
+    assert client.get("/api/tmdb/suggest?q=dnue").json() is None
+
+
+def test_suggest_without_a_key_is_503(client, monkeypatch):
+    monkeypatch.delenv("TMDB_API_KEY", raising=False)
+    monkeypatch.setattr(config, "_DEFAULT_TMDB_API_KEY", "", raising=False)
+    assert client.get("/api/tmdb/suggest?q=dnue").status_code == 503
