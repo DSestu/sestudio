@@ -672,27 +672,45 @@ export function deviceDownloadUrl(proxyUrl: string, filename: string): string {
   return `${BASE}/downloads/stream?${new URLSearchParams({ token, filename })}`
 }
 
-export async function searchSeasons(q: string): Promise<SeasonCard[]> {
+/** How one site fared for a search: a slow site is cut off as `timeout`. */
+export interface SourceReport {
+  id: string
+  name: string
+  status: 'ok' | 'empty' | 'failed' | 'timeout'
+  count: number
+  ms: number
+}
+
+export interface SearchResponse {
+  cards: SeasonCard[]
+  sources: SourceReport[]
+}
+
+async function searchAll(q: string): Promise<SearchResponse> {
   const res = await fetch(`${BASE}/search?q=${encodeURIComponent(q)}`)
   if (!res.ok) throw new Error(`Search failed: ${res.status}`)
   return res.json()
 }
 
+export async function searchSeasons(q: string): Promise<SeasonCard[]> {
+  return (await searchAll(q)).cards
+}
+
 // Session-scoped, so returning to a search (browser back from a title) restores
 // instantly, and the search bar and the source picker never scrape twice.
-const searchCache = new Map<string, SeasonCard[]>()
+const searchCache = new Map<string, SearchResponse>()
 
 /** A search already answered this session, if any. */
 export function cachedSearch(q: string): SeasonCard[] | undefined {
-  return searchCache.get(q)
+  return searchCache.get(q)?.cards
 }
 
 export async function searchSeasonsCached(q: string): Promise<SeasonCard[]> {
   const hit = searchCache.get(q)
-  if (hit) return hit
-  const results = await searchSeasons(q)
+  if (hit) return hit.cards
+  const results = await searchAll(q)
   searchCache.set(q, results)
-  return results
+  return results.cards
 }
 
 /** Site id for a title that lives only on disk — not a real content site. */

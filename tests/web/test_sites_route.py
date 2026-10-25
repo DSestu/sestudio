@@ -63,7 +63,7 @@ def test_disabled_site_is_skipped_by_search(client, httpx_mock):
     client.put("/api/settings", json={"disabled_sites": ["fstream"]})
     resp = client.get("/api/search?q=stargate")
     assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.json()["cards"] == []
 
 
 def test_disabled_site_still_resolves_its_pages(client, httpx_mock):
