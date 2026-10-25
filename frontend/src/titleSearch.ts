@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { SeasonCard } from './api'
 import { cachedSearch, searchSeasonsCached } from './api'
 import { useMergedCards } from './useMergedCards'
@@ -56,7 +56,8 @@ interface Answer {
   failed: boolean
 }
 
-const SHOWN = 8
+// A preview names a few titles and counts the rest: the details are the page's.
+const SHOWN = 4
 
 /** Search every source for `query` as it is typed (debounced), merged into one
  *  card per title. A query already searched this session answers at once. */
@@ -92,3 +93,57 @@ export function useTitleSearch(query: string, kind: Kind, merge: MergeOptions, r
 
 /** How many result rows a preview shows before "See all". */
 export const PREVIEW_ROWS = SHOWN
+
+// --- Recent searches -------------------------------------------------------
+// The last searches that reached the results page, newest first, kept in this
+// browser only, so a search can be gone back to without retyping it.
+
+export interface RecentSearch {
+  term: string
+  kind: Kind
+}
+
+const RECENT_KEY = 'sestudio.searches.recent'
+const RECENT_MAX = 5
+const recentListeners = new Set<() => void>()
+let recentCache: RecentSearch[] | null = null
+
+function readRecent(): RecentSearch[] {
+  if (recentCache) return recentCache
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
+    recentCache = Array.isArray(parsed)
+      ? parsed.filter((r): r is RecentSearch => typeof r?.term === 'string').map(r => ({ term: r.term, kind: parseKind(r.kind) }))
+      : []
+  } catch {
+    recentCache = []
+  }
+  return recentCache
+}
+
+function writeRecent(list: RecentSearch[]) {
+  recentCache = list
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)) } catch { /* private mode */ }
+  recentListeners.forEach(l => l())
+}
+
+export function rememberSearch(term: string, kind: Kind) {
+  const t = term.trim()
+  if (!t) return
+  const rest = readRecent().filter(r => r.term.toLowerCase() !== t.toLowerCase())
+  writeRecent([{ term: t, kind }, ...rest].slice(0, RECENT_MAX))
+}
+
+export const clearRecentSearches = () => writeRecent([])
+
+export function useRecentSearches(): RecentSearch[] {
+  return useSyncExternalStore(
+    l => { recentListeners.add(l); return () => recentListeners.delete(l) },
+    readRecent,
+  )
+}
+
+/** A kind's label for a recent search, or '' for everything. */
+export function kindLabel(kind: Kind): string {
+  return kind === 'all' ? '' : KINDS.find(k => k.value === kind)?.label ?? ''
+}

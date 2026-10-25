@@ -26,7 +26,7 @@ import PersonView from './views/PersonView'
 import SearchView from './views/SearchView'
 import { DiscoverMenu } from './components/discover/SourcePicker'
 import DesktopSearch from './components/search/DesktopSearch'
-import { type Kind, parseKind } from './titleSearch'
+import { type Kind, parseKind, rememberSearch } from './titleSearch'
 import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
 
@@ -195,6 +195,7 @@ export default function App() {
    *  the search view's filter row and can be cleared there. */
   /** The full results page for a typed search, narrowed to a kind. */
   function searchTitles(term: string, kind: Kind) {
+    rememberSearch(term, kind)
     navigate('search', { q: term, only: kind === 'all' ? undefined : kind })
   }
 
@@ -294,6 +295,7 @@ export default function App() {
             onSearchTerm={searchFor}
             catalogs={catalogs}
             catalogId={catalogId}
+            onSearch={searchTitles}
             onOpenPerson={id => navigate('person', { id })}
             onOpenDownloaded={openDownloadedTitle}
             onJobsCreated={() => setDownloadTick(t => t + 1)}

@@ -28,7 +28,8 @@ import { useDownloadedLibrary } from '../downloadedLibrary'
 import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
 import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
-import { matchesKind, parseKind } from '../titleSearch'
+import { type Kind, matchesKind, parseKind } from '../titleSearch'
+import { KindChips } from '../components/search/SearchParts'
 
 interface Props {
   settings: AppSettings
@@ -43,6 +44,8 @@ interface Props {
   /** The catalogues to browse while the query is empty, and the open one. */
   catalogs: CatalogInfo[]
   catalogId: string
+  /** Rerun the search narrowed to a kind (the phone's kind chips). */
+  onSearch: (term: string, kind: Kind) => void
   /** Open a person's profile from the People band. */
   onOpenPerson: (id: number) => void
   /** Open a title already on disk, rather than a source listing. With a file,
@@ -69,7 +72,7 @@ function inWindow(card: SeasonCard, from: string, to: string): boolean {
 }
 
 /** Search view: query, TMDB discovery, results grid, and bulk season download. */
-export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, catalogs, catalogId, onOpenPerson, onOpenDownloaded, onJobsCreated, onSkipped }: Props) {
+export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, catalogs, catalogId, onSearch, onOpenPerson, onOpenDownloaded, onJobsCreated, onSkipped }: Props) {
   // Raw, as scraped: merging is derived, so flipping the TMDB-identity setting
   // regroups what is already on screen without re-searching.
   const [rawResults, setRawResults] = useState<SeasonCard[]>([])
@@ -258,8 +261,10 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     <div className="flex flex-col gap-5">
       {/* Desktop searches from the bar pinned above every page; this one
           stays mounted there all the same, as it runs the page's search. */}
-      <div className="md:hidden">
+      <div className="md:hidden flex flex-col gap-3">
         <SearchBar onResults={handleSearchResults} term={params.get('q')} />
+        {/* Desktop has these in the pinned bar. */}
+        {lastQuery !== '' && <KindChips value={kind} onChange={k => onSearch(lastQuery, k)} />}
       </div>
 
       {/* Outside the results toolbar below: a search that found nothing is the
@@ -464,7 +469,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
       {/* Bulk download bar — clears the mobile tab bar */}
       {checkedIds.size > 0 && (
-        <div className="fixed z-40 left-1/2 -translate-x-1/2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-6 flex items-center flex-wrap justify-between sm:justify-start gap-3 sm:gap-4 rounded-box border border-base-300 bg-base-200 shadow-xl px-4 sm:px-6 py-3 w-[calc(100%-2rem)] max-w-md sm:w-auto sm:max-w-none">
+        <div className="fixed z-40 left-1/2 -translate-x-1/2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-6 max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none flex items-center flex-wrap justify-between sm:justify-start gap-3 sm:gap-4 rounded-box border border-base-300 bg-base-200 shadow-xl px-4 sm:px-6 py-3 w-[calc(100%-2rem)] max-w-md sm:w-auto sm:max-w-none">
           <span className="text-base-content/80 text-sm">
             {checkedIds.size} season{checkedIds.size !== 1 ? 's' : ''} selected
           </span>

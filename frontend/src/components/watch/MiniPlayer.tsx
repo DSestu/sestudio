@@ -99,7 +99,7 @@ export default function MiniPlayer({ node, onOpen, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-x-0 z-40 bottom-[calc(4rem+env(safe-area-inset-bottom))] border-t border-base-300 bg-base-200/95 backdrop-blur">
+    <div className="fixed inset-x-0 z-40 bottom-[calc(4rem+env(safe-area-inset-bottom))] border-t border-base-300 bg-base-200/95 backdrop-blur max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none">
       <div className="flex items-center gap-3 px-3 py-2">
         {video('w-24 rounded aspect-video shrink-0')}
         <button onClick={onOpen} className="min-w-0 flex-1 text-left">
