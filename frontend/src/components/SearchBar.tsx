@@ -4,7 +4,8 @@ import { cachedSearch, searchSeasonsCached } from '../api'
 
 interface Props {
   /** Called with the results and the query they belong to ('' when cleared). */
-  onResults: (cards: SeasonCard[], query: string) => void
+  /** `failed`: no source answered, which is not the same as nothing found. */
+  onResults: (cards: SeasonCard[], query: string, failed?: boolean) => void
   /** Externally-driven query (e.g. clicking a browse-row card). */
   term?: string | null
 }
@@ -53,7 +54,7 @@ export default function SearchBar({ onResults, term }: Props) {
         onResultsRef.current(results, q)
       } catch {
         setError('Search failed — is the server reachable?')
-        onResultsRef.current([], q)
+        onResultsRef.current([], q, true)
       } finally {
         setLoading(false)
       }

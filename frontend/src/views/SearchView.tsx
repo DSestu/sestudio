@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type {
   AppSettings, CatalogInfo, DownloadDestination, DownloadItem, DownloadJob,
-  DownloadedFile, DownloadedTitle, PersonHit, SeasonCard, SourceReport,
+  DownloadedFile, DownloadedTitle, PersonHit, SeasonCard, SourceReport, TrendingCard,
 } from '../api'
-import { cachedSearchSources, checkDownloads, getSeason, postDownloads, retrySearchSources, searchPeople } from '../api'
+import { cachedSearchSources, checkDownloads, getSeason, postDownloads, retrySearchSources, searchPeople, searchSeasonsCached, suggestTitle } from '../api'
 import SourceChips from '../components/search/SourceChips'
 import SourcesPanel from '../components/search/SourcesPanel'
 import ResponsiveModal from '../components/ResponsiveModal'
@@ -32,7 +32,7 @@ import { fmtSize, useDownloadedLibrary } from '../downloadedLibrary'
 import { episodeCode, episodeHits, groupOnDisk, resumePoint } from '../diskShows'
 import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
-import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
+import { ANY_DATES, isAnyDates, rangeLabel, yearOf } from '../releaseDates'
 import { KINDS, type Kind, matchesKind, parseKind } from '../titleSearch'
 import { KindSegments, OptionsButton } from '../components/search/SearchParts'
 import { OPTIONS_ID, setSearchOptionsSummary, setSourcesPanel, useSearchOptions } from '../searchOptions'
@@ -226,7 +226,28 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     })
   }
 
-  function handleSearchResults(cards: SeasonCard[], query: string) {
+  // A search that no source answered, and a spelling to try when one found nothing.
+  const [failedFor, setFailedFor] = useState('')
+  const [suggested, setSuggested] = useState<{ q: string; hit: TrendingCard | null }>({ q: '', hit: null })
+  const suggestion = suggested.q === lastQuery ? suggested.hit : null
+  const foundNothing = resolvedQuery === lastQuery && lastQuery !== '' && merged.length === 0 && failedFor !== lastQuery
+  useEffect(() => {
+    if (!foundNothing || !settings.tmdb_configured) return
+    let cancelled = false
+    void suggestTitle(lastQuery).then(hit => { if (!cancelled) setSuggested({ q: lastQuery, hit }) })
+    return () => { cancelled = true }
+  }, [foundNothing, lastQuery, settings.tmdb_configured])
+
+  function retrySearch() {
+    const q = lastQuery
+    setResolvedQuery('')
+    searchSeasonsCached(q)
+      .then(cards => handleSearchResults(cards, q))
+      .catch(() => handleSearchResults([], q, true))
+  }
+
+  function handleSearchResults(cards: SeasonCard[], query: string, failed = false) {
+    setFailedFor(failed ? query : '')
     setRawResults(cards)
     setSources(cachedSearchSources(query))
     if (query !== lastQuery) setPicked(new Set())
@@ -646,19 +667,33 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         // Something matched; only the source chips are hiding it.
         <EmptyState
           title="Nothing from these sources"
-          message={`${inWindowResults.length} result${inWindowResults.length !== 1 ? 's' : ''} came from other sources. Clear the source filter to see ${inWindowResults.length !== 1 ? 'them' : 'it'}.`}
+          message={`${inWindowResults.length} result${inWindowResults.length !== 1 ? 's' : ''} came from other sources.`}
+          action={{ label: 'Show every source', onClick: () => setPicked(new Set()) }}
         />
       ) : merged.length > 0 && ofKind.length === 0 ? (
         // Something matched the query, just not of the kind picked in the bar.
         <EmptyState
           title={`No ${kind} for “${lastQuery}”`}
-          message={`${merged.length} other result${merged.length !== 1 ? 's' : ''} matched. Pick Everything to see ${merged.length !== 1 ? 'them' : 'it'}.`}
+          message={`${KINDS.filter(k => k.value !== 'all' && kindCounts[k.value] > 0).map(k => `${kindCounts[k.value]} ${k.label.toLowerCase()}`).join(' and ')} matched.`}
+          action={{ label: 'Show everything', onClick: () => onSearch(lastQuery, 'all') }}
         />
       ) : merged.length > 0 ? (
         // Something matched the query — only the release window is hiding it.
         <EmptyState
           title={`Nothing released ${rangeLabel(releaseWindow)}`}
-          message={`${merged.length} result${merged.length !== 1 ? 's' : ''} for “${lastQuery}” fall outside that window. Widen it, or pick Any.`}
+          message={`${merged.length} result${merged.length !== 1 ? 's' : ''} for “${lastQuery}” fall outside that window.`}
+          action={{ label: 'Widen to Any', onClick: () => setReleaseWindow(ANY_DATES) }}
+        >
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReleaseWindow({ from: `${new Date().getFullYear() - 4}-01-01`, to: '' })}>
+            Last 5 years
+          </button>
+        </EmptyState>
+      ) : failedFor === lastQuery && lastQuery !== '' ? (
+        // No source answered: not the same as nothing found, so say so and retry.
+        <EmptyState
+          title="Sources didn't answer"
+          message={hits.length || namedOnDisk.length ? 'What you have on disk is above.' : 'Check the connection, then try again.'}
+          action={{ label: 'Retry', onClick: retrySearch }}
         />
       ) : resolvedQuery === lastQuery ? (
         withPhoto.length > 0 ? (
@@ -668,14 +703,26 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           />
         ) : (
           <EmptyState
-            title={`No results for “${lastQuery}”`}
-            message="Try a different title, or check the spelling."
-          />
+            title={`Nothing for “${lastQuery}”`}
+            message={suggestion ? 'Maybe a typo?' : 'Try a different title, or check the spelling. A watch tells you when it shows up.'}
+            action={suggestion ? { label: `Search “${suggestion.title}” instead`, onClick: () => onSearch(suggestion.title, kind) } : undefined}
+          >
+            <WatchSearchButton query={lastQuery} />
+          </EmptyState>
         )
       ) : (
-        // Restored from the URL and still fetching — the bar shows a spinner.
-        <div className="flex justify-center py-12" aria-busy="true" aria-label="Searching">
-          <span className="loading loading-spinner loading-md text-base-content/40" />
+        // Still fetching: the shape of what's coming, so nothing jumps when it lands.
+        <div aria-busy="true" aria-label="Searching" className="flex flex-col gap-6">
+          {[0, 1].map(row => (
+            <div key={row} className="flex flex-col gap-2">
+              <div className="h-3 w-24 rounded bg-base-300 animate-pulse motion-reduce:animate-none" />
+              <div className="flex gap-3 sm:gap-4 overflow-hidden">
+                {Array.from({ length: 7 }, (_, i) => (
+                  <div key={i} className="w-36 sm:w-40 shrink-0 aspect-[2/3] rounded-box bg-base-300 animate-pulse motion-reduce:animate-none" style={{ animationDelay: `${i * 60}ms` }} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

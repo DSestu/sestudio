@@ -1,11 +1,15 @@
+import type { ReactNode } from 'react'
+
 interface Props {
   title: string
   message: string
   action?: { label: string; onClick: () => void }
+  /** More ways out, beside the main action. */
+  children?: ReactNode
 }
 
 /** Shared empty/zero-data placeholder so no view ever renders a blank screen. */
-export default function EmptyState({ title, message, action }: Props) {
+export default function EmptyState({ title, message, action, children }: Props) {
   return (
     <div role="status" className="flex flex-col items-center text-center py-16 px-6">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-base-200 text-base-content/30">
@@ -15,10 +19,15 @@ export default function EmptyState({ title, message, action }: Props) {
       </div>
       <h2 className="text-base font-semibold">{title}</h2>
       <p className="mt-1 max-w-sm text-sm text-base-content/60">{message}</p>
-      {action && (
-        <button onClick={action.onClick} className="btn btn-primary btn-sm mt-5">
-          {action.label}
-        </button>
+      {(action || children) && (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {action && (
+            <button onClick={action.onClick} className="btn btn-primary btn-sm">
+              {action.label}
+            </button>
+          )}
+          {children}
+        </div>
       )}
     </div>
   )
