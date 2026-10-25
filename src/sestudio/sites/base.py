@@ -42,6 +42,14 @@ class StreamCandidate:
     embed_url: str
 
 
+@dataclass
+class BrowseRow:
+    """A named list of titles a site offers without a query (Home rows)."""
+
+    title: str
+    cards: list[SeasonCard]
+
+
 class SiteError(Exception):
     """Raised by a site for scrape/parse failures (routes map it to 502)."""
 
@@ -79,6 +87,10 @@ class ContentSite(ABC):
         override this; for the rest it is a no-op. Runs in a worker thread, and
         raising is fine — the caller logs and carries on with the old value.
         """
+
+    def browse(self) -> list[BrowseRow]:
+        """Rows of titles to show on Home; most sites have none to offer."""
+        return []
 
     def provider_order(self) -> tuple[str, ...]:
         return DEFAULT_PROVIDER_ORDER

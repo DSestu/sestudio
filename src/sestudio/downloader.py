@@ -14,6 +14,7 @@ from pathlib import Path
 from sestudio.http_client import IMPERSONATE_PROVIDERS, new_client
 from sestudio.media import ffmpeg_location
 from sestudio.models import StreamSource, sanitize_path_component
+from sestudio.providers.subtitles import is_srt_url, srt_to_vtt
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +261,8 @@ def download_subtitles(source: StreamSource, output_path: Path) -> list[Path]:
             try:
                 resp = client.get(sub.url)
                 resp.raise_for_status()
-                target.write_bytes(resp.content)
+                body = srt_to_vtt(resp.content) if is_srt_url(sub.url) else resp.content
+                target.write_bytes(body)
             except Exception as exc:  # noqa: BLE001 — best effort, see docstring
                 logger.warning("Could not fetch subtitle %s: %s", sub.url[:80], exc)
                 continue

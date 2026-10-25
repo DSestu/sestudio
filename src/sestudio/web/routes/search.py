@@ -45,3 +45,30 @@ async def search(q: str, request: Request) -> list[dict[str, Any]]:
     if errors and len(errors) == len(sites):
         raise HTTPException(status_code=502, detail="; ".join(errors))
     return cards
+
+
+@router.get("/browse")
+async def browse(request: Request) -> list[dict[str, Any]]:
+    """Home rows straight from the enabled sites, for titles TMDB never lists."""
+    registered: dict[str, ContentSite] = request.app.state.sites
+    disabled = set(load_config().disabled_sites)
+    sites = [s for sid, s in registered.items() if sid not in disabled]
+    results = await asyncio.gather(
+        *(asyncio.to_thread(site.browse) for site in sites),
+        return_exceptions=True,
+    )
+    rows: list[dict[str, Any]] = []
+    for site, result in zip(sites, results):
+        if isinstance(result, BaseException):
+            # Optional rows: a site being down just hides its own.
+            logger.warning("Browse failed for site %s: %s", site.id, result)
+            continue
+        rows.extend(
+            {
+                "source": site.id,
+                "title": row.title,
+                "cards": [dataclasses.asdict(c) for c in row.cards],
+            }
+            for row in result
+        )
+    return rows

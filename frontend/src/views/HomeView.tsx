@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, TrendingCard, WatcherEvent } from '../api'
-import { DEFAULT_DISCOVER_FILTERS, discoverTitles, getGenres, getTrending } from '../api'
+import type { AppSettings, BrowseRow, TrendingCard, WatcherEvent } from '../api'
+import { DEFAULT_DISCOVER_FILTERS, discoverTitles, getBrowseRows, getGenres, getTrending } from '../api'
 import { useCollections } from '../collections'
 import ActivityPeek from '../components/ActivityPeek'
 import EmptyState from '../components/EmptyState'
@@ -80,6 +80,14 @@ export default function HomeView({
   }, [settings.tmdb_configured])
   const genreRows = settings.tmdb_configured ? fetchedGenreRows : []
 
+  // Rows the sites list themselves — their titles open directly, TMDB or not.
+  const [browseRows, setBrowseRows] = useState<BrowseRow[]>([])
+  useEffect(() => {
+    let cancelled = false
+    getBrowseRows().then(r => { if (!cancelled) setBrowseRows(r) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
   const inProgress = watching(watch)
   const watchlist = savedItems('watchlist', collections, onOpen, settings.lang)
   const favourites = savedItems('favourites', collections, onOpen, settings.lang)
@@ -90,6 +98,7 @@ export default function HomeView({
   if (
     !inProgress.length &&
     !trending.length &&
+    !browseRows.length &&
     !watchlist.length &&
     !favourites.length &&
     !activity.length
@@ -161,6 +170,19 @@ export default function HomeView({
           onClick: () => onSearchTerm(t.title, t.year),
         }))}
       />
+      {browseRows.map(row => (
+        <MediaRow
+          key={`browse-${row.source}-${row.title}`}
+          title={row.title}
+          items={row.cards.map(c => ({
+            key: `b-${row.source}-${c.newsid}`,
+            title: c.title,
+            subtitle: c.year ? String(c.year) : undefined,
+            poster_url: c.poster_url,
+            onClick: () => onOpen(c, 0, settings.lang),
+          }))}
+        />
+      ))}
       {genreRows.map(row => (
         <MediaRow
           key={`genre-${row.id}`}

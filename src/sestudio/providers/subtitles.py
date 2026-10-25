@@ -136,3 +136,27 @@ def extract(page: str, base_url: str) -> list[Subtitle]:
             ", ".join(f"{s.label} ({s.lang})" for s in unique),
         )
     return unique
+
+
+_SRT_TIME_RE = re.compile(r"(\d{1,2}:\d{2}:\d{2}),(\d{3})")
+
+
+def is_srt_url(url: str) -> bool:
+    return urlsplit(url).path.lower().endswith(".srt")
+
+
+def srt_to_vtt(data: bytes) -> bytes:
+    """WebVTT from SubRip, which is the player, Chromecast and disk format.
+
+    Hosts like kisskh serve `.srt`, which no `<track>` loads. The two differ
+    only in the header and the millisecond separator; a body that is already
+    WebVTT (some `.srt` URLs serve it) passes through unchanged.
+    """
+    text = data.decode("utf-8-sig", errors="replace").replace("\r\n", "\n")
+    if text.lstrip().startswith("WEBVTT"):
+        return data
+    lines = [
+        _SRT_TIME_RE.sub(r"\1.\2", line) if "-->" in line else line
+        for line in text.split("\n")
+    ]
+    return ("WEBVTT\n\n" + "\n".join(lines).lstrip("\n")).encode("utf-8")

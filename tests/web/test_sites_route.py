@@ -15,6 +15,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
     app = create_app(live_domain="https://fs03.lol")
     app.state.sites.pop("french-manga")
+    app.state.sites.pop("kisskh")
     return TestClient(app)
 
 

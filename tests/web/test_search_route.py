@@ -23,6 +23,7 @@ def client():
     app = create_app(live_domain="https://fs03.lol")
     # Isolate the test to the primary site; the others are exercised elsewhere.
     app.state.sites.pop("french-manga")
+    app.state.sites.pop("kisskh")
     return TestClient(app)
 
 
@@ -67,3 +68,31 @@ def test_search_empty_result(client, httpx_mock: HTTPXMock):
     resp = client.get("/api/search?q=nothing")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_browse_returns_site_rows_and_skips_a_failing_site(client):
+    from sestudio.models import SeasonCard
+    from sestudio.sites import BrowseRow
+    from tests.web.conftest import FakeSite
+
+    card = SeasonCard(
+        "1", "Goblin", "Goblin", 1, "", "https://fake.example/1", source="fake"
+    )
+
+    class Rows(FakeSite):
+        def browse(self):
+            return [BrowseRow("Popular", [card])]
+
+    class Broken(FakeSite):
+        id = "broken"
+
+        def browse(self):
+            raise RuntimeError("down")
+
+    client.app.state.sites.update(fake=Rows(), broken=Broken())
+    resp = client.get("/api/browse")
+    assert resp.status_code == 200
+    rows = resp.json()
+    # fstream offers no rows; the broken site is skipped, not fatal.
+    assert [(r["source"], r["title"]) for r in rows] == [("fake", "Popular")]
+    assert rows[0]["cards"][0]["title"] == "Goblin"

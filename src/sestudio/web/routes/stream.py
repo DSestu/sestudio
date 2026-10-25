@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from sestudio import downloaded
 from sestudio.http_client import BROWSER_UA, IMPERSONATE_PROVIDERS, new_client
+from sestudio.providers.subtitles import is_srt_url, srt_to_vtt
 from sestudio.sites import site_for
 from sestudio.web.proxy import (
     PROXY_TOKEN_TTL,
@@ -258,6 +259,20 @@ def proxy_stream(token: str, request: Request) -> Response:
     )
     req = client.build_request("GET", target_url)
     upstream = client.send(req, stream=True)
+
+    # SubRip sidecars are served as WebVTT: that is all a <track> loads.
+    if is_srt_url(target_url):
+        try:
+            raw = upstream.read()
+        finally:
+            upstream.close()
+            client.close()
+        return Response(
+            content=srt_to_vtt(raw),
+            status_code=upstream.status_code,
+            media_type="text/vtt",
+            headers=dict(_CORS_HEADERS),
+        )
 
     # HLS playlists are fetched whole and rewritten so the client only ever
     # talks to this proxy; media segments are streamed through byte-for-byte.

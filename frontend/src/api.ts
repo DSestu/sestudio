@@ -314,6 +314,19 @@ export async function getTrending(): Promise<TrendingCard[]> {
   return res.json()
 }
 
+/** A Home row a content site offers on its own (no TMDB needed). */
+export interface BrowseRow {
+  source: string
+  title: string
+  cards: SeasonCard[]
+}
+
+export async function getBrowseRows(): Promise<BrowseRow[]> {
+  const res = await fetch(`${BASE}/browse`)
+  if (!res.ok) return []
+  return res.json()
+}
+
 export interface DownloadItem {
   embed_url: string
   provider: string
