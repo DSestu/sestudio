@@ -149,18 +149,31 @@ export default function SettingsView({ settings, onUpdate }: Props) {
         ) : (
           <div className="flex flex-col gap-2">
             {sites.map(site => (
-              <label
-                key={site.id}
-                className="flex items-center gap-3 cursor-pointer text-sm"
-              >
-                <input
-                  type="checkbox"
-                  className="toggle toggle-primary toggle-sm"
-                  checked={!disabled.includes(site.id)}
-                  onChange={e => toggleSite(site.id, e.target.checked)}
-                />
-                <span>{site.display_name}</span>
-              </label>
+              <div key={site.id} className="flex items-center gap-3 text-sm">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-primary toggle-sm"
+                    checked={!disabled.includes(site.id)}
+                    onChange={e => toggleSite(site.id, e.target.checked)}
+                  />
+                  <span>{site.display_name}</span>
+                </label>
+                {site.url && (
+                  <a
+                    href={site.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="link link-hover text-xs text-base-content/50 inline-flex items-center gap-1"
+                  >
+                    {new URL(site.url).hostname}
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 5h6v6M19 5l-8 8M10 5H5v14h14v-5" />
+                    </svg>
+                    <span className="sr-only">(opens in a new tab)</span>
+                  </a>
+                )}
+              </div>
             ))}
           </div>
         )}

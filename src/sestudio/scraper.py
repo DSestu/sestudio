@@ -111,6 +111,56 @@ def search_one(
     return cards
 
 
+_LISTING_ID_RE = re.compile(r"newsid=(\d+)|/(\d+)-")
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def parse_listing(
+    html: str, origin: str, *, is_anime: bool = False, series_only: bool = False
+) -> list[tuple[SeasonCard, str]]:
+    """A DLE category page's cards, each with its blurb ("" if none).
+    Listings link titles as ?newsid=N, which the
+    title-page parsers can't read, so each card gets the /N-slug.html form:
+    DLE serves a title under any slug."""
+    soup = BeautifulSoup(html, "html.parser")
+    found: list[tuple[SeasonCard, str]] = []
+    for short in soup.select("#dle-content div.short"):
+        link = short.select_one("a.short-poster")
+        m_id = _LISTING_ID_RE.search(str(link.get("href", ""))) if link else None
+        title_el = short.select_one(".short-title")
+        if not m_id or not title_el:
+            continue
+        newsid = m_id.group(1) or m_id.group(2)
+        title = _YEAR_RE.sub("", title_el.get_text(strip=True)).strip()
+        year_el = short.select_one(".short-year")
+        year_text = year_el.get_text(strip=True) if year_el else ""
+        img = short.find("img")
+        m_season = SEASON_RE.search(title)
+        slug = _SLUG_RE.sub("-", title.lower()).strip("-")
+        desc = short.select_one(f"#desc-{newsid}")
+        found.append(
+            (
+                SeasonCard(
+                    newsid=newsid,
+                    title=title,
+                    series_name=(
+                        SEASON_RE.split(title)[0].rstrip(" -").strip()
+                        if m_season
+                        else title
+                    ),
+                    season_number=int(m_season.group(1)) if m_season else 0,
+                    poster_url=str(img.get("src", "")) if img else "",
+                    page_url=f"{origin}/{newsid}-{slug or 'title'}.html",
+                    is_film=not m_season and not is_anime and not series_only,
+                    is_anime=is_anime,
+                    year=int(year_text) if year_text.isdigit() else 0,
+                ),
+                desc.get_text(strip=True) if desc else "",
+            )
+        )
+    return found
+
+
 def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode], list[str]]:
     """Fetch a season page; return (season_number, episodes, available_langs)."""
     logger.debug("Fetching season page: %s (lang=%s)", url, lang)

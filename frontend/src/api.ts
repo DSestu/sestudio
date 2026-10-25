@@ -111,8 +111,15 @@ export interface AppSettings {
 export interface SiteInfo {
   id: string
   display_name: string
+  /** The site's front page ("" when unknown). */
+  url: string
   is_anime: boolean
   enabled: boolean
+}
+
+/** A link that opens a title's page on its own site, in the browser. */
+export function siteLink(source: string, pageUrl: string): string {
+  return `${BASE}/sites/${encodeURIComponent(source)}/open?url=${encodeURIComponent(pageUrl)}`
 }
 
 /** The content sites this server knows about, for the source toggles. */

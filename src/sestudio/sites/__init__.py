@@ -27,16 +27,27 @@ def build_sites(fstream_domain: str | None = None) -> dict[str, ContentSite]:
     """Build the registry of content sites, keyed by site id."""
     # Imported here, not at module level: scraper imports sites.base, so a
     # top-level import of fstream (which imports scraper) would be circular.
-    from sestudio.sites.fstream import FstreamSite
+    from sestudio.sites.fstream import (
+        FRENCH_MANGA_LISTINGS,
+        FSTREAM_LISTINGS,
+        FstreamSite,
+    )
     from sestudio.sites.kisskh import KisskhSite
     from sestudio.sites.uniquestream import UniqueStreamSite
 
     return {
         "fstream": FstreamSite(
-            "fstream", "FStream", fstream_domain or "https://fstream.top"
+            "fstream",
+            "FStream",
+            fstream_domain or "https://fstream.top",
+            listings=FSTREAM_LISTINGS,
         ),
         "french-manga": FstreamSite(
-            "french-manga", "French-Manga", ANIME_DOMAIN, is_anime=True
+            "french-manga",
+            "French-Manga",
+            ANIME_DOMAIN,
+            is_anime=True,
+            listings=FRENCH_MANGA_LISTINGS,
         ),
         "kisskh": KisskhSite(),
         "uniquestream": UniqueStreamSite(),
