@@ -5,6 +5,11 @@
    `ease-smooth` (see docs/SPEC-search-page.md, motion). */
 @theme {
   --ease-smooth: cubic-bezier(.2, .8, .2, 1);
+  /* Arriving content rises a little and fades in. */
+  --animate-rise: rise 320ms cubic-bezier(.2, .8, .2, 1) both;
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+  }
 }
 
 /* Bottom-sheet modals clear the home indicator / notch inset on mobile. */
