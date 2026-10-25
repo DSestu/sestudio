@@ -10,6 +10,11 @@
   @keyframes rise {
     from { opacity: 0; transform: translateY(8px); }
   }
+  /* Content swapped sideways (another season's episodes) slides in. */
+  --animate-slide: slide 240ms cubic-bezier(.2, .8, .2, 1) both;
+  @keyframes slide {
+    from { opacity: 0; transform: translateX(24px); }
+  }
 }
 
 /* Bottom-sheet modals clear the home indicator / notch inset on mobile. */

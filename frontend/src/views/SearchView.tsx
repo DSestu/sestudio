@@ -19,6 +19,7 @@ import PeopleResults from '../components/PeopleResults'
 import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
 import KindRows from '../components/search/KindRows'
+import DiskRail from '../components/search/DiskRail'
 import { setLibraryLayout, useLibraryLayout } from '../libraryLayout'
 import { useMergedCards } from '../useMergedCards'
 import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
@@ -199,8 +200,10 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     const copy = at.episode.copies[0]
     const film = show.seasons.length === 1 && show.seasons[0].label === 'Film'
     return {
+      show,
+      at,
       line: [
-        show.seasons.length > 1 ? `${show.seasons.length} seasons` : '',
+        show.seasons.length > 1 ? `${show.seasons.length} ${show.seasons[0].cut ? 'cuts' : 'seasons'}` : '',
         show.episodes > 1 ? `${show.episodes} episodes` : '',
         fmtSize(show.size),
       ].filter(Boolean).join(' · '),
@@ -579,7 +582,17 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       {lastQuery !== '' && resolvedQuery === lastQuery && (topMatch.pending
         ? <TopMatchSkeleton />
         : topMatch.hero && (
-          <TopMatchHero card={topMatch.hero} meta={topMatch.meta} disk={heroDisk} posters={settings.tmdb_posters} onOpen={onOpenDetail} />
+          <TopMatchHero card={topMatch.hero} meta={topMatch.meta} disk={heroDisk} posters={settings.tmdb_posters} onOpen={onOpenDetail}>
+            {heroDisk && heroDisk.show.episodes > 1 && (
+              <DiskRail
+                key={heroDisk.show.key}
+                show={heroDisk.show}
+                at={heroDisk.at}
+                history={Object.values(watchStore)}
+                onPlay={copy => onOpenDownloaded(copy.title, copy.file)}
+              />
+            )}
+          </TopMatchHero>
         ))}
 
       {lastQuery !== '' && <PeopleResults people={people} onOpen={onOpenPerson} />}
