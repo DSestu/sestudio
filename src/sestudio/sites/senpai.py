@@ -642,6 +642,10 @@ def _snapshot_named(page: str, name: str) -> tuple[str, dict[str, Any]]:
 
 
 def _watch_snapshot(page: str) -> tuple[str, dict[str, Any]]:
+    # Since Oct 2026 the player sits behind a "Lecture" form leading to an
+    # ad gate (several ads to watch first): nothing this app will play.
+    if "/watch-start/" in page or "&quot;ad-gate&quot;" in page:
+        raise SiteError("senpai now asks to watch ads before it plays")
     raw, parsed = _snapshot_named(page, "watch-component")
     return raw, parsed.get("data", {})
 
