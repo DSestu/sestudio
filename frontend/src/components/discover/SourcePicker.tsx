@@ -3,7 +3,7 @@ import type { CatalogInfo, SeasonCard } from '../../api'
 import { closeDiscoverMenu, closeDiscoverMenuThen, openDiscoverMenu, useDiscoverMenuOpen } from '../../discoverMenu'
 import { useModalBack } from '../../useModalBack'
 import { useSourcePosters } from './sourcePosters'
-import { type Kind, SEARCH_FIELD, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
+import { type Kind, SEARCH_FIELD, type TitleSearch, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
 import { RecentSearchChips, SearchIcon, TitleResults } from '../search/SearchParts'
 
 // TMDB lists titles to look up on the sites rather than playing any itself,
@@ -225,17 +225,14 @@ export function DiscoverMenu({
           </form>
 
           {q ? (
-            <div className="min-h-0 overflow-y-auto overscroll-contain px-2 pb-4">
-              <TitleResults
-                search={search}
-                query={q}
-                kind={kind}
-                onKind={setKind}
-                listId="discover-menu-results"
-                onOpen={card => closeDiscoverMenuThen(() => onOpenCard(card))}
-                onSeeAll={() => closeDiscoverMenuThen(() => onSearchTerm(q, kind))}
-              />
-            </div>
+            <PhoneResults
+              search={search}
+              query={q}
+              kind={kind}
+              onKind={setKind}
+              onOpen={card => closeDiscoverMenuThen(() => onOpenCard(card))}
+              onSeeAll={() => closeDiscoverMenuThen(() => onSearchTerm(q, kind))}
+            />
           ) : (
             <>
               {recentSearches.length > 0 && (
@@ -305,6 +302,116 @@ export function DiscoverMenu({
     </div>
   )
 }
+
+/**
+ * Every title, down to the panel's bottom edge, under a frosted results-page
+ * button that counts the rows still out of sight (behind it, or behind the
+ * keyboard). The button fills in once nothing is left to scroll to.
+ */
+function PhoneResults({ search, query, kind, onKind, onOpen, onSeeAll }: {
+  search: TitleSearch
+  query: string
+  kind: Kind
+  onKind: (kind: Kind) => void
+  onOpen: (card: SeasonCard) => void
+  onSeeAll: () => void
+}) {
+  const scroller = useRef<HTMLDivElement>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const [below, setBelow] = useState(0)
+  // How far the on-screen keyboard reaches over the panel's bottom.
+  const [keyboard, setKeyboard] = useState(0)
+  useEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    const vv = window.visualViewport
+    const measure = () => {
+      const box = el.getBoundingClientRect()
+      const k = Math.max(0, Math.round(box.bottom - (vv ? vv.offsetTop + vv.height : window.innerHeight)))
+      setKeyboard(k)
+      const edge = box.bottom - k - (button.current?.offsetHeight ?? 0) - BUTTON_GAP
+      let n = 0
+      el.querySelectorAll('[role=option]').forEach(row => { if (row.getBoundingClientRect().bottom > edge + 4) n++ })
+      setBelow(n)
+    }
+    measure()
+    const sizes = new ResizeObserver(measure)
+    sizes.observe(el)
+    if (el.firstElementChild) sizes.observe(el.firstElementChild)
+    el.addEventListener('scroll', measure, { passive: true })
+    vv?.addEventListener('resize', measure)
+    vv?.addEventListener('scroll', measure)
+    return () => {
+      sizes.disconnect()
+      el.removeEventListener('scroll', measure)
+      vv?.removeEventListener('resize', measure)
+      vv?.removeEventListener('scroll', measure)
+    }
+  }, [])
+
+  const total = search.cards.length
+  const done = search.status === 'done'
+  const end = done && below === 0
+  const note =
+    search.status === 'loading' ? 'Searching every source…'
+      : search.status === 'failed' ? 'Search failed — is the server reachable?'
+        : below > 0 ? `${below} more not shown yet` : 'All of them are in the list'
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scroller}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2"
+        style={{ paddingBottom: `calc(${keyboard}px + 5rem)` }}
+      >
+        <TitleResults
+          search={search}
+          query={query}
+          kind={kind}
+          onKind={onKind}
+          listId="discover-menu-results"
+          seeAllRow={false}
+          limit={Infinity}
+          onOpen={onOpen}
+          onSeeAll={onSeeAll}
+        />
+      </div>
+      {!(done && total === 0) && (
+        <button
+          ref={button}
+          type="button"
+          onClick={onSeeAll}
+          style={{ bottom: keyboard + BUTTON_GAP }}
+          className={`absolute inset-x-3 flex items-center gap-3 rounded-box border px-3 py-2.5 text-left shadow-xl transition-colors duration-300 ${
+            end
+              ? 'border-primary bg-primary text-primary-content'
+              : 'border-base-content/10 bg-base-300/70 backdrop-blur-md'
+          }`}
+        >
+          <span className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center ${end ? 'bg-primary-content/15' : 'bg-primary text-primary-content'}`}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">
+              {done ? `See all ${total} result${total === 1 ? '' : 's'}` : `See every result for “${query}”`}
+            </span>
+            <span className={`flex items-center gap-1.5 text-xs ${
+              search.status === 'failed' ? 'text-error' : end ? 'text-primary-content/70' : 'text-base-content/60'
+            }`}>
+              {search.status === 'loading' && <span className="loading loading-spinner loading-xs" />}
+              {note}
+            </span>
+          </span>
+          <span className={`text-lg ${end ? '' : 'text-primary'}`} aria-hidden="true">›</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+const BUTTON_GAP = 12
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
