@@ -7,6 +7,7 @@ import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
 import { currentParams, patchParams } from '../nav'
 import BrowseList from './BrowseList'
 import CatalogFilters from './discover/CatalogFilters'
+import SourcePicker from './discover/SourcePicker'
 import { withValue } from './discover/values'
 import LayoutToggle from './LayoutToggle'
 import MediaRow from './MediaRow'
@@ -18,7 +19,6 @@ const RESERVED = new Set(['q', 'from', 'to', 'cat', 'all'])
 interface Props {
   catalogs: CatalogInfo[]
   catalogId: string
-  onSwitchCatalog: (id: string) => void
   /** A site's own title: open it directly. */
   onOpenCard: (card: SeasonCard) => void
   /** A title only described by the catalogue: search the sites for it. */
@@ -52,7 +52,7 @@ interface Fetched {
  * while nothing is chosen, a filtered grid once anything is. Filters live in
  * the URL, so back, reload and deep links land on the same list.
  */
-export default function DiscoverPanel({ catalogs, catalogId, onSwitchCatalog, onOpenCard, onSearchTerm }: Props) {
+export default function DiscoverPanel({ catalogs, catalogId, onOpenCard, onSearchTerm }: Props) {
   const [values, setValues] = useState<CatalogValues>(() => {
     const seeded: CatalogValues = {}
     currentParams().forEach((v, k) => { if (!RESERVED.has(k)) seeded[k] = v })
@@ -233,23 +233,7 @@ export default function DiscoverPanel({ catalogs, catalogId, onSwitchCatalog, on
   return (
     <section aria-label={`Discover ${label}`} className="flex flex-col gap-4">
       {/* Phones have no rail to list catalogues in, so they switch here. */}
-      {catalogs.length > 1 && (
-        <div className="md:hidden flex gap-1 p-1 rounded-box bg-base-200 overflow-x-auto no-scrollbar" role="tablist" aria-label="Catalogue">
-          {catalogs.map(c => (
-            <button
-              key={c.id}
-              role="tab"
-              aria-selected={c.id === catalogId}
-              onClick={() => onSwitchCatalog(c.id)}
-              className={`flex-1 shrink-0 px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${
-                c.id === catalogId ? 'bg-base-300 text-base-content' : 'text-base-content/55'
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <SourcePicker catalogs={catalogs} catalogId={catalogId} />
 
       {fields.length > 0 && (
         <CatalogFilters

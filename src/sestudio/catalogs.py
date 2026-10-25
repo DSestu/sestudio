@@ -170,7 +170,7 @@ def _tmdb_sort(kind: str, sort: str) -> str:
 class TmdbCatalog(Catalog):
     id = "tmdb"
     label = "TMDB"
-    description = "Films & series · finds a source"
+    description = "Every film & series · rated"
 
     def __init__(self) -> None:
         self._shelves = TtlCache(600)

@@ -26,6 +26,10 @@ function summaries(field: FilterField, value: string): { label: string; without:
   return []
 }
 
+function optionLabel(field: FilterField, value: string): string {
+  return field.options.find(o => o.value === value)?.label ?? value
+}
+
 interface Props {
   fields: FilterField[]
   values: CatalogValues
@@ -37,8 +41,9 @@ const chip = 'flex items-center gap-1.5 shrink-0 rounded-full border border-base
 
 /**
  * The quick row under the search bar: the Filters button, every single-choice
- * field as a native select (the phone's own picker), and a removable pill per
- * active multi/range value. The rest of each field lives in the sheet.
+ * field as a native select, and a removable pill per active multi/range value.
+ * The rest of each field lives in the sheet. A phone's row is too narrow for
+ * the selects, so there it keeps only the button and what is set, as pills.
  */
 export default function CatalogFilters({ fields, values, onChange, onClear }: Props) {
   const [open, setOpen] = useState(false)
@@ -58,7 +63,7 @@ export default function CatalogFilters({ fields, values, onChange, onClear }: Pr
           {active > 0 && <span className="badge badge-primary badge-sm">{active}</span>}
         </button>
         {fields.filter(f => f.type === 'select').map(f => (
-          <label key={f.key} className={`${chip} cursor-pointer`}>
+          <label key={f.key} className={`${chip} cursor-pointer max-md:hidden`}>
             <span className="text-base-content/50">{f.label}</span>
             <select
               value={valueOf(f, values)}
@@ -70,11 +75,21 @@ export default function CatalogFilters({ fields, values, onChange, onClear }: Pr
             </select>
           </label>
         ))}
+        {fields.filter(f => f.type === 'select' && valueOf(f, values) !== f.default).map(f => (
+          <button
+            key={`${f.key}-set`}
+            onClick={() => onChange(f, f.default)}
+            aria-label={`Remove ${f.label}: ${optionLabel(f, valueOf(f, values))}`}
+            className={`${chip} bg-base-300 border-transparent md:hidden`}
+          >
+            {optionLabel(f, valueOf(f, values))} <span aria-hidden="true">✕</span>
+          </button>
+        ))}
         {fields.filter(f => f.type !== 'select').flatMap(f => {
           const pills = summaries(f, valueOf(f, values))
           if (!pills.length || valueOf(f, values) === f.default) {
             return [
-              <button key={f.key} onClick={() => setOpen(true)} className={`${chip} text-base-content/70`}>
+              <button key={f.key} onClick={() => setOpen(true)} className={`${chip} text-base-content/70 max-md:hidden`}>
                 {f.label} <span aria-hidden="true">▾</span>
               </button>,
             ]

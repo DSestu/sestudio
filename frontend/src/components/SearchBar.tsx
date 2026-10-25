@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SeasonCard } from '../api'
-import { searchSeasons } from '../api'
+import { cachedSearch, searchSeasonsCached } from '../api'
 
 interface Props {
   /** Called with the results and the query they belong to ('' when cleared). */
@@ -8,10 +8,6 @@ interface Props {
   /** Externally-driven query (e.g. clicking a browse-row card). */
   term?: string | null
 }
-
-// Session-scoped results cache so returning to a search (browser back from a
-// title) restores instantly instead of re-scraping the sources.
-const resultsCache = new Map<string, SeasonCard[]>()
 
 export default function SearchBar({ onResults, term }: Props) {
   const [query, setQuery] = useState(term ?? '')
@@ -46,13 +42,12 @@ export default function SearchBar({ onResults, term }: Props) {
     if (timer.current) clearTimeout(timer.current)
     const q = query.trim()
     if (!q) { onResultsRef.current([], ''); return }
-    const cached = resultsCache.get(q)
+    const cached = cachedSearch(q)
     if (cached) { onResultsRef.current(cached, q); return }
     timer.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const results = await searchSeasons(q)
-        resultsCache.set(q, results)
+        const results = await searchSeasonsCached(q)
         setError(null)
         onResultsRef.current(results, q)
       } catch {

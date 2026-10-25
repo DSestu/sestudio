@@ -24,6 +24,7 @@ import LibraryView from './views/LibraryView'
 import NotificationsView from './views/NotificationsView'
 import PersonView from './views/PersonView'
 import SearchView from './views/SearchView'
+import { DiscoverMenu } from './components/discover/SourcePicker'
 import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
 
@@ -269,7 +270,6 @@ export default function App() {
             onSearchTerm={searchFor}
             catalogs={catalogs}
             catalogId={catalogId}
-            onSwitchCatalog={openCatalog}
             onOpenPerson={id => navigate('person', { id })}
             onOpenDownloaded={openDownloadedTitle}
             onJobsCreated={() => setDownloadTick(t => t + 1)}
@@ -341,6 +341,17 @@ export default function App() {
             />
           </div>
         ))}
+        <DiscoverMenu
+          catalogs={catalogs}
+          catalogId={catalogId}
+          onDiscover={route.view === 'search' && !route.params.get('q')}
+          preferredSite={settings.preferred_site}
+          mergeByTmdb={settings.tmdb_configured && settings.tmdb_merge}
+          collapseSeasons={settings.collapse_seasons !== false}
+          onOpenCatalog={openCatalog}
+          onOpenCard={card => openTitle(card, 0, settings.lang)}
+          onSearchTerm={searchFor}
+        />
       </AppShell>
 
       {/* One persistent Now-Casting surface, on every view. Renders nothing
