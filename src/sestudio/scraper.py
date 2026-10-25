@@ -29,6 +29,11 @@ _NEWSID_RE = re.compile(r"/(\d+)-")
 _YEAR_RE = re.compile(r"\s*\((\d{4})\)\s*$")
 
 
+def _unslash(text: str) -> str:
+    """The site's engine backslash-escapes quotes in titles ("l\\'ombre")."""
+    return text.replace("\\'", "'").replace('\\"', '"')
+
+
 def search_one(
     query: str, base_url: str, *, is_anime: bool = False
 ) -> list[SeasonCard]:
@@ -77,7 +82,7 @@ def search_one(
         poster_url: str = img["src"] if img else ""  # type: ignore[index]
 
         title_el = item.find("div", class_="search-title")
-        raw_title: str = title_el.get_text(strip=True) if title_el else ""
+        raw_title: str = _unslash(title_el.get_text(strip=True)) if title_el else ""
         # The trailing "(2019)" is stripped from the display title, but kept —
         # it disambiguates remakes when matching against metadata providers.
         m_year = _YEAR_RE.search(raw_title)
@@ -131,7 +136,7 @@ def parse_listing(
         if not m_id or not title_el:
             continue
         newsid = m_id.group(1) or m_id.group(2)
-        title = _YEAR_RE.sub("", title_el.get_text(strip=True)).strip()
+        title = _YEAR_RE.sub("", _unslash(title_el.get_text(strip=True))).strip()
         year_el = short.select_one(".short-year")
         year_text = year_el.get_text(strip=True) if year_el else ""
         img = short.find("img")
