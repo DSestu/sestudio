@@ -51,25 +51,28 @@ interface ResultsProps {
   onSeeAll: () => void
   /** The key Enter is, shown on the results-page row (desktop). */
   enterHint?: boolean
+  /** Phones put the results-page link elsewhere and list every title. */
+  seeAllRow?: boolean
+  limit?: number
   footer?: ReactNode
 }
 
 const resultOptionId = (listId: string, index: number) => `${listId}-${index}`
 
 /** A search's preview: the results page first, then a few titles, one line each. */
-export function TitleResults({ search, query, kind, onKind, listId, active = -1, onActive, onOpen, onSeeAll, enterHint = false, footer }: ResultsProps) {
+export function TitleResults({ search, query, kind, onKind, listId, active = -1, onActive, onOpen, onSeeAll, enterHint = false, seeAllRow = true, limit = PREVIEW_ROWS, footer }: ResultsProps) {
   const total = search.cards.length
   const sources = new Set(search.cards.flatMap(c => [c.source || 'fstream', ...(c.alts ?? []).map(a => a.source || 'fstream')]))
   const status =
     search.status === 'loading' ? 'searching every source…'
       : search.status === 'failed' ? 'search failed — is the server reachable?'
         : `${total} title${total === 1 ? '' : 's'} · ${sources.size} source${sources.size === 1 ? '' : 's'}`
-  const rows = search.cards.slice(0, PREVIEW_ROWS)
+  const rows = search.cards.slice(0, limit)
 
   return (
     <div className="flex flex-col">
       <ul id={listId} role="listbox" aria-label="Search results" className="flex flex-col">
-        <li
+        {seeAllRow && <li
           id={resultOptionId(listId, 0)}
           role="option"
           aria-selected={active === 0}
@@ -92,11 +95,11 @@ export function TitleResults({ search, query, kind, onKind, listId, active = -1,
             </span>
           </span>
           {enterHint ? <kbd className="kbd kbd-sm">Enter</kbd> : <span className="text-primary text-lg" aria-hidden="true">›</span>}
-        </li>
+        </li>}
 
         {search.status === 'done' && total > 0 && (
           <>
-            <li role="presentation" className="mt-3 mb-1 flex items-center gap-3">
+            <li role="presentation" className={`${seeAllRow ? 'mt-3' : ''} mb-1 flex items-center gap-3`}>
               <span className={sectionTitle}>Titles</span>
               <span className="ml-auto"><KindChips value={kind} onChange={onKind} small /></span>
             </li>
@@ -141,7 +144,7 @@ export function TitleResults({ search, query, kind, onKind, listId, active = -1,
           </p>
         </div>
       )}
-      {total > PREVIEW_ROWS && (
+      {total > limit && (
         <button type="button" onClick={onSeeAll} className="mt-1 px-2 py-1 text-left text-xs text-base-content/50">
           +{total - PREVIEW_ROWS} more — <span className="font-semibold text-primary">on the results page</span>
         </button>
