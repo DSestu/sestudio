@@ -674,6 +674,23 @@ export async function searchSeasons(q: string): Promise<SeasonCard[]> {
   return res.json()
 }
 
+// Session-scoped, so returning to a search (browser back from a title) restores
+// instantly, and the search bar and the source picker never scrape twice.
+const searchCache = new Map<string, SeasonCard[]>()
+
+/** A search already answered this session, if any. */
+export function cachedSearch(q: string): SeasonCard[] | undefined {
+  return searchCache.get(q)
+}
+
+export async function searchSeasonsCached(q: string): Promise<SeasonCard[]> {
+  const hit = searchCache.get(q)
+  if (hit) return hit
+  const results = await searchSeasons(q)
+  searchCache.set(q, results)
+  return results
+}
+
 /** Site id for a title that lives only on disk — not a real content site. */
 export const DOWNLOADED_SOURCE = 'downloaded'
 

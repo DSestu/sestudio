@@ -5,6 +5,7 @@ import { useCastState } from '../cast'
 import { useDlnaState } from '../dlnaControl'
 import type { Tab, View } from '../nav'
 import { useSelectionActive } from '../selectionMode'
+import { closeDiscoverMenuThen, toggleDiscoverMenu, useDiscoverMenuOpen } from '../discoverMenu'
 
 interface Destination {
   id: Tab
@@ -68,6 +69,8 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   // While the library is selecting, its action bar takes the tab bar's slot
   // instead of stacking on top of it, so fixed chrome height never grows (#26).
   const selecting = useSelectionActive()
+  // On phones Discover is a menu of catalogues, unfolded from its tab.
+  const menuOpen = useDiscoverMenuOpen()
   return (
     <div className="min-h-dvh bg-base-100 md:flex">
       {/* Desktop rail */}
@@ -94,7 +97,8 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
             {/* Catalogues sit right under Discover, always one click away. */}
             {d.id === 'search' && catalogs.length > 0 && (
               <div className="ml-[1.4rem] pl-3 mb-1 flex flex-col gap-0.5 border-l border-base-300" aria-label="Catalogues">
-                {catalogs.map(c => (
+                {/* TMDB first: it finds titles on the sources below, playing none itself. */}
+                {[...catalogs.filter(c => c.id === 'tmdb'), ...catalogs.filter(c => c.id !== 'tmdb')].map(c => (
                   <button
                     key={c.id}
                     onClick={() => onOpenCatalog?.(c.id)}
@@ -164,17 +168,22 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
           selecting ? 'hidden' : 'md:hidden'
         }`}
       >
-        {DESTINATIONS.map(d => (
+        {DESTINATIONS.map(d => {
+          // An open menu lights Discover alone: it covers whatever view is under it.
+          const lit = d.id === 'search' ? menuOpen || view === d.id : view === d.id && !menuOpen
+          return (
           <button
             key={d.id}
-            onClick={() => onNavigate(d.id)}
+            onClick={() => (d.id === 'search' ? toggleDiscoverMenu() : closeDiscoverMenuThen(() => onNavigate(d.id)))}
             aria-current={view === d.id ? 'page' : undefined}
+            aria-expanded={d.id === 'search' ? menuOpen : undefined}
+            aria-controls={d.id === 'search' ? 'discover-menu' : undefined}
             className={`relative flex min-w-0 flex-col items-center justify-center gap-1 min-h-14 px-1 py-2 text-[11px] font-medium transition-colors ${
-              view === d.id ? 'text-primary' : 'text-base-content/50'
+              lit ? 'text-primary' : 'text-base-content/50'
             }`}
           >
             {/* Active state is icon + label + rail, never colour alone */}
-            {view === d.id && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
+            {lit && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
             {d.icon}
             {/* Labels must be able to shrink, or six 1fr columns overflow the
                 viewport on narrow phones and the whole page scrolls sideways. */}
@@ -183,7 +192,8 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
               <span className="absolute top-1.5 right-[18%] badge badge-primary badge-xs">{badgeFor(d.id)}</span>
             )}
           </button>
-        ))}
+          )
+        })}
       </nav>
     </div>
   )

@@ -42,7 +42,6 @@ interface Props {
   /** The catalogues to browse while the query is empty, and the open one. */
   catalogs: CatalogInfo[]
   catalogId: string
-  onSwitchCatalog: (id: string) => void
   /** Open a person's profile from the People band. */
   onOpenPerson: (id: number) => void
   /** Open a title already on disk, rather than a source listing. With a file,
@@ -69,7 +68,7 @@ function inWindow(card: SeasonCard, from: string, to: string): boolean {
 }
 
 /** Search view: query, TMDB discovery, results grid, and bulk season download. */
-export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, catalogs, catalogId, onSwitchCatalog, onOpenPerson, onOpenDownloaded, onJobsCreated, onSkipped }: Props) {
+export default function SearchView({ settings, params, onOpenDetail, onUpdateSettings, onSearchTerm, catalogs, catalogId, onOpenPerson, onOpenDownloaded, onJobsCreated, onSkipped }: Props) {
   // Raw, as scraped: merging is derived, so flipping the TMDB-identity setting
   // regroups what is already on screen without re-searching.
   const [rawResults, setRawResults] = useState<SeasonCard[]>([])
@@ -395,7 +394,6 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             key={catalogId}
             catalogs={catalogs}
             catalogId={catalogId}
-            onSwitchCatalog={onSwitchCatalog}
             onOpenCard={onOpenDetail}
             onSearchTerm={onSearchTerm}
           />
