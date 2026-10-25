@@ -1,3 +1,4 @@
+import { siteLink } from '../../api'
 import ProviderChips from '../ProviderChips'
 import type { ProviderStatus } from '../../providers'
 import type { SourceListing } from '../../useSourceListings'
@@ -230,6 +231,21 @@ export default function SourcesPanel({
                   </span>
                 </span>
               </button>
+              {/* The row itself plays from the site; this opens its page instead. */}
+              {listing.page_url && (
+                <a
+                  href={siteLink(listing.source, listing.page_url)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  title={`Open on ${listing.label}`}
+                  aria-label={`Open on ${listing.label} (opens in a new tab)`}
+                  className="btn btn-ghost btn-xs btn-square -ml-3 text-base-content/50 hover:text-base-content"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5h6v6M19 5l-8 8M10 5H5v14h14v-5" />
+                  </svg>
+                </a>
+              )}
 
               {/* Versions, styled like the season switcher's language buttons.
                   Clicking one plays this site in that language. */}

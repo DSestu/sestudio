@@ -73,6 +73,8 @@ class ContentSite(ABC):
 
     id: str
     display_name: str
+    # The site's own front page, for a link out of the app ("" for none).
+    home_url: str = ""
     is_anime: bool = False
     # Download folder for standalone films (season == 0).
     films_dirname: str = "sestudio_films"
@@ -88,6 +90,11 @@ class ContentSite(ABC):
     def owns_url(self, url: str) -> bool:
         """Fallback routing when a request carries no source id."""
         return False
+
+    def web_url(self, url: str) -> str:
+        """Where a title's page_url opens in a browser, when the site's own
+        pages live at another address than the one this app keys titles by."""
+        return url
 
     def refresh(self) -> None:
         """Re-resolve whatever the site caches about itself.

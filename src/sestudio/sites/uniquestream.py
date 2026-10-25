@@ -111,6 +111,7 @@ def _langs(audio_locales: list[str]) -> list[str]:
 class UniqueStreamSite(ContentSite, Catalog):
     id = "uniquestream"
     display_name = "UniqueStream"
+    home_url = BASE
     label = "UniqueStream"
     description = "Anime · plays directly"
     is_anime = True
@@ -151,6 +152,24 @@ class UniqueStreamSite(ContentSite, Catalog):
         series opened from a catalogue card and from search is the same title."""
         url = f"{BASE}/series/{series_id}"
         return f"{url}?season={season_id}" if season_id else url
+
+    def web_url(self, url: str) -> str:
+        # The site's pages need the title's slug, which page_url doesn't carry.
+        segments = [s for s in urlsplit(url).path.split("/") if s]
+        if len(segments) != 2 or segments[0] not in ("series", "movie"):
+            return BASE
+        kind, cid = segments
+        try:
+            detail = (
+                self._series_detail(cid)
+                if kind == "series"
+                else self._get(f"movie/{cid}")
+            )
+        except SiteError:
+            return BASE
+        # The site's own makeTitle().
+        slug = re.sub(r"[^a-zA-Z0-9]+", "-", detail.get("title") or "") or "title"
+        return f"{BASE}/{'series' if kind == 'series' else 'movies'}/{cid}/{slug}"
 
     def _season_cards(self, series: dict[str, Any]) -> list[SeasonCard]:
         seasons = series.get("seasons") or []

@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from sestudio.catalogs import Catalog, FilterField, TtlCache, parallel
+from sestudio.catalogs import card as catalog_card
 from sestudio.http_client import new_client
 from sestudio.models import Episode, SeasonCard, StreamSource, Subtitle
 from sestudio.providers import jsdecode
@@ -45,6 +47,24 @@ _DRAMA, _MOVIE, _ANIME, _HOLLYWOOD = 1, 2, 3, 4
 _SOUTH_KOREA = 2
 # List orders, read off the live site: 1 popular, 2 last updated.
 _POPULAR, _UPDATED = 1, 2
+_DISCOVER_PAGE = 30
+# The labels kisskh's own app gives its list filters; other ids answer but
+# aren't named anywhere.
+_KINDS = [
+    (_DRAMA, "TV series"),
+    (_MOVIE, "Movies"),
+    (_ANIME, "Anime"),
+    (_HOLLYWOOD, "Hollywood"),
+]
+_COUNTRIES = [
+    (0, "Any"),
+    (1, "China"),
+    (_SOUTH_KOREA, "South Korea"),
+    (3, "Japan"),
+    (5, "Thailand"),
+]
+_STATUSES = [(0, "Any"), (1, "Ongoing"), (2, "Completed"), (3, "Upcoming")]
+_SORTS = [(_POPULAR, "Most popular"), (_UPDATED, "Last updated")]
 
 # Search fans out per type; each answers up to ~100 hits, more than a results
 # page (and its per-card TMDB lookups) should carry.
@@ -119,11 +139,15 @@ def _drama_id(url: str) -> int:
     return int(ids[0])
 
 
-class KisskhSite(ContentSite):
+class KisskhSite(ContentSite, Catalog):
     id = "kisskh"
     display_name = "KissKH"
+    home_url = BASE
+    label = "KissKH"
+    description = "Asian dramas, films & anime · subtitled"
 
     def __init__(self) -> None:
+        self._shelves = TtlCache(600)
         self._config: _KeyConfig | None = None
         self._config_at = 0.0
         self._lock = threading.Lock()
@@ -202,6 +226,80 @@ class KisskhSite(ContentSite):
 
         with ThreadPoolExecutor(max_workers=len(rows)) as pool:
             return [r for r in pool.map(one, rows) if r.cards]
+
+    # --- Catalog ------------------------------------------------------------
+
+    def schema(self, values: dict[str, str]) -> list[FilterField]:
+        def select(key: str, label: str, pairs: list[tuple[int, str]]) -> FilterField:
+            options = [{"value": str(v), "label": t} for v, t in pairs]
+            return FilterField(key, label, "select", options, default=str(pairs[0][0]))
+
+        return [
+            select("type", "Type", _KINDS),
+            select("sort", "Sort", _SORTS),
+            select("country", "Country", _COUNTRIES),
+            select("status", "Status", _STATUSES),
+        ]
+
+    def discover(self, values: dict[str, str], page: int) -> dict[str, Any]:
+        def pick(key: str, pairs: list[tuple[int, str]]) -> int:
+            ids = [v for v, _ in pairs]
+            value = values.get(key, "")
+            return int(value) if value.isdigit() and int(value) in ids else ids[0]
+
+        kind = pick("type", _KINDS)
+        data = self._get_json(
+            "DramaList/List",
+            page=page,
+            type=kind,
+            sub=0,
+            country=pick("country", _COUNTRIES),
+            status=pick("status", _STATUSES),
+            order=pick("sort", _SORTS),
+            pageSize=_DISCOVER_PAGE,
+        )
+        cards = []
+        for item in data.get("data") or []:
+            season_card = self._card(item, kind)
+            cards.append(
+                catalog_card(
+                    season_card.newsid,
+                    season_card.title,
+                    season_card.poster_url,
+                    {"card": vars(season_card)},
+                    year=season_card.year,
+                )
+            )
+        return {
+            "cards": cards,
+            "page": page,
+            "has_more": page * _DISCOVER_PAGE < int(data.get("totalCount") or 0),
+            "note": "",
+        }
+
+    def shelves(self) -> list[dict[str, Any]]:
+        return self._shelves.get("all", self._fetch_shelves)
+
+    def _fetch_shelves(self) -> list[dict[str, Any]]:
+        specs = [
+            ("Popular K-dramas", {"type": str(_DRAMA), "country": str(_SOUTH_KOREA)}),
+            ("Popular C-dramas", {"type": str(_DRAMA), "country": "1"}),
+            ("Just updated", {"type": str(_DRAMA), "sort": str(_UPDATED)}),
+            ("Popular anime", {"type": str(_ANIME)}),
+            ("Popular movies", {"type": str(_MOVIE)}),
+            ("Coming soon", {"type": str(_DRAMA), "status": "3"}),
+        ]
+        pages = parallel([lambda v=v: self.discover(v, 1) for _, v in specs])
+        return [
+            {
+                "id": f"shelf-{i}",
+                "title": title,
+                "cards": got["cards"][:18],
+                "values": values,
+            }
+            for i, ((title, values), got) in enumerate(zip(specs, pages))
+            if got and got["cards"]
+        ]
 
     def fetch_page(self, url: str, lang: str = "vf") -> PageResult:
         drama = self._get_json(f"DramaList/Drama/{_drama_id(url)}", isq="false")

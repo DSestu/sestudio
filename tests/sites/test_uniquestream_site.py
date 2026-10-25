@@ -6,7 +6,7 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from sestudio.sites import SiteError, StreamCandidate
-from sestudio.sites.uniquestream import API, UniqueStreamSite
+from sestudio.sites.uniquestream import API, BASE, UniqueStreamSite
 from tests.sites.contract import SiteContractMixin
 
 SERIES = {
@@ -217,3 +217,12 @@ def test_key_bin_is_decoded_for_streams_it_resolved(site, httpx_mock: HTTPXMock)
     # Segments stream through untouched, and so does a key of an unknown stream.
     assert site.proxy_fix("https://cdn/episode/S/A/e1/mid_fr-FR/v/seg-0.png") is None
     assert site.proxy_fix("https://cdn/other/keys/key.bin") is None
+
+
+def test_web_url_adds_the_slug_the_sites_pages_need(monkeypatch):
+    site = UniqueStreamSite()
+    monkeypatch.setattr(site, "_series_detail", lambda cid: {"title": "Kaiju No. 8"})
+    monkeypatch.setattr(site, "_get", lambda path: {"title": "Suzume"})
+    assert site.web_url(f"{BASE}/series/Nz?season=s2") == f"{BASE}/series/Nz/Kaiju-No-8"
+    assert site.web_url(f"{BASE}/movie/nf_1") == f"{BASE}/movies/nf_1/Suzume"
+    assert site.web_url(f"{BASE}/other") == BASE

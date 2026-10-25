@@ -161,3 +161,21 @@ def test_srt_becomes_vtt():
     )
     vtt = b"WEBVTT\n\n00:01.000 --> 00:02.000\nx\n"
     assert srt_to_vtt(vtt) == vtt
+
+
+def test_discover_passes_filters_and_pages_by_total(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=re.compile(rf"{API}/DramaList/List\?.*"),
+        json={"data": [_hit(26, "Goblin (2016)")], "totalCount": 61},
+    )
+    site = KisskhSite()
+    got = site.discover({"type": "3", "country": "5", "status": "9", "sort": "2"}, 2)
+    params = httpx_mock.get_requests()[0].url.params
+    assert (params["type"], params["country"], params["order"]) == ("3", "5", "2")
+    # An unknown status falls back to "any".
+    assert params["status"] == "0" and params["page"] == "2"
+    assert got["has_more"]  # 2 pages of 30 < 61
+    goblin = got["cards"][0]["open"]["card"]
+    assert (
+        goblin["source"] == "kisskh" and goblin["is_anime"] and goblin["year"] == 2016
+    )

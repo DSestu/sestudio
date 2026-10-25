@@ -26,6 +26,7 @@ def test_lists_registered_sites_as_enabled_by_default(client):
     sites = resp.json()
     assert [s["id"] for s in sites] == ["fstream"]
     assert sites[0]["display_name"] == "FStream"
+    assert sites[0]["url"] == "https://fs03.lol"
     assert sites[0]["enabled"] is True
 
 
@@ -118,3 +119,14 @@ def test_a_site_that_cannot_be_resolved_does_not_block_startup(tmp_path, monkeyp
         # The app still serves, and the reachable site was still refreshed.
         assert started.get("/api/sites").status_code == 200
     assert healthy.refreshed == 1
+
+
+def test_open_redirects_only_to_the_sites_own_pages(client):
+    page = "https://fs03.lol/123-x.html"
+    resp = client.get(
+        "/api/sites/fstream/open", params={"url": page}, follow_redirects=False
+    )
+    assert resp.status_code == 307 and resp.headers["location"] == page
+    elsewhere = {"url": "https://evil.example/123-x.html"}
+    assert client.get("/api/sites/fstream/open", params=elsewhere).status_code == 404
+    assert client.get("/api/sites/nope/open", params={"url": page}).status_code == 404
