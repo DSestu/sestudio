@@ -28,7 +28,8 @@ import SearchBar from '../components/SearchBar'
 import { downloadToDevice } from '../deviceDownloads'
 import DownloadedTree from '../components/downloaded/DownloadedTree'
 import { buildFolders } from '../downloadedFolders'
-import { useDownloadedLibrary } from '../downloadedLibrary'
+import { fmtSize, useDownloadedLibrary } from '../downloadedLibrary'
+import { episodeCode, groupOnDisk, resumePoint } from '../diskShows'
 import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
 import { isAnyDates, rangeLabel, yearOf } from '../releaseDates'
@@ -186,9 +187,27 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   // The one result that is clearly what was searched for, shown big above the
   // rest; what you have on disk or are watching counts as meaning it.
   const watchStore = useWatchState()
-  const onDiskKeys = useMemo(() => new Set(downloadedTitles.map(t => matchKey(t.series))), [downloadedTitles])
+  const diskShows = useMemo(() => groupOnDisk(downloadedTitles), [downloadedTitles])
+  const onDiskKeys = useMemo(() => new Set(diskShows.map(s => s.key)), [diskShows])
   const watchingKeys = useMemo(() => new Set(Object.values(watchStore).map(e => matchKey(e.series))), [watchStore])
   const topMatch = useTopMatch(results, lastQuery, settings.tmdb_configured, onDiskKeys, watchingKeys)
+  // The hero on disk plays from there: where you left off, or the first episode.
+  const heroDisk = useMemo(() => {
+    const show = topMatch.hero && diskShows.find(s => s.key === matchKey(topMatch.hero!.series_name))
+    const at = show && resumePoint(show, Object.values(watchStore))
+    if (!show || !at) return undefined
+    const copy = at.episode.copies[0]
+    const film = show.seasons.length === 1 && show.seasons[0].label === 'Film'
+    return {
+      line: [
+        show.seasons.length > 1 ? `${show.seasons.length} seasons` : '',
+        show.episodes > 1 ? `${show.episodes} episodes` : '',
+        fmtSize(show.size),
+      ].filter(Boolean).join(' · '),
+      play: film ? 'Play · on disk' : `${at.resume ? 'Resume' : 'Play'} · ${episodeCode(at.season, at.episode)}`,
+      onPlay: () => onOpenDownloaded(copy.title, copy.file),
+    }
+  }, [topMatch.hero, diskShows, watchStore, onOpenDownloaded])
   const gridCards = topMatch.hero ? sortedResults.filter(c => c !== topMatch.hero) : sortedResults
 
   const cardMap = new Map(results.map(c => [c.newsid, c]))
@@ -560,7 +579,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       {lastQuery !== '' && resolvedQuery === lastQuery && (topMatch.pending
         ? <TopMatchSkeleton />
         : topMatch.hero && (
-          <TopMatchHero card={topMatch.hero} meta={topMatch.meta} posters={settings.tmdb_posters} onOpen={onOpenDetail} />
+          <TopMatchHero card={topMatch.hero} meta={topMatch.meta} disk={heroDisk} posters={settings.tmdb_posters} onOpen={onOpenDetail} />
         ))}
 
       {lastQuery !== '' && <PeopleResults people={people} onOpen={onOpenPerson} />}
@@ -601,6 +620,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             onToggle={toggleCard}
             onOpenDetail={onOpenDetail}
             enrich={settings.tmdb_configured}
+            onDisk={onDiskKeys}
             posters={settings.tmdb_posters}
             onSeeAll={k => { onSearch(lastQuery, k); window.scrollTo({ top: 0 }) }}
           />
@@ -612,6 +632,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             onOpenDetail={onOpenDetail}
             enrich={settings.tmdb_configured}
             posters={settings.tmdb_posters}
+            onDisk={onDiskKeys}
           />
         )
       ) : inWindowResults.length > 0 ? (

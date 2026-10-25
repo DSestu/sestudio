@@ -10,6 +10,8 @@ interface Props {
   /** Let the TMDB poster stand in for the source's own, as the grid does. */
   posters: boolean
   onOpen: (card: SeasonCard) => void
+  /** Set when the title is on disk: what is there, and Play picks it up from disk. */
+  disk?: { line: string; play: string; onPlay: () => void }
 }
 
 /** The skeleton the hero slot holds while it waits on votes, at the same
@@ -24,7 +26,7 @@ export function TopMatchSkeleton() {
  * The search's top match, shown big with Play next to it, over a blurred copy
  * of its own artwork. Only drawn when one result is clearly the one meant.
  */
-export default function TopMatchHero({ card, meta, posters, onOpen }: Props) {
+export default function TopMatchHero({ card, meta, posters, onOpen, disk }: Props) {
   const poster = (posters ? meta?.poster_url : '') || card.poster_url
   const backdrop = meta?.backdrop_url || poster
   const year = meta?.year || card.year || 0
@@ -52,13 +54,21 @@ export default function TopMatchHero({ card, meta, posters, onOpen }: Props) {
             {facts.join(' · ')}
             {meta && <RatingBadge rating={meta.rating} />}
           </div>
+          {disk && (
+            <p className="flex items-center gap-1.5 text-sm text-success">
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 1.1.9 2 2 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H6a2 2 0 00-2 2z" />
+              </svg>
+              <span><span className="font-semibold">On disk</span> · {disk.line}</span>
+            </p>
+          )}
           {meta?.overview && (
             <p className="hidden sm:block max-w-2xl text-sm leading-relaxed text-base-content/70 line-clamp-3">{meta.overview}</p>
           )}
           <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
-            <button type="button" onClick={() => onOpen(card)} className="btn btn-primary btn-sm gap-1.5">
+            <button type="button" onClick={disk ? disk.onPlay : () => onOpen(card)} className="btn btn-primary btn-sm gap-1.5">
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-              Play
+              {disk ? disk.play : 'Play'}
             </button>
             <SaveToggles size="sm" entry={saveEntry(card, poster)} className="rounded-box bg-base-100/60" />
             <SourcesBadge card={card} onOpen={onOpen} />

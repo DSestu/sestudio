@@ -1,4 +1,5 @@
 import type { SeasonCard } from '../api'
+import { matchKey } from '../topMatch'
 import { useTmdb } from '../useTmdb'
 import { kindLabel, saveEntry, seasonsLabel } from './resultMeta'
 import RatingBadge from './RatingBadge'
@@ -18,9 +19,11 @@ interface Props {
   /** One line that scrolls sideways instead of a wrapping grid: a kind's row
    *  on the search page. */
   row?: boolean
+  /** `matchKey`s of the shows on disk, to flag their cards. */
+  onDisk?: ReadonlySet<string>
 }
 
-export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail, enrich, posters, row }: Props) {
+export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail, enrich, posters, row, onDisk }: Props) {
   if (!cards.length) return null
 
   // Two across on a phone, so the always-visible touch controls fit (#26).
@@ -33,6 +36,7 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail,
         <ResultCard
           key={card.newsid}
           className={row ? 'w-36 sm:w-40 shrink-0 snap-start' : ''}
+          onDisk={!!onDisk?.has(matchKey(card.series_name))}
           card={card}
           checked={checkedIds.has(card.newsid)}
           onToggle={() => onToggle(card.newsid)}
@@ -54,9 +58,10 @@ interface CardProps {
   enrich: boolean
   posters: boolean
   className: string
+  onDisk: boolean
 }
 
-function ResultCard({ card, checked, onToggle, onOpenDetail, enrich, posters, className }: CardProps) {
+function ResultCard({ card, checked, onToggle, onOpenDetail, enrich, posters, className, onDisk }: CardProps) {
   // Falls back to the source's own poster/title when TMDB is off or unmatched.
   const meta = useTmdb(card.series_name, card.year ?? 0, card.is_film, enrich)
   const poster = (posters ? meta?.poster_url : '') || card.poster_url
@@ -105,6 +110,9 @@ function ResultCard({ card, checked, onToggle, onOpenDetail, enrich, posters, cl
             <img src={poster} alt="" loading="lazy" className="w-full aspect-[2/3] object-cover" />
           ) : (
             <div className="w-full aspect-[2/3] bg-base-300 flex items-center justify-center text-base-content/30 text-3xl">?</div>
+          )}
+          {onDisk && (
+            <span className="absolute bottom-1.5 left-1.5 badge badge-success badge-sm font-semibold uppercase tracking-wide">On disk</span>
           )}
           <span className="pointer-events-none absolute inset-0 hidden [@media(hover:hover)]:flex items-center justify-center bg-base-100/40 opacity-0 group-hover:opacity-100 transition-opacity">
             <span className="btn btn-circle btn-primary btn-sm">
