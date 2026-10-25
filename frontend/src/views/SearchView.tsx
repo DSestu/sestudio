@@ -35,6 +35,10 @@ import { KINDS, type Kind, matchesKind, parseKind } from '../titleSearch'
 import { KindSegments, OptionsButton } from '../components/search/SearchParts'
 import { OPTIONS_ID, setSearchOptionsSummary, setSourcesPanel, useSearchOptions } from '../searchOptions'
 import { useScrolledDown } from '../useScrolledDown'
+import { useTopMatch } from '../useTopMatch'
+import { matchKey } from '../topMatch'
+import { useWatchState } from '../watchState'
+import TopMatchHero, { TopMatchSkeleton } from '../components/search/TopMatchHero'
 
 interface Props {
   settings: AppSettings
@@ -177,6 +181,14 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       ).map(row => row.card),
     [results, sort, ratings],
   )
+
+  // The one result that is clearly what was searched for, shown big above the
+  // rest; what you have on disk or are watching counts as meaning it.
+  const watchStore = useWatchState()
+  const onDiskKeys = useMemo(() => new Set(downloadedTitles.map(t => matchKey(t.series))), [downloadedTitles])
+  const watchingKeys = useMemo(() => new Set(Object.values(watchStore).map(e => matchKey(e.series))), [watchStore])
+  const topMatch = useTopMatch(results, lastQuery, settings.tmdb_configured, onDiskKeys, watchingKeys)
+  const gridCards = topMatch.hero ? sortedResults.filter(c => c !== topMatch.hero) : sortedResults
 
   const cardMap = new Map(results.map(c => [c.newsid, c]))
   const allChecked = results.length > 0 && results.every(c => checkedIds.has(c.newsid))
@@ -544,6 +556,12 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         </details>
       )}
 
+      {lastQuery !== '' && resolvedQuery === lastQuery && (topMatch.pending
+        ? <TopMatchSkeleton />
+        : topMatch.hero && (
+          <TopMatchHero card={topMatch.hero} meta={topMatch.meta} posters={settings.tmdb_posters} onOpen={onOpenDetail} />
+        ))}
+
       {lastQuery !== '' && <PeopleResults people={people} onOpen={onOpenPerson} />}
 
       {lastQuery === '' ? (
@@ -567,7 +585,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       ) : results.length > 0 ? (
         layout === 'detail' ? (
           <ResultsList
-            cards={sortedResults}
+            cards={gridCards}
             checkedIds={checkedIds}
             onToggle={toggleCard}
             onOpenDetail={onOpenDetail}
@@ -576,7 +594,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           />
         ) : (
           <ResultsGrid
-            cards={sortedResults}
+            cards={gridCards}
             checkedIds={checkedIds}
             onToggle={toggleCard}
             onOpenDetail={onOpenDetail}
