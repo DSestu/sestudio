@@ -142,7 +142,10 @@ _SRT_TIME_RE = re.compile(r"(\d{1,2}:\d{2}:\d{2}),(\d{3})")
 
 
 def is_srt_url(url: str) -> bool:
-    return urlsplit(url).path.lower().endswith(".srt")
+    # A "#srt" fragment marks SubRip served from an extensionless URL; HTTP
+    # clients never send the fragment, so the upstream request is unchanged.
+    parts = urlsplit(url)
+    return parts.path.lower().endswith(".srt") or parts.fragment == "srt"
 
 
 def srt_to_vtt(data: bytes) -> bytes:
@@ -150,9 +153,14 @@ def srt_to_vtt(data: bytes) -> bytes:
 
     Hosts like kisskh serve `.srt`, which no `<track>` loads. The two differ
     only in the header and the millisecond separator; a body that is already
-    WebVTT (some `.srt` URLs serve it) passes through unchanged.
+    WebVTT (some `.srt` URLs serve it) passes through unchanged. SubRip from
+    subtitle aggregators is often Windows-1252, whatever it claims to be.
     """
-    text = data.decode("utf-8-sig", errors="replace").replace("\r\n", "\n")
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = data.decode("cp1252", errors="replace")
+    text = text.replace("\r\n", "\n")
     if text.lstrip().startswith("WEBVTT"):
         return data
     lines = [

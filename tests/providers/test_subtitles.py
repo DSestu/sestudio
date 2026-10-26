@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sestudio.providers.subtitles import extract
+from sestudio.providers.subtitles import extract, is_srt_url, srt_to_vtt
 
 BASE = "https://vidzy.org/embed-abc123.html"
 
@@ -94,3 +94,16 @@ def test_duplicate_declarations_are_collapsed():
 def test_label_falls_back_to_language_then_generic():
     (sub,) = extract("player.loadTracks([{kind:'subtitles', src:'/x.vtt'}]);", BASE)
     assert sub.label == "Subtitles"
+
+
+def test_srt_fragment_marks_an_extensionless_url_as_subrip():
+    assert is_srt_url("https://vidcore.io/wyzie/abc#srt")
+    assert is_srt_url("https://x.test/a.SRT")
+    assert not is_srt_url("https://vidcore.io/wyzie/abc")
+
+
+def test_srt_that_is_not_utf8_is_read_as_windows_1252():
+    srt = "1\r\n00:00:09,075 --> 00:00:11,910\r\nFatigué\r\n".encode("cp1252")
+    assert srt_to_vtt(srt).decode() == (
+        "WEBVTT\n\n1\n00:00:09.075 --> 00:00:11.910\nFatigué\n"
+    )

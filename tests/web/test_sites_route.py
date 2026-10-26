@@ -17,6 +17,7 @@ def client(tmp_path, monkeypatch):
     app.state.sites.pop("french-manga")
     app.state.sites.pop("kisskh")
     app.state.sites.pop("uniquestream")
+    app.state.sites.pop("bflix")
     return TestClient(app)
 
 
