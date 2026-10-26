@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.1.0](https://github.com/DSestu/sestudio/compare/v1.0.0...v1.1.0) (2026-10-26)
+
+
+### New features
+
+* add BFlix as a source, streaming films and series through vidnest ([#130](https://github.com/DSestu/sestudio/issues/130)) ([9fce680](https://github.com/DSestu/sestudio/commit/9fce6801f6ca2dc6b61cd31ff67b3015ef5c03d7))
+* list BFlix in Discover, with TMDB's filters and cards that open on BFlix ([#133](https://github.com/DSestu/sestudio/issues/133)) ([df95e50](https://github.com/DSestu/sestudio/commit/df95e5061a652202b21fc8e207576dabee27123e))
+* make People its own search kind, and fold people under Everything's titles ([#131](https://github.com/DSestu/sestudio/issues/131)) ([d6ffe7b](https://github.com/DSestu/sestudio/commit/d6ffe7b2f24d9d28d635adec7a9eff09cb277030))
+* show BFlix's favicon in the source lists ([#134](https://github.com/DSestu/sestudio/issues/134)) ([74e026d](https://github.com/DSestu/sestudio/commit/74e026d92db5211da42db781275c05ae41791ceb))
+* show each source's favicon in the Discover rail and phone menu ([#132](https://github.com/DSestu/sestudio/issues/132)) ([dab2649](https://github.com/DSestu/sestudio/commit/dab26491f2446408451543f6b623176b65f83d30))
+
+
+### Bug fixes
+
+* catch scene cuts by their jump, so RIFE stops morphing between similar shots ([#128](https://github.com/DSestu/sestudio/issues/128)) ([bcc27b8](https://github.com/DSestu/sestudio/commit/bcc27b80fa754fb0c51ad1ec8071ad31eade52cd))
+* keep the bottom padding of modals on desktop, so the Filters sheet isn't cut off ([#124](https://github.com/DSestu/sestudio/issues/124)) ([e38d0ab](https://github.com/DSestu/sestudio/commit/e38d0abc254e2668b3207c86e962e6ba9f0da0bd))
+* keep the Ctrl K hint on one line when the search bar is narrow ([#127](https://github.com/DSestu/sestudio/issues/127)) ([5a7e5e5](https://github.com/DSestu/sestudio/commit/5a7e5e5f4a7ed446a549be95fe95fd947c6733fb))
+* list a site once in the sources panel when its pages come from two mirror hosts ([#129](https://github.com/DSestu/sestudio/issues/129)) ([c9e7131](https://github.com/DSestu/sestudio/commit/c9e7131e315fd7041fe4fa9cf797a25f1882729d))
+
+
+### Miscellaneous Chores
+
+* wait for CI and merge from a background shell command, not a subagent ([#126](https://github.com/DSestu/sestudio/issues/126)) ([40cf840](https://github.com/DSestu/sestudio/commit/40cf8409b56d2e6efc885bff2a57b31a44e508e4))
+
 ## [1.0.0](https://github.com/DSestu/sestudio/compare/v0.20.0...v1.0.0) (2026-10-25)
 
 
