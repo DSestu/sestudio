@@ -40,6 +40,17 @@ export function normalize(name: string): string {
     .replace(/[^a-z0-9]+/g, '')
 }
 
+/**
+ * A listing's identity on its site, host left out.
+ *
+ * Mirror sites answer on rotating hosts (french-manga.net, w16.french-manga.net),
+ * so one page can arrive under two hosts — one carried in the route, one fresh
+ * from search — and comparing whole URLs listed it twice.
+ */
+export function listingKey(source: string, url: string): string {
+  return `${source}|${url.replace(/^[a-z]+:\/\/[^/]+/i, '')}`
+}
+
 interface Params {
   seriesName: string
   season: number
@@ -156,12 +167,18 @@ export function useAlternateSources({
         current: true,
       },
     ]
-    const seen = new Set([pageUrl])
+    const seen = new Map([[listingKey(source, pageUrl), list[0]]])
     for (const alt of [...merged, ...found]) {
-      if (seen.has(alt.page_url)) continue
-      seen.add(alt.page_url)
       const id = alt.source ?? 'fstream'
-      list.push({
+      const key = listingKey(id, alt.page_url)
+      const kept = seen.get(key)
+      if (kept) {
+        // Route-carried rows have no poster or year; search's copy does.
+        kept.poster_url ||= alt.poster_url
+        kept.year ||= alt.year ?? 0
+        continue
+      }
+      const entry: AlternateSource = {
         source: id,
         label: name(id),
         page_url: alt.page_url,
@@ -169,7 +186,9 @@ export function useAlternateSources({
         poster_url: alt.poster_url,
         year: alt.year ?? 0,
         current: false,
-      })
+      }
+      seen.set(key, entry)
+      list.push(entry)
     }
     return list
   }, [labels, merged, result, identity, source, pageUrl, seriesName])
