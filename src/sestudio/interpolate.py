@@ -30,6 +30,7 @@ import sys
 import sysconfig
 import threading
 import time
+from collections import deque
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,15 @@ _PROVIDERS = (
 #: taken for a cut. RIFE across a cut draws a ghost of both shots, so the frames
 #: in between repeat the earlier one instead.
 _SCENE_CUT = 40.0
+#: Most cuts sit well under that: a reverse shot in the same room, or one dark
+#: shot to another. What gives them away is the jump: a pair past _SPIKE_FLOOR
+#: and _SPIKE times the largest of the _SPIKE_WINDOW pairs before it is a cut
+#: too. Fast motion climbs to its difference over several pairs, so it is not.
+# shortcut: hand-picked, not measured on real cuts; tune if cuts still morph
+# or fast action stutters.
+_SPIKE = 3.0
+_SPIKE_FLOOR = 12.0
+_SPIKE_WINDOW = 4
 #: And below which the second is the first again: anime holds each drawing for
 #: two or three frames, and compression noise keeps the copies from being equal.
 #: Measured on an episode: copies sit near 0.1, new drawings above 1.
@@ -573,10 +583,22 @@ def frames_at(
     drawings = _drawings(source, hold, before)
     left = next(drawings, None)
     right = next(drawings, None)
+    recent: deque[float] = deque(maxlen=_SPIKE_WINDOW)
+
+    def across_a_cut() -> bool:
+        if left is None or right is None:
+            return False
+        diff = _differ(left[1], right[1])
+        spike = bool(recent) and diff > max(_SPIKE_FLOOR, _SPIKE * max(recent))
+        recent.append(diff)
+        return diff > _SCENE_CUT or spike
+
+    cut = across_a_cut()
     for k in range(count):
         position = k * src_fps / out_fps
         while right is not None and position >= right[0]:
             left, right = right, next(drawings, None)
+            cut = across_a_cut()
         # Past the source's last frame: the end, however many were asked for.
         if left is None or (right is None and position >= left[0] + 1):
             return
@@ -587,8 +609,7 @@ def frames_at(
         if t < 1e-3:
             yield left[1]
             continue
-        cut = _differ(left[1], right[1])
-        yield left[1] if cut > _SCENE_CUT else interpolate(left[1], right[1], t)
+        yield left[1] if cut else interpolate(left[1], right[1], t)
 
 
 def read_frames(stdout: Any, width: int, height: int) -> Iterator[Any]:
