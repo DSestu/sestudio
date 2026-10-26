@@ -90,7 +90,7 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
           onKeyDown={onKeyDown}
           className="grow bg-transparent outline-none text-sm min-w-0"
         />
-        <kbd className="kbd kbd-sm">{open ? 'Esc' : 'Ctrl K'}</kbd>
+        <kbd className="kbd kbd-sm shrink-0 whitespace-nowrap">{open ? 'Esc' : 'Ctrl K'}</kbd>
       </div>
       {open && (
         <div className="absolute left-0 right-0 top-full z-10 max-h-[70dvh] overflow-y-auto overscroll-contain rounded-b-box border-2 border-t-0 border-primary/80 bg-base-200 p-2 shadow-2xl">
