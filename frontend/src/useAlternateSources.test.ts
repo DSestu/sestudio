@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalize } from './useAlternateSources'
+import { listingKey, normalize } from './useAlternateSources'
 
 describe('normalize', () => {
   // Real pairs captured from /api/search: the same film as spelled by fstream
@@ -27,5 +27,19 @@ describe('normalize', () => {
     expect(normalize('Harry Potter et la Coupe de feu')).not.toBe(
       normalize('Harry Potter et la Chambre des secrets'),
     )
+  })
+})
+
+describe('listingKey', () => {
+  it('matches one page served from two mirror hosts', () => {
+    expect(listingKey('french-manga', 'https://french-manga.net/1497644-x.html')).toBe(
+      listingKey('french-manga', 'https://w16.french-manga.net/1497644-x.html'),
+    )
+  })
+
+  it('keeps different pages and different sites apart', () => {
+    const key = listingKey('french-manga', 'https://w16.french-manga.net/1-a.html')
+    expect(listingKey('french-manga', 'https://w16.french-manga.net/2-b.html')).not.toBe(key)
+    expect(listingKey('fstream', 'https://w16.french-manga.net/1-a.html')).not.toBe(key)
   })
 })

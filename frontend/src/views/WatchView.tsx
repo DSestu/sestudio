@@ -21,7 +21,7 @@ import BrowserPerformance from '../components/watch/BrowserPerformance'
 import BrowserQuality from '../components/watch/BrowserQuality'
 import SourcesPanel from '../components/watch/SourcesPanel'
 import VideoPane from '../components/watch/VideoPane'
-import { useAlternateSources } from '../useAlternateSources'
+import { listingKey, useAlternateSources } from '../useAlternateSources'
 import type { SourceListing } from '../useSourceListings'
 import { useSourceListings } from '../useSourceListings'
 import type { ShowSeason } from '../useShowSeasons'
@@ -274,10 +274,11 @@ export default function WatchView({
       { url: sourceUrl, src: sourceId },
     ]
     const kept: { url: string; src: string }[] = []
-    const seen = new Set<string>([next.page_url])
+    const seen = new Set<string>([listingKey(next.source, next.page_url)])
     for (const alt of carried) {
-      if (!alt.url || seen.has(alt.url)) continue
-      seen.add(alt.url)
+      const key = listingKey(alt.src, alt.url)
+      if (!alt.url || seen.has(key)) continue
+      seen.add(key)
       kept.push(alt)
     }
 
