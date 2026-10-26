@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/DSestu/sestudio/compare/v1.1.0...v1.1.1) (2026-10-26)
+
+
+### Bug fixes
+
+* stop the player going black over plain HTTP, where crypto.randomUUID does not exist ([#135](https://github.com/DSestu/sestudio/issues/135)) ([b5160dc](https://github.com/DSestu/sestudio/commit/b5160dcc9dbf27d93fa5c69c7e9a1e4364927ab3))
+
 ## [1.1.0](https://github.com/DSestu/sestudio/compare/v1.0.0...v1.1.0) (2026-10-26)
 
 
