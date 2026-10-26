@@ -120,10 +120,10 @@ export default function VideoPane({
   const direct = displaySource?.direct
   const untouched = Boolean(direct) && quality === undefined && !playingFps
   const [loaded, setLoaded] = useState(() => ({
-    url: ladderUrl, untouched, fps: playingFps, live: crypto.randomUUID(),
+    url: ladderUrl, untouched, fps: playingFps, live: Math.random().toString(36).slice(2),
   }))
   if (loaded.url !== ladderUrl || loaded.untouched !== untouched) {
-    setLoaded({ url: ladderUrl, untouched, fps: playingFps, live: crypto.randomUUID() })
+    setLoaded({ url: ladderUrl, untouched, fps: playingFps, live: Math.random().toString(36).slice(2) })
   }
   const mediaUrl = !displaySource ? ''
     : untouched && direct ? direct.url

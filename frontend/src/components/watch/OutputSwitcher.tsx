@@ -159,7 +159,7 @@ export default function OutputSwitcher({
       // reload (see `castLive`). Best leaves the quality to the Chromecast.
       let media = proxyUrl
       if (/\/api\/(downloaded|stream)\/hls\?/.test(proxyUrl)) {
-        const id = crypto.randomUUID()
+        const id = Math.random().toString(36).slice(2)
         await castLive(id, quality, fps)
         media = `${withFps(proxyUrl, fps)}&live=${id}`
       }
