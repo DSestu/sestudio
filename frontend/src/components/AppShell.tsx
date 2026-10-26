@@ -6,6 +6,7 @@ import { useDlnaState } from '../dlnaControl'
 import type { Tab, View } from '../nav'
 import { useSelectionActive } from '../selectionMode'
 import { closeDiscoverMenuThen, toggleDiscoverMenu, useDiscoverMenuOpen } from '../discoverMenu'
+import SourceIcon from './SourceIcon'
 
 interface Destination {
   id: Tab
@@ -267,9 +268,7 @@ function RailCatalogs({ catalogs, catalogId, onOpenCatalog }: {
               : 'text-base-content/60 hover:bg-base-300/60 hover:text-base-content'
           }`}
         >
-          <span className="w-6 h-6 shrink-0 rounded-md bg-primary/15 text-primary flex items-center justify-center text-xs font-extrabold" aria-hidden="true">
-            {c.label.slice(0, 1)}
-          </span>
+          <SourceIcon id={c.id} label={c.label} className="w-5 h-5 m-0.5" />
           <span className="min-w-0">
             <span className="block text-[13px] font-medium leading-tight">{c.label}</span>
             <span className="block truncate text-[10.5px] leading-tight text-base-content/45">{c.description}</span>

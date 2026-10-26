@@ -13,3 +13,15 @@ export function sourceInitials(name: string): string {
   const words = name.split(/[\s\-_.]+/).filter(Boolean)
   return (words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2)).toUpperCase()
 }
+
+// Each site's own favicon, copied into the repo so the source lists don't hit the
+// sites on every load. Named after the source id: assets/sources/<id>.<ext>.
+const ICONS = new Map(
+  Object.entries(import.meta.glob<string>('./assets/sources/*', { eager: true, import: 'default' }))
+    .map(([path, url]) => [path.replace(/^.*\/|\.\w+$/g, ''), url]),
+)
+
+/** The source's favicon URL, or undefined for one we have none for. */
+export function sourceIcon(id: string): string | undefined {
+  return ICONS.get(id)
+}
