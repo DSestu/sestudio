@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import type { CatalogInfo, SeasonCard } from '../../api'
 import type { Kind, MergeOptions, RecentSearch } from '../../titleSearch'
-import { PREVIEW_ROWS, SEARCH_FIELD, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
+import { KINDS, PREVIEW_ROWS, SEARCH_FIELD, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
 import { KindChips, OptionsButton, RecentSearchList, SearchIcon, TitleResults } from './SearchParts'
 
 interface Props {
@@ -26,7 +26,8 @@ const RECENT_ID = 'desktop-search-recent'
  */
 export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, barless = false, onOpenCard, onSearch }: Props) {
   const [text, setText] = useState(query)
-  const [kind, setKind] = useState<Kind>(pageKind)
+  // The preview lists titles, so a People page previews every kind.
+  const [kind, setKind] = useState<Kind>(pageKind === 'people' ? 'all' : pageKind)
   const [open, setOpen] = useState(false)
   // Typed: 0 is the results page, i the (i-1)th title. Empty: the ith recent.
   const [active, setActive] = useState(0)
@@ -140,7 +141,7 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
           {field}
           {onResults ? (
             <>
-              <KindChips value={pageKind} onChange={k => onSearch(query, k)} />
+              <KindChips value={pageKind} onChange={k => onSearch(query, k)} kinds={KINDS} />
               <OptionsButton />
             </>
           ) : (

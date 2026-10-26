@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException
 
 from sestudio import tmdb
@@ -46,6 +47,8 @@ async def people(q: str) -> list[dict[str, Any]]:
         return await asyncio.to_thread(tmdb.search_people, q)
     except tmdb.TmdbDisabled as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="TMDB didn't answer") from exc
 
 
 @router.get("/tmdb/person/{person_id}")
