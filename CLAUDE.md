@@ -10,7 +10,7 @@
 
 ## Git
 
-- In this repo, "commit" means the full flow: create a branch, commit, push, open a PR (title only, `--body ""`), wait for the GitHub Actions checks, then merge. Hand the push/PR/CI-wait/merge to a background agent so the main thread stays free. If checks fail, don't merge; report the failure. Still commit only when the user explicitly says "commit".
+- In this repo, "commit" means the full flow: create a branch, commit, push, open a PR (title only, `--body ""`), wait for the GitHub Actions checks, then merge. Push and open the PR in the foreground, then run the CI wait and merge as one background Bash command (`gh pr checks <n> --watch --fail-fast && gh pr merge <n> --squash`), not a subagent: an agent took up to 10 minutes per PR. If checks fail, don't merge; report the failure. Still commit only when the user explicitly says "commit".
 
 ## Live server
 
