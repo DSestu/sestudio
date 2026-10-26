@@ -57,6 +57,20 @@ def test_a_cut_repeats_the_frame_before_it_instead_of_a_ghost(drawn):
     assert drawn == []
 
 
+def test_a_cut_between_similar_shots_is_caught_by_its_jump(drawn):
+    """Under the absolute threshold, but ten times the motion just before."""
+    out = list(interpolate.frames_at(iter(_frames([0, 2, 4, 6, 26])), 24, 48, 8))
+
+    assert [int(f[0, 0, 0]) for f in out][-2:] == [6, 6]
+    assert (6, 26, 0.5) not in drawn
+
+
+def test_fast_motion_is_still_drawn_across(drawn):
+    list(interpolate.frames_at(iter(_frames([0, 20, 40, 60, 80])), 24, 48, 8))
+
+    assert len(drawn) == 4
+
+
 def test_the_last_frame_repeats_when_the_source_runs_out(drawn):
     out = list(interpolate.frames_at(iter(_frames([10, 20])), 24, 48, 4))
 
@@ -82,18 +96,18 @@ def test_a_drawing_held_on_twos_is_drawn_across_as_one(drawn):
 
 
 def test_without_a_hold_repeats_stay_as_they_were(drawn):
-    list(interpolate.frames_at(iter(_frames([0, 0, 30])), 24, 48, 4))
+    list(interpolate.frames_at(iter(_frames([0, 0, 10])), 24, 48, 4))
 
-    assert drawn == [(0, 0, 0.5), (0, 30, 0.5)]
+    assert drawn == [(0, 0, 0.5), (0, 10, 0.5)]
 
 
 def test_a_pause_longer_than_the_hold_stays_still(drawn):
     """Held four frames with a hold of 2: a pause, kept still, then moving
     from its last frame as without a hold."""
-    out = list(interpolate.frames_at(iter(_frames([0, 0, 0, 0, 30])), 24, 48, 8, 2))
+    out = list(interpolate.frames_at(iter(_frames([0, 0, 0, 0, 10])), 24, 48, 8, 2))
 
     assert len(out) == 8
-    assert (0, 30, 0.5) == drawn[-1]
+    assert (0, 10, 0.5) == drawn[-1]
     assert all(right == 0 for _, right, _ in drawn[:-1])
 
 
