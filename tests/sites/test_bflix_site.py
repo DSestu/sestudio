@@ -11,7 +11,14 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pytest_httpx import HTTPXMock
 
 from sestudio.sites import SiteError, StreamCandidate
-from sestudio.sites.bflix import API, DEFAULT_SECRET, SERVERS, TMDB, BflixSite
+from sestudio.sites.bflix import (
+    API,
+    DEFAULT_SECRET,
+    SERVERS,
+    TMDB,
+    BflixSite,
+    title_url,
+)
 from tests.sites.contract import SiteContractMixin
 
 SHOW = {
@@ -235,3 +242,45 @@ def test_without_a_tmdb_key_search_says_so(site, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr("sestudio.sites.bflix.tmdb_key", lambda: "")
     with pytest.raises(SiteError, match="TMDB API key"):
         site.search("anything")
+
+
+def test_discover_cards_open_on_bflix_and_skip_unreleased(
+    site, monkeypatch: pytest.MonkeyPatch
+):
+    def light(tmdb_id: int, kind: str, day: str) -> dict[str, object]:
+        return {
+            "tmdb_id": tmdb_id,
+            "kind": kind,
+            "title": f"T{tmdb_id}",
+            "year": int(day[:4]) if day else 0,
+            "release_date": day,
+            "rating": 7.0,
+            "poster_url": "",
+            "overview": "",
+            "genre_ids": [],
+        }
+
+    seen: dict[str, object] = {}
+
+    def discover(kind: str, *args: object) -> dict[str, object]:
+        seen["to_date"] = args[6]
+        return {
+            "results": [
+                light(1399, "tv", "2011-04-17"),
+                light(9, "tv", "2999-01-01"),
+                light(8, "tv", ""),
+            ],
+            "page": 1,
+            "total_pages": 1,
+        }
+
+    monkeypatch.setattr("sestudio.tmdb.genres", lambda kind: [])
+    monkeypatch.setattr("sestudio.tmdb.discover", discover)
+    assert "release" not in [f.key for f in site.schema({})]
+    got = site.discover({"kind": "tv", "release": "upcoming"}, 1)
+    # Upcoming is never asked of TMDB: nothing unreleased plays.
+    assert seen["to_date"]
+    [card] = got["cards"]
+    assert card["open"]["card"]["page_url"] == title_url(1399, "tv", 1)
+    assert card["open"]["card"]["source"] == "bflix"
+    assert card["open"]["card"]["season_number"] == 1

@@ -11,6 +11,9 @@ constant, so a redeploy that rotates it heals on its own.
 Every server carries the original audio only (English for most titles), so the
 site is VOSTFR at best: French subtitles come from two aggregators, and many
 titles have none.
+
+Its catalogue is TMDB's, the same filters and shelves, but its cards open on
+BFlix itself and only list titles already out.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ import httpx
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from sestudio.catalogs import parallel
+from sestudio.catalogs import FilterField, TmdbCatalog, parallel
 from sestudio.config import tmdb_key
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import Episode, SeasonCard, StreamSource, Subtitle
@@ -94,13 +97,48 @@ def title_url(tmdb_id: int | str, kind: str, season: int = 0) -> str:
     return f"{url}&season={season}" if season else url
 
 
-class BflixSite(ContentSite):
+class BflixSite(ContentSite, TmdbCatalog):
     id = "bflix"
     display_name = "BFlix"
     home_url = f"{BASE}/home"
+    label = "BFlix"
+    description = "Films & series · original audio, French subtitles"
 
     def __init__(self) -> None:
+        super().__init__()
         self._secret = DEFAULT_SECRET
+
+    # --- Catalog --------------------------------------------------------------
+
+    def schema(self, values: dict[str, str]) -> list[FilterField]:
+        # Nothing unreleased plays, so there is no release filter to offer.
+        return [f for f in super().schema(values) if f.key != "release"]
+
+    def discover(self, values: dict[str, str], page: int) -> dict[str, Any]:
+        return super().discover({**values, "release": "out"}, page)
+
+    def _cards(self, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        out = [r for r in results if _aired(r["release_date"])]
+        cards = super()._cards(out)
+        for c, r in zip(cards, out):
+            film = r["kind"] == "movie"
+            season = 0 if film else 1
+            c["open"] = {
+                "card": vars(
+                    SeasonCard(
+                        newsid=f"m{r['tmdb_id']}" if film else f"t{r['tmdb_id']}-1",
+                        title=r["title"],
+                        series_name=r["title"],
+                        season_number=season,
+                        poster_url=r["poster_url"],
+                        page_url=title_url(r["tmdb_id"], r["kind"], season),
+                        is_film=film,
+                        year=r["year"],
+                        source=self.id,
+                    )
+                )
+            }
+        return cards
 
     # --- HTTP ---------------------------------------------------------------
 
