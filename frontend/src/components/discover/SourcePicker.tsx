@@ -3,6 +3,7 @@ import type { CatalogInfo, SeasonCard } from '../../api'
 import { closeDiscoverMenu, closeDiscoverMenuThen, openDiscoverMenu, useDiscoverMenuOpen } from '../../discoverMenu'
 import { useModalBack } from '../../useModalBack'
 import { useSourcePosters } from './sourcePosters'
+import SourceIcon from '../SourceIcon'
 import { type Kind, SEARCH_FIELD, type TitleSearch, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
 import { RecentSearchChips, SearchIcon, TitleResults } from '../search/SearchParts'
 
@@ -285,7 +286,8 @@ export function DiscoverMenu({
                         })}
                       </span>
                       <span className="block px-2.5 py-2">
-                        <span className="flex items-center gap-1 text-sm font-semibold">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold">
+                          <SourceIcon id={c.id} label={c.label} className="w-4 h-4" />
                           <span className="truncate">{c.label}</span>
                           <span className="ml-auto text-base-content/50" aria-hidden="true">{isOn(c.id) ? '✓' : '›'}</span>
                         </span>
