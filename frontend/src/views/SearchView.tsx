@@ -15,7 +15,7 @@ import EmptyState from '../components/EmptyState'
 import LayoutToggle from '../components/LayoutToggle'
 import ToolbarToggle from '../components/ToolbarToggle'
 import WatchSearchButton from '../components/WatchSearchButton'
-import PeopleResults from '../components/PeopleResults'
+import PeopleResults, { PeopleFold } from '../components/PeopleResults'
 import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
 import KindRows from '../components/search/KindRows'
@@ -110,9 +110,11 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
   const [retrying, setRetrying] = useState(false)
   // Tagged with the query they belong to, so a stale set is never shown and
   // no synchronous reset is needed when the query changes.
-  const [peopleFor, setPeopleFor] = useState<{ q: string; hits: PersonHit[] }>(
+  // `hits` is null when TMDB didn't answer; `asked` re-runs the lookup on Retry.
+  const [peopleFor, setPeopleFor] = useState<{ q: string; hits: PersonHit[] | null }>(
     () => ({ q: '', hits: [] }),
   )
+  const [peopleAsked, setPeopleAsked] = useState(0)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const layout = useLibraryLayout().search
   const [bulkLoading, setBulkLoading] = useState(false)
@@ -261,8 +263,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
   // People are looked up per query, in parallel with the source search: a
   // name like "tarantino" matches no title, so without this the search
-  // simply looks empty. Failures are silent — this is an extra, not the
-  // result set.
+  // simply looks empty.
   useEffect(() => {
     if (!lastQuery || !settings.tmdb_configured) return
     let cancelled = false
@@ -270,15 +271,23 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       if (!cancelled) setPeopleFor({ q: lastQuery, hits })
     })
     return () => { cancelled = true }
-  }, [lastQuery, settings.tmdb_configured])
+  }, [lastQuery, settings.tmdb_configured, peopleAsked])
 
-  const people = peopleFor.q === lastQuery ? peopleFor.hits : []
+  function retryPeople() {
+    setPeopleFor({ q: '', hits: [] })
+    setPeopleAsked(n => n + 1)
+  }
+
+  const peopleStatus = !settings.tmdb_configured ? 'done'
+    : peopleFor.q !== lastQuery ? 'loading'
+    : peopleFor.hits ? 'done' : 'failed'
+  const people = peopleFor.q === lastQuery ? peopleFor.hits ?? [] : []
   // A person is only worth showing with a face. When no title matches the
   // search exactly, TMDB's first person (its most popular) is who it meant,
-  // and takes the hero slot ("villeneuve").
+  // and takes the hero slot ("villeneuve"), in Everything only.
   const withPhoto = people.filter(p => p.profile_url)
   const exactTitle = results.some(c => matchKey(c.series_name) === matchKey(splitYear(lastQuery).title))
-  const personHero = !exactTitle && !topMatch.hero && !topMatch.pending && people[0]?.profile_url ? people[0] : null
+  const personHero = kind === 'all' && !exactTitle && !topMatch.hero && !topMatch.pending && people[0]?.profile_url ? people[0] : null
   const morePeople = personHero ? withPhoto.filter(p => p !== personHero) : withPhoto
 
   // On disk, matched in memory so the answer is instant: episodes whose own
@@ -433,16 +442,16 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
               <KindSegments
                 value={kind}
                 onChange={k => onSearch(lastQuery, k)}
-                counts={resolvedQuery === lastQuery ? kindCounts : undefined}
+                counts={resolvedQuery === lastQuery && peopleStatus !== 'loading' ? { ...kindCounts, people: withPhoto.length } : undefined}
               />
             </div>
             <OptionsButton square />
           </div>
         )}
-        {lastQuery !== '' && chips('flex mt-3')}
+        {lastQuery !== '' && kind !== 'people' && chips('flex mt-3')}
       </div>
       {/* Desktop: the panel lists every source, so the row steps aside for it. */}
-      {lastQuery !== '' && !sourcesOpen && chips('hidden md:flex')}
+      {lastQuery !== '' && kind !== 'people' && !sourcesOpen && chips('hidden md:flex')}
 
       {/* Every control the results have, folded behind the one Options button
           (in the pinned bar on desktop, beside the kinds on phones). Inline, so
@@ -573,7 +582,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
       {/* Above the remote results: a copy already on disk is the most
           actionable answer to a search, and it plays without resolving a host. */}
-      {lastQuery !== '' && hits.length > 0 && (
+      {lastQuery !== '' && kind !== 'people' && hits.length > 0 && (
         <EpisodeHits
           groups={hits}
           onPlay={copy => onOpenDownloaded(copy.title, copy.file)}
@@ -582,7 +591,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       )}
       {/* Shows on disk the search names, beyond the one the hero already covers:
           their cards carry the pill, and the library lists them all. */}
-      {lastQuery !== '' && namedOnDisk.length > 0 && (
+      {lastQuery !== '' && kind !== 'people' && namedOnDisk.length > 0 && (
         <p className="flex items-center gap-2 px-1 text-sm text-base-content/70">
           <svg className="w-4 h-4 shrink-0 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 1.1.9 2 2 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H6a2 2 0 00-2 2z" />
@@ -610,8 +619,6 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           </TopMatchHero>
         ))}
 
-      {lastQuery !== '' && <PeopleResults people={morePeople} title={personHero ? `Also named “${lastQuery}”` : undefined} onOpen={onOpenPerson} />}
-
       {lastQuery === '' ? (
         // No query: browse a catalogue instead of a blank page, so discovery
         // and search flow into each other.
@@ -628,6 +635,25 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           <EmptyState
             title="Search the catalogue"
             message="Type a series or film name above. Results can be played here, cast to a TV, or downloaded."
+          />
+        )
+      ) : kind === 'people' ? (
+        // People only: who TMDB knows by that name, with a face.
+        peopleStatus === 'loading' ? (
+          <div aria-busy="true" aria-label="Loading people" className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="aspect-[2/3] rounded-box bg-base-300 animate-pulse motion-reduce:animate-none" style={{ animationDelay: `${i * 60}ms` }} />
+            ))}
+          </div>
+        ) : peopleStatus === 'failed' ? (
+          <EmptyState title="TMDB didn't answer" message="People come from TMDB. Check the connection, then try again." action={{ label: 'Retry', onClick: retryPeople }} />
+        ) : withPhoto.length > 0 ? (
+          <PeopleResults people={withPhoto} onOpen={onOpenPerson} grid />
+        ) : (
+          <EmptyState
+            title={`No one named “${lastQuery}”`}
+            message={kindCounts.all > 0 ? `${kindCounts.all} title${kindCounts.all !== 1 ? 's' : ''} matched.` : 'Only people with a photo are listed.'}
+            action={{ label: 'Show everything', onClick: () => onSearch(lastQuery, 'all') }}
           />
         )
       ) : results.length > 0 ? (
@@ -699,7 +725,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         withPhoto.length > 0 ? (
           <EmptyState
             title={`No titles match “${lastQuery}”`}
-            message="That looks like a person's name — open one above to browse their filmography."
+            message="That looks like a person's name — open one under People to browse their filmography."
           />
         ) : (
           <EmptyState
@@ -724,6 +750,17 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             </div>
           ))}
         </div>
+      )}
+
+      {/* Everything only, under the titles: what a search is for comes first. */}
+      {lastQuery !== '' && kind === 'all' && (
+        <PeopleFold
+          people={morePeople}
+          title={personHero ? `Also named “${lastQuery}”` : undefined}
+          status={peopleStatus}
+          onRetry={retryPeople}
+          onOpen={onOpenPerson}
+        />
       )}
 
       {/* Bulk download bar — clears the mobile tab bar */}

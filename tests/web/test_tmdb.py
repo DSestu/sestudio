@@ -444,6 +444,11 @@ def test_people_search_without_a_key_is_503(client, monkeypatch):
     assert client.get("/api/tmdb/people?q=tarantino").status_code == 503
 
 
+def test_people_search_when_tmdb_fails_is_502_not_empty(client, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(url=PEOPLE, status_code=500)
+    assert client.get("/api/tmdb/people?q=tarantino").status_code == 502
+
+
 MULTI = re.compile(r"https://api\.themoviedb\.org/3/search/multi\?.*")
 
 

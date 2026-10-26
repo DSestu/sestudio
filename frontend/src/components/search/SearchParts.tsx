@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { SeasonCard } from '../../api'
 import type { Kind, RecentSearch, TitleSearch } from '../../titleSearch'
-import { KINDS, PREVIEW_ROWS, kindLabel } from '../../titleSearch'
+import { KINDS, PREVIEW_ROWS, TITLE_KINDS, kindLabel } from '../../titleSearch'
 import RatingBadge from '../RatingBadge'
 import { OPTIONS_ID, toggleSearchOptions, useSearchOptions } from '../../searchOptions'
 
@@ -17,10 +17,11 @@ export function SearchIcon() {
   )
 }
 
-export function KindChips({ value, onChange, small = false }: { value: Kind; onChange: (kind: Kind) => void; small?: boolean }) {
+/** Title previews narrow by title kinds only; the results page adds People. */
+export function KindChips({ value, onChange, small = false, kinds = TITLE_KINDS }: { value: Kind; onChange: (kind: Kind) => void; small?: boolean; kinds?: typeof KINDS }) {
   return (
     <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Kind">
-      {KINDS.map(k => (
+      {kinds.map(k => (
         <button
           key={k.value}
           type="button"
@@ -59,7 +60,7 @@ export function KindSegments({ value, onChange, counts }: { value: Kind; onChang
           role="radio"
           aria-checked={k.value === value}
           onClick={() => onChange(k.value)}
-          className={`relative py-1.5 text-sm leading-tight transition-colors duration-200 ${k.value === value ? 'text-primary-content font-semibold' : 'text-base-content/60'}`}
+          className={`relative py-1.5 text-sm leading-tight transition-colors duration-200 ${k.value === value ? 'text-primary-content font-semibold' : k.value === 'people' && counts?.people === 0 ? 'text-base-content/30' : 'text-base-content/60'}`}
         >
           {k.value === 'all' ? 'All' : k.label}
           {counts && <span className="block text-[10px] tabular-nums opacity-75">{counts[k.value]}</span>}

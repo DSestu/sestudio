@@ -212,10 +212,23 @@ export interface PersonHit {
 }
 
 /** People matching a name. Empty when TMDB is disabled or has no match. */
-export async function searchPeople(q: string): Promise<PersonHit[]> {
-  const res = await fetch(`${BASE}/tmdb/people?q=${encodeURIComponent(q)}`)
-  if (!res.ok) return []
-  return res.json()
+// Answers kept for the session, so switching between Everything and People
+// doesn't ask TMDB again. Failures aren't kept, so Retry really retries.
+const peopleCache = new Map<string, PersonHit[]>()
+
+/** People named like the query, or null when TMDB didn't answer. */
+export async function searchPeople(q: string): Promise<PersonHit[] | null> {
+  const cached = peopleCache.get(q)
+  if (cached) return cached
+  try {
+    const res = await fetch(`${BASE}/tmdb/people?q=${encodeURIComponent(q)}`)
+    if (!res.ok) return null
+    const hits: PersonHit[] = await res.json()
+    peopleCache.set(q, hits)
+    return hits
+  } catch {
+    return null
+  }
 }
 
 /** A person's profile and filmography, or null when unknown / TMDB disabled. */

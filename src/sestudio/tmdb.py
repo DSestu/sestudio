@@ -300,8 +300,9 @@ def search_people(query: str) -> list[dict[str, Any]]:
             resp.raise_for_status()
             results = resp.json().get("results") or []
     except httpx.HTTPError as exc:
+        # Raised, not swallowed: "TMDB didn't answer" isn't "nobody has that name".
         logger.warning("TMDB person search failed for %r: %s", query, exc)
-        return []
+        raise
 
     people: list[dict[str, Any]] = []
     for r in results[:_PEOPLE_LIMIT]:
