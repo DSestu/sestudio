@@ -17,9 +17,14 @@
   }
 }
 
-/* Bottom-sheet modals clear the home indicator / notch inset on mobile. */
-@supports (padding: env(safe-area-inset-bottom)) {
+/* Bottom-sheet modals clear the home indicator / notch inset on mobile, on top
+   of their own padding. Phones only: from `sm:` the sheet is a centred dialog
+   and keeps daisyUI's padding. */
+@media (width < 40rem) {
   .modal-bottom .modal-box {
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  }
+  .modal-bottom .modal-box.p-0 {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
