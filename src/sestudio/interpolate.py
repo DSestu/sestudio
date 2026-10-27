@@ -7,6 +7,10 @@ alike), CoreML on a Mac, CUDA where onnxruntime-gpu is installed. Without a GPU
 it falls back to the CPU, which is far too slow to keep up with playback — the
 caller decides from :func:`status` whether to offer it at all.
 
+A Mac tries ncnn first: RIFE on Vulkan, which MoltenVK (inside the wheel) runs
+on Metal. CoreML cannot take all of RIFE, so ONNX Runtime there draws much of
+it on the CPU. ONNX stays the fallback where ncnn has no wheel or fails.
+
 The model is the RIFE v4.26 export vs-mlrt publishes, its "v2" form: one input
 of seven channels (frame A as RGB, frame B as RGB, then a plane holding the time
 point between them, all 0..1) at any size, padded inside the model, and one RGB
@@ -28,6 +32,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tarfile
 import threading
 import time
 from collections import deque
@@ -47,6 +52,14 @@ MODEL_URL = (
 )
 #: The member of that archive taken: the v2 export, which pads internally.
 _MODEL_MEMBER = "rife_v2/rife_v4.26.onnx"
+
+#: The same RIFE v4.26 for ncnn, as REAL-Video-Enhancer publishes it.
+NCNN_MODEL_URL = (
+    "https://github.com/TNTwise/real-video-enhancer-models/releases/download/"
+    "models/rife-v4.26.tar.gz"
+)
+#: The wrapper imports cv2 without declaring it. Wheels on a Mac start at 3.12.
+_NCNN_PACKAGES = ["rife-ncnn-vulkan-python-tntwise>=1.4.5", "opencv-python-headless"]
 
 #: Providers tried in order; the first this onnxruntime build has wins.
 _PROVIDERS = (
@@ -222,16 +235,8 @@ def ensure_model() -> Path | None:
             return None
         out.parent.mkdir(parents=True, exist_ok=True)
         archive = out.with_suffix(".7z.part")
-        _setup.update(step="model", progress=0.0)
         try:
-            with httpx.stream("GET", MODEL_URL, follow_redirects=True, timeout=60) as r:
-                r.raise_for_status()
-                total = int(r.headers.get("content-length") or 0)
-                with archive.open("wb") as f:
-                    for chunk in r.iter_bytes():
-                        f.write(chunk)
-                        if total:
-                            _setup["progress"] = min(1.0, f.tell() / total)
+            _download(MODEL_URL, archive)
             with py7zr.SevenZipFile(archive) as z:
                 z.extract(path=out.parent, targets=[_MODEL_MEMBER])
             unpacked = out.parent / _MODEL_MEMBER
@@ -243,6 +248,84 @@ def ensure_model() -> Path | None:
             return None
         finally:
             archive.unlink(missing_ok=True)
+
+
+def _download(url: str, to: Path) -> None:
+    """*url* into *to*, its progress shown as the setup's model step."""
+    _setup.update(step="model", progress=0.0)
+    with httpx.stream("GET", url, follow_redirects=True, timeout=60) as r:
+        r.raise_for_status()
+        total = int(r.headers.get("content-length") or 0)
+        with to.open("wb") as f:
+            for chunk in r.iter_bytes():
+                f.write(chunk)
+                if total:
+                    _setup["progress"] = min(1.0, f.tell() / total)
+
+
+def ncnn_model_path() -> Path:
+    # The folder's name tells the wrapper it is v4.26, which pads to 64.
+    return model_path().parent / "rife-v4.26"
+
+
+def _ncnn_model() -> Path | None:
+    """The ncnn model folder, downloaded and unpacked first if it is not."""
+    out = ncnn_model_path()
+    # flownet.param is the archive's last member: there, the folder is whole.
+    if (out / "flownet.param").is_file():
+        return out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    archive = out.with_name(f"{out.name}.tar.gz.part")
+    try:
+        _download(NCNN_MODEL_URL, archive)
+        with tarfile.open(archive) as tar:
+            tar.extractall(out.parent, filter="data")
+        return out
+    except Exception as exc:  # noqa: BLE001 — any failure means "not available"
+        _failed("Could not fetch the ncnn interpolation model", exc)
+        return None
+    finally:
+        archive.unlink(missing_ok=True)
+
+
+class _NcnnSession:
+    """RIFE on ncnn, answering as the ONNX Runtime session does."""
+
+    def __init__(self, rife: Any) -> None:
+        self._rife = rife
+
+    def get_providers(self) -> list[str]:
+        return ["VulkanExecutionProvider"]
+
+    def run(self, _outputs: Any, feed: dict[str, Any]) -> list[Any]:
+        return [self._rife.process_cv2(feed["a"], feed["b"], float(feed["t"][0]))]
+
+
+def _ncnn_session() -> _NcnnSession | None:
+    """RIFE on the GPU through ncnn and Vulkan; None where it cannot run."""
+    if sys.version_info < (3, 12):
+        return None  # no Mac wheel before
+    target = runtime_dir("-ncnn")
+    if not (target / ".complete").is_file():
+        _setup.update(step="runtime", progress=None)
+        if not _install_runtime(target, _NCNN_PACKAGES):
+            return None
+    if str(target) not in sys.path:
+        sys.path.append(str(target))
+        importlib.invalidate_caches()
+    try:
+        from rife_ncnn_vulkan_python import Rife, wrapped
+
+        if wrapped.get_gpu_count() < 1:
+            logger.info("ncnn found no Vulkan GPU")
+            return None
+        if (model := _ncnn_model()) is None:
+            return None
+        _setup.update(step="measure", progress=None)
+        return _NcnnSession(Rife(gpuid=0, model=str(model)))
+    except Exception as exc:  # noqa: BLE001 — a wheel that will not load
+        _failed("ncnn interpolation unavailable", exc)
+        return None
 
 
 _session_cache: list[Any] = []
@@ -358,6 +441,11 @@ _TENSORRT_SHAPES = {
 
 
 def _new_session() -> Any | None:
+    if sys.platform == "darwin":
+        if (ncnn := _ncnn_session()) is not None:
+            return ncnn
+        # ONNX below is the fallback: its own failure is the one to show.
+        _setup["error"] = None
     if not ensure_runtime():
         return None
     import onnxruntime as ort
@@ -379,19 +467,23 @@ def _new_session() -> Any | None:
     except Exception as exc:  # noqa: BLE001 — onnx missing, or a model it rejects
         _failed("Interpolation unavailable", exc)
         return None
+    provider_options = {
+        "TensorrtExecutionProvider": {
+            "trt_fp16_enable": True,
+            "trt_engine_cache_enable": True,
+            "trt_engine_cache_path": str(model.parent / "tensorrt"),
+            "trt_timing_cache_enable": True,
+            **_TENSORRT_SHAPES,
+        },
+        # The default NeuralNetwork format lacks ops RIFE needs (GridSample),
+        # which then run on the CPU; ML Program has them.
+        "CoreMLExecutionProvider": {
+            "ModelFormat": "MLProgram",
+            "MLComputeUnits": "ALL",
+        },
+    }
     providers: list[Any] = [
-        (
-            name,
-            {
-                "trt_fp16_enable": True,
-                "trt_engine_cache_enable": True,
-                "trt_engine_cache_path": str(model.parent / "tensorrt"),
-                "trt_timing_cache_enable": True,
-                **_TENSORRT_SHAPES,
-            },
-        )
-        if name == "TensorrtExecutionProvider"
-        else name
+        (name, provider_options[name]) if name in provider_options else name
         for name in chosen
     ]
     options = ort.SessionOptions()
@@ -474,11 +566,15 @@ def info() -> dict[str, Any]:
     is, and what it found. Never starts the setup."""
     session = _session_cache[0] if _session_cache else None
     ort = sys.modules.get("onnxruntime")
+    if isinstance(session, _NcnnSession):
+        runtime: str | None = "ncnn"
+    else:
+        runtime = f"onnxruntime {ort.__version__}" if ort else None
     return {
         "enabled": load_config().frame_interpolation,
         **_setup,
         "nvidia_gpu": _gpu_name(),
-        "runtime": f"onnxruntime {ort.__version__}" if ort else None,
+        "runtime": runtime,
         "providers": session.get_providers() if session else [],
         "speed": _speed[0] if _speed else None,
     }

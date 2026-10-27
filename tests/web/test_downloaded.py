@@ -406,8 +406,9 @@ def test_the_playlist_lists_the_whole_film_and_warms_its_start(
     # player's own first attempt at playing gives up if they are not there.
     for future, _stop in list(route.RAW.pending.values()):
         future.result(timeout=10)
-    # Of the rung the player picked, not of every rung the master offers.
-    assert built == [(0, 720), (1, 720), (2, 720)]
+    # Of the rung the player picked, not of every rung the master offers. Built
+    # on parallel threads, so in no set order.
+    assert sorted(built) == [(0, 720), (1, 720), (2, 720)]
     route.RAW.pending.clear()
 
 

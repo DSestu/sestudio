@@ -5,7 +5,7 @@
 **Watch, cast and download series and films from several streaming sites — from one library, on your own machine.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org)
 [![Run with uvx](https://img.shields.io/badge/run-uvx%20sestudio-purple.svg)](https://github.com/astral-sh/uv)
 
 </div>
@@ -374,7 +374,7 @@ AAAA records), or use another resolver meanwhile.
 ## Requirements
 
 [uv](https://github.com/astral-sh/uv) — that is the only thing you install.
-Everything else is bundled: uv provides Python (3.11 or 3.12), and `yt-dlp` plus
+Everything else is bundled: uv provides Python (3.11 to 3.13), and `yt-dlp` plus
 a static `ffmpeg` ship as dependencies. A system `ffmpeg` on `PATH` is preferred
 when present, giving a real `ffprobe` and fuller codecs. Node 18+ is only needed
 to rebuild the frontend during development.
