@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import type { SeasonCard } from '../../api'
 import type { Kind, RecentSearch, TitleSearch } from '../../titleSearch'
 import { KINDS, PREVIEW_ROWS, TITLE_KINDS, kindLabel } from '../../titleSearch'
@@ -17,18 +17,65 @@ export function SearchIcon() {
   )
 }
 
-/** Title previews narrow by title kinds only; the results page adds People. */
+// Where each chip set's blue bar last sat, kept outside the component: a pick
+// re-runs the search, which can remount the chips, and the bar should slide on
+// from there rather than appear.
+const lastBar = new Map<typeof KINDS, { x: number; w: number }>()
+
+/** A pill's outline as an SVG path, for clipping the blue bar to the chips. */
+function pillPath(el: HTMLElement) {
+  const { offsetLeft: x, offsetTop: y, offsetWidth: w, offsetHeight: h } = el
+  const r = h / 2
+  return `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`
+}
+
+/** Kind chips; ←/→ step through them when one has focus. The picked chip's blue
+ *  is one bar that slides between chips, seen only through the chips' outlines. */
 export function KindChips({ value, onChange, small = false, kinds = TITLE_KINDS }: { value: Kind; onChange: (kind: Kind) => void; small?: boolean; kinds?: typeof KINDS }) {
+  const index = kinds.findIndex(k => k.value === value)
+  const group = useRef<HTMLDivElement>(null)
+  const [bar, setBar] = useState(() => lastBar.get(kinds))
+  const [clip, setClip] = useState('')
+  // shortcut: measured on pick only, not on resize; chips are fixed-size labels.
+  useLayoutEffect(() => {
+    const chips = [...(group.current?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])]
+    const on = chips[index]
+    if (!on) return
+    setClip(chips.map(pillPath).join(''))
+    const next = { x: on.offsetLeft, w: on.offsetWidth }
+    lastBar.set(kinds, next)
+    // A frame later, so the bar is painted where it was before it moves.
+    const id = requestAnimationFrame(() => setBar(next))
+    return () => cancelAnimationFrame(id)
+  }, [kinds, index, small])
+  const pick = (next: number) => onChange(kinds[next].value)
+  const onKeys = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+    e.preventDefault()
+    pick((index + (e.key === 'ArrowRight' ? 1 : -1) + kinds.length) % kinds.length)
+    const g = e.currentTarget
+    requestAnimationFrame(() => g.querySelector<HTMLElement>('[aria-checked="true"]')?.focus())
+  }
   return (
-    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Kind">
-      {kinds.map(k => (
+    <div ref={group} className="relative flex flex-wrap gap-1.5" role="radiogroup" aria-label="Kind" onKeyDown={onKeys}>
+      {/* The chips' fill, clipped to their outlines, with the blue bar inside. */}
+      <div aria-hidden="true" className="absolute inset-0 bg-base-200" style={{ clipPath: clip ? `path('${clip}')` : 'none' }}>
+        {bar && (
+          <div
+            className="absolute inset-y-0 left-0 bg-primary transition-[transform,width] duration-300 ease-smooth motion-reduce:transition-none"
+            style={{ transform: `translateX(${bar.x}px)`, width: bar.w }}
+          />
+        )}
+      </div>
+      {kinds.map((k, i) => (
         <button
           key={k.value}
           type="button"
           role="radio"
           aria-checked={k.value === value}
-          onClick={() => onChange(k.value)}
-          className={`badge ${small ? 'badge-sm' : ''} cursor-pointer transition-colors ${k.value === value ? 'badge-primary' : 'badge-ghost hover:badge-outline'}`}
+          tabIndex={k.value === value ? 0 : -1}
+          onClick={() => pick(i)}
+          className={`relative badge ${small ? 'badge-sm' : ''} cursor-pointer border-transparent bg-transparent transition-colors duration-300 ${k.value === value ? 'text-primary-content' : 'hover:border-base-content/30'}`}
         >
           {k.label}
         </button>

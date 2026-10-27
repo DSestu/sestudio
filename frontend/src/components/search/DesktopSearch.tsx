@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import type { CatalogInfo, SeasonCard } from '../../api'
 import type { Kind, MergeOptions, RecentSearch } from '../../titleSearch'
-import { KINDS, PREVIEW_ROWS, SEARCH_FIELD, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
+import { KINDS, PREVIEW_ROWS, SEARCH_FIELD, TITLE_KINDS, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
 import { KindChips, OptionsButton, RecentSearchList, SearchIcon, TitleResults } from './SearchParts'
 
 interface Props {
@@ -60,6 +60,13 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
     if (e.key === 'Escape') { e.preventDefault(); close() }
     else if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(a + 1, rowCount - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(a - 1, 0)) }
+    // ←/→ switch the preview's kind; with Ctrl or Shift they still move or select text.
+    else if (q && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const i = TITLE_KINDS.findIndex(k => k.value === kind)
+      setKind(TITLE_KINDS[(i + (e.key === 'ArrowRight' ? 1 : -1) + TITLE_KINDS.length) % TITLE_KINDS.length].value)
+      setActive(0)
+    }
     else if (e.key === 'Enter') {
       e.preventDefault()
       if (!q) { if (recent[active]) pickRecent(recent[active]); return }
