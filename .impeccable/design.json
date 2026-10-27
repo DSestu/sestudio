@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-27T00:00:00Z",
+  "title": "Design System: sestudio",
+  "extensions": {
+    "colorMeta": {
+      "signal-blue": { "role": "primary", "displayName": "Signal Blue", "canonical": "oklch(72% 0.16 230)", "tonalRamp": ["oklch(15% 0.04 230)", "oklch(26% 0.08 230)", "oklch(38% 0.12 230)", "oklch(50% 0.15 230)", "oklch(62% 0.16 230)", "oklch(72% 0.16 230)", "oklch(84% 0.1 230)", "oklch(95% 0.03 230)"] },
+      "signal-blue-ink": { "role": "primary", "displayName": "Signal Blue Ink", "canonical": "oklch(18% 0.05 230)" },
+      "ember-coral": { "role": "secondary", "displayName": "Ember Coral", "canonical": "oklch(70% 0.17 25)", "tonalRamp": ["oklch(15% 0.04 25)", "oklch(26% 0.08 25)", "oklch(38% 0.12 25)", "oklch(50% 0.15 25)", "oklch(60% 0.17 25)", "oklch(70% 0.17 25)", "oklch(83% 0.1 25)", "oklch(95% 0.03 25)"] },
+      "ember-coral-ink": { "role": "secondary", "displayName": "Ember Coral Ink", "canonical": "oklch(20% 0.06 25)" },
+      "lagoon-teal": { "role": "tertiary", "displayName": "Lagoon Teal", "canonical": "oklch(75% 0.12 180)" },
+      "house-dark": { "role": "neutral", "displayName": "House Dark", "canonical": "oklch(16% 0.015 240)", "tonalRamp": ["oklch(16% 0.015 240)", "oklch(20% 0.02 240)", "oklch(26% 0.025 240)", "oklch(30% 0.02 240)", "oklch(45% 0.02 240)", "oklch(60% 0.015 240)", "oklch(78% 0.012 240)", "oklch(92% 0.01 240)"] },
+      "aisle-dark": { "role": "neutral", "displayName": "Aisle Dark", "canonical": "oklch(20% 0.02 240)" },
+      "row-dark": { "role": "neutral", "displayName": "Row Dark", "canonical": "oklch(26% 0.025 240)" },
+      "seat-slate": { "role": "neutral", "displayName": "Seat Slate", "canonical": "oklch(30% 0.02 240)" },
+      "screen-white": { "role": "neutral", "displayName": "Screen White", "canonical": "oklch(92% 0.01 240)" },
+      "rating-good": { "role": "status", "displayName": "Rating Good", "canonical": "oklch(76% 0.17 155)" },
+      "rating-mixed": { "role": "status", "displayName": "Rating Mixed", "canonical": "oklch(83% 0.16 85)" },
+      "rating-bad": { "role": "status", "displayName": "Rating Bad", "canonical": "oklch(68% 0.19 25)" },
+      "info-blue": { "role": "status", "displayName": "Info Blue", "canonical": "oklch(74% 0.14 250)" }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "View titles: Settings, Library, Downloads, a person's name." },
+      "title": { "displayName": "Title", "purpose": "Row and section headings, the open title in Watch." },
+      "body": { "displayName": "Body", "purpose": "Descriptions, lists, settings copy." },
+      "label": { "displayName": "Label", "purpose": "Poster titles, nav items, buttons." },
+      "tab-label": { "displayName": "Tab label", "purpose": "Phone bottom tab bar only." }
+    },
+    "shadows": [
+      { "name": "floating", "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)", "purpose": "Modals, dropdowns, popovers and the mini-player only (Tailwind shadow-xl)." }
+    ],
+    "motion": [
+      { "name": "ease-smooth", "value": "cubic-bezier(.2, .8, .2, 1)", "purpose": "The one easing for UI motion: fast start, soft landing, no bounce." },
+      { "name": "rise", "value": "320ms ease-smooth, translateY(8px) + fade", "purpose": "Arriving content." },
+      { "name": "slide", "value": "240ms ease-smooth, translateX(24px) + fade", "purpose": "Content swapped sideways (another season's episodes)." },
+      { "name": "player-morph", "value": "250ms cubic-bezier(0.4, 0, 0.2, 1) view transition", "purpose": "Player moving between full pane and mini-player." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "40rem" },
+      { "name": "md", "value": "48rem" },
+      { "name": "lg", "value": "64rem" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one solid action in a region.",
+      "html": "<button class=\"ds-btn-primary\">Play</button>",
+      "css": ".ds-btn-primary { background: oklch(72% 0.16 230); color: oklch(18% 0.05 230); height: 32px; padding: 0 12px; border: none; border-radius: 0.25rem; font: 600 0.875rem ui-sans-serif, system-ui, sans-serif; cursor: pointer; transition: filter 0.2s cubic-bezier(.2,.8,.2,1); } .ds-btn-primary:hover { filter: brightness(0.92); } .ds-btn-primary:focus-visible { outline: 2px solid oklch(72% 0.16 230); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Default for toolbars, rows and icon actions.",
+      "html": "<button class=\"ds-btn-ghost\">Watch for new episodes</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: oklch(92% 0.01 240); height: 32px; padding: 0 12px; border: none; border-radius: 0.25rem; font: 600 0.875rem ui-sans-serif, system-ui, sans-serif; cursor: pointer; transition: background 0.2s cubic-bezier(.2,.8,.2,1); } .ds-btn-ghost:hover { background: oklch(26% 0.025 240); } .ds-btn-ghost:focus-visible { outline: 2px solid oklch(72% 0.16 230); outline-offset: 2px; }"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "The signature input: blue border, soft ring, magnifier at left.",
+      "html": "<label class=\"ds-search\"><svg class=\"ds-search-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m20 20-3.5-3.5\"/></svg><input placeholder=\"Search titles, people…\"></label>",
+      "css": ".ds-search { position: relative; display: block; width: 100%; } .ds-search-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: oklch(72% 0.16 230); } .ds-search input { width: 100%; height: 56px; padding: 0 48px; background: oklch(16% 0.015 240); color: oklch(92% 0.01 240); border: 2px solid oklch(72% 0.16 230 / 0.8); box-shadow: 0 0 0 4px oklch(72% 0.16 230 / 0.15); border-radius: 0.5rem; font: 400 1.125rem ui-sans-serif, system-ui, sans-serif; } .ds-search input:focus { outline: none; border-color: oklch(72% 0.16 230); }"
+    },
+    {
+      "name": "Sidebar Nav",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Desktop primary nav; active item filled Row Dark with Signal Blue text.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item is-active\">Home</a><a class=\"ds-nav-item\">Search</a><a class=\"ds-nav-item\">Library</a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 4px; width: 200px; padding: 12px; background: oklch(20% 0.02 240 / 0.4); } .ds-nav-item { padding: 10px 12px; border-radius: 0.5rem; font: 500 0.875rem ui-sans-serif, system-ui, sans-serif; color: oklch(92% 0.01 240 / 0.7); cursor: pointer; transition: background 0.2s, color 0.2s; } .ds-nav-item:hover { background: oklch(26% 0.025 240 / 0.6); color: oklch(92% 0.01 240); } .ds-nav-item.is-active { background: oklch(26% 0.025 240); color: oklch(72% 0.16 230); }"
+    },
+    {
+      "name": "Rating Chip",
+      "kind": "chip",
+      "refersTo": "chip-rating-good",
+      "description": "TMDB-style traffic-light rating pill.",
+      "html": "<span class=\"ds-rating ds-good\">★ 7.8</span> <span class=\"ds-rating ds-mixed\">★ 5.9</span> <span class=\"ds-rating ds-bad\">★ 3.1</span>",
+      "css": ".ds-rating { display: inline-flex; align-items: center; gap: 2px; height: 20px; padding: 0 8px; border-radius: 2rem; font: 500 0.75rem ui-sans-serif, system-ui, sans-serif; color: oklch(16% 0.015 240); } .ds-good { background: oklch(76% 0.17 155); } .ds-mixed { background: oklch(83% 0.16 85); } .ds-bad { background: oklch(68% 0.19 25); }"
+    },
+    {
+      "name": "Poster Card",
+      "kind": "card",
+      "refersTo": "poster-card",
+      "description": "2:3 poster with corner chips, progress bar, title and subtitle below.",
+      "html": "<div class=\"ds-poster\"><div class=\"ds-poster-frame\"><span class=\"ds-rating ds-good ds-poster-rating\">★ 8.1</span><div class=\"ds-poster-progress\"><div></div></div></div><p class=\"ds-poster-title\">Title of the show</p><p class=\"ds-poster-sub\">Season 2 · VOSTFR</p></div>",
+      "css": ".ds-poster { width: 140px; font-family: ui-sans-serif, system-ui, sans-serif; } .ds-poster-frame { position: relative; aspect-ratio: 2/3; border-radius: 0.5rem; overflow: hidden; background: linear-gradient(160deg, oklch(30% 0.06 260), oklch(20% 0.02 240)); box-shadow: 0 0 0 1px oklch(26% 0.025 240); transition: box-shadow 0.2s; } .ds-poster:hover .ds-poster-frame { box-shadow: 0 0 0 1px oklch(72% 0.16 230 / 0.6); } .ds-poster-rating { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 2rem; font-size: 0.75rem; font-weight: 500; color: oklch(16% 0.015 240); background: oklch(76% 0.17 155); } .ds-poster-progress { position: absolute; inset: auto 0 0 0; height: 4px; background: oklch(16% 0.015 240 / 0.6); } .ds-poster-progress div { width: 40%; height: 100%; background: oklch(72% 0.16 230); } .ds-poster-title { margin: 8px 0 0; font-size: 0.875rem; font-weight: 500; color: oklch(92% 0.01 240); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-poster-sub { margin: 2px 0 0; font-size: 0.75rem; color: oklch(92% 0.01 240 / 0.5); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Living-Room Auditorium",
+    "overview": "The interface is the darkened room, and the posters are the lit screen. A near-black, low-chroma navy base steps back so TMDB artwork brings all the color. When you reach for the controls (versions, sources, hosts, cast targets), they are precise, the way an operator's booth is. But the room is a living room, not a cinema: it is used on the couch, at night, phone in hand, so it stays cozy, relaxed and forgiving rather than technical.\n\nDensity is comfortable: poster grids and rows carry most screens, with the extra information (VF/VOSTFR availability, source avatars, ratings) kept to small chips at the poster's edges. Motion is soft: one easing curve, short rises and slides, nothing bouncy, and all of it turned off under reduced motion.",
+    "keyCharacteristics": [
+      "Dark-only (`sestudio-dark`): every surface is a step of the same navy-black hue (240).",
+      "Artwork carries color; chrome is near-neutral.",
+      "One Signal Blue accent marks actions, the active place and progress.",
+      "Tonal depth: lightness steps, not shadows.",
+      "Soft, rounded, generous controls; ghost by default."
+    ],
+    "rules": [
+      { "name": "The Art Carries the Color Rule", "body": "Chrome stays on the hue-240 ramp. Saturated color on a screen should come from posters and backdrops, plus Signal Blue on the one thing that is active or actionable.", "section": "colors" },
+      { "name": "The One Hue Ramp Rule", "body": "New surfaces are a step of base-100/200/300 (or one of them at opacity with a backdrop blur), never a new gray or a new tint.", "section": "colors" },
+      { "name": "The Tight Heading Rule", "body": "Every heading is semibold with `tracking-tight`; boldness above 600 is kept for the wordmark and the player's overlays.", "section": "typography" },
+      { "name": "The Tabular Time Rule", "body": "Times, counts and positions in the player use tabular numbers so they don't jitter.", "section": "typography" },
+      { "name": "The Floating-Only Shadow Rule", "body": "Cards, panels, rows and nav are flat. If it doesn't float over other content, it doesn't get a shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep every surface on the hue-240 ramp (house-dark, aisle-dark, row-dark) and let artwork bring the color.",
+      "Do use Signal Blue for the single active or primary thing in a region: the current nav item, the main action, progress.",
+      "Do use `ease-smooth` (`cubic-bezier(.2, .8, .2, 1)`) and the `rise` (320ms) or `slide` (240ms) animations for arriving content, and disable motion under `prefers-reduced-motion`.",
+      "Do keep tap targets generous: 56px tab bar cells, 32px minimum buttons, padded nav rows.",
+      "Do design both layouts: the desktop sidebar and the phone's top bar, tab bar and bottom sheets."
+    ],
+    "donts": [
+      "Don't add a light theme or bright surfaces; the app is used in a dim room.",
+      "Don't put shadows on cards, rows or panels; shadows are only for floating layers.",
+      "Don't introduce web fonts or a second accent hue for chrome.",
+      "Don't use Ember Coral next to destructive actions; it shares the error hue.",
+      "Don't hide missing versions: show the gap (struck through or listed) instead of leaving it out."
+    ]
+  }
+}

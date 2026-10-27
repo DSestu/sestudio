@@ -5,7 +5,7 @@ import { useCollections } from '../collections'
 import ActivityPeek from '../components/ActivityPeek'
 import EmptyState from '../components/EmptyState'
 import WatchingRow from '../components/library/WatchingRow'
-import MediaRow from '../components/MediaRow'
+import MediaRow, { SeeAllButton } from '../components/MediaRow'
 import type { View } from '../nav'
 import { useNotifications } from '../notifications'
 import { openWatching, savedItems, type OpenTitle } from '../rowItems'
@@ -95,15 +95,10 @@ export default function HomeView({
 
       {inProgress.length > 0 && (
         <section aria-label="Continue watching">
-          <div className="flex items-baseline justify-between gap-3 mb-3">
+          <div className="flex items-center gap-3 mb-3">
             <h2 className="text-base sm:text-lg font-semibold tracking-tight">Continue watching</h2>
             {inProgress.length > WATCHING_LIMIT && (
-              <button
-                onClick={() => onNavigate('library')}
-                className="text-xs font-medium text-base-content/50 hover:text-primary transition-colors"
-              >
-                See all
-              </button>
+              <SeeAllButton onClick={() => onNavigate('library')} count={inProgress.length} />
             )}
           </div>
           <div className="flex flex-col gap-2">

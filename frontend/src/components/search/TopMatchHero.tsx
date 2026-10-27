@@ -44,15 +44,27 @@ export default function TopMatchHero({ card, meta, posters, onOpen, disk, childr
         <img src={backdrop} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
       )}
       <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-base-100 via-base-100/70 to-base-100/20" />
-      <div className="relative flex gap-4 sm:gap-6 p-4 sm:p-6">
-        <button type="button" onClick={() => onOpen(card)} className="w-24 sm:w-36 shrink-0 self-start rounded-box overflow-hidden ring-1 ring-base-300 hover:ring-primary transition">
+      <div className="group relative flex gap-4 sm:gap-6 p-4 sm:p-6 cursor-pointer">
+        <div aria-hidden="true" className="absolute inset-0 bg-primary/0 transition-colors duration-200 ease-smooth group-hover:bg-primary/6" />
+        <button
+          type="button"
+          onClick={disk ? disk.onPlay : () => onOpen(card)}
+          aria-label={`${disk ? disk.play : 'Play'}: ${card.series_name}`}
+          className="absolute inset-0 z-0 rounded-box focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+        />
+        <div className="pointer-events-none relative w-24 sm:w-36 shrink-0 self-start rounded-box overflow-hidden ring-1 ring-base-300 group-hover:ring-primary transition">
           {poster
             ? <img src={poster} alt="" className="w-full aspect-[2/3] object-cover" />
             : <div className="w-full aspect-[2/3] bg-base-300" />}
-        </button>
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <span className="absolute inset-0 flex items-center justify-center bg-base-100/40 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:bg-transparent transition-opacity">
+            <span className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-primary text-primary-content shadow-lg">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 translate-x-px" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            </span>
+          </span>
+        </div>
+        <div className="pointer-events-none relative flex min-w-0 flex-1 flex-col gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-base-content/60">Top match</span>
-          <h2 className="text-2xl sm:text-3xl font-bold leading-tight">{card.series_name}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold leading-tight transition-colors group-hover:text-primary">{card.series_name}</h2>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-base-content/70">
             {facts.join(' · ')}
             {meta && <RatingBadge rating={meta.rating} />}
@@ -68,7 +80,7 @@ export default function TopMatchHero({ card, meta, posters, onOpen, disk, childr
           {meta?.overview && (
             <p className="hidden sm:block max-w-2xl text-sm leading-relaxed text-base-content/70 line-clamp-3">{meta.overview}</p>
           )}
-          <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+          <div className="pointer-events-auto relative z-10 mt-auto flex flex-wrap items-center gap-2 pt-1">
             <button type="button" onClick={disk ? disk.onPlay : () => onOpen(card)} className="btn btn-primary btn-sm gap-1.5">
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
               {disk ? disk.play : 'Play'}
