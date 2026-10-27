@@ -487,6 +487,91 @@ def test_an_nvidia_gpu_gets_nvidia_s_runtime_first_and_the_plain_one_failing_tha
     assert (interpolate.runtime_dir() / ".complete").is_file()
 
 
+# --- a Mac: ncnn on Vulkan first, ONNX on CoreML failing that -------------- #
+
+
+def test_a_mac_draws_on_ncnn_without_fetching_onnx(monkeypatch):
+    calls: list[tuple[int, int, float]] = []
+
+    class FakeRife:
+        def process_cv2(self, a, b, t):
+            calls.append((int(a[0, 0, 0]), int(b[0, 0, 0]), t))
+            return np.full_like(a, 7)
+
+    ncnn = interpolate._NcnnSession(FakeRife())
+    monkeypatch.setattr(interpolate.sys, "platform", "darwin")
+    monkeypatch.setattr(interpolate, "_ncnn_session", lambda: ncnn)
+    monkeypatch.setattr(
+        interpolate, "ensure_runtime", lambda: pytest.fail("fetched ONNX Runtime")
+    )
+    monkeypatch.setattr(interpolate, "_session_cache", [])
+
+    assert interpolate._session() is ncnn
+    a, b = _frames([1, 2])
+    # The feed the ONNX session takes, with the time point as a 1-element array.
+    assert interpolate.interpolate(a, b, 0.25)[0, 0, 0] == 7
+    assert calls == [(1, 2, 0.25)]
+    assert ncnn.get_providers()[0] != "CPUExecutionProvider"
+
+
+def test_a_mac_without_ncnn_runs_coreml_as_an_ml_program(tmp_path, monkeypatch):
+    import types
+
+    given: list[list] = []
+    fake_ort = types.SimpleNamespace(
+        get_available_providers=lambda: [
+            "CoreMLExecutionProvider",
+            "CPUExecutionProvider",
+        ],
+        SessionOptions=lambda: types.SimpleNamespace(),
+        InferenceSession=lambda _model, _options, providers: given.append(providers),
+    )
+    monkeypatch.setitem(interpolate.sys.modules, "onnxruntime", fake_ort)
+    monkeypatch.setattr(interpolate.sys, "platform", "darwin")
+    monkeypatch.setattr(interpolate, "_ncnn_session", lambda: None)
+    monkeypatch.setattr(interpolate, "ensure_runtime", lambda: True)
+    monkeypatch.setattr(interpolate, "ensure_model", lambda: tmp_path / "m.onnx")
+    monkeypatch.setattr(interpolate, "_wrapped", lambda model: model)
+    monkeypatch.setitem(interpolate._setup, "error", "ncnn interpolation unavailable")
+
+    interpolate._new_session()
+
+    coreml, cpu = given[0]
+    assert coreml == (
+        "CoreMLExecutionProvider",
+        {"ModelFormat": "MLProgram", "MLComputeUnits": "ALL"},
+    )
+    assert cpu == "CPUExecutionProvider"
+    # The fallback worked: ncnn's failure is not shown as the setup's.
+    assert interpolate._setup["error"] is None
+
+
+def test_the_ncnn_model_is_unpacked_into_its_v4_26_folder(tmp_path, monkeypatch):
+    import io
+    import tarfile
+
+    monkeypatch.setattr(interpolate, "config_dir", lambda: tmp_path / "cfg")
+    packed = io.BytesIO()
+    with tarfile.open(fileobj=packed, mode="w:gz") as tar:
+        for name in ("flownet.bin", "flownet.param"):
+            info = tarfile.TarInfo(f"rife-v4.26/{name}")
+            info.size = 3
+            tar.addfile(info, io.BytesIO(b"abc"))
+    monkeypatch.setattr(
+        interpolate, "_download", lambda _url, to: to.write_bytes(packed.getvalue())
+    )
+
+    folder = interpolate._ncnn_model()
+
+    # The wrapper reads the version, and so the padding, from the folder's name.
+    assert folder == tmp_path / "cfg" / "models" / "rife-v4.26"
+    assert (folder / "flownet.bin").read_bytes() == b"abc"
+    assert not list(folder.parent.glob("*.part"))
+    # Kept: a later start downloads nothing.
+    monkeypatch.setattr(interpolate, "_download", lambda *_: pytest.fail("refetched"))
+    assert interpolate._ncnn_model() == folder
+
+
 def test_turned_off_it_is_never_available_and_fetches_nothing(tmp_path, monkeypatch):
     from sestudio.config import AppConfig, save_config
 
