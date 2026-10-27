@@ -166,7 +166,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
       {/* Content column — bottom padding clears the mobile tab bar, plus the
           Now-Casting bar when a cast is active. */}
       <main
-        className={`flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-5 ${
+        className={`flex-1 min-w-0 py-5 px-(--gutter) [--gutter:clamp(0.6rem,1.5vw,1.5rem)] ${
           bottomBar
             ? 'pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-24'
             : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-10'
@@ -178,14 +178,13 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
           <div
             className={view === 'watch'
               ? 'hidden md:block relative z-40'
-              : 'hidden md:block sticky top-0 z-30 -mt-5 mb-5 -mx-6 lg:-mx-8 px-6 lg:px-8 border-b border-base-300 bg-base-100'}
+              : 'hidden md:block sticky top-0 z-30 -mt-5 mb-5 mx-[calc(-1*var(--gutter))] px-(--gutter) border-b border-base-300 bg-base-100'}
           >
-            <div className={view === 'watch' ? '' : 'mx-auto max-w-6xl'}>{searchBar}</div>
+            {searchBar}
           </div>
         )}
-        {/* The watch view (player + playlist) fills the available width; the
-            grid/list views stay capped for readability. */}
-        <div className={`mx-auto w-full ${view === 'watch' ? '' : 'max-w-6xl'}`}>{children}</div>
+        {/* Every view uses the full width; the gutter grows with the window. */}
+        <div className="w-full">{children}</div>
       </main>
 
       {/* Mobile tab bar — hidden while the selection bar occupies this slot. */}

@@ -1,5 +1,6 @@
 import type { SeasonCard } from '../../api'
 import { KINDS, matchesKind, type Kind } from '../../titleSearch'
+import { SeeAllButton } from '../MediaRow'
 import ResultsGrid from '../ResultsGrid'
 
 interface Props {
@@ -29,19 +30,10 @@ export default function KindRows({ cards, onSeeAll, ...grid }: Props) {
   return (
     <div className="flex flex-col gap-6">
       {rows.map(r => (
-        <section key={r.value} aria-label={r.label} className="flex flex-col gap-2">
-          <div className="flex items-baseline gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-              {r.label} <span className="font-mono tabular-nums">{r.cards.length}</span>
-            </h3>
-            <button
-              type="button"
-              onClick={() => onSeeAll(r.value)}
-              className="ml-auto text-sm text-primary hover:underline"
-              aria-label={`See all ${r.label.toLowerCase()}`}
-            >
-              See all ›
-            </button>
+        <section key={r.value} aria-label={r.label} className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <h3 className="text-base sm:text-lg font-semibold tracking-tight">{r.label}</h3>
+            <SeeAllButton onClick={() => onSeeAll(r.value)} count={r.cards.length} />
           </div>
           <ResultsGrid row cards={r.cards.slice(0, ROW_MAX)} {...grid} />
         </section>

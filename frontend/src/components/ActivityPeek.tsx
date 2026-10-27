@@ -1,4 +1,5 @@
 import type { WatcherEvent } from '../api'
+import { SeeAllButton } from './MediaRow'
 import { markRead, timeAgo, useNotifications } from '../notifications'
 
 /** Rows shown on Home before deferring to the Activity feed. */
@@ -27,17 +28,12 @@ export default function ActivityPeek({ onOpen, onSeeAll }: Props) {
 
   return (
     <section aria-label="Latest activity">
-      <div className="flex items-baseline justify-between gap-3 mb-3">
+      <div className="flex items-center gap-3 mb-3">
         <h2 className="text-base sm:text-lg font-semibold tracking-tight">
           New for you
           {unread > 0 && <span className="badge badge-primary badge-sm ml-2">{unread}</span>}
         </h2>
-        <button
-          onClick={onSeeAll}
-          className="text-xs font-medium text-base-content/50 hover:text-primary transition-colors"
-        >
-          See all
-        </button>
+        <SeeAllButton onClick={onSeeAll} />
       </div>
 
       <div className="flex flex-col gap-2">
