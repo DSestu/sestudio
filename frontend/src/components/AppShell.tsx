@@ -176,9 +176,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
           // No backdrop blur here: it would trap the search's fixed backdrop
           // inside the bar instead of letting it dim the page.
           <div
-            className={view === 'watch'
-              ? 'hidden md:block relative z-40'
-              : 'hidden md:block sticky top-0 z-30 -mt-5 mb-5 mx-[calc(-1*var(--gutter))] px-(--gutter) border-b border-base-300 bg-base-100'}
+            className="hidden md:block sticky top-0 z-30 -mt-5 mb-5 mx-[calc(-1*var(--gutter))] px-(--gutter) border-b border-base-300 bg-base-100"
           >
             {searchBar}
           </div>

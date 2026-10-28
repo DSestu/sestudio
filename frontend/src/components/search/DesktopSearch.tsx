@@ -10,8 +10,6 @@ interface Props {
   /** The results page's query and kind, which the bar shows; '' elsewhere. */
   query: string
   kind: Kind
-  /** No bar (the player): only Ctrl K brings the search up, over the page. */
-  barless?: boolean
   onOpenCard: (card: SeasonCard) => void
   onSearch: (term: string, kind: Kind) => void
 }
@@ -24,7 +22,7 @@ const RECENT_ID = 'desktop-search-recent'
  * the field grows a panel downward. Empty, it lists recent searches; typed, its
  * first row is the full results page (what Enter does), then a few titles.
  */
-export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, barless = false, onOpenCard, onSearch }: Props) {
+export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, onOpenCard, onSearch }: Props) {
   const [text, setText] = useState(query)
   // The preview lists titles, so a People page previews every kind.
   const [kind, setKind] = useState<Kind>(pageKind === 'people' ? 'all' : pageKind)
@@ -77,10 +75,9 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
   }
 
   const onResults = query !== ''
-  if (barless && !open) return null
 
   const field = (
-    <div className={`relative ${barless ? 'w-[min(36rem,90vw)]' : 'flex-1 max-w-xl'}`}>
+    <div className="relative flex-1 max-w-xl">
       <div className={`${SEARCH_FIELD} ${open ? 'rounded-b-none border-b-base-300' : ''}`}>
         <SearchIcon />
         <input
@@ -141,23 +138,19 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
       {open && (
         <div aria-hidden="true" onClick={close} className="fixed inset-0 z-0 bg-black/45" />
       )}
-      {barless ? (
-        <div className="fixed inset-x-0 top-6 z-10 flex justify-center">{field}</div>
-      ) : (
-        <div className="relative z-10 flex items-center gap-4 h-16">
-          {field}
-          {onResults ? (
-            <>
-              <KindChips value={pageKind} onChange={k => onSearch(query, k)} kinds={KINDS} />
-              <OptionsButton />
-            </>
-          ) : (
-            <span className="text-xs text-base-content/40">
-              on {catalogs.filter(c => c.id !== 'tmdb').length} sources{catalogs.some(c => c.id === 'tmdb') ? ' + TMDB' : ''}
-            </span>
-          )}
-        </div>
-      )}
+      <div className="relative z-10 flex items-center gap-4 h-16">
+        {field}
+        {onResults ? (
+          <>
+            <KindChips value={pageKind} onChange={k => onSearch(query, k)} kinds={KINDS} />
+            <OptionsButton />
+          </>
+        ) : (
+          <span className="text-xs text-base-content/40">
+            on {catalogs.filter(c => c.id !== 'tmdb').length} sources{catalogs.some(c => c.id === 'tmdb') ? ' + TMDB' : ''}
+          </span>
+        )}
+      </div>
     </>
   )
 }
