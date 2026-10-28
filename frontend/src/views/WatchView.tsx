@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { togglePlaylistCollapsed, usePlaylistCollapsed } from '../playlistCollapsed'
 import type {
   AppSettings, DownloadDestination, DownloadItem, EpisodeDetail, SeasonDetail,
@@ -38,6 +38,7 @@ import { useProviderSources } from '../useProviderSources'
 import {
   fileFor, fmtSize, langsFor, sanitizeName, titleFor, useDownloadedLibrary,
 } from '../downloadedLibrary'
+import { useBrowserPlayerControls } from '../browserPlayerControls'
 import { useTmdb } from '../useTmdb'
 import { setWatched, useWatchState, watchKey } from '../watchState'
 
@@ -49,9 +50,9 @@ const NO_EMBEDS: Record<string, string> = {}
 const NO_SUBTITLES: StreamSubtitle[] = []
 const NO_AUDIO: DownloadedTrack[] = []
 
-// Details is not among them: the TMDB metadata sits above the player on every
-// breakpoint now, so a tab for it would duplicate what is already on screen.
-const MOBILE_TABS = ['episodes', 'download'] as const
+// The phone's version of the desktop queue and now-playing line: one job per
+// tab. Details is not among them: the TMDB metadata sits below the player.
+const MOBILE_TABS = ['episodes', 'sources', 'output'] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
 
 interface Props {
@@ -116,6 +117,8 @@ export default function WatchView({
   const collapsed = usePlaylistCollapsed()
   const [tab, setTab] = useState<MobileTab>('episodes')
   const [autoplay, setAutoplay] = useState(true)
+  /** The sources panel under the now-playing line (desktop). */
+  const [sourcesOpen, setSourcesOpen] = useState(false)
   const [position, setPosition] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
@@ -675,6 +678,22 @@ export default function WatchView({
     />
   )
 
+  // Desktop only: the queue folds to a strip for a wider player. It sits in
+  // the list header, so the queue spends one row on chrome, not two.
+  const collapseButton = (
+    <button
+      onClick={toggleCollapsed}
+      aria-expanded={!collapsed}
+      aria-label={collapsed ? 'Expand playlist' : 'Collapse playlist'}
+      title={collapsed ? 'Expand playlist' : 'Collapse playlist'}
+      className="hidden lg:inline-flex btn btn-ghost btn-xs btn-square"
+    >
+      <svg className={`w-4 h-4 ${collapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+  )
+
   const list = detail && (
     <EpisodeList
       episodes={detail.episodes}
@@ -698,6 +717,7 @@ export default function WatchView({
       onLang={selectLang}
       onToggleWatched={toggleWatched}
       onSelectEpisodeLang={selectEpisodeLang}
+      headerAction={collapseButton}
     />
   )
 
@@ -713,6 +733,130 @@ export default function WatchView({
       </button>
     </div>
   )
+
+  // Below desktop the player docks instead of staying whole: it scrolls with
+  // the page until only its bottom third (seek bar, time, fullscreen) is left
+  // under the top bar, and the part leaving the screen dims as it goes. Both
+  // follow the measured player, so the dock holds at any width and zoom.
+  const playerBox = useRef<HTMLDivElement>(null)
+  const [dock, setDock] = useState({ top: 0, progress: 0 })
+  const hasEpisodes = Boolean(detail?.episodes.length)
+  useEffect(() => {
+    const wide = matchMedia('(min-width: 64rem)')
+    // From md the sidebar layout's search bar (4rem) is what sits on top.
+    const tablet = matchMedia('(min-width: 48rem)')
+    let frame = 0
+    const measure = () => {
+      frame = 0
+      const box = playerBox.current
+      if (!box || wide.matches) {
+        setDock(d => (d.top || d.progress ? { top: 0, progress: 0 } : d))
+        return
+      }
+      const bar = tablet.matches ? 64 : 56
+      const { top, height } = box.getBoundingClientRect()
+      const travel = (height * 2) / 3
+      const progress = travel ? Math.min(Math.max(bar - top, 0), travel) / travel : 0
+      // 8px is the wrapper's top padding, which docks above the bar too.
+      const next = { top: Math.round(bar - 8 - travel), progress }
+      setDock(d => (d.top === next.top && Math.abs(d.progress - progress) < 0.01 ? d : next))
+    }
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure) }
+    schedule()
+    addEventListener('scroll', schedule, { passive: true })
+    addEventListener('resize', schedule)
+    wide.addEventListener('change', schedule)
+    return () => {
+      cancelAnimationFrame(frame)
+      removeEventListener('scroll', schedule)
+      removeEventListener('resize', schedule)
+      wide.removeEventListener('change', schedule)
+    }
+  }, [hasEpisodes])
+  const docked = dock.progress > 0.98
+  const controls = useBrowserPlayerControls()
+
+  // The version playing, said in one line: language, site, host. On desktop it
+  // is the switch that opens the sources panel; a failed source opens the panel
+  // by itself, since that is exactly when switching matters.
+  const currentListing = listings.find(l => l.current)
+  const versionLabel = [
+    activeLang.toUpperCase(),
+    downloadedActive ? 'On disk' : (currentListing?.label ?? sourceId),
+    !downloadedActive && active ? active : null,
+  ].filter(Boolean) as string[]
+  const sourceFailed = playing && !probing && !source
+  const sourcesShown = sourcesOpen || sourceFailed
+  // Phone: the same moment opens the Sources tab, so a dead player is never
+  // left without the way out on screen.
+  // Adjusted during render, as the audio track is above, rather than in an effect.
+  const [failedSeen, setFailedSeen] = useState(false)
+  if (sourceFailed !== failedSeen) {
+    setFailedSeen(sourceFailed)
+    if (sourceFailed && !matchMedia('(min-width: 64rem)').matches) setTab('sources')
+  }
+
+  const episodeLabel = current && !detail?.is_film
+    ? `E${String(current.number).padStart(2, '0')} · ${current.title}`
+    : seriesName
+
+  // Phone: the language as a chip; the Sources tab does the rest.
+  const langChip = (
+    <span className="badge badge-sm badge-primary font-bold shrink-0">{activeLang.toUpperCase()}</span>
+  )
+
+  const autoplayToggle = (
+    <label className="flex items-center gap-2 cursor-pointer text-sm text-base-content/70">
+      <input
+        type="checkbox"
+        className="toggle toggle-primary toggle-sm"
+        checked={autoplay}
+        onChange={e => setAutoplay(e.target.checked)}
+      />
+      Autoplay next
+    </label>
+  )
+
+  // Audio tracks, for the copy on disk. Only shown when the file actually has a
+  // choice to make, and only while it is the thing playing — a streamed host
+  // serves one track and has nothing to switch between. The server builds the
+  // chosen track (no browser can pick one), so the first use of a track pauses
+  // briefly and later ones are instant.
+  const audioPicker = active === DOWNLOADED_PROVIDER && downloadedAudio.length > 1 && (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="text-base-content/60">Audio</span>
+      <select
+        className="select select-sm select-bordered"
+        value={audioTrack}
+        onChange={e => setAudioIndex(Number(e.target.value))}
+      >
+        {downloadedAudio.map(track => (
+          <option key={track.index} value={track.index}>
+            {track.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+
+  // Document PiP, not the browser's element PiP: it carries the caption overlay
+  // and controls into the floating window, which element PiP drops.
+  // Chromium-only, so hidden elsewhere.
+  const popOut = !pipWindow && isDocumentPiPSupported() && (
+    <button
+      className="btn btn-sm btn-ghost gap-2"
+      onClick={() => { void openDocumentPiP() }}
+      title="Play in a floating window that stays on top"
+    >
+      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M19 11h-8v6h8v-6zm4 8V4.98A2 2 0 0 0 21 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2zm-2 .02H3V4.97h18v14.05z" />
+      </svg>
+      Pop out
+    </button>
+  )
+
+  const quality = <BrowserQuality source={source} />
+  const frameRate = <BrowserFrameRate source={source} settings={settings} onUpdateSettings={onUpdateSettings} />
 
   return (
     <div className="flex flex-col gap-4">
@@ -736,9 +880,8 @@ export default function WatchView({
       </InPortal>
       )}
 
-      {/* Title bar — pinned to the viewport top on desktop so back / save
-          controls stay reachable while scrolling. */}
-      <div className="flex items-center gap-3 lg:sticky lg:top-0 lg:z-30 lg:bg-base-100 lg:py-2">
+      {/* Title bar. On desktop the search bar above it is the pinned one. */}
+      <div className="flex items-center gap-3">
         <button
           // Real history back, so a search (with its query and filters in the
           // URL) is restored exactly; fall back to search on a deep link.
@@ -751,10 +894,12 @@ export default function WatchView({
           </svg>
         </button>
         <div className="min-w-0 flex-1">
-          <h2 className="font-semibold text-lg truncate">{seriesName}</h2>
-          <p className="text-base-content/50 text-xs">
-            {detail ? (detail.is_film ? 'Film' : `Season ${detail.season}`) : ''}
-            {current && !detail?.is_film && ` · E${String(current.number).padStart(2, '0')} — ${current.title}`}
+          <h2 className="font-semibold text-lg tracking-tight truncate">{seriesName}</h2>
+          <p className="text-base-content/50 text-xs truncate">
+            {[
+              detail && (detail.is_film ? 'Film' : `Season ${detail.season}`),
+              meta?.year,
+            ].filter(Boolean).join(' · ')}
           </p>
         </div>
         {detail && (
@@ -795,60 +940,38 @@ export default function WatchView({
       )}
 
       {/* A dead or empty listing is exactly when switching site matters most,
-          and the row under the player is not rendered then — so surface the
-          source on its own here. */}
-      {(error || (detail && detail.episodes.length === 0)) && sourceControl}
+          and the player layout below is not rendered then — so surface the
+          source on its own here. With episodes on screen it already has a
+          place in that layout, and a copy here would push the player down. */}
+      {(error || detail) && !detail?.episodes.length && sourceControl}
 
       {detail && detail.episodes.length > 0 && (
-        <div className="lg:flex lg:gap-4 lg:items-start">
-          {/* Desktop playlist column — collapsible */}
-          <aside
-            className={`hidden lg:flex lg:flex-col rounded-box border border-base-300 bg-base-200 overflow-hidden transition-[width] ${
-              collapsed ? 'lg:w-12' : 'lg:w-80'
-            } lg:h-[calc(100dvh-12rem)] lg:sticky lg:top-16 shrink-0`}
-          >
-            <div className={`flex items-center gap-2 px-2 py-2 border-b border-base-300 ${collapsed ? 'justify-center' : 'justify-between'}`}>
-              {!collapsed && <span className="text-xs uppercase tracking-wide text-base-content/40 pl-1">Episodes</span>}
-              <button
-                onClick={toggleCollapsed}
-                aria-expanded={!collapsed}
-                aria-label={collapsed ? 'Expand playlist' : 'Collapse playlist'}
-                title={collapsed ? 'Expand playlist' : 'Collapse playlist'}
-                className="btn btn-ghost btn-xs btn-square"
+        <div
+          className={`flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 ${
+            collapsed ? 'lg:grid-cols-[minmax(0,1fr)_3rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem]'
+          }`}
+        >
+          {/* Now playing: the player first, then one line saying what plays and
+              where it goes. */}
+          <div className="min-w-0 flex flex-col gap-3">
+            {/* Below desktop it docks with its bottom third showing (see dock
+                above); static on desktop. The browser always plays the browsed
+                episode; casting to a TV is a separate, non-disruptive action
+                (see OutputSwitcher). */}
+            <div
+              className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-base-100 lg:static lg:mx-0 lg:px-0 lg:py-0 lg:bg-transparent"
+              style={dock.top ? { top: dock.top } : undefined}
+            >
+              {/* As it docks the picture dims, through the video alone so the
+                  controls and captions stay sharp; docked, the control row's
+                  title gives its place to the play button below. */}
+              <div
+                ref={playerBox}
+                className={`relative aspect-video rounded-box overflow-hidden bg-base-200 [&_video]:[filter:brightness(var(--dock-dim,1))] ${
+                  docked ? '[&_.vds-chapter-title]:invisible' : ''
+                }`}
+                style={{ '--dock-dim': 1 - 0.65 * dock.progress } as CSSProperties}
               >
-                {collapsed ? '›' : '‹'}
-              </button>
-            </div>
-            {collapsed ? (
-              <button
-                onClick={toggleCollapsed}
-                className="flex-1 flex items-start justify-center pt-3 text-base-content/40 hover:text-base-content"
-                aria-label="Expand playlist"
-              >
-                <span className="[writing-mode:vertical-rl] text-xs tracking-wide">
-                  {detail.episodes.length} episodes
-                </span>
-              </button>
-            ) : (
-              <>
-                <div className="flex-1 min-h-0">{list}</div>
-                {downloadBar}
-              </>
-            )}
-          </aside>
-
-          {/* Player pane */}
-          <div className="flex-1 min-w-0 flex flex-col gap-3">
-            {/* TMDB metadata above the player, on every breakpoint. Renders
-                nothing without a key or a match, so the layout is unchanged
-                then. Its own bottom border separates it from the player. */}
-            <TitleHeader meta={meta} navigate={navigate} />
-
-            {/* Sticky on mobile so the list scrolls under it; static on desktop.
-                The browser always plays the browsed episode; casting to a TV is
-                a separate, non-disruptive action (see OutputSwitcher). */}
-            <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-base-100 lg:static lg:mx-0 lg:px-0 lg:py-0 lg:bg-transparent">
-              <div className="aspect-video rounded-box overflow-hidden bg-base-200">
                 {/* Only claim the shared video node while visible; when minimised
                     the mini-player owns it. */}
                 {visible && (pipWindow && current ? (
@@ -868,18 +991,17 @@ export default function WatchView({
                     className="group relative w-full h-full flex items-center justify-center"
                     aria-label={`Play ${current.title}`}
                   >
-                    {posterUrl && (
+                    {(meta?.backdrop_url || posterUrl) && (
                       <img
-                        src={posterUrl}
+                        src={meta?.backdrop_url || posterUrl}
                         alt=""
-                        className="absolute inset-0 w-full h-full object-cover opacity-30 blur-[1px]"
+                        className="absolute inset-0 w-full h-full object-cover opacity-40"
                       />
                     )}
-                    <span className="relative flex flex-col items-center gap-2 text-base-content/70 group-hover:text-base-content transition-colors">
-                      <svg className="w-14 h-14" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <span className="relative flex items-center justify-center w-16 h-16 rounded-full bg-primary text-primary-content transition-transform group-hover:scale-105">
+                      <svg className="w-7 h-7 ml-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M8 5v14l11-7z" />
                       </svg>
-                      <span className="text-sm">Play</span>
                     </span>
                   </button>
                 ) : (
@@ -887,30 +1009,72 @@ export default function WatchView({
                     Select an episode to start
                   </div>
                 ))}
+                {docked && (
+                  <>
+                    {/* Tapping the dimmed picture brings the whole player back. */}
+                    <button
+                      type="button"
+                      onClick={() => scrollTo({ top: 0, behavior: 'smooth' })}
+                      aria-label="Show the whole player"
+                      className="lg:hidden absolute inset-x-0 top-0 h-[72%] z-10 flex items-end justify-center pb-1"
+                    >
+                      <span aria-hidden="true" className="w-10 h-1 rounded-full bg-base-content/50" />
+                    </button>
+                    {/* The phone player's own play button sits mid-picture,
+                        which the dock cuts off; this one stands in for it. */}
+                    {playing && controls && (
+                      <button
+                        type="button"
+                        onClick={controls.playPause}
+                        aria-label={controls.isPaused ? 'Play' : 'Pause'}
+                        className="lg:hidden absolute left-1/2 -translate-x-1/2 top-[calc(66.7%+0.5rem)] z-10 btn btn-circle btn-sm bg-base-100/80 border-0"
+                      >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          {controls.isPaused
+                            ? <path d="M8 5v14l11-7z" />
+                            : <path d="M6 5h4v14H6zM14 5h4v14h-4z" />}
+                        </svg>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* The now-playing line: episode, the version playing, the output. */}
+            <div className="flex flex-col gap-3">
+              <div className={`items-center gap-x-3 gap-y-2 flex-wrap ${playing && current ? 'hidden lg:flex' : 'flex'}`}>
+                <h3 className="font-semibold tracking-tight text-base lg:text-lg min-w-0 truncate max-w-full">
+                  {episodeLabel}
+                </h3>
+                <span className="lg:hidden">{langChip}</span>
+                {/* Desktop: the version as one switch over the sources panel. */}
+                <button
+                  type="button"
+                  onClick={() => setSourcesOpen(o => !o)}
+                  aria-expanded={sourcesShown}
+                  aria-controls="watch-sources"
+                  title="Change language, site or host"
+                  className="hidden lg:inline-flex items-center gap-0.5 h-8 rounded-full border border-base-300 bg-base-200 p-0.5 text-sm hover:border-base-content/30 transition-colors"
+                >
+                  <span className="px-2.5 h-full grid place-items-center rounded-full bg-primary text-primary-content font-bold">
+                    {versionLabel[0]}
+                  </span>
+                  <span className="px-2 text-base-content/75">{versionLabel.slice(1).join(' · ')}</span>
+                  <svg
+                    className={`w-4 h-4 mr-1.5 text-base-content/50 transition-transform ${sourcesShown ? 'rotate-180' : ''}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
               </div>
 
-              {/* Document PiP, not the browser's element PiP: it carries the
-                  caption overlay and controls into the floating window, which
-                  element PiP drops. Chromium-only, so hidden elsewhere.
-                  Sits directly under the player, on the side the eye already
-                  returns to, rather than tucked in a corner. */}
-              {/* Both are "where does this play" choices, so they share a row —
-                  and they sit inside the sticky container so they stay reachable
-                  while the episode list scrolls. */}
+              {/* Where the video goes. Send to TV stays on every breakpoint; the
+                  finer controls sit here on desktop and in the Output tab on a
+                  phone. */}
               {playing && current && (
-                <div className="pt-2 flex items-start gap-2 flex-wrap">
-                  {!pipWindow && isDocumentPiPSupported() && (
-                    <button
-                      className="btn btn-sm btn-primary gap-2"
-                      onClick={() => { void openDocumentPiP() }}
-                      title="Play in a floating window that stays on top"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M19 11h-8v6h8v-6zm4 8V4.98A2 2 0 0 0 21 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2zm-2 .02H3V4.97h18v14.05z" />
-                      </svg>
-                      Pop out
-                    </button>
-                  )}
+                <div className="flex items-start gap-2 flex-wrap">
                   <OutputSwitcher
                     episodes={playlist}
                     index={index}
@@ -918,67 +1082,44 @@ export default function WatchView({
                     autoplay={autoplay}
                     handoffAt={position}
                   >
-                    <BrowserQuality source={source} />
-                    <BrowserFrameRate source={source} settings={settings} onUpdateSettings={onUpdateSettings} />
+                    {/* Phone: the episode title sits on the Send to TV row, ahead
+                        of the button, so casting is never a scroll away. */}
+                    <div className="lg:hidden order-first flex-1 min-w-0 flex items-center gap-2">
+                      <h3 className="font-semibold tracking-tight min-w-0 truncate">{episodeLabel}</h3>
+                      {langChip}
+                    </div>
+                    {/* Desktop: one toolbar. Where it goes, then how it plays,
+                        then Autoplay at the end; the AI settings fold below. */}
+                    <div className="hidden lg:contents [&>details]:order-last">
+                      {popOut}
+                      <span aria-hidden="true" className="w-px h-5 bg-base-300 mx-1" />
+                      {quality}
+                      {frameRate}
+                      {audioPicker}
+                      <div className="ml-auto">{autoplayToggle}</div>
+                    </div>
                   </OutputSwitcher>
-                  {/* Audio tracks, for the copy on disk. Only shown when the
-                      file actually has a choice to make, and only while it is
-                      the thing playing — a streamed host serves one track and
-                      has nothing to switch between. The server builds the
-                      chosen track (no browser can pick one), so the first use
-                      of a track pauses briefly and later ones are instant. */}
-                  {active === DOWNLOADED_PROVIDER && downloadedAudio.length > 1 && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <span className="opacity-60">Audio</span>
-                      <select
-                        className="select select-sm select-bordered"
-                        value={audioTrack}
-                        onChange={e => setAudioIndex(Number(e.target.value))}
-                      >
-                        {downloadedAudio.map(track => (
-                          <option key={track.index} value={track.index}>
-                            {track.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
                 </div>
+              )}
+
+              {/* Desktop: the sources panel opens in place under the line rather
+                  than over the video, so what follows moves down instead of
+                  being covered. */}
+              {sourcesShown && (
+                <div id="watch-sources" className="hidden lg:block">{sourceControl}</div>
+              )}
+              {playing && current && (
+                <div className="hidden lg:block"><BrowserPerformance source={source} /></div>
               )}
             </div>
 
-            {/* Below the pinned player rather than inside it: opening it then
-                pushes what follows down instead of covering it. */}
-            {playing && current && <BrowserPerformance source={source} />}
+            {/* About the title: right under the controls, on every breakpoint.
+                Renders nothing without a TMDB key or a match. */}
+            <div className="order-last mt-5"><TitleHeader meta={meta} navigate={navigate} /></div>
 
-            {/* Where the video comes from: the site first, then the hosts that
-                site offers — left to right, site → host, which is also the order
-                in which a failure is worth investigating. Output moved up into
-                the sticky row beside the player. */}
-            <div className="flex flex-col gap-3">
-              {/* Hosts used to live on their own row; they are per-source, so
-                  they belong on the source's row in the panel above. */}
-              {sourceControl}
-              <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
-                {playing && current && (
-                  <>
-                    <label className="flex items-center gap-2 cursor-pointer text-sm text-base-content/70 ml-auto">
-                      <input
-                        type="checkbox"
-                        className="toggle toggle-primary toggle-sm"
-                        checked={autoplay}
-                        onChange={e => setAutoplay(e.target.checked)}
-                      />
-                      Autoplay next
-                    </label>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Mobile: tabs for everything the desktop shows alongside */}
+            {/* Phone: everything the desktop shows alongside, one tab at a time. */}
             <div className="lg:hidden">
-              <div role="tablist" className="tabs tabs-box">
+              <div role="tablist" className="tabs tabs-box w-full">
                 {MOBILE_TABS.map(t => (
                   <button
                     key={t}
@@ -987,16 +1128,66 @@ export default function WatchView({
                     onClick={() => setTab(t)}
                     className={`tab flex-1 capitalize ${tab === t ? 'tab-active' : ''}`}
                   >
-                    {t === 'download' ? `Download (${checked.size})` : t}
+                    {t}
                   </button>
                 ))}
               </div>
-              <div className="mt-3 rounded-box border border-base-300 bg-base-200 overflow-hidden">
-                {tab === 'episodes' && list}
-                {tab === 'download' && downloadBar}
+              <div className="mt-3">
+                {tab === 'episodes' && (
+                  // Bounded to the space between the pinned player and the tab
+                  // bar, so the list scrolls inside itself, opens on the episode
+                  // playing, and keeps the download bar in reach.
+                  <div className="h-[calc(100dvh-9.5rem-(100vw-2rem)*9/16-env(safe-area-inset-bottom))] min-h-72 flex flex-col rounded-box border border-base-300 bg-base-200 overflow-hidden">
+                    <div className="flex-1 min-h-0">{list}</div>
+                    {downloadBar}
+                  </div>
+                )}
+                {tab === 'sources' && sourceControl}
+                {tab === 'output' && (
+                  playing && current ? (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-wrap items-center gap-3">
+                        {quality}
+                        {frameRate}
+                        {audioPicker}
+                      </div>
+                      {autoplayToggle}
+                      <BrowserPerformance source={source} />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-base-content/60">Start an episode to pick the quality and frame rate.</p>
+                  )
+                )}
               </div>
             </div>
           </div>
+
+          {/* Desktop queue: opens on the episode playing, with what comes next
+              below it. Collapsible to a strip for a wider player. */}
+          <aside
+            className={`hidden lg:flex lg:flex-col rounded-box border border-base-300 bg-base-200 overflow-hidden lg:sticky lg:top-16 lg:h-[calc(100dvh-5.5rem)]`}
+          >
+            {collapsed ? (
+              <>
+              <div className="flex justify-center py-2 border-b border-base-300">{collapseButton}</div>
+              <button
+                onClick={toggleCollapsed}
+                className="flex-1 flex items-start justify-center pt-3 text-base-content/50 hover:text-base-content"
+                aria-label="Expand playlist"
+              >
+                <span className="[writing-mode:vertical-rl] text-xs tracking-wide">
+                  {detail.episodes.length} episodes
+                </span>
+              </button>
+              </>
+            ) : (
+              <>
+                <div className="flex-1 min-h-0">{list}</div>
+                {downloadBar}
+              </>
+            )}
+          </aside>
+
         </div>
       )}
 

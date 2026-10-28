@@ -1,3 +1,4 @@
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { EpisodeDetail } from '../../api'
 import type { ShowSeason } from '../../useShowSeasons'
 import LangSwitcher from '../season/LangSwitcher'
@@ -33,6 +34,8 @@ interface Props {
   onLang: (lang: string) => void
   /** Flip an episode's watched flag. Owned by the parent, which holds the playlist. */
   onToggleWatched: (ep: EpisodeDetail) => void
+  /** Ends the header row, after the language switch (the desktop collapse). */
+  headerAction?: ReactNode
 }
 
 /** The left-hand playlist: every episode in the season, always visible. */
@@ -40,8 +43,18 @@ export default function EpisodeList({
   episodes, currentNumber, checked, watchedNumbers, progress, langs, activeLang,
   epLangs, epTitles, downloadedLangs, isFilm, season, seasons,
   onSelect, onToggle, onToggleAll, onLang, onToggleWatched, onSelectEpisodeLang,
-  onSelectSeason,
+  onSelectSeason, headerAction,
 }: Props) {
+  // The list reads as a queue: it opens on the episode playing, with what comes
+  // next below it. Only the list scrolls, never the page around it.
+  const scroller = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const box = scroller.current
+    const row = box?.querySelector('[aria-current="true"]')
+    if (!box || !row) return
+    box.scrollTop += row.getBoundingClientRect().top - box.getBoundingClientRect().top - 8
+  }, [currentNumber, episodes, season])
+
   /** Already on disk in the language being shown — nothing left to select. */
   const isDownloaded = (num: number) => (downloadedLangs[num] ?? []).includes(activeLang)
 
@@ -124,7 +137,7 @@ export default function EpisodeList({
                 playable
                   ? 'Play this episode'
                   : missingHere
-                    ? `Only in ${(epLangs[ep.number] ?? []).join(', ').toUpperCase()} — use the chip below`
+                    ? `Only in ${(epLangs[ep.number] ?? []).join(', ').toUpperCase()} — use its chip`
                     : 'No source for this episode'
               }
             >
@@ -145,66 +158,66 @@ export default function EpisodeList({
                 </div>
               )}
             </button>
-            {/* Which versions this episode exists in. A new episode is
-                often vostfr before it is vf, so the missing ones stay
-                listed — struck through — rather than silently absent. */}
-            {langs.length > 1 && available.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {langs.map(l => {
-                  const has = available.includes(l)
-                  const on = has && l === activeLang && current
-                  // Downloaded state rides on each version's own badge: a
-                  // download is per language, so this is the only place it can
-                  // be told accurately. Same discreet yellow tick as the row.
-                  const stored = (downloadedLangs[ep.number] ?? []).includes(l)
-                  const tick = stored && (
-                    <svg className="w-2.5 h-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={4}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )
-                  if (!has) {
-                    return (
-                      <span
-                        key={l}
-                        className={`badge badge-xs font-mono uppercase gap-0.5 ${
-                          stored
-                            ? 'badge-ghost text-warning/70'
-                            : 'badge-ghost opacity-40 line-through'
-                        }`}
-                        title={stored
-                          ? `Downloaded in ${l.toUpperCase()} — no longer listed`
-                          : `No ${l.toUpperCase()} version`}
-                      >
-                        {l}
-                        {tick}
-                      </span>
-                    )
-                  }
+          </div>
+          {/* Which versions this episode exists in. A new episode is
+              often vostfr before it is vf, so the missing ones stay
+              listed — struck through — rather than silently absent. */}
+          {langs.length > 1 && available.length > 0 && (
+            <div className="flex gap-1 shrink-0">
+              {langs.map(l => {
+                const has = available.includes(l)
+                const on = has && l === activeLang && current
+                // Downloaded state rides on each version's own badge: a
+                // download is per language, so this is the only place it can
+                // be told accurately. Same discreet yellow tick as the row.
+                const stored = (downloadedLangs[ep.number] ?? []).includes(l)
+                const tick = stored && (
+                  <svg className="w-2.5 h-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={4}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )
+                if (!has) {
                   return (
-                    <button
+                    <span
                       key={l}
-                      type="button"
-                      onClick={() => onSelectEpisodeLang(ep, l)}
-                      aria-pressed={on}
-                      title={stored
-                        ? `Downloaded in ${l.toUpperCase()} — play it`
-                        : `Play in ${l.toUpperCase()}`}
-                      className={`badge badge-xs font-mono uppercase cursor-pointer gap-0.5 ${
-                        on
-                          ? 'badge-primary'
-                          : stored
-                            ? 'badge-outline text-warning/70 hover:badge-primary'
-                            : 'badge-outline hover:badge-primary'
+                      className={`badge badge-xs font-mono uppercase gap-0.5 ${
+                        stored
+                          ? 'badge-ghost text-warning/70'
+                          : 'badge-ghost opacity-40 line-through'
                       }`}
+                      title={stored
+                        ? `Downloaded in ${l.toUpperCase()} — no longer listed`
+                        : `No ${l.toUpperCase()} version`}
                     >
                       {l}
                       {tick}
-                    </button>
+                    </span>
                   )
-                })}
-              </div>
-            )}
-          </div>
+                }
+                return (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => onSelectEpisodeLang(ep, l)}
+                    aria-pressed={on}
+                    title={stored
+                      ? `Downloaded in ${l.toUpperCase()} — play it`
+                      : `Play in ${l.toUpperCase()}`}
+                    className={`badge badge-xs font-mono uppercase cursor-pointer gap-0.5 ${
+                      on
+                        ? 'badge-primary'
+                        : stored
+                          ? 'badge-outline text-warning/70 hover:badge-primary'
+                          : 'badge-outline hover:badge-primary'
+                    }`}
+                  >
+                    {l}
+                    {tick}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           {/* Visible on touch, hover-revealed only where hover exists.
               Skipped for an episode this language lacks: there is no
               playable item here to mark. */}
@@ -264,7 +277,10 @@ export default function EpisodeList({
               {rows.length} {rows.length === 1 ? 'item' : 'episodes'}
             </span>
           </p>
-          <LangSwitcher langs={langs} active={activeLang} onSelect={onLang} />
+          <div className="flex items-center gap-1">
+            <LangSwitcher langs={langs} active={activeLang} onSelect={onLang} />
+            {headerAction}
+          </div>
         </div>
         <label className="flex items-center gap-2 text-xs text-base-content/60 cursor-pointer">
           <input
@@ -280,7 +296,7 @@ export default function EpisodeList({
       {/* Episodes, under their season when the show has more than one. Only
           the open season is expanded: the others are links, since loading them
           all would fetch a page per season for a list nobody asked to see. */}
-      <div className="overflow-y-auto flex-1 min-h-0 p-2">
+      <div ref={scroller} className="overflow-y-auto flex-1 min-h-0 p-2">
         {seasons.length === 0 ? (
           <ul className="space-y-1">{episodeItems}</ul>
         ) : (

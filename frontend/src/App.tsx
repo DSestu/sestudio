@@ -264,7 +264,6 @@ export default function App() {
             }}
             query={route.view === 'search' ? route.params.get('q') ?? '' : ''}
             kind={parseKind(route.params.get('only'))}
-            barless={route.view === 'watch'}
             onOpenCard={card => openTitle(card, 0, settings.lang)}
             onSearch={searchTitles}
           />
