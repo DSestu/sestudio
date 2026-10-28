@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0](https://github.com/DSestu/sestudio/compare/v1.1.1...v1.2.0) (2026-10-28)
+
+
+### New features
+
+* full-width pages, a clickable top match, a labelled Options button and clearer poster rows ([#138](https://github.com/DSestu/sestudio/issues/138)) ([89e85e6](https://github.com/DSestu/sestudio/commit/89e85e6c14c48feefb0aa56794198da2814d7e40))
+* put the player first in the Watch view, dock it on phones, add the search bar and a denser episode queue ([#142](https://github.com/DSestu/sestudio/issues/142)) ([df6f2b8](https://github.com/DSestu/sestudio/commit/df6f2b8e47d1a81e70190cec6fc726560f81820f))
+* switch the search preview's kind with the arrow keys, and slide the blue between the chips ([#141](https://github.com/DSestu/sestudio/issues/141)) ([6f92393](https://github.com/DSestu/sestudio/commit/6f923935621966415415a85a6a17ed1f95189e86))
+
+
+### Bug fixes
+
+* draw AI frames on a Mac's GPU, through ncnn on Vulkan or CoreML as an ML program ([#140](https://github.com/DSestu/sestudio/issues/140)) ([cdfe954](https://github.com/DSestu/sestudio/commit/cdfe954c2ba0bd9d0aaaffb1e69db2d53d112bec))
+
 ## [1.1.1](https://github.com/DSestu/sestudio/compare/v1.1.0...v1.1.1) (2026-10-26)
 
 
