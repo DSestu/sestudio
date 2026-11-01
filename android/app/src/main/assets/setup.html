@@ -81,7 +81,7 @@
     document.getElementById('background').hidden = state.background;
     document.getElementById('background-done').hidden = !state.background;
     document.getElementById('progress-title').textContent =
-      state.screen === 'ready' ? 'Ready.' : failed ? 'Setup stopped.' : 'Setting up…';
+      state.screen === 'ready' ? 'Ready.' : failed ? 'Stopped.' : state.screen === 'starting' ? 'Starting…' : 'Setting up…';
     const error = document.getElementById('error');
     error.hidden = !failed;
     error.textContent = state.error || '';

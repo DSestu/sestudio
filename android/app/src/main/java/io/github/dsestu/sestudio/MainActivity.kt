@@ -1,5 +1,6 @@
 package io.github.dsestu.sestudio
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ClipData
@@ -19,11 +20,14 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.concurrent.thread
 
 /**
- * sestudio's web UI, full screen. The first launch shows the setup screens
- * (assets/setup.html) and sets up the Linux sestudio runs in.
+ * sestudio's web UI, full screen. Until the server answers, the setup screens
+ * (assets/setup.html): the whole setup on first launch, "Starting…" after.
  */
 class MainActivity : Activity() {
     private var web: WebView? = null
@@ -33,8 +37,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val runtime = Runtime(this)
-        if (runtime.isReady) showWeb(savedInstanceState) else setUp(runtime)
+        boot(Runtime(this))
     }
 
     override fun onResume() {
@@ -49,13 +52,18 @@ class MainActivity : Activity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
-    private fun setUp(runtime: Runtime) {
+    private fun boot(runtime: Runtime) {
         val page = WebView(this).apply {
             settings.javaScriptEnabled = true
             setBackgroundColor(Color.rgb(0x13, 0x17, 0x20))
         }
-        val steps = listOf(Step("Linux base"), Step("uv"), Step("Checking"))
-        var screen = "welcome"
+        val firstRun = !runtime.isReady
+        val steps = if (firstRun) {
+            listOf(Step("Linux base"), Step("uv"), Step("Python and sestudio"), Step("Starting"))
+        } else {
+            listOf(Step("Starting"))
+        }
+        var screen = if (firstRun) "welcome" else "starting"
         var error = ""
         var running = false
 
@@ -74,11 +82,15 @@ class MainActivity : Activity() {
         fun run() {
             if (running) return
             running = true
-            screen = "progress"
+            if (screen != "starting") screen = "progress"
             error = ""
             steps.forEach { it.state = "wait"; it.detail = ""; it.fraction = null }
             render()
-            thread(name = "setup") {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // The server's notification, with its Stop button.
+                runOnUiThread { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0) }
+            }
+            thread(name = "boot") {
                 try {
                     runtime.install { index, done, total ->
                         steps.take(index).forEach { it.state = "done"; it.fraction = null }
@@ -89,20 +101,28 @@ class MainActivity : Activity() {
                         }
                         render()
                     }
-                    steps.take(2).forEach { it.state = "done"; it.fraction = null }
-                    steps[2].state = "run"
-                    render()
-                    val check = runtime.command("uv", "--version").start()
-                    val version = check.inputStream.bufferedReader().readText().trim()
-                    check(check.waitFor() == 0) { version.ifEmpty { "uv did not start" } }
-                    steps[2].apply { state = "done"; detail = version }
+                    steps.dropLast(1).forEach { it.state = "done"; it.fraction = null }
+                    val log = ServerService.logFile(this@MainActivity)
+                    if (!ServerService.running) log.delete()
+                    ServerService.start(this@MainActivity)
+                    // The first start installs Python and sestudio, which reports in the log.
+                    val waiting = if (firstRun) steps[2] else steps.last()
+                    waiting.state = "run"
+                    val deadline = System.currentTimeMillis() + 15 * 60_000
+                    while (!answers()) {
+                        check(System.currentTimeMillis() < deadline) { "The server did not answer in 15 minutes." }
+                        Thread.sleep(1000)
+                        check(ServerService.running) { "The server stopped:\n" + tail(log) }
+                        waiting.detail = tail(log, 1).take(60)
+                        render()
+                    }
+                    steps.forEach { it.state = "done"; it.detail = ""; it.fraction = null }
                     screen = "ready"
                     render()
-                    Thread.sleep(1500)
                     runOnUiThread { showWeb(null) }
                 } catch (e: Exception) {
                     steps.firstOrNull { it.state == "run" }?.state = "bad"
-                    error = e.stackTraceToString().lines().take(6).joinToString("\n")
+                    error = e.message ?: e.stackTraceToString().lines().take(6).joinToString("\n")
                     screen = "failed"
                     render()
                 } finally {
@@ -128,11 +148,29 @@ class MainActivity : Activity() {
             }
         }, "Setup")
         page.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView, url: String) = render()
+            override fun onPageFinished(view: WebView, url: String) {
+                render()
+                if (!firstRun) run() // nothing to ask: start straight away
+            }
         }
         refreshSetup = ::render
         show(page)
         page.loadUrl("file:///android_asset/setup.html")
+    }
+
+    /** The last [lines] lines of [file], or nothing yet. */
+    private fun tail(file: File, lines: Int = 15) =
+        if (file.exists()) file.readLines().takeLast(lines).joinToString("\n") else ""
+
+    /** Whether the server answers HTTP yet. */
+    private fun answers(): Boolean = try {
+        (URL(SERVER_URL).openConnection() as HttpURLConnection).run {
+            connectTimeout = 1000
+            readTimeout = 2000
+            responseCode in 200..399
+        }
+    } catch (_: Exception) {
+        false
     }
 
     private fun showWeb(savedInstanceState: Bundle?) {

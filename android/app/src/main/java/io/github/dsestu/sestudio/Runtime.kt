@@ -53,13 +53,17 @@ class Runtime(private val context: Context) {
         readyMark.writeText("1")
     }
 
-    /** A process running [args] inside Debian, stdout and stderr merged. */
-    fun command(vararg args: String): ProcessBuilder {
+    /**
+     * A process running [args] inside Debian, stdout and stderr merged. [binds]
+     * are extra (phone path, Debian path) folders to show inside.
+     */
+    fun command(vararg args: String, binds: List<Pair<String, String>> = emptyList()): ProcessBuilder {
         val tmp = File(context.cacheDir, "proot").apply { mkdirs() }
         val argv = listOf(
             File(libDir, "libproot.so").path, "--kill-on-exit", "--link2symlink",
             "-r", rootfs.path, "-0", "-w", "/root",
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
+        ) + binds.flatMap { (outside, inside) -> listOf("-b", "$outside:$inside") } + listOf(
             // Android's own environment means nothing inside Debian.
             "/usr/bin/env", "-i", "HOME=/root", "PATH=/usr/local/bin:/usr/bin:/bin",
             "TERM=dumb", "LANG=C.UTF-8",
