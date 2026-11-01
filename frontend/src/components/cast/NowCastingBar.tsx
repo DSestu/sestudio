@@ -183,7 +183,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
       } : {})}
       onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
       // On phones it rides up with the Discover menu (--discover-lift).
-      className="fixed inset-x-0 md:left-56 z-40 bottom-[calc(4rem+env(safe-area-inset-bottom))] md:bottom-0 max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none"
+      className="fixed inset-x-0 md:left-56 z-40 bottom-(--dock-clear) md:bottom-0 max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none"
     >
       {/* Accordion — grid-rows 0fr→1fr gives a smooth slide-up reveal. */}
       <div className="mx-auto w-full max-w-6xl px-3 md:px-6">

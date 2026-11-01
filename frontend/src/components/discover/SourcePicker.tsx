@@ -12,10 +12,10 @@ import { RecentSearchChips, SearchIcon, TitleResults } from '../search/SearchPar
 // so it is set apart from the video sources wherever they are listed.
 const TMDB = 'tmdb'
 
-// From the tab bar's top edge to the top of the screen. min and max both, so
+// From just above the dock to near the top of the screen. min and max both, so
 // the height animates (min-height grows) and stays put whatever the results.
 const FULL_HEIGHT =
-  'min-h-[calc(100dvh_-_3.5rem_-_1px_-_env(safe-area-inset-bottom)_-_env(safe-area-inset-top))] max-h-[calc(100dvh_-_3.5rem_-_1px_-_env(safe-area-inset-bottom)_-_env(safe-area-inset-top))]'
+  'min-h-[calc(100dvh_-_var(--dock-clear)_-_0.75rem_-_env(safe-area-inset-top))] max-h-[calc(100dvh_-_var(--dock-clear)_-_0.75rem_-_env(safe-area-inset-top))]'
 
 /**
  * The Discover heading: names the open catalogue and what it holds. On a phone
@@ -104,7 +104,7 @@ interface MenuProps {
 }
 
 /**
- * The phone's Discover menu: unfolds upward out of the tab bar, under a title
+ * The phone's Discover menu: grows out of the dock's Search button, under a title
  * search, with TMDB pinned above the video sources. Stays mounted so folding
  * animates as unfolding does.
  */
@@ -182,12 +182,12 @@ export function DiscoverMenu({
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       />
-      {/* Ends at the tab bar's top edge and clips there, so the panel slides
-          up out of the bar and back down into it. */}
+      {/* Floats just above the dock and grows out of its Search button (a
+          clip-path from the bottom centre), shrinking back into it. */}
       <div
         id="discover-menu"
         inert={!open}
-        className={`fixed inset-x-0 z-[35] bottom-[calc(3.5rem+1px+env(safe-area-inset-bottom))] overflow-hidden ${
+        className={`fixed inset-x-3 z-[35] bottom-(--dock-clear) ${
           open ? '' : 'pointer-events-none'
         }`}
       >
@@ -195,8 +195,10 @@ export function DiscoverMenu({
           ref={panel}
           role="dialog"
           aria-label="Discover"
-          className={`flex flex-col rounded-t-box border-t border-base-300 bg-base-200 transition-[translate,min-height,max-height] duration-300 ease-out motion-reduce:transition-none ${
-            open ? 'translate-y-0' : 'translate-y-full'
+          className={`relative flex flex-col overflow-hidden glass rounded-[28px] transition-[clip-path,opacity,min-height,max-height] ease-smooth motion-reduce:[clip-path:none] motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
+            open
+              ? 'duration-[480ms] [clip-path:inset(0_round_28px)]'
+              : 'duration-300 motion-reduce:opacity-0 [clip-path:inset(100%_50%_0_50%_round_26px)]'
           } ${expanded ? FULL_HEIGHT : 'min-h-0 max-h-[70dvh]'}`}
         >
           {/* Results preview as you type; Enter (the keyboard's Search key)
