@@ -66,7 +66,7 @@ export default function NotificationsView({ onOpen, tmdbConfigured, navigate }: 
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Phones: the page name, what is new and the feed's actions live in the top card. */}
+      {/* The page name, what is new and the feed's actions live in the top card. */}
       <PageHeader
         title="Activity"
         status={unread > 0 ? <><em className="not-italic text-primary font-semibold">{unread}</em> new</> : undefined}
@@ -91,32 +91,6 @@ export default function NotificationsView({ onOpen, tmdbConfigured, navigate }: 
           </>
         )}
       />
-      <div className="max-md:hidden flex items-center gap-2 flex-wrap">
-        <h2 className="text-lg font-semibold flex-1">
-          Activity
-          {unread > 0 && <span className="badge badge-primary badge-sm ml-2">{unread} new</span>}
-        </h2>
-        {!empty && (
-          <>
-            <label className="label cursor-pointer gap-2 py-0">
-              <span className="label-text text-sm">Unread only</span>
-              <input
-                type="checkbox"
-                className="toggle toggle-primary toggle-sm"
-                checked={unreadOnly}
-                onChange={e => setUnreadOnly(e.target.checked)}
-              />
-            </label>
-            <button
-              className="btn btn-sm btn-ghost"
-              disabled={unread === 0}
-              onClick={() => void markRead({ all: true })}
-            >
-              Mark all read
-            </button>
-          </>
-        )}
-      </div>
 
       {/* What is being watched sits above the feed it produces — and stays put
           when the feed is empty, since an empty feed is exactly when you want to

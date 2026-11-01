@@ -85,7 +85,7 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
   const onResults = query !== ''
 
   const field = (
-    <div className="relative flex-1 max-w-xl">
+    <div className="relative flex-1 min-w-[30rem] max-w-[53.75rem]">
       <div className={`${SEARCH_FIELD} ${open ? 'rounded-b-none border-b-base-300' : ''}`}>
         <SearchIcon />
         <input

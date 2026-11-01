@@ -46,7 +46,7 @@ export default function CreatorsView({ source, onOpen, navigate }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Phones: the page name, how many channels are followed and the site tabs live in the top card. */}
+      {/* The page name, how many channels are followed and the site tabs live in the top card. */}
       <PageHeader
         title="YouTube &amp; Twitch"
         status={follows.length ? <><em className="not-italic text-primary font-semibold">{follows.length}</em> followed</> : undefined}
@@ -54,23 +54,6 @@ export default function CreatorsView({ source, onOpen, navigate }: Props) {
         tab={source || 'all'}
         onTab={id => navigate('creators', { src: id === 'all' ? undefined : id })}
       />
-      <header className="max-md:hidden flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold tracking-tight flex-1">YouTube &amp; Twitch</h2>
-        <div role="radiogroup" aria-label="Site" className="flex gap-1">
-          {FILTERS.map(f => (
-            <button
-              key={f.value}
-              type="button"
-              role="radio"
-              aria-checked={f.value === source}
-              onClick={() => navigate('creators', { src: f.value || undefined })}
-              className={`btn btn-sm rounded-full ${f.value === source ? 'btn-primary' : 'btn-ghost'}`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </header>
 
       {/* The way in comes first: with no follows it is the whole page. */}
       <FollowSearch source={source} autoFocus={!follows.length} />

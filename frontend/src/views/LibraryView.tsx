@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AppSettings } from '../api'
 import type { CollectionEntry } from '../collections'
 import {
@@ -90,7 +90,6 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
   const collections = useCollections()
   const watch = useWatchState()
   const layouts = useLibraryLayout()
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   // AppShell yields the mobile tab bar's slot while this is up.
   useEffect(() => {
@@ -265,19 +264,9 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
     },
   ]
 
-  /** Arrow keys move between tabs, as the tablist role promises. */
-  function onTabKey(e: React.KeyboardEvent, index: number) {
-    const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
-    if (!delta) return
-    e.preventDefault()
-    const next = (index + delta + TABS.length) % TABS.length
-    changeTab(TABS[next].id)
-    tabRefs.current[next]?.focus()
-  }
-
   return (
     <div className="flex flex-col gap-5">
-      {/* Phones: the page name, its tabs and its actions live in the top card. */}
+      {/* The page name, its tabs and its actions live in the top card. */}
       <PageHeader
         title="Library"
         status={<><em className="not-italic text-primary font-semibold">{counts[tab]}</em> {STATUS[tab]}</>}
@@ -306,54 +295,6 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
           </>
         }
       />
-      <div className="max-md:hidden flex items-center justify-between gap-2">
-        <h2 className="text-xl font-semibold tracking-tight">Library</h2>
-        <div className="flex items-center gap-2">
-          {counts[tab] > 0 && (
-            <SortSelect
-              options={tab === 'watching' ? SORTS_FOR.watching : SORTS_FOR.saved}
-              value={sort}
-              onChange={key => setSorts(prev => ({ ...prev, [tab]: key }))}
-            />
-          )}
-          <LayoutToggle layout={layout} onChange={next => setLibraryLayout(tab, next)} />
-          {/* Only Watching: a saved title is removed by un-starring it, which
-              the ☆/♥ on every row and card already do one tap at a time.
-              Dropping a series from Watching has no such per-item control on
-              cards, so bulk selection stays here. */}
-          {tab === 'watching' && (
-            <button
-              onClick={() => (selecting ? exitSelection() : setSelecting(true))}
-              aria-pressed={selecting}
-              disabled={counts[tab] === 0}
-              className={`btn btn-sm ${selecting ? 'btn-active' : 'btn-ghost'}`}
-            >
-              {selecting ? 'Done' : 'Select'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div role="tablist" aria-label="Library" className="max-md:hidden tabs tabs-box w-full sm:w-fit">
-        {TABS.map((t, i) => (
-          <button
-            key={t.id}
-            ref={el => { tabRefs.current[i] = el }}
-            role="tab"
-            id={`library-tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`library-panel-${t.id}`}
-            tabIndex={tab === t.id ? 0 : -1}
-            onClick={() => changeTab(t.id)}
-            onKeyDown={e => onTabKey(e, i)}
-            className={`tab flex-1 sm:flex-none gap-2 ${tab === t.id ? 'tab-active' : ''}`}
-          >
-            {t.label}
-            <span className="badge badge-ghost badge-sm">{counts[t.id]}</span>
-          </button>
-        ))}
-      </div>
-
       {/* Above the genre chips, since it is the coarser filter of the two and
           the one you reach for first when you know the name. */}
       {counts[tab] > 0 && (
@@ -389,7 +330,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
       <div
         role="tabpanel"
         id={`library-panel-${tab}`}
-        aria-labelledby={`library-tab-${tab}`}
+        aria-label={TABS.find(t => t.id === tab)?.label}
         tabIndex={0}
       >
         {/* Select-all lives in the content, not the action bar: as a text link

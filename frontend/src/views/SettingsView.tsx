@@ -71,9 +71,8 @@ export default function SettingsView({ settings, onUpdate }: Props) {
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">
-      {/* Phones: reached from the gear, so the card offers the way back. */}
+      {/* Reached from the gear, so the card offers the way back. */}
       <PageHeader title="Settings" onBack={goBack} />
-      <h2 className="max-md:hidden text-xl font-semibold tracking-tight">Settings</h2>
 
       {settings.js_runtime === '' && (
         <p role="alert" className="text-sm text-warning">
