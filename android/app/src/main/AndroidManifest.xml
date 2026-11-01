@@ -14,12 +14,13 @@
     <!-- Cleartext: the server is http://localhost on the phone itself. -->
     <application
         android:icon="@mipmap/ic_launcher"
-        android:label="sestudio"
+        android:label="@string/app_name"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:supportsPictureInPicture="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

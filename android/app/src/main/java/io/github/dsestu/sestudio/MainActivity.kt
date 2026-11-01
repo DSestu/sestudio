@@ -5,14 +5,19 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Context
+import android.app.DownloadManager
+import android.content.res.Configuration
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Insets
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
@@ -20,6 +25,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
+import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -41,6 +47,7 @@ import kotlin.concurrent.thread
  */
 class MainActivity : Activity() {
     private var web: WebView? = null
+    private var playback: Playback? = null
 
     /** Re-renders the setup screen; set while it is showing. */
     private var refreshSetup: (() -> Unit)? = null
@@ -73,7 +80,13 @@ class MainActivity : Activity() {
         } else {
             listOf(Step("Starting"))
         }
-        var screen = if (firstRun) "welcome" else "starting"
+        // Background use is required: without it Android stops the server minutes after the screen locks.
+        fun allowed() = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+        var screen = when {
+            firstRun -> "welcome"
+            !allowed() -> "background"
+            else -> "starting"
+        }
         var error = ""
         var running = false
 
@@ -81,7 +94,7 @@ class MainActivity : Activity() {
             val state = JSONObject()
                 .put("screen", screen)
                 .put("error", error)
-                .put("background", getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName))
+                .put("background", allowed())
                 .put("steps", JSONArray(steps.map {
                     JSONObject().put("label", it.label).put("state", it.state).put("detail", it.detail)
                         .put("fraction", it.fraction ?: JSONObject.NULL)
@@ -90,7 +103,7 @@ class MainActivity : Activity() {
         }
 
         fun run() {
-            if (running) return
+            if (running || !allowed()) return
             running = true
             if (screen != "starting") screen = "progress"
             error = ""
@@ -160,10 +173,18 @@ class MainActivity : Activity() {
         page.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 render()
-                if (!firstRun) run() // nothing to ask: start straight away
+                if (screen == "starting") run() // nothing to ask: start straight away
             }
         }
-        refreshSetup = ::render
+        refreshSetup = {
+            // Back from Android's prompt: a later launch starts once background use is allowed.
+            if (screen == "background" && allowed()) {
+                screen = "starting"
+                run()
+            } else {
+                render()
+            }
+        }
         show(page)
         page.loadUrl("file:///android_asset/setup.html")
     }
@@ -189,7 +210,7 @@ class MainActivity : Activity() {
         val start = serverUrl()
         val host = Uri.parse(start).host
         val trusted = serverCertificate()
-        val view = WebView(this).apply {
+        val view = PlayerWebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true // the library and settings live in localStorage
             settings.mediaPlaybackRequiresUserGesture = false
@@ -205,6 +226,10 @@ class MainActivity : Activity() {
                     }
                 }
 
+                override fun onPageFinished(view: WebView, url: String) {
+                    playback?.inject()
+                }
+
                 // Other sites (a TMDB guide, a trailer) open in the browser.
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val target = request.url
@@ -214,7 +239,20 @@ class MainActivity : Activity() {
                 }
             }
             webChromeClient = FullscreenVideo()
+            // "This device" downloads: Android's download manager, over the server's plain HTTP
+            // port (it would not trust the self-signed certificate), into Movies/sestudio.
+            setDownloadListener { url, _, disposition, mime, _ ->
+                val local = Uri.parse(url).buildUpon().scheme("http").encodedAuthority("127.0.0.1:${BuildConfig.HTTP_PORT}").build()
+                val name = URLUtil.guessFileName(url, disposition, mime)
+                getSystemService(DownloadManager::class.java).enqueue(
+                    DownloadManager.Request(local)
+                        .setTitle(name)
+                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setDestinationInExternalPublicDir(Environment.DIRECTORY_MOVIES, "sestudio/$name"),
+                )
+            }
         }
+        playback = Playback(this, view).also { player -> view.keepVisible = { player.playing } }
         web = view
         show(view)
         if (savedInstanceState == null) view.loadUrl(start) else view.restoreState(savedInstanceState)
@@ -232,7 +270,7 @@ class MainActivity : Activity() {
             ?.map { it.address }
             ?.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }
             ?.hostAddress ?: return SERVER_URL
-        return "https://$ip:8443"
+        return "https://$ip:${BuildConfig.HTTPS_PORT}"
     }
 
     /** The certificate sestudio made for its HTTPS port; null before it has made one. */
@@ -264,13 +302,47 @@ class MainActivity : Activity() {
         fun leave(): Boolean = (shown != null).also { if (it) onHideCustomView() }
     }
 
-    /** Full screen: the window only has its bars once it has content. */
+    /** Full screen, like an app: the window only has its bars once it has content. */
     private fun show(view: View) {
         setContentView(view)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) window.insetsController?.apply {
-            hide(WindowInsets.Type.systemBars())
-            systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.apply {
+                hide(WindowInsets.Type.systemBars())
+                systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+            // The page reaches the top edge, the camera hole over the header's gap between
+            // logo and menu: reporting the cutout as a safe area cost 40 px of empty header.
+            view.setOnApplyWindowInsetsListener { target, insets ->
+                target.onApplyWindowInsets(
+                    WindowInsets.Builder(insets).setInsets(WindowInsets.Type.displayCutout(), Insets.NONE).build(),
+                )
+            }
         }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Android 12+ enters picture-in-picture by itself (setAutoEnterEnabled).
+        val player = playback
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && player?.playing == true) enterPictureInPictureMode(player.params())
+    }
+
+    override fun onPictureInPictureModeChanged(active: Boolean, config: Configuration) {
+        super.onPictureInPictureModeChanged(active, config)
+        playback?.pictureInPicture(active)
+    }
+
+    override fun onDestroy() {
+        playback?.release()
+        super.onDestroy()
+    }
+
+    /** A web view that stays visible to its page while a video plays, so it plays on in the background. */
+    private class PlayerWebView(context: Context) : WebView(context) {
+        var keepVisible: () -> Boolean = { false }
+
+        override fun onWindowVisibilityChanged(visibility: Int) =
+            super.onWindowVisibilityChanged(if (keepVisible()) View.VISIBLE else visibility)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -289,6 +361,6 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        const val SERVER_URL = "http://localhost:8080"
+        val SERVER_URL = "http://localhost:${BuildConfig.HTTP_PORT}"
     }
 }

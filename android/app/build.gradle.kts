@@ -37,8 +37,24 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release")
+            resValue("string", "app_name", "sestudio")
+            buildConfigField("int", "HTTP_PORT", "8080")
+            buildConfigField("int", "HTTPS_PORT", "8443")
+            buildConfigField("boolean", "FROM_MAIN", "false")
+        }
+        // sestudio-dev: installs beside the release app (its own id, data and key),
+        // and serves on its own ports so both can run at once.
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "sestudio-dev")
+            buildConfigField("int", "HTTP_PORT", "8090")
+            buildConfigField("int", "HTTPS_PORT", "8453")
+            // Runs the repository's main branch, so merged fixes show up before a release.
+            buildConfigField("boolean", "FROM_MAIN", "true")
         }
     }
+    buildFeatures { buildConfig = true }
 
     // proot must exist as a real file in nativeLibraryDir to be executed.
     packaging { jniLibs { useLegacyPackaging = true } }

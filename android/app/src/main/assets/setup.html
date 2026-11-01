@@ -46,9 +46,10 @@
   <div class="logo">se<b>studio</b></div>
 
   <section id="welcome">
-    <p>First, sestudio sets itself up on this phone.</p>
-    <p>It downloads about <strong>200 MB</strong> — use Wi-Fi. This happens once and takes 2–4 minutes.</p>
-    <p>To keep playing while the screen is off, allow it to run in the background.</p>
+    <p class="first-only">First, sestudio sets itself up on this phone.</p>
+    <p class="first-only">It downloads about <strong>200 MB</strong> — use Wi-Fi. This happens once and takes 2–4 minutes.</p>
+    <p><strong>sestudio needs to run in the background:</strong> its server keeps going while the
+      screen is off or another app is open, or playback and downloads stop. Android asks once.</p>
   </section>
 
   <section id="progress" hidden>
@@ -58,9 +59,9 @@
   </section>
 
   <div class="actions" id="welcome-actions">
-    <button class="primary" onclick="Setup.start()">Set up</button>
-    <button id="background" onclick="Setup.allowBackground()">Allow background use</button>
+    <button id="background" class="primary" onclick="Setup.allowBackground()">Allow background use</button>
     <div class="done-note" id="background-done" hidden>✓ Background use allowed</div>
+    <button id="setup" class="first-only" onclick="Setup.start()" disabled>Set up</button>
   </div>
   <div class="actions" id="failed-actions" hidden>
     <button class="primary" onclick="Setup.retry()">Retry</button>
@@ -71,7 +72,12 @@
 <script>
   // Called by the app with the whole state each time it changes.
   function render(state) {
-    const welcome = state.screen === 'welcome';
+    // 'background': a later launch where background use was revoked; nothing runs until allowed.
+    const welcome = state.screen === 'welcome' || state.screen === 'background';
+    document.querySelectorAll('.first-only').forEach(el => { el.hidden = state.screen === 'background'; });
+    const setup = document.getElementById('setup');
+    setup.disabled = !state.background;
+    setup.className = state.background ? 'first-only primary' : 'first-only';
     const failed = state.screen === 'failed';
     document.getElementById('welcome').hidden = !welcome;
     document.getElementById('welcome-actions').hidden = !welcome;
