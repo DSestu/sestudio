@@ -19,11 +19,13 @@ Status: draft brief, before mockups. Mode: **Operate**. Visual authority: the ex
 
 | Size | Phone (2 columns) | Desktop (4 columns) |
 |------|-------------------|---------------------|
-| **S** | 1 × 1: a counter or a single item | 1 × 1 |
-| **M** | 2 × 1: one row of items | 2 × 1 |
-| **L** | 2 × 2: one rich item plus a short list | 2 × 2 |
+| **S** | 1 column, as tall as an M: a counter or a single item | 1 column |
+| **M** | 2 columns, 3 grid rows (80px): one row of items | 2 columns |
+| **L** | 2 columns, twice an M: one rich item plus a short list | 2 columns |
 
 **One item fills its widget.** A widget's size is fixed, so its content adapts to the count: a single item is shown large and fills the frame; several items become rows (up to the widget's cap). Live now with one stream shows the stream thumbnail edge to edge, with the channel, title and Watch / Cast laid over a bottom gradient; with several it lists red-ringed rows. New episodes with one shows a single raised block (big poster, title, episode, version, Play, Download). Upcoming with one shows a faded, dashed poster beside a large dashed day tile and the line "Tell me when it's in VF".
+
+Heights add up: an S is as tall as an M and an L is exactly two Ms, so widgets side by side always end on the same line.
 
 S widgets pair side by side on the phone. Packing is dense: a gap left by an S is filled by the next S in order, even one with lower urgency. An S with no partner stretches to the full row width at the same height.
 
