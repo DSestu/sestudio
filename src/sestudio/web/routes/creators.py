@@ -52,11 +52,11 @@ async def search_videos(q: str, request: Request) -> list[dict[str, Any]]:
 
 
 @router.get("/channel")
-async def get_channel(url: str, request: Request) -> dict[str, Any]:
-    """A YouTube or Twitch channel and its latest videos."""
+async def get_channel(url: str, request: Request, tab: str = "") -> dict[str, Any]:
+    """A YouTube or Twitch channel and its latest videos on one of its tabs."""
     site = _creator_site(request, url)
     try:
-        return await asyncio.to_thread(site.channel, url)
+        return await asyncio.to_thread(site.channel, url, tab)
     except SiteError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

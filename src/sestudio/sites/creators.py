@@ -113,11 +113,21 @@ class _YtDlpSite(ContentSite):
         info = self.info(url)
         return video_card(info, self.id, url)
 
-    def channel(self, url: str) -> dict[str, Any]:
-        """A channel and its latest videos (and its live stream, if on now)."""
-        return self._channels.get(url, lambda: self._channel(url))
+    # The channel page's tabs, first one the default: id -> label.
+    tabs: dict[str, str] = {}
 
-    def _channel(self, url: str) -> dict[str, Any]:
+    def channel(self, url: str, tab: str = "") -> dict[str, Any]:
+        """A channel and its latest videos on one tab (and its live stream, if
+        on now)."""
+        tab = tab if tab in self.tabs else next(iter(self.tabs))
+        channel = self._channels.get(f"{tab}:{url}", lambda: self._channel(url, tab))
+        return {
+            **channel,
+            "tab": tab,
+            "tabs": [{"id": k, "label": v} for k, v in self.tabs.items()],
+        }
+
+    def _channel(self, url: str, tab: str) -> dict[str, Any]:
         raise NotImplementedError
 
     def latest(self, url: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
@@ -226,19 +236,21 @@ class YouTubeSite(_YtDlpSite):
         ]
         return videos, None
 
-    def _channel(self, url: str) -> dict[str, Any]:
+    tabs = {"videos": "Videos", "streams": "Past streams"}
+
+    def _channel(self, url: str, tab: str = "videos") -> dict[str, Any]:
         base = re.sub(
             r"/(videos|streams|shorts|featured|live|playlists)$",
             "",
             url.split("?")[0].rstrip("/"),
         )
-        # The Videos tab: Shorts and past streams live on tabs of their own.
-        listing = ytdlp_json(
-            "--flat-playlist", "--playlist-end", "30", base + "/videos"
-        )
+        # Shorts have a tab of their own, deliberately not offered.
+        listing = ytdlp_json("--flat-playlist", "--playlist-end", "30", f"{base}/{tab}")
         name = listing.get("channel") or listing.get("uploader") or ""
         channel_url = listing.get("channel_url") or base
-        dates = youtube_feed_dates(listing.get("channel_id") or "")
+        dates = youtube_feed_dates(
+            listing.get("channel_id") or "", "UULV" if tab == "streams" else "UULF"
+        )
         videos = []
         for entry in listing.get("entries") or []:
             card = video_card(entry, self.id)
@@ -274,11 +286,14 @@ class TwitchSite(_YtDlpSite):
             card["channel_url"] = f"https://www.twitch.tv/{login}"
         return card
 
-    def _channel(self, url: str) -> dict[str, Any]:
+    tabs = {"videos": "Past broadcasts", "highlights": "Highlights"}
+
+    def _channel(self, url: str, tab: str = "videos") -> dict[str, Any]:
         login = urlsplit(url).path.strip("/").split("/")[0].lower()
         if not re.fullmatch(r"\w{1,25}", login) or login == "videos":
             raise SiteError(f"Not a Twitch channel: {url}")
-        user = twitch_gql(_TWITCH_CHANNEL, {"login": login}).get("user")
+        kind = "HIGHLIGHT" if tab == "highlights" else "ARCHIVE"
+        user = twitch_gql(_TWITCH_CHANNEL, {"login": login, "type": kind}).get("user")
         if not user:
             raise SiteError(f"No Twitch channel called {login}")
         return twitch_channel(user)
@@ -309,17 +324,17 @@ _ATOM = {
 }
 
 
-def youtube_feed(channel_id: str) -> list[dict[str, Any]]:
-    """A channel's last 15 long-form uploads, newest first, from its RSS feed.
+def youtube_feed(channel_id: str, playlist: str = "UULF") -> list[dict[str, Any]]:
+    """A channel's last 15 uploads of one kind, newest first, from its RSS feed.
 
-    The ``UULF`` playlist is the channel's uploads without Shorts and streams,
-    matching its Videos tab. One free request, no key; raises SiteError.
+    ``UULF`` is its uploads without Shorts and streams, matching its Videos
+    tab; ``UULV`` its past streams. One free request, no key; raises SiteError.
     """
     try:
         with new_client(headers={"User-Agent": BROWSER_UA}) as client:
             resp = client.get(
                 "https://www.youtube.com/feeds/videos.xml",
-                params={"playlist_id": "UULF" + channel_id.removeprefix("UC")},
+                params={"playlist_id": playlist + channel_id.removeprefix("UC")},
             )
             resp.raise_for_status()
         root = ET.fromstring(resp.content)
@@ -341,7 +356,7 @@ def youtube_feed(channel_id: str) -> list[dict[str, Any]]:
     return entries
 
 
-def youtube_feed_dates(channel_id: str) -> dict[str, int]:
+def youtube_feed_dates(channel_id: str, playlist: str = "UULF") -> dict[str, int]:
     """Upload time of a channel's latest videos, by video id.
 
     yt-dlp's flat listing has no dates. Empty on any failure: the dates are a
@@ -349,7 +364,7 @@ def youtube_feed_dates(channel_id: str) -> dict[str, int]:
     """
     try:
         return (
-            {e["id"]: e["timestamp"] for e in youtube_feed(channel_id)}
+            {e["id"]: e["timestamp"] for e in youtube_feed(channel_id, playlist)}
             if channel_id
             else {}
         )
@@ -360,11 +375,11 @@ def youtube_feed_dates(channel_id: str) -> dict[str, int]:
 # Twitch's own web client id, the one yt-dlp sends too: public, no account.
 _TWITCH_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 _TWITCH_CHANNEL = """
-query($login: String!) {
+query($login: String!, $type: BroadcastType = ARCHIVE) {
   user(login: $login) {
     login displayName profileImageURL(width: 150)
     stream { title viewersCount createdAt previewImageURL(width: 640, height: 360) }
-    videos(first: 30, type: ARCHIVE, sort: TIME) {
+    videos(first: 30, type: $type, sort: TIME) {
       edges { node {
         id title lengthSeconds publishedAt viewCount
         previewThumbnailURL(width: 640, height: 360)
