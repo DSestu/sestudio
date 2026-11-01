@@ -64,7 +64,18 @@ class ServerService : Service() {
         val runtime = Runtime(this)
         writeFirstConfig(runtime)
         val downloads = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!.apply { mkdirs() }
-        process = runtime.command("uvx", "sestudio@latest", binds = listOf(downloads.path to DOWNLOADS))
+        // sestudio-dev builds main afresh on every start (same URL, new code: hence the refresh);
+        // a build from source has no default TMDB key, so posters need one in Settings.
+        val source = if (BuildConfig.FROM_MAIN) {
+            arrayOf("--refresh-package", "sestudio", "--from", MAIN_ARCHIVE, "sestudio")
+        } else {
+            arrayOf("sestudio@latest")
+        }
+        process = runtime.command(
+            "uvx", *source,
+            "--http_port", "${BuildConfig.HTTP_PORT}", "--https_port", "${BuildConfig.HTTPS_PORT}",
+            binds = listOf(downloads.path to DOWNLOADS),
+        )
             .redirectOutput(logFile(this))
             .start()
             .also { started ->
@@ -120,6 +131,8 @@ class ServerService : Service() {
         /** Whether the server process is up (it may still be starting). */
         @Volatile var running = false
             private set
+
+        private const val MAIN_ARCHIVE = "https://github.com/DSestu/sestudio/archive/refs/heads/main.zip"
 
         /** Where downloads appear inside Debian: the app's Movies folder on the phone. */
         const val DOWNLOADS = "/downloads"
