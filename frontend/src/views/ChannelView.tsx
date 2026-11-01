@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import type { ChannelInfo, SeasonCard, VideoInfo } from '../api'
 import { downloadVideo, fetchChannel, videoSeasonCard } from '../api'
 import EmptyState from '../components/EmptyState'
+import FollowButton from '../components/FollowButton'
 import VideoGrid from '../components/VideoGrid'
 import { VideoThumb } from '../components/search/LinkCard'
 import { sourceIcon } from '../sourceLook'
 import { videoMeta } from '../videoLinks'
-import { addWatcher, removeWatcher, updateWatcher, useWatchers, watcherForChannel } from '../watchers'
 
 interface Props {
   url: string
@@ -82,7 +82,7 @@ export default function ChannelView({ url, onOpen }: Props) {
             {site} · {channel.videos.length} latest {channel.source === 'twitch' ? 'past broadcasts' : 'videos'}
           </p>
         </div>
-        <FollowControls channel={channel} />
+        <FollowButton channel={channel} autoDownload />
       </header>
 
       {channel.live && (
@@ -110,62 +110,6 @@ export default function ChannelView({ url, onOpen }: Props) {
       ) : (
         <EmptyState title="No videos yet" message={`${channel.name} has nothing to watch here for now.`} />
       )}
-    </div>
-  )
-}
-
-/** Follow: new videos (and Twitch going live) land in Activity; with
- *  auto-download on, each new video is downloaded too. */
-function FollowControls({ channel }: { channel: ChannelInfo }) {
-  const watcher = watcherForChannel(useWatchers(), channel.url)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  async function run(action: () => Promise<unknown>) {
-    setBusy(true)
-    setError('')
-    try {
-      await action()
-    } catch {
-      setError('That did not go through. Try again.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const follow = () => run(() => addWatcher({
-    kind: 'channel',
-    label: channel.name,
-    config: { channel_url: channel.url, source: channel.source, name: channel.name, avatar: channel.avatar },
-  }))
-
-  return (
-    <div className="flex flex-col items-end gap-1.5 shrink-0">
-      <div className="flex items-center gap-3">
-        {watcher && (
-          <label className="flex items-center gap-2 text-xs text-base-content/60 cursor-pointer">
-            <input
-              type="checkbox"
-              className="toggle toggle-primary toggle-sm"
-              checked={watcher.auto_download}
-              disabled={busy}
-              onChange={e => run(() => updateWatcher(watcher.id, { auto_download: e.target.checked }))}
-            />
-            <span className="max-sm:hidden">Auto-download new</span>
-            <span className="sm:hidden">Auto</span>
-          </label>
-        )}
-        <button
-          type="button"
-          disabled={busy}
-          aria-pressed={!!watcher}
-          onClick={() => (watcher ? run(() => removeWatcher(watcher.id)) : follow())}
-          className={`btn btn-sm ${watcher ? '' : 'btn-primary'}`}
-        >
-          {watcher ? 'Following' : 'Follow'}
-        </button>
-      </div>
-      {error && <p role="alert" className="text-xs text-error">{error}</p>}
     </div>
   )
 }
