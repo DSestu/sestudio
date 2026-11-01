@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import type { TmdbCredit, TmdbPerson } from '../api'
 import { getPerson } from '../api'
 import EmptyState from '../components/EmptyState'
+import PageHeader from '../components/PageHeader'
+import { goBack } from '../pageHeader'
 import PosterGrid from '../components/PosterGrid'
 import { isUpcoming } from '../releaseDates'
 import SortSelect from '../components/SortSelect'
@@ -126,11 +128,13 @@ export default function PersonView({ personId, navigate }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader title={person.name} status={person.known_for_department} onBack={goBack} />
       <div className="flex items-start gap-4 sm:gap-6">
+        {/* Phones go back from the top card. */}
         <button
           onClick={() => history.back()}
           aria-label="Back"
-          className="btn btn-ghost btn-sm btn-square shrink-0 mt-1"
+          className="max-md:hidden btn btn-ghost btn-sm btn-square shrink-0 mt-1"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import type { ChannelInfo, SeasonCard, VideoInfo } from '../api'
 import { downloadVideo, fetchChannel, videoSeasonCard } from '../api'
 import EmptyState from '../components/EmptyState'
+import PageHeader from '../components/PageHeader'
+import { goBack } from '../pageHeader'
 import FollowButton from '../components/FollowButton'
 import VideoGrid from '../components/VideoGrid'
 import { VideoThumb } from '../components/search/LinkCard'
@@ -74,6 +76,7 @@ export default function ChannelView({ url, tab, onOpen }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader title={channel.name} status={site} onBack={goBack} />
       <header className="flex items-center gap-4">
         {channel.avatar ? (
           <img src={channel.avatar} alt="" className="h-12 w-12 sm:h-16 sm:w-16 rounded-full object-cover bg-base-300" />
