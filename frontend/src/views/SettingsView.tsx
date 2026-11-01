@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
 import RankRow from '../components/RankRow'
+import colabQr from '../assets/colab-qr.svg'
 import { DEFAULT_HOST_ORDER } from '../downloadPrefs'
 import type { AppSettings, RestartWay, SiteInfo } from '../api'
 import { getSites, restartServer, runAiSetup, serverRestartWay } from '../api'
@@ -19,6 +20,9 @@ import {
 
 /** Where to get a TMDB key, linked from the field itself. */
 const TMDB_GUIDE_URL = 'https://duckkota.gitlab.io/guides/tmdb/'
+
+/** The Colab notebook, shared from the Settings page. */
+const COLAB_URL = 'https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb'
 
 interface Props {
   settings: AppSettings
@@ -69,6 +73,10 @@ export default function SettingsView({ settings, onUpdate }: Props) {
           (nodejs.org) and restart the server, or YouTube videos may not play.
         </p>
       )}
+
+      <ShareSection />
+
+      <div className="divider my-0" />
 
       <AiSection settings={settings} onUpdate={onUpdate} />
 
@@ -511,6 +519,62 @@ function VideoQualitySetting() {
 function engineName(provider: string): string {
   const name = provider.replace(/ExecutionProvider$/, '')
   return ({ Tensorrt: 'TensorRT', Dml: 'DirectML', ROCM: 'ROCm' } as Record<string, string>)[name] ?? name
+}
+
+/**
+ * A link and QR code to the Colab notebook, for someone else to run their own.
+ * The QR is a static image: the link points at main, so it never changes.
+ */
+function ShareSection() {
+  const [copied, setCopied] = useState(false)
+
+  function copy() {
+    navigator.clipboard.writeText(COLAB_URL).then(() => setCopied(true)).catch(() => {})
+  }
+
+  return (
+    <section aria-labelledby="settings-share" className="flex flex-col gap-3">
+      <h3
+        id="settings-share"
+        className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
+      >
+        Share sestudio
+      </h3>
+      <p className="text-xs text-base-content/50">
+        Let a friend scan this to try it on Google Colab: their own copy, on their own Google
+        account, with a GPU. It needs a paid Colab plan.
+      </p>
+      <img
+        src={colabQr}
+        alt="QR code to the sestudio Colab notebook"
+        className="w-44 h-44 rounded-lg bg-white p-2"
+      />
+      <a
+        href={COLAB_URL}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="link link-primary text-xs break-all"
+      >
+        {COLAB_URL}
+      </a>
+      <div className="flex gap-2">
+        {/* Both need a secure context: absent on a plain-HTTP LAN address. */}
+        {'share' in navigator && (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => navigator.share({ title: 'sestudio', url: COLAB_URL }).catch(() => {})}
+          >
+            Share…
+          </button>
+        )}
+        {navigator.clipboard && (
+          <button className="btn btn-sm btn-ghost" onClick={copy}>
+            {copied ? 'Copied' : 'Copy link'}
+          </button>
+        )}
+      </div>
+    </section>
+  )
 }
 
 /**
