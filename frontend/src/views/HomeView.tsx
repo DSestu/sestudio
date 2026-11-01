@@ -160,7 +160,8 @@ export default function HomeView({
             onOpen={() => onOpenCatalog(catalogId)}
             loading={!discover}
             // A window that runs off the right edge: the catalogue goes on.
-            frame="f-disc rounded-r-none pr-0 mr-[calc(-1*var(--gutter))] md:col-span-full"
+            // The posters bleed; the header's chevron stays inside the screen.
+            frame="f-disc rounded-r-none pr-0 mr-[calc(-1*var(--gutter))] md:col-span-full [&>h2]:mr-2"
           >
             {discover && (
               <PosterStrip

@@ -1,5 +1,10 @@
-/** The version a title is followed in (VF, VOSTFR, VO). VF gets the blue tint. */
-export function VersionChip({ lang }: { lang: string }) {
+const VERSIONS = ['vf', 'vostfr', 'vo']
+const isVersion = (lang?: string) => VERSIONS.includes(lang?.toLowerCase() ?? '')
+
+/** The version a title is followed in (VF, VOSTFR, VO). VF gets the blue tint;
+ *  anything else ("other", empty) is not a version and shows nothing. */
+export function VersionChip({ lang }: { lang?: string }) {
+  if (!lang || !isVersion(lang)) return null
   const vf = lang.toLowerCase() === 'vf'
   return (
     <span className={`shrink-0 rounded-full px-1.5 text-[10px] leading-4 font-semibold ${
@@ -37,7 +42,7 @@ export default function PosterStrip({ items, ledge }: Props) {
               {item.poster_url
                 ? <img src={item.poster_url} alt="" loading="lazy" className="w-full aspect-[2/3] object-cover" />
                 : <div className="w-full aspect-[2/3]" />}
-              {item.lang && (
+              {isVersion(item.lang) && (
                 <span className="absolute bottom-1.5 left-1.5 flex rounded-full bg-base-100/85 backdrop-blur-sm">
                   <VersionChip lang={item.lang} />
                 </span>
