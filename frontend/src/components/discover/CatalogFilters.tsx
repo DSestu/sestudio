@@ -51,7 +51,7 @@ export default function CatalogFilters({ fields, values, onChange, onClear }: Pr
 
   return (
     <>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap" role="group" aria-label="Filters">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar mx-[calc(-1*var(--gutter))] px-(--gutter) sm:mx-0 sm:px-0 sm:flex-wrap" role="group" aria-label="Filters">
         <button
           onClick={() => setOpen(true)}
           className={`${chip} border-primary/50 bg-primary/15 text-primary font-semibold`}
