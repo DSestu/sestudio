@@ -890,8 +890,9 @@ export default function WatchView({
       </InPortal>
       )}
 
-      {/* Title bar. On desktop the search bar above it is the pinned one. */}
-      <div className="flex items-center gap-3">
+      {/* Title bar. On desktop the search bar above it is the pinned one. A
+          long title wraps; the buttons stay level with its first line. */}
+      <div className="flex items-start gap-3">
         <button
           // Real history back, so a search (with its query and filters in the
           // URL) is restored exactly; fall back to search on a deep link.
@@ -904,7 +905,7 @@ export default function WatchView({
           </svg>
         </button>
         <div className="min-w-0 flex-1">
-          <h2 className="font-semibold text-lg tracking-tight truncate">{seriesName}</h2>
+          <h2 className="font-semibold text-lg tracking-tight break-words">{seriesName}</h2>
           <p className="text-base-content/50 text-xs truncate">
             {[
               detail && (detail.is_film ? (isVideo ? 'Video' : 'Film') : `Season ${detail.season}`),
@@ -1062,7 +1063,7 @@ export default function WatchView({
             {/* The now-playing line: episode, the version playing, the output. */}
             <div className="flex flex-col gap-3">
               <div className={`items-center gap-x-3 gap-y-2 flex-wrap ${playing && current ? 'hidden lg:flex' : 'flex'}`}>
-                <h3 className="font-semibold tracking-tight text-base lg:text-lg min-w-0 truncate max-w-full">
+                <h3 className="font-semibold tracking-tight text-base lg:text-lg min-w-0 break-words max-w-full">
                   {episodeLabel}
                 </h3>
                 <span className="lg:hidden">{langChip}</span>
@@ -1101,9 +1102,12 @@ export default function WatchView({
                     handoffAt={position}
                   >
                     {/* Phone: the episode title sits on the Send to TV row, ahead
-                        of the button, so casting is never a scroll away. */}
+                        of the button, so casting is never a scroll away. A film
+                        or video's title is the header's, so it isn't repeated. */}
                     <div className="lg:hidden order-first flex-1 min-w-0 flex items-center gap-2">
-                      <h3 className="font-semibold tracking-tight min-w-0 truncate">{episodeLabel}</h3>
+                      {episodeLabel !== seriesName && (
+                        <h3 className="font-semibold tracking-tight min-w-0 break-words">{episodeLabel}</h3>
+                      )}
                       {langChip}
                     </div>
                     {/* Desktop: one toolbar. Where it goes, then how it plays,
