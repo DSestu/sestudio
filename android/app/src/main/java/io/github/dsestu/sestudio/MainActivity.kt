@@ -217,6 +217,10 @@ class MainActivity : Activity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true // the library and settings live in localStorage
             settings.mediaPlaybackRequiresUserGesture = false
+            // Honour the page's viewport meta like a browser: the width fits the screen again after
+            // picture-in-picture, and long text wraps instead of widening the page.
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
             webViewClient = object : WebViewClient() {
                 // The server's certificate is self-signed: trust that one, and only it.
                 override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
