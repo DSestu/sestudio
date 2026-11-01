@@ -7,6 +7,7 @@ import {
   useCollections,
 } from '../collections'
 import EmptyState from '../components/EmptyState'
+import PageHeader from '../components/PageHeader'
 import { matchesAllGenres } from '../genreFilter'
 import GenreChips from '../components/GenreChips'
 import LayoutToggle from '../components/LayoutToggle'
@@ -33,6 +34,13 @@ const TABS = [
   { id: 'favourites', label: 'Favourites' },
 ] as const
 type LibraryTab = (typeof TABS)[number]['id']
+
+/** What the count in the phone card's status line counts, per tab. */
+const STATUS: Record<LibraryTab, string> = {
+  watching: 'in progress',
+  watchlist: 'saved',
+  favourites: 'favourites',
+}
 
 interface Props {
   settings: AppSettings
@@ -269,7 +277,36 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-2">
+      {/* Phones: the page name, its tabs and its actions live in the top card. */}
+      <PageHeader
+        title="Library"
+        status={<><em className="not-italic text-primary font-semibold">{counts[tab]}</em> {STATUS[tab]}</>}
+        tabs={TABS.map(t => ({ ...t, count: counts[t.id] }))}
+        tab={tab}
+        onTab={changeTab}
+        menu={
+          <>
+            {counts[tab] > 0 && (
+              <SortSelect
+                options={tab === 'watching' ? SORTS_FOR.watching : SORTS_FOR.saved}
+                value={sort}
+                onChange={key => setSorts(prev => ({ ...prev, [tab]: key }))}
+              />
+            )}
+            <LayoutToggle layout={layout} onChange={next => setLibraryLayout(tab, next)} />
+            {tab === 'watching' && (
+              <button
+                onClick={() => setSelecting(true)}
+                disabled={counts[tab] === 0 || selecting}
+                className="btn btn-sm btn-ghost justify-start"
+              >
+                Select titles…
+              </button>
+            )}
+          </>
+        }
+      />
+      <div className="max-md:hidden flex items-center justify-between gap-2">
         <h2 className="text-xl font-semibold tracking-tight">Library</h2>
         <div className="flex items-center gap-2">
           {counts[tab] > 0 && (
@@ -297,7 +334,7 @@ export default function LibraryView({ settings, onOpen, onNavigate }: Props) {
         </div>
       </div>
 
-      <div role="tablist" aria-label="Library" className="tabs tabs-box w-full sm:w-fit">
+      <div role="tablist" aria-label="Library" className="max-md:hidden tabs tabs-box w-full sm:w-fit">
         {TABS.map((t, i) => (
           <button
             key={t.id}

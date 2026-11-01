@@ -29,15 +29,14 @@ One `.glass` utility used by every bar, sheet, popover and dock.
 
 | Property | Value |
 |---|---|
-| Background | `hsla(205 62% 14% / .62)` |
-| Backdrop | `blur(24px) saturate(1.6)` |
-| Edge light | 1px gradient border, white at .24 top-left fading to .03, .11 bottom-right |
-| Top highlight | `inset 0 1px 0 rgba(255,255,255,.12)` |
-| Shadow | `0 16px 40px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.35)` |
-| Grain | SVG fractal noise, overlay, .03 |
-| Radius | 28px (dock, sheet); full pill for single-row bars; 22–24px desktop |
+| Background | `hsl(205 62% 14% / .66)` |
+| Backdrop | `blur(24px) saturate(1.4)` |
+| Edge | flat 1px hairline, `inset 0 0 0 1px rgb(255 255 255 / .08)` |
+| Shadow | `0 8px 24px rgb(0 0 0 / .35)` |
+| Gloss | none: no sheen, top highlight or grain (rejected as too "Aero", 2026-11-01) |
+| Radius | 16px for the dock, top card, sheets and player strip; 12px for buttons; 10px for active pills |
 
-Active state everywhere: a pill `rgba(25,180,240,.22)` behind the icon or label, sliding
+Active state everywhere: a rounded-square pill `rgba(25,180,240,.22)` behind the icon or label, sliding
 between items. Fallback: where `backdrop-filter` is unsupported, or if the Android app stutters,
 the same tint at opacity .92 with no blur.
 
@@ -47,8 +46,8 @@ the same tint at opacity .92 with no blur.
 
 Floating glass dock, 12px from the screen edges plus the bottom safe area.
 
-- Items: **Home · Library · Search · Media · Activity**. Search is a filled 52px signal-blue
-  circle in the middle; the others are icon + label, active one with the sliding pill.
+- Items: **Home · Library · Search · Media · Activity**. Search is a filled 52px signal-blue rounded square (16px)
+  in the middle; the others are icon + label, active one with the sliding pill.
 - Search opens today's Discover sheet (search box, TMDB, creators, sources), which grows out of
   the button and turns it into the close button. Discover leaves the bar.
 - Badges sit on the icon's top-right corner (Media: active downloads; Activity: unread).

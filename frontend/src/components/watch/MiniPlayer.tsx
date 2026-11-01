@@ -102,8 +102,8 @@ export default function MiniPlayer({ node, onOpen, onClose }: Props) {
     // Sits on the dock's top edge (one glass object with it), under it in
     // stacking so it can rise out from behind it.
     <div className="fixed inset-x-3 z-[39] bottom-(--dock-top) max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none">
-      <div className="relative glass rounded-t-[28px] flex items-center gap-3 pl-2.5 pr-3 py-2.5 animate-dock-rise motion-reduce:animate-none">
-        {video('w-24 rounded-xl aspect-video shrink-0')}
+      <div className="relative glass rounded-t-2xl flex items-center gap-3 pl-2.5 pr-3 py-2.5 animate-dock-rise motion-reduce:animate-none">
+        {video('w-24 rounded-lg aspect-video shrink-0')}
         <button onClick={onOpen} className="min-w-0 flex-1 text-left">
           <span className="block text-sm font-medium truncate">{heading}</span>
           <span className="block text-xs text-base-content/50 truncate">{sub}</span>

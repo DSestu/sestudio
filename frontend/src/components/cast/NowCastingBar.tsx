@@ -194,7 +194,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
         >
           <div className="overflow-hidden">
             <div
-              className={`relative rounded-t-box max-md:rounded-t-[28px] md:border md:border-b-0 md:border-base-300 md:bg-base-200/95 md:backdrop-blur max-md:glass p-3 flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
+              className={`relative rounded-t-box max-md:rounded-t-2xl md:border md:border-b-0 md:border-base-300 md:bg-base-200/95 md:backdrop-blur max-md:glass p-3 flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
                 open ? 'opacity-100' : 'opacity-0'
               }`}
             >
@@ -356,7 +356,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
       {/* On phones it sits on the dock as one glass object (the accordion, when
           open, joins on top of it). */}
       <div className={`md:border-t md:border-base-300 md:bg-base-200/95 md:backdrop-blur max-md:relative max-md:glass max-md:overflow-hidden max-md:animate-dock-rise motion-reduce:animate-none ${
-        open ? "" : "max-md:rounded-t-[28px]"
+        open ? "" : "max-md:rounded-t-2xl"
       }`}>
         <div
           onClick={desktop ? openSeries : () => setOpen(o => !o)}
