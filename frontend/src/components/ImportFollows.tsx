@@ -32,14 +32,7 @@ export default function ImportFollows() {
   }
 
   return (
-    <section aria-labelledby="settings-creators" className="flex flex-col gap-4">
-      <h3 id="settings-creators" className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-        YouTube &amp; Twitch
-      </h3>
-      <p className="text-xs text-base-content/50 -mt-2">
-        Paste a link into search to play or download a video, and follow a channel from its page.
-        To follow many at once, import them here.
-      </p>
+    <div className="flex flex-col gap-4">
       <div>
         <label htmlFor="import-takeout" className="text-sm text-base-content/60 mb-1 block">
           YouTube subscriptions
@@ -88,6 +81,6 @@ export default function ImportFollows() {
         </p>
       </div>
       {error && <p role="alert" className="text-xs text-error">{error}</p>}
-    </section>
+    </div>
   )
 }

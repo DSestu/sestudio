@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { SeasonCard, VideoInfo } from '../api'
 import { fetchCreatorsLatest } from '../api'
-import EmptyState from '../components/EmptyState'
+import FollowSearch from '../components/FollowSearch'
+import ImportFollows from '../components/ImportFollows'
 import FollowedChannels from '../components/FollowedChannels'
 import LiveNow from '../components/LiveNow'
 import VideoGrid from '../components/VideoGrid'
@@ -62,19 +63,14 @@ export default function CreatorsView({ source, onOpen, navigate }: Props) {
         </div>
       </header>
 
-      {!follows.length ? (
-        <EmptyState
-          title="Follow channels to see them here"
-          message="Paste a YouTube or Twitch link into search, open its channel and press Follow. Or bring all your subscriptions over at once."
-          action={{ label: 'Import subscriptions', onClick: () => navigate('settings') }}
-        />
-      ) : (
+      {/* The way in comes first: with no follows it is the whole page. */}
+      <FollowSearch source={source} autoFocus={!follows.length} />
+
+      {follows.length > 0 && (
         <>
           {source !== 'youtube' && <LiveNow onOpen={onOpen} followLink={false} />}
 
-          <section>
-            <FollowedChannels variant="menu" source={source || undefined} />
-          </section>
+          <FollowedChannels source={source || undefined} />
 
           <section aria-labelledby="creators-latest" className="flex flex-col gap-3">
             <h3 id="creators-latest" className="text-lg font-semibold tracking-tight">Latest videos</h3>
@@ -94,6 +90,19 @@ export default function CreatorsView({ source, onOpen, navigate }: Props) {
           </section>
         </>
       )}
+
+      <details className="group max-w-xl rounded-box border border-base-300 px-4 py-3" open={!follows.length}>
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <svg className="w-4 h-4 transition-transform group-open:rotate-90 motion-reduce:transition-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
+          </svg>
+          Import many at once
+          <span className="font-normal text-base-content/50 max-sm:hidden">: your YouTube subscriptions, or a list of Twitch names</span>
+        </summary>
+        <div className="mt-4">
+          <ImportFollows />
+        </div>
+      </details>
     </div>
   )
 }

@@ -305,3 +305,37 @@ def test_youtube_rate_limit_stops_further_lookups_for_a_while(monkeypatch):
         "https://www.youtube.com/watch?v=a",
         "https://www.twitch.tv/videos/1",
     ]
+
+
+def test_youtube_channel_search_keys_channels_by_their_channel_address(monkeypatch):
+    seen: list[tuple] = []
+
+    def fake(*args, **_kw):
+        seen.append(args)
+        return {
+            "entries": [
+                {
+                    "channel_id": "UCWeg",
+                    "title": "SQUEEZIE",
+                    "channel_follower_count": 20200000,
+                    "thumbnails": [{"url": "//yt3.googleusercontent.com/a"}],
+                },
+                {"title": "a video, not a channel"},
+            ]
+        }
+
+    monkeypatch.setattr(creators, "ytdlp_json", fake)
+    hits = YouTubeSite().search_channels("squeezie")
+
+    assert "sp=EgIQAg%3D%3D" in seen[0][-1] and "search_query=squeezie" in seen[0][-1]
+    assert hits == [
+        {
+            "source": "youtube",
+            "name": "SQUEEZIE",
+            "url": "https://www.youtube.com/channel/UCWeg",
+            "avatar": "https://yt3.googleusercontent.com/a",
+            "followers": 20200000,
+            "live": False,
+            "game": "",
+        }
+    ]
