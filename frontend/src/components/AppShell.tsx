@@ -9,8 +9,14 @@ import { closeDiscoverMenuThen, toggleDiscoverMenu, useDiscoverMenuOpen } from '
 import SourceIcon from './SourceIcon'
 import CreatorLinks from './CreatorLinks'
 import { SettingsButton, TopCard } from './PageHeader'
-import { usePageHeaderMounted } from '../pageHeader'
+import { deskSlotRef, usePageHeaderMounted } from '../pageHeader'
 import { AWAY, setBarsHidden, useBarsHidden } from '../barsHidden'
+
+// Stable callback refs for the desktop card's slots (a fresh function each
+// render would unregister and re-register them every time).
+const TITLE_SLOT = deskSlotRef('title')
+const MENU_SLOT = deskSlotRef('menu')
+const TABS_SLOT = deskSlotRef('tabs')
 
 interface Destination {
   id: Tab
@@ -80,24 +86,32 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   // On phones Discover is a menu of catalogues, unfolded from its tab.
   const menuOpen = useDiscoverMenuOpen()
   const pageHeader = usePageHeaderMounted()
-  // Phones: scrolling down sends the top card and the dock away; any scroll up
-  // brings them back. Never while a sheet or the selection bar is up, or on
+  // Scrolling down sends the bars away (phone top card and dock, desktop card);
+  // any scroll up brings them back. Never while a sheet or the selection bar is up, or on
   // the player page.
+  const away = useBarsHidden()
   const pinned = menuOpen || selecting || view === 'watch'
   useEffect(() => {
     setBarsHidden(false)
     if (pinned) return
-    const phone = window.matchMedia('(width < 48rem)')
     let last = window.scrollY
     const onScroll = () => {
       const y = window.scrollY
-      if (!phone.matches || Math.abs(y - last) < 6) return
+      if (Math.abs(y - last) < 6) return
       setBarsHidden(y > last && y > 40)
       last = y
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => { window.removeEventListener('scroll', onScroll); setBarsHidden(false) }
   }, [pinned, view])
+  // Asking for the search (Ctrl K, or the rail's Search button) brings the card back.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && ['k', 'f'].includes(e.key.toLowerCase())) setBarsHidden(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   // The rail's Discover flyout opens while the pointer or keyboard focus is on
   // Discover or the flyout. Closing waits a beat, so crossing the gap between
   // the two doesn't fold it.
@@ -185,12 +199,25 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
         }`}
       >
         {searchBar && (
-          // No backdrop blur here: it would trap the search's fixed backdrop
-          // inside the bar instead of letting it dim the page.
+          // Desktop's header card (docs/SPEC-nav-redesign.md §5): the page's
+          // name, the search field and the page's ⋯ on one row, its tabs on a
+          // second. Pages fill the slots through <PageHeader>. It leaves while
+          // scrolling down, like the phone bars.
           <div
-            className="hidden md:block sticky top-0 z-30 -mt-5 mb-5 mx-[calc(-1*var(--gutter))] px-(--gutter) border-b border-base-300 bg-base-100"
+            className={`hidden md:block sticky top-3 z-30 mb-5 transition-[translate,opacity] ${AWAY(away, '-translate-y-[calc(100%+1.5rem)]')}`}
           >
-            {searchBar}
+            {/* The glass is a layer behind the content, not the card itself: a
+                blur on an ancestor would trap the search's full-page dimming
+                inside the card. */}
+            <div aria-hidden="true" className="absolute inset-0 glass rounded-2xl" />
+            <div className="relative px-5">
+              <div className="flex items-center gap-6">
+                <div ref={TITLE_SLOT} className="contents" />
+                <div className="flex-1 min-w-0">{searchBar}</div>
+                <div ref={MENU_SLOT} className="contents" />
+              </div>
+              <div ref={TABS_SLOT} />
+            </div>
           </div>
         )}
         {/* Every view uses the full width; the gutter grows with the window. */}
