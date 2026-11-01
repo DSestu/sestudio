@@ -422,3 +422,32 @@ def twitch_channel(user: dict[str, Any]) -> dict[str, Any]:
         "live": live,
         "videos": videos,
     }
+
+
+_TWITCH_LIVE = """
+query($logins: [String!]) {
+  users(logins: $logins) {
+    login displayName profileImageURL(width: 150)
+    stream {
+      title viewersCount createdAt previewImageURL(width: 640, height: 360)
+      game { name }
+    }
+  }
+}
+"""
+
+
+def twitch_live(logins: list[str]) -> list[dict[str, Any]]:
+    """Which of these Twitch channels are live now, in one request."""
+    if not logins:
+        return []
+    users = twitch_gql(_TWITCH_LIVE, {"logins": logins[:100]}).get("users") or []
+    live = []
+    for user in users:
+        if not user or not user.get("stream"):
+            continue
+        card = twitch_channel({**user, "videos": None})["live"]
+        card["avatar"] = user.get("profileImageURL") or ""
+        card["game"] = ((user["stream"].get("game") or {}).get("name")) or ""
+        live.append(card)
+    return live

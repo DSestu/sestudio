@@ -3,6 +3,7 @@ import type { AppSettings, BrowseRow, Shelf, WatcherEvent } from '../api'
 import { getBrowseRows, getShelves } from '../api'
 import { useCollections } from '../collections'
 import ActivityPeek from '../components/ActivityPeek'
+import LiveNow from '../components/LiveNow'
 import EmptyState from '../components/EmptyState'
 import WatchingRow from '../components/library/WatchingRow'
 import MediaRow, { SeeAllButton } from '../components/MediaRow'
@@ -89,7 +90,10 @@ export default function HomeView({
 
   return (
     <div className="flex flex-col gap-8">
-      {/* First, because news goes stale: a new episode is the most time-sensitive
+      {/* Only true right now, so it leads. Hides itself when nobody is live. */}
+      <LiveNow onOpen={card => onOpen(card, 0, settings.lang)} />
+
+      {/* Then news, because it goes stale: a new episode is the most time-sensitive
           thing Home can offer. Hides itself entirely when nothing is new. */}
       <ActivityPeek onOpen={onOpenEvent} onSeeAll={() => onNavigate('notifications')} />
 

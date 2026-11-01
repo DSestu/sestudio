@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ChannelInfo, SeasonCard, VideoInfo } from '../api'
-import { fetchChannel, videoSeasonCard } from '../api'
+import { downloadVideo, fetchChannel, videoSeasonCard } from '../api'
 import EmptyState from '../components/EmptyState'
 import { VideoThumb } from '../components/search/LinkCard'
 import { sourceIcon } from '../sourceLook'
@@ -118,18 +118,20 @@ export default function ChannelView({ url, onOpen }: Props) {
       {channel.live && (
         <section aria-labelledby="channel-live">
           <h3 id="channel-live" className="sr-only">Live now</h3>
-          <button
-            type="button"
-            onClick={() => onOpen(videoSeasonCard(channel.live!))}
-            className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full text-left rounded-box border border-error/40 bg-base-200 p-3"
-          >
-            <VideoThumb info={channel.live} className="w-full sm:w-80" />
-            <div className="min-w-0">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 rounded-box border border-error/40 bg-base-200 p-3">
+            <button type="button" onClick={() => onOpen(videoSeasonCard(channel.live!))} className="w-full sm:w-80 shrink-0" aria-label={`Watch ${channel.live.title}`}>
+              <VideoThumb info={channel.live} className="w-full" />
+            </button>
+            <div className="min-w-0 flex flex-col gap-1">
               <p className="text-xs font-semibold text-error">Live now</p>
-              <p className="mt-1 font-semibold leading-snug line-clamp-2">{channel.live.title}</p>
-              <p className="mt-1 text-xs text-base-content/50">{videoMeta({ ...channel.live, channel: '' })}</p>
+              <p className="font-semibold leading-snug line-clamp-2">{channel.live.title}</p>
+              <p className="text-xs text-base-content/50">{videoMeta({ ...channel.live, channel: '' })}</p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpen(videoSeasonCard(channel.live!))}>Watch</button>
+                <RecordButton live={channel.live} />
+              </div>
             </div>
-          </button>
+          </div>
         </section>
       )}
 
@@ -197,5 +199,23 @@ function FollowControls({ channel }: { channel: ChannelInfo }) {
       </div>
       {error && <p role="alert" className="text-xs text-error">{error}</p>}
     </div>
+  )
+}
+
+/** Record a live stream from now until it ends, into the downloads folder. */
+function RecordButton({ live }: { live: VideoInfo }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'failed'>('idle')
+  return (
+    <button
+      type="button"
+      className="btn btn-sm"
+      disabled={state === 'busy' || state === 'done'}
+      onClick={() => {
+        setState('busy')
+        downloadVideo(live).then(() => setState('done'), () => setState('failed'))
+      }}
+    >
+      {state === 'done' ? 'Recording' : state === 'failed' ? 'Retry recording' : 'Record'}
+    </button>
   )
 }
