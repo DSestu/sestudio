@@ -183,7 +183,8 @@ export function DiscoverMenu({
         }`}
       />
       {/* Floats just above the dock and grows out of its Search button (a
-          clip-path from the bottom centre), shrinking back into it. */}
+          clip-path from the bottom centre) while it sharpens from a soft blur,
+          shrinking and blurring back into it. */}
       <div
         id="discover-menu"
         inert={!open}
@@ -195,10 +196,10 @@ export function DiscoverMenu({
           ref={panel}
           role="dialog"
           aria-label="Discover"
-          className={`relative flex flex-col overflow-hidden glass rounded-2xl transition-[clip-path,opacity,min-height,max-height] ease-smooth motion-reduce:[clip-path:none] motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
+          className={`relative flex flex-col overflow-hidden glass rounded-2xl transition-[clip-path,filter,opacity,min-height,max-height] ease-smooth motion-reduce:[clip-path:none] motion-reduce:[filter:none] motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
             open
-              ? 'duration-[480ms] [clip-path:inset(0_round_16px)]'
-              : 'duration-300 motion-reduce:opacity-0 [clip-path:inset(100%_50%_0_50%_round_12px)]'
+              ? 'duration-[480ms] [clip-path:inset(0_round_16px)] [filter:none]'
+              : 'duration-300 motion-reduce:opacity-0 [clip-path:inset(100%_50%_0_50%_round_12px)] [filter:blur(14px)]'
           } ${expanded ? FULL_HEIGHT : 'min-h-0 max-h-[70dvh]'}`}
         >
           {/* Results preview as you type; Enter (the keyboard's Search key)

@@ -186,12 +186,12 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
       onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
       // On phones it rides up with the Discover menu (--discover-lift).
       // While the dock is away (scrolling down) it drops into the dock's place.
-      className={`fixed inset-x-0 max-md:inset-x-3 md:left-56 z-40 max-md:z-[39] bottom-(--dock-top) md:bottom-0 max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none ${
+      className={`fixed inset-x-0 max-md:inset-x-3 md:left-27 md:px-6 z-40 max-md:z-[39] bottom-(--dock-top) md:bottom-4 max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none ${
         away ? "max-md:translate-y-[4.125rem]" : "max-md:translate-y-[calc(-1*var(--discover-lift,0px))]"
       }`}
     >
       {/* Accordion — grid-rows 0fr→1fr gives a smooth slide-up reveal. */}
-      <div className="mx-auto w-full max-w-6xl md:px-6">
+      <div className="mx-auto w-full md:max-w-3xl">
         <div
           className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
             open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
@@ -199,7 +199,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
         >
           <div className="overflow-hidden">
             <div
-              className={`relative rounded-t-box max-md:rounded-t-2xl md:border md:border-b-0 md:border-base-300 md:bg-base-200/95 md:backdrop-blur max-md:glass p-3 flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
+              className={`relative rounded-t-2xl glass p-3 flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
                 open ? 'opacity-100' : 'opacity-0'
               }`}
             >
@@ -358,14 +358,14 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
 
       {/* Bar — clicking anywhere on it (except the controls) returns to the
           casting title's watch view. */}
-      {/* On phones it sits on the dock as one glass object (the accordion, when
-          open, joins on top of it). */}
-      <div className={`md:border-t md:border-base-300 md:bg-base-200/95 md:backdrop-blur max-md:relative max-md:glass max-md:overflow-hidden max-md:animate-dock-rise motion-reduce:animate-none ${
-        open ? "" : away ? "max-md:rounded-2xl" : "max-md:rounded-t-2xl"
+      {/* A floating glass dock on desktop; on phones it sits on the dock as one
+          glass object. The accordion, when open, joins on top of it. */}
+      <div className={`relative glass overflow-hidden md:mx-auto md:max-w-3xl max-md:animate-dock-rise motion-reduce:animate-none ${
+        open ? "md:rounded-b-2xl" : away ? "max-md:rounded-2xl md:rounded-2xl" : "max-md:rounded-t-2xl md:rounded-2xl"
       }`}>
         <div
           onClick={desktop ? openSeries : () => setOpen(o => !o)}
-          className={`mx-auto w-full max-w-6xl flex items-center gap-3 px-3 md:px-6 py-2 ${
+          className={`w-full flex items-center gap-3 px-3 md:px-6 py-2 ${
             (desktop ? ep : true) ? 'cursor-pointer hover:bg-base-300/40 transition-colors' : ''
           }`}
         >
@@ -413,7 +413,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
         </div>
 
         {/* Thin read-only progress line (not a seek control) */}
-        <div className="mx-auto w-full max-w-6xl px-3 md:px-6 pb-1.5">
+        <div className="w-full px-3 md:px-6 pb-1.5">
           <div className="h-1 rounded-full bg-base-300 overflow-hidden">
             <div className="h-full bg-primary transition-[width] duration-500 ease-linear" style={{ width: `${pct}%` }} />
           </div>
