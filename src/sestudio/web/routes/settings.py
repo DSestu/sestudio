@@ -5,9 +5,9 @@ import dataclasses
 import os
 import subprocess
 import threading
+import time
 from typing import Any
 
-import psutil
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -158,11 +158,16 @@ async def post_ai_setup() -> dict[str, Any]:
     return await asyncio.to_thread(interpolate.info)
 
 
+# When the routes were loaded, at startup. Not psutil's create_time: it reads
+# /proc/stat, which Android keeps from apps, and the Server log then gave 500.
+_STARTED = time.time()
+
+
 @router.get("/server/log")
 async def get_server_log(after: int = 0) -> dict[str, Any]:
     """What the server logged since line *after* (0: all it still holds), and
     when it started (Unix seconds), for its uptime."""
-    return {"lines": LOG_BUFFER.since(after), "started": psutil.Process().create_time()}
+    return {"lines": LOG_BUFFER.since(after), "started": _STARTED}
 
 
 @router.get("/server")

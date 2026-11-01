@@ -177,7 +177,7 @@ def test_proxy_forwards_range_and_relays_206(httpx_mock: HTTPXMock):
 
 
 def test_proxy_head_mp4_reports_real_size_and_dlna_features(httpx_mock: HTTPXMock):
-    # DLNA renderers probe with HEAD; the total size (from a 1-byte ranged GET —
+    # DLNA renderers probe with HEAD; the total size (from a short ranged GET —
     # presigned hosts 403 upstream HEADs) and byte-seek DLNA features are what
     # let them fetch the moov index from the tail of non-faststart mp4s.
     client = _client()
@@ -200,7 +200,41 @@ def test_proxy_head_mp4_reports_real_size_and_dlna_features(httpx_mock: HTTPXMoc
     assert resp.headers["transfermode.dlna.org"] == "Streaming"
 
     sent = httpx_mock.get_requests()[0]
-    assert sent.headers["Range"] == "bytes=0-0"
+    assert sent.headers["Range"] == "bytes=0-188"
+
+
+@pytest.mark.parametrize(
+    ("served", "head", "kind"),
+    [
+        ("application/octet-stream", b"G" + bytes(187) + b"G", "video/mp2t"),
+        ("application/octet-stream", b"ID3\x04", "audio/aac"),
+        ("video/MP2T", b"G", "video/MP2T"),  # Twitch says it itself
+    ],
+)
+def test_proxy_tells_a_segment_for_what_it_is(httpx_mock, served, head, kind):
+    # googlevideo serves YouTube's TS video and AAC audio as octet-stream, and
+    # HEAD used to say MP4 of anything: a Cast receiver then buffered YouTube
+    # and Twitch at 0:00 for ever.
+    client = _client()
+    token = sign(
+        client.app.state.proxy_secret, "https://g.example/seg", "https://y/", "youtube"
+    )
+    body = head + b"rest"
+    httpx_mock.add_response(
+        url="https://g.example/seg",
+        headers={"Content-Type": served},
+        content=body,
+        is_reusable=True,
+    )
+
+    assert (
+        client.head("/api/stream/proxy", params={"token": token})
+        .headers["content-type"]
+        .startswith(kind)
+    )
+    resp = client.get("/api/stream/proxy", params={"token": token})
+    assert resp.headers["content-type"].startswith(kind)
+    assert resp.content == body
 
 
 def test_proxy_head_mp4_survives_probe_failure(httpx_mock: HTTPXMock):
