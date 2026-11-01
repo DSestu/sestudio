@@ -36,6 +36,8 @@ interface Props {
   /** Why there is no source *yet*, when the wait is expected (a copy being
    *  rebuilt on the server) rather than a search that came up empty. */
   pending?: string | null
+  /** The server's reason the last source failed, shown when none is left. */
+  failure?: string | null
   /** Title of the episode queued after this one, if any. */
   nextTitle: string | null
   autoplay: boolean
@@ -88,7 +90,7 @@ function setReadAhead(player: MediaPlayerInstance | null, seconds: number | null
 }
 
 export default function VideoPane({
-  ep, source, probing, pending = null, nextTitle, autoplay, onSourceError, onAdvance, onPosition,
+  ep, source, probing, pending = null, failure = null, nextTitle, autoplay, onSourceError, onAdvance, onPosition,
 }: Props) {
   const playerRef = useRef<MediaPlayerInstance>(null)
   const lastSaveRef = useRef(0)
@@ -474,9 +476,13 @@ export default function VideoPane({
         </div>
       )}
       {!displaySource && !probing && !pending && !source && (
-        <p className="text-error text-sm px-6 text-center">
-          No playable source for this episode.
-        </p>
+        <div className="px-6 text-center">
+          <p className="text-error text-sm">No playable source for this episode.</p>
+          {/* The reason, without the resolver's "every provider failed" preamble. */}
+          {failure && (
+            <p className="mt-1 text-xs text-white/60">{failure.replace(/^All providers failed — [\w-]+: /, '')}</p>
+          )}
+        </div>
       )}
       {displaySource && !probing && !source && (
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-center px-6">

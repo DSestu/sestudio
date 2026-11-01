@@ -339,3 +339,38 @@ def test_youtube_channel_search_keys_channels_by_their_channel_address(monkeypat
             "game": "",
         }
     ]
+
+
+def test_ytdlp_errors_raise_instead_of_returning_nothing(monkeypatch):
+    """yt-dlp's default only reports an extraction error; in-process that came
+    back as an empty result, hiding subscriber-only videos and YouTube's rate
+    limit behind "no playable format"."""
+    seen: list[dict] = []
+    monkeypatch.setattr(creators, "_extract", lambda opts, url: seen.append(opts) or {})
+    creators.ytdlp_json("--no-playlist", "https://www.twitch.tv/videos/1")
+
+    assert seen[0]["ignoreerrors"] is False
+
+
+def test_youtube_original_audio_becomes_the_default_ahead_of_ai_dubs():
+    """YouTube marks no track default, so players picked a dub."""
+    master = "\n".join(
+        [
+            "#EXTM3U",
+            '#EXT-X-MEDIA:URI="ar.m3u8",TYPE=AUDIO,GROUP-ID="234",LANGUAGE="ar",NAME="Arabic - dubbed",DEFAULT=NO,AUTOSELECT=YES',
+            '#EXT-X-MEDIA:URI="fr.m3u8",TYPE=AUDIO,GROUP-ID="234",LANGUAGE="fr",NAME="Français - dubbed",DEFAULT=NO,AUTOSELECT=YES',
+            '#EXT-X-MEDIA:URI="en.m3u8",TYPE=AUDIO,GROUP-ID="234",LANGUAGE="en-US",NAME="American English - original",DEFAULT=NO,AUTOSELECT=YES',
+            '#EXT-X-STREAM-INF:BANDWIDTH=1,CODECS="avc1.4D401E,mp4a.40.2",AUDIO="234"',
+            "v.m3u8",
+        ]
+    ).encode()
+    audio = [
+        line
+        for line in creators.original_audio_first(master).decode().splitlines()
+        if "TYPE=AUDIO" in line
+    ]
+
+    assert 'URI="en.m3u8"' in audio[0] and "DEFAULT=YES" in audio[0]
+    assert all("DEFAULT=NO" in line for line in audio[1:]) and len(audio) == 3
+    single = b'#EXTM3U\n#EXT-X-MEDIA:URI="a.m3u8",TYPE=AUDIO,GROUP-ID="1",NAME="English",DEFAULT=NO\n'
+    assert creators.original_audio_first(single) == single

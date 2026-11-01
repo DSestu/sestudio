@@ -90,6 +90,8 @@ export interface ProviderSources {
   select: (provider: string) => void
   markFailed: (provider: string) => void
   probing: boolean
+  /** Why the last source failed, as the server put it; null when none did. */
+  failure: string | null
 }
 
 /** Status map for a fresh episode: nothing is playable until it is probed —
@@ -145,6 +147,8 @@ export function useProviderSources(
   const [sources, setSources] = useState<Record<string, StreamSource>>({})
   const [active, setActive] = useState<string | null>(null)
   const [probing, setProbing] = useState(true)
+  // Why the last source failed, as the server put it: shown when none is left.
+  const [failure, setFailure] = useState<string | null>(null)
   const sourcesRef = useRef<Record<string, StreamSource>>({})
   const activeRef = useRef<string | null>(null)
 
@@ -159,6 +163,7 @@ export function useProviderSources(
   if (prev.embeds !== embedUrls || prev.local !== local) {
     setPrev({ embeds: embedUrls, local })
     setStatus(seedStatus(providers))
+    setFailure(null)
     setSources({})
     // Plain setter, not setActiveBoth: this runs during render, and the ref is
     // the effect's to assign (it does so before awaiting anything).
@@ -215,9 +220,10 @@ export function useProviderSources(
           // other one that was already working. Still exactly one media loaded
           // — nothing switches once something is playing.
           if (!localPending) claim(p)
-        } catch {
+        } catch (e) {
           if (cancelled) return
           setStatus(prev => ({ ...prev, [p]: 'failed' }))
+          if (e instanceof Error && e.name !== 'AbortError') setFailure(e.message)
         }
       }),
     ]).then(() => {
@@ -240,5 +246,5 @@ export function useProviderSources(
     }
   }
 
-  return { providers, status, sources, active, select, markFailed, probing }
+  return { providers, status, sources, active, select, markFailed, probing, failure }
 }
