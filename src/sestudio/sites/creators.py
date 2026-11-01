@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import threading
+from collections import defaultdict
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any
@@ -93,6 +95,9 @@ class _YtDlpSite(ContentSite):
     def __init__(self) -> None:
         # googlevideo URLs stop working after about 6 hours.
         self._info = TtlCache(4 * 3600)
+        # One yt-dlp run per URL at a time: the watch view asks for the title
+        # page and the link card together, and each run costs seconds.
+        self._info_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         self._channels = TtlCache(600)
 
     def owns_url(self, url: str) -> bool:
@@ -106,7 +111,8 @@ class _YtDlpSite(ContentSite):
         return (self.id,)
 
     def info(self, url: str) -> dict[str, Any]:
-        return self._info.get(url, lambda: ytdlp_json("--no-playlist", url))
+        with self._info_locks[url]:
+            return self._info.get(url, lambda: ytdlp_json("--no-playlist", url))
 
     def video(self, url: str) -> dict[str, Any]:
         """What the app shows for one video or live stream."""

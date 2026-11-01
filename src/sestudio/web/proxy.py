@@ -126,6 +126,49 @@ def _subtitle_group(text: str) -> str | None:
     return None
 
 
+_ATTR_RE = re.compile(r'([A-Z0-9-]+)=("[^"]*"|[^,]*)')
+
+
+def best_variant(text: str) -> str:
+    """An HLS master cut down to its best variant (by height, then bandwidth)
+    and the renditions that variant uses; any other playlist as it is.
+
+    For the server's own ffmpeg, which reads every variant of a master before
+    it starts: a YouTube master took 14 s to probe, its best variant 0.7 s.
+    """
+    lines = text.splitlines()
+    variants = [
+        (i, dict(_ATTR_RE.findall(line.split(":", 1)[1])))
+        for i, line in enumerate(lines)
+        if line.startswith("#EXT-X-STREAM-INF")
+    ]
+    if not variants:
+        return text
+
+    def rank(variant: tuple[int, dict[str, str]]) -> tuple[int, int]:
+        attrs = variant[1]
+        height = attrs.get("RESOLUTION", "0x0").partition("x")[2]
+        return int(height or 0), int(attrs.get("BANDWIDTH", "0") or 0)
+
+    best, attrs = max(variants, key=rank)
+    groups = {attrs.get(k) for k in ("AUDIO", "VIDEO", "SUBTITLES") if attrs.get(k)}
+    dropped = {i for i, _ in variants if i != best} | {
+        i + 1 for i, _ in variants if i != best
+    }
+    out = []
+    for i, line in enumerate(lines):
+        if i in dropped:
+            continue
+        if line.startswith("#EXT-X-MEDIA") and "URI=" in line:
+            if (
+                dict(_ATTR_RE.findall(line.split(":", 1)[1])).get("GROUP-ID")
+                not in groups
+            ):
+                continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def rewrite_playlist(
     text: str,
     base_url: str,

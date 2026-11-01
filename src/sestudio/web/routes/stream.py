@@ -17,6 +17,7 @@ from sestudio.sites import site_for
 from sestudio.web.proxy import (
     PROXY_TOKEN_TTL,
     TokenError,
+    best_variant,
     rewrite_playlist,
     sign,
     verify,
@@ -115,7 +116,8 @@ def transcode_source(request: Request, token: str) -> tuple[str, bool]:
         if port is not None
         else f"https://127.0.0.1:{request.app.state.https_port}"
     )
-    query = urllib.parse.urlencode({"token": token})
+    # best=1: a master comes back holding its best variant only (best_variant).
+    query = urllib.parse.urlencode({"token": token, "best": 1})
     return f"{base}/api/stream/proxy?{query}", ".m3u8" in payload["u"]
 
 
@@ -195,7 +197,7 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
 
 
 @router.api_route("/stream/proxy", methods=["GET", "HEAD"])
-def proxy_stream(token: str, request: Request) -> Response:
+def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
     """Stream an upstream media resource through the server, injecting the provider Referer.
 
     Only tokens this process signed (and not yet expired) are honoured; verification
@@ -291,6 +293,8 @@ def proxy_stream(token: str, request: Request) -> Response:
             client.close()
         if fix is not None and upstream.is_success:
             raw = fix.transform(raw)
+        if best:
+            raw = best_variant(raw.decode("utf-8", errors="replace")).encode()
         secret_bytes = request.app.state.proxy_secret
         base_url = str(upstream.url)
 
