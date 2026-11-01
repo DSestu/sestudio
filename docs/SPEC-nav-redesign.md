@@ -110,9 +110,9 @@ Narrow phones: if Row 1 overflows, the status line truncates first; the ⋯ butt
 | Playback starts | dock grows upward, player row sharpens in (blur 6px → 0) | 420 ms |
 | Scroll down / up | top card up + dock down, together | 220 ms out (ease-in), 340 ms back |
 | Player pill | rises in after the dock leaves | 300 ms, 90 ms delay |
-| Search sheet | clip-path grows from the Search button while it sharpens from `blur(14px)`; button becomes close | 480 ms open, 300 ms close |
+| Search sheet | clip-path grows from the Search button's width on the sheet's bottom edge with a faint blue glow (30%) fading from that edge; the content is there from the first frame, rising 14px and sharpening from `blur(12px)`; button becomes close | 420 ms open, 300 ms close |
 | ⋯ popover | scales from its button, 0.92 → 1 | 220 ms |
-| Desktop Discover flyout | clip-path wipe out of the rail | 320 ms open, 200 ms close |
+| Desktop Discover flyout | fades in, slides 12px and sharpens from `blur(10px)`; its rows follow top to bottom, 35 ms apart | 300 ms open, 200 ms close |
 | Desktop player dock | rises in | 420 ms |
 | Button press | scale 0.92 | 120 ms |
 

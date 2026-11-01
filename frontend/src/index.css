@@ -144,3 +144,22 @@
 .vds-quality-menu {
   display: none !important;
 }
+
+/* Desktop Discover panel: its rows follow the panel in, top to bottom, and
+   leave together. */
+.rows-follow > * {
+  opacity: 0;
+  translate: -8px 0;
+  transition: opacity 260ms, translate 260ms var(--ease-smooth);
+}
+[data-open] .rows-follow > * { opacity: 1; translate: 0 0; }
+[data-open] .rows-follow > :nth-child(1) { transition-delay: 90ms; }
+[data-open] .rows-follow > :nth-child(2) { transition-delay: 125ms; }
+[data-open] .rows-follow > :nth-child(3) { transition-delay: 160ms; }
+[data-open] .rows-follow > :nth-child(4) { transition-delay: 195ms; }
+[data-open] .rows-follow > :nth-child(5) { transition-delay: 230ms; }
+[data-open] .rows-follow > :nth-child(6) { transition-delay: 265ms; }
+[data-open] .rows-follow > :nth-child(n + 7) { transition-delay: 300ms; }
+@media (prefers-reduced-motion: reduce) {
+  .rows-follow > * { translate: none; transition-delay: 0s !important; }
+}

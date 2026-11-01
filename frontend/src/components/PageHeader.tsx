@@ -26,9 +26,13 @@ export function SettingsButton() {
  * The floating glass card itself, phones only. Publishes its height as
  * --top-card-h so the page below starts clear of it.
  */
-export function TopCard({ children }: { children: ReactNode }) {
+export function TopCard({ children, away: forced = false }: {
+  children: ReactNode
+  /** Keep it out of the way regardless of scrolling direction. */
+  away?: boolean
+}) {
   const card = useRef<HTMLElement>(null)
-  const away = useBarsHidden()
+  const away = useBarsHidden() || forced
   useLayoutEffect(() => {
     const el = card.current
     if (!el) return
