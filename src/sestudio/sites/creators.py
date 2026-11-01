@@ -58,6 +58,10 @@ def ytdlp_json(*args: str) -> dict[str, Any]:
     """
     argv = [
         "--ignore-config",
+        # yt-dlp's default only reports an extraction error and returns
+        # nothing; in-process that hid every failure (subscriber-only videos,
+        # YouTube's rate limit) behind an empty result that got cached.
+        "--abort-on-error",
         "--quiet",
         "--no-warnings",
         "--socket-timeout",
@@ -89,7 +93,12 @@ def _extract(ydl_opts: dict[str, Any], url: str) -> dict[str, Any]:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             return ydl.sanitize_info(ydl.extract_info(url, download=False)) or {}
     except yt_dlp.utils.YoutubeDLError as exc:
-        raise SiteError(str(exc).removeprefix("ERROR: ")) from exc
+        message = str(exc).removeprefix("ERROR: ")
+        if "subscriber-only" in message:
+            # No account here, so no subscription: say so rather than relay
+            # yt-dlp's advice about passing cookies.
+            message = "Subscribers only: Twitch keeps this broadcast for the channel's subscribers"
+        raise SiteError(message) from exc
 
 
 def stream_url(info: dict[str, Any]) -> str:
@@ -238,6 +247,42 @@ def h264_only(playlist: bytes) -> bytes:
     return "\n".join(out).encode()
 
 
+def original_audio_first(playlist: bytes) -> bytes:
+    """Make a YouTube master's original audio the default, ahead of its dubs.
+
+    YouTube lists AI-dubbed tracks ("Français - dubbed") beside the original
+    ("American English - original") and marks none as the default, so a player
+    took the first in the list or one matching the browser's language: a dub.
+    The dubs stay selectable; a video with no track marked original is left as
+    it is.
+    """
+    lines = playlist.decode("utf-8", errors="replace").splitlines()
+
+    def is_audio(line: str) -> bool:
+        return line.startswith("#EXT-X-MEDIA") and "TYPE=AUDIO" in line
+
+    def is_original(line: str) -> bool:
+        return bool(re.search(r'NAME="[^"]*\boriginal"', line))
+
+    audio = [line for line in lines if is_audio(line)]
+    originals = [line for line in audio if is_original(line)]
+    if not originals:
+        return playlist
+    marked = [re.sub(r"DEFAULT=NO", "DEFAULT=YES", line) for line in originals]
+    others = [
+        re.sub(r"DEFAULT=YES", "DEFAULT=NO", line)
+        for line in audio
+        if not is_original(line)
+    ]
+    out: list[str] = []
+    for line in lines:
+        if not is_audio(line):
+            out.append(line)
+        elif line is audio[0]:
+            out += marked + others
+    return "\n".join(out).encode()
+
+
 class YouTubeSite(_YtDlpSite):
     id = "youtube"
     display_name = "YouTube"
@@ -246,7 +291,9 @@ class YouTubeSite(_YtDlpSite):
     hosts = ("youtube.com", "music.youtube.com", "youtu.be")
 
     def proxy_fix(self, url: str) -> ProxyFix | None:
-        return ProxyFix({}, h264_only) if "/hls_variant/" in url else None
+        if "/hls_variant/" not in url:
+            return None
+        return ProxyFix({}, lambda body: original_audio_first(h264_only(body)))
 
     def search_channels(self, query: str) -> list[dict[str, Any]]:
         """YouTube channels matching a query: one yt-dlp run on YouTube's own
