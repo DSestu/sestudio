@@ -153,7 +153,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
       </aside>
 
       {/* Mobile top bar */}
-      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-base-300 bg-base-100/95 backdrop-blur px-4 h-14 pt-[env(safe-area-inset-top)]">
+      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-base-300 bg-base-100/95 backdrop-blur px-4 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]">
         <Wordmark />
         <button
           onClick={onOpenSettings}
