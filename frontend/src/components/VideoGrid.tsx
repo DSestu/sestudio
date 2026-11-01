@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import type { SeasonCard, VideoInfo } from '../api'
 import { videoSeasonCard, warmVideo } from '../api'
 import { videoMeta } from '../videoLinks'
@@ -15,6 +16,7 @@ interface Props {
  *  rows with the thumbnail on the left on phones. */
 export default function VideoGrid({ videos, onOpen, showChannel = false }: Props) {
   const watch = useWatchState()
+  const rest = useRef<ReturnType<typeof setTimeout>>(undefined)
   return (
     <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-x-4 sm:gap-y-6">
       {videos.map(v => {
@@ -25,8 +27,10 @@ export default function VideoGrid({ videos, onOpen, showChannel = false }: Props
             <button
               type="button"
               onClick={() => onOpen(videoSeasonCard(v))}
-              onPointerEnter={() => warmVideo(v.page_url)}
-              onFocus={() => warmVideo(v.page_url)}
+              // Only a pointer that rests: sweeping across the grid must not look
+              // every tile up (YouTube rate-limits an IP that asks too much).
+              onPointerEnter={() => { clearTimeout(rest.current); rest.current = setTimeout(() => warmVideo(v.page_url), 400) }}
+              onPointerLeave={() => clearTimeout(rest.current)}
               className="group flex sm:flex-col gap-3 sm:gap-2 w-full text-left rounded-box focus-visible:outline-2 focus-visible:outline-primary"
             >
               <div className="relative w-40 sm:w-full shrink-0">

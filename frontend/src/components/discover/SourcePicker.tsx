@@ -234,6 +234,7 @@ export function DiscoverMenu({
               onKind={setKind}
               onOpen={card => closeDiscoverMenuThen(() => onOpenCard(card))}
               onSeeAll={() => closeDiscoverMenuThen(() => onSearchTerm(q, kind))}
+              onSeeVideos={() => closeDiscoverMenuThen(() => onSearchTerm(q, 'videos'))}
             />
           ) : (
             <>
@@ -265,6 +266,7 @@ export function DiscoverMenu({
                 </div>
               )}
               <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">
+                <CreatorLinks variant="menu" onPick={closeDiscoverMenu} />
                 <SectionTitle>Browse a source</SectionTitle>
                 {/* Tiles that look like what they open onto: each shows the
                     first posters of that source's Discover page. */}
@@ -297,7 +299,6 @@ export function DiscoverMenu({
                     </button>
                   ))}
                 </div>
-                <CreatorLinks variant="menu" onPick={closeDiscoverMenu} />
               </div>
             </>
           )}
@@ -312,13 +313,14 @@ export function DiscoverMenu({
  * button that counts the rows still out of sight (behind it, or behind the
  * keyboard). The button fills in once nothing is left to scroll to.
  */
-function PhoneResults({ search, query, kind, onKind, onOpen, onSeeAll }: {
+function PhoneResults({ search, query, kind, onKind, onOpen, onSeeAll, onSeeVideos }: {
   search: TitleSearch
   query: string
   kind: Kind
   onKind: (kind: Kind) => void
   onOpen: (card: SeasonCard) => void
   onSeeAll: () => void
+  onSeeVideos: () => void
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -378,6 +380,7 @@ function PhoneResults({ search, query, kind, onKind, onOpen, onSeeAll }: {
           limit={Infinity}
           onOpen={onOpen}
           onSeeAll={onSeeAll}
+          onSeeVideos={onSeeVideos}
         />
       </div>
       {!(done && total === 0) && (

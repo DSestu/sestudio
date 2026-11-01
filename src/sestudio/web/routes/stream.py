@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import http.cookiejar
 import logging
 import threading
@@ -332,12 +333,18 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
 
         rewritten = rewrite_playlist(
             raw.decode("utf-8", errors="replace"), base_url, _mint
-        )
+        ).encode()
+        headers = dict(_CORS_HEADERS)
+        # A long video's playlist lists thousands of segment URLs: 4.2 MB for a
+        # 3.5-hour YouTube video, three of them per video, and 307 kB gzipped.
+        if "gzip" in request.headers.get("accept-encoding", ""):
+            rewritten = gzip.compress(rewritten, compresslevel=1)
+            headers.update({"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
         return Response(
             content=rewritten,
             status_code=upstream.status_code,
             media_type=_HLS_CONTENT_TYPE,
-            headers=dict(_CORS_HEADERS),
+            headers=headers,
         )
 
     if fix is not None:  # a small body, read whole to be rewritten

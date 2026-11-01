@@ -4,6 +4,7 @@ import type { Kind, RecentSearch, TitleSearch } from '../../titleSearch'
 import { KINDS, PREVIEW_ROWS, TITLE_KINDS, kindLabel } from '../../titleSearch'
 import RatingBadge from '../RatingBadge'
 import { OPTIONS_ID, toggleSearchOptions, useSearchOptions } from '../../searchOptions'
+import SourceIcon from '../SourceIcon'
 
 // The pieces every title search is drawn with, on desktop and on phones. A
 // preview keeps one job per state (pick a past search, go to the results
@@ -132,6 +133,9 @@ interface ResultsProps {
   onActive?: (index: number) => void
   onOpen: (card: SeasonCard) => void
   onSeeAll: () => void
+  /** Open the results page on its Videos kind (YouTube videos, Twitch
+   *  channels), searched only then. */
+  onSeeVideos?: () => void
   /** The key Enter is, shown on the results-page row (desktop). */
   enterHint?: boolean
   /** Phones put the results-page link elsewhere and list every title. */
@@ -143,7 +147,7 @@ interface ResultsProps {
 const resultOptionId = (listId: string, index: number) => `${listId}-${index}`
 
 /** A search's preview: the results page first, then a few titles, one line each. */
-export function TitleResults({ search, query, kind, onKind, listId, active = -1, onActive, onOpen, onSeeAll, enterHint = false, seeAllRow = true, limit = PREVIEW_ROWS, footer }: ResultsProps) {
+export function TitleResults({ search, query, kind, onKind, listId, active = -1, onActive, onOpen, onSeeAll, onSeeVideos, enterHint = false, seeAllRow = true, limit = PREVIEW_ROWS, footer }: ResultsProps) {
   const total = search.cards.length
   const sources = new Set(search.cards.flatMap(c => [c.source || 'fstream', ...(c.alts ?? []).map(a => a.source || 'fstream')]))
   const status =
@@ -230,6 +234,22 @@ export function TitleResults({ search, query, kind, onKind, listId, active = -1,
       {total > limit && (
         <button type="button" onClick={onSeeAll} className="mt-1 px-2 py-1 text-left text-xs text-base-content/50">
           +{total - PREVIEW_ROWS} more — <span className="font-semibold text-primary">on the results page</span>
+        </button>
+      )}
+      {onSeeVideos && (
+        <button
+          type="button"
+          onClick={onSeeVideos}
+          className="mt-2 flex items-center gap-3 rounded-box px-2 py-1.5 text-left hover:bg-base-300 active:bg-base-300/60"
+        >
+          <span className="flex shrink-0 -space-x-1.5">
+            <SourceIcon id="youtube" label="YouTube" className="w-5 h-5" />
+            <SourceIcon id="twitch" label="Twitch" className="w-5 h-5" />
+          </span>
+          <span className="min-w-0 flex-1 text-sm truncate">
+            Search YouTube &amp; Twitch for <span className="font-medium">“{query}”</span>
+          </span>
+          <span className="text-xs text-base-content/40">Videos ›</span>
         </button>
       )}
       {footer && search.status === 'done' && total > 0 && (

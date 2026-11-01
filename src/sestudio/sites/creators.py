@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 from collections import defaultdict
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -36,6 +37,18 @@ from sestudio.sites.base import (
 LANG = "vo"
 
 
+# YouTube bans an IP for up to an hour when it asks too much: once it says so,
+# stop asking for a while (asking again only extends the ban), and never ask
+# more than two things at once.
+_YOUTUBE_COOLDOWN = 15 * 60
+_youtube_blocked_until = 0.0
+_youtube_slots = threading.BoundedSemaphore(2)
+
+
+def _is_youtube(url: str) -> bool:
+    return url.startswith("ytsearch") or "youtube.com" in url or "youtu.be" in url
+
+
 def ytdlp_json(*args: str) -> dict[str, Any]:
     """What ``yt-dlp -J <args>`` prints, or SiteError with yt-dlp's reason.
 
@@ -53,10 +66,28 @@ def ytdlp_json(*args: str) -> dict[str, Any]:
         *args,
     ]
     parsed = yt_dlp.parse_options(argv)
+    url = parsed.urls[-1]
+    if not _is_youtube(url):
+        return _extract(parsed.ydl_opts, url)
+    global _youtube_blocked_until
+    wait = _youtube_blocked_until - time.monotonic()
+    if wait > 0:
+        raise SiteError(
+            f"YouTube is rate-limiting this server; try again in {wait / 60:.0f} min"
+        )
+    with _youtube_slots:
+        try:
+            return _extract(parsed.ydl_opts, url)
+        except SiteError as exc:
+            if "rate-limited" in str(exc):
+                _youtube_blocked_until = time.monotonic() + _YOUTUBE_COOLDOWN
+            raise
+
+
+def _extract(ydl_opts: dict[str, Any], url: str) -> dict[str, Any]:
     try:
-        with yt_dlp.YoutubeDL(parsed.ydl_opts) as ydl:
-            info = ydl.extract_info(parsed.urls[-1], download=False)
-            return ydl.sanitize_info(info) or {}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            return ydl.sanitize_info(ydl.extract_info(url, download=False)) or {}
     except yt_dlp.utils.YoutubeDLError as exc:
         raise SiteError(str(exc).removeprefix("ERROR: ")) from exc
 
@@ -315,6 +346,10 @@ class TwitchSite(_YtDlpSite):
             raise SiteError(f"No Twitch channel called {login}")
         return twitch_channel(user)
 
+    def search_channels(self, query: str) -> list[dict[str, Any]]:
+        """Twitch channels matching a query, in Twitch's own order."""
+        return self._channels.get(f"search:{query}", lambda: twitch_search(query))
+
     def latest(self, url: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         channel = self._channel(url)
         live = channel["live"]
@@ -496,3 +531,38 @@ def twitch_live(logins: list[str]) -> list[dict[str, Any]]:
         card["game"] = ((user["stream"].get("game") or {}).get("name")) or ""
         live.append(card)
     return live
+
+
+_TWITCH_SEARCH = """
+query($q: String!) {
+  searchUsers(userQuery: $q, first: 12) {
+    edges { node {
+      login displayName profileImageURL(width: 150)
+      followers { totalCount }
+      stream { title viewersCount game { name } }
+    } }
+  }
+}
+"""
+
+
+def twitch_search(query: str) -> list[dict[str, Any]]:
+    """Twitch channels whose name matches *query*, as the client lists them."""
+    edges = (twitch_gql(_TWITCH_SEARCH, {"q": query}).get("searchUsers") or {}).get(
+        "edges"
+    ) or []
+    out = []
+    for node in (e["node"] for e in edges if e.get("node")):
+        stream = node.get("stream") or {}
+        out.append(
+            {
+                "source": "twitch",
+                "name": node.get("displayName") or node["login"],
+                "url": f"https://www.twitch.tv/{node['login']}",
+                "avatar": node.get("profileImageURL") or "",
+                "followers": (node.get("followers") or {}).get("totalCount") or 0,
+                "live": bool(stream),
+                "game": (stream.get("game") or {}).get("name") or "",
+            }
+        )
+    return out

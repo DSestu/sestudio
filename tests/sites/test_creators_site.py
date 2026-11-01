@@ -244,3 +244,64 @@ def test_youtube_search_lists_videos(monkeypatch):
     assert [(v["title"], v["channel"], v["source"]) for v in videos] == [
         ("A", "C", "youtube")
     ]
+
+
+def test_twitch_channel_search_from_graphql(monkeypatch):
+    monkeypatch.setattr(
+        creators,
+        "twitch_gql",
+        lambda q, v: {
+            "searchUsers": {
+                "edges": [
+                    {
+                        "node": {
+                            "login": "zerator",
+                            "displayName": "ZeratoR",
+                            "followers": {"totalCount": 1658477},
+                            "stream": None,
+                        }
+                    },
+                    {
+                        "node": {
+                            "login": "zerator_247",
+                            "displayName": "ZeratoR_247",
+                            "followers": {"totalCount": 53776},
+                            "stream": {"game": {"name": "Just Chatting"}},
+                        }
+                    },
+                ]
+            }
+        },
+    )
+    found = TwitchSite().search_channels("zerator")
+
+    assert [(c["url"], c["followers"], c["live"], c["game"]) for c in found] == [
+        ("https://www.twitch.tv/zerator", 1658477, False, ""),
+        ("https://www.twitch.tv/zerator_247", 53776, True, "Just Chatting"),
+    ]
+
+
+def test_youtube_rate_limit_stops_further_lookups_for_a_while(monkeypatch):
+    """Asking YouTube again during its ban only extends it."""
+    calls: list[str] = []
+
+    def limited(opts, url):
+        calls.append(url)
+        raise SiteError(
+            "[youtube] x: The current session has been rate-limited by YouTube"
+        )
+
+    monkeypatch.setattr(creators, "_extract", limited)
+    monkeypatch.setattr(creators, "_youtube_blocked_until", 0.0)
+    with pytest.raises(SiteError):
+        creators.ytdlp_json("--no-playlist", "https://www.youtube.com/watch?v=a")
+    with pytest.raises(SiteError, match="try again in"):
+        creators.ytdlp_json("--no-playlist", "https://www.youtube.com/watch?v=b")
+    # Twitch is a different site and stays reachable.
+    with pytest.raises(SiteError):
+        creators.ytdlp_json("--no-playlist", "https://www.twitch.tv/videos/1")
+
+    assert calls == [
+        "https://www.youtube.com/watch?v=a",
+        "https://www.twitch.tv/videos/1",
+    ]
