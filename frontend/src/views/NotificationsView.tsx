@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { WatcherEvent } from '../api'
 import DetailRow from '../components/library/DetailRow'
 import EmptyState from '../components/EmptyState'
+import PageHeader from '../components/PageHeader'
 import WatcherKindBadge from '../components/WatcherKindBadge'
 import WatchersAccordion from '../components/WatchersAccordion'
 import WatchersIntro from '../components/WatchersIntro'
@@ -65,7 +66,32 @@ export default function NotificationsView({ onOpen, tmdbConfigured, navigate }: 
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 flex-wrap">
+      {/* Phones: the page name, what is new and the feed's actions live in the top card. */}
+      <PageHeader
+        title="Activity"
+        status={unread > 0 ? <><em className="not-italic text-primary font-semibold">{unread}</em> new</> : undefined}
+        menu={empty ? undefined : (
+          <>
+            <label className="label cursor-pointer justify-between gap-2 py-0">
+              <span className="label-text text-sm">Unread only</span>
+              <input
+                type="checkbox"
+                className="toggle toggle-primary toggle-sm"
+                checked={unreadOnly}
+                onChange={e => setUnreadOnly(e.target.checked)}
+              />
+            </label>
+            <button
+              className="btn btn-sm btn-ghost justify-start"
+              disabled={unread === 0}
+              onClick={() => void markRead({ all: true })}
+            >
+              Mark all read
+            </button>
+          </>
+        )}
+      />
+      <div className="max-md:hidden flex items-center gap-2 flex-wrap">
         <h2 className="text-lg font-semibold flex-1">
           Activity
           {unread > 0 && <span className="badge badge-primary badge-sm ml-2">{unread} new</span>}
