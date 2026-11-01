@@ -17,8 +17,8 @@ interface Props {
 
 /**
  * Minimised browser player (issue #20). Shows the still-playing local video as
- * a fixed card (desktop, bottom-right) or a docked strip (mobile, above the tab
- * bar). The video element itself is relocated here via the reverse portal, so
+ * a fixed card (desktop, bottom-right) or a strip joined onto the phone dock
+ * (mobile). The video element itself is relocated here via the reverse portal, so
  * playback is uninterrupted. Only rendered when off the watch view.
  */
 export default function MiniPlayer({ node, onOpen, onClose }: Props) {
@@ -99,9 +99,11 @@ export default function MiniPlayer({ node, onOpen, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-x-0 z-40 bottom-(--dock-clear) border-t border-base-300 bg-base-200/95 backdrop-blur max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none">
-      <div className="flex items-center gap-3 px-3 py-2">
-        {video('w-24 rounded aspect-video shrink-0')}
+    // Sits on the dock's top edge (one glass object with it), under it in
+    // stacking so it can rise out from behind it.
+    <div className="fixed inset-x-3 z-[39] bottom-(--dock-top) max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none">
+      <div className="relative glass rounded-t-[28px] flex items-center gap-3 pl-2.5 pr-3 py-2.5 animate-dock-rise motion-reduce:animate-none">
+        {video('w-24 rounded-xl aspect-video shrink-0')}
         <button onClick={onOpen} className="min-w-0 flex-1 text-left">
           <span className="block text-sm font-medium truncate">{heading}</span>
           <span className="block text-xs text-base-content/50 truncate">{sub}</span>

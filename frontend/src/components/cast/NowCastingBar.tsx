@@ -183,10 +183,10 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
       } : {})}
       onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
       // On phones it rides up with the Discover menu (--discover-lift).
-      className="fixed inset-x-0 md:left-56 z-40 bottom-(--dock-clear) md:bottom-0 max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none"
+      className="fixed inset-x-0 max-md:inset-x-3 md:left-56 z-40 max-md:z-[39] bottom-(--dock-top) md:bottom-0 max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none"
     >
       {/* Accordion — grid-rows 0fr→1fr gives a smooth slide-up reveal. */}
-      <div className="mx-auto w-full max-w-6xl px-3 md:px-6">
+      <div className="mx-auto w-full max-w-6xl md:px-6">
         <div
           className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
             open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
@@ -194,7 +194,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
         >
           <div className="overflow-hidden">
             <div
-              className={`rounded-t-box border border-b-0 border-base-300 bg-base-200/95 backdrop-blur p-3 flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
+              className={`relative rounded-t-box max-md:rounded-t-[28px] md:border md:border-b-0 md:border-base-300 md:bg-base-200/95 md:backdrop-blur max-md:glass p-3 flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
                 open ? 'opacity-100' : 'opacity-0'
               }`}
             >
@@ -353,7 +353,11 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
 
       {/* Bar — clicking anywhere on it (except the controls) returns to the
           casting title's watch view. */}
-      <div className="border-t border-base-300 bg-base-200/95 backdrop-blur">
+      {/* On phones it sits on the dock as one glass object (the accordion, when
+          open, joins on top of it). */}
+      <div className={`md:border-t md:border-base-300 md:bg-base-200/95 md:backdrop-blur max-md:relative max-md:glass max-md:overflow-hidden max-md:animate-dock-rise motion-reduce:animate-none ${
+        open ? "" : "max-md:rounded-t-[28px]"
+      }`}>
         <div
           onClick={desktop ? openSeries : () => setOpen(o => !o)}
           className={`mx-auto w-full max-w-6xl flex items-center gap-3 px-3 md:px-6 py-2 ${

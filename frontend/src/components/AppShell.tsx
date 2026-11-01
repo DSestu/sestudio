@@ -189,7 +189,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
 
       {/* Phone dock — hidden while the selection bar occupies this slot. */}
       {!selecting && (
-        <PhoneDock view={view} menuOpen={menuOpen} onNavigate={onNavigate} badgeFor={badgeFor} />
+        <PhoneDock view={view} menuOpen={menuOpen} joined={bottomBar && !menuOpen} onNavigate={onNavigate} badgeFor={badgeFor} />
       )}
     </div>
   )
@@ -213,9 +213,11 @@ const closeIcon = (
  * around a Search button that unfolds the Discover menu. The active tab's pill
  * slides between tabs rather than jumping.
  */
-function PhoneDock({ view, menuOpen, onNavigate, badgeFor }: {
+function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
   view: View
   menuOpen: boolean
+  /** A playing strip sits on top, so the top corners square off to meet it. */
+  joined: boolean
   onNavigate: (v: Tab) => void
   badgeFor: (id: Tab) => number
 }) {
@@ -275,7 +277,9 @@ function PhoneDock({ view, menuOpen, onNavigate, badgeFor }: {
   return (
     <nav
       aria-label="Primary"
-      className="md:hidden fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 glass rounded-[28px] grid grid-cols-[1fr_1fr_4.5rem_1fr_1fr] items-center h-16.5"
+      className={`md:hidden fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 glass grid grid-cols-[1fr_1fr_4.5rem_1fr_1fr] items-center h-16.5 transition-[border-radius] duration-300 ${
+        joined ? "rounded-b-[28px]" : "rounded-[28px]"
+      }`}
     >
       <span
         ref={pill}
