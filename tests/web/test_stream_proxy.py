@@ -563,7 +563,7 @@ def test_proxy_applies_the_sites_fix(httpx_mock: HTTPXMock):
 
 def test_best_variant_keeps_the_best_picture_and_its_audio_only():
     """The server's own ffmpeg reads every variant of a master before starting."""
-    from sestudio.web.proxy import best_variant
+    from sestudio.web.proxy import best_variant, master_variants
 
     master = "\n".join(
         [
@@ -585,3 +585,27 @@ def test_best_variant_keeps_the_best_picture_and_its_audio_only():
     assert not any(x in out for x in ("v240", "v720", "a-low"))
     media = "#EXTM3U\n#EXTINF:6,\nseg0.ts"
     assert best_variant(media) == media
+    # A quality picked from the master's own: the best at most that tall,
+    # else the shortest.
+    assert "v720.m3u8" in best_variant(master, 720)
+    assert not any(x in best_variant(master, 720) for x in ("v1080", "v240"))
+    assert "v240.m3u8" in best_variant(master, 100)
+    assert [h for _w, h, _b in master_variants(master)] == [1080, 720, 240]
+
+
+def test_resolve_lets_youtube_be_played_at_its_own_qualities():
+    """No re-encode on offer: the player picks one of the master's variants."""
+    client = _client()
+    site = client.app.state.sites["youtube"]
+    site.resolve_candidate = lambda cand, providers: StreamSource(
+        url="https://manifest.googlevideo.com/api/manifest/hls_variant/x/file/index.m3u8",
+        referer="https://www.youtube.com/watch?v=x",
+        provider="youtube",
+    )
+    body = client.post(
+        "/api/stream/resolve",
+        json={"embed_urls": {"youtube": "https://youtu.be/x"}, "source": "youtube"},
+    ).json()
+
+    assert body["kind"] == "hls"
+    assert "transcode_url" not in body

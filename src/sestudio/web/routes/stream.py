@@ -126,8 +126,21 @@ def _proxy_url(secret: bytes, target_url: str, referer: str, provider: str) -> s
     return "/api/stream/proxy?" + urllib.parse.urlencode({"token": token})
 
 
-def transcode_source(request: Request, token: str) -> tuple[str, bool]:
+def source_qualities(request: Request, token: str) -> bool:
+    """Whether the stream behind *token* carries its own qualities (YouTube,
+    Twitch): a quality is then picked from them, read alone, rather than
+    re-encoded down from the best one."""
+    try:
+        site = site_for(request.app.state.sites, _verify(request, token)["p"])
+    except KeyError:
+        return False
+    return getattr(site, "source_qualities", False)
+
+
+def transcode_source(request: Request, token: str, height: int = 0) -> tuple[str, bool]:
     """The URL ffmpeg reads a proxied stream from, and whether it is HLS.
+
+    With *height*, a master is read at its best variant that tall at most.
 
     The server's own proxy, not the host: it already carries the Referer, the
     browser-like headers and the TLS fingerprint the host checks, and rewrites
@@ -143,7 +156,9 @@ def transcode_source(request: Request, token: str) -> tuple[str, bool]:
         else f"https://127.0.0.1:{request.app.state.https_port}"
     )
     # best=1: a master comes back holding its best variant only (best_variant).
-    query = urllib.parse.urlencode({"token": token, "best": 1})
+    query = urllib.parse.urlencode(
+        {"token": token, "best": 1, **({"height": height} if height else {})}
+    )
     return f"{base}/api/stream/proxy?{query}", ".m3u8" in payload["u"]
 
 
@@ -183,12 +198,18 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
             continue
         kind = "hls" if ".m3u8" in source.url else "mp4"
         proxy_url = _proxy_url(secret, source.url, source.referer, source.provider)
+        # The same stream re-encoded as it plays, at every quality from the
+        # source down, for a player on a link too slow for the source. Not for
+        # a master that holds its qualities already: the player picks one.
+        own = kind == "hls" and getattr(site, "source_qualities", False)
         result = {
             "proxy_url": proxy_url,
             "kind": kind,
-            # The same stream re-encoded as it plays, at every quality from the
-            # source down, for a player on a link too slow for the source.
-            "transcode_url": "/api/stream/hls?" + proxy_url.split("?", 1)[1],
+            **(
+                {}
+                if own
+                else {"transcode_url": "/api/stream/hls?" + proxy_url.split("?", 1)[1]}
+            ),
             "provider": cand.provider,
             # Sidecar subtitles go through the same proxy: they are fetched from
             # the stream host and need its Referer just as the segments do.
@@ -251,7 +272,9 @@ def _release(client: httpx.Client) -> None:
 
 
 @router.api_route("/stream/proxy", methods=["GET", "HEAD"])
-def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
+def proxy_stream(
+    token: str, request: Request, best: bool = False, height: int = Query(0, ge=0)
+) -> Response:
     """Stream an upstream media resource through the server, injecting the provider Referer.
 
     Only tokens this process signed (and not yet expired) are honoured; verification
@@ -341,8 +364,8 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
             _release(client)
         if fix is not None and upstream.is_success:
             raw = fix.transform(raw)
-        if best:
-            raw = best_variant(raw.decode("utf-8", errors="replace")).encode()
+        if best or height:
+            raw = best_variant(raw.decode("utf-8", errors="replace"), height).encode()
         secret_bytes = request.app.state.proxy_secret
         base_url = str(upstream.url)
 
@@ -392,8 +415,10 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
     return StreamingResponse(body(), status_code=upstream.status_code, headers=relay)
 
 
-async def _probe(request: Request, token: str) -> tuple[str, downloaded.StreamProbe]:
-    url, hls = transcode_source(request, token)
+async def _probe(
+    request: Request, token: str, height: int = 0
+) -> tuple[str, downloaded.StreamProbe]:
+    url, hls = transcode_source(request, token, height)
     probe = await asyncio.to_thread(downloaded.probe_stream, url, hls=hls)
     if probe is None:
         raise HTTPException(status_code=502, detail="Could not read that stream")
@@ -478,12 +503,14 @@ async def stream_tv(
     rung: int = Query(0, ge=0),
     fps: int = 0,
     live: str | None = None,
+    height: int = Query(0, ge=0),
 ) -> Response:
     """A provider's stream re-encoded for a DLNA TV, as ``/downloaded/tv`` is a
     stored file. For HLS, which few TVs follow, and for a lighter quality or
-    another frame rate."""
+    another frame rate. *height* reads a master at its variant that tall at
+    most (see `source_qualities`)."""
     check_fps(fps)
-    url, probe = await _probe(request, token)
+    url, probe = await _probe(request, token, height)
     start, headers = tv_seek(request, probe.duration)
     if request.method == "HEAD":
         return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)

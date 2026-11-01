@@ -162,6 +162,10 @@ export default function OutputSwitcher({
         const id = Math.random().toString(36).slice(2)
         await castLive(id, quality, fps)
         media = `${withFps(proxyUrl, fps)}&live=${id}`
+      } else if (quality && kind === 'hls' && /\/api\/stream\/proxy\?/.test(proxyUrl)) {
+        // A master holding its own qualities (YouTube, Twitch): cut to the one
+        // picked, so nothing heavier is fetched.
+        media = `${proxyUrl}&height=${quality}`
       }
       await castToChromecast(
         onLan(media),
