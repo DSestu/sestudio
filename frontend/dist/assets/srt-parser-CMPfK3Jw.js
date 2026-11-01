@@ -1,0 +1,6 @@
+<<<<<<<< HEAD:frontend/dist/assets/srt-parser-C0dqKxTy.js
+import{a as e,o as t,s as n}from"./prod-C3EGsk6i.js";var r=/,/g,i=`-->`,a=class extends n{parse(n,r){if(n===``)this.c&&=(this.l.push(this.c),this.h.onCue?.(this.c),null),this.e=e.None;else if(this.e===e.Cue)this.c.text+=(this.c.text?`
+========
+import{a as e,o as t,s as n}from"./prod-D3SF4Hym.js";var r=/,/g,i=`-->`,a=class extends n{parse(n,r){if(n===``)this.c&&=(this.l.push(this.c),this.h.onCue?.(this.c),null),this.e=e.None;else if(this.e===e.Cue)this.c.text+=(this.c.text?`
+>>>>>>>> bd509ed (feat: Home becomes a grid of widgets, led by Continue watching with its progress on the frame):frontend/dist/assets/srt-parser-CMPfK3Jw.js
+`:``)+n;else if(n.includes(i)){let i=this.q(n,r);i&&(this.c=new t(i[0],i[1],i[2].join(` `)),this.c.id=this.n,this.e=e.Cue)}this.n=n}q(e,t){return super.q(e.replace(r,`.`),t)}};function o(){return new a}export{o as default};
