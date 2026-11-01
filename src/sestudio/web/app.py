@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from sestudio.config import load_config
+from sestudio.logging_config import capture_logs
 from sestudio.models import StreamSource
 from sestudio.providers.filmoon import FilmoonProvider
 from sestudio.providers.luluvid import LuluvidProvider
@@ -104,6 +105,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     SESTUDIO_WATCHERS=0 so tests can enter the lifespan without it reaching the
     network.
     """
+    capture_logs()
     await _refresh_sites(app)
     tasks = [asyncio.create_task(_refresh_loop(app))]
     if watchers_enabled():

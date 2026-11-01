@@ -14,6 +14,7 @@ from sestudio import interpolate, restart
 from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.config import DEFAULT_DOWNLOAD_ORDER, load_config, save_config, tmdb_key
 from sestudio.downloader import js_runtime
+from sestudio.logging_config import LOG_BUFFER
 
 router = APIRouter()
 
@@ -154,6 +155,12 @@ async def post_ai_setup() -> dict[str, Any]:
     """Run the frame interpolation setup again, from scratch."""
     await asyncio.to_thread(interpolate.setup)
     return await asyncio.to_thread(interpolate.info)
+
+
+@router.get("/server/log")
+async def get_server_log(after: int = 0) -> dict[str, Any]:
+    """What the server logged since line *after* (0: all it still holds)."""
+    return {"lines": LOG_BUFFER.since(after)}
 
 
 @router.get("/server")
