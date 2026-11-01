@@ -58,6 +58,7 @@ Drive. See [On Google Colab](#on-google-colab).
 * [Sources and hosts](#sources-and-hosts)
 * [Running it](#running-it)
   * [On Google Colab](#on-google-colab)
+  * [On an Android phone](#on-an-android-phone)
 * [Where it keeps things](#where-it-keeps-things)
 * [Casting setup](#casting-setup)
   * [HTTPS and the certificate](#https-and-the-certificate)
@@ -266,6 +267,34 @@ cell prints a public link — open it on any device, no sign-in.
 
 > [!WARNING]
 > Anyone with the link controls sestudio and writes to your Drive folder.
+
+### On an Android phone
+
+sestudio can run on the phone itself, with no computer, inside
+[Termux](https://termux.dev).
+
+1. Install **Termux** and **Termux:Widget** from
+   [F-Droid](https://f-droid.org/packages/com.termux/) (the Play Store Termux is
+   outdated).
+2. Open Termux and paste:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/DSestu/sestudio/main/scripts/termux.sh | bash
+   ```
+
+   It takes a few minutes the first time (Debian, then sestudio) and asks once
+   for access to your files.
+3. Add the Termux:Widget widget to your home screen and tap **sestudio**. It
+   starts the server and opens `http://localhost:8080`.
+
+Downloads land in `Movies/sestudio`. AI frame rates are off: the phone's GPU is
+out of reach from Termux.
+
+* Android stops apps in the background: in the phone's settings, turn off
+  battery optimisation for Termux, or sestudio dies a few minutes after the
+  screen locks.
+* sestudio runs inside Debian (`proot-distro`), not in Termux itself, where
+  several of its dependencies have no build.
 
 ---
 
