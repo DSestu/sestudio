@@ -977,7 +977,7 @@ export default function WatchView({
                 episode; casting to a TV is a separate, non-disruptive action
                 (see OutputSwitcher). */}
             <div
-              className="sticky top-14 z-20 mx-[calc(-1*var(--gutter))] px-(--gutter) py-2 bg-base-100 lg:static lg:mx-0 lg:px-0 lg:py-0 lg:bg-transparent"
+              className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 mx-[calc(-1*var(--gutter))] px-(--gutter) py-2 bg-base-100 lg:static lg:mx-0 lg:px-0 lg:py-0 lg:bg-transparent"
               style={dock.top ? { top: dock.top } : undefined}
             >
               {/* As it docks the picture dims, through the video alone so the
