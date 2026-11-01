@@ -96,7 +96,7 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
           aria-controls={q ? RESULTS_ID : RECENT_ID}
           aria-activedescendant={open && active < rowCount ? `${q ? RESULTS_ID : RECENT_ID}-${active}` : undefined}
           aria-label="Search films, series and anime on every source"
-          placeholder="Search films, series and anime, or paste a YouTube or Twitch link"
+          placeholder="Search titles, or paste a YouTube or Twitch link"
           value={text}
           onChange={e => { setText(e.target.value); setActive(0); setOpen(true) }}
           onFocus={() => setOpen(true)}

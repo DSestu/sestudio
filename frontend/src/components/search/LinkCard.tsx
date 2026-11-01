@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { VideoInfo } from '../../api'
 import { downloadVideo } from '../../api'
 import type { LinkState } from '../../videoLinks'
-import { videoDuration, videoMeta } from '../../videoLinks'
+import { channelHref, videoDuration, videoMeta } from '../../videoLinks'
 
 /** A 16:9 thumbnail with its duration, or LIVE, in the corner. */
 export function VideoThumb({ info, className = '' }: { info: VideoInfo; className?: string }) {
@@ -66,7 +66,14 @@ export default function LinkCard({ link, source, onPlay }: Props) {
           <VideoThumb info={info} className="w-full sm:w-48" />
           <div className="flex-1 min-w-0 flex flex-col gap-1">
             <p className="font-semibold leading-snug line-clamp-2">{info.title}</p>
-            <p className="text-xs text-base-content/60 truncate">{videoMeta(info)}</p>
+            <p className="text-xs text-base-content/60 truncate">
+              {info.channel_url ? (
+                <a href={channelHref(info.channel_url, info.source)} className="link link-hover font-medium text-base-content/80">
+                  {info.channel}
+                </a>
+              ) : info.channel}
+              {videoMeta({ ...info, channel: '' }) && ` · ${videoMeta({ ...info, channel: '' })}`}
+            </p>
             <div className="mt-2 grid grid-cols-2 sm:flex gap-2">
               <button type="button" className="btn btn-primary btn-sm" onClick={() => onPlay(info)}>
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>

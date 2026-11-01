@@ -132,3 +132,76 @@ def test_youtube_master_keeps_only_h264_variants():
         YouTubeSite().proxy_fix("https://manifest.googlevideo.com/hls_playlist/")
         is None
     )
+
+
+def test_youtube_channel_lists_its_videos_dated_by_the_feed(monkeypatch):
+    """yt-dlp's flat listing has no dates; the channel's RSS feed fills them in."""
+    calls: list[tuple] = []
+
+    def fake(*args, **_kw):
+        calls.append(args)
+        return {
+            "channel": "Blender",
+            "channel_id": "UC1",
+            "channel_url": "https://www.youtube.com/channel/UC1",
+            "thumbnails": [{"id": "avatar_uncropped", "url": "https://yt/avatar"}],
+            "entries": [
+                {"id": "a", "url": "https://www.youtube.com/watch?v=a", "title": "A"},
+                {"id": "b", "url": "https://www.youtube.com/watch?v=b", "title": "B"},
+            ],
+        }
+
+    monkeypatch.setattr(creators, "ytdlp_json", fake)
+    monkeypatch.setattr(creators, "youtube_feed_dates", lambda cid: {"a": 1700000000})
+    channel = YouTubeSite().channel("https://www.youtube.com/@BlenderOfficial/videos")
+
+    assert calls[0][-1] == "https://www.youtube.com/@BlenderOfficial/videos"
+    assert (channel["name"], channel["url"], channel["avatar"]) == (
+        "Blender",
+        "https://www.youtube.com/channel/UC1",
+        "https://yt/avatar",
+    )
+    assert [(v["title"], v["timestamp"]) for v in channel["videos"]] == [
+        ("A", 1700000000),
+        ("B", 0),
+    ]
+    assert channel["videos"][0]["channel"] == "Blender"
+
+
+def test_twitch_channel_from_graphql_has_its_live_stream_and_vods():
+    channel = creators.twitch_channel(
+        {
+            "login": "someone",
+            "displayName": "SomeOne",
+            "profileImageURL": "https://tw/avatar",
+            "stream": {
+                "title": "Run",
+                "viewersCount": 8200,
+                "createdAt": "2026-11-01T18:00:00Z",
+            },
+            "videos": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "42",
+                            "title": "VOD",
+                            "lengthSeconds": 60,
+                            "publishedAt": "2026-10-30T10:00:00Z",
+                        }
+                    }
+                ]
+            },
+        }
+    )
+
+    assert channel["url"] == "https://www.twitch.tv/someone"
+    assert channel["live"]["is_live"] and channel["live"]["view_count"] == 8200
+    assert channel["live"]["page_url"] == "https://www.twitch.tv/someone"
+    vod = channel["videos"][0]
+    assert vod["page_url"] == "https://www.twitch.tv/videos/42"
+    assert vod["timestamp"] == 1793354400 and vod["duration"] == 60
+
+
+def test_twitch_channel_refuses_non_channel_links():
+    with pytest.raises(SiteError):
+        TwitchSite().channel("https://www.twitch.tv/videos/123")

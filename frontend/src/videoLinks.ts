@@ -66,3 +66,9 @@ export function videoMeta(info: VideoInfo): string {
     info.view_count ? views(info.view_count, info.is_live) : null,
   ].filter(Boolean).join(' · ')
 }
+
+/** Where a YouTube or Twitch channel's page opens in the app. A plain link,
+ *  so it works from anywhere without passing navigation down. */
+export function channelHref(url: string, source: string): string {
+  return `#/channel?u=${encodeURIComponent(url)}&src=${source}`
+}
