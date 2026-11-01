@@ -1086,6 +1086,7 @@ export type WatcherKind =
   | 'film_available'
   | 'saved_search'
   | 'tmdb_criteria'
+  | 'channel'
 
 export interface Watcher {
   id: number

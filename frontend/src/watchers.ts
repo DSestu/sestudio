@@ -66,6 +66,11 @@ export function watcherForPage(all: Watcher[], pageUrl: string): Watcher | undef
   })
 }
 
+/** The watcher following a YouTube or Twitch channel, if there is one. */
+export function watcherForChannel(all: Watcher[], channelUrl: string): Watcher | undefined {
+  return all.find(w => w.kind === 'channel' && w.config.channel_url === channelUrl)
+}
+
 /** The saved-search watcher for a query, if there is one. */
 export function watcherForQuery(all: Watcher[], query: string): Watcher | undefined {
   const wanted = query.trim().toLowerCase()

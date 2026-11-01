@@ -167,10 +167,66 @@ def collect_saved_search_hits(
     return hits
 
 
+def collect_channel_hits(watcher: Watcher, sites: dict[str, ContentSite]) -> list[Hit]:
+    """Hits for a followed YouTube or Twitch channel: each new video, and each
+    time it goes live (keyed by the stream's start, so once per stream)."""
+    config = watcher.config
+    channel_url = str(config.get("channel_url") or "")
+    site = sites.get(str(config.get("source") or ""))
+    if site is None or not hasattr(site, "latest"):
+        raise SiteError(f"Unknown channel source {config.get('source')!r}")
+    name = str(config.get("name") or "") or watcher.label
+    videos, live = site.latest(channel_url)
+
+    what = "broadcast" if site.id == "twitch" else "video"
+    hits = [
+        Hit(
+            item_key=f"video:{video['page_url']}",
+            title=video["title"],
+            subtitle=f"{name} · New {what}",
+            poster_url=video["thumbnail"],
+            data={
+                "kind": "video",
+                "page_url": video["page_url"],
+                "source": site.id,
+                # A video is its own one-item title, keyed in watch state by it.
+                "series_name": video["title"],
+                "season": 0,
+                "lang": "vo",
+                "episode_name": f"{video['title']}.mp4",
+                "channel": name,
+                "channel_url": channel_url,
+            },
+        )
+        for video in videos
+    ]
+    if live:
+        hits.append(
+            Hit(
+                item_key=f"live:{live['timestamp']}",
+                title=live["title"],
+                subtitle=f"{name} is live",
+                poster_url=live["thumbnail"] or str(config.get("avatar") or ""),
+                data={
+                    "kind": "live",
+                    "page_url": live["page_url"],
+                    "source": site.id,
+                    "series_name": live["title"],
+                    "season": 0,
+                    "lang": "vo",
+                    "channel": name,
+                    "channel_url": channel_url,
+                },
+            )
+        )
+    return hits
+
+
 COLLECTORS = {
     "series_episodes": collect_page_hits,
     "title_lang": collect_page_hits,
     "film_available": collect_page_hits,
     "saved_search": collect_saved_search_hits,
     "tmdb_criteria": collect_criteria_hits,
+    "channel": collect_channel_hits,
 }

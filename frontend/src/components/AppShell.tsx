@@ -7,6 +7,7 @@ import type { Tab, View } from '../nav'
 import { useSelectionActive } from '../selectionMode'
 import { closeDiscoverMenuThen, toggleDiscoverMenu, useDiscoverMenuOpen } from '../discoverMenu'
 import SourceIcon from './SourceIcon'
+import FollowedChannels from './FollowedChannels'
 
 interface Destination {
   id: Tab
@@ -272,6 +273,7 @@ function RailCatalogs({ catalogs, catalogId, onOpenCatalog }: {
           </span>
         </button>
       ))}
+      <FollowedChannels variant="rail" />
     </div>
   )
 }

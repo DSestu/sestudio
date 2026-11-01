@@ -12,6 +12,7 @@ WATCHER_KINDS: tuple[str, ...] = (
     "film_available",
     "saved_search",
     "tmdb_criteria",
+    "channel",
 )
 
 # How often each kind is worth re-checking. Episodes land daily, search results
@@ -22,6 +23,9 @@ DEFAULT_INTERVALS: dict[str, int] = {
     "film_available": 3600,
     "saved_search": 21600,
     "tmdb_criteria": 86400,
+    # One cheap request per poll (an RSS feed, a GraphQL query), and going live
+    # is only news while it lasts.
+    "channel": 300,
 }
 
 # Kinds whose config points at a single title page.
@@ -124,6 +128,19 @@ def validate_config(kind: str, config: Any) -> dict[str, Any]:
             "poster_url": str(config.get("poster_url") or "").strip(),
         }
 
+    if kind == "channel":
+        channel_url = str(config.get("channel_url") or "").strip()
+        source = str(config.get("source") or "").strip().casefold()
+        if not channel_url or source not in ("youtube", "twitch"):
+            raise ValueError(
+                "channel requires a channel_url and a youtube or twitch source"
+            )
+        return {
+            "channel_url": channel_url,
+            "source": source,
+            "name": str(config.get("name") or "").strip(),
+            "avatar": str(config.get("avatar") or "").strip(),
+        }
     if kind == "saved_search":
         query = str(config.get("query") or "").strip()
         if not query:
