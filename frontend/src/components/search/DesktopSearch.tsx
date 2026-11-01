@@ -120,6 +120,7 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
               onActive={setActive}
               onOpen={openCard}
               onSeeAll={seeAll}
+              onSeeVideos={() => { close(); onSearch(q, 'videos') }}
               enterHint
               footer={
                 <span className="flex items-center gap-3 text-xs text-base-content/50">

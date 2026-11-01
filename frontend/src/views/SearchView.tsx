@@ -17,6 +17,7 @@ import ToolbarToggle from '../components/ToolbarToggle'
 import WatchSearchButton from '../components/WatchSearchButton'
 import PeopleResults, { PeopleFold } from '../components/PeopleResults'
 import VideoResults from '../components/search/VideoResults'
+import ChannelHits from '../components/search/ChannelHits'
 import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
 import KindRows from '../components/search/KindRows'
@@ -639,7 +640,10 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           />
         )
       ) : kind === 'videos' ? (
-        <VideoResults query={lastQuery} onOpen={onOpenDetail} />
+        <div className="flex flex-col gap-6">
+          <ChannelHits query={lastQuery} />
+          <VideoResults query={lastQuery} onOpen={onOpenDetail} />
+        </div>
       ) : kind === 'people' ? (
         // People only: who TMDB knows by that name, with a face.
         peopleStatus === 'loading' ? (

@@ -1360,9 +1360,29 @@ export async function fetchCreatorsLatest(): Promise<VideoInfo[]> {
 const warmed = new Set<string>()
 
 /** Have the server look a video up before it is opened, so opening it starts
- *  at once: a pointer resting on its tile is the hint. Once per video. */
+ *  at once. Once per video; callers wait for the pointer to rest on its tile,
+ *  as each lookup counts toward YouTube's per-IP rate limit. */
 export function warmVideo(url: string): void {
   if (warmed.has(url)) return
   warmed.add(url)
   fetch(`${BASE}/link?url=${encodeURIComponent(url)}`).catch(() => warmed.delete(url))
+}
+
+/** A Twitch channel found by name, for search's Videos kind. */
+export interface ChannelHit {
+  source: string
+  name: string
+  url: string
+  avatar: string
+  followers: number
+  live: boolean
+  /** What it streams now, '' when off air. */
+  game: string
+}
+
+/** Twitch channels matching a query; [] when the search fails, as the strip
+ *  holding them just hides then. */
+export async function searchChannels(q: string): Promise<ChannelHit[]> {
+  const res = await fetch(`${BASE}/channels/search?q=${encodeURIComponent(q)}`).catch(() => null)
+  return res?.ok ? res.json() : []
 }

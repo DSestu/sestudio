@@ -436,6 +436,23 @@ def test_proxy_serves_rewritten_playlist_end_to_end(httpx_mock: HTTPXMock, monke
     assert payload["u"] == "https://cdn.example/hls/480/index.m3u8"
     assert payload["r"] == "https://vidzy.org/"
 
+    # Gzipped for a client that accepts it (a long video's playlist is MBs),
+    # plain for one that does not.
+    assert resp.headers.get("content-encoding") == "gzip"
+    httpx_mock.add_response(
+        url="https://cdn.example/hls/master.m3u8",
+        headers={"Content-Type": "application/vnd.apple.mpegurl"},
+        text="#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\n480/index.m3u8\n",
+    )
+    plain = client.get(
+        "/api/stream/proxy",
+        params={"token": token},
+        headers={"Accept-Encoding": "identity"},
+    )
+    assert "content-encoding" not in plain.headers
+    # The same playlist; only the minted tokens' expiry differs.
+    assert plain.text.splitlines()[:-1] == resp.text.splitlines()[:-1]
+
 
 # --------------------------------------------------------------------------- #
 # Re-encoded at every quality from the source down
