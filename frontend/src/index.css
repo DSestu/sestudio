@@ -15,6 +15,11 @@
   @keyframes slide {
     from { opacity: 0; transform: translateX(24px); }
   }
+  /* The phone's playing strip rises out from behind the dock. */
+  --animate-dock-rise: dock-rise 420ms cubic-bezier(.2, .8, .2, 1) both;
+  @keyframes dock-rise {
+    from { opacity: 0; transform: translateY(100%); }
+  }
 }
 
 /* Bottom-sheet modals clear the home indicator / notch inset on mobile, on top
@@ -59,11 +64,13 @@
   }
 }
 
-/* Phones: the distance from the bottom of the screen to just above the
-   floating dock (12px margin + 66px dock + a 6px gap). Bars and sheets that
-   sit on top of the dock use it, so they move together if the dock does. */
+/* Phones: where the floating dock's top edge is (12px margin + 66px dock),
+   and just above it with a 6px gap. The playing strip sits on --dock-top, so
+   it and the dock read as one object; bars and sheets that float over the
+   dock use --dock-clear. Both move together if the dock does. */
 :root {
-  --dock-clear: calc(5.25rem + env(safe-area-inset-bottom));
+  --dock-top: calc(4.875rem + env(safe-area-inset-bottom));
+  --dock-clear: calc(var(--dock-top) + 0.375rem);
 }
 
 /* "Signal" glass, the one material for the nav bars, the player dock, sheets
