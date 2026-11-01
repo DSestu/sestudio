@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { GLASS_BUTTON, pageHeaderMounted } from '../pageHeader'
+import { AWAY, useBarsHidden } from '../barsHidden'
 
 // The phone's top card (docs/SPEC-nav-redesign.md §4.2): one floating glass
 // card per page with its name, a status line, a ⋯ menu of the page's actions
@@ -26,6 +27,7 @@ export function SettingsButton() {
  */
 export function TopCard({ children }: { children: ReactNode }) {
   const card = useRef<HTMLElement>(null)
+  const away = useBarsHidden()
   useLayoutEffect(() => {
     const el = card.current
     if (!el) return
@@ -39,7 +41,7 @@ export function TopCard({ children }: { children: ReactNode }) {
   return (
     <header
       ref={card}
-      className="md:hidden fixed inset-x-3 top-[calc(0.625rem+env(safe-area-inset-top))] z-40 glass rounded-2xl pl-5 pr-2.5 py-2.5"
+      className={`md:hidden fixed inset-x-3 top-[calc(0.625rem+env(safe-area-inset-top))] z-40 glass rounded-2xl pl-5 pr-2.5 py-2.5 transition-[translate,opacity] ${AWAY(away, "-translate-y-[calc(100%+1.5rem)]")}`}
     >
       {children}
     </header>
