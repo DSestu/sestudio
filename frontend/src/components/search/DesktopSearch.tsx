@@ -2,7 +2,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import type { CatalogInfo, SeasonCard, VideoInfo } from '../../api'
 import { videoSeasonCard } from '../../api'
 import type { Kind, MergeOptions, RecentSearch } from '../../titleSearch'
-import { KINDS, PREVIEW_ROWS, SEARCH_FIELD, TITLE_KINDS, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
+import { KINDS, PREVIEW_ROWS, SEARCH_FIELD, TITLE_KINDS, clearRecentSearches, isTitleKind, useRecentSearches, useTitleSearch } from '../../titleSearch'
 import { KindChips, OptionsButton, RecentSearchList, SearchIcon, TitleResults } from './SearchParts'
 import LinkCard from './LinkCard'
 import { linkSource, useLink } from '../../videoLinks'
@@ -27,8 +27,8 @@ const RECENT_ID = 'desktop-search-recent'
  */
 export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, onOpenCard, onSearch }: Props) {
   const [text, setText] = useState(query)
-  // The preview lists titles, so a People page previews every kind.
-  const [kind, setKind] = useState<Kind>(pageKind === 'people' ? 'all' : pageKind)
+  // The preview lists titles, so a People or Videos page previews every kind.
+  const [kind, setKind] = useState<Kind>(isTitleKind(pageKind) ? pageKind : 'all')
   const [open, setOpen] = useState(false)
   // Typed: 0 is the results page, i the (i-1)th title. Empty: the ith recent.
   const [active, setActive] = useState(0)

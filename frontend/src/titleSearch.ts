@@ -7,7 +7,7 @@ import { useTitlesMeta, type TitleRef } from './useTitlesMeta'
 // The one title search behind the desktop bar and the phone's Discover menu:
 // the same query, merge, kind filter and ratings, so both show the same rows.
 
-export type Kind = 'all' | 'films' | 'series' | 'anime' | 'people'
+export type Kind = 'all' | 'films' | 'series' | 'anime' | 'people' | 'videos'
 
 export const KINDS: { value: Kind; label: string }[] = [
   { value: 'all', label: 'Everything' },
@@ -15,10 +15,17 @@ export const KINDS: { value: Kind; label: string }[] = [
   { value: 'series', label: 'Series' },
   { value: 'anime', label: 'Anime' },
   { value: 'people', label: 'People' },
+  { value: 'videos', label: 'Videos' },
 ]
 
-/** The kinds a title list can be narrowed to: people come from TMDB, not the sources. */
-export const TITLE_KINDS = KINDS.filter(k => k.value !== 'people')
+/** Kinds that are not titles from the sources: people come from TMDB, videos
+ *  from YouTube. */
+export function isTitleKind(kind: Kind): boolean {
+  return kind !== 'people' && kind !== 'videos'
+}
+
+/** The kinds a title list can be narrowed to. */
+export const TITLE_KINDS = KINDS.filter(k => isTitleKind(k.value))
 
 /** The kind in a URL's `only` param; anything else means everything. */
 export function parseKind(value: string | null): Kind {
@@ -31,7 +38,7 @@ export function matchesKind(card: SeasonCard, kind: Kind): boolean {
   if (kind === 'anime') return card.is_anime
   if (kind === 'films') return card.is_film && !card.is_anime
   if (kind === 'series') return !card.is_film && !card.is_anime
-  return kind !== 'people'
+  return isTitleKind(kind)
 }
 
 /** Classes for the search field, wherever it is drawn: accent ring, so it reads

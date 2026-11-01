@@ -107,10 +107,11 @@ export function KindSegments({ value, onChange, counts }: { value: Kind; onChang
           role="radio"
           aria-checked={k.value === value}
           onClick={() => onChange(k.value)}
-          className={`relative py-1.5 text-sm leading-tight transition-colors duration-200 ${k.value === value ? 'text-primary-content font-semibold' : k.value === 'people' && counts?.people === 0 ? 'text-base-content/30' : 'text-base-content/60'}`}
+          className={`relative py-1.5 text-xs sm:text-sm leading-tight transition-colors duration-200 ${k.value === value ? 'text-primary-content font-semibold' : k.value === 'people' && counts?.people === 0 ? 'text-base-content/30' : 'text-base-content/60'}`}
         >
           {k.value === 'all' ? 'All' : k.label}
-          {counts && <span className="block text-[10px] tabular-nums opacity-75">{counts[k.value]}</span>}
+          {/* Videos are only searched once picked, so there is no count to show. */}
+          {counts && <span className="block text-[10px] tabular-nums opacity-75">{k.value === 'videos' ? '\u00a0' : counts[k.value]}</span>}
         </button>
       ))}
     </div>

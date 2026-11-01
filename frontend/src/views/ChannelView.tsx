@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import type { ChannelInfo, SeasonCard, VideoInfo } from '../api'
 import { downloadVideo, fetchChannel, videoSeasonCard } from '../api'
 import EmptyState from '../components/EmptyState'
+import VideoGrid from '../components/VideoGrid'
 import { VideoThumb } from '../components/search/LinkCard'
 import { sourceIcon } from '../sourceLook'
 import { videoMeta } from '../videoLinks'
-import { useWatchState, watchKey } from '../watchState'
 import { addWatcher, removeWatcher, updateWatcher, useWatchers, watcherForChannel } from '../watchers'
 
 interface Props {
@@ -27,7 +27,6 @@ interface Fetched {
 export default function ChannelView({ url, onOpen }: Props) {
   const [fetched, setFetched] = useState<Fetched | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const watch = useWatchState()
 
   useEffect(() => {
     let live = true
@@ -68,35 +67,6 @@ export default function ChannelView({ url, onOpen }: Props) {
   const icon = sourceIcon(channel.source)
   const site = channel.source === 'twitch' ? 'Twitch' : 'YouTube'
 
-  function tile(v: VideoInfo) {
-    const entry = watch[watchKey(v.title, 0, 1)]
-    const fraction = entry ? (entry.watched ? 1 : entry.duration ? entry.position / entry.duration : 0) : 0
-    return (
-      <li key={v.page_url}>
-        <button
-          type="button"
-          onClick={() => onOpen(videoSeasonCard(v))}
-          className="group flex sm:flex-col gap-3 sm:gap-2 w-full text-left rounded-box focus-visible:outline-2 focus-visible:outline-primary"
-        >
-          <div className="relative w-40 sm:w-full shrink-0">
-            <VideoThumb info={v} className="w-full transition-opacity group-hover:opacity-90" />
-            {fraction > 0 && (
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50 rounded-b-box overflow-hidden">
-                <div className="h-full bg-primary" style={{ width: `${Math.min(100, fraction * 100)}%` }} />
-              </div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium leading-snug line-clamp-2">{v.title}</p>
-            <p className="mt-0.5 text-xs text-base-content/50">
-              {[videoMeta({ ...v, channel: '' }), entry?.watched ? 'Watched' : null].filter(Boolean).join(' · ')}
-            </p>
-          </div>
-        </button>
-      </li>
-    )
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <header className="flex items-center gap-4">
@@ -136,9 +106,7 @@ export default function ChannelView({ url, onOpen }: Props) {
       )}
 
       {channel.videos.length ? (
-        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-x-4 sm:gap-y-6">
-          {channel.videos.map(tile)}
-        </ul>
+        <VideoGrid videos={channel.videos} onOpen={onOpen} />
       ) : (
         <EmptyState title="No videos yet" message={`${channel.name} has nothing to watch here for now.`} />
       )}

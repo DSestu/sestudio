@@ -31,10 +31,10 @@ and casting.
 | Concept | Existing piece | How |
 |---|---|---|
 | YouTube, Twitch | `ContentSite` (`sites/base.py`) | Two new sites, `youtube` and `twitch`, that override `resolve_candidate` the way UniqueStream does |
-| A video | `Episode` | One `Episode`, `embed_urls={"yt-dlp": url}`, `langs=["vo"]` |
-| A channel | `PageResult` | `fetch_page(channel_url)` returns its videos as episodes, newest first, `season=0` |
-| New video / went live | Watcher kinds (`watchers/kinds.py`) | New kinds `channel_videos` and `channel_live` |
-| Auto-download / archive | `watchers/autodownload.py` | Unchanged, works on the new kinds |
+| A video | `Episode` | One `Episode`, `embed_urls={site id: url}`, `langs=["vo"]`; in watch state it is its own title (series name = the video title) |
+| A channel | New `channel` view + `/api/channel` | Its 30 latest videos (and its live stream, Twitch) |
+| New video / went live | Watcher kinds (`watchers/kinds.py`) | One new kind, `channel`, polled every 5 min; items `video:<url>` and `live:<stream start>` |
+| Auto-download / archive | `watchers/autodownload.py` | New videos queued directly; a Twitch stream is archived from its broadcast once it ends |
 | Recording a live stream | Download queue | yt-dlp records live HLS from now on; the job ends when the stream ends |
 
 ## 4. Playback (yt-dlp streams)
@@ -69,10 +69,11 @@ when neither is there.
 
 | | New videos | Live now |
 |---|---|---|
-| YouTube | Channel RSS `youtube.com/feeds/videos.xml?channel_id=…` (last 15 videos, free, one HTTP GET) | yt-dlp on `youtube.com/channel/<id>/live` |
-| Twitch | yt-dlp `--flat-playlist` on `twitch.tv/<name>/videos` | yt-dlp on `twitch.tv/<name>` (only succeeds while live) |
+| YouTube | RSS of the `UULF<id>` playlist (long-form uploads only, no Shorts or streams; last 15, free, one GET) | *Not checked* (would cost a yt-dlp run per channel per poll) |
+| Twitch | Twitch's public web GraphQL endpoint (the client id yt-dlp uses; no account): profile, live stream and dated broadcasts in one request | Same query; Home's strip asks for every followed channel in one `users(logins:…)` request |
 
-- Live checks every 2 min, new videos every 15 min (reusing the poller). One yt-dlp call takes about 1–2 s, which is fine for a few dozen channels.
+- As built: one `channel` watcher per followed channel, polled every 5 min; Home's Live now strip checks every 2 min while open.
+- yt-dlp's flat listings carry no dates or (on Twitch) thumbnails, which is why the feed and GraphQL are used instead.
 - **Import:** upload Google Takeout's `subscriptions.csv` to follow every YouTube channel in it. For Twitch, paste names or links (one per line).
 - The VOD "expires in Xd" from the mockup is **dropped**: without the API there is no reliable expiry date. Auto-archive instead.
 

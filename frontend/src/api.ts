@@ -1336,3 +1336,13 @@ export async function importFollows(body: { youtube_csv?: string; twitch?: strin
   }
   return res.json()
 }
+
+/** YouTube videos for a query, for search's Videos kind. */
+export async function searchVideos(q: string): Promise<VideoInfo[]> {
+  const res = await fetch(`${BASE}/videos/search?q=${encodeURIComponent(q)}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail ?? 'YouTube search failed')
+  }
+  return res.json()
+}
