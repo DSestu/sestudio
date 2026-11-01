@@ -118,3 +118,41 @@ def test_import_follows_takeout_and_twitch_names_once(monkeypatch, tmp_path):
         "https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg",
     ]
     library.reset_connection()
+
+
+def test_latest_merges_followed_channels_newest_first(monkeypatch, tmp_path):
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SESTUDIO_DB", str(tmp_path / "library.db"))
+    from sestudio import library
+    from sestudio.sites.creators import TwitchSite, YouTubeSite
+
+    library.reset_connection()
+    library.watcher_create(
+        "channel",
+        {"channel_url": "https://www.twitch.tv/a", "source": "twitch", "name": "A"},
+    )
+    library.watcher_create(
+        "channel",
+        {
+            "channel_url": "https://www.youtube.com/channel/UCb",
+            "source": "youtube",
+            "name": "B",
+        },
+    )
+    monkeypatch.setattr(
+        TwitchSite,
+        "latest",
+        lambda self, url: ([{"page_url": "t1", "timestamp": 5}], None),
+    )
+
+    def broken(self, url):
+        raise creators.SiteError("down")
+
+    monkeypatch.setattr(YouTubeSite, "latest", broken)
+    client = TestClient(create_app(live_domain="https://fs03.lol"))
+
+    videos = client.get("/api/creators/latest").json()
+
+    # A channel that fails is left out; the others still show, named.
+    assert [(v["page_url"], v["channel"]) for v in videos] == [("t1", "A")]
+    library.reset_connection()

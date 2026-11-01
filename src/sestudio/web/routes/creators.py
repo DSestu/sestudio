@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from sestudio import library
+from sestudio.catalogs import TtlCache, parallel
 from sestudio.sites.base import SiteError
 from sestudio.sites.creators import _TWITCH_LIVE, _YtDlpSite, twitch_gql, twitch_live
 from sestudio.watchers.models import DEFAULT_INTERVALS, validate_config
@@ -58,6 +59,47 @@ async def get_channel(url: str, request: Request) -> dict[str, Any]:
         return await asyncio.to_thread(site.channel, url)
     except SiteError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+# Every followed channel is one request; the page is opened often, uploads
+# land by the hour.
+_latest = TtlCache(300)
+
+
+def _latest_videos(follows: list[dict[str, Any]], sites: dict) -> list[dict[str, Any]]:
+    def one(w: dict[str, Any]):
+        config = w["config"]
+        site = sites.get(config.get("source"))
+        if not isinstance(site, _YtDlpSite):
+            return []
+        videos, _live = site.latest(config.get("channel_url") or "")
+        name = config.get("name") or w["label"]
+        return [
+            {**v, "channel": name, "channel_url": config["channel_url"]} for v in videos
+        ]
+
+    merged = [
+        v
+        for batch in parallel([lambda w=w: one(w) for w in follows])
+        for v in batch or []
+    ]
+    return sorted(merged, key=lambda v: v["timestamp"], reverse=True)[:60]
+
+
+@router.get("/creators/latest")
+async def creators_latest(request: Request) -> list[dict[str, Any]]:
+    """The newest videos across every followed channel, newest first. A channel
+    that fails to load is left out rather than failing the page."""
+    follows = [
+        w
+        for w in await asyncio.to_thread(library.watcher_list)
+        if w["kind"] == "channel"
+    ]
+    key = "|".join(sorted(w["config"].get("channel_url") or "" for w in follows))
+    sites = request.app.state.sites
+    return await asyncio.to_thread(
+        _latest.get, key, lambda: _latest_videos(follows, sites)
+    )
 
 
 @router.get("/live")
