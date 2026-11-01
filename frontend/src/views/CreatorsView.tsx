@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SeasonCard, VideoInfo } from '../api'
 import { fetchCreatorsLatest } from '../api'
 import FollowSearch from '../components/FollowSearch'
+import PageHeader from '../components/PageHeader'
 import ImportFollows from '../components/ImportFollows'
 import FollowedChannels from '../components/FollowedChannels'
 import LiveNow from '../components/LiveNow'
@@ -45,7 +46,15 @@ export default function CreatorsView({ source, onOpen, navigate }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-center gap-3">
+      {/* Phones: the page name, how many channels are followed and the site tabs live in the top card. */}
+      <PageHeader
+        title="YouTube &amp; Twitch"
+        status={follows.length ? <><em className="not-italic text-primary font-semibold">{follows.length}</em> followed</> : undefined}
+        tabs={FILTERS.map(f => ({ id: f.value || 'all', label: f.label }))}
+        tab={source || 'all'}
+        onTab={id => navigate('creators', { src: id === 'all' ? undefined : id })}
+      />
+      <header className="max-md:hidden flex flex-wrap items-center gap-3">
         <h2 className="text-xl font-semibold tracking-tight flex-1">YouTube &amp; Twitch</h2>
         <div role="radiogroup" aria-label="Site" className="flex gap-1">
           {FILTERS.map(f => (

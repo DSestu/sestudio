@@ -21,3 +21,9 @@ export function usePageHeaderMounted(): boolean {
 /** A round button on the glass: the ⋯, Settings and back controls. */
 export const GLASS_BUTTON =
   'grid place-items-center w-10 h-10 shrink-0 rounded-xl bg-white/6 text-base-content/85 transition-transform duration-100 active:scale-92'
+
+/** Back to wherever the page was opened from; Home when it was opened directly. */
+export function goBack() {
+  if (history.length > 1) history.back()
+  else location.hash = '#/home'
+}
