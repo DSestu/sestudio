@@ -1,5 +1,51 @@
 # Changelog
 
+## [1.2.0](https://github.com/DSestu/sestudio/compare/v1.1.1...v1.2.0) (2026-11-01)
+
+
+### New features
+
+* a Server log in Settings, showing what the server prints in its terminal ([#165](https://github.com/DSestu/sestudio/issues/165)) ([f7c3f3c](https://github.com/DSestu/sestudio/commit/f7c3f3c8c50b794f01dba171817610f6ce09c799))
+* an Android app skeleton that shows sestudio full screen, built and linted in CI ([#160](https://github.com/DSestu/sestudio/issues/160)) ([4efe4fc](https://github.com/DSestu/sestudio/commit/4efe4fcad8c23c907b1945da610eca2590816e46))
+* find and follow YouTube and Twitch channels from the YouTube & Twitch page, and fold its sidebar rows with Discover ([#164](https://github.com/DSestu/sestudio/issues/164)) ([e3af5a0](https://github.com/DSestu/sestudio/commit/e3af5a0e29b3ec4967e53792a073428cc6b785e5))
+* follow a channel straight from a pasted link's card ([#156](https://github.com/DSestu/sestudio/issues/156)) ([244c8d8](https://github.com/DSestu/sestudio/commit/244c8d849a58d84e7b53d01f56cf8a22bf89e5e7))
+* follow a YouTube or Twitch channel to hear about new videos and streams, and download them as they land ([#150](https://github.com/DSestu/sestudio/issues/150)) ([4894098](https://github.com/DSestu/sestudio/commit/4894098c4d8f39e17898269f9f7baefb72af392d))
+* full-width pages, a clickable top match, a labelled Options button and clearer poster rows ([#138](https://github.com/DSestu/sestudio/issues/138)) ([89e85e6](https://github.com/DSestu/sestudio/commit/89e85e6c14c48feefb0aa56794198da2814d7e40))
+* import YouTube subscriptions from Google Takeout and Twitch channels by name ([#152](https://github.com/DSestu/sestudio/issues/152)) ([03dcac9](https://github.com/DSestu/sestudio/commit/03dcac9968470f1cb324562f1d0bc85a9e8e8b11))
+* open a YouTube or Twitch channel as a page of its latest videos ([#149](https://github.com/DSestu/sestudio/issues/149)) ([9fe84da](https://github.com/DSestu/sestudio/commit/9fe84dab8c018a9d8de18dfc6e9997dcc13f6c0b))
+* paste a YouTube or Twitch link into search to play or download it ([#148](https://github.com/DSestu/sestudio/issues/148)) ([6d82eb1](https://github.com/DSestu/sestudio/commit/6d82eb18419888a217b45ac9a089ebdce7bbaea0))
+* play and download YouTube and Twitch links through yt-dlp ([#145](https://github.com/DSestu/sestudio/issues/145)) ([41c875a](https://github.com/DSestu/sestudio/commit/41c875a2dc0b08e0fb8dd36edfc382e93e4db184))
+* play YouTube in H.264 so Chromecast and TVs can decode it, and label YouTube and Twitch titles as videos ([#147](https://github.com/DSestu/sestudio/issues/147)) ([5441d5d](https://github.com/DSestu/sestudio/commit/5441d5dd149e770562d8a79a69f77f1724db27bc))
+* put the player first in the Watch view, dock it on phones, add the search bar and a denser episode queue ([#142](https://github.com/DSestu/sestudio/issues/142)) ([df6f2b8](https://github.com/DSestu/sestudio/commit/df6f2b8e47d1a81e70190cec6fc726560f81820f))
+* put YouTube and Twitch in Discover with a Creators page of who is live, who you follow and their latest videos ([#154](https://github.com/DSestu/sestudio/issues/154)) ([e888b90](https://github.com/DSestu/sestudio/commit/e888b906e08695444c017a14501d9c6df680baa3))
+* run sestudio on an Android phone through Termux, and serve the built app's own files ([#166](https://github.com/DSestu/sestudio/issues/166)) ([1adf2f5](https://github.com/DSestu/sestudio/commit/1adf2f5591bd5f4e73e873765be954bf5df28c3b))
+* run sestudio on Google Colab from a one-cell notebook, and share it from Settings ([#144](https://github.com/DSestu/sestudio/issues/144)) ([627348a](https://github.com/DSestu/sestudio/commit/627348a3e678bb738072bb9a36244286d151e407))
+* run YouTube extraction on Node when Deno is missing, warn in Settings when neither is there, and bump yt-dlp ([#143](https://github.com/DSestu/sestudio/issues/143)) ([19e3d68](https://github.com/DSestu/sestudio/commit/19e3d68eab7fb9547b848b27d424b7da64293f83))
+* search Twitch channels, keep YouTube and Twitch in view, and stop tripping YouTube's rate limit ([#161](https://github.com/DSestu/sestudio/issues/161)) ([b9e65d3](https://github.com/DSestu/sestudio/commit/b9e65d37b6581939797dfabe868be699d198a4bd))
+* search YouTube from the search bar's new Videos kind ([#153](https://github.com/DSestu/sestudio/issues/153)) ([dc4aa43](https://github.com/DSestu/sestudio/commit/dc4aa436fb51ab547c7b74ad9a7754e91644184d))
+* show a followed channel's videos as 16:9 thumbnails in New for you and Activity ([#155](https://github.com/DSestu/sestudio/issues/155)) ([ef27d0b](https://github.com/DSestu/sestudio/commit/ef27d0b712574a08cdf0d9baf0a104f62b8da493))
+* show followed Twitch channels that are live on Home, and record a live stream from its channel page ([#151](https://github.com/DSestu/sestudio/issues/151)) ([c533c6c](https://github.com/DSestu/sestudio/commit/c533c6c2d8f0baf51e29d03ca47cfdb7db2e82b2))
+* switch the search preview's kind with the arrow keys, and slide the blue between the chips ([#141](https://github.com/DSestu/sestudio/issues/141)) ([6f92393](https://github.com/DSestu/sestudio/commit/6f923935621966415415a85a6a17ed1f95189e86))
+* tabs for a channel's past streams and highlights, and how often it posts ([#157](https://github.com/DSestu/sestudio/issues/157)) ([42d166e](https://github.com/DSestu/sestudio/commit/42d166e5453e95e25b4be2d2be9c1951ee8de06f))
+* the Android app runs sestudio's server itself, in a foreground service with a Stop notification ([#163](https://github.com/DSestu/sestudio/issues/163)) ([9b0caa9](https://github.com/DSestu/sestudio/commit/9b0caa9ee025ea83ac21df46bd2f88118566047e))
+* the Android app sets up its own Linux on first launch, with setup screens, and runs uv in it ([#162](https://github.com/DSestu/sestudio/issues/162)) ([3dcf8c6](https://github.com/DSestu/sestudio/commit/3dcf8c661d02550bd24425f117480787ca2e8ad1))
+
+
+### Bug fixes
+
+* draw AI frames on a Mac's GPU, through ncnn on Vulkan or CoreML as an ML program ([#140](https://github.com/DSestu/sestudio/issues/140)) ([cdfe954](https://github.com/DSestu/sestudio/commit/cdfe954c2ba0bd9d0aaaffb1e69db2d53d112bec))
+
+
+### Documentation
+
+* point to the Colab notebook from the README's header and Quick start ([#146](https://github.com/DSestu/sestudio/issues/146)) ([5c99178](https://github.com/DSestu/sestudio/commit/5c99178445a162bf48ea5f555d2a2fe205540476))
+
+
+### Performance improvements
+
+* cut another 1-2 s off opening a YouTube or Twitch video, and reuse the proxy's upstream connections ([#159](https://github.com/DSestu/sestudio/issues/159)) ([0b24c4e](https://github.com/DSestu/sestudio/commit/0b24c4eeb988344b6afec333e5f4cbf48bd9a952))
+* start YouTube and Twitch streams in about 2 s instead of 13 by probing only a master's best variant ([#158](https://github.com/DSestu/sestudio/issues/158)) ([1d2c00b](https://github.com/DSestu/sestudio/commit/1d2c00bae0fd68a8194aaebe12565b87133d5699))
+
 ## [1.1.1](https://github.com/DSestu/sestudio/compare/v1.1.0...v1.1.1) (2026-10-26)
 
 
