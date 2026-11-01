@@ -52,6 +52,7 @@ def test_job_transitions_to_failed(store, source, tmp_path):
                 break
             time.sleep(0.05)
         assert store.get(job.id).status == "failed"
+        assert store.get(job.id).finished_at is not None
 
 
 def test_all_jobs_returns_list(store, source, tmp_path):

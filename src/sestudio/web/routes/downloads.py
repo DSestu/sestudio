@@ -61,6 +61,7 @@ def _job_to_dict(job: DownloadJob) -> dict[str, Any]:
         "to_device": job.to_device,
         # "watcher" marks a job a watcher queued rather than the user.
         "lane": job.lane,
+        "finished_at": job.finished_at,
     }
 
 

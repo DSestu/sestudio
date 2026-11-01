@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import threading
+import time
 import uuid
 from collections import deque
 from collections.abc import Callable
@@ -47,6 +48,9 @@ class DownloadJob:
     # Which admission lane queued this: "user" starts immediately, "watcher" waits
     # for a slot so background work cannot crowd out an interactive download.
     lane: str = "user"
+    # When it finished or failed (epoch seconds): Home's Now strip shows what
+    # ended since the last visit.
+    finished_at: float | None = None
 
 
 class JobStore:
@@ -338,6 +342,8 @@ class JobStore:
             job = self._jobs.get(job_id)
             if job:
                 job.status = status
+                if status in ("done", "failed"):
+                    job.finished_at = time.time()
                 if progress is not None:
                     job.progress = progress
                 if error is not None:
