@@ -1245,12 +1245,14 @@ export async function fetchLink(url: string): Promise<VideoInfo> {
   return res.json()
 }
 
-/** The card that opens a video in the watch view: the channel is the "show". */
+/** The card that opens a video in the watch view. Named after the video, not
+ *  its channel: watch state is keyed by title, season and episode, and every
+ *  video of a channel is its own one-item title. */
 export function videoSeasonCard(v: VideoInfo): SeasonCard {
   return {
     newsid: '',
     title: v.title,
-    series_name: v.channel || v.title,
+    series_name: v.title,
     season_number: 0,
     poster_url: v.thumbnail,
     page_url: v.page_url,
@@ -1275,4 +1277,25 @@ export function downloadVideo(v: VideoInfo): Promise<DownloadJob[]> {
     poster_url: v.thumbnail,
     page_url: v.page_url,
   }])
+}
+
+/** A YouTube or Twitch channel and its latest videos, as `/api/channel` lists them. */
+export interface ChannelInfo {
+  source: string
+  name: string
+  /** Its canonical address, the same whichever link it was opened from. */
+  url: string
+  avatar: string
+  /** Its stream, when it is live now (Twitch). */
+  live: VideoInfo | null
+  videos: VideoInfo[]
+}
+
+export async function fetchChannel(url: string): Promise<ChannelInfo> {
+  const res = await fetch(`${BASE}/channel?url=${encodeURIComponent(url)}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail ?? 'Could not load that channel')
+  }
+  return res.json()
 }

@@ -26,3 +26,13 @@ async def get_link(url: str, request: Request) -> dict[str, Any]:
         return await asyncio.to_thread(site.video, url)
     except SiteError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/channel")
+async def get_channel(url: str, request: Request) -> dict[str, Any]:
+    """A YouTube or Twitch channel and its latest videos."""
+    site = _creator_site(request, url)
+    try:
+        return await asyncio.to_thread(site.channel, url)
+    except SiteError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc

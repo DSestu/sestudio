@@ -11,6 +11,7 @@ import {
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import { pickHost } from '../downloadPrefs'
 import { VIDEO_SOURCES } from '../sourceLook'
+import { channelHref, useLink } from '../videoLinks'
 import EmptyState from '../components/EmptyState'
 import SaveToggles from '../components/SaveToggles'
 import WatchToggle from '../components/WatchToggle'
@@ -110,6 +111,8 @@ export default function WatchView({
     sourceUrl, sourceId, epLangs, epTitles,
   } = useSeasonDetail(pageUrl, lang, altPageUrls, sourceProp ?? 'fstream', altSources)
   const isVideo = VIDEO_SOURCES.has(sourceId)
+  // The video's channel, for a way to the rest of it (the server has it cached).
+  const videoLink = useLink(isVideo ? sourceUrl : null).info
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const [initializedFor, setInitializedFor] = useState<SeasonDetail | null>(null)
   const [currentNumber, setCurrentNumber] = useState<number | null>(null)
@@ -905,6 +908,14 @@ export default function WatchView({
               detail && (detail.is_film ? (isVideo ? 'Video' : 'Film') : `Season ${detail.season}`),
               meta?.year,
             ].filter(Boolean).join(' · ')}
+            {videoLink?.channel_url && (
+              <>
+                {' · '}
+                <a href={channelHref(videoLink.channel_url, sourceId)} className="link link-hover text-base-content/70">
+                  {videoLink.channel}
+                </a>
+              </>
+            )}
           </p>
         </div>
         {detail && (
