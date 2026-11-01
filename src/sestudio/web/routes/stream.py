@@ -77,6 +77,22 @@ _DLNA_MP4_HEADERS = {
 }
 
 
+def _sniffed(content_type: str, head: bytes) -> str:
+    """*content_type*, or what *head* (a body's first bytes) shows it to be when
+    the host says only octet-stream, as googlevideo does for YouTube's segments.
+
+    A Cast receiver picks its demuxer from the type: told MP4 or nothing, it
+    buffered YouTube's MPEG-TS video and packed AAC audio at 0:00 for ever.
+    """
+    if content_type and "octet-stream" not in content_type:
+        return content_type
+    if head[:1] == b"G" and head[188:189] in (b"", b"G"):  # TS sync bytes
+        return "video/mp2t"
+    if head[:3] == b"ID3" or head[:2] in (b"\xff\xf1", b"\xff\xf9"):  # ADTS
+        return "audio/aac"
+    return content_type
+
+
 def _total_size(resp: Any) -> int | None:
     """Total resource size from a ranged response (Content-Range), else Content-Length."""
     content_range = resp.headers.get("content-range", "")
@@ -314,16 +330,20 @@ def proxy_stream(
         headers = {"Accept-Ranges": "bytes", **_DLNA_MP4_HEADERS, **_CORS_HEADERS}
         try:
             with new_client(
-                headers={**upstream_headers, "Range": "bytes=0-0"},
+                headers={**upstream_headers, "Range": "bytes=0-188"},
                 impersonate=provider in IMPERSONATE_PROVIDERS,
             ) as probe:
                 resp = probe.get(target_url)
             length = _total_size(resp)
             if length is not None:
                 headers["Content-Length"] = str(length)
+            media_type = _sniffed(resp.headers.get("content-type", ""), resp.content)
         except Exception as exc:  # noqa: BLE001 — a HEAD without length still helps
             logger.debug("HEAD size probe failed for %s: %s", provider, exc)
-        return Response(status_code=200, media_type="video/mp4", headers=headers)
+            media_type = ""
+        if not media_type or "octet-stream" in media_type:
+            media_type = "video/mp4"
+        return Response(status_code=200, media_type=media_type, headers=headers)
 
     range_header = request.headers.get("range")
     if range_header:
@@ -404,10 +424,20 @@ def proxy_stream(
     relay = {h: upstream.headers[h] for h in _RELAY_HEADERS if h in upstream.headers}
     relay.update(_DLNA_MP4_HEADERS)
     relay.update(_CORS_HEADERS)
+    chunks = upstream.iter_bytes()
+    try:
+        first = next(chunks, b"")
+    except Exception:
+        upstream.close()
+        _release(client)
+        raise
+    if sniffed := _sniffed(relay.get("content-type", ""), first):
+        relay["content-type"] = sniffed
 
     def body() -> Iterator[bytes]:
         try:
-            yield from upstream.iter_bytes()
+            yield first
+            yield from chunks
         finally:
             upstream.close()
             _release(client)
