@@ -7,6 +7,7 @@ import subprocess
 import threading
 from typing import Any
 
+import psutil
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -159,8 +160,9 @@ async def post_ai_setup() -> dict[str, Any]:
 
 @router.get("/server/log")
 async def get_server_log(after: int = 0) -> dict[str, Any]:
-    """What the server logged since line *after* (0: all it still holds)."""
-    return {"lines": LOG_BUFFER.since(after)}
+    """What the server logged since line *after* (0: all it still holds), and
+    when it started (Unix seconds), for its uptime."""
+    return {"lines": LOG_BUFFER.since(after), "started": psutil.Process().create_time()}
 
 
 @router.get("/server")
