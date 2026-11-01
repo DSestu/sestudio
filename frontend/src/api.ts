@@ -1219,3 +1219,60 @@ export async function markNotificationsRead(
   if (!res.ok) throw new Error(`Could not mark read: ${res.status}`)
   return res.json()
 }
+
+/** A YouTube or Twitch video or live stream, as `/api/link` describes it. */
+export interface VideoInfo {
+  source: string
+  page_url: string
+  title: string
+  channel: string
+  channel_url: string
+  thumbnail: string
+  /** Seconds; 0 for a live stream or when unknown. */
+  duration: number
+  is_live: boolean
+  /** Unix seconds of the upload or the stream start; 0 when unknown. */
+  timestamp: number
+  view_count: number
+}
+
+export async function fetchLink(url: string): Promise<VideoInfo> {
+  const res = await fetch(`${BASE}/link?url=${encodeURIComponent(url)}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail ?? 'Could not read that link')
+  }
+  return res.json()
+}
+
+/** The card that opens a video in the watch view: the channel is the "show". */
+export function videoSeasonCard(v: VideoInfo): SeasonCard {
+  return {
+    newsid: '',
+    title: v.title,
+    series_name: v.channel || v.title,
+    season_number: 0,
+    poster_url: v.thumbnail,
+    page_url: v.page_url,
+    is_film: true,
+    is_anime: false,
+    source: v.source,
+  }
+}
+
+/** Queue a video for download; yt-dlp picks and merges the best formats. */
+export function downloadVideo(v: VideoInfo): Promise<DownloadJob[]> {
+  return postDownloads([{
+    embed_url: v.page_url,
+    provider: v.source,
+    // The server makes it path-safe, as it does every episode name.
+    episode_name: `${v.title}.mp4`,
+    series_name: v.channel || v.title,
+    season: 0,
+    lang: 'vo',
+    all_providers: { [v.source]: v.page_url },
+    source: v.source,
+    poster_url: v.thumbnail,
+    page_url: v.page_url,
+  }])
+}

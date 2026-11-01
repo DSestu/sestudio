@@ -173,7 +173,8 @@ export default function WatchView({
     if (pendingNumber !== null) setPendingNumber(null)
   }
 
-  const meta = useTmdb(seriesName, 0, !!detail?.is_film, !!settings.tmdb_configured)
+  // A channel name is no film title: TMDB would only find a namesake.
+  const meta = useTmdb(seriesName, 0, !!detail?.is_film, !!settings.tmdb_configured && !isVideo)
 
   const {
     sources: siteSources,

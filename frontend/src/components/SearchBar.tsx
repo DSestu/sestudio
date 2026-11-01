@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SeasonCard } from '../api'
-import { cachedSearch, searchSeasonsCached } from '../api'
+import { cachedSearch, searchSeasonsCached, videoSeasonCard } from '../api'
+import LinkCard from './search/LinkCard'
+import { linkSource, useLink } from '../videoLinks'
+import ResponsiveModal from './ResponsiveModal'
 
 interface Props {
   /** Called with the results and the query they belong to ('' when cleared). */
@@ -8,10 +11,15 @@ interface Props {
   onResults: (cards: SeasonCard[], query: string, failed?: boolean) => void
   /** Externally-driven query (e.g. clicking a browse-row card). */
   term?: string | null
+  /** Open a pasted YouTube or Twitch link in the watch view. */
+  onOpenLink?: (card: SeasonCard) => void
 }
 
-export default function SearchBar({ onResults, term }: Props) {
+export default function SearchBar({ onResults, term, onOpenLink }: Props) {
   const [query, setQuery] = useState(term ?? '')
+  // A pasted YouTube or Twitch link opens a sheet to play it instead of a search.
+  const linkSite = onOpenLink ? linkSource(query) : null
+  const link = useLink(linkSite ? query.trim() : null)
 
   // Adopt an externally-set term (render-phase, so it lands in the same pass).
   const [prevTerm, setPrevTerm] = useState(term)
@@ -43,7 +51,7 @@ export default function SearchBar({ onResults, term }: Props) {
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current)
     const q = query.trim()
-    if (!q) { onResultsRef.current([], ''); return }
+    if (!q || linkSite) { onResultsRef.current([], ''); return }
     const cached = cachedSearch(q)
     if (cached) { onResultsRef.current(cached, q); return }
     timer.current = setTimeout(async () => {
@@ -60,7 +68,7 @@ export default function SearchBar({ onResults, term }: Props) {
       }
     }, 300)
     return () => { if (timer.current) clearTimeout(timer.current) }
-  }, [query])
+  }, [query, linkSite])
 
   return (
     <div>
@@ -74,7 +82,7 @@ export default function SearchBar({ onResults, term }: Props) {
         <input
           ref={inputRef}
           type="search"
-          placeholder="Search all sources…"
+          placeholder="Search, or paste a YouTube or Twitch link"
           aria-label="Search series or films"
           value={query}
           onChange={e => { setQuery(e.target.value); setError(null) }}
@@ -86,6 +94,15 @@ export default function SearchBar({ onResults, term }: Props) {
       </div>
       {error && (
         <p role="alert" className="text-error text-sm mt-2">{error}</p>
+      )}
+      {linkSite && onOpenLink && (
+        <ResponsiveModal onClose={() => setQuery('')} boxClassName="max-w-lg">
+          <LinkCard
+            link={link}
+            source={linkSite}
+            onPlay={v => { setQuery(''); onOpenLink(videoSeasonCard(v)) }}
+          />
+        </ResponsiveModal>
       )}
     </div>
   )

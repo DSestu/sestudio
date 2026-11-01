@@ -1,8 +1,11 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
-import type { CatalogInfo, SeasonCard } from '../../api'
+import type { CatalogInfo, SeasonCard, VideoInfo } from '../../api'
+import { videoSeasonCard } from '../../api'
 import type { Kind, MergeOptions, RecentSearch } from '../../titleSearch'
 import { KINDS, PREVIEW_ROWS, SEARCH_FIELD, TITLE_KINDS, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
 import { KindChips, OptionsButton, RecentSearchList, SearchIcon, TitleResults } from './SearchParts'
+import LinkCard from './LinkCard'
+import { linkSource, useLink } from '../../videoLinks'
 
 interface Props {
   catalogs: CatalogInfo[]
@@ -31,9 +34,12 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
   const [active, setActive] = useState(0)
   const input = useRef<HTMLInputElement>(null)
   const q = text.trim()
-  const search = useTitleSearch(open ? q : '', kind, merge, catalogs.some(c => c.id === 'tmdb'))
+  // A pasted YouTube or Twitch link gets a card to play it, not a title search.
+  const linkSite = linkSource(q)
+  const link = useLink(open && linkSite ? q : null)
+  const search = useTitleSearch(open && !linkSite ? q : '', kind, merge, catalogs.some(c => c.id === 'tmdb'))
   const recent = useRecentSearches()
-  const rowCount = q ? 1 + Math.min(search.cards.length, PREVIEW_ROWS) : recent.length
+  const rowCount = linkSite ? 0 : q ? 1 + Math.min(search.cards.length, PREVIEW_ROWS) : recent.length
 
   // Ctrl K (or Ctrl F, which used to focus the old bar) from anywhere.
   useEffect(() => {
@@ -53,13 +59,14 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
   const seeAll = () => { if (q) { close(); onSearch(q, kind) } }
   const openCard = (card: SeasonCard) => { close(); onOpenCard(card) }
   const pickRecent = (r: RecentSearch) => { close(); onSearch(r.term, r.kind) }
+  const playLink = (v: VideoInfo) => openCard(videoSeasonCard(v))
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Escape') { e.preventDefault(); close() }
     else if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(a + 1, rowCount - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(a - 1, 0)) }
     // ←/→ switch the preview's kind; with Ctrl or Shift they still move or select text.
-    else if (q && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+    else if (q && !linkSite && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
       e.preventDefault()
       const i = TITLE_KINDS.findIndex(k => k.value === kind)
       setKind(TITLE_KINDS[(i + (e.key === 'ArrowRight' ? 1 : -1) + TITLE_KINDS.length) % TITLE_KINDS.length].value)
@@ -68,6 +75,7 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
     else if (e.key === 'Enter') {
       e.preventDefault()
       if (!q) { if (recent[active]) pickRecent(recent[active]); return }
+      if (linkSite) { if (link.info) playLink(link.info); return }
       const card = active > 0 ? search.cards[active - 1] : undefined
       if (card && !e.ctrlKey && !e.metaKey) openCard(card)
       else seeAll()
@@ -88,7 +96,7 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
           aria-controls={q ? RESULTS_ID : RECENT_ID}
           aria-activedescendant={open && active < rowCount ? `${q ? RESULTS_ID : RECENT_ID}-${active}` : undefined}
           aria-label="Search films, series and anime on every source"
-          placeholder="Search films, series and anime"
+          placeholder="Search films, series and anime, or paste a YouTube or Twitch link"
           value={text}
           onChange={e => { setText(e.target.value); setActive(0); setOpen(true) }}
           onFocus={() => setOpen(true)}
@@ -99,7 +107,9 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
       </div>
       {open && (
         <div className="absolute left-0 right-0 top-full z-10 max-h-[70dvh] overflow-y-auto overscroll-contain rounded-b-box border-2 border-t-0 border-primary/80 bg-base-200 p-2 shadow-2xl">
-          {q ? (
+          {linkSite ? (
+            <LinkCard link={link} source={linkSite} onPlay={playLink} />
+          ) : q ? (
             <TitleResults
               search={search}
               query={q}

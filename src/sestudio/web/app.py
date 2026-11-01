@@ -26,6 +26,7 @@ from sestudio.sites import build_sites
 from sestudio.web.routes import (
     cast,
     catalogs,
+    creators,
     downloads,
     library,
     downloaded,
@@ -179,6 +180,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(sites.router, prefix="/api")
     app.include_router(catalogs.router, prefix="/api")
     app.include_router(watchers.router, prefix="/api")
+    app.include_router(creators.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)
     dist = _frontend_dist()
