@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sestudio import dlna, downloaded, interpolate, metrics
 from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.web.routes.downloaded import _resolved, check_fps, offered_rung
-from sestudio.web.routes.stream import transcode_source
+from sestudio.web.routes.stream import short_token, transcode_source
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +188,7 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
             proxy_url += "&live=dlna"
             mime_type = downloaded.TV_MEDIA_TYPE
             duration = probe.duration if probe else None
+        proxy_url = proxy_url.replace(token, short_token(token))
 
     # The renderer fetches the stream itself, so build an absolute HTTP URL on
     # our LAN IP facing the renderer (browsing via localhost would otherwise

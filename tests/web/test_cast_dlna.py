@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sestudio.web.app import create_app
 from sestudio.web.proxy import sign
 from sestudio.web.routes import cast
+from sestudio.web.routes.stream import short_token
 
 
 @pytest.fixture()
@@ -53,6 +54,12 @@ def _proxied(client, url: str = "https://cdn.example/ep1.mp4") -> str:
     return f"/api/stream/proxy?token={token}"
 
 
+def _short(proxied: str) -> str:
+    """*proxied* as a TV is handed it: under its token's short stand-in."""
+    token = proxied.split("token=", 1)[1]
+    return proxied.replace(token, short_token(token))
+
+
 def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}
@@ -80,7 +87,7 @@ def test_play_pushes_lan_absolute_url_to_known_renderer(client, monkeypatch):
     assert resp.json()["status"] == "playing"
     assert calls["location"] == "http://192.168.1.5:8200/desc.xml"
     # The renderer gets our LAN IP (not localhost) so it can actually fetch the stream.
-    assert calls["media_url"] == f"http://192.168.1.20:8080{proxied}"
+    assert calls["media_url"] == f"http://192.168.1.20:8080{_short(proxied)}"
     assert calls["mime_type"] == "video/mp4"
     assert calls["title"] == "Ep 1"
 
@@ -108,7 +115,7 @@ def test_play_falls_back_to_https_when_no_http_server(client, monkeypatch):
         json={"renderer_udn": "uuid:tv-1", "proxy_url": (proxied := _proxied(client))},
     )
     assert resp.status_code == 200
-    assert calls["media_url"] == f"https://192.168.1.20:8443{proxied}"
+    assert calls["media_url"] == f"https://192.168.1.20:8443{_short(proxied)}"
 
 
 def test_http_port_endpoint_reports_the_real_port(client):
@@ -143,7 +150,7 @@ def test_play_provider_hls_goes_to_the_tv_re_encoded(client, monkeypatch):
     assert resp.status_code == 200
     token = proxied.split("token=", 1)[1]
     assert calls["media_url"] == (
-        f"http://192.168.1.20:8080/api/stream/tv?token={token}&live=dlna"
+        f"http://192.168.1.20:8080/api/stream/tv?token={short_token(token)}&live=dlna"
     )
     assert calls["mime_type"] == "video/mpeg"
     assert calls["duration"] == 1320.0
