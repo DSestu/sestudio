@@ -227,7 +227,11 @@ class JobStore:
                 return
 
             source = job.source
-            if source.via_proxy and self._local_proxy is not None:
+            if (
+                source.via_proxy
+                and not source.extract_url
+                and self._local_proxy is not None
+            ):
                 proxied = self._local_proxy(source)
                 if proxied:
                     source = dataclasses.replace(source, url=proxied)

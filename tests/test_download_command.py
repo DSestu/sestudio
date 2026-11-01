@@ -100,3 +100,27 @@ def test_no_runtime_flag_when_deno_is_there_or_nothing_is(monkeypatch):
     monkeypatch.setattr(downloader.shutil, "which", lambda name: None)
     assert downloader.js_runtime_args() == []
     assert downloader.js_runtime() == ""
+
+
+def test_a_page_is_downloaded_by_yt_dlp_itself_at_its_best(tmp_path, monkeypatch):
+    """YouTube's 1080p is split into video and audio: yt-dlp must pick and merge."""
+    captured: list[list[str]] = []
+    monkeypatch.setattr(downloader, "check_yt_dlp", lambda: "yt-dlp")
+    monkeypatch.setattr(downloader, "ffmpeg_location", lambda: None)
+    monkeypatch.setattr(
+        downloader.subprocess,
+        "Popen",
+        lambda cmd, **_k: captured.append(list(cmd)) or _FakeProc(),
+    )
+    monkeypatch.setattr(downloader.time, "sleep", lambda _s: None)
+    source = StreamSource(
+        url="https://gv/18",
+        referer="https://www.youtube.com/watch?v=x",
+        provider="youtube",
+        extract_url="https://www.youtube.com/watch?v=x",
+    )
+    downloader.download(source, tmp_path / "v.mp4")
+
+    argv = captured[0]
+    assert argv[-1] == "https://www.youtube.com/watch?v=x"
+    assert argv[argv.index("-f") + 1].startswith("bv*[vcodec^=avc1]")

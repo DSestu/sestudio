@@ -18,6 +18,8 @@ def client(tmp_path, monkeypatch):
     app.state.sites.pop("kisskh")
     app.state.sites.pop("uniquestream")
     app.state.sites.pop("bflix")
+    app.state.sites.pop("youtube")
+    app.state.sites.pop("twitch")
     return TestClient(app)
 
 
