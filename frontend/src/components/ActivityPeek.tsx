@@ -59,16 +59,17 @@ export default function ActivityPeek({ onOpen, onSeeAll }: Props) {
                   unreadRow ? 'bg-primary' : 'bg-transparent'
                 }`}
               />
-              <span className="shrink-0 w-8 rounded overflow-hidden bg-base-300">
+              {/* A followed channel's video keeps its 16:9 frame. */}
+              <span className={`shrink-0 ${event.watcher_kind === 'channel' ? 'w-20' : 'w-8'} rounded overflow-hidden bg-base-300`}>
                 {event.poster_url ? (
                   <img
                     src={event.poster_url}
                     alt=""
                     loading="lazy"
-                    className="w-full aspect-[2/3] object-cover"
+                    className={`w-full ${event.watcher_kind === 'channel' ? 'aspect-video' : 'aspect-[2/3]'} object-cover`}
                   />
                 ) : (
-                  <span className="block w-full aspect-[2/3]" />
+                  <span className={`block w-full ${event.watcher_kind === 'channel' ? 'aspect-video' : 'aspect-[2/3]'}`} />
                 )}
               </span>
               <span className="min-w-0 flex-1">

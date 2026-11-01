@@ -161,6 +161,7 @@ function ItemRow({
     <div className={unread ? 'border-l-2 border-primary pl-2 -ml-2' : undefined}>
       <DetailRow
         poster_url={event.poster_url}
+        wide={event.watcher_kind === 'channel'}
         title={event.title}
         meta={event.subtitle}
         submeta={

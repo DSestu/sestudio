@@ -3,6 +3,8 @@ import RatingBadge from '../RatingBadge'
 
 interface Props {
   poster_url: string
+  /** A 16:9 video thumbnail rather than a 2:3 poster. */
+  wide?: boolean
   title: string
   /** Primary meta line, e.g. "S01E04 · The Cursed Sword". */
   meta?: string
@@ -35,7 +37,7 @@ interface Props {
  * stretch to fill the row, above it they size to their content.
  */
 export default function DetailRow({
-  poster_url, title, meta, submeta, rating, genres, synopsis,
+  poster_url, wide = false, title, meta, submeta, rating, genres, synopsis,
   progress, onOpen, actions, overflow, selection,
 }: Props) {
   // In selection mode both tap targets select, and the row's own actions step aside.
@@ -54,12 +56,12 @@ export default function DetailRow({
         onClick={activate}
         aria-label={selection ? `Select ${title}` : `Open ${title}`}
         {...checkboxProps}
-        className="shrink-0 self-start w-24 sm:w-30 rounded-box overflow-hidden bg-base-300"
+        className={`shrink-0 self-start ${wide ? 'w-36 sm:w-48' : 'w-24 sm:w-30'} rounded-box overflow-hidden bg-base-300`}
       >
         {poster_url ? (
-          <img src={poster_url} alt="" loading="lazy" className="w-full aspect-[2/3] object-cover" />
+          <img src={poster_url} alt="" loading="lazy" className={`w-full ${wide ? 'aspect-video' : 'aspect-[2/3]'} object-cover`} />
         ) : (
-          <div className="w-full aspect-[2/3] flex items-center justify-center text-base-content/30 text-2xl">?</div>
+          <div className={`w-full ${wide ? 'aspect-video' : 'aspect-[2/3]'} flex items-center justify-center text-base-content/30 text-2xl`}>?</div>
         )}
       </button>
 
