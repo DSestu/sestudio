@@ -28,11 +28,13 @@ import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.Inet4Address
@@ -48,6 +50,7 @@ import kotlin.concurrent.thread
 class MainActivity : Activity() {
     private var web: WebView? = null
     private var playback: Playback? = null
+    private var cast: CastBridge? = null
 
     /** Re-renders the setup screen; set while it is showing. */
     private var refreshSetup: (() -> Unit)? = null
@@ -228,7 +231,16 @@ class MainActivity : Activity() {
 
                 override fun onPageFinished(view: WebView, url: String) {
                     playback?.inject()
+                    cast?.inject()
                 }
+
+                // Google's web Cast library does not run here; CastBridge stands in for it.
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                    if (request.url.path.orEmpty().contains("cast_sender")) {
+                        WebResourceResponse("text/javascript", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                    } else {
+                        null
+                    }
 
                 // Other sites (a TMDB guide, a trailer) open in the browser.
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -253,6 +265,7 @@ class MainActivity : Activity() {
             }
         }
         playback = Playback(this, view).also { player -> view.keepVisible = { player.playing } }
+        cast = CastBridge(this, view)
         web = view
         show(view)
         if (savedInstanceState == null) view.loadUrl(start) else view.restoreState(savedInstanceState)
@@ -334,6 +347,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         playback?.release()
+        cast?.release()
         super.onDestroy()
     }
 

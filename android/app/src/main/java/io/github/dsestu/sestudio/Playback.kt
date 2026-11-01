@@ -77,6 +77,13 @@ class Playback(private val activity: Activity, private val web: WebView) {
         activity.runOnUiThread { update(state) }
     }
 
+    /** The Server log's Stop: the notification's Stop, then the app closes, as nothing is left to show. */
+    @JavascriptInterface
+    fun stopServer() = activity.runOnUiThread {
+        activity.startService(Intent(activity, ServerService::class.java).setAction(ServerService.ACTION_STOP))
+        activity.finishAndRemoveTask()
+    }
+
     fun control(command: String, value: Double = 0.0) = activity.runOnUiThread {
         web.evaluateJavascript("window.__sestudioControl && __sestudioControl('$command', $value)", null)
     }
@@ -221,9 +228,11 @@ class Playback(private val activity: Activity, private val web: WebView) {
                 else if (command === 'to') v.currentTime = value;
               };
               const style = document.createElement('style');
-              style.textContent = 'html.sestudio-pip * { visibility: hidden !important } ' +
+              // Sized in % of the window, not vw/vh: the web view updates those late when PiP shrinks it.
+              style.textContent = 'html.sestudio-pip, html.sestudio-pip body { overflow: hidden !important; background: #000 !important } ' +
+                'html.sestudio-pip * { visibility: hidden !important } ' +
                 'html.sestudio-pip video { visibility: visible !important; position: fixed !important; ' +
-                'inset: 0 !important; width: 100vw !important; height: 100vh !important; ' +
+                'inset: 0 !important; width: 100% !important; height: 100% !important; ' +
                 'max-width: none !important; max-height: none !important; transform: none !important; ' +
                 'z-index: 2147483647 !important; background: #000 !important; object-fit: contain !important }';
               document.head.appendChild(style);
