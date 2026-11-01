@@ -11,6 +11,16 @@ const ROWS = 3
 const fraction = (item: WatchingItem) =>
   item.resume.position > 0 && item.resume.duration > 0 ? item.resume.position / item.resume.duration : 0
 
+const isVideo = (item: WatchingItem) => item.source === 'youtube' || item.source === 'twitch'
+
+/** The item's picture. Some saved videos have no thumbnail; a YouTube one can
+ *  always be rebuilt from its watch URL. */
+function artFor(item: WatchingItem): string {
+  if (item.poster_url) return item.poster_url
+  const id = item.source === 'youtube' && item.page_url.match(/[?&]v=([\w-]{6,})|youtu\.be\/([\w-]{6,})/)
+  return id ? `https://i.ytimg.com/vi/${id[1] ?? id[2]}/hqdefault.jpg` : ''
+}
+
 /** "12 min left" for a started episode, "Up next" for one not begun. */
 function timeLeft(item: WatchingItem) {
   return fraction(item) ? minutesLeft(item.resume.position, item.resume.duration) : 'Up next'
@@ -32,6 +42,7 @@ interface Props {
 export default function ContinueWidget({ items, onOpen, onSeeAll, style }: Props) {
   const [lead, ...rest] = items
   const started = fraction(lead) > 0
+  const leadArt = artFor(lead)
 
   return (
     <Widget
@@ -44,15 +55,16 @@ export default function ContinueWidget({ items, onOpen, onSeeAll, style }: Props
     >
       {/* The show's own light behind the header and hero, fading into the panel. */}
       <div aria-hidden="true" className="absolute inset-x-0 top-0 h-56 -z-10 overflow-hidden">
-        {lead.poster_url && (
-          <div className="absolute -inset-5 bg-cover bg-center blur-[20px] saturate-[1.2] opacity-50 scale-110" style={{ backgroundImage: `url("${lead.poster_url}")` }} />
+        {leadArt && (
+          <div className="absolute -inset-5 bg-cover bg-center blur-[20px] saturate-[1.2] opacity-50 scale-110" style={{ backgroundImage: `url("${leadArt}")` }} />
         )}
         <div className="absolute inset-0 bg-linear-to-b from-transparent from-20% to-base-200 to-92%" />
       </div>
 
       <div className="flex items-end gap-3 mt-3">
-        <button type="button" onClick={() => onOpen(lead)} className="w-[100px] shrink-0 rounded-box overflow-hidden ring-1 ring-base-content/10 bg-base-300" aria-label={`Open ${lead.series}`}>
-          {lead.poster_url && <img src={lead.poster_url} alt="" className="w-full aspect-[2/3] object-cover" />}
+        {/* Videos keep their 16:9 frame; posters are 2:3. */}
+        <button type="button" onClick={() => onOpen(lead)} className={`${isVideo(lead) ? 'w-[160px]' : 'w-[100px]'} shrink-0 rounded-box overflow-hidden ring-1 ring-base-content/10 bg-base-300`} aria-label={`Open ${lead.series}`}>
+          {leadArt && <img src={leadArt} alt="" className={`w-full ${isVideo(lead) ? 'aspect-video' : 'aspect-[2/3]'} object-cover`} />}
         </button>
         <div className="min-w-0 flex-1">
           <p className="text-xl font-semibold tracking-tight leading-tight line-clamp-2">{lead.series}</p>
@@ -76,8 +88,8 @@ export default function ContinueWidget({ items, onOpen, onSeeAll, style }: Props
           {rest.slice(0, ROWS).map(item => (
             <li key={`${item.series}|S${item.season}`}>
               <button type="button" onClick={() => onOpen(item)} className="group flex w-full items-center gap-2.5 rounded-field p-1 text-left hover:bg-base-content/5">
-                <span className="w-[34px] shrink-0 rounded-[4px] overflow-hidden bg-base-300">
-                  {item.poster_url && <img src={item.poster_url} alt="" loading="lazy" className="w-full aspect-[2/3] object-cover" />}
+                <span className={`${isVideo(item) ? 'w-[60px]' : 'w-[34px]'} shrink-0 rounded-[4px] overflow-hidden bg-base-300`}>
+                  {artFor(item) && <img src={artFor(item)} alt="" loading="lazy" className={`w-full ${isVideo(item) ? 'aspect-video' : 'aspect-[2/3]'} object-cover`} />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium truncate">{item.series}</span>
