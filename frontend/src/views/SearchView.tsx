@@ -424,7 +424,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           folds the search away so only the kinds stay. */}
       <div
         className={`md:hidden flex flex-col ${lastQuery !== ''
-          ? 'sticky top-14 z-20 -mx-4 -mt-5 px-4 pt-3 pb-3 border-b border-base-300 bg-base-100/95 backdrop-blur'
+          ? 'sticky top-14 z-20 mx-[calc(-1*var(--gutter))] -mt-5 px-(--gutter) pt-3 pb-3 border-b border-base-300 bg-base-100/95 backdrop-blur'
           : ''}`}
       >
         <div
