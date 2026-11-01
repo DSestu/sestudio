@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
 import RankRow from '../components/RankRow'
+import apkQr from '../assets/apk-qr.svg'
 import colabQr from '../assets/colab-qr.svg'
 import { DEFAULT_HOST_ORDER } from '../downloadPrefs'
 import type { AppSettings, LogLine, RestartWay, SiteInfo } from '../api'
@@ -23,6 +24,9 @@ const TMDB_GUIDE_URL = 'https://duckkota.gitlab.io/guides/tmdb/'
 
 /** The Colab notebook, shared from the Settings page. */
 const COLAB_URL = 'https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb'
+
+/** The newest Android app: GitHub redirects this to the latest release's APK. */
+const APK_URL = 'https://github.com/DSestu/sestudio/releases/latest/download/sestudio.apk'
 
 interface Props {
   settings: AppSettings
@@ -620,16 +624,10 @@ function ServerLogSection() {
 }
 
 /**
- * A link and QR code to the Colab notebook, for someone else to run their own.
- * The QR is a static image: the link points at main, so it never changes.
+ * Links and QR codes for someone else to get their own sestudio: the Android
+ * app, or the Colab notebook. Static images: both links never change.
  */
 function ShareSection() {
-  const [copied, setCopied] = useState(false)
-
-  function copy() {
-    navigator.clipboard.writeText(COLAB_URL).then(() => setCopied(true)).catch(() => {})
-  }
-
   return (
     <section aria-labelledby="settings-share" className="flex flex-col gap-3">
       <h3
@@ -638,29 +636,50 @@ function ShareSection() {
       >
         Share sestudio
       </h3>
-      <p className="text-xs text-base-content/50">
-        Let a friend scan this to try it on Google Colab: their own copy, on their own Google
-        account, with a GPU. It needs a paid Colab plan.
-      </p>
-      <img
-        src={colabQr}
-        alt="QR code to the sestudio Colab notebook"
-        className="w-44 h-44 rounded-lg bg-white p-2"
-      />
+      <div className="flex flex-wrap gap-x-8 gap-y-6">
+        <ShareLink
+          title="Android app"
+          text="Scan on an Android phone to install the latest version. It runs on the phone itself."
+          url={APK_URL}
+          qr={apkQr}
+        />
+        <ShareLink
+          title="Google Colab"
+          text="Their own copy, on their own Google account, with a GPU. Needs a paid Colab plan."
+          url={COLAB_URL}
+          qr={colabQr}
+        />
+      </div>
+    </section>
+  )
+}
+
+function ShareLink({ title, text, url, qr }: { title: string; text: string; url: string; qr: string }) {
+  const [copied, setCopied] = useState(false)
+
+  function copy() {
+    navigator.clipboard.writeText(url).then(() => setCopied(true)).catch(() => {})
+  }
+
+  return (
+    <div className="flex flex-col gap-2 w-60">
+      <p className="text-sm font-medium">{title}</p>
+      <p className="text-xs text-base-content/50">{text}</p>
+      <img src={qr} alt={`QR code: ${title}`} className="w-44 h-44 rounded-lg bg-white p-2" />
       <a
-        href={COLAB_URL}
+        href={url}
         target="_blank"
         rel="noreferrer noopener"
         className="link link-primary text-xs break-all"
       >
-        {COLAB_URL}
+        {url}
       </a>
       <div className="flex gap-2">
         {/* Both need a secure context: absent on a plain-HTTP LAN address. */}
         {'share' in navigator && (
           <button
             className="btn btn-sm btn-primary"
-            onClick={() => navigator.share({ title: 'sestudio', url: COLAB_URL }).catch(() => {})}
+            onClick={() => navigator.share({ title: `sestudio: ${title}`, url }).catch(() => {})}
           >
             Share…
           </button>
@@ -671,7 +690,7 @@ function ShareSection() {
           </button>
         )}
       </div>
-    </section>
+    </div>
   )
 }
 
