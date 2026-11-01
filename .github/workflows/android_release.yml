@@ -1,0 +1,62 @@
+name: Android release APK
+
+# Builds the APK signed with the release key and attaches it to a GitHub
+# Release as sestudio.apk, the file the app's updater and the Share QR fetch.
+# Called by the release workflow; run by hand to add it to an existing release.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+      ref:
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach the APK to, e.g. v1.2.0"
+        required: true
+      ref:
+        description: "Commit or branch to build (default: the branch this runs on)"
+        required: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the signed APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export ANDROID_KEYSTORE="$RUNNER_TEMP/release.jks"
+          ./gradlew assembleRelease --console=plain -PsestudioVersion="${TAG#v}"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/sestudio.apk"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP/sestudio.apk" --clobber --repo "$GITHUB_REPOSITORY"

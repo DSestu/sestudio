@@ -94,6 +94,15 @@ jobs:
             dist/*.whl
             dist/*.tar.gz
 
+  build-apk:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/android_release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      ref: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
+
   publish-to-pypi:
     needs: [release-please, build-wheels]
     if: needs.release-please.outputs.release_created == 'true'
