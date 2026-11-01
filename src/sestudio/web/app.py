@@ -191,6 +191,12 @@ def create_app(live_domain: str | None = None) -> FastAPI:
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa_fallback(full_path: str) -> FileResponse:
+            # The build's top-level files (manifest, service worker, icons) as
+            # themselves, so the app installs. Resolved, so "..", "\" and
+            # symlinks cannot reach outside dist.
+            file = (dist / full_path).resolve()
+            if file.parent == dist.resolve() and file.is_file():
+                return FileResponse(str(file))
             return FileResponse(str(dist / "index.html"))
 
     return app
