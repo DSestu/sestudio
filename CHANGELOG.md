@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0](https://github.com/DSestu/sestudio/compare/v1.3.0...v1.4.0) (2026-11-01)
+
+
+### New features
+
+* Chromecast from the Android app, Stop in its Server log, and a picture-in-picture video that fits ([#178](https://github.com/DSestu/sestudio/issues/178)) ([5b8a416](https://github.com/DSestu/sestudio/commit/5b8a416b4294210f4423cbdef4ad11c0e0e22150))
+* picture-in-picture, background play and phone downloads in the Android app, and a sestudio-dev build beside it ([#176](https://github.com/DSestu/sestudio/issues/176)) ([0446537](https://github.com/DSestu/sestudio/commit/0446537ca3cee1fec11357624d9908c2d5eb591c))
+* the Server log in Settings looks and works like a terminal: status, uptime, Copy, Restart, Stop ([#177](https://github.com/DSestu/sestudio/issues/177)) ([4eb6835](https://github.com/DSestu/sestudio/commit/4eb6835afde669f1d69273f99bb9c57435c90367))
+
+
+### Bug fixes
+
+* give the phone header room for the screen's safe area instead of squashing it ([#174](https://github.com/DSestu/sestudio/issues/174)) ([d9eee44](https://github.com/DSestu/sestudio/commit/d9eee44244eee4d0c59b9e5f538dd4bd3df4ddf8))
+
 ## [1.3.0](https://github.com/DSestu/sestudio/compare/v1.2.0...v1.3.0) (2026-11-01)
 
 
