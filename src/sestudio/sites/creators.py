@@ -142,6 +142,9 @@ class _YtDlpSite(ContentSite):
     hosts: tuple[str, ...] = ()
     # Kept out of the title search: their own Videos kind comes later.
     searchable = False
+    # Their HLS master holds every quality: one is picked from it, never
+    # re-encoded down from the best (see routes/stream.py `source_qualities`).
+    source_qualities = True
 
     def __init__(self) -> None:
         # googlevideo URLs stop working after about 6 hours.
