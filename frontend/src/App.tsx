@@ -271,6 +271,8 @@ export default function App() {
             catalogLabel={catalogs.find(c => c.id === catalogId)?.label ?? ''}
             onOpenCatalog={openCatalog}
             onOpenEvent={openEvent}
+            jobs={downloads.jobs}
+            onOpenDownloaded={openDownloadedTitle}
           />
         )}
         {route.view === 'search' && (

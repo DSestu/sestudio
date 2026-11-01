@@ -406,6 +406,8 @@ export interface DownloadJob {
   provider?: string     // host currently being downloaded from
   /** Staged on the server for this browser to collect once done. */
   to_device?: boolean
+  /** When it finished or failed, epoch seconds; null while it runs. */
+  finished_at?: number | null
 }
 
 /** URL serving a finished device-bound job's file as an attachment. */
@@ -1333,6 +1335,65 @@ export interface LiveStream extends VideoInfo {
 export async function fetchLive(): Promise<LiveStream[]> {
   const res = await fetch(`${BASE}/live`).catch(() => null)
   return res?.ok ? res.json() : []
+}
+
+/** A followed series' next episode, airing within the week. */
+export interface UpcomingEpisode {
+  series: string
+  tmdb_id: number
+  season: number | null
+  episode: number | null
+  name: string | null
+  /** YYYY-MM-DD. */
+  air_date: string
+  poster_url: string | null
+  /** Median days its VF has lagged the original, null when too few to tell. */
+  vf_delay_days: number | null
+  /** The site page it was followed from, null when only TMDB knows it. */
+  page_url: string | null
+  source: string | null
+  lang: string | null
+}
+
+/** [] when the check fails: what is upcoming is optional on Home. */
+export async function getUpcoming(): Promise<UpcomingEpisode[]> {
+  const res = await fetch(`${BASE}/home/upcoming`).catch(() => null)
+  // A server older than the endpoint answers with the app's HTML.
+  return res?.ok ? res.json().then(b => b.episodes ?? [], () => []) : []
+}
+
+/** One thing wrong, worst first in `Health.issues`. */
+export interface HealthIssue {
+  kind: 'disk' | 'site' | 'watcher'
+  /** The site or watcher id; null for the disk. */
+  id: string | null
+  message: string
+  retry: 'site' | 'watcher' | null
+}
+
+export interface Health {
+  ok: boolean
+  checked_at: string
+  sites: { id: string; label: string; up: boolean; checked_at: string; error: string | null }[]
+  watchers: {
+    count: number
+    last_run_at: string | null
+    failing: { id: number; label: string; error: string; since: string | null }[]
+  }
+  disk: { path: string; free_bytes: number | null; total_bytes: number | null; low: boolean; error?: string }
+  issues: HealthIssue[]
+}
+
+/** null when the check fails. */
+export async function getHealth(): Promise<Health | null> {
+  const res = await fetch(`${BASE}/health`).catch(() => null)
+  return res?.ok ? res.json().catch(() => null) : null
+}
+
+/** Probe one site again, past the cache. */
+export async function retryHealthSite(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/health/sites/${encodeURIComponent(id)}/retry`, { method: 'POST' })
+  if (!res.ok) throw new Error(`Retry failed: ${res.status}`)
 }
 
 export interface ImportResult {

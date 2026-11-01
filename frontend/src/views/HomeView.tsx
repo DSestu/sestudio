@@ -1,11 +1,12 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import type { AppSettings, Shelf, WatcherEvent } from '../api'
+import type { AppSettings, DownloadedFile, DownloadedTitle, DownloadJob, Shelf, WatcherEvent } from '../api'
 import { getShelves } from '../api'
 import { entries, useCollections, type ListName } from '../collections'
 import ActivityPeek from '../components/ActivityPeek'
 import LiveNow from '../components/LiveNow'
 import EmptyState from '../components/EmptyState'
 import ContinueWidget from '../components/home/ContinueWidget'
+import NowStrip from '../components/home/NowStrip'
 import PosterStrip from '../components/home/PosterStrip'
 import Widget, { WidgetGrid } from '../components/home/Widget'
 import { orderWidgets, pinTiers, type WidgetDescriptor, type WidgetId, type WidgetTier } from '../homeOrder'
@@ -30,17 +31,21 @@ interface Props {
   onOpenCatalog: (id: string) => void
   /** Open the title a watcher event points at. */
   onOpenEvent: (event: WatcherEvent) => void
+  /** The download queue, for the Now strip's failed jobs. */
+  jobs: DownloadJob[]
+  onOpenDownloaded: (title: DownloadedTitle, file?: DownloadedFile) => void
 }
 
 /** Landing view: a grid of widgets, what to resume first (docs/SPEC-home-dashboard.md). */
 export default function HomeView({
   settings, onOpen, onNavigate, onSearchTerm, catalogId, catalogLabel, onOpenCatalog, onOpenEvent,
+  jobs, onOpenDownloaded,
 }: Props) {
   const watch = useWatchState()
   const collections = useCollections()
   const { events: activity } = useNotifications()
-  // Recorded from now on; the widgets that badge what is new read it.
-  useLastVisit()
+  // The previous visit: what ended since then is new to the Now strip.
+  const lastVisit = useLastVisit()
   const [pinned] = useState(() => new Map<WidgetId, WidgetTier>())
 
   // One shelf from the catalogue last browsed — a way into Discover, not a
@@ -184,6 +189,17 @@ export default function HomeView({
 
   return (
     <div className="flex flex-col gap-8">
+      {/* What needs you now, at the very top; absent when nothing does. */}
+      <NowStrip
+        lastVisit={lastVisit}
+        jobs={jobs}
+        lang={settings.lang}
+        onOpen={onOpen}
+        onNavigate={onNavigate}
+        onOpenDownloaded={onOpenDownloaded}
+        onSearchTerm={onSearchTerm}
+      />
+
       {/* Only true right now, so it leads. Hides itself when nobody is live. */}
       <LiveNow onOpen={card => onOpen(card, 0, settings.lang)} />
 
