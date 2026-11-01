@@ -59,6 +59,13 @@
   }
 }
 
+/* Phones: the distance from the bottom of the screen to just above the
+   floating dock (12px margin + 66px dock + a 6px gap). Bars and sheets that
+   sit on top of the dock use it, so they move together if the dock does. */
+:root {
+  --dock-clear: calc(5.25rem + env(safe-area-inset-bottom));
+}
+
 /* "Signal" glass, the one material for the nav bars, the player dock, sheets
    and popovers (docs/SPEC-nav-redesign.md §3). The edge light and grain are
    pseudo-elements, so the element needs a position (relative, fixed, …). */

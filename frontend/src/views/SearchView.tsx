@@ -770,9 +770,9 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         />
       )}
 
-      {/* Bulk download bar — clears the mobile tab bar */}
+      {/* Bulk download bar — clears the phone dock */}
       {checkedIds.size > 0 && (
-        <div className="fixed z-40 left-1/2 -translate-x-1/2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-6 max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none flex items-center flex-wrap justify-between sm:justify-start gap-3 sm:gap-4 rounded-box border border-base-300 bg-base-200 shadow-xl px-4 sm:px-6 py-3 w-[calc(100%-2rem)] max-w-md sm:w-auto sm:max-w-none">
+        <div className="fixed z-40 left-1/2 -translate-x-1/2 bottom-[calc(var(--dock-clear)+0.25rem)] md:bottom-6 max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none flex items-center flex-wrap justify-between sm:justify-start gap-3 sm:gap-4 rounded-box border border-base-300 bg-base-200 shadow-xl px-4 sm:px-6 py-3 w-[calc(100%-2rem)] max-w-md sm:w-auto sm:max-w-none">
           <span className="text-base-content/80 text-sm">
             {checkedIds.size} season{checkedIds.size !== 1 ? 's' : ''} selected
           </span>

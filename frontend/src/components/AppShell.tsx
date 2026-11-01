@@ -1,4 +1,4 @@
-import { type FocusEvent, type ReactNode, useState } from 'react'
+import { type FocusEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import type { CatalogInfo } from '../api'
 import { useBrowserPlayerControls } from '../browserPlayerControls'
 import { useCastState } from '../cast'
@@ -165,13 +165,13 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
         </button>
       </header>
 
-      {/* Content column — bottom padding clears the mobile tab bar, plus the
-          Now-Casting bar when a cast is active. */}
+      {/* Content column — bottom padding clears the phone dock, plus the
+          Now-Casting bar or mini-player when one is up. */}
       <main
         className={`flex-1 min-w-0 py-5 px-(--gutter) [--gutter:clamp(0.6rem,1.5vw,1.5rem)] ${
           bottomBar
-            ? 'pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-24'
-            : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-10'
+            ? 'pb-[calc(var(--dock-clear)+4.75rem)] md:pb-24'
+            : 'pb-[calc(var(--dock-clear)+1rem)] md:pb-10'
         }`}
       >
         {searchBar && (
@@ -187,41 +187,114 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
         <div className="w-full">{children}</div>
       </main>
 
-      {/* Mobile tab bar — hidden while the selection bar occupies this slot. */}
-      <nav
-        aria-label="Primary"
-        className={`fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)] ${
-          selecting ? 'hidden' : 'md:hidden'
+      {/* Phone dock — hidden while the selection bar occupies this slot. */}
+      {!selecting && (
+        <PhoneDock view={view} menuOpen={menuOpen} onNavigate={onNavigate} badgeFor={badgeFor} />
+      )}
+    </div>
+  )
+}
+
+/** The phone dock's tabs, in order; Search sits in the middle of them. */
+const DOCK_TABS: Tab[] = ['home', 'library', 'media', 'notifications']
+const searchIcon = (
+  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+  </svg>
+)
+const closeIcon = (
+  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+  </svg>
+)
+
+/**
+ * The phone's floating glass dock (docs/SPEC-nav-redesign.md §4.1): four tabs
+ * around a Search button that unfolds the Discover menu. The active tab's pill
+ * slides between tabs rather than jumping.
+ */
+function PhoneDock({ view, menuOpen, onNavigate, badgeFor }: {
+  view: View
+  menuOpen: boolean
+  onNavigate: (v: Tab) => void
+  badgeFor: (id: Tab) => number
+}) {
+  // An open menu covers whatever view is under it, so no tab is lit then.
+  const active = menuOpen ? undefined : DOCK_TABS.find(id => id === view)
+  const icons = useRef<Partial<Record<Tab, HTMLSpanElement | null>>>({})
+  const pill = useRef<HTMLSpanElement>(null)
+  // The first placement must not slide in from the left edge.
+  const placed = useRef(false)
+  useLayoutEffect(() => {
+    const place = () => {
+      const p = pill.current
+      const target = active && icons.current[active]
+      if (!p) return
+      p.style.opacity = target ? '1' : '0'
+      if (!target) return
+      // No layout to measure while the dock is hidden (desktop widths).
+      const button = target.offsetParent as HTMLElement | null
+      if (!button) return
+      p.style.transition = placed.current ? '' : 'none'
+      p.style.transform = `translate(${button.offsetLeft + target.offsetLeft}px, ${button.offsetTop + target.offsetTop}px)`
+      placed.current = true
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [active])
+
+  const tab = (id: Tab) => {
+    const d = DESTINATIONS.find(x => x.id === id)!
+    const lit = id === active
+    return (
+      <button
+        key={id}
+        onClick={() => closeDiscoverMenuThen(() => onNavigate(id))}
+        aria-current={view === id ? 'page' : undefined}
+        className={`relative flex min-w-0 flex-col items-center gap-1 text-[11.5px] transition-colors ${
+          lit ? 'text-base-content font-semibold' : 'text-base-content/70 font-medium'
         }`}
       >
-        {DESTINATIONS.map(d => {
-          // An open menu lights Discover alone: it covers whatever view is under it.
-          const lit = d.id === 'search' ? menuOpen || view === d.id : view === d.id && !menuOpen
-          return (
-          <button
-            key={d.id}
-            onClick={() => (d.id === 'search' ? toggleDiscoverMenu() : closeDiscoverMenuThen(() => onNavigate(d.id)))}
-            aria-current={view === d.id ? 'page' : undefined}
-            aria-expanded={d.id === 'search' ? menuOpen : undefined}
-            aria-controls={d.id === 'search' ? 'discover-menu' : undefined}
-            className={`relative flex min-w-0 flex-col items-center justify-center gap-1 min-h-14 px-1 py-2 text-[11px] font-medium transition-colors ${
-              lit ? 'text-primary' : 'text-base-content/50'
-            }`}
-          >
-            {/* Active state is icon + label + rail, never colour alone */}
-            {lit && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
-            {d.icon}
-            {/* Labels must be able to shrink, or five 1fr columns overflow the
-                viewport on narrow phones and the whole page scrolls sideways. */}
-            <span className="max-w-full truncate">{d.label}</span>
-            {badgeFor(d.id) > 0 && (
-              <span className="absolute top-1.5 right-[18%] badge badge-primary badge-xs">{badgeFor(d.id)}</span>
-            )}
-          </button>
-          )
-        })}
-      </nav>
-    </div>
+        <span
+          ref={el => { icons.current[id] = el }}
+          className={`relative grid place-items-center w-13 h-7.5 transition-colors ${lit ? 'text-primary' : ''}`}
+        >
+          {d.icon}
+          {badgeFor(id) > 0 && (
+            <span className="absolute -top-1 left-7.5 badge badge-primary badge-xs">{badgeFor(id)}</span>
+          )}
+        </span>
+        {/* Labels must be able to shrink, or the columns overflow the viewport
+            on narrow phones and the whole page scrolls sideways. */}
+        <span className="max-w-full truncate">{d.label}</span>
+      </button>
+    )
+  }
+
+  return (
+    <nav
+      aria-label="Primary"
+      className="md:hidden fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 glass rounded-[28px] grid grid-cols-[1fr_1fr_4.5rem_1fr_1fr] items-center h-16.5"
+    >
+      <span
+        ref={pill}
+        aria-hidden="true"
+        className="absolute left-0 top-0 w-13 h-7.5 rounded-full bg-primary/22 transition-[transform,opacity] duration-300 ease-smooth motion-reduce:transition-opacity"
+      />
+      {DOCK_TABS.slice(0, 2).map(tab)}
+      <button
+        onClick={toggleDiscoverMenu}
+        aria-label={menuOpen ? 'Close search' : 'Search'}
+        aria-expanded={menuOpen}
+        aria-controls="discover-menu"
+        aria-current={view === 'search' ? 'page' : undefined}
+        className="justify-self-center grid place-items-center w-13 h-13 rounded-full bg-primary text-primary-content shadow-[0_6px_18px_color-mix(in_oklab,var(--color-primary)_30%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)] transition-transform duration-100 active:scale-92"
+      >
+        {menuOpen ? closeIcon : searchIcon}
+      </button>
+      {DOCK_TABS.slice(2).map(tab)}
+    </nav>
   )
 }
 

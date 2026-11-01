@@ -1152,10 +1152,10 @@ export default function WatchView({
               </div>
               <div className="mt-3">
                 {tab === 'episodes' && (
-                  // Bounded to the space between the pinned player and the tab
-                  // bar, so the list scrolls inside itself, opens on the episode
+                  // Bounded to the space between the pinned player and the
+                  // dock, so the list scrolls inside itself, opens on the episode
                   // playing, and keeps the download bar in reach.
-                  <div className="h-[calc(100dvh-9.5rem-(100vw-2rem)*9/16-env(safe-area-inset-bottom))] min-h-72 flex flex-col rounded-box border border-base-300 bg-base-200 overflow-hidden">
+                  <div className="h-[calc(100dvh-6rem-var(--dock-clear)-(100vw-2rem)*9/16)] min-h-72 flex flex-col rounded-box border border-base-300 bg-base-200 overflow-hidden">
                     <div className="flex-1 min-h-0">{list}</div>
                     {downloadBar}
                   </div>
