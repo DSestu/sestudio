@@ -67,6 +67,10 @@ android {
 
 dependencies {
     implementation("org.apache.commons:commons-compress:1.27.1")
+    // Chromecast from the app (see CastBridge); appcompat themes the device picker.
+    implementation("com.google.android.gms:play-services-cast-framework:22.0.0")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
 }
 
 kotlin {
