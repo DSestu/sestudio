@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
 import PageHeader from '../components/PageHeader'
+import { goBack } from '../pageHeader'
 import RankRow from '../components/RankRow'
 import apkQr from '../assets/apk-qr.svg'
 import colabQr from '../assets/colab-qr.svg'
@@ -42,12 +43,6 @@ interface Props {
  * room to be grouped. Width is capped because full-width inputs on a desktop
  * content column are hard to scan.
  */
-/** Back to wherever the gear was tapped; Home when Settings was opened directly. */
-function goBack() {
-  if (history.length > 1) history.back()
-  else location.hash = '#/home'
-}
-
 export default function SettingsView({ settings, onUpdate }: Props) {
   // The key is write-only — the server never sends it back — so this field
   // cannot be pre-filled and instead sets or replaces whatever is stored.
