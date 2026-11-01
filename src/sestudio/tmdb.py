@@ -253,6 +253,77 @@ def enrich(title: str, year: int = 0, is_film: bool = False) -> dict[str, Any] |
     return result
 
 
+def tv_airing(title: str, seasons: list[int] | None = None) -> dict[str, Any] | None:
+    """A series' airing status and next episode, or None without a confident match.
+
+    Confident means a search result whose French or original name is *title*
+    once folded: unlike enrich, a wrong first hit here would put another show's
+    episodes on the agenda. The title → id match is cached like enrich's; the
+    status is not, as it changes week to week. *seasons* also fetches those
+    seasons' episode air dates, in the same request. Raises on HTTP errors so a
+    caller can tell "TMDB didn't answer" from "no such series".
+    """
+    key = tmdb_key()
+    if not key:
+        raise TmdbDisabled("No TMDB API key configured")
+    folded = _fold(title)
+    cache_key = f"tvid:{folded}"
+    with _lock:
+        cache = _load_cache()
+        cached = cache.get(cache_key, "miss")
+    try:
+        with _client() as client:
+            if cached == "miss":
+                resp = client.get(
+                    f"{_API}/search/tv",
+                    params={"api_key": key, "query": title, "language": _LANG},
+                )
+                resp.raise_for_status()
+                cached = next(
+                    (
+                        r.get("id")
+                        for r in resp.json().get("results") or []
+                        if folded
+                        in (
+                            _fold(r.get("name") or ""),
+                            _fold(r.get("original_name") or ""),
+                        )
+                    ),
+                    None,
+                )
+                with _lock:
+                    cache = _load_cache()
+                    cache[cache_key] = cached
+                    _save_cache(cache)
+            if cached is None:
+                return None
+            params: dict[str, Any] = {"api_key": key, "language": _LANG}
+            if seasons:
+                # TMDB appends at most 20 sub-requests; the latest seasons matter.
+                params["append_to_response"] = ",".join(
+                    f"season/{n}" for n in sorted(set(seasons))[-20:]
+                )
+            resp = client.get(f"{_API}/tv/{cached}", params=params)
+            resp.raise_for_status()
+            detail = resp.json()
+    except httpx.HTTPError as exc:
+        logger.warning("TMDB airing lookup failed for %r: %s", title, exc)
+        raise
+
+    air_dates = {
+        (n, ep.get("episode_number")): ep.get("air_date") or ""
+        for n in seasons or []
+        for ep in (detail.get(f"season/{n}") or {}).get("episodes") or []
+    }
+    return {
+        "tmdb_id": detail.get("id") or cached,
+        "status": detail.get("status") or "",
+        "poster_url": _image(detail.get("poster_path"), "w342"),
+        "next_episode": detail.get("next_episode_to_air"),
+        "air_dates": air_dates,
+    }
+
+
 def catalog() -> list[dict[str, Any]]:
     """A browsable list of poster cards (trending this week)."""
     key = tmdb_key()
