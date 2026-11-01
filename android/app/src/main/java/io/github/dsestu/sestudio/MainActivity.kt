@@ -7,7 +7,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -16,12 +19,19 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.webkit.JavascriptInterface
+import android.webkit.SslErrorHandler
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
+import java.net.Inet4Address
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 import java.net.URL
 import kotlin.concurrent.thread
 
@@ -173,16 +183,85 @@ class MainActivity : Activity() {
         false
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     private fun showWeb(savedInstanceState: Bundle?) {
         refreshSetup = null
+        val start = serverUrl()
+        val host = Uri.parse(start).host
+        val trusted = serverCertificate()
         val view = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true // the library and settings live in localStorage
             settings.mediaPlaybackRequiresUserGesture = false
+            webViewClient = object : WebViewClient() {
+                // The server's certificate is self-signed: trust that one, and only it.
+                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+                    val presented = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) error.certificate.x509Certificate else null
+                    if (trusted != null && presented == trusted) {
+                        handler.proceed()
+                    } else {
+                        handler.cancel()
+                        view.loadUrl(SERVER_URL)
+                    }
+                }
+
+                // Other sites (a TMDB guide, a trailer) open in the browser.
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val target = request.url
+                    if (target.host == host || target.host == "localhost") return false
+                    startActivity(Intent(Intent.ACTION_VIEW, target))
+                    return true
+                }
+            }
+            webChromeClient = FullscreenVideo()
         }
         web = view
         show(view)
-        if (savedInstanceState == null) view.loadUrl(SERVER_URL) else view.restoreState(savedInstanceState)
+        if (savedInstanceState == null) view.loadUrl(start) else view.restoreState(savedInstanceState)
+    }
+
+    /**
+     * The phone's Wi-Fi address over HTTPS, so media URLs the page gives a TV
+     * reach the phone, and the page keeps a secure context. Off Wi-Fi: localhost.
+     */
+    private fun serverUrl(): String {
+        val network = getSystemService(ConnectivityManager::class.java)
+        val active = network.activeNetwork ?: return SERVER_URL
+        if (network.getNetworkCapabilities(active)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) return SERVER_URL
+        val ip = network.getLinkProperties(active)?.linkAddresses
+            ?.map { it.address }
+            ?.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }
+            ?.hostAddress ?: return SERVER_URL
+        return "https://$ip:8443"
+    }
+
+    /** The certificate sestudio made for its HTTPS port; null before it has made one. */
+    private fun serverCertificate(): X509Certificate? {
+        val pem = File(Runtime(this).rootfs, "root/.config/sestudio/cert.pem")
+        if (!pem.exists()) return null
+        return pem.inputStream().use { CertificateFactory.getInstance("X.509").generateCertificate(it) as X509Certificate }
+    }
+
+    /** A video's fullscreen button: its view laid over everything, until it ends. */
+    private inner class FullscreenVideo : WebChromeClient() {
+        private var shown: View? = null
+        private var callback: CustomViewCallback? = null
+
+        override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+            shown?.let { onHideCustomView() }
+            shown = view
+            this.callback = callback
+            (window.decorView as FrameLayout).addView(view, FrameLayout.LayoutParams(-1, -1))
+        }
+
+        override fun onHideCustomView() {
+            shown?.let { (window.decorView as FrameLayout).removeView(it) }
+            shown = null
+            callback?.onCustomViewHidden()
+            callback = null
+        }
+
+        fun leave(): Boolean = (shown != null).also { if (it) onHideCustomView() }
     }
 
     /** Full screen: the window only has its bars once it has content. */
@@ -202,7 +281,11 @@ class MainActivity : Activity() {
     @Deprecated("Back stays inside the web app's own history first.")
     override fun onBackPressed() {
         val view = web
-        if (view != null && view.canGoBack()) view.goBack() else @Suppress("DEPRECATION") super.onBackPressed()
+        when {
+            (view?.webChromeClient as? FullscreenVideo)?.leave() == true -> Unit
+            view != null && view.canGoBack() -> view.goBack()
+            else -> @Suppress("DEPRECATION") super.onBackPressed()
+        }
     }
 
     companion object {
