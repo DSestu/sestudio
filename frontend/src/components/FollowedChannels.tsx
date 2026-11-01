@@ -6,13 +6,15 @@ interface Props {
   variant: 'rail' | 'menu'
   /** Channel page open now, marked as current. */
   currentUrl?: string
+  /** Only this site's channels ('youtube' or 'twitch'); all when absent. */
+  source?: string
   onPick?: () => void
 }
 
 /** The YouTube and Twitch channels you follow, each a link to its page. */
-export default function FollowedChannels({ variant, currentUrl, onPick }: Props) {
+export default function FollowedChannels({ variant, currentUrl, source, onPick }: Props) {
   const channels = useWatchers()
-    .filter(w => w.kind === 'channel')
+    .filter(w => w.kind === 'channel' && (!source || w.config.source === source))
     .map(w => ({
       id: w.id,
       url: String(w.config.channel_url ?? ''),

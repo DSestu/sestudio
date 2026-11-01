@@ -1,30 +1,22 @@
-import { useEffect, useState } from 'react'
-import type { LiveStream, SeasonCard } from '../api'
-import { fetchLive, videoSeasonCard } from '../api'
+import type { SeasonCard } from '../api'
+import { videoSeasonCard } from '../api'
+import { useLive } from '../liveNow'
 import { useWatchers } from '../watchers'
 
-/** How often the strip checks again while Home is open. */
-const REFRESH_MS = 120_000
-
 /**
- * Followed channels live now, as a row of avatars ringed in red. Hidden when
- * nobody is on, so it costs Home nothing the rest of the time.
+ * Followed channels live now, as a row of avatars ringed in red, ending on a
+ * way to follow more. Hidden when nobody is on, so it costs Home nothing the
+ * rest of the time.
  */
-export default function LiveNow({ onOpen }: { onOpen: (card: SeasonCard) => void }) {
-  const [live, setLive] = useState<LiveStream[]>([])
-  // Re-checked when a channel is followed or dropped, not only on a timer.
+export default function LiveNow({ onOpen, followLink = true }: {
+  onOpen: (card: SeasonCard) => void
+  /** End on a way to the Creators page; off on that page itself. */
+  followLink?: boolean
+}) {
   const follows = useWatchers().filter(w => w.kind === 'channel').length
+  const live = useLive(follows)
 
-  useEffect(() => {
-    if (!follows) return
-    let alive = true
-    const check = () => fetchLive().then(next => { if (alive) setLive(next) })
-    check()
-    const timer = setInterval(check, REFRESH_MS)
-    return () => { alive = false; clearInterval(timer) }
-  }, [follows])
-
-  if (!follows || !live.length) return null
+  if (!live.length) return null
   return (
     <section aria-labelledby="live-now">
       <h2 id="live-now" className="text-lg font-semibold tracking-tight mb-3">Live now</h2>
@@ -47,6 +39,17 @@ export default function LiveNow({ onOpen }: { onOpen: (card: SeasonCard) => void
             </button>
           </li>
         ))}
+        {followLink && <li className="shrink-0">
+          <a
+            href="#/creators"
+            className="flex w-20 flex-col items-center gap-1.5 text-center rounded-box focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <span className="rounded-full bg-base-300 p-0.5">
+              <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-base-100 bg-base-200 text-2xl text-base-content/60" aria-hidden="true">+</span>
+            </span>
+            <span className="w-full truncate text-xs text-base-content/60">Follow</span>
+          </a>
+        </li>}
       </ul>
     </section>
   )

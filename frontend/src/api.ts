@@ -1346,3 +1346,10 @@ export async function searchVideos(q: string): Promise<VideoInfo[]> {
   }
   return res.json()
 }
+
+/** The newest videos across every followed channel, newest first. */
+export async function fetchCreatorsLatest(): Promise<VideoInfo[]> {
+  const res = await fetch(`${BASE}/creators/latest`)
+  if (!res.ok) throw new Error('Could not load the latest videos')
+  return res.json()
+}

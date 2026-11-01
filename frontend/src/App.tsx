@@ -24,6 +24,7 @@ import LibraryView from './views/LibraryView'
 import NotificationsView from './views/NotificationsView'
 import PersonView from './views/PersonView'
 import ChannelView from './views/ChannelView'
+import CreatorsView from './views/CreatorsView'
 import SearchView from './views/SearchView'
 import { DiscoverMenu } from './components/discover/SourcePicker'
 import DesktopSearch from './components/search/DesktopSearch'
@@ -300,6 +301,13 @@ export default function App() {
             onOpenDownloaded={openDownloadedTitle}
             onJobsCreated={() => setDownloadTick(t => t + 1)}
             onSkipped={jobs => setSkippedJobs(prev => [...prev, ...jobs])}
+          />
+        )}
+        {route.view === 'creators' && (
+          <CreatorsView
+            source={route.params.get('src') ?? ''}
+            onOpen={card => openTitle(card, 0, settings.lang)}
+            navigate={navigate}
           />
         )}
         {route.view === 'channel' && (

@@ -7,7 +7,7 @@ import type { Tab, View } from '../nav'
 import { useSelectionActive } from '../selectionMode'
 import { closeDiscoverMenuThen, toggleDiscoverMenu, useDiscoverMenuOpen } from '../discoverMenu'
 import SourceIcon from './SourceIcon'
-import FollowedChannels from './FollowedChannels'
+import CreatorLinks from './CreatorLinks'
 
 interface Destination {
   id: Tab
@@ -79,7 +79,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   // The rail's catalogues show on Discover, and peek open from anywhere else
   // while the pointer or keyboard focus is on the Discover group.
   const [peek, setPeek] = useState(false)
-  const catalogsOpen = view === 'search' || peek
+  const catalogsOpen = view === 'search' || view === 'creators' || view === 'channel' || peek
   const peekProps = {
     onMouseEnter: () => setPeek(true),
     onMouseLeave: () => setPeek(false),
@@ -273,7 +273,7 @@ function RailCatalogs({ catalogs, catalogId, onOpenCatalog }: {
           </span>
         </button>
       ))}
-      <FollowedChannels variant="rail" />
+      <CreatorLinks variant="rail" />
     </div>
   )
 }

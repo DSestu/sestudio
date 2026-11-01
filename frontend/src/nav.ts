@@ -7,12 +7,12 @@ export type Tab = (typeof TABS)[number]
 /**
  * All routable views. `watch` is reachable only by opening a title, `settings`
  * only from the settings control, `person` only from a cast/director credit,
- * `channel` only from a YouTube or Twitch video —
+ * `channel` only from a YouTube or Twitch video, `creators` from Discover —
  * none takes a slot in the nav.
  */
-export type View = Tab | 'watch' | 'settings' | 'person' | 'channel'
+export type View = Tab | 'watch' | 'settings' | 'person' | 'channel' | 'creators'
 
-const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person', 'channel']
+const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person', 'channel', 'creators']
 
 export interface Route {
   view: View
