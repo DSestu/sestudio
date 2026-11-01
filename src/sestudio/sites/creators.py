@@ -65,6 +65,23 @@ def stream_url(info: dict[str, Any]) -> str:
     return max(files, key=lambda f: f.get("height") or 0)["url"]
 
 
+def video_card(info: dict[str, Any], source: str, url: str = "") -> dict[str, Any]:
+    """A video as the client sees it, from a full or a flat yt-dlp entry."""
+    thumbs = info.get("thumbnails") or []
+    return {
+        "source": source,
+        "page_url": info.get("webpage_url") or info.get("url") or url,
+        "title": info.get("title") or url,
+        "channel": info.get("channel") or info.get("uploader") or "",
+        "channel_url": info.get("channel_url") or info.get("uploader_url") or "",
+        "thumbnail": info.get("thumbnail") or (thumbs[-1].get("url") if thumbs else ""),
+        "duration": info.get("duration") or 0,
+        "is_live": bool(info.get("is_live")),
+        "timestamp": info.get("timestamp") or info.get("release_timestamp") or 0,
+        "view_count": info.get("view_count") or info.get("concurrent_view_count") or 0,
+    }
+
+
 class _YtDlpSite(ContentSite):
     hosts: tuple[str, ...] = ()
     # Kept out of the title search: their own Videos kind comes later.
@@ -86,6 +103,11 @@ class _YtDlpSite(ContentSite):
 
     def info(self, url: str) -> dict[str, Any]:
         return self._info.get(url, lambda: ytdlp_json("--no-playlist", url))
+
+    def video(self, url: str) -> dict[str, Any]:
+        """What the app shows for one video or live stream."""
+        info = self.info(url)
+        return video_card(info, self.id, url)
 
     def fetch_page(self, url: str, lang: str = LANG) -> PageResult:
         info = self.info(url)

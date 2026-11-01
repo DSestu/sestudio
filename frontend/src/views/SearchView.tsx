@@ -432,7 +432,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
         >
           {/* Padding inside the clip, so the field's focus ring isn't cut. */}
           <div className="min-h-0 overflow-hidden -m-1 p-1">
-            <SearchBar onResults={handleSearchResults} term={params.get('q')} />
+            <SearchBar onResults={handleSearchResults} term={params.get('q')} onOpenLink={onOpenDetail} />
           </div>
         </div>
         {/* Desktop has these in the pinned bar. */}
