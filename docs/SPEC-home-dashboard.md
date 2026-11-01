@@ -63,7 +63,11 @@ A widget whose news is in the strip keeps its normal place lower down; the strip
 
 ## 5. States
 
-- **First run** (no history, follows or downloads): a welcome block ("What do you want to watch?", one line on what search covers, ghost buttons Browse catalogues and Follow a channel), then a Discover window on TMDB trending, then the status line. The phone shows a search field in the welcome block; desktop points to its existing search bar instead of adding a second one. No dashboard of empty shells.
+- **First run** (no history, follows or watchers), chosen 2026-11-01:
+  - **Welcome hero** in Continue watching's place (an L on phone, half width on desktop): a mosaic of trending posters, tilted and fading into the panel, lights it; its top edge is a dashed Signal Blue timeline (the progress line that fills once something plays). Tag "Continue watching · starts with your first title", heading "What do you want to watch tonight?", one line on what search covers, then on the phone the signature search field and a ghost "Browse catalogues" button; on desktop only the button (the page card already has search).
+  - **Two ghost tiles** beside it (phone: side by side under it; desktop: the two right columns, as tall as the hero), dashed outline, each drawn with its future widget's own shapes: "Your channels" (dashed live rings, action Follow) and "Know when the VF lands" (dashed day tile with a VF chip, action Add a watcher). One line, one action each; text sits low, by its button.
+  - **Two real shelves**: Trending this week on TMDB, and the first shelf of a site catalogue; then the status line.
+  - Each part becomes its real widget as soon as it has content (first title played, first channel followed, first watcher); no dismiss button.
 - **Quiet day** (nothing live, new, downloading or airing): no Now strip, no badges or blue dots, no Upcoming. From your channels shows "latest" with desaturated faces. Health is not a widget: it drops to a one-line footer, "All good" in green with a small pulse trace and its facts (sites up, last watcher run, free disk).
 - **Health:** a widget only when something is wrong (and then also a Now chip); otherwise the footer status line on every Home.
 - **Loading:** each widget loads on its own, with a skeleton at its final size, so the grid never jumps. A widget whose fetch fails is absent, and Health records it.
