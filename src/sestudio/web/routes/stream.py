@@ -289,6 +289,8 @@ def proxy_stream(token: str, request: Request) -> Response:
         finally:
             upstream.close()
             client.close()
+        if fix is not None and upstream.is_success:
+            raw = fix.transform(raw)
         secret_bytes = request.app.state.proxy_secret
         base_url = str(upstream.url)
 

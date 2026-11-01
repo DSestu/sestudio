@@ -10,6 +10,7 @@ import {
 } from '../api'
 import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import { pickHost } from '../downloadPrefs'
+import { VIDEO_SOURCES } from '../sourceLook'
 import EmptyState from '../components/EmptyState'
 import SaveToggles from '../components/SaveToggles'
 import WatchToggle from '../components/WatchToggle'
@@ -108,6 +109,7 @@ export default function WatchView({
     detail, loading, error, setError, activeLang, setActiveLang, langs,
     sourceUrl, sourceId, epLangs, epTitles,
   } = useSeasonDetail(pageUrl, lang, altPageUrls, sourceProp ?? 'fstream', altSources)
+  const isVideo = VIDEO_SOURCES.has(sourceId)
   const [checked, setChecked] = useState<Set<number>>(new Set())
   const [initializedFor, setInitializedFor] = useState<SeasonDetail | null>(null)
   const [currentNumber, setCurrentNumber] = useState<number | null>(null)
@@ -696,6 +698,7 @@ export default function WatchView({
 
   const list = detail && (
     <EpisodeList
+      filmLabel={isVideo ? 'Video' : undefined}
       episodes={detail.episodes}
       currentNumber={currentNumber}
       checked={checked}
@@ -783,7 +786,8 @@ export default function WatchView({
   const versionLabel = [
     activeLang.toUpperCase(),
     downloadedActive ? 'On disk' : (currentListing?.label ?? sourceId),
-    !downloadedActive && active ? active : null,
+    // A video site resolves its own streams: its host name would repeat it.
+    !downloadedActive && active && active !== sourceId ? active : null,
   ].filter(Boolean) as string[]
   const sourceFailed = playing && !probing && !source
   const sourcesShown = sourcesOpen || sourceFailed
@@ -897,7 +901,7 @@ export default function WatchView({
           <h2 className="font-semibold text-lg tracking-tight truncate">{seriesName}</h2>
           <p className="text-base-content/50 text-xs truncate">
             {[
-              detail && (detail.is_film ? 'Film' : `Season ${detail.season}`),
+              detail && (detail.is_film ? (isVideo ? 'Video' : 'Film') : `Season ${detail.season}`),
               meta?.year,
             ].filter(Boolean).join(' · ')}
           </p>
@@ -906,14 +910,14 @@ export default function WatchView({
           <div className="flex items-center gap-2">
             {/* Labelled, not an icon: between the star and the heart a bare bell
                 read as decoration and nobody found it. */}
-            <WatchToggle
+            {!isVideo && <WatchToggle
               pageUrl={sourceUrl}
               source={sourceId}
               seriesName={seriesName}
               posterUrl={posterUrl}
               isFilm={Boolean(detail.is_film)}
               variant="button"
-            />
+            />}
             <SaveToggles
               entry={{
                 series: seriesName,

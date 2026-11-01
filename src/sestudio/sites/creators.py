@@ -7,6 +7,7 @@ Their own search and channel pages come later (docs/SPEC-youtube-twitch.md).
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from typing import Any
 from urllib.parse import urlsplit
@@ -16,7 +17,13 @@ from sestudio.downloader import check_yt_dlp, js_runtime_args
 from sestudio.http_client import BROWSER_UA
 from sestudio.models import Episode, SeasonCard, StreamSource
 from sestudio.providers.base import StreamProvider
-from sestudio.sites.base import ContentSite, PageResult, SiteError, StreamCandidate
+from sestudio.sites.base import (
+    ContentSite,
+    PageResult,
+    ProxyFix,
+    SiteError,
+    StreamCandidate,
+)
 
 # These videos carry no VF/VOSTFR distinction: everything is the original.
 LANG = "vo"
@@ -116,12 +123,34 @@ class _YtDlpSite(ContentSite):
         )
 
 
+def h264_only(playlist: bytes) -> bytes:
+    """Drop the VP9 and AV1 variants from an HLS master, with their URI lines.
+
+    Chrome plays them, but Chromecast, Safari and many TVs can't, and a player
+    choosing one by bandwidth has no idea it won't decode.
+    """
+    out: list[str] = []
+    skip_uri = False
+    for line in playlist.decode("utf-8", errors="replace").splitlines():
+        if skip_uri and line and not line.startswith("#"):
+            skip_uri = False
+            continue
+        if line.startswith("#EXT-X-STREAM-INF") and re.search(r"vp09|av01", line):
+            skip_uri = True
+            continue
+        out.append(line)
+    return "\n".join(out).encode()
+
+
 class YouTubeSite(_YtDlpSite):
     id = "youtube"
     display_name = "YouTube"
     home_url = "https://www.youtube.com"
     films_dirname = "YouTube"
     hosts = ("youtube.com", "music.youtube.com", "youtu.be")
+
+    def proxy_fix(self, url: str) -> ProxyFix | None:
+        return ProxyFix({}, h264_only) if "/hls_variant/" in url else None
 
 
 class TwitchSite(_YtDlpSite):

@@ -111,3 +111,24 @@ def test_downloads_extract_the_page_and_live_is_never_cached(monkeypatch):
     assert src.extract_url == "https://www.twitch.tv/someone"
     # One cached lookup, then a fresh one for each resolve of a live stream.
     assert len(calls) == 3
+
+
+def test_youtube_master_keeps_only_h264_variants():
+    """Chromecast and TVs pick a variant by bandwidth and can't decode VP9/AV1."""
+    master = (
+        b"#EXTM3U\n"
+        b'#EXT-X-MEDIA:URI="a.m3u8",TYPE=AUDIO,GROUP-ID="234"\n'
+        b'#EXT-X-STREAM-INF:BANDWIDTH=7417746,CODECS="avc1.64002A,mp4a.40.2"\n'
+        b"https://gv/h264.m3u8\n"
+        b'#EXT-X-STREAM-INF:BANDWIDTH=27987109,CODECS="vp09.00.51.08,mp4a.40.2"\n'
+        b"https://gv/vp9.m3u8\n"
+    )
+    out = creators.h264_only(master).decode()
+
+    assert "h264.m3u8" in out and 'URI="a.m3u8"' in out
+    assert "vp09" not in out and "vp9.m3u8" not in out
+    assert YouTubeSite().proxy_fix("https://manifest.googlevideo.com/x/hls_variant/y")
+    assert (
+        YouTubeSite().proxy_fix("https://manifest.googlevideo.com/hls_playlist/")
+        is None
+    )

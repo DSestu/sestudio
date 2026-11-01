@@ -23,6 +23,8 @@ interface Props {
   /** Play an episode in a given language, switching the season if needed. */
   onSelectEpisodeLang: (ep: EpisodeDetail, lang: string) => void
   isFilm: boolean
+  /** What a one-item title is called: "Film", or "Video" for a channel's. */
+  filmLabel?: string
   season: number
   /** Every season of this show on this site, empty when there is only one. */
   seasons: ShowSeason[]
@@ -41,7 +43,7 @@ interface Props {
 /** The left-hand playlist: every episode in the season, always visible. */
 export default function EpisodeList({
   episodes, currentNumber, checked, watchedNumbers, progress, langs, activeLang,
-  epLangs, epTitles, downloadedLangs, isFilm, season, seasons,
+  epLangs, epTitles, downloadedLangs, isFilm, filmLabel = 'Film', season, seasons,
   onSelect, onToggle, onToggleAll, onLang, onToggleWatched, onSelectEpisodeLang,
   onSelectSeason, headerAction,
 }: Props) {
@@ -269,7 +271,7 @@ export default function EpisodeList({
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-medium">
             {isFilm
-              ? 'Film'
+              ? filmLabel
               : seasons.length > 1
                 ? `${seasons.length} seasons`
                 : `Season ${season}`}
