@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
 import RankRow from '../components/RankRow'
 import colabQr from '../assets/colab-qr.svg'
 import { DEFAULT_HOST_ORDER } from '../downloadPrefs'
-import type { AppSettings, RestartWay, SiteInfo } from '../api'
-import { getSites, restartServer, runAiSetup, serverRestartWay } from '../api'
+import type { AppSettings, LogLine, RestartWay, SiteInfo } from '../api'
+import { getServerLog, getSites, restartServer, runAiSetup, serverRestartWay } from '../api'
 import type { SubtitleStyle } from '../subtitleStyle'
 import { isSettingUp, useAiSetup } from '../useAiSetup'
 import { setBrowserQuality } from '../browserFps'
@@ -405,6 +405,10 @@ export default function SettingsView({ settings, onUpdate }: Props) {
 
       <div className="divider my-0" />
 
+      <ServerLogSection />
+
+      <div className="divider my-0" />
+
       {/* Last and set apart: nothing here is needed day to day, and what it
           unlocks cannot be undone. */}
       <section
@@ -532,6 +536,87 @@ function VideoQualitySetting() {
 function engineName(provider: string): string {
   const name = provider.replace(/ExecutionProvider$/, '')
   return ({ Tensorrt: 'TensorRT', Dml: 'DirectML', ROCM: 'ROCm' } as Record<string, string>)[name] ?? name
+}
+
+/** Same cap as the server's buffer: older lines are gone there too. */
+const LOG_KEPT = 1000
+
+/**
+ * The server's own output, as its terminal shows it: polled while Settings is
+ * open, newest at the bottom, following along unless scrolled up.
+ */
+function ServerLogSection() {
+  const [lines, setLines] = useState<LogLine[]>([])
+  const [copied, setCopied] = useState(false)
+  const box = useRef<HTMLPreElement>(null)
+
+  useEffect(() => {
+    let last = 0
+    const poll = () =>
+      getServerLog(last).then(fresh => {
+        if (!fresh.length) return
+        last = fresh[fresh.length - 1].seq
+        const el = box.current
+        const atBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 24
+        setLines(prev => [...prev, ...fresh].slice(-LOG_KEPT))
+        if (atBottom) requestAnimationFrame(() => el?.scrollTo({ top: el.scrollHeight }))
+      })
+    poll()
+    const timer = setInterval(poll, 2000)
+    return () => clearInterval(timer)
+  }, [])
+
+  function copy() {
+    navigator.clipboard
+      .writeText(lines.map(line => line.text).join('\n'))
+      .then(() => setCopied(true))
+      .catch(() => {})
+  }
+
+  return (
+    <section aria-labelledby="settings-log" className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h3
+          id="settings-log"
+          className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
+        >
+          Server log
+        </h3>
+        {navigator.clipboard && lines.length > 0 && (
+          <button className="btn btn-xs btn-ghost" onClick={copy}>
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
+      </div>
+      <pre
+        ref={box}
+        role="log"
+        className="h-64 overflow-auto rounded-box bg-base-300 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all"
+      >
+        {lines.length === 0 ? (
+          <span className="text-base-content/40">Nothing logged yet.</span>
+        ) : (
+          lines.map(line => (
+            <div
+              key={line.seq}
+              className={
+                line.level === 'ERROR' || line.level === 'CRITICAL'
+                  ? 'text-error'
+                  : line.level === 'WARNING'
+                    ? 'text-warning'
+                    : 'text-base-content/70'
+              }
+            >
+              {line.text}
+            </div>
+          ))
+        )}
+      </pre>
+      <p className="text-xs text-base-content/50">
+        What the server prints in its terminal: requests, warnings and errors.
+      </p>
+    </section>
+  )
 }
 
 /**

@@ -645,6 +645,22 @@ export type RestartWay = 'launcher' | 'uvx' | 'python'
 
 /** How the server would restart, and the command it would run; null while it
  *  does not answer. */
+export interface LogLine {
+  seq: number
+  level: string
+  text: string
+}
+
+/** What the server logged since line `after`; empty when it cannot be reached. */
+export async function getServerLog(after: number): Promise<LogLine[]> {
+  try {
+    const res = await fetch(`${BASE}/server/log?after=${after}`, { cache: 'no-store' })
+    return res.ok ? (await res.json()).lines : []
+  } catch {
+    return []
+  }
+}
+
 export async function serverRestartWay(): Promise<{ restart: RestartWay; command: string } | null> {
   try {
     const res = await fetch(`${BASE}/server`, { cache: 'no-store' })
