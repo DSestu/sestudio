@@ -27,6 +27,7 @@ import io
 import os
 import re
 import subprocess
+import collections
 import threading
 import time
 from collections.abc import Iterator
@@ -1388,6 +1389,11 @@ class StreamProbe:
 
 
 _probes: dict[str, StreamProbe | None] = {}
+# One probe per URL at a time: a player opening a stream asks several routes for
+# it at once, and each would otherwise run its own ffmpeg over the network.
+_probe_locks: collections.defaultdict[str, threading.Lock] = collections.defaultdict(
+    threading.Lock
+)
 
 
 @functools.cache
@@ -1425,6 +1431,11 @@ def probe_stream(url: str, *, hls: bool) -> StreamProbe | None:
     Cached per URL: the probe reads the playlist (or the mp4's index) over the
     network, which is seconds, and every segment would otherwise repeat it.
     """
+    with _probe_locks[url]:
+        return _probe_stream(url, hls)
+
+
+def _probe_stream(url: str, hls: bool) -> StreamProbe | None:
     if url in _probes:
         return _probes[url]
     found: StreamProbe | None = None

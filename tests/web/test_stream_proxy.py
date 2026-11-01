@@ -478,8 +478,9 @@ def test_the_stream_master_is_built_from_what_ffmpeg_reads_through_the_proxy(
     media = client.get(f"/api/stream/hls?{quoted}&rung=360")
 
     assert master.status_code == 200
-    # ffmpeg reads the server's own proxy, which carries the host's headers.
-    assert read[0] == (f"http://127.0.0.1:8080/api/stream/proxy?{quoted}", True)
+    # ffmpeg reads the server's own proxy, which carries the host's headers,
+    # asking for a master's best variant only.
+    assert read[0] == (f"http://127.0.0.1:8080/api/stream/proxy?{quoted}&best=1", True)
     uris = [line for line in master.text.splitlines() if not line.startswith("#")]
     assert uris == [f"hls?{quoted}&rung={r}" for r in (0, 480, 360, 240, 144)]
     assert media.text.splitlines()[-2] == f"segment?{quoted}&rung=360&index=4"
@@ -526,3 +527,29 @@ def test_proxy_applies_the_sites_fix(httpx_mock: HTTPXMock):
 
     assert fetch("https://cdn/keys/key.bin") == b"SECRET"
     assert fetch("https://cdn/seg.ts") == b"segment"
+
+
+def test_best_variant_keeps_the_best_picture_and_its_audio_only():
+    """The server's own ffmpeg reads every variant of a master before starting."""
+    from sestudio.web.proxy import best_variant
+
+    master = "\n".join(
+        [
+            "#EXTM3U",
+            '#EXT-X-MEDIA:URI="a-low.m3u8",TYPE=AUDIO,GROUP-ID="233"',
+            '#EXT-X-MEDIA:URI="a-high.m3u8",TYPE=AUDIO,GROUP-ID="234"',
+            '#EXT-X-STREAM-INF:BANDWIDTH=310801,RESOLUTION=426x240,AUDIO="233"',
+            "v240.m3u8",
+            '#EXT-X-STREAM-INF:BANDWIDTH=7417746,RESOLUTION=1920x1080,AUDIO="234"',
+            "v1080.m3u8",
+            '#EXT-X-STREAM-INF:BANDWIDTH=4553846,RESOLUTION=1280x720,AUDIO="234"',
+            "v720.m3u8",
+        ]
+    )
+
+    out = best_variant(master)
+
+    assert "v1080.m3u8" in out and "a-high.m3u8" in out
+    assert not any(x in out for x in ("v240", "v720", "a-low"))
+    media = "#EXTM3U\n#EXTINF:6,\nseg0.ts"
+    assert best_variant(media) == media
