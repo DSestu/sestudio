@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DownloadJob } from './api'
-import { cancelJob, clearHistory, getJobs, jobFileUrl, subscribeJobProgress } from './api'
+import { cancelJob, clearHistory, getJobs, jobFileUrl } from './api'
 
 export interface DownloadJobsApi {
   jobs: DownloadJob[]
@@ -13,16 +13,15 @@ export interface DownloadJobsApi {
 const TERMINAL = new Set(['done', 'failed', 'skipped', 'cancelled'])
 
 /**
- * Owns the download queue: initial fetch, per-job SSE progress, cancellation,
- * and handing finished device-bound files to the browser. Lifted out of
+ * Owns the download queue: initial fetch, progress polling, cancellation, and
+ * handing finished device-bound files to the browser. Lifted out of
  * DownloadQueue so the shell can badge the Downloads tab without duplicating
- * the subscriptions.
+ * the polling.
  */
 export function useDownloadJobs(refreshTrigger: number, onClearHistory: () => void): DownloadJobsApi {
   const [jobs, setJobs] = useState<DownloadJob[]>([])
-  const subscriptions = useRef<Record<string, () => void>>({})
   // Device-bound jobs already handed to the browser, so a re-render or a
-  // second SSE 'done' event doesn't download the same file twice.
+  // second poll seeing 'done' doesn't download the same file twice.
   const delivered = useRef<Set<string>>(new Set())
 
   /** Hand a finished device-bound job's file to the browser. */
@@ -41,26 +40,21 @@ export function useDownloadJobs(refreshTrigger: number, onClearHistory: () => vo
     getJobs().then(setJobs).catch(() => {})
   }, [refreshTrigger])
 
+  // Polled, not streamed: tunnels such as Cloudflare's quick tunnels hold an
+  // SSE stream back until it ends, so progress would only show once finished.
+  const anyActive = jobs.some(j => !TERMINAL.has(j.status))
   useEffect(() => {
-    jobs.forEach(job => {
-      if (subscriptions.current[job.id]) return
-      if (TERMINAL.has(job.status)) return
-
-      subscriptions.current[job.id] = subscribeJobProgress(
-        job.id,
-        (data) => {
-          setJobs(prev => prev.map(j => {
-            if (j.id !== job.id) return j
-            const next = { ...j, ...data } as DownloadJob
-            // The file only exists once the job finishes — collect it then.
-            if (next.to_device && next.status === 'done') deliverToDevice(next)
-            return next
-          }))
-        },
-        () => { delete subscriptions.current[job.id] },
-      )
-    })
-  }, [jobs])
+    if (!anyActive) return
+    const timer = setInterval(() => {
+      getJobs().then(next => setJobs(prev => {
+        const wasActive = new Set(prev.filter(j => !TERMINAL.has(j.status)).map(j => j.id))
+        // The file only exists once the job finishes — collect it then.
+        next.forEach(j => { if (j.to_device && j.status === 'done' && wasActive.has(j.id)) deliverToDevice(j) })
+        return next
+      })).catch(() => {})
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [anyActive])
 
   function cancel(id: string) {
     cancelJob(id).then(() => {

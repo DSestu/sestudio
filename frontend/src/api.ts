@@ -1078,24 +1078,6 @@ export async function getJobs(): Promise<DownloadJob[]> {
   return res.json()
 }
 
-export function subscribeJobProgress(
-  jobId: string,
-  onEvent: (data: Partial<DownloadJob>) => void,
-  onDone: () => void,
-): () => void {
-  const es = new EventSource(`${BASE}/downloads/${jobId}/progress`)
-  es.onmessage = (e) => {
-    const data = JSON.parse(e.data)
-    onEvent(data)
-    if (data.status === 'done' || data.status === 'failed' || data.status === 'cancelled') {
-      es.close()
-      onDone()
-    }
-  }
-  es.onerror = () => { es.close(); onDone() }
-  return () => es.close()
-}
-
 // --- watchers & notifications ---------------------------------------------- //
 
 export type WatcherKind =

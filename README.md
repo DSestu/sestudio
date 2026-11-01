@@ -51,6 +51,7 @@ close the tab. Stop it with Ctrl-C.
   * [Casting](#casting-1)
 * [Sources and hosts](#sources-and-hosts)
 * [Running it](#running-it)
+  * [On Google Colab](#on-google-colab)
 * [Where it keeps things](#where-it-keeps-things)
 * [Casting setup](#casting-setup)
   * [HTTPS and the certificate](#https-and-the-certificate)
@@ -239,6 +240,26 @@ uv sync && uv run sestudio         # from a source checkout
 | `--no_https` | off | Don't start the HTTPS server |
 | `--no_resolve` | off | Skip live-domain auto-resolution |
 | `-v`, `--verbose` | off | Debug logging |
+
+### On Google Colab
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb)
+
+No machine of your own needed: Colab provides the GPU for AI frames. Pick
+**Runtime → Change runtime type → T4 GPU**, press ▶ and allow Google Drive. The
+cell prints a public link — open it on any device, no sign-in.
+
+* Settings, library and downloaded videos live in `MyDrive/sestudio/`, so the
+  next session carries on. The library is copied there every 5 minutes and on ■.
+* The link is a [Cloudflare quick tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/):
+  real HTTPS, so Chromecast works with no certificate to trust, but it changes
+  every session.
+* DLNA does not work — Colab has no local network to discover a TV on.
+* Use a paid Colab plan. The free tier forbids serving a web UI and ends such
+  sessions without warning.
+
+> [!WARNING]
+> Anyone with the link controls sestudio and writes to your Drive folder.
 
 ---
 

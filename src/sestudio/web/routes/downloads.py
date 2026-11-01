@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import urllib.parse
 from collections.abc import Iterator
@@ -244,25 +242,3 @@ async def cancel_download(job_id: str, request: Request) -> dict[str, Any]:
 
         raise HTTPException(status_code=404, detail="Job not found or already terminal")
     return {"id": job_id, "status": "cancelled"}
-
-
-@router.get("/downloads/{job_id}/progress")
-async def job_progress(job_id: str, request: Request) -> StreamingResponse:
-    store = request.app.state.job_store
-
-    async def event_stream() -> Any:
-        while True:
-            if await request.is_disconnected():
-                break
-            job = store.get(job_id)
-            if job is None:
-                yield f"data: {json.dumps({'error': 'not found'})}\n\n"
-                break
-            # Same shape as the list endpoint so both stay in sync as fields grow.
-            payload = json.dumps(_job_to_dict(job))
-            yield f"data: {payload}\n\n"
-            if job.status in ("done", "failed", "cancelled"):
-                break
-            await asyncio.sleep(0.5)
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
