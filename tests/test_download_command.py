@@ -82,3 +82,21 @@ def test_vidzy_download_impersonates_chrome(tmp_path, monkeypatch):
     argv = _argv_for("https://cdn.example.test/hls/master.m3u8", tmp_path, monkeypatch)
 
     assert argv[argv.index("--impersonate") + 1] == "chrome"
+
+
+def test_node_is_named_when_deno_is_missing(tmp_path, monkeypatch):
+    """YouTube needs a JS runtime, and yt-dlp only enables deno by itself."""
+    monkeypatch.setattr(
+        downloader.shutil, "which", lambda name: "/bin/node" if name == "node" else None
+    )
+    argv = _argv_for("https://www.youtube.com/watch?v=x", tmp_path, monkeypatch)
+
+    assert argv[argv.index("--js-runtimes") + 1] == "node"
+
+
+def test_no_runtime_flag_when_deno_is_there_or_nothing_is(monkeypatch):
+    monkeypatch.setattr(downloader.shutil, "which", lambda name: "/bin/deno")
+    assert downloader.js_runtime_args() == []
+    monkeypatch.setattr(downloader.shutil, "which", lambda name: None)
+    assert downloader.js_runtime_args() == []
+    assert downloader.js_runtime() == ""

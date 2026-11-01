@@ -63,6 +63,13 @@ export default function SettingsView({ settings, onUpdate }: Props) {
     <div className="flex flex-col gap-6 max-w-xl">
       <h2 className="text-xl font-semibold tracking-tight">Settings</h2>
 
+      {settings.js_runtime === '' && (
+        <p role="alert" className="text-sm text-warning">
+          YouTube needs Node.js or Deno on the server, and neither was found. Install one
+          (nodejs.org) and restart the server, or YouTube videos may not play.
+        </p>
+      )}
+
       <AiSection settings={settings} onUpdate={onUpdate} />
 
       <div className="divider my-0" />
