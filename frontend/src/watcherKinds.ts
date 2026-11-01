@@ -8,7 +8,7 @@
 // Colour is never the only signal: every use pairs the tone with an icon and a
 // word, so the kinds stay distinguishable without relying on hue.
 
-export type KindFamily = 'series' | 'film' | 'search' | 'criteria'
+export type KindFamily = 'series' | 'film' | 'search' | 'criteria' | 'channel'
 
 export interface KindMeta {
   family: KindFamily
@@ -55,6 +55,13 @@ const META: Record<string, KindMeta> = {
     short: 'Criteria',
     badge: 'badge-success',
     edge: 'border-success',
+  },
+  channel: {
+    family: 'channel',
+    label: 'Followed channel',
+    short: 'Channel',
+    badge: 'badge-neutral',
+    edge: 'border-neutral',
   },
 }
 

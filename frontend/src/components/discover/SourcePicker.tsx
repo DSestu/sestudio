@@ -4,6 +4,7 @@ import { closeDiscoverMenu, closeDiscoverMenuThen, openDiscoverMenu, useDiscover
 import { useModalBack } from '../../useModalBack'
 import { useSourcePosters } from './sourcePosters'
 import SourceIcon from '../SourceIcon'
+import FollowedChannels from '../FollowedChannels'
 import { type Kind, SEARCH_FIELD, type TitleSearch, clearRecentSearches, useRecentSearches, useTitleSearch } from '../../titleSearch'
 import { RecentSearchChips, SearchIcon, TitleResults } from '../search/SearchParts'
 
@@ -296,6 +297,7 @@ export function DiscoverMenu({
                     </button>
                   ))}
                 </div>
+                <FollowedChannels variant="menu" onPick={closeDiscoverMenu} />
               </div>
             </>
           )}

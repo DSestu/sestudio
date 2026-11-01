@@ -120,6 +120,11 @@ class _YtDlpSite(ContentSite):
     def _channel(self, url: str) -> dict[str, Any]:
         raise NotImplementedError
 
+    def latest(self, url: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        """A followed channel's newest videos and its live stream, cheaply: run
+        every few minutes for every channel followed."""
+        raise NotImplementedError
+
     def fetch_page(self, url: str, lang: str = LANG) -> PageResult:
         info = self.info(url)
         episode = Episode(
@@ -185,6 +190,29 @@ class YouTubeSite(_YtDlpSite):
     def proxy_fix(self, url: str) -> ProxyFix | None:
         return ProxyFix({}, h264_only) if "/hls_variant/" in url else None
 
+    def latest(self, url: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        # shortcut: no live check for YouTube, which would cost a yt-dlp run per
+        # channel per poll; add one on /channel/<id>/live if it is missed.
+        match = re.search(r"/channel/(UC[\w-]+)", url)
+        if not match:
+            raise SiteError(f"Follow a YouTube channel by its /channel/ address: {url}")
+        videos = [
+            {
+                "source": self.id,
+                "page_url": entry["page_url"],
+                "title": entry["title"],
+                "channel": "",
+                "channel_url": url,
+                "thumbnail": entry["thumbnail"],
+                "duration": 0,
+                "is_live": False,
+                "timestamp": entry["timestamp"],
+                "view_count": 0,
+            }
+            for entry in youtube_feed(match.group(1))
+        ]
+        return videos, None
+
     def _channel(self, url: str) -> dict[str, Any]:
         base = re.sub(
             r"/(videos|streams|shorts|featured|live|playlists)$",
@@ -242,6 +270,16 @@ class TwitchSite(_YtDlpSite):
             raise SiteError(f"No Twitch channel called {login}")
         return twitch_channel(user)
 
+    def latest(self, url: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        channel = self._channel(url)
+        live = channel["live"]
+        videos = channel["videos"]
+        if live:
+            # The stream on now is already listed as a broadcast that is still
+            # being recorded: it is news, and downloadable, once it ends.
+            videos = [v for v in videos if v["timestamp"] < live["timestamp"] - 300]
+        return videos, live
+
 
 def _timestamp(iso: str | None) -> int:
     return (
@@ -254,33 +292,56 @@ def _timestamp(iso: str | None) -> int:
 _ATOM = {
     "a": "http://www.w3.org/2005/Atom",
     "yt": "http://www.youtube.com/xml/schemas/2015",
+    "media": "http://search.yahoo.com/mrss/",
 }
 
 
-def youtube_feed_dates(channel_id: str) -> dict[str, int]:
-    """Upload time of a channel's last 15 videos, by video id, from its RSS feed.
+def youtube_feed(channel_id: str) -> list[dict[str, Any]]:
+    """A channel's last 15 long-form uploads, newest first, from its RSS feed.
 
-    yt-dlp's flat listing has no dates; the feed is one free request. Empty on
-    any failure: the dates are a nicety, the listing still stands.
+    The ``UULF`` playlist is the channel's uploads without Shorts and streams,
+    matching its Videos tab. One free request, no key; raises SiteError.
     """
-    if not channel_id:
-        return {}
     try:
         with new_client(headers={"User-Agent": BROWSER_UA}) as client:
             resp = client.get(
                 "https://www.youtube.com/feeds/videos.xml",
-                params={"channel_id": channel_id},
+                params={"playlist_id": "UULF" + channel_id.removeprefix("UC")},
             )
             resp.raise_for_status()
         root = ET.fromstring(resp.content)
-    except Exception:  # noqa: BLE001
-        return {}
-    return {
-        entry.findtext("yt:videoId", "", _ATOM): _timestamp(
-            entry.findtext("a:published", "", _ATOM)
+    except Exception as exc:  # noqa: BLE001
+        raise SiteError(f"youtube feed: {exc}") from exc
+    entries = []
+    for entry in root.findall("a:entry", _ATOM):
+        video_id = entry.findtext("yt:videoId", "", _ATOM)
+        thumb = entry.find("media:group/media:thumbnail", _ATOM)
+        entries.append(
+            {
+                "id": video_id,
+                "page_url": f"https://www.youtube.com/watch?v={video_id}",
+                "title": entry.findtext("a:title", "", _ATOM),
+                "timestamp": _timestamp(entry.findtext("a:published", "", _ATOM)),
+                "thumbnail": thumb.get("url", "") if thumb is not None else "",
+            }
         )
-        for entry in root.findall("a:entry", _ATOM)
-    }
+    return entries
+
+
+def youtube_feed_dates(channel_id: str) -> dict[str, int]:
+    """Upload time of a channel's latest videos, by video id.
+
+    yt-dlp's flat listing has no dates. Empty on any failure: the dates are a
+    nicety, the listing still stands.
+    """
+    try:
+        return (
+            {e["id"]: e["timestamp"] for e in youtube_feed(channel_id)}
+            if channel_id
+            else {}
+        )
+    except SiteError:
+        return {}
 
 
 # Twitch's own web client id, the one yt-dlp sends too: public, no account.

@@ -10,6 +10,8 @@ function icon(family: KindFamily) {
     search: ['M21 21l-4.35-4.35', 'M17 11a6 6 0 11-12 0 6 6 0 0112 0z'],
     // A funnel: filters, not a fixed title.
     criteria: ['M4 5h16l-6 7.5V19l-4-2v-4.5z'],
+    // A video frame with a play mark: a YouTube or Twitch channel.
+    channel: ['M3 6h18v12H3z', 'M10 9.5l4.5 2.5-4.5 2.5z'],
   }
   return (
     <svg

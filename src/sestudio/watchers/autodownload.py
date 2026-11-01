@@ -68,6 +68,8 @@ async def auto_download(
     """
     if not watcher.auto_download:
         return 0
+    if watcher.kind == "channel":
+        return await _queue_videos(watcher, events, store=store, sites=sites, cfg=cfg)
     downloadable = [
         event
         for event in events
@@ -135,6 +137,52 @@ async def auto_download(
 
     if queued:
         logger.info("Watcher %d auto-queued %d download(s)", watcher.id, queued)
+    return queued
+
+
+async def _queue_videos(
+    watcher: Watcher,
+    events: list[dict[str, Any]],
+    *,
+    store: JobStore,
+    sites: dict[str, ContentSite],
+    cfg: AppConfig | None,
+) -> int:
+    """Queue a followed channel's new videos (not its live streams: Twitch lists
+    each one as a broadcast once it ends, and that is what gets archived)."""
+    queued = 0
+    for event in events:
+        data = event.get("data") or {}
+        if data.get("kind") != "video" or not data.get("page_url"):
+            continue
+        source = str(data.get("source") or "")
+        spec = DownloadSpec(
+            episode_name=str(data.get("episode_name") or f"{event.get('title')}.mp4"),
+            series_name=str(data.get("channel") or watcher.label),
+            season=0,
+            embed_url=str(data["page_url"]),
+            provider=source,
+            lang="vo",
+            all_providers={source: str(data["page_url"])},
+            poster_url=str(event.get("poster_url") or ""),
+            page_url=str(data["page_url"]),
+            source=source,
+        )
+        try:
+            outcome = await queue_download(
+                spec, store=store, sites=sites, cfg=cfg, lane="watcher"
+            )
+        except Exception as exc:
+            logger.warning(
+                "Watcher %d: queueing %s failed: %s", watcher.id, spec.episode_name, exc
+            )
+            _mark(event, None, "error")
+            continue
+        if outcome.status == "queued" and outcome.job is not None:
+            _mark(event, outcome.job.id, "queued")
+            queued += 1
+        else:
+            _mark(event, None, "skipped" if outcome.status == "skipped" else "error")
     return queued
 
 
