@@ -29,6 +29,7 @@ from sestudio.web.routes import (
     catalogs,
     creators,
     downloads,
+    health,
     library,
     downloaded,
     home,
@@ -135,6 +136,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.state.catalogs = build_catalogs(app.state.sites)
     app.state.providers = _PROVIDERS
     app.state.proxy_secret = secrets.token_bytes(32)
+    app.state.site_health = {}  # site id -> (monotonic, entry): routes/health.py
     app.state.dlna_renderers = {}  # udn -> control location, populated by discovery
     app.state.dlna_dmr = None  # active DmrDevice for the current cast session
     app.state.dlna_title = ""
@@ -185,6 +187,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(watchers.router, prefix="/api")
     app.include_router(creators.router, prefix="/api")
     app.include_router(home.router, prefix="/api")
+    app.include_router(health.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)
     dist = _frontend_dist()
