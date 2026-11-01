@@ -1,20 +1,25 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import type { AppSettings, DownloadedFile, DownloadedTitle, DownloadJob, Shelf, WatcherEvent } from '../api'
-import { getShelves } from '../api'
+import { getShelves, videoSeasonCard } from '../api'
 import { entries, useCollections, type ListName } from '../collections'
-import ActivityPeek from '../components/ActivityPeek'
-import LiveNow from '../components/LiveNow'
 import EmptyState from '../components/EmptyState'
 import ContinueWidget from '../components/home/ContinueWidget'
+import LiveWidget from '../components/home/LiveWidget'
+import NewEpisodesWidget from '../components/home/NewEpisodesWidget'
 import NowStrip from '../components/home/NowStrip'
 import PosterStrip from '../components/home/PosterStrip'
 import Widget, { WidgetGrid } from '../components/home/Widget'
 import { orderWidgets, pinTiers, type WidgetDescriptor, type WidgetId, type WidgetTier } from '../homeOrder'
 import { useLastVisit } from '../lastVisit'
 import type { Navigate } from '../nav'
-import { useNotifications } from '../notifications'
+import { useLive } from '../liveNow'
+import { markRead, newFindings, useNotifications } from '../notifications'
 import { openWatching, savedItems, type OpenTitle } from '../rowItems'
+import { useWatchers } from '../watchers'
 import { useWatchState, watching } from '../watchState'
+
+/** Rows New episodes shows before deferring to Activity. */
+const FINDINGS_LIMIT = 3
 
 /** Posters a saved-list widget shows before deferring to the Library. */
 const STRIP_LIMIT = 12
@@ -47,6 +52,9 @@ export default function HomeView({
   // The previous visit: what ended since then is new to the Now strip.
   const lastVisit = useLastVisit()
   const [pinned] = useState(() => new Map<WidgetId, WidgetTier>())
+  const [shownFindings] = useState(() => new Set<number>())
+  const findings = newFindings(activity, shownFindings)
+  const live = useLive(useWatchers().filter(w => w.kind === 'channel').length)
 
   // One shelf from the catalogue last browsed — a way into Discover, not a
   // copy of it. Tagged with its catalogue so a switch never shows a stale one.
@@ -73,16 +81,17 @@ export default function HomeView({
   const watchlist = saved('watchlist')
   const favourites = saved('favourites')
 
-  // Activity counts here too: a fresh install whose only content is a watcher
-  // finding would otherwise be told there is nothing, with the finding hidden
-  // behind the empty state.
+  // New findings and live channels count here too: a fresh install whose only
+  // content is a watcher finding would otherwise be told there is nothing, with
+  // the finding hidden behind the empty state.
   if (
     !inProgress.length &&
     !discoverLoading &&
     !discover?.cards.length &&
     !watchlist.length &&
     !favourites.length &&
-    !activity.length
+    !findings.length &&
+    !live.length
   ) {
     return (
       <EmptyState
@@ -97,6 +106,8 @@ export default function HomeView({
   // loading one is present, as a skeleton at its final size.
   const present: (WidgetDescriptor | false)[] = [
     inProgress.length > 0 && { id: 'continue', size: 'L', tier: 'continue' },
+    findings.length > 0 && { id: 'new-episodes', size: 'M', tier: 'fresh' },
+    live.length > 0 && { id: 'live', size: 'M', tier: 'fresh' },
     watchlist.length > 0 && { id: 'watchlist', size: 'M', tier: 'browse' },
     favourites.length > 0 && { id: 'favourites', size: 'M', tier: 'browse' },
     (discoverLoading || Boolean(discover?.cards.length)) && { id: 'discover', size: 'M', tier: 'browse' },
@@ -113,6 +124,30 @@ export default function HomeView({
             items={inProgress}
             onOpen={openWatching(onOpen)}
             onSeeAll={() => onNavigate('library')}
+          />
+        )
+      case 'new-episodes':
+        return (
+          <NewEpisodesWidget
+            key={id}
+            style={style}
+            items={findings.slice(0, FINDINGS_LIMIT)}
+            unseen={findings.filter(e => e.read_at === null).length}
+            onOpen={event => {
+              if (event.read_at === null) void markRead({ ids: [event.id] })
+              onOpenEvent(event)
+            }}
+            onSeeAll={() => onNavigate('notifications')}
+          />
+        )
+      case 'live':
+        return (
+          <LiveWidget
+            key={id}
+            style={style}
+            live={live}
+            onWatch={s => onOpen(videoSeasonCard(s), 0, settings.lang)}
+            onSeeAll={() => onNavigate('creators')}
           />
         )
       case 'watchlist':
@@ -199,13 +234,6 @@ export default function HomeView({
         onOpenDownloaded={onOpenDownloaded}
         onSearchTerm={onSearchTerm}
       />
-
-      {/* Only true right now, so it leads. Hides itself when nobody is live. */}
-      <LiveNow onOpen={card => onOpen(card, 0, settings.lang)} />
-
-      {/* Then news, because it goes stale: a new episode is the most time-sensitive
-          thing Home can offer. Hides itself entirely when nothing is new. */}
-      <ActivityPeek onOpen={onOpenEvent} onSeeAll={() => onNavigate('notifications')} />
 
       <WidgetGrid>
         {placed.map((w, i) => render(w.id, { animationDelay: `${i * 40}ms` }))}
