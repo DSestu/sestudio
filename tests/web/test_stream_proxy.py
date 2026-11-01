@@ -11,6 +11,7 @@ from sestudio.models import StreamSource
 from sestudio.providers.base import ProviderError
 from sestudio.web.app import create_app
 from sestudio.web.proxy import TokenError, rewrite_playlist, sign, verify
+from sestudio.web.routes.stream import short_token
 
 SECRET = b"0123456789abcdef0123456789abcdef"
 
@@ -251,6 +252,19 @@ def test_proxy_sets_cors_headers(httpx_mock: HTTPXMock):
 
     head = client.head("/api/stream/proxy", params={"token": token})
     assert head.headers["access-control-allow-origin"] == "*"
+
+
+def test_proxy_takes_a_tokens_short_stand_in(httpx_mock: HTTPXMock):
+    # LG webOS cuts a media URL at ~1024 characters: TVs get the short one.
+    client = _client()
+    token = sign(
+        client.app.state.proxy_secret, "https://cdn.example/v.mp4", "https://r/", "voe"
+    )
+    httpx_mock.add_response(url="https://cdn.example/v.mp4", content=b"x" * 16)
+
+    resp = client.get("/api/stream/proxy", params={"token": short_token(token)})
+    assert resp.status_code == 200
+    assert resp.content == b"x" * 16
 
 
 def test_proxy_rejects_bad_token_without_upstream_call(httpx_mock: HTTPXMock):

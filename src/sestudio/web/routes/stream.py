@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import gzip
+import hashlib
 import http.cookiejar
 import logging
 import threading
@@ -96,6 +97,30 @@ def _is_playlist(url: str, content_type: str) -> bool:
     return path.endswith(".m3u8") or "mpegurl" in content_type.lower()
 
 
+#: Short stand-ins for proxy tokens, handed to TVs (see `short_token`).
+# shortcut: one entry per cast, never pruned; expire them with their token if
+# a long-running server ever holds enough to matter.
+_SHORT_TOKENS: dict[str, str] = {}
+
+
+def short_token(token: str) -> str:
+    """A short stand-in for *token*, accepted wherever it is.
+
+    LG webOS cuts a media URL at about 1024 characters, and a YouTube token
+    alone is longer: the TV then asks for half a token and gets a 403.
+    """
+    short = hashlib.sha256(token.encode()).hexdigest()[:16]
+    _SHORT_TOKENS[short] = token
+    return short
+
+
+def _verify(request: Request, token: str) -> dict[str, Any]:
+    try:
+        return verify(request.app.state.proxy_secret, _SHORT_TOKENS.get(token, token))
+    except TokenError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
 def _proxy_url(secret: bytes, target_url: str, referer: str, provider: str) -> str:
     token = sign(secret, target_url, referer, provider, ttl=PROXY_TOKEN_TTL)
     return "/api/stream/proxy?" + urllib.parse.urlencode({"token": token})
@@ -108,10 +133,7 @@ def transcode_source(request: Request, token: str) -> tuple[str, bool]:
     browser-like headers and the TLS fingerprint the host checks, and rewrites
     a playlist's segments and keys to come back through it.
     """
-    try:
-        payload = verify(request.app.state.proxy_secret, token)
-    except TokenError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    payload = _verify(request, token)
     # shortcut: loopback, so a server bound to one LAN address only cannot
     # reach itself here; pass the bound host through app state if that happens.
     port = request.app.state.http_port
@@ -235,11 +257,7 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
     Only tokens this process signed (and not yet expired) are honoured; verification
     happens before any upstream request is made.
     """
-    secret = request.app.state.proxy_secret
-    try:
-        payload = verify(secret, token)
-    except TokenError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    payload = _verify(request, token)
 
     target_url: str = payload["u"]
     referer: str = payload["r"]
