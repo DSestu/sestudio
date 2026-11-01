@@ -195,10 +195,10 @@ export function DiscoverMenu({
           ref={panel}
           role="dialog"
           aria-label="Discover"
-          className={`relative flex flex-col overflow-hidden glass rounded-[28px] transition-[clip-path,opacity,min-height,max-height] ease-smooth motion-reduce:[clip-path:none] motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
+          className={`relative flex flex-col overflow-hidden glass rounded-2xl transition-[clip-path,opacity,min-height,max-height] ease-smooth motion-reduce:[clip-path:none] motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
             open
-              ? 'duration-[480ms] [clip-path:inset(0_round_28px)]'
-              : 'duration-300 motion-reduce:opacity-0 [clip-path:inset(100%_50%_0_50%_round_26px)]'
+              ? 'duration-[480ms] [clip-path:inset(0_round_16px)]'
+              : 'duration-300 motion-reduce:opacity-0 [clip-path:inset(100%_50%_0_50%_round_12px)]'
           } ${expanded ? FULL_HEIGHT : 'min-h-0 max-h-[70dvh]'}`}
         >
           {/* Results preview as you type; Enter (the keyboard's Search key)

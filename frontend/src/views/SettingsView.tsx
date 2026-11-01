@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
+import PageHeader from '../components/PageHeader'
 import RankRow from '../components/RankRow'
 import apkQr from '../assets/apk-qr.svg'
 import colabQr from '../assets/colab-qr.svg'
@@ -41,6 +42,12 @@ interface Props {
  * room to be grouped. Width is capped because full-width inputs on a desktop
  * content column are hard to scan.
  */
+/** Back to wherever the gear was tapped; Home when Settings was opened directly. */
+function goBack() {
+  if (history.length > 1) history.back()
+  else location.hash = '#/home'
+}
+
 export default function SettingsView({ settings, onUpdate }: Props) {
   // The key is write-only — the server never sends it back — so this field
   // cannot be pre-filled and instead sets or replaces whatever is stored.
@@ -69,7 +76,9 @@ export default function SettingsView({ settings, onUpdate }: Props) {
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">
-      <h2 className="text-xl font-semibold tracking-tight">Settings</h2>
+      {/* Phones: reached from the gear, so the card offers the way back. */}
+      <PageHeader title="Settings" onBack={goBack} />
+      <h2 className="max-md:hidden text-xl font-semibold tracking-tight">Settings</h2>
 
       {settings.js_runtime === '' && (
         <p role="alert" className="text-sm text-warning">

@@ -8,6 +8,8 @@ import { useSelectionActive } from '../selectionMode'
 import { closeDiscoverMenuThen, toggleDiscoverMenu, useDiscoverMenuOpen } from '../discoverMenu'
 import SourceIcon from './SourceIcon'
 import CreatorLinks from './CreatorLinks'
+import { SettingsButton, TopCard } from './PageHeader'
+import { usePageHeaderMounted } from '../pageHeader'
 
 interface Destination {
   id: Tab
@@ -76,6 +78,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   const selecting = useSelectionActive()
   // On phones Discover is a menu of catalogues, unfolded from its tab.
   const menuOpen = useDiscoverMenuOpen()
+  const pageHeader = usePageHeaderMounted()
   // The rail's catalogues show on Discover, and peek open from anywhere else
   // while the pointer or keyboard focus is on the Discover group.
   const [peek, setPeek] = useState(false)
@@ -152,23 +155,26 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
         </div>
       </aside>
 
-      {/* Mobile top bar */}
-      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-base-300 bg-base-100/95 backdrop-blur px-4 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]">
-        <Wordmark />
-        <button
-          onClick={onOpenSettings}
-          aria-label="Settings"
-          aria-current={view === 'settings' ? 'page' : undefined}
-          className={`btn btn-square btn-sm ${view === 'settings' ? 'btn-active text-primary' : 'btn-ghost'}`}
-        >
-          {icon('M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75')}
-        </button>
-      </header>
+      {/* Phone top card. Pages with their own (<PageHeader>) replace this
+          default: the wordmark, and on Home what is new. */}
+      {!pageHeader && (
+        <TopCard>
+          <div className="flex items-center gap-2 min-h-11">
+            <div className="min-w-0 flex-1 leading-tight">
+              <Wordmark />
+              {view === 'home' && unreadBadge > 0 && (
+                <p className="mt-0.5 text-xs text-base-content/60"><span className="text-primary font-semibold">{unreadBadge}</span> new for you</p>
+              )}
+            </div>
+            <SettingsButton />
+          </div>
+        </TopCard>
+      )}
 
       {/* Content column — bottom padding clears the phone dock, plus the
           Now-Casting bar or mini-player when one is up. */}
       <main
-        className={`flex-1 min-w-0 py-5 px-(--gutter) [--gutter:clamp(0.6rem,1.5vw,1.5rem)] ${
+        className={`flex-1 min-w-0 pt-[calc(var(--top-card-h,4.25rem)+env(safe-area-inset-top)+1.25rem)] md:pt-5 px-(--gutter) [--gutter:clamp(0.6rem,1.5vw,1.5rem)] ${
           bottomBar
             ? 'pb-[calc(var(--dock-clear)+4.75rem)] md:pb-24'
             : 'pb-[calc(var(--dock-clear)+1rem)] md:pb-10'
@@ -278,13 +284,13 @@ function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
     <nav
       aria-label="Primary"
       className={`md:hidden fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 glass grid grid-cols-[1fr_1fr_4.5rem_1fr_1fr] items-center h-16.5 transition-[border-radius] duration-300 ${
-        joined ? "rounded-b-[28px]" : "rounded-[28px]"
+        joined ? "rounded-b-2xl" : "rounded-2xl"
       }`}
     >
       <span
         ref={pill}
         aria-hidden="true"
-        className="absolute left-0 top-0 w-13 h-7.5 rounded-full bg-primary/22 transition-[transform,opacity] duration-300 ease-smooth motion-reduce:transition-opacity"
+        className="absolute left-0 top-0 w-13 h-7.5 rounded-[10px] bg-primary/22 transition-[transform,opacity] duration-300 ease-smooth motion-reduce:transition-opacity"
       />
       {DOCK_TABS.slice(0, 2).map(tab)}
       <button
@@ -293,7 +299,7 @@ function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
         aria-expanded={menuOpen}
         aria-controls="discover-menu"
         aria-current={view === 'search' ? 'page' : undefined}
-        className="justify-self-center grid place-items-center w-13 h-13 rounded-full bg-primary text-primary-content shadow-[0_6px_18px_color-mix(in_oklab,var(--color-primary)_30%,transparent),inset_0_1px_0_rgb(255_255_255/0.35)] transition-transform duration-100 active:scale-92"
+        className="justify-self-center grid place-items-center w-13 h-13 rounded-2xl bg-primary text-primary-content transition-transform duration-100 active:scale-92"
       >
         {menuOpen ? closeIcon : searchIcon}
       </button>

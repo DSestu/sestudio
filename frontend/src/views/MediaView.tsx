@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import type { DownloadJob } from '../api'
 import DownloadQueue from '../components/DownloadQueue'
 import EmptyState from '../components/EmptyState'
+import PageHeader from '../components/PageHeader'
 import { clearDeviceDownloads, useDeviceDownloads } from '../deviceDownloads'
 import { currentParams, patchParams, type View } from '../nav'
 
@@ -52,9 +53,19 @@ export default function MediaView({
 
   return (
     <div className="flex flex-col gap-5">
-      <h2 className="text-xl font-semibold tracking-tight">Media</h2>
+      {/* Phones: the page name and its tabs live in the top card. */}
+      <PageHeader
+        title="Media"
+        status={activeCount > 0
+          ? <><em className="not-italic text-primary font-semibold">{activeCount}</em> downloading</>
+          : undefined}
+        tabs={TABS.map(t => ({ ...t, count: t.id === 'queue' && activeCount > 0 ? activeCount : undefined }))}
+        tab={tab}
+        onTab={changeTab}
+      />
+      <h2 className="max-md:hidden text-xl font-semibold tracking-tight">Media</h2>
 
-      <div role="tablist" aria-label="Media" className="tabs tabs-box w-full sm:w-fit">
+      <div role="tablist" aria-label="Media" className="max-md:hidden tabs tabs-box w-full sm:w-fit">
         {TABS.map((t, i) => (
           <button
             key={t.id}
