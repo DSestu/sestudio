@@ -13,7 +13,8 @@ export default function ChannelHits({ query }: { query: string }) {
   const [found, setFound] = useState<{ query: string; hits: ChannelHit[] } | null>(null)
   useEffect(() => {
     let alive = true
-    searchChannels(query).then(hits => { if (alive) setFound({ query, hits }) })
+    // A failed search only hides the strip: the videos below still stand.
+    searchChannels(query).catch(() => []).then(hits => { if (alive) setFound({ query, hits }) })
     return () => { alive = false }
   }, [query])
 

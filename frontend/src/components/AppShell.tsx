@@ -132,13 +132,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
                 </div>
               </div>
             )}
-            {/* YouTube and Twitch stay in view, folded or not: nothing else on
-                the page leads to them before a channel is followed. */}
-            {d.id === 'search' && (
-              <div className="ml-[1.4rem] pl-2 mb-1 flex flex-col gap-0.5 border-l border-base-300">
-                <CreatorLinks variant="rail" />
-              </div>
-            )}
+
             </div>
           ))}
         </nav>
@@ -280,6 +274,7 @@ function RailCatalogs({ catalogs, catalogId, onOpenCatalog }: {
           </span>
         </button>
       ))}
+      <CreatorLinks variant="rail" />
     </div>
   )
 }

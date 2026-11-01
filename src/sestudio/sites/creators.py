@@ -14,7 +14,7 @@ from collections import defaultdict
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 # Imported with the app, not on first use: it takes over a second, which the
 # first video opened would otherwise wait for.
@@ -247,6 +247,24 @@ class YouTubeSite(_YtDlpSite):
 
     def proxy_fix(self, url: str) -> ProxyFix | None:
         return ProxyFix({}, h264_only) if "/hls_variant/" in url else None
+
+    def search_channels(self, query: str) -> list[dict[str, Any]]:
+        """YouTube channels matching a query: one yt-dlp run on YouTube's own
+        search, filtered to channels."""
+        url = "https://www.youtube.com/results?" + urlencode(
+            {"search_query": query, "sp": "EgIQAg=="}
+        )
+        return self._channels.get(
+            f"channels:{query}",
+            lambda: [
+                youtube_channel_hit(entry)
+                for entry in ytdlp_json(
+                    "--flat-playlist", "--playlist-end", "12", url
+                ).get("entries")
+                or []
+                if entry.get("channel_id")
+            ],
+        )
 
     def search_videos(self, query: str) -> list[dict[str, Any]]:
         """YouTube's own search, through yt-dlp: the top 20 videos."""
@@ -566,3 +584,19 @@ def twitch_search(query: str) -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+def youtube_channel_hit(entry: dict[str, Any]) -> dict[str, Any]:
+    """A YouTube channel from yt-dlp's flat search, as the client lists it."""
+    thumbs = entry.get("thumbnails") or []
+    avatar = thumbs[-1].get("url", "") if thumbs else ""
+    return {
+        "source": "youtube",
+        "name": entry.get("title") or entry.get("channel") or "",
+        # The /channel/ address: the one a follow is keyed by.
+        "url": f"https://www.youtube.com/channel/{entry['channel_id']}",
+        "avatar": "https:" + avatar if avatar.startswith("//") else avatar,
+        "followers": entry.get("channel_follower_count") or 0,
+        "live": False,
+        "game": "",
+    }

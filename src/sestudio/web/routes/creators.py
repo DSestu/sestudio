@@ -52,14 +52,16 @@ async def search_videos(q: str, request: Request) -> list[dict[str, Any]]:
 
 
 @router.get("/channels/search")
-async def search_channels(q: str, request: Request) -> list[dict[str, Any]]:
-    """Twitch channels matching a query, for search's Videos kind."""
+async def search_channels(
+    q: str, request: Request, source: str = "twitch"
+) -> list[dict[str, Any]]:
+    """Channels matching a query on one site (``twitch`` or ``youtube``)."""
     query = q.strip()
-    if not query:
+    if not query or source not in ("twitch", "youtube"):
         return []
     try:
         return await asyncio.to_thread(
-            request.app.state.sites["twitch"].search_channels, query
+            request.app.state.sites[source].search_channels, query
         )
     except SiteError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

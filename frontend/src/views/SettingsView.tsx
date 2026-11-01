@@ -1,4 +1,3 @@
-import ImportFollows from '../components/ImportFollows'
 import { useEffect, useState } from 'react'
 import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
@@ -221,7 +220,16 @@ export default function SettingsView({ settings, onUpdate }: Props) {
 
       <div className="divider my-0" />
 
-      <ImportFollows />
+      <section aria-labelledby="settings-creators" className="flex flex-col gap-2">
+        <h3 id="settings-creators" className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+          YouTube &amp; Twitch
+        </h3>
+        <p className="text-sm text-base-content/70">
+          Follow channels, choose which ones download on their own, and import your
+          subscriptions on the YouTube &amp; Twitch page.
+        </p>
+        <a href="#/creators" className="btn btn-sm self-start">Open YouTube &amp; Twitch</a>
+      </section>
 
       <div className="divider my-0" />
 

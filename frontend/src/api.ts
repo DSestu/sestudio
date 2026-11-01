@@ -1380,9 +1380,13 @@ export interface ChannelHit {
   game: string
 }
 
-/** Twitch channels matching a query; [] when the search fails, as the strip
- *  holding them just hides then. */
-export async function searchChannels(q: string): Promise<ChannelHit[]> {
-  const res = await fetch(`${BASE}/channels/search?q=${encodeURIComponent(q)}`).catch(() => null)
-  return res?.ok ? res.json() : []
+/** Channels matching a query on one site; throws with the server's reason
+ *  (YouTube's rate limit among them) when the search fails. */
+export async function searchChannels(q: string, source: 'twitch' | 'youtube' = 'twitch'): Promise<ChannelHit[]> {
+  const res = await fetch(`${BASE}/channels/search?q=${encodeURIComponent(q)}&source=${source}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail ?? `${source === 'youtube' ? 'YouTube' : 'Twitch'} search failed`)
+  }
+  return res.json()
 }
