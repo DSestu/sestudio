@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.5.0](https://github.com/DSestu/sestudio/compare/v1.4.0...v1.5.0) (2026-11-01)
+
+
+### New features
+
+* a "glass" style for the coming nav redesign, and its spec ([#182](https://github.com/DSestu/sestudio/issues/182)) ([04c2741](https://github.com/DSestu/sestudio/commit/04c27410ed58b1e042120a1d7b85f495fc31d9c8))
+* a glass top card on phones that carries each page's name, status, actions and tabs, in a flatter look ([#189](https://github.com/DSestu/sestudio/issues/189)) ([9f1cf7b](https://github.com/DSestu/sestudio/commit/9f1cf7b63fb15e390344e564e70ee5e7997ad82a))
+* Activity, YouTube & Twitch, channels and people get the phone top card too ([#192](https://github.com/DSestu/sestudio/issues/192)) ([5991828](https://github.com/DSestu/sestudio/commit/599182818e8c0c30e1a3b54e1ba0798bc07d45dc))
+* desktop gets a slim glass rail with Search on top and Discover opening beside it ([#195](https://github.com/DSestu/sestudio/issues/195)) ([e82ed0d](https://github.com/DSestu/sestudio/commit/e82ed0dd12b130d390faa129283a324cbe0b3b65))
+* desktop's mini-player and casting bar become floating glass docks, and the phone Search sheet unblurs as it opens ([#197](https://github.com/DSestu/sestudio/issues/197)) ([a1f5097](https://github.com/DSestu/sestudio/commit/a1f50977dc9f4befc2e47cfa17c0c099995919c5))
+* Downloaded and Downloads become one Media destination, with Collection and Queue tabs ([#179](https://github.com/DSestu/sestudio/issues/179)) ([1519165](https://github.com/DSestu/sestudio/commit/151916539d6b20dad8932aebbe2b24ef2cbb6cf0))
+* Home becomes a grid of widgets, led by Continue watching with its progress on the frame ([#190](https://github.com/DSestu/sestudio/issues/190)) ([1c785d2](https://github.com/DSestu/sestudio/commit/1c785d2f701c71c6b769d296e9673a18ad0c12cc))
+* Home opens on a strip of what needs you now: live channels, today's episodes, finished downloads and problems ([#202](https://github.com/DSestu/sestudio/issues/202)) ([95053d2](https://github.com/DSestu/sestudio/commit/95053d2b2358af93fb90394c7ccf30fa134eedb7))
+* on desktop the search moves into each page's glass card, which slides away while scrolling ([#196](https://github.com/DSestu/sestudio/issues/196)) ([d0340df](https://github.com/DSestu/sestudio/commit/d0340df6476f23996f1aa1e6338947fcd5009724))
+* on phones the mini-player and the casting bar join the dock as one glass object ([#185](https://github.com/DSestu/sestudio/issues/185)) ([e80e378](https://github.com/DSestu/sestudio/commit/e80e37849feb60284de53aa1ebc09a9f67dd46e0))
+* on phones the top card and the dock slide away while scrolling down ([#194](https://github.com/DSestu/sestudio/issues/194)) ([fd76d3c](https://github.com/DSestu/sestudio/commit/fd76d3cef4c6c1380e3791d0f42bbaac8c1c902d))
+* Search and Discover open more softly, the dock always meets the mini-player, and the top card stays off the playing video ([#203](https://github.com/DSestu/sestudio/issues/203)) ([1707081](https://github.com/DSestu/sestudio/commit/170708120fe2eba5708d18929608d2320d663a58))
+* the desktop search's results panel slides open and closed instead of popping ([#204](https://github.com/DSestu/sestudio/issues/204)) ([b24656a](https://github.com/DSestu/sestudio/commit/b24656a2993b1529e8be763f723650d3220e4fd5))
+* the phone's tab bar becomes a floating glass dock, with Search in the middle ([#184](https://github.com/DSestu/sestudio/issues/184)) ([157fee5](https://github.com/DSestu/sestudio/commit/157fee5d1eb1a8afb7aa689f28e5185bc8e01809))
+* the server lists followed series' episodes airing in the next 7 days, for Home's Upcoming widget ([#187](https://github.com/DSestu/sestudio/issues/187)) ([d9df3d2](https://github.com/DSestu/sestudio/commit/d9df3d276d1ecca2ad4aa2d3fc3fae3b5198c75c))
+* the server recommends titles like the last five you watched, kept only when a site carries them ([#188](https://github.com/DSestu/sestudio/issues/188)) ([8d3b9f0](https://github.com/DSestu/sestudio/commit/8d3b9f083c72a069ce0d7db8f2c55d5e447d7b7f))
+* the server reports site reachability, failing watchers and free disk in one health check ([#186](https://github.com/DSestu/sestudio/issues/186)) ([2b7cd51](https://github.com/DSestu/sestudio/commit/2b7cd51632cdfbf8fe5ca87330cd1385c026a3de))
+* YouTube and Twitch play at their own qualities, fetching only the one picked ([#193](https://github.com/DSestu/sestudio/issues/193)) ([b5006b7](https://github.com/DSestu/sestudio/commit/b5006b75ad5ce67ce0658ebb684e38097a3b3d3e))
+
+
+### Bug fixes
+
+* a long title on the watch page wraps instead of ending in an ellipsis ([#206](https://github.com/DSestu/sestudio/issues/206)) ([5b88e00](https://github.com/DSestu/sestudio/commit/5b88e00263c37cd70b928cf112d50763069c6d5c))
+* a long video title no longer makes the phone watch page wider than the screen ([#181](https://github.com/DSestu/sestudio/issues/181)) ([7a67a53](https://github.com/DSestu/sestudio/commit/7a67a538f8020c07b5854540982446e02bcf2fdf))
+* DLNA casts of YouTube and Twitch play on LG TVs: the TV gets a short stream URL ([#191](https://github.com/DSestu/sestudio/issues/191)) ([8d1ccdf](https://github.com/DSestu/sestudio/commit/8d1ccdff0fc531b4f346bb6143948fb0e8fa6bdb))
+* Home's widgets line up side by side, and a video in Continue watching shows its thumbnail ([#199](https://github.com/DSestu/sestudio/issues/199)) ([2c8c991](https://github.com/DSestu/sestudio/commit/2c8c991ba4a44c8e912e3f68114f776c2c5a23c9))
+* on phones Continue watching is no taller than its content ([#201](https://github.com/DSestu/sestudio/issues/201)) ([de5bc93](https://github.com/DSestu/sestudio/commit/de5bc93630312996e9d89e84e747b1b43cb0c99c))
+* YouTube and Twitch play on a Chromecast, and the Server log opens in the Android app ([#198](https://github.com/DSestu/sestudio/issues/198)) ([95e5b0d](https://github.com/DSestu/sestudio/commit/95e5b0d2e539fa9b621ecc5363b8334e3f19e5bb))
+
+
+### Documentation
+
+* Home's first run opens on a welcome hero and two ghost tiles ([#200](https://github.com/DSestu/sestudio/issues/200)) ([e2d5e99](https://github.com/DSestu/sestudio/commit/e2d5e996e7ed68c6bfd70570aa0c4c72412ba8af))
+* spec and PR plan for the Home dashboard redesign ([#183](https://github.com/DSestu/sestudio/issues/183)) ([8952680](https://github.com/DSestu/sestudio/commit/8952680e9028f1cd56397c09bd9f047263eb1dc7))
+
 ## [1.4.0](https://github.com/DSestu/sestudio/compare/v1.3.0...v1.4.0) (2026-11-01)
 
 
