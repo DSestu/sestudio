@@ -25,3 +25,7 @@ const ICONS = new Map(
 export function sourceIcon(id: string): string | undefined {
   return ICONS.get(id)
 }
+
+/** Sources whose titles are single videos from a channel (YouTube, Twitch),
+ *  not films or series. */
+export const VIDEO_SOURCES: ReadonlySet<string> = new Set(['youtube', 'twitch'])
