@@ -1314,3 +1314,25 @@ export async function fetchLive(): Promise<LiveStream[]> {
   const res = await fetch(`${BASE}/live`).catch(() => null)
   return res?.ok ? res.json() : []
 }
+
+export interface ImportResult {
+  added: number
+  /** Already followed. */
+  skipped: number
+  /** Twitch names no channel answers to. */
+  unknown: string[]
+}
+
+/** Follow every channel of a Takeout subscriptions.csv and/or Twitch names. */
+export async function importFollows(body: { youtube_csv?: string; twitch?: string }): Promise<ImportResult> {
+  const res = await fetch(`${BASE}/follows/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null)
+    throw new Error(detail?.detail ?? 'Import failed')
+  }
+  return res.json()
+}

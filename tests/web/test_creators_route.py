@@ -82,3 +82,39 @@ def test_live_asks_twitch_about_followed_channels_only(monkeypatch, tmp_path):
         ("SomeOne", "Elden Ring", "a")
     ]
     library.reset_connection()
+
+
+def test_import_follows_takeout_and_twitch_names_once(monkeypatch, tmp_path):
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SESTUDIO_DB", str(tmp_path / "library.db"))
+    from sestudio import library
+    from sestudio.web.routes import creators as route
+
+    library.reset_connection()
+    monkeypatch.setattr(
+        route,
+        "twitch_gql",
+        lambda q, v: {"users": [{"login": "someone", "displayName": "SomeOne"}, None]},
+    )
+    client = TestClient(create_app(live_domain="https://fs03.lol"))
+    takeout = (
+        "﻿Channel Id,Channel Url,Channel Title\n"
+        "UCSMOQeBJ2RAnuFungnQOxLg,http://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg,Blender\n"
+        "not-a-channel,x,y\n"
+    )
+    body = {
+        "youtube_csv": takeout,
+        "twitch": "https://www.twitch.tv/SomeOne/, ghost_user",
+    }
+
+    first = client.post("/api/follows/import", json=body).json()
+    again = client.post("/api/follows/import", json=body).json()
+
+    assert first == {"added": 2, "skipped": 0, "unknown": ["ghost_user"]}
+    assert again["added"] == 0 and again["skipped"] == 2
+    configs = sorted(w["config"]["channel_url"] for w in library.watcher_list())
+    assert configs == [
+        "https://www.twitch.tv/someone",
+        "https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg",
+    ]
+    library.reset_connection()

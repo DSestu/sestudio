@@ -1,3 +1,4 @@
+import ImportFollows from '../components/ImportFollows'
 import { useEffect, useState } from 'react'
 import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
@@ -217,6 +218,10 @@ export default function SettingsView({ settings, onUpdate }: Props) {
           </p>
         </div>
       </section>
+
+      <div className="divider my-0" />
+
+      <ImportFollows />
 
       <div className="divider my-0" />
 
