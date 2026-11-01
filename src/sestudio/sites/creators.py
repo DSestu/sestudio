@@ -7,9 +7,7 @@ channel's RSS feed; Twitch's from its public web GraphQL endpoint.
 
 from __future__ import annotations
 
-import json
 import re
-import subprocess
 import threading
 from collections import defaultdict
 import xml.etree.ElementTree as ET
@@ -17,8 +15,12 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
+# Imported with the app, not on first use: it takes over a second, which the
+# first video opened would otherwise wait for.
+import yt_dlp
+
 from sestudio.catalogs import TtlCache
-from sestudio.downloader import check_yt_dlp, js_runtime_args
+from sestudio.downloader import js_runtime_args
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import Episode, SeasonCard, StreamSource
 from sestudio.providers.base import StreamProvider
@@ -34,20 +36,29 @@ from sestudio.sites.base import (
 LANG = "vo"
 
 
-def ytdlp_json(*args: str, timeout: float = 60) -> dict[str, Any]:
-    """Run ``yt-dlp -J`` and return its JSON, or raise SiteError with its reason."""
-    cmd = [check_yt_dlp(), "-J", "--no-warnings", *js_runtime_args(), *args]
+def ytdlp_json(*args: str) -> dict[str, Any]:
+    """What ``yt-dlp -J <args>`` prints, or SiteError with yt-dlp's reason.
+
+    Run in this process rather than as a command: starting yt-dlp alone takes
+    over a second, which was a third of the wait before a video plays. The
+    arguments are yt-dlp's own command line, parsed by yt-dlp; the last is the URL.
+    """
+    argv = [
+        "--ignore-config",
+        "--quiet",
+        "--no-warnings",
+        "--socket-timeout",
+        "20",
+        *js_runtime_args(),
+        *args,
+    ]
+    parsed = yt_dlp.parse_options(argv)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        raise SiteError(f"yt-dlp timed out after {timeout:.0f}s") from exc
-    if proc.returncode != 0:
-        lines = [ln for ln in proc.stderr.splitlines() if ln.strip()]
-        raise SiteError(lines[-1] if lines else f"yt-dlp exited {proc.returncode}")
-    try:
-        return json.loads(proc.stdout)
-    except ValueError as exc:
-        raise SiteError(f"yt-dlp returned no JSON: {exc}") from exc
+        with yt_dlp.YoutubeDL(parsed.ydl_opts) as ydl:
+            info = ydl.extract_info(parsed.urls[-1], download=False)
+            return ydl.sanitize_info(info) or {}
+    except yt_dlp.utils.YoutubeDLError as exc:
+        raise SiteError(str(exc).removeprefix("ERROR: ")) from exc
 
 
 def stream_url(info: dict[str, Any]) -> str:

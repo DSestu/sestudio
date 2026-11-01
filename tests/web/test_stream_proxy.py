@@ -393,6 +393,7 @@ def test_proxy_impersonates_chrome_for_vidzy(monkeypatch):
         raise RuntimeError("stop before any network")
 
     monkeypatch.setattr(stream, "new_client", fake_new_client)
+    monkeypatch.setattr(stream, "_shared", None)
     client = TestClient(
         create_app(live_domain="https://fs03.lol"), raise_server_exceptions=False
     )

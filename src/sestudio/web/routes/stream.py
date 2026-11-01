@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import http.cookiejar
 import logging
+import threading
 import urllib.parse
 from collections.abc import Iterator
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
@@ -196,6 +199,34 @@ async def resolve_stream(body: ResolveRequest, request: Request) -> dict[str, An
     raise HTTPException(status_code=502, detail=detail)
 
 
+# The plain upstream client, kept open across requests: a new one per request
+# paid a TLS handshake on every segment, nearly doubling its fetch time (0.84 s
+# against 0.46 s for a Twitch segment). It keeps no cookies, as a fresh client
+# would not. The impersonating one stays per request: curl_cffi sessions are not
+# meant to be shared between threads.
+_shared: httpx.Client | None = None
+_shared_lock = threading.Lock()
+
+
+def _upstream_client(impersonate: bool) -> httpx.Client:
+    global _shared
+    if impersonate:
+        return new_client(impersonate=True)
+    with _shared_lock:
+        if _shared is None:
+            _shared = new_client(
+                cookies=http.cookiejar.CookieJar(
+                    http.cookiejar.DefaultCookiePolicy(allowed_domains=[])
+                )
+            )
+        return _shared
+
+
+def _release(client: httpx.Client) -> None:
+    if client is not _shared:
+        client.close()
+
+
 @router.api_route("/stream/proxy", methods=["GET", "HEAD"])
 def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
     """Stream an upstream media resource through the server, injecting the provider Referer.
@@ -263,10 +294,8 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
     if fix is not None:
         upstream_headers.update(fix.headers)
 
-    client = new_client(
-        headers=upstream_headers, impersonate=provider in IMPERSONATE_PROVIDERS
-    )
-    req = client.build_request("GET", target_url)
+    client = _upstream_client(provider in IMPERSONATE_PROVIDERS)
+    req = client.build_request("GET", target_url, headers=upstream_headers)
     upstream = client.send(req, stream=True)
 
     # SubRip sidecars are served as WebVTT: that is all a <track> loads.
@@ -275,7 +304,7 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
             raw = upstream.read()
         finally:
             upstream.close()
-            client.close()
+            _release(client)
         return Response(
             content=srt_to_vtt(raw),
             status_code=upstream.status_code,
@@ -290,7 +319,7 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
             raw = upstream.read()
         finally:
             upstream.close()
-            client.close()
+            _release(client)
         if fix is not None and upstream.is_success:
             raw = fix.transform(raw)
         if best:
@@ -316,7 +345,7 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
             raw = upstream.read()
         finally:
             upstream.close()
-            client.close()
+            _release(client)
         return Response(
             content=fix.transform(raw) if upstream.is_success else raw,
             status_code=upstream.status_code,
@@ -333,7 +362,7 @@ def proxy_stream(token: str, request: Request, best: bool = False) -> Response:
             yield from upstream.iter_bytes()
         finally:
             upstream.close()
-            client.close()
+            _release(client)
 
     return StreamingResponse(body(), status_code=upstream.status_code, headers=relay)
 
