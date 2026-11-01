@@ -2,18 +2,29 @@
 
 # sestudio
 
-**Watch, cast and download series and films from several streaming sites — from one library, on your own machine.**
+**Watch, cast and download series, films, YouTube and Twitch from several streaming sites — from one library, on your own machine or phone.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org)
 [![Run with uvx](https://img.shields.io/badge/run-uvx%20sestudio-purple.svg)](https://github.com/astral-sh/uv)
+[![Android app](https://img.shields.io/badge/Android-get%20the%20app-3DDC84.svg?logo=android&logoColor=white)](https://github.com/DSestu/sestudio/releases/latest/download/sestudio.apk)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb)
 
 </div>
 
 ---
 
-## Quick start
+## Get started
+
+Three ways to run it. Each one is the whole sestudio, server included.
+
+| On a computer | On an Android phone | On Google Colab |
+| --- | --- | --- |
+| `uvx sestudio` | The sestudio app, scan below | One notebook cell |
+| Windows, macOS, Linux | No computer needed | No machine needed, with a GPU |
+| [Details](#on-a-computer) | [Details](#the-android-app) | [Details](#on-google-colab-1) |
+
+### On a computer
 
 ```bash
 uvx sestudio
@@ -37,10 +48,28 @@ close the tab. Stop it with Ctrl-C.
 > reachable from every device on your network, which is what casting needs — run
 > it only on a network you trust, or pass `--host 127.0.0.1`.
 
-No machine to run it on, or no GPU for AI frames?
-[Open it on Google Colab](https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb):
-one cell, a public link to open from any device, everything kept in your Google
-Drive. See [On Google Colab](#on-google-colab).
+### On an Android phone
+
+<a href="https://github.com/DSestu/sestudio/releases/latest/download/sestudio.apk"><img src="docs/assets/android-app-qr.svg" alt="QR code: download the latest sestudio app" width="160" align="right"></a>
+
+Scan the code with the phone, or open
+**[sestudio.apk](https://github.com/DSestu/sestudio/releases/latest/download/sestudio.apk)**
+on it — it is always the latest version. Allow your browser to install it,
+open **sestudio**, and tap **Set up**. The first launch downloads what it needs
+(about 200 MB, a few minutes); after that it opens in seconds. See
+[The Android app](#the-android-app).
+
+The same code and link are in sestudio itself, under **Settings → Share
+sestudio**, to pass it on.
+
+<br clear="right">
+
+### On Google Colab
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb)
+
+One cell, a public link to open from any device, everything kept in your Google
+Drive, and a GPU for AI frames. See [On Google Colab](#on-google-colab-1).
 
 ---
 
@@ -51,14 +80,16 @@ Drive. See [On Google Colab](#on-google-colab).
   * [Search across sites](#search-across-sites)
   * [Every version, from every source](#every-version-from-every-source)
   * [Watching](#watching)
+  * [YouTube and Twitch](#youtube-and-twitch)
   * [Watchers and notifications](#watchers-and-notifications)
   * [Downloading](#downloading)
   * [Your downloads, as a source](#your-downloads-as-a-source)
-  * [Casting](#casting-1)
+  * [Casting](#casting)
 * [Sources and hosts](#sources-and-hosts)
 * [Running it](#running-it)
-  * [On Google Colab](#on-google-colab)
-  * [On an Android phone](#on-an-android-phone)
+  * [The Android app](#the-android-app)
+  * [Android through Termux](#android-through-termux)
+  * [On Google Colab](#on-google-colab-1)
 * [Where it keeps things](#where-it-keeps-things)
 * [Casting setup](#casting-setup)
   * [HTTPS and the certificate](#https-and-the-certificate)
@@ -117,6 +148,25 @@ the next.
 * Hosts carrying soft subtitles (vidzy, premium) hand them to the player as
   sidecar tracks. HLS alternate renditions (`#EXT-X-MEDIA`) are relayed
   untouched, so a multi-track stream exposes its menus by itself.
+
+### YouTube and Twitch
+
+No account, no API key: [yt-dlp](https://github.com/yt-dlp/yt-dlp) does the
+work, and videos play, cast and download like any episode.
+
+* **Paste a link** into search to play, download or follow it. The search bar's
+  **Videos** kind searches YouTube; Twitch channels are found by name.
+* **Follow a channel like a show**: its new videos land in Activity and *New for
+  you*, and can download themselves as they arrive.
+* **Live Twitch channels** you follow show on Home; a live stream can be
+  recorded from its channel page.
+* **Import** YouTube subscriptions from a Google Takeout export, and Twitch
+  channels by name.
+* The **Creators** page, under Discover, lists who is live, who you follow and
+  their latest videos.
+
+YouTube needs Node.js or Deno on the server (see [Requirements](#requirements));
+Settings warns when neither is there.
 
 ### Watchers and notifications
 
@@ -215,9 +265,13 @@ back into the browser where the TV left off. See
 
 | Site | Id | Notes |
 | --- | --- | --- |
-| FStream | `fstream` | Live-action and anime |
-| French-Manga | `french-manga` | Anime |
+| FStream | `fstream` | Films and series, French audio |
+| French-Manga | `french-manga` | Anime, French dubs and subtitles |
 | KissKH | `kisskh` | Asian dramas, films and anime (VOSTFR); its own Home rows |
+| UniqueStream | `uniquestream` | Anime, plays directly |
+| BFlix | `bflix` | Films and series, original audio with French subtitles |
+| YouTube | `youtube` | Videos and channels, through yt-dlp |
+| Twitch | `twitch` | Channels, live streams and past broadcasts, through yt-dlp |
 
 **Hosts** — where a stream is actually resolved from:
 
@@ -248,6 +302,71 @@ uv sync && uv run sestudio         # from a source checkout
 | `--no_resolve` | off | Skip live-domain auto-resolution |
 | `-v`, `--verbose` | off | Debug logging |
 
+What the server prints is also under **Settings → Server log**, wherever it runs.
+
+### The Android app
+
+The app is the whole of sestudio on the phone: it runs its own server, then shows
+it full screen, like any app. Install it from the
+[QR code or link](#on-an-android-phone); it needs an arm64 phone on Android 8 or
+newer.
+
+* **First launch.** **Set up** downloads a small Linux (Debian) and
+  [uv](https://github.com/astral-sh/uv), then sestudio itself — about 200 MB,
+  once. **Allow background use** keeps it running with the screen off.
+* **While it runs**, a notification reads *sestudio is running*; its **Stop**
+  button is how you shut the server down. It stays until you do.
+* **Updates.** The server half updates itself on every start (it runs the
+  latest release). For a new app, open the same link again and install over the
+  old one: your library and settings stay.
+* **Casting.** The app shows sestudio at the phone's Wi-Fi address over HTTPS,
+  so a TV can reach the videos it plays. DLNA works as on a computer; Chromecast
+  is not in the app yet.
+* **Off**: AI frame rates (the phone's GPU is out of reach from the app's
+  Linux).
+
+Downloads to the server land in the app's own Movies folder
+(`Android/data/io.github.dsestu.sestudio/files/Movies`).
+
+<details>
+<summary><b>How it works</b></summary>
+
+The APK carries a static [proot](https://proot-me.github.io/), the one kind of
+program an Android app may run from its own files. On first launch it unpacks
+Debian's slim arm64 image into the app's private storage and installs a static
+uv there; `uvx sestudio@latest` then runs inside, in a foreground service. The
+code is in [`android/`](android/), the design in
+[`docs/SPEC-android-apk.md`](docs/SPEC-android-apk.md).
+
+</details>
+
+### Android through Termux
+
+Without the app, sestudio also runs inside [Termux](https://termux.dev):
+
+1. Install **Termux** and **Termux:Widget** from
+   [F-Droid](https://f-droid.org/packages/com.termux/) (the Play Store Termux is
+   outdated).
+2. Open Termux and paste:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/DSestu/sestudio/main/scripts/termux.sh | bash
+   ```
+
+   It takes a few minutes the first time (Debian, then sestudio) and asks once
+   for access to your files.
+3. Add the Termux:Widget widget to your home screen and tap **sestudio**. It
+   starts the server and opens it — in the sestudio app if installed, else the
+   browser.
+
+Downloads land in `Movies/sestudio`. AI frame rates are off.
+
+* Android stops apps in the background: in the phone's settings, turn off
+  battery optimisation for Termux, or sestudio dies a few minutes after the
+  screen locks.
+* sestudio runs inside Debian (`proot-distro`), not in Termux itself, where
+  several of its dependencies have no build.
+
 ### On Google Colab
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb)
@@ -268,39 +387,12 @@ cell prints a public link — open it on any device, no sign-in.
 > [!WARNING]
 > Anyone with the link controls sestudio and writes to your Drive folder.
 
-### On an Android phone
-
-sestudio can run on the phone itself, with no computer, inside
-[Termux](https://termux.dev).
-
-1. Install **Termux** and **Termux:Widget** from
-   [F-Droid](https://f-droid.org/packages/com.termux/) (the Play Store Termux is
-   outdated).
-2. Open Termux and paste:
-
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/DSestu/sestudio/main/scripts/termux.sh | bash
-   ```
-
-   It takes a few minutes the first time (Debian, then sestudio) and asks once
-   for access to your files.
-3. Add the Termux:Widget widget to your home screen and tap **sestudio**. It
-   starts the server and opens `http://localhost:8080`.
-
-Downloads land in `Movies/sestudio`. AI frame rates are off: the phone's GPU is
-out of reach from Termux.
-
-* Android stops apps in the background: in the phone's settings, turn off
-  battery optimisation for Termux, or sestudio dies a few minutes after the
-  screen locks.
-* sestudio runs inside Debian (`proot-distro`), not in Termux itself, where
-  several of its dependencies have no build.
-
 ---
 
 ## Where it keeps things
 
-Everything lives in `~/.config/sestudio/`:
+Everything lives in `~/.config/sestudio/` (inside the app's private storage, on
+the Android app):
 
 | File | Contents |
 | --- | --- |
@@ -330,7 +422,7 @@ uvx sestudio --host 0.0.0.0
 
 | Target | Needs | Notes |
 | --- | --- | --- |
-| **DLNA** | Plain HTTP | The ⧉ button runs a ~4 s SSDP scan, then pushes the stream to the renderer you pick. Works with no extra flags. |
+| **DLNA** | Plain HTTP | The ⧉ button runs a ~4 s SSDP scan, then pushes the stream to the renderer you pick. Works with no extra flags, and from the Android app. |
 | **Chromecast / AirPlay** | HTTPS | The Cast Web Sender SDK refuses to run outside a secure context. Trust the certificate once, below. |
 
 ### HTTPS and the certificate
@@ -351,6 +443,8 @@ Trust `~/.config/sestudio/cert.pem` on whichever device uses the HTTPS site:
 * **Android phone driving the cast** — install it as a user CA (Settings →
   Security → Encryption & credentials → Install a certificate → CA certificate).
   Until you do, the Cast button lists no devices.
+
+The Android app needs neither: it trusts its own server's certificate by itself.
 
 ### From a phone over Tailscale
 
@@ -432,8 +526,11 @@ AAAA records), or use another resolver meanwhile.
 [uv](https://github.com/astral-sh/uv) — that is the only thing you install.
 Everything else is bundled: uv provides Python (3.11 to 3.13), and `yt-dlp` plus
 a static `ffmpeg` ship as dependencies. A system `ffmpeg` on `PATH` is preferred
-when present, giving a real `ffprobe` and fuller codecs. Node 18+ is only needed
-to rebuild the frontend during development.
+when present, giving a real `ffprobe` and fuller codecs.
+
+**YouTube** also needs [Node.js](https://nodejs.org) or
+[Deno](https://deno.com) on the server's `PATH`: yt-dlp runs YouTube's player
+code with it. Everything else works without.
 
 The wheel bundles a static ffmpeg, so it targets the platforms
 [`imageio-ffmpeg`](https://github.com/imageio/imageio-ffmpeg) ships wheels for:
@@ -443,6 +540,8 @@ The wheel bundles a static ffmpeg, so it targets the platforms
 | Linux | x86_64, arm64 |
 | macOS | arm64 |
 | Windows | x86_64 |
+
+The Android app needs an arm64 phone on Android 8 or newer, and brings the rest.
 
 ---
 
@@ -458,6 +557,17 @@ npm run dev                        # dev server, proxies /api to localhost:8080
 npm run lint && npm test           # frontend checks
 npm run build                      # commit the result — frontend/dist ships in the wheel
 ```
+
+The Android app is a Kotlin project in `android/`; Node 18+ is only needed for
+the frontend, and JDK 17 with the Android SDK for the app:
+
+```bash
+cd android
+./gradlew assembleDebug lint       # app/build/outputs/apk/debug/app-debug.apk
+```
+
+Every release attaches a signed `sestudio.apk` to its GitHub Release
+(`.github/workflows/android_release.yml`).
 
 **Adding a site** means implementing `ContentSite` in `src/sestudio/sites/` and
 registering it in `build_sites()`. Everything downstream — search, merging,
