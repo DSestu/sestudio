@@ -1300,3 +1300,17 @@ export async function fetchChannel(url: string): Promise<ChannelInfo> {
   }
   return res.json()
 }
+
+/** A followed channel live now, for Home's strip. */
+export interface LiveStream extends VideoInfo {
+  avatar: string
+  /** What it is streaming (Twitch's category), '' when unknown. */
+  game: string
+}
+
+/** The followed channels live now; [] when the check fails, as Home's strip
+ *  just hides then. */
+export async function fetchLive(): Promise<LiveStream[]> {
+  const res = await fetch(`${BASE}/live`).catch(() => null)
+  return res?.ok ? res.json() : []
+}
