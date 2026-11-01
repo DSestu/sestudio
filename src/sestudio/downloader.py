@@ -53,6 +53,24 @@ def check_yt_dlp() -> str:
     return path
 
 
+def js_runtime() -> str:
+    """The JavaScript runtime yt-dlp will use for YouTube, or "" for none.
+
+    YouTube extraction needs one; yt-dlp only enables deno by default, so node
+    — far more often installed — has to be named on the command line.
+    """
+    for name in ("deno", "node"):
+        if shutil.which(name):
+            return name
+    return ""
+
+
+def js_runtime_args() -> list[str]:
+    """yt-dlp flags that enable the runtime :func:`js_runtime` found."""
+    runtime = js_runtime()
+    return ["--js-runtimes", runtime] if runtime and runtime != "deno" else []
+
+
 _RETRYABLE = re.compile(
     r"HTTP Error 5\d\d|429|Too Many|Service Unavailable", re.IGNORECASE
 )
@@ -103,6 +121,7 @@ def download(
         cmd += ["--user-agent", source.user_agent]
     if source.provider in IMPERSONATE_PROVIDERS:
         cmd += ["--impersonate", "chrome"]
+    cmd += js_runtime_args()
     # Point yt-dlp at a bundled ffmpeg when the system has none (returns None
     # when a system ffmpeg is on PATH, so yt-dlp uses that instead).
     ffmpeg_dir = ffmpeg_location()

@@ -106,6 +106,8 @@ export interface AppSettings {
   known_hosts?: string[]
   /** The shipped order, restored by "Reset". Read-only. */
   default_hosts?: string[]
+  /** JS runtime yt-dlp uses for YouTube ("deno", "node"), "" for none. Read-only. */
+  js_runtime?: string
 }
 
 export interface SiteInfo {

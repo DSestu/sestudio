@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sestudio import interpolate, restart
 from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.config import DEFAULT_DOWNLOAD_ORDER, load_config, save_config, tmdb_key
+from sestudio.downloader import js_runtime
 
 router = APIRouter()
 
@@ -65,6 +66,8 @@ def _public(cfg, request: Request) -> dict[str, Any]:
     # What the client can offer to rank, and what "reset" restores.
     data["known_hosts"] = _known_hosts(request)
     data["default_hosts"] = list(DEFAULT_DOWNLOAD_ORDER)
+    # Empty when YouTube can't be extracted properly; Settings warns about it.
+    data["js_runtime"] = js_runtime()
     return data
 
 
