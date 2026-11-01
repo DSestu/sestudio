@@ -7,6 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org)
 [![Run with uvx](https://img.shields.io/badge/run-uvx%20sestudio-purple.svg)](https://github.com/astral-sh/uv)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb)
 
 </div>
 
@@ -35,6 +36,11 @@ close the tab. Stop it with Ctrl-C.
 > There is no authentication. The default bind (`0.0.0.0`) makes the UI
 > reachable from every device on your network, which is what casting needs — run
 > it only on a network you trust, or pass `--host 127.0.0.1`.
+
+No machine to run it on, or no GPU for AI frames?
+[Open it on Google Colab](https://colab.research.google.com/github/DSestu/sestudio/blob/main/colab/sestudio.ipynb):
+one cell, a public link to open from any device, everything kept in your Google
+Drive. See [On Google Colab](#on-google-colab).
 
 ---
 
