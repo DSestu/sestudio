@@ -156,6 +156,46 @@ def test_play_provider_hls_goes_to_the_tv_re_encoded(client, monkeypatch):
     assert calls["duration"] == 1320.0
 
 
+def test_play_youtube_at_a_quality_reads_only_that_variant(client, monkeypatch):
+    """A master holding its own qualities is read at the one picked, not
+    encoded down from the best."""
+    client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
+    calls, read = {}, []
+
+    async def fake_play(location, media_url, title, mime_type, duration=None):
+        calls["media_url"] = media_url
+
+    def fake_probe(url, hls):
+        read.append(url)
+        return cast.downloaded.StreamProbe(212.0, 854, 480, 0, 0, False, True)
+
+    monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
+    monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
+    monkeypatch.setattr(cast.downloaded, "probe_stream", fake_probe)
+    token = sign(
+        client.app.state.proxy_secret,
+        "https://manifest.googlevideo.com/index.m3u8",
+        "https://www.youtube.com/watch?v=x",
+        "youtube",
+        ttl=60,
+    )
+    resp = client.post(
+        "/api/cast/dlna/play",
+        json={
+            "renderer_udn": "uuid:tv-1",
+            "proxy_url": f"/api/stream/proxy?token={token}",
+            "kind": "hls",
+            "quality": 480,
+        },
+    )
+    assert resp.status_code == 200
+    assert read[0].endswith("&best=1&height=480")
+    assert calls["media_url"] == (
+        f"http://192.168.1.20:8080/api/stream/tv?token={short_token(token)}"
+        "&height=480&live=dlna"
+    )
+
+
 def test_play_provider_mp4_at_a_lighter_quality_is_re_encoded(client, monkeypatch):
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}

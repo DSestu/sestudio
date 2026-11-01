@@ -129,26 +129,53 @@ def _subtitle_group(text: str) -> str | None:
 _ATTR_RE = re.compile(r'([A-Z0-9-]+)=("[^"]*"|[^,]*)')
 
 
-def best_variant(text: str) -> str:
+def _variant_lines(text: str) -> list[tuple[int, dict[str, str]]]:
+    """Each ``#EXT-X-STREAM-INF`` of a master: its line number and attributes."""
+    return [
+        (i, dict(_ATTR_RE.findall(line.split(":", 1)[1])))
+        for i, line in enumerate(text.splitlines())
+        if line.startswith("#EXT-X-STREAM-INF")
+    ]
+
+
+def _size(attrs: dict[str, str]) -> tuple[int, int, int]:
+    width, _, height = attrs.get("RESOLUTION", "0x0").partition("x")
+    return int(width or 0), int(height or 0), int(attrs.get("BANDWIDTH", "0") or 0)
+
+
+def master_variants(text: str) -> list[tuple[int, int, int]]:
+    """A master's pictures as ``(width, height, bandwidth)``, tallest first, one
+    per height (its best bandwidth); empty for any other playlist."""
+    seen: dict[int, tuple[int, int, int]] = {}
+    for _i, attrs in _variant_lines(text):
+        width, height, bits = _size(attrs)
+        if height and bits > seen.get(height, (0, 0, -1))[2]:
+            seen[height] = (width, height, bits)
+    return sorted(seen.values(), key=lambda v: -v[1])
+
+
+def best_variant(text: str, height: int = 0) -> str:
     """An HLS master cut down to its best variant (by height, then bandwidth)
     and the renditions that variant uses; any other playlist as it is.
+
+    With *height*, the best of those at most that tall (the shortest when none
+    is): a quality picked from the source's own, read without the rest.
 
     For the server's own ffmpeg, which reads every variant of a master before
     it starts: a YouTube master took 14 s to probe, its best variant 0.7 s.
     """
     lines = text.splitlines()
-    variants = [
-        (i, dict(_ATTR_RE.findall(line.split(":", 1)[1])))
-        for i, line in enumerate(lines)
-        if line.startswith("#EXT-X-STREAM-INF")
-    ]
+    variants = _variant_lines(text)
     if not variants:
         return text
 
-    def rank(variant: tuple[int, dict[str, str]]) -> tuple[int, int]:
-        attrs = variant[1]
-        height = attrs.get("RESOLUTION", "0x0").partition("x")[2]
-        return int(height or 0), int(attrs.get("BANDWIDTH", "0") or 0)
+    def rank(variant: tuple[int, dict[str, str]]) -> tuple[bool, int, int]:
+        _w, tall, bits = _size(variant[1])
+        return (
+            (not height or tall <= height),
+            (-tall if height and tall > height else tall),
+            bits,
+        )
 
     best, attrs = max(variants, key=rank)
     groups = {attrs.get(k) for k in ("AUDIO", "VIDEO", "SUBTITLES") if attrs.get(k)}

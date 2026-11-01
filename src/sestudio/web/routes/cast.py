@@ -7,6 +7,7 @@ import socket
 import urllib.parse
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -14,7 +15,8 @@ from pydantic import BaseModel, Field
 from sestudio import dlna, downloaded, interpolate, metrics
 from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.web.routes.downloaded import _resolved, check_fps, offered_rung
-from sestudio.web.routes.stream import short_token, transcode_source
+from sestudio.web.proxy import master_variants
+from sestudio.web.routes.stream import short_token, source_qualities, transcode_source
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +167,10 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
             mime_type = downloaded.media_type_for(stored)
     elif parsed.path == "/api/stream/proxy":
         token = urllib.parse.parse_qs(parsed.query).get("token", [""])[0]
-        source, hls = transcode_source(request, token)
+        # A quality of a master that holds its own is read alone, not encoded
+        # down from the best: the TV gets that variant, re-encoded as it is.
+        height = body.quality if source_qualities(request, token) else 0
+        source, hls = transcode_source(request, token, height)
         probe = (
             await asyncio.to_thread(downloaded.probe_stream, source, hls=hls)
             if hls or body.quality or body.fps
@@ -173,7 +178,7 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
         )
         rung = (
             offered_rung(downloaded.ladder(probe.width, probe.height), body.quality)
-            if probe and body.quality
+            if probe and body.quality and not height
             else 0
         )
         rate = bool(probe) and _other_rate(body.fps, probe.fps)
@@ -185,6 +190,8 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
                 proxy_url += f"&rung={rung}"
             if rate:
                 proxy_url += f"&fps={body.fps}"
+            if height:
+                proxy_url += f"&height={height}"
             proxy_url += "&live=dlna"
             mime_type = downloaded.TV_MEDIA_TYPE
             duration = probe.duration if probe else None
@@ -288,12 +295,28 @@ async def _variants_for(
         fps = (await asyncio.to_thread(downloaded.tracks_of, target)).video_fps
         return variants, fps
     if parsed.path.startswith("/api/stream/"):
-        source, hls = transcode_source(request, query.get("token", [""])[0])
+        token = query.get("token", [""])[0]
+        source, hls = transcode_source(request, token)
         probe = await asyncio.to_thread(downloaded.probe_stream, source, hls=hls)
         if probe is None:
             return None
+        if source_qualities(request, token):
+            # The master's own pictures, each its own rung: picked, not encoded.
+            whole = urllib.parse.urlparse(source)._replace(
+                query=urllib.parse.urlencode({"token": token})
+            )
+            text = await asyncio.to_thread(_text_of, whole.geturl())
+            own = [(h, w, h, bits) for w, h, bits in master_variants(text)]
+            return own or downloaded.ladder(probe.width, probe.height), probe.fps
         return downloaded.ladder(probe.width, probe.height), probe.fps
     return None
+
+
+def _text_of(url: str) -> str:
+    """The body at *url*, one of this server's own (see `transcode_source`)."""
+    # The loopback HTTPS front has the server's self-signed cert.
+    with httpx.Client(verify=False, timeout=30) as client:
+        return client.get(url).text
 
 
 @router.get("/media/metrics")
@@ -402,7 +425,13 @@ async def cast_live(body: CastLiveRequest, request: Request) -> dict[str, Any]:
     if last is None:
         raise HTTPException(status_code=409, detail="No active DLNA session")
     wanted = last.model_copy(update={"quality": body.quality, "fps": fps})
-    if not getattr(request.app.state, "dlna_live", False):
+    token = urllib.parse.parse_qs(urllib.parse.urlparse(last.proxy_url).query).get(
+        "token", [""]
+    )[0]
+    # Another variant of a master is another stream to read: started again.
+    if not getattr(request.app.state, "dlna_live", False) or (
+        token and source_qualities(request, token)
+    ):
         return {**await dlna_play(wanted, request), "restarted": True}
     found = await _variants_for(request, last.proxy_url)
     rung = offered_rung(found[0], body.quality) if found and body.quality else 0
