@@ -76,6 +76,8 @@ class ContentSite(ABC):
     # The site's own front page, for a link out of the app ("" for none).
     home_url: str = ""
     is_anime: bool = False
+    # Whether the title search asks this site at all.
+    searchable: bool = True
     # Download folder for standalone films (season == 0).
     films_dirname: str = "sestudio_films"
 

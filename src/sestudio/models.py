@@ -81,3 +81,6 @@ class StreamSource:
     # Only playable through the app's own stream proxy, which applies the site's
     # proxy_fix (an obfuscated HLS key): downloads read it from there too.
     via_proxy: bool = False
+    # A page yt-dlp downloads from itself (YouTube, Twitch), choosing and merging
+    # the best formats, instead of the single stream in ``url`` a player gets.
+    extract_url: str = ""

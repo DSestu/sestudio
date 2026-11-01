@@ -39,29 +39,24 @@ and casting.
 
 ## 4. Playback (yt-dlp streams)
 
-Checked on 2026-11-01 with yt-dlp 2026.03.17:
+Checked on 2026-11-01:
 
 - **Twitch** live and VODs are HLS, so they play through the existing proxy and hls.js unchanged.
-- **YouTube** only has one file with sound and picture together: 360p (format 18). Everything above
-  that comes as separate video and audio DASH files. Each file starts with `ftyp`+`moov` (the init
-  segment) and then a `sidx` index of its fragments (seen: `ftyp 0..27, moov 28..741, sidx 742..2249`).
+- **YouTube** with yt-dlp 2026.03.17 only had one file with sound and picture together (360p, format 18),
+  and everything above that came as separate DASH files. With **yt-dlp 2026.10.26 and a JS runtime**,
+  YouTube also returns an **HLS master** (`manifest.googlevideo.com/.../hls_variant/...`): H.264 from
+  144p to 1080p, VP9 up to 2160p, and audio as `EXT-X-MEDIA` groups. It plays through the existing
+  proxy like Twitch (verified: 2160p60 in the browser player, with the quality picker).
 
-So the server **writes an HLS playlist from the `sidx`**:
+So `stream_url()` takes the HLS master whenever yt-dlp lists one and only falls back to a single muxed
+file without it. The `sidx` → HLS playlist idea from the first draft isn't needed.
 
-1. `yt-dlp -J` picks the best H.264 video ≤ 1080p plus the m4a audio, and keeps their URLs.
-2. One ranged GET of each file's first few KB gives the init range and the `sidx` table.
-3. The server writes a master playlist (video variant + `EXT-X-MEDIA TYPE=AUDIO`) and two media
-   playlists made of `EXT-X-MAP` + `EXT-X-BYTERANGE` segments.
-4. The existing proxy rewrites it (`rewrite_m3u8` already leaves `#EXT-X-BYTERANGE` untouched)
-   and forwards `Range` upstream.
-
-The browser player, Chromecast and seeking then use the same HLS path as every other site. It
-works out to about 60 lines of Python plus a test with a recorded `sidx`.
-
-- **URL expiry:** googlevideo URLs last about 6 hours. Cache the resolution for 4 hours and resolve
-  again on a 403.
-- **DLNA:** many TVs can't play fMP4 HLS with a separate audio track, so DLNA uses format 18 (360p muxed) at first. *To confirm on your TV.*
-- **Quality picker:** lists the H.264 heights yt-dlp returns. AV1/VP9 are left out because Safari and many TVs can't decode them.
+- **URL expiry:** googlevideo URLs last about 6 hours. The resolution is cached for 4 hours.
+- **VP9:** Chrome plays the VP9 variants. Chromecast, Safari and many TVs can't, so PR 3 drops the VP9
+  variants from the master as it passes through the proxy (a `proxy_fix` transform).
+- **DLNA:** many TVs can't play fMP4 HLS with a separate audio track. *To confirm on your TV.*
+- **Downloads** give yt-dlp the page itself (`StreamSource.extract_url`), so it picks and merges the best
+  H.264 + AAC ≤ 1080p.
 
 ### JS runtime
 
@@ -108,7 +103,7 @@ See the mockups in the 2026-11-01 discussion. Summary:
 |---|---|---|
 | 1 | yt-dlp JS-runtime detection + Settings warning; bump yt-dlp | S |
 | 2 | `youtube` + `twitch` sites: resolve a pasted video/live URL, play Twitch through the proxy, download through the queue | M |
-| 3 | `sidx` → HLS playlist for YouTube ≥ 720p, quality picker, URL expiry handling | M |
+| 3 | Drop the VP9 variants from YouTube's HLS master for Chromecast/TVs; video labels in the player | S |
 | 4 | Search bar URL detection: desktop card + phone bottom sheet | M |
 | 5 | Channel pages (`fetch_page` on a channel URL), 16:9 grid / rows | M |
 | 6 | Watcher kinds `channel_videos` + `channel_live`, Follow button, Creators group in Discover | M |
@@ -117,12 +112,11 @@ See the mockups in the 2026-11-01 discussion. Summary:
 | 9 | Videos kind in search (`ytsearch20:`) | S |
 
 PRs 1–4 cover paste a link, 5–8 cover following and archiving, and 9 adds search.
-Rough total: 6–9 days of work.
+Rough total: 5–8 days of work.
 
 ## 9. Files this touches (starting points)
 
 `src/sestudio/sites/` (new `youtube.py`, `twitch.py`, register in `__init__.py`),
-`src/sestudio/downloader.py` (JS runtime flag), `src/sestudio/web/proxy.py` + `routes/stream.py`
-(sidx playlist route), `src/sestudio/watchers/kinds.py` + `poller.py`,
+`src/sestudio/sites/creators.py`, `src/sestudio/downloader.py` (JS runtime flag, `extract_url`), `src/sestudio/watchers/kinds.py` + `poller.py`,
 `frontend/src/components/SearchBar.tsx`, `frontend/src/views/HomeView.tsx`,
 `frontend/src/components/discover/DiscoverMenu.tsx`, `frontend/src/components/watch/VideoPane.tsx`.

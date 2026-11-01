@@ -52,7 +52,7 @@ async def search(q: str, request: Request, sites: str = "") -> dict[str, Any]:
     chosen = [
         s
         for sid, s in registered.items()
-        if sid not in disabled and (not wanted or sid in wanted)
+        if s.searchable and sid not in disabled and (not wanted or sid in wanted)
     ]
     # Results are appended per site, so ordering the sites is what puts the
     # preferred one's listings at the top.

@@ -28,6 +28,7 @@ def build_sites(fstream_domain: str | None = None) -> dict[str, ContentSite]:
     # Imported here, not at module level: scraper imports sites.base, so a
     # top-level import of fstream (which imports scraper) would be circular.
     from sestudio.sites.bflix import BflixSite
+    from sestudio.sites.creators import TwitchSite, YouTubeSite
     from sestudio.sites.fstream import (
         FRENCH_MANGA_LISTINGS,
         FSTREAM_LISTINGS,
@@ -53,6 +54,8 @@ def build_sites(fstream_domain: str | None = None) -> dict[str, ContentSite]:
         "kisskh": KisskhSite(),
         "uniquestream": UniqueStreamSite(),
         "bflix": BflixSite(),
+        "youtube": YouTubeSite(),
+        "twitch": TwitchSite(),
     }
 
 

@@ -122,6 +122,10 @@ def download(
     if source.provider in IMPERSONATE_PROVIDERS:
         cmd += ["--impersonate", "chrome"]
     cmd += js_runtime_args()
+    if source.extract_url:
+        # H.264 + AAC first so the merged mp4 plays on every browser and TV; a
+        # site with only combined formats (Twitch, live) falls through to `b`.
+        cmd += ["-f", "bv*[vcodec^=avc1][height<=1080]+ba[ext=m4a]/b[height<=1080]/b"]
     # Point yt-dlp at a bundled ffmpeg when the system has none (returns None
     # when a system ffmpeg is on PATH, so yt-dlp uses that instead).
     ffmpeg_dir = ffmpeg_location()
@@ -150,7 +154,7 @@ def download(
         str(output_path),
         "--progress",
         "--newline",
-        source.url,
+        source.extract_url or source.url,
     ]
     logger.debug("Running: %s", " ".join(cmd))
 
