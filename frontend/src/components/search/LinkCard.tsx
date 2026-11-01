@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { VideoInfo } from '../../api'
 import { downloadVideo } from '../../api'
+import FollowButton from '../FollowButton'
 import type { LinkState } from '../../videoLinks'
 import { channelHref, videoDuration, videoMeta } from '../../videoLinks'
 
@@ -87,6 +88,12 @@ export default function LinkCard({ link, source, onPlay }: Props) {
               >
                 {queued === 'done' ? 'Queued' : queued === 'failed' ? 'Retry download' : info.is_live ? 'Record' : 'Download'}
               </button>
+              {info.channel_url && (
+                <FollowButton
+                  channel={{ url: info.channel_url, source: info.source, name: info.channel, avatar: '' }}
+                  block
+                />
+              )}
             </div>
           </div>
         </div>
