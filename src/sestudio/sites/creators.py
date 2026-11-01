@@ -190,6 +190,19 @@ class YouTubeSite(_YtDlpSite):
     def proxy_fix(self, url: str) -> ProxyFix | None:
         return ProxyFix({}, h264_only) if "/hls_variant/" in url else None
 
+    def search_videos(self, query: str) -> list[dict[str, Any]]:
+        """YouTube's own search, through yt-dlp: the top 20 videos."""
+        return self._channels.get(
+            f"search:{query}",
+            lambda: [
+                video_card(entry, self.id)
+                for entry in ytdlp_json("--flat-playlist", f"ytsearch20:{query}").get(
+                    "entries"
+                )
+                or []
+            ],
+        )
+
     def latest(self, url: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         # shortcut: no live check for YouTube, which would cost a yt-dlp run per
         # channel per poll; add one on /channel/<id>/live if it is missed.

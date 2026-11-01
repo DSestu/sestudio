@@ -36,6 +36,20 @@ async def get_link(url: str, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@router.get("/videos/search")
+async def search_videos(q: str, request: Request) -> list[dict[str, Any]]:
+    """YouTube videos matching a query, for search's Videos kind."""
+    query = q.strip()
+    if not query:
+        return []
+    try:
+        return await asyncio.to_thread(
+            request.app.state.sites["youtube"].search_videos, query
+        )
+    except SiteError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.get("/channel")
 async def get_channel(url: str, request: Request) -> dict[str, Any]:
     """A YouTube or Twitch channel and its latest videos."""

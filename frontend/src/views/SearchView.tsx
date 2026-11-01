@@ -16,6 +16,7 @@ import LayoutToggle from '../components/LayoutToggle'
 import ToolbarToggle from '../components/ToolbarToggle'
 import WatchSearchButton from '../components/WatchSearchButton'
 import PeopleResults, { PeopleFold } from '../components/PeopleResults'
+import VideoResults from '../components/search/VideoResults'
 import ResultsGrid from '../components/ResultsGrid'
 import ResultsList from '../components/ResultsList'
 import KindRows from '../components/search/KindRows'
@@ -33,7 +34,7 @@ import { episodeCode, episodeHits, groupOnDisk, resumePoint } from '../diskShows
 import { patchParams } from '../nav'
 import ReleaseFilter from '../components/ReleaseFilter'
 import { ANY_DATES, isAnyDates, rangeLabel, yearOf } from '../releaseDates'
-import { KINDS, type Kind, matchesKind, parseKind } from '../titleSearch'
+import { KINDS, type Kind, isTitleKind, matchesKind, parseKind } from '../titleSearch'
 import { KindSegments, OptionsButton } from '../components/search/SearchParts'
 import { OPTIONS_ID, setSearchOptionsSummary, setSourcesPanel, useSearchOptions } from '../searchOptions'
 import { useScrolledDown } from '../useScrolledDown'
@@ -448,10 +449,10 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             <OptionsButton square />
           </div>
         )}
-        {lastQuery !== '' && kind !== 'people' && chips('flex mt-3')}
+        {lastQuery !== '' && isTitleKind(kind) && chips('flex mt-3')}
       </div>
       {/* Desktop: the panel lists every source, so the row steps aside for it. */}
-      {lastQuery !== '' && kind !== 'people' && !sourcesOpen && chips('hidden md:flex')}
+      {lastQuery !== '' && isTitleKind(kind) && !sourcesOpen && chips('hidden md:flex')}
 
       {/* Every control the results have, folded behind the one Options button
           (in the pinned bar on desktop, beside the kinds on phones). Inline, so
@@ -582,7 +583,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
 
       {/* Above the remote results: a copy already on disk is the most
           actionable answer to a search, and it plays without resolving a host. */}
-      {lastQuery !== '' && kind !== 'people' && hits.length > 0 && (
+      {lastQuery !== '' && isTitleKind(kind) && hits.length > 0 && (
         <EpisodeHits
           groups={hits}
           onPlay={copy => onOpenDownloaded(copy.title, copy.file)}
@@ -591,7 +592,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
       )}
       {/* Shows on disk the search names, beyond the one the hero already covers:
           their cards carry the pill, and the library lists them all. */}
-      {lastQuery !== '' && kind !== 'people' && namedOnDisk.length > 0 && (
+      {lastQuery !== '' && isTitleKind(kind) && namedOnDisk.length > 0 && (
         <p className="flex items-center gap-2 px-1 text-sm text-base-content/70">
           <svg className="w-4 h-4 shrink-0 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 1.1.9 2 2 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H6a2 2 0 00-2 2z" />
@@ -637,6 +638,8 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             message="Type a series or film name above. Results can be played here, cast to a TV, or downloaded."
           />
         )
+      ) : kind === 'videos' ? (
+        <VideoResults query={lastQuery} onOpen={onOpenDetail} />
       ) : kind === 'people' ? (
         // People only: who TMDB knows by that name, with a face.
         peopleStatus === 'loading' ? (

@@ -205,3 +205,29 @@ def test_twitch_channel_from_graphql_has_its_live_stream_and_vods():
 def test_twitch_channel_refuses_non_channel_links():
     with pytest.raises(SiteError):
         TwitchSite().channel("https://www.twitch.tv/videos/123")
+
+
+def test_youtube_search_lists_videos(monkeypatch):
+    seen: list[tuple] = []
+
+    def fake(*args, **_kw):
+        seen.append(args)
+        return {
+            "entries": [
+                {
+                    "url": "https://www.youtube.com/watch?v=a",
+                    "title": "A",
+                    "channel": "C",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(creators, "ytdlp_json", fake)
+    site = YouTubeSite()
+    videos = site.search_videos("dune trailer")
+    site.search_videos("dune trailer")
+
+    assert seen == [("--flat-playlist", "ytsearch20:dune trailer")]
+    assert [(v["title"], v["channel"], v["source"]) for v in videos] == [
+        ("A", "C", "youtube")
+    ]
