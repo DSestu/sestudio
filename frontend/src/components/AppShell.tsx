@@ -1,4 +1,4 @@
-import { type FocusEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react'
+import { type FocusEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CatalogInfo } from '../api'
 import { useBrowserPlayerControls } from '../browserPlayerControls'
 import { useCastState } from '../cast'
@@ -10,6 +10,7 @@ import SourceIcon from './SourceIcon'
 import CreatorLinks from './CreatorLinks'
 import { SettingsButton, TopCard } from './PageHeader'
 import { usePageHeaderMounted } from '../pageHeader'
+import { AWAY, setBarsHidden, useBarsHidden } from '../barsHidden'
 
 interface Destination {
   id: Tab
@@ -79,6 +80,24 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   // On phones Discover is a menu of catalogues, unfolded from its tab.
   const menuOpen = useDiscoverMenuOpen()
   const pageHeader = usePageHeaderMounted()
+  // Phones: scrolling down sends the top card and the dock away; any scroll up
+  // brings them back. Never while a sheet or the selection bar is up, or on
+  // the player page.
+  const pinned = menuOpen || selecting || view === 'watch'
+  useEffect(() => {
+    setBarsHidden(false)
+    if (pinned) return
+    const phone = window.matchMedia('(width < 48rem)')
+    let last = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      if (!phone.matches || Math.abs(y - last) < 6) return
+      setBarsHidden(y > last && y > 40)
+      last = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => { window.removeEventListener('scroll', onScroll); setBarsHidden(false) }
+  }, [pinned, view])
   // The rail's catalogues show on Discover, and peek open from anywhere else
   // while the pointer or keyboard focus is on the Discover group.
   const [peek, setPeek] = useState(false)
@@ -227,6 +246,7 @@ function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
   onNavigate: (v: Tab) => void
   badgeFor: (id: Tab) => number
 }) {
+  const away = useBarsHidden()
   // An open menu covers whatever view is under it, so no tab is lit then.
   const active = menuOpen ? undefined : DOCK_TABS.find(id => id === view)
   const icons = useRef<Partial<Record<Tab, HTMLSpanElement | null>>>({})
@@ -283,9 +303,9 @@ function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
   return (
     <nav
       aria-label="Primary"
-      className={`md:hidden fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 glass grid grid-cols-[1fr_1fr_4.5rem_1fr_1fr] items-center h-16.5 transition-[border-radius] duration-300 ${
+      className={`md:hidden fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 glass grid grid-cols-[1fr_1fr_4.5rem_1fr_1fr] items-center h-16.5 transition-[translate,opacity,border-radius] ${
         joined ? "rounded-b-2xl" : "rounded-2xl"
-      }`}
+      } ${AWAY(away, "translate-y-[calc(100%+1.5rem)]")}`}
     >
       <span
         ref={pill}

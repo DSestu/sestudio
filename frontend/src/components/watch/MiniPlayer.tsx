@@ -3,6 +3,7 @@ import { useBrowserPlayerControls } from '../../browserPlayerControls'
 import { MINI_PLAYER_FONT_SIZE } from '../../subtitleStyle'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
 import { OutPortal } from '../../reversePortal'
+import { useBarsHidden } from '../../barsHidden'
 import type { PortalNode } from '../../portalNode'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -25,6 +26,7 @@ export default function MiniPlayer({ node, onOpen, onClose }: Props) {
   const browser = useBrowserSession()
   const controls = useBrowserPlayerControls()
   const castSession = useCastSession()
+  const away = useBarsHidden()
   const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)')
@@ -101,8 +103,11 @@ export default function MiniPlayer({ node, onOpen, onClose }: Props) {
   return (
     // Sits on the dock's top edge (one glass object with it), under it in
     // stacking so it can rise out from behind it.
-    <div className="fixed inset-x-3 z-[39] bottom-(--dock-top) max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none">
-      <div className="relative glass rounded-t-2xl flex items-center gap-3 pl-2.5 pr-3 py-2.5 animate-dock-rise motion-reduce:animate-none">
+    // While the dock is away (scrolling down) it drops into the dock's place.
+    <div className={`fixed inset-x-3 z-[39] bottom-(--dock-top) transition-transform duration-300 ease-out motion-reduce:transition-none ${
+      away ? 'translate-y-[4.125rem]' : 'translate-y-[calc(-1*var(--discover-lift,0px))]'
+    }`}>
+      <div className={`relative glass transition-[border-radius] duration-300 ${away ? 'rounded-2xl' : 'rounded-t-2xl'} flex items-center gap-3 pl-2.5 pr-3 py-2.5 animate-dock-rise motion-reduce:animate-none`}>
         {video('w-24 rounded-lg aspect-video shrink-0')}
         <button onClick={onOpen} className="min-w-0 flex-1 text-left">
           <span className="block text-sm font-medium truncate">{heading}</span>

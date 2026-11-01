@@ -10,6 +10,7 @@ import {
 } from '../../dlnaControl'
 import { useBrowserPlayerControls } from '../../browserPlayerControls'
 import { getCastQueue } from '../../castQueue'
+import { useBarsHidden } from '../../barsHidden'
 import { castLive } from '../../api'
 import { loadPlayerPrefs } from '../../playerPrefs'
 import CastFrameRate from './CastFrameRate'
@@ -58,6 +59,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   const browserSession = useBrowserSession()
   const controls = useBrowserPlayerControls()
   const [open, setOpen] = useState(false)
+  const away = useBarsHidden()
   // While dragging the timeline, show the local value instead of live updates.
   const [seeking, setSeeking] = useState<number | null>(null)
   const closeTimer = useRef<number | null>(null)
@@ -183,7 +185,10 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
       } : {})}
       onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
       // On phones it rides up with the Discover menu (--discover-lift).
-      className="fixed inset-x-0 max-md:inset-x-3 md:left-56 z-40 max-md:z-[39] bottom-(--dock-top) md:bottom-0 max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none"
+      // While the dock is away (scrolling down) it drops into the dock's place.
+      className={`fixed inset-x-0 max-md:inset-x-3 md:left-56 z-40 max-md:z-[39] bottom-(--dock-top) md:bottom-0 max-md:transition-transform max-md:duration-300 max-md:ease-out motion-reduce:transition-none ${
+        away ? "max-md:translate-y-[4.125rem]" : "max-md:translate-y-[calc(-1*var(--discover-lift,0px))]"
+      }`}
     >
       {/* Accordion — grid-rows 0fr→1fr gives a smooth slide-up reveal. */}
       <div className="mx-auto w-full max-w-6xl md:px-6">
@@ -356,7 +361,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
       {/* On phones it sits on the dock as one glass object (the accordion, when
           open, joins on top of it). */}
       <div className={`md:border-t md:border-base-300 md:bg-base-200/95 md:backdrop-blur max-md:relative max-md:glass max-md:overflow-hidden max-md:animate-dock-rise motion-reduce:animate-none ${
-        open ? "" : "max-md:rounded-t-2xl"
+        open ? "" : away ? "max-md:rounded-2xl" : "max-md:rounded-t-2xl"
       }`}>
         <div
           onClick={desktop ? openSeries : () => setOpen(o => !o)}
