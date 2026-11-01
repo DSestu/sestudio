@@ -1,4 +1,4 @@
-import { type FocusEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type FocusEvent, type HTMLAttributes, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CatalogInfo } from '../api'
 import { useBrowserPlayerControls } from '../browserPlayerControls'
 import { useCastState } from '../cast'
@@ -98,80 +98,65 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => { window.removeEventListener('scroll', onScroll); setBarsHidden(false) }
   }, [pinned, view])
-  // The rail's catalogues show on Discover, and peek open from anywhere else
-  // while the pointer or keyboard focus is on the Discover group.
+  // The rail's Discover flyout opens while the pointer or keyboard focus is on
+  // Discover or the flyout. Closing waits a beat, so crossing the gap between
+  // the two doesn't fold it.
   const [peek, setPeek] = useState(false)
-  const catalogsOpen = view === 'search' || view === 'creators' || view === 'channel' || peek
+  const peekTimer = useRef<number | undefined>(undefined)
+  const openPeek = () => { clearTimeout(peekTimer.current); setPeek(true) }
   const peekProps = {
-    onMouseEnter: () => setPeek(true),
-    onMouseLeave: () => setPeek(false),
-    onFocus: () => setPeek(true),
+    onMouseEnter: openPeek,
+    onMouseLeave: () => { peekTimer.current = window.setTimeout(() => setPeek(false), 150) },
+    onFocus: openPeek,
     onBlur: (e: FocusEvent<HTMLDivElement>) => {
       if (!e.currentTarget.contains(e.relatedTarget)) setPeek(false)
     },
   }
   return (
     <div className="min-h-dvh bg-base-100 md:flex">
-      {/* Desktop rail */}
-      <aside className="hidden md:flex md:flex-col md:w-56 md:shrink-0 md:h-dvh md:sticky md:top-0 border-r border-base-300 bg-base-200/40 px-3 py-5 gap-6">
-        <Wordmark className="px-2" />
-        <nav aria-label="Primary" className="flex flex-col gap-1">
-          {DESTINATIONS.map(d => (
-            <div key={d.id} className="flex flex-col gap-1" {...(d.id === 'search' ? peekProps : {})}>
-            <button
-              onClick={() => onNavigate(d.id)}
-              aria-current={view === d.id ? 'page' : undefined}
-              className={`flex items-center gap-3 rounded-box px-3 py-2.5 text-sm font-medium transition-colors ${
-                view === d.id
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-base-content/60 hover:bg-base-300/60 hover:text-base-content'
-              }`}
-            >
-              {d.icon}
-              <span className="flex-1 text-left">{d.label}</span>
-              {d.id === 'search' && catalogs.length > 0 && (
-                <svg
-                  className={`w-3.5 h-3.5 transition-transform duration-300 motion-reduce:transition-none ${catalogsOpen ? '' : '-rotate-90'}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-                </svg>
-              )}
-              {badgeFor(d.id) > 0 && (
-                <span className="badge badge-primary badge-sm">{badgeFor(d.id)}</span>
-              )}
-            </button>
-            {/* Catalogues sit right under Discover, folded away (animated)
-                whenever Discover is neither the page on screen nor hovered. */}
-            {d.id === 'search' && catalogs.length > 0 && (
-              <div
-                className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
-                  catalogsOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                }`}
-              >
-                <div className="min-h-0 overflow-hidden" inert={!catalogsOpen}>
-                  <RailCatalogs catalogs={catalogs} catalogId={catalogId} onOpenCatalog={onOpenCatalog} />
-                </div>
-              </div>
-            )}
-
-            </div>
-          ))}
-        </nav>
-        <div className="mt-auto">
+      {/* Desktop rail: a slim glass column floating beside the page (docs/
+          SPEC-nav-redesign.md §5). The Discover flyout is a sibling of the
+          column, not inside it, so its own blur sees the page under it. */}
+      <aside className="hidden md:block md:shrink-0 md:w-27 md:h-dvh md:sticky md:top-0 p-3 pr-0 z-40">
+        <div className="relative h-full w-21 glass rounded-2xl flex flex-col items-center gap-1 py-4">
+          <img src="/sestudio-mark.svg" alt="sestudio" className="w-8 h-8 mb-3" />
           <button
-            onClick={onOpenSettings}
-            aria-current={view === 'settings' ? 'page' : undefined}
-            className={`flex w-full items-center gap-3 rounded-box px-3 py-2.5 text-sm font-medium transition-colors ${
-              view === 'settings'
-                ? 'bg-primary/15 text-primary'
-                : 'text-base-content/60 hover:bg-base-300/60 hover:text-base-content'
+            // The search bar listens for Ctrl K from anywhere; this is the same request.
+            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+            aria-label="Search"
+            title="Search (Ctrl K)"
+            className="grid place-items-center w-13 h-13 mb-3 rounded-2xl bg-primary text-primary-content transition-transform duration-100 active:scale-92"
+          >
+            {searchIcon}
+          </button>
+          <RailNav view={view} onNavigate={onNavigate} badgeFor={badgeFor} discoverProps={catalogs.length > 0 ? peekProps : {}} />
+          <div className="mt-auto">
+            <RailItem
+              label="Settings"
+              icon={icon('M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75')}
+              lit={view === 'settings'}
+              onClick={onOpenSettings}
+            />
+          </div>
+        </div>
+        {catalogs.length > 0 && (
+          <div
+            {...peekProps}
+            inert={!peek}
+            className={`absolute left-27 top-46 w-72 glass rounded-2xl p-3 transition-[clip-path,opacity,translate] ease-smooth motion-reduce:[clip-path:none] motion-reduce:translate-x-0 ${
+              peek
+                ? 'duration-[320ms] [clip-path:inset(0_round_16px)]'
+                : 'duration-200 opacity-0 -translate-x-2 pointer-events-none [clip-path:inset(0_100%_0_0_round_16px)]'
             }`}
           >
-            {icon('M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75')}
-            Settings
-          </button>
-        </div>
+            <p className="px-2 pt-1 pb-2 text-[10px] font-bold uppercase tracking-wide text-base-content/50">Discover</p>
+            <RailCatalogs
+              catalogs={catalogs}
+              catalogId={catalogId}
+              onOpenCatalog={id => { setPeek(false); onOpenCatalog?.(id) }}
+            />
+          </div>
+        )}
       </aside>
 
       {/* Phone top card. Pages with their own (<PageHeader>) replace this
@@ -328,6 +313,87 @@ function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
   )
 }
 
+/** One rail entry: icon over label, the icon carrying the badge. */
+function RailItem({ label, icon, lit, badge = 0, current, onClick, iconRef }: {
+  label: string
+  icon: ReactNode
+  lit: boolean
+  badge?: number
+  current?: boolean
+  onClick: () => void
+  /** Set when a sliding pill marks the lit item; otherwise the item lights itself. */
+  iconRef?: (el: HTMLSpanElement | null) => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-current={current ? 'page' : undefined}
+      className={`relative flex flex-col items-center gap-1 w-18 py-1 text-[11px] transition-colors ${
+        lit ? 'text-base-content font-semibold' : 'text-base-content/65 font-medium hover:text-base-content'
+      }`}
+    >
+      <span
+        ref={iconRef}
+        className={`relative grid place-items-center w-13 h-8 rounded-[10px] transition-colors ${lit ? 'text-primary' : ''} ${
+          !iconRef && lit ? 'bg-primary/22' : ''
+        }`}
+      >
+        {icon}
+        {badge > 0 && <span className="absolute -top-1 left-8 badge badge-primary badge-xs">{badge}</span>}
+      </span>
+      {label}
+    </button>
+  )
+}
+
+/** The rail's destinations, with the lit one's pill sliding between them. */
+function RailNav({ view, onNavigate, badgeFor, discoverProps }: {
+  view: View
+  onNavigate: (v: Tab) => void
+  badgeFor: (id: Tab) => number
+  discoverProps: HTMLAttributes<HTMLDivElement>
+}) {
+  // Creators and channels are reached through Discover, so it stays lit there.
+  const active = view === 'creators' || view === 'channel' ? 'search' : DESTINATIONS.find(d => d.id === view)?.id
+  const icons = useRef<Partial<Record<Tab, HTMLSpanElement | null>>>({})
+  const pill = useRef<HTMLSpanElement>(null)
+  const placed = useRef(false)
+  useLayoutEffect(() => {
+    const p = pill.current
+    const target = active && icons.current[active]
+    if (!p) return
+    p.style.opacity = target ? '1' : '0'
+    // No layout to measure while the rail is hidden (phone widths).
+    const item = target ? (target.offsetParent as HTMLElement | null) : null
+    if (!target || !item) return
+    p.style.transition = placed.current ? '' : 'none'
+    p.style.transform = `translateY(${item.offsetTop + target.offsetTop}px)`
+    placed.current = true
+  }, [active])
+  return (
+    <nav aria-label="Primary" className="relative flex flex-col gap-1">
+      <span
+        ref={pill}
+        aria-hidden="true"
+        className="absolute left-1/2 -ml-6.5 top-0 w-13 h-8 rounded-[10px] bg-primary/22 transition-[transform,opacity] duration-300 ease-smooth motion-reduce:transition-opacity"
+      />
+      {DESTINATIONS.map(d => (
+        <div key={d.id} {...(d.id === 'search' ? discoverProps : {})}>
+          <RailItem
+            label={d.label}
+            icon={d.icon}
+            lit={d.id === active}
+            badge={badgeFor(d.id)}
+            current={view === d.id}
+            onClick={() => onNavigate(d.id)}
+            iconRef={el => { icons.current[d.id] = el }}
+          />
+        </div>
+      ))}
+    </nav>
+  )
+}
+
 /** The rail's catalogue list: TMDB set apart on top, as it plays nothing
  *  itself, then the video sources with what each holds. */
 function RailCatalogs({ catalogs, catalogId, onOpenCatalog }: {
@@ -338,7 +404,7 @@ function RailCatalogs({ catalogs, catalogId, onOpenCatalog }: {
   const tmdb = catalogs.find(c => c.id === 'tmdb')
   const sites = catalogs.filter(c => c.id !== 'tmdb')
   return (
-    <div className="ml-[1.4rem] pl-2 mt-1 mb-2 flex flex-col gap-0.5 border-l border-base-300" aria-label="Catalogues">
+    <div className="flex flex-col gap-0.5" aria-label="Catalogues">
       {tmdb && (
         <button
           onClick={() => onOpenCatalog?.(tmdb.id)}
