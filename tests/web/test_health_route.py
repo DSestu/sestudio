@@ -121,6 +121,28 @@ def test_low_disk_by_ratio(client, disk):
     assert client.get("/api/health").json()["disk"]["low"] is True
 
 
+def test_unavailable_disk_is_an_issue_not_a_500(client, monkeypatch):
+    def unmounted(path):
+        raise OSError("device not ready")
+
+    monkeypatch.setattr(health.shutil, "disk_usage", unmounted)
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["disk"]["free_bytes"] is None
+    assert body["disk"]["total_bytes"] is None
+    assert body["disk"]["low"] is False
+    assert body["disk"]["error"] == "device not ready"
+    assert body["issues"] == [
+        {
+            "kind": "disk",
+            "id": None,
+            "message": "Downloads folder unavailable",
+            "retry": None,
+        }
+    ]
+
+
 def test_site_probes_are_cached(client, down):
     client.get("/api/health")
     client.get("/api/health")

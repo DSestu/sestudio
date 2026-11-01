@@ -103,7 +103,16 @@ def _disk(output_root: str) -> dict[str, Any]:
     # Not created until the first download; its drive is what fills up anyway.
     while not path.exists() and path != path.parent:
         path = path.parent
-    usage = shutil.disk_usage(path)
+    try:
+        usage = shutil.disk_usage(path)
+    except OSError as exc:  # an unmounted or inaccessible drive
+        return {
+            "path": str(path),
+            "free_bytes": None,
+            "total_bytes": None,
+            "low": False,
+            "error": str(exc) or type(exc).__name__,
+        }
     return {
         "path": str(path),
         "free_bytes": usage.free,
@@ -123,6 +132,15 @@ async def get_health(request: Request) -> dict[str, Any]:
     # Worst first: a full disk fails every download, a site down fails
     # everything on it, a failing watcher is often just its site being down.
     issues: list[dict[str, Any]] = []
+    if "error" in disk:
+        issues.append(
+            {
+                "kind": "disk",
+                "id": None,
+                "message": "Downloads folder unavailable",
+                "retry": None,
+            }
+        )
     if disk["low"]:
         issues.append(
             {
