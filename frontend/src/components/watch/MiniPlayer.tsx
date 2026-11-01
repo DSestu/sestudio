@@ -86,16 +86,15 @@ export default function MiniPlayer({ node, onOpen, onClose }: Props) {
 
   if (desktop) {
     return (
-      <div className={`fixed right-4 z-40 w-80 rounded-box overflow-hidden border border-base-300 bg-base-200 shadow-xl ${casting ? 'bottom-[5.5rem]' : 'bottom-4'}`}>
-        {video('aspect-video')}
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          {playPause}
-          <button onClick={onOpen} className="min-w-0 flex-1 text-left">
-            <span className="block text-sm font-medium truncate">{heading}</span>
-            <span className="block text-xs text-base-content/50 truncate">{sub}</span>
-          </button>
-          {close}
-        </div>
+      // A floating glass dock centred on the page, above the casting dock when both are up.
+      <div className={`fixed z-40 left-[calc(6.75rem+(100vw-6.75rem)/2)] -translate-x-1/2 w-[min(40rem,calc(100vw-9rem))] glass rounded-2xl p-2 flex items-center gap-3 ${casting ? 'bottom-24' : 'bottom-4'}`}>
+        {video('w-40 aspect-video rounded-lg shrink-0')}
+        <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+          <span className="block text-sm font-medium truncate">{heading}</span>
+          <span className="block text-xs text-base-content/50 truncate">{sub}</span>
+        </button>
+        {playPause}
+        {close}
       </div>
     )
   }
