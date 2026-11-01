@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>sestudio setup</title>
+<style>
+  :root { color-scheme: dark; --bg: #131720; --fg: #e5e7eb; --muted: #94a3b8; --line: #334155; --accent: #22d3ee; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  main { min-height: 100%; display: flex; flex-direction: column; padding: 56px 24px 28px; max-width: 520px; margin: 0 auto; }
+  .logo { font-weight: 700; font-size: 32px; margin-bottom: 20px; }
+  .logo b { color: var(--accent); }
+  p { margin: 0 0 14px; color: var(--muted); }
+  p strong { color: var(--fg); }
+  .actions { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+  button { font: inherit; font-weight: 600; border-radius: 12px; padding: 14px; border: 1px solid var(--line);
+    background: transparent; color: var(--fg); }
+  button.primary { background: var(--accent); color: #04202a; border-color: var(--accent); }
+  button:disabled { opacity: .5; }
+  .done-note { text-align: center; color: #4ade80; font-size: 14px; }
+  ol { list-style: none; margin: 8px 0 0; padding: 0; }
+  li { margin: 14px 0; }
+  .row { display: flex; gap: 12px; align-items: center; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; flex: 0 0 22px; display: grid; place-items: center;
+    font-size: 13px; font-weight: 700; color: #fff; }
+  .done .dot { background: #16a34a; }
+  .run .dot { border: 2.5px solid var(--accent); }
+  .wait .dot { border: 2.5px solid var(--line); }
+  .bad .dot { background: #dc2626; }
+  .wait .label { color: var(--muted); }
+  .detail { color: var(--muted); font-size: 14px; }
+  .bar { height: 7px; background: #1e293b; border-radius: 4px; margin: 8px 0 0 34px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .3s; }
+  .bar.unknown i { width: 30% !important; animation: slide 1.2s infinite ease-in-out; }
+  @keyframes slide { from { margin-left: -30%; } to { margin-left: 100%; } }
+  pre { background: #0b0f16; border: 1px solid #273142; border-radius: 10px; padding: 12px; margin: 16px 0 0;
+    font: 12px/1.5 ui-monospace, monospace; color: #fca5a5; white-space: pre-wrap; word-break: break-word; }
+  .foot { margin-top: auto; color: var(--muted); font-size: 14px; padding-top: 24px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="logo">se<b>studio</b></div>
+
+  <section id="welcome">
+    <p>First, sestudio sets itself up on this phone.</p>
+    <p>It downloads about <strong>200 MB</strong> — use Wi-Fi. This happens once and takes 2–4 minutes.</p>
+    <p>To keep playing while the screen is off, allow it to run in the background.</p>
+  </section>
+
+  <section id="progress" hidden>
+    <p id="progress-title">Setting up…</p>
+    <ol id="steps"></ol>
+    <pre id="error" hidden></pre>
+  </section>
+
+  <div class="actions" id="welcome-actions">
+    <button class="primary" onclick="Setup.start()">Set up</button>
+    <button id="background" onclick="Setup.allowBackground()">Allow background use</button>
+    <div class="done-note" id="background-done" hidden>✓ Background use allowed</div>
+  </div>
+  <div class="actions" id="failed-actions" hidden>
+    <button class="primary" onclick="Setup.retry()">Retry</button>
+    <button onclick="Setup.copyLog()">Copy log</button>
+  </div>
+  <div class="foot" id="leave-note" hidden>You can leave the app; setup continues.</div>
+</main>
+<script>
+  // Called by the app with the whole state each time it changes.
+  function render(state) {
+    const welcome = state.screen === 'welcome';
+    const failed = state.screen === 'failed';
+    document.getElementById('welcome').hidden = !welcome;
+    document.getElementById('welcome-actions').hidden = !welcome;
+    document.getElementById('progress').hidden = welcome;
+    document.getElementById('failed-actions').hidden = !failed;
+    document.getElementById('leave-note').hidden = welcome || failed || state.screen === 'ready';
+    document.getElementById('background').hidden = state.background;
+    document.getElementById('background-done').hidden = !state.background;
+    document.getElementById('progress-title').textContent =
+      state.screen === 'ready' ? 'Ready.' : failed ? 'Setup stopped.' : 'Setting up…';
+    const error = document.getElementById('error');
+    error.hidden = !failed;
+    error.textContent = state.error || '';
+    const list = document.getElementById('steps');
+    list.replaceChildren(...state.steps.map(step => {
+      const li = document.createElement('li');
+      li.className = step.state;
+      const mark = step.state === 'done' ? '✓' : step.state === 'bad' ? '!' : '';
+      li.innerHTML = '<div class="row"><span class="dot"></span><span><span class="label"></span> ' +
+        '<span class="detail"></span></span></div>';
+      li.querySelector('.dot').textContent = mark;
+      li.querySelector('.label').textContent = step.label;
+      li.querySelector('.detail').textContent = step.detail ? '· ' + step.detail : '';
+      if (step.state === 'run') {
+        const bar = document.createElement('div');
+        bar.className = 'bar' + (step.fraction == null ? ' unknown' : '');
+        bar.innerHTML = '<i></i>';
+        bar.firstChild.style.width = Math.round((step.fraction || 0) * 100) + '%';
+        li.appendChild(bar);
+      }
+      return li;
+    }));
+  }
+</script>
+</body>
+</html>

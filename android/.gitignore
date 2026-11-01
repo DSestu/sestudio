@@ -1,3 +1,6 @@
 .gradle/
 build/
 local.properties
+
+# proot ships as native libraries (see third_party/proot).
+!app/src/main/jniLibs/**/*.so

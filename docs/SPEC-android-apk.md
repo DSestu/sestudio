@@ -21,8 +21,6 @@ app, tap it, and watch.
 
 ### Non-goals
 
-- Chromecast (the Cast web SDK does not run in a WebView). DLNA still works: the server, not the
-  page, builds the media URL from the phone's Wi-Fi address.
 - AI frame rates (the phone's GPU is out of reach from proot).
 - The Play Store (an app that scrapes streaming sites will not pass review).
 - iOS.
@@ -63,16 +61,19 @@ certificates. Debian only provides glibc and the dynamic loader.
 ## 4. The WebView shell
 
 - Immersive full screen; the system back button goes back in the web app's history.
+- Loads `https://<phone's Wi-Fi IP>:8443`, not `localhost`: media URLs the page hands a TV must reach
+  the phone, and HTTPS keeps the secure context (Copy, Share, Cast) a LAN address over HTTP loses. The
+  WebView trusts exactly the server's own certificate (`cert.pem`). No Wi-Fi: `http://localhost:8080`.
+- **Chromecast, two ways** (the Cast web SDK does not run in a WebView):
+  - *Native*: the Google Cast Android SDK, bridged to the web UI's Cast button through a JavaScript
+    interface; the TV fetches the same `https://<Wi-Fi IP>:8443/…` media URLs.
+  - *Open in Chrome*: a button that opens the current page in Chrome, where web casting already works.
+  DLNA works as it does today: the server builds its media URL from the phone's Wi-Fi address.
 - Video fullscreen through `WebChromeClient.onShowCustomView`.
 - Picture-in-picture when leaving the app during playback.
 - "This device" downloads: `DownloadListener` → Android's `DownloadManager`.
 - Links to other sites (TMDB guide, trailers) open in the phone's browser.
-- Waits for the server: a native "Starting…" screen until `localhost:8080` answers.
-- **Terminal drawer**: a small `>_` tab on the right edge, above the web UI, opens a bottom sheet
-  with the server's live output (`filesDir/server.log`, newest at the bottom) and Copy, Restart and
-  Stop. A tap target, not an edge swipe: both side edges are Android's back gesture, the bottom holds
-  the app's tab bar, and a swipe from the top reveals the hidden system bars. Swipe down or Back
-  closes it.
+- Waits for the server: a native "Starting…" screen until it answers.
 
 ## 5. First launch
 
@@ -126,17 +127,17 @@ means every user must uninstall and reinstall; it gets a second copy outside Git
 
 1. **Termux script** (`scripts/termux.sh`) and root-file serving: done separately, the fallback route.
 2. **Android project skeleton**: `android/` (Kotlin, Gradle), CI builds a signed APK artifact.
-3. **Runtime bootstrap**: proot in `jniLibs`, root filesystem + uv download and unpack, a debug
-   button that runs `uvx sestudio --version` and shows the output.
+3. **Runtime bootstrap and setup screens**: proot in `jniLibs`, root filesystem + uv download and
+   unpack, the first-launch screens (welcome, battery exemption, progress, Retry, Copy log), and a
+   check that runs uv inside Debian.
 4. **ServerService**: foreground service, wake lock, logs kept in `filesDir/server.log`, and its
    notification: "sestudio is running", tapping it opens the app, **Stop** shuts the server down and
    removes it. Ongoing, so it cannot be swiped away; on Android 14+, where the system lets users
    dismiss even a foreground service's notification, a dismissal re-posts it (`setDeleteIntent`) for
    as long as the server runs.
-5. **WebView shell**: full screen, back button, fullscreen video, external links, "Starting…" screen,
-   terminal drawer.
+5. **WebView shell**: full screen, back button, fullscreen video, external links, "Starting…" screen.
 6. **Downloads and PiP**.
-7. **First-launch flow**: explanation, battery exemption, progress, Retry.
+7. **Chromecast**: native Cast SDK bridge, and "Open in Chrome".
 8. **Release and auto-update**: signing key as secrets, APK attached to each release by the
    release-please workflow, in-app updater, README section.
 
