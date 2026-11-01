@@ -1,6 +1,6 @@
 import { type FocusEvent, type HTMLAttributes, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CatalogInfo } from '../api'
-import { useBrowserPlayerControls } from '../browserPlayerControls'
+import { useBrowserSession } from '../playbackSession'
 import { useCastState } from '../cast'
 import { useDlnaState } from '../dlnaControl'
 import type { Tab, View } from '../nav'
@@ -77,8 +77,10 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   // (and flush to the bottom on desktop), so content needs extra room to clear it.
   const castConnected = useCastState().connected
   const dlnaConnected = useDlnaState().connected
-  const browserControls = useBrowserPlayerControls()
-  const miniActive = view !== 'watch' && browserControls !== null
+  // Same signal the mini-player shows on, so the dock squares off exactly when
+  // the strip sits on it.
+  const browserSession = useBrowserSession()
+  const miniActive = view !== 'watch' && browserSession !== null
   const bottomBar = castConnected || dlnaConnected || miniActive
   // While the library is selecting, its action bar takes the tab bar's slot
   // instead of stacking on top of it, so fixed chrome height never grows (#26).
@@ -104,6 +106,15 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => { window.removeEventListener('scroll', onScroll); setBarsHidden(false) }
   }, [pinned, view])
+  // The player page pins its video to the top of the screen, so the phone top
+  // card only shows while the page is at the very top, never over the video.
+  const [watchScrolled, setWatchScrolled] = useState(false)
+  useEffect(() => {
+    if (view !== 'watch') return
+    const onScroll = () => setWatchScrolled(window.scrollY > 8)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => { window.removeEventListener('scroll', onScroll); setWatchScrolled(false) }
+  }, [view])
   // Asking for the search (Ctrl K, or the rail's Search button) brings the card back.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -157,10 +168,11 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
           <div
             {...peekProps}
             inert={!peek}
-            className={`absolute left-27 top-46 w-72 glass rounded-2xl p-3 transition-[clip-path,opacity,translate] ease-smooth motion-reduce:[clip-path:none] motion-reduce:translate-x-0 ${
+            data-open={peek || undefined}
+            className={`absolute left-27 top-46 w-72 glass rounded-2xl p-3 transition-[opacity,translate,filter] ease-smooth motion-reduce:translate-x-0 motion-reduce:[filter:none] ${
               peek
-                ? 'duration-[320ms] [clip-path:inset(0_round_16px)]'
-                : 'duration-200 opacity-0 -translate-x-2 pointer-events-none [clip-path:inset(0_100%_0_0_round_16px)]'
+                ? 'duration-300 [filter:none]'
+                : 'duration-200 opacity-0 -translate-x-3 pointer-events-none [filter:blur(10px)]'
             }`}
           >
             <p className="px-2 pt-1 pb-2 text-[10px] font-bold uppercase tracking-wide text-base-content/50">Discover</p>
@@ -176,7 +188,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
       {/* Phone top card. Pages with their own (<PageHeader>) replace this
           default: the wordmark, and on Home what is new. */}
       {!pageHeader && (
-        <TopCard>
+        <TopCard away={view === 'watch' && watchScrolled}>
           <div className="flex items-center gap-2 min-h-11">
             <div className="min-w-0 flex-1 leading-tight">
               <Wordmark />
@@ -431,7 +443,7 @@ function RailCatalogs({ catalogs, catalogId, onOpenCatalog }: {
   const tmdb = catalogs.find(c => c.id === 'tmdb')
   const sites = catalogs.filter(c => c.id !== 'tmdb')
   return (
-    <div className="flex flex-col gap-0.5" aria-label="Catalogues">
+    <div className="rows-follow flex flex-col gap-0.5" aria-label="Catalogues">
       {tmdb && (
         <button
           onClick={() => onOpenCatalog?.(tmdb.id)}

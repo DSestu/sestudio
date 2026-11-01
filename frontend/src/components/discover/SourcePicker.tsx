@@ -182,9 +182,11 @@ export function DiscoverMenu({
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       />
-      {/* Floats just above the dock and grows out of its Search button (a
-          clip-path from the bottom centre) while it sharpens from a soft blur,
-          shrinking and blurring back into it. */}
+      {/* Floats just above the dock and grows out of its Search button: it starts
+          as a sliver the button's width on its own bottom edge (a clip-path, with a
+          faint glow rising from that edge and fading out) and stretches into the sheet. The
+          content is there from the first frame, rising a little and sharpening
+          from a blur with it. Closing runs it back into the button. */}
       <div
         id="discover-menu"
         inert={!open}
@@ -196,10 +198,10 @@ export function DiscoverMenu({
           ref={panel}
           role="dialog"
           aria-label="Discover"
-          className={`relative flex flex-col overflow-hidden glass rounded-2xl transition-[clip-path,filter,opacity,min-height,max-height] ease-smooth motion-reduce:[clip-path:none] motion-reduce:[filter:none] motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
+          className={`relative flex flex-col overflow-hidden glass rounded-2xl transition-[clip-path,filter,opacity,min-height,max-height] ease-smooth after:absolute after:inset-0 after:bg-[linear-gradient(to_top,color-mix(in_oklab,var(--color-primary)_30%,transparent),transparent_40%)] after:pointer-events-none after:transition-opacity after:duration-[320ms] *:transition-[translate] *:duration-[380ms] *:ease-smooth motion-reduce:[clip-path:none] motion-reduce:[filter:none] motion-reduce:after:hidden motion-reduce:*:translate-y-0 motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
             open
-              ? 'duration-[480ms] [clip-path:inset(0_round_16px)] [filter:none]'
-              : 'duration-300 motion-reduce:opacity-0 [clip-path:inset(100%_50%_0_50%_round_12px)] [filter:blur(14px)]'
+              ? 'duration-[420ms] [clip-path:inset(0_round_16px)] [filter:none] after:opacity-0 *:translate-y-0'
+              : 'duration-300 motion-reduce:opacity-0 [clip-path:inset(100%_calc(50%_-_1.625rem)_0_calc(50%_-_1.625rem)_round_16px)] [filter:blur(12px)] after:opacity-100 *:translate-y-3.5'
           } ${expanded ? FULL_HEIGHT : 'min-h-0 max-h-[70dvh]'}`}
         >
           {/* Results preview as you type; Enter (the keyboard's Search key)
