@@ -1290,10 +1290,13 @@ export interface ChannelInfo {
   /** Its stream, when it is live now (Twitch). */
   live: VideoInfo | null
   videos: VideoInfo[]
+  /** The tab these videos are from, and every tab the channel page offers. */
+  tab: string
+  tabs: { id: string; label: string }[]
 }
 
-export async function fetchChannel(url: string): Promise<ChannelInfo> {
-  const res = await fetch(`${BASE}/channel?url=${encodeURIComponent(url)}`)
+export async function fetchChannel(url: string, tab = ''): Promise<ChannelInfo> {
+  const res = await fetch(`${BASE}/channel?url=${encodeURIComponent(url)}&tab=${encodeURIComponent(tab)}`)
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     throw new Error(body?.detail ?? 'Could not load that channel')

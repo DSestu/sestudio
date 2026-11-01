@@ -314,6 +314,7 @@ export default function App() {
           <ChannelView
             key={route.params.get('u') ?? ''}
             url={route.params.get('u') ?? ''}
+            tab={route.params.get('tab') ?? ''}
             onOpen={card => openTitle(card, 0, settings.lang)}
           />
         )}

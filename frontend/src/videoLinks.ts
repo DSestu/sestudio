@@ -72,3 +72,15 @@ export function videoMeta(info: VideoInfo): string {
 export function channelHref(url: string, source: string): string {
   return `#/channel?u=${encodeURIComponent(url)}&src=${source}`
 }
+
+/** "New video every ~4 days", from the typical gap between dated uploads;
+ *  '' with too few dates to say. */
+export function uploadCadence(videos: VideoInfo[], noun = 'video'): string {
+  const times = videos.map(v => v.timestamp).filter(Boolean).sort((a, b) => b - a)
+  if (times.length < 3) return ''
+  const gaps = times.slice(1).map((t, i) => times[i] - t).sort((a, b) => a - b)
+  const days = gaps[Math.floor(gaps.length / 2)] / 86_400
+  if (days < 1) return `several ${noun}s a day`
+  const n = Math.round(days)
+  return n === 1 ? `new ${noun} every day` : `new ${noun} every ~${n} days`
+}

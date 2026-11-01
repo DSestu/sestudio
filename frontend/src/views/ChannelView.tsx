@@ -6,15 +6,18 @@ import FollowButton from '../components/FollowButton'
 import VideoGrid from '../components/VideoGrid'
 import { VideoThumb } from '../components/search/LinkCard'
 import { sourceIcon } from '../sourceLook'
-import { videoMeta } from '../videoLinks'
+import { channelHref, uploadCadence, videoMeta } from '../videoLinks'
 
 interface Props {
   url: string
+  /** Which tab to list ('' for the channel's first). */
+  tab: string
   onOpen: (card: SeasonCard) => void
 }
 
 interface Fetched {
   url: string
+  tab: string
   channel?: ChannelInfo
   error?: string
 }
@@ -24,20 +27,22 @@ interface Fetched {
  * then its latest videos. A grid on desktop, rows with the thumbnail on the
  * left on phones.
  */
-export default function ChannelView({ url, onOpen }: Props) {
+export default function ChannelView({ url, tab, onOpen }: Props) {
   const [fetched, setFetched] = useState<Fetched | null>(null)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let live = true
-    fetchChannel(url).then(
-      channel => { if (live) setFetched({ url, channel }) },
-      (e: Error) => { if (live) setFetched({ url, error: e.message }) },
+    fetchChannel(url, tab).then(
+      channel => { if (live) setFetched({ url, tab, channel }) },
+      (e: Error) => { if (live) setFetched({ url, tab, error: e.message }) },
     )
     return () => { live = false }
-  }, [url, attempt])
+  }, [url, tab, attempt])
 
+  // Switching tabs keeps the header up; only the list waits.
   const current = fetched?.url === url ? fetched : null
+  const listReady = current?.tab === tab
   if (!current) {
     return (
       <div className="flex flex-col gap-6" aria-busy="true" aria-label="Loading channel">
@@ -79,7 +84,7 @@ export default function ChannelView({ url, onOpen }: Props) {
           <h2 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">{channel.name}</h2>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-base-content/50">
             {icon && <img src={icon} alt="" className="h-3.5 w-3.5" />}
-            {site} · {channel.videos.length} latest {channel.source === 'twitch' ? 'past broadcasts' : 'videos'}
+            {[site, listReady && uploadCadence(channel.videos, channel.tab === 'highlights' ? 'highlight' : channel.tab === 'streams' || channel.source === 'twitch' ? 'stream' : 'video')].filter(Boolean).join(' · ')}
           </p>
         </div>
         <FollowButton channel={channel} autoDownload />
@@ -105,10 +110,31 @@ export default function ChannelView({ url, onOpen }: Props) {
         </section>
       )}
 
-      {channel.videos.length ? (
+      <div role="tablist" aria-label="Channel" className="flex gap-5 border-b border-base-300 text-sm">
+        {channel.tabs.map(t => {
+          const on = t.id === (tab || channel.tabs[0]?.id)
+          return (
+            <a
+              key={t.id}
+              role="tab"
+              aria-selected={on}
+              href={`${channelHref(url, channel.source)}&tab=${t.id}`}
+              className={`-mb-px pb-2 border-b-2 transition-colors ${on ? 'border-primary text-base-content font-medium' : 'border-transparent text-base-content/60 hover:text-base-content'}`}
+            >
+              {t.label}
+            </a>
+          )
+        })}
+      </div>
+
+      {!listReady ? (
+        <div aria-busy="true" aria-label="Loading videos" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }, (_, i) => <div key={i} className="aspect-video rounded-box bg-base-300 animate-pulse" />)}
+        </div>
+      ) : channel.videos.length ? (
         <VideoGrid videos={channel.videos} onOpen={onOpen} />
       ) : (
-        <EmptyState title="No videos yet" message={`${channel.name} has nothing to watch here for now.`} />
+        <EmptyState title="Nothing here yet" message={`${channel.name} has nothing on this tab for now.`} />
       )}
     </div>
   )

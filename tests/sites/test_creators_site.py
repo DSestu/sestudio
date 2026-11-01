@@ -152,7 +152,12 @@ def test_youtube_channel_lists_its_videos_dated_by_the_feed(monkeypatch):
         }
 
     monkeypatch.setattr(creators, "ytdlp_json", fake)
-    monkeypatch.setattr(creators, "youtube_feed_dates", lambda cid: {"a": 1700000000})
+    feeds: list[str] = []
+    monkeypatch.setattr(
+        creators,
+        "youtube_feed_dates",
+        lambda cid, playlist: feeds.append(playlist) or {"a": 1700000000},
+    )
     channel = YouTubeSite().channel("https://www.youtube.com/@BlenderOfficial/videos")
 
     assert calls[0][-1] == "https://www.youtube.com/@BlenderOfficial/videos"
@@ -166,6 +171,14 @@ def test_youtube_channel_lists_its_videos_dated_by_the_feed(monkeypatch):
         ("B", 0),
     ]
     assert channel["videos"][0]["channel"] == "Blender"
+    assert channel["tab"] == "videos" and feeds == ["UULF"]
+
+    streams = YouTubeSite().channel(
+        "https://www.youtube.com/@BlenderOfficial", "streams"
+    )
+    assert calls[-1][-1] == "https://www.youtube.com/@BlenderOfficial/streams"
+    assert streams["tab"] == "streams" and feeds[-1] == "UULV"
+    assert [t["id"] for t in streams["tabs"]] == ["videos", "streams"]
 
 
 def test_twitch_channel_from_graphql_has_its_live_stream_and_vods():
