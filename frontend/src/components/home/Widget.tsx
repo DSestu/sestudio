@@ -2,12 +2,13 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { WidgetSize } from '../../homeOrder'
 
 // Grid cells per size, on a 2-column phone / 4-column desktop grid of 80px rows.
-// Heights add up: an S is as tall as an M and an L as two Ms, so any pairing
-// side by side ends on the same line.
+// Heights add up: an S is as tall as an M, and from md: an L is two Ms, so
+// widgets side by side end on the same line. A phone L has nothing beside it,
+// so it keeps the height its content needs.
 const SPAN: Record<WidgetSize, string> = {
   S: 'col-span-1 row-span-3',
   M: 'col-span-2 row-span-3',
-  L: 'col-span-2 row-span-6',
+  L: 'col-span-2 row-span-5 md:row-span-6',
 }
 
 /** Home's grid: widgets place themselves by size, and packing is dense so an S
