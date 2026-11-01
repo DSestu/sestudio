@@ -201,8 +201,9 @@ export default function WatchView({
   // loads, and candidates are matched on it, so a lookup fired before then finds
   // nothing and — being remembered as done — never retries. That is what left
   // every season past the first showing its own site alone.
+  // A YouTube or Twitch video is on no other site: no lookup to spend.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadSiteSources() }, [seriesName, sourceId, sourceUrl, season, detail])
+  useEffect(() => { if (!isVideo) loadSiteSources() }, [seriesName, sourceId, sourceUrl, season, detail, isVideo])
   // The copy on disk is not a site, and it already has its own row in the
   // sources panel. It reaches this list because a title opened from the
   // downloaded library *is* the open source, and the open source is always

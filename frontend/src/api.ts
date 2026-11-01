@@ -1356,3 +1356,13 @@ export async function fetchCreatorsLatest(): Promise<VideoInfo[]> {
   if (!res.ok) throw new Error('Could not load the latest videos')
   return res.json()
 }
+
+const warmed = new Set<string>()
+
+/** Have the server look a video up before it is opened, so opening it starts
+ *  at once: a pointer resting on its tile is the hint. Once per video. */
+export function warmVideo(url: string): void {
+  if (warmed.has(url)) return
+  warmed.add(url)
+  fetch(`${BASE}/link?url=${encodeURIComponent(url)}`).catch(() => warmed.delete(url))
+}

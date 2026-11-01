@@ -1,5 +1,5 @@
 import type { SeasonCard, VideoInfo } from '../api'
-import { videoSeasonCard } from '../api'
+import { videoSeasonCard, warmVideo } from '../api'
 import { videoMeta } from '../videoLinks'
 import { useWatchState, watchKey } from '../watchState'
 import { VideoThumb } from './search/LinkCard'
@@ -25,6 +25,8 @@ export default function VideoGrid({ videos, onOpen, showChannel = false }: Props
             <button
               type="button"
               onClick={() => onOpen(videoSeasonCard(v))}
+              onPointerEnter={() => warmVideo(v.page_url)}
+              onFocus={() => warmVideo(v.page_url)}
               className="group flex sm:flex-col gap-3 sm:gap-2 w-full text-left rounded-box focus-visible:outline-2 focus-visible:outline-primary"
             >
               <div className="relative w-40 sm:w-full shrink-0">
