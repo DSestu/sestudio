@@ -105,50 +105,60 @@ export default function DesktopSearch({ catalogs, merge, query, kind: pageKind, 
         />
         <kbd className="kbd kbd-sm shrink-0 whitespace-nowrap">{open ? 'Esc' : 'Ctrl K'}</kbd>
       </div>
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-10 max-h-[70dvh] overflow-y-auto overscroll-contain rounded-b-box border-2 border-t-0 border-primary/80 bg-base-200 p-2 shadow-2xl">
-          {linkSite ? (
-            <LinkCard link={link} source={linkSite} onPlay={playLink} />
-          ) : q ? (
-            <TitleResults
-              search={search}
-              query={q}
-              kind={kind}
-              onKind={k => { setKind(k); setActive(0); input.current?.focus() }}
-              listId={RESULTS_ID}
-              active={active}
-              onActive={setActive}
-              onOpen={openCard}
-              onSeeAll={seeAll}
-              onSeeVideos={() => { close(); onSearch(q, 'videos') }}
-              enterHint
-              footer={
-                <span className="flex items-center gap-3 text-xs text-base-content/50">
-                  <span><kbd className="kbd kbd-xs">↓</kbd> titles</span>
-                  <span><kbd className="kbd kbd-xs">Enter</kbd> open</span>
-                </span>
-              }
-            />
-          ) : (
-            <RecentSearchList
-              items={recent}
-              listId={RECENT_ID}
-              active={active}
-              onActive={setActive}
-              onPick={pickRecent}
-              onClear={() => { clearRecentSearches(); input.current?.focus() }}
-            />
-          )}
-        </div>
-      )}
+      {/* Stays mounted so it can animate both ways: it slides down out of the
+          field and sharpens from a blur, as the desktop Discover panel does. */}
+      <div
+        inert={!open}
+        className={`absolute left-0 right-0 top-full z-10 max-h-[70dvh] overflow-y-auto overscroll-contain rounded-b-box border-2 border-t-0 border-primary/80 bg-base-200 p-2 shadow-2xl transition-[opacity,translate,filter] ease-smooth motion-reduce:translate-y-0 motion-reduce:[filter:none] motion-reduce:duration-[120ms] ${
+          open ? 'duration-300 [filter:none]' : 'duration-200 opacity-0 -translate-y-2 pointer-events-none [filter:blur(10px)]'
+        }`}
+      >
+        {linkSite ? (
+          <LinkCard link={link} source={linkSite} onPlay={playLink} />
+        ) : q ? (
+          <TitleResults
+            search={search}
+            query={q}
+            kind={kind}
+            onKind={k => { setKind(k); setActive(0); input.current?.focus() }}
+            listId={RESULTS_ID}
+            active={active}
+            onActive={setActive}
+            onOpen={openCard}
+            onSeeAll={seeAll}
+            onSeeVideos={() => { close(); onSearch(q, 'videos') }}
+            enterHint
+            footer={
+              <span className="flex items-center gap-3 text-xs text-base-content/50">
+                <span><kbd className="kbd kbd-xs">↓</kbd> titles</span>
+                <span><kbd className="kbd kbd-xs">Enter</kbd> open</span>
+              </span>
+            }
+          />
+        ) : (
+          <RecentSearchList
+            items={recent}
+            listId={RECENT_ID}
+            active={active}
+            onActive={setActive}
+            onPick={pickRecent}
+            onClear={() => { clearRecentSearches(); input.current?.focus() }}
+          />
+        )}
+      </div>
     </div>
   )
 
   return (
     <>
-      {open && (
-        <div aria-hidden="true" onClick={close} className="fixed inset-0 z-0 bg-black/45" />
-      )}
+      {/* Stays mounted so the dimming fades out as well as in. */}
+      <div
+        aria-hidden="true"
+        onClick={close}
+        className={`fixed inset-0 z-0 bg-black/45 transition-opacity ease-smooth motion-reduce:duration-[120ms] ${
+          open ? 'duration-300' : 'duration-200 opacity-0 pointer-events-none'
+        }`}
+      />
       <div className="relative z-10 flex items-center gap-4 h-16">
         {field}
         {onResults ? (
