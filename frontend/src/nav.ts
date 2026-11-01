@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 /** Destinations that appear in the nav rail / tab bar. */
-export const TABS = ['home', 'search', 'library', 'downloaded', 'downloads', 'notifications'] as const
+export const TABS = ['home', 'search', 'library', 'media', 'notifications'] as const
 export type Tab = (typeof TABS)[number]
 
 /**
@@ -25,11 +25,13 @@ export interface Route {
 
 function parseHash(): Omit<Route, 'visit'> {
   const raw = window.location.hash.replace(/^#\/?/, '')
-  const [path, query] = raw.split('?')
-  return {
-    view: VIEWS.includes(path) ? (path as View) : 'home',
-    params: new URLSearchParams(query ?? ''),
-  }
+  const [hashPath, query] = raw.split('?')
+  let path = hashPath
+  const params = new URLSearchParams(query ?? '')
+  // Downloaded and Downloads became Media's two tabs; old links still land.
+  if (path === 'downloaded') path = 'media'
+  if (path === 'downloads') { path = 'media'; params.set('tab', 'queue') }
+  return { view: VIEWS.includes(path) ? (path as View) : 'home', params }
 }
 
 function hashFor(view: View, params?: Record<string, string | number | undefined>): string {

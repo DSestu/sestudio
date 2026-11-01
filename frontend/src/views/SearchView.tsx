@@ -599,7 +599,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 1.1.9 2 2 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H6a2 2 0 00-2 2z" />
           </svg>
           <span className="truncate">On disk: {namedOnDisk.map(s => s.name).join(' · ')}</span>
-          <a href={`#/downloaded?q=${encodeURIComponent(lastQuery)}`} className="ml-auto shrink-0 text-primary hover:underline">All on disk ›</a>
+          <a href={`#/media?q=${encodeURIComponent(lastQuery)}`} className="ml-auto shrink-0 text-primary hover:underline">All on disk ›</a>
         </p>
       )}
 

@@ -26,21 +26,21 @@ const DESTINATIONS: Destination[] = [
   // Discovery and search share one destination: an empty search bar browses.
   { id: 'search', label: 'Discover', icon: icon('M12 21a9 9 0 100-18 9 9 0 000 18zM15.5 8.5l-2 5-5 2 2-5 5-2z') },
   { id: 'library', label: 'Library', icon: icon('M20.8 6.6a4.5 4.5 0 00-6.4 0L12 9l-2.4-2.4a4.5 4.5 0 10-6.4 6.4L12 21.5l8.8-8.5a4.5 4.5 0 000-6.4z') },
-  { id: 'downloaded', label: 'Downloaded', icon: icon('M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6L9 5H6a2 2 0 00-2 2z') },
-  { id: 'downloads', label: 'Downloads', icon: icon('M12 3v12m0 0l-4-4m4 4l4-4M4 19h16') },
+  // What is on the server's disk, and what is on its way there.
+  { id: 'media', label: 'Media', icon: icon('M4 6a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM10 8.5v5l4-2.5-4-2.5zM8 21h8') },
   { id: 'notifications', label: 'Activity', icon: icon('M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0') },
 ]
 
 /** Destinations that carry a count badge, and which prop feeds it. */
 const BADGES: Partial<Record<Tab, 'download' | 'unread'>> = {
-  downloads: 'download',
+  media: 'download',
   notifications: 'unread',
 }
 
 interface Props {
   view: View
   onNavigate: (v: Tab) => void
-  /** Rendered on the Downloads destination when non-zero. */
+  /** Active downloads, rendered on the Media destination when non-zero. */
   downloadBadge?: number
   /** Unread watcher events, rendered on the Activity destination when non-zero. */
   unreadBadge?: number
@@ -190,7 +190,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
       {/* Mobile tab bar — hidden while the selection bar occupies this slot. */}
       <nav
         aria-label="Primary"
-        className={`fixed bottom-0 inset-x-0 z-40 grid grid-cols-6 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)] ${
+        className={`fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 border-t border-base-300 bg-base-200/95 backdrop-blur pb-[env(safe-area-inset-bottom)] ${
           selecting ? 'hidden' : 'md:hidden'
         }`}
       >
@@ -211,7 +211,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
             {/* Active state is icon + label + rail, never colour alone */}
             {lit && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
             {d.icon}
-            {/* Labels must be able to shrink, or six 1fr columns overflow the
+            {/* Labels must be able to shrink, or five 1fr columns overflow the
                 viewport on narrow phones and the whole page scrolls sideways. */}
             <span className="max-w-full truncate">{d.label}</span>
             {badgeFor(d.id) > 0 && (

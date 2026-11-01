@@ -18,7 +18,7 @@ import { useDownloadJobs } from './useDownloadJobs'
 import { useSettings } from './useSettings'
 import { pickCatalog, rememberCatalog, useCatalogs } from './useCatalogs'
 import { refreshNotifications, useUnreadCount, watchParamsForEvent } from './notifications'
-import DownloadsView from './views/DownloadsView'
+import MediaView from './views/MediaView'
 import HomeView from './views/HomeView'
 import LibraryView from './views/LibraryView'
 import NotificationsView from './views/NotificationsView'
@@ -228,16 +228,6 @@ export default function App() {
     })
   }
 
-  // Built once and handed to each surface that shows it: its own view, a
-  // Library tab, and a section under the download queue.
-  const downloadedLibrary = (
-    <DownloadedLibrary
-      onOpenTitle={openDownloadedTitle}
-      settings={settings}
-      onUpdateSettings={updateSettings}
-    />
-  )
-
   const allJobs = [
     ...downloads.jobs,
     ...skippedJobs.filter(s => !downloads.jobs.some(j => j.episode_name === s.episode_name)),
@@ -330,10 +320,8 @@ export default function App() {
             settings={settings}
             onOpen={openTitle}
             onNavigate={navigate}
-            downloadedLibrary={downloadedLibrary}
           />
         )}
-        {route.view === 'downloaded' && downloadedLibrary}
         {route.view === 'notifications' && (
           <NotificationsView
             tmdbConfigured={settings.tmdb_configured}
@@ -344,9 +332,10 @@ export default function App() {
         {route.view === 'settings' && (
           <SettingsView settings={settings} onUpdate={updateSettings} />
         )}
-        {route.view === 'downloads' && (
-          <DownloadsView
+        {route.view === 'media' && (
+          <MediaView
             jobs={allJobs}
+            activeCount={downloads.activeCount}
             onCancel={downloads.cancel}
             onClearHistory={downloads.clear}
             onNavigate={navigate}
@@ -355,7 +344,6 @@ export default function App() {
                 onOpenTitle={openDownloadedTitle}
                 settings={settings}
                 onUpdateSettings={updateSettings}
-                compact
               />
             }
           />

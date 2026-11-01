@@ -82,8 +82,6 @@ interface Props {
   settings: AppSettings
   /** Save a grouping setting — the toolbar owns the same two search offers. */
   onUpdateSettings: (patch: Partial<AppSettings>) => void | Promise<void>
-  /** Trimmed down for embedding under another view. */
-  compact?: boolean
 }
 
 /**
@@ -100,7 +98,7 @@ interface Props {
  * DownloadedFilesModal: a card here can be a whole show.
  */
 export default function DownloadedLibrary({
-  onOpenTitle, settings, onUpdateSettings, compact,
+  onOpenTitle, settings, onUpdateSettings,
 }: Props) {
   const titles = useDownloadedLibrary()
   const layout = useLibraryLayout().downloaded
@@ -108,11 +106,11 @@ export default function DownloadedLibrary({
   const [managing, setManaging] = useState<string | null>(null)
   const [pickedGenres, setPickedGenres] = useState<Set<string>>(new Set())
   // Kept in the URL, so coming back from the watch view (browser back) finds
-  // the shelf filtered as it was left. The compact copy has no filter box.
-  const [query, setQueryState] = useState(() => (compact ? '' : currentParams().get('q') ?? ''))
+  // the shelf filtered as it was left.
+  const [query, setQueryState] = useState(() => currentParams().get('q') ?? '')
   function setQuery(next: string) {
     setQueryState(next)
-    if (!compact) patchParams({ q: next || undefined })
+    patchParams({ q: next || undefined })
   }
   const [confirming, setConfirming] = useState<{ title: DownloadedTitle; file: DownloadedFile } | null>(null)
   // No delete control at all unless Settings allows it; the server refuses too.
@@ -255,11 +253,11 @@ export default function DownloadedLibrary({
 
   // Headings only earn their space when both halves are on screen; with just
   // one, they label the obvious.
-  const showHeadings = !compact && sorted.length > 0 && unmatchedTitles.length > 0
+  const showHeadings = sorted.length > 0 && unmatchedTitles.length > 0
 
   /** The matched titles, in whichever card layout is picked. */
   function renderMatched() {
-    if (layout === 'grid' && !compact) {
+    if (layout === 'grid') {
       return (
           <PosterGrid
             items={sorted.map(g => ({
@@ -303,7 +301,7 @@ export default function DownloadedLibrary({
                 }
                 rating={meta?.rating}
                 genres={meta?.genres}
-                synopsis={compact ? undefined : meta?.overview}
+                synopsis={meta?.overview}
                 onOpen={() => onOpenTitle(g.parts[0])}
                 actions={
                   <button onClick={() => setManaging(g.key)} className="btn btn-sm btn-ghost">
@@ -319,60 +317,58 @@ export default function DownloadedLibrary({
 
   return (
     <div className="flex flex-col gap-4">
-      {!compact && (
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* A shelf this size is searched, not scanned. Filters what is already
-              loaded, so it costs nothing and answers on every keystroke. */}
-          <label className="relative">
-            <span className="sr-only">Filter downloaded titles</span>
-            <input
-              type="search"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Filter…"
-              className="input input-sm input-bordered w-40 sm:w-56"
-            />
-          </label>
-          <span className="text-base-content/40 text-sm">
-            {query || pickedGenres.size
-              ? `${sorted.length} matched of ${groups.length}`
-              : `${groups.length} ${groups.length === 1 ? 'title' : 'titles'} on disk`}
-            {regrouping && <span className="ml-2 text-base-content/30">regrouping…</span>}
-          </span>
-          {/* The same offers search makes, on the same settings — grouping is
-              one behaviour, so it is controlled the same way wherever it
-              applies rather than only where you first meet it. */}
-          <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
-            <SortSelect options={SORTS_FOR.saved} value={sort} onChange={setSort} />
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* A shelf this size is searched, not scanned. Filters what is already
+            loaded, so it costs nothing and answers on every keystroke. */}
+        <label className="relative">
+          <span className="sr-only">Filter downloaded titles</span>
+          <input
+            type="search"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Filter…"
+            className="input input-sm input-bordered w-40 sm:w-56"
+          />
+        </label>
+        <span className="text-base-content/40 text-sm">
+          {query || pickedGenres.size
+            ? `${sorted.length} matched of ${groups.length}`
+            : `${groups.length} ${groups.length === 1 ? 'title' : 'titles'} on disk`}
+          {regrouping && <span className="ml-2 text-base-content/30">regrouping…</span>}
+        </span>
+        {/* The same offers search makes, on the same settings — grouping is
+            one behaviour, so it is controlled the same way wherever it
+            applies rather than only where you first meet it. */}
+        <div className="ml-auto flex items-center gap-3 flex-wrap justify-end">
+          <SortSelect options={SORTS_FOR.saved} value={sort} onChange={setSort} />
+          <ToolbarToggle
+            label="One card per show"
+            title="Fold a show's seasons into a single card, with the seasons listed behind it. Off lists every downloaded season separately."
+            checked={settings.collapse_seasons !== false}
+            onChange={v => void onUpdateSettings({ collapse_seasons: v })}
+          />
+          {settings.tmdb_configured && (
             <ToolbarToggle
-              label="One card per show"
-              title="Fold a show's seasons into a single card, with the seasons listed behind it. Off lists every downloaded season separately."
-              checked={settings.collapse_seasons !== false}
-              onChange={v => void onUpdateSettings({ collapse_seasons: v })}
+              label="Group by TMDB match"
+              title="Identify a title by its TMDB match rather than its folder name, so seasons stored under differently-spelled names group together."
+              checked={settings.tmdb_merge}
+              onChange={v => void onUpdateSettings({ tmdb_merge: v })}
+              // Regrouping waits on a lookup per title, so it is not instant.
+              busy={regrouping}
             />
-            {settings.tmdb_configured && (
-              <ToolbarToggle
-                label="Group by TMDB match"
-                title="Identify a title by its TMDB match rather than its folder name, so seasons stored under differently-spelled names group together."
-                checked={settings.tmdb_merge}
-                onChange={v => void onUpdateSettings({ tmdb_merge: v })}
-                // Regrouping waits on a lookup per title, so it is not instant.
-                busy={regrouping}
-              />
-            )}
-            <LayoutToggle
-              layout={layout}
-              onChange={next => setLibraryLayout('downloaded', next)}
-              only={['grid', 'detail', 'folders', 'tree']}
-            />
-          </div>
+          )}
+          <LayoutToggle
+            layout={layout}
+            onChange={next => setLibraryLayout('downloaded', next)}
+            only={['grid', 'detail', 'folders', 'tree']}
+          />
         </div>
-      )}
+      </div>
 
       {/* Below the toolbar, above the shelf — as in the library. Only offered
           once TMDB has said what is in there, and never in the tree, which is
           about where files sit rather than what they are. */}
-      {!compact && layout !== 'tree' && availableGenres.length > 0 && (
+      {layout !== 'tree' && availableGenres.length > 0 && (
         <div className="flex flex-col gap-1">
           <GenreChips
             available={availableGenres}
@@ -394,21 +390,21 @@ export default function DownloadedLibrary({
       {/* Browse and tree both show every folder, matched or not, so each
           replaces the split rather than sitting inside it: the split answers
           "what do I have", these two answer "what is actually on the disk". */}
-      {layout === 'folders' && !compact ? (
+      {layout === 'folders' ? (
         <DownloadedBrowser
           titles={titles}
           filter={query}
           onPlay={(title, file) => onOpenTitle(title, file)}
           onDelete={onDelete}
         />
-      ) : layout === 'tree' && !compact ? (
+      ) : layout === 'tree' ? (
         <DownloadedTree
           titles={titles}
           filter={query}
           onPlay={(title, file) => onOpenTitle(title, file)}
           onDelete={onDelete}
         />
-      ) : sorted.length === 0 && (compact || unmatchedTitles.length === 0) ? (
+      ) : sorted.length === 0 && unmatchedTitles.length === 0 ? (
         <EmptyState
           title="Nothing matches"
           message={
@@ -440,7 +436,7 @@ export default function DownloadedLibrary({
           {/* Everything TMDB could not name, in the folders it actually sits
               in. Grouping it into cards was the mess: with no artwork and no
               real title, a card says nothing a folder name does not say better. */}
-          {!compact && unmatchedTitles.length > 0 && (
+          {unmatchedTitles.length > 0 && (
             <section className="flex flex-col gap-3">
               {showHeadings && (
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
@@ -457,14 +453,6 @@ export default function DownloadedLibrary({
                 onDelete={onDelete}
               />
             </section>
-          )}
-
-          {/* On the Downloads page the folders are left out, so say what is
-              missing rather than quietly under-reporting the shelf. */}
-          {compact && unmatchedTitles.length > 0 && (
-            <p className="text-xs text-base-content/40">
-              {unmatchedTitles.length} more not matched to TMDB — see Downloaded.
-            </p>
           )}
         </div>
       )}
