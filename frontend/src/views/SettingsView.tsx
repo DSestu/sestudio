@@ -453,11 +453,10 @@ const RESTART_WAY: Record<RestartWay, string> = {
 }
 
 /** Restarts the server, then reloads the page once it answers again. What
- *  plays or casts stops for the few seconds it is away. */
-function RestartServer() {
-  const [way, setWay] = useState<{ restart: RestartWay; command: string } | null>(null)
+ *  plays or casts stops for the few seconds it is away. Shared by the Danger
+ *  zone and the Server log's header. */
+function useRestart() {
   const [state, setState] = useState<'idle' | 'restarting' | 'failed'>('idle')
-  useEffect(() => { void serverRestartWay().then(setWay) }, [])
 
   async function run() {
     if (!window.confirm('Restart the server? Playback and casts stop for a few seconds.')) return
@@ -479,6 +478,14 @@ function RestartServer() {
     }
     setState('failed')
   }
+
+  return { state, run }
+}
+
+function RestartServer() {
+  const [way, setWay] = useState<{ restart: RestartWay; command: string } | null>(null)
+  const { state, run } = useRestart()
+  useEffect(() => { void serverRestartWay().then(setWay) }, [])
 
   return (
     <div>
@@ -545,24 +552,54 @@ function engineName(provider: string): string {
 /** Same cap as the server's buffer: older lines are gone there too. */
 const LOG_KEPT = 1000
 
+/** A log level as the terminal tags it, and its colour. */
+const LEVEL_TAG: Record<string, [string, string]> = {
+  DEBUG: ['DBG', 'text-base-content/40'],
+  INFO: ['INFO', 'text-success'],
+  WARNING: ['WARN', 'text-warning'],
+  ERROR: ['ERR', 'text-error'],
+  CRITICAL: ['ERR', 'text-error'],
+}
+
+/** How long the server has been up: "4 min", "2 h 5 min". */
+function uptime(started: number): string {
+  const minutes = Math.max(0, Math.floor((Date.now() / 1000 - started) / 60))
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+}
+
+/** The Android app's own bridge, when the page runs inside it. */
+declare global {
+  interface Window { SestudioApp?: { stopServer?: () => void } }
+}
+
 /**
  * The server's own output, as its terminal shows it: polled while Settings is
- * open, newest at the bottom, following along unless scrolled up.
+ * open, newest at the bottom, following along unless scrolled up. Its header
+ * says whether the server runs and for how long, and copies, restarts or (in
+ * the Android app) stops it.
  */
 function ServerLogSection() {
   const [lines, setLines] = useState<LogLine[]>([])
+  const [started, setStarted] = useState<number | null>(null)
+  const [reachable, setReachable] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [, tick] = useState(0)
+  const restart = useRestart()
   const box = useRef<HTMLPreElement>(null)
 
   useEffect(() => {
     let last = 0
     const poll = () =>
-      getServerLog(last).then(fresh => {
-        if (!fresh.length) return
-        last = fresh[fresh.length - 1].seq
+      getServerLog(last).then(answer => {
+        setReachable(answer !== null)
+        if (!answer) return
+        setStarted(answer.started)
+        tick(n => n + 1) // the uptime moves on even when nothing is logged
+        if (!answer.lines.length) return
+        last = answer.lines[answer.lines.length - 1].seq
         const el = box.current
         const atBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 24
-        setLines(prev => [...prev, ...fresh].slice(-LOG_KEPT))
+        setLines(prev => [...prev, ...answer.lines].slice(-LOG_KEPT))
         if (atBottom) requestAnimationFrame(() => el?.scrollTo({ top: el.scrollHeight }))
       })
     poll()
@@ -577,45 +614,69 @@ function ServerLogSection() {
       .catch(() => {})
   }
 
+  const stopServer = window.SestudioApp?.stopServer
+  const running = reachable && restart.state !== 'restarting'
+
   return (
     <section aria-labelledby="settings-log" className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h3
-          id="settings-log"
-          className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
-        >
-          Server log
-        </h3>
-        {navigator.clipboard && lines.length > 0 && (
-          <button className="btn btn-xs btn-ghost" onClick={copy}>
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        )}
-      </div>
-      <pre
-        ref={box}
-        role="log"
-        className="h-64 overflow-auto rounded-box bg-base-300 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all"
+      <h3
+        id="settings-log"
+        className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
       >
-        {lines.length === 0 ? (
-          <span className="text-base-content/40">Nothing logged yet.</span>
-        ) : (
-          lines.map(line => (
-            <div
-              key={line.seq}
-              className={
-                line.level === 'ERROR' || line.level === 'CRITICAL'
-                  ? 'text-error'
-                  : line.level === 'WARNING'
-                    ? 'text-warning'
-                    : 'text-base-content/70'
-              }
+        Server log
+      </h3>
+      <div className="rounded-box border border-base-300 bg-[#05070b] overflow-hidden">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 border-b border-base-300 text-xs">
+          <span className={`size-2 rounded-full ${running ? 'bg-success' : 'bg-error'}`} aria-hidden="true" />
+          <span className="font-semibold">Server</span>
+          <span className="text-base-content/50">
+            {restart.state === 'restarting'
+              ? 'restarting…'
+              : running ? `running${started ? ` · ${uptime(started)}` : ''}` : 'not answering'}
+          </span>
+          <span className="flex-1" />
+          {navigator.clipboard && lines.length > 0 && (
+            <button className="btn btn-xs btn-outline" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+          )}
+          <button
+            className="btn btn-xs btn-outline"
+            disabled={restart.state === 'restarting'}
+            onClick={() => { void restart.run() }}
+          >
+            Restart
+          </button>
+          {stopServer && (
+            <button
+              className="btn btn-xs btn-outline btn-error"
+              onClick={() => { if (window.confirm('Stop the server? The app closes.')) stopServer() }}
             >
-              {line.text}
-            </div>
-          ))
-        )}
-      </pre>
+              Stop
+            </button>
+          )}
+        </div>
+        <pre
+          ref={box}
+          role="log"
+          className="h-72 overflow-auto p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-base-content/70"
+        >
+          {lines.length === 0 ? (
+            <span className="text-base-content/40">Nothing logged yet.</span>
+          ) : (
+            lines.map(line => {
+              // "HH:MM:SS message", as the server formats it.
+              const time = line.text.slice(0, 8)
+              const [tag, colour] = LEVEL_TAG[line.level] ?? [line.level, '']
+              return (
+                <div key={line.seq}>
+                  <span className="text-base-content/35">{time}</span>{' '}
+                  <span className={`inline-block w-9 font-semibold ${colour}`}>{tag}</span>
+                  {line.text.slice(9)}
+                </div>
+              )
+            })
+          )}
+        </pre>
+      </div>
       <p className="text-xs text-base-content/50">
         What the server prints in its terminal: requests, warnings and errors.
       </p>

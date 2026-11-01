@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi.testclient import TestClient
 
@@ -31,7 +32,9 @@ def test_route_returns_lines_after_a_number(tmp_path, monkeypatch):
     monkeypatch.setattr("sestudio.web.app._refresh_sites", lambda app: _noop())
     with TestClient(create_app(live_domain="https://fs03.lol")) as client:
         logging.getLogger("sestudio.test").warning("hello from the server")
-        lines = client.get("/api/server/log").json()["lines"]
+        body = client.get("/api/server/log").json()
+        lines = body["lines"]
+        assert 0 < body["started"] <= time.time()
         assert lines[-1]["text"].endswith("hello from the server")
         last = lines[-1]["seq"]
         assert client.get(f"/api/server/log?after={last}").json()["lines"] == []

@@ -651,13 +651,14 @@ export interface LogLine {
   text: string
 }
 
-/** What the server logged since line `after`; empty when it cannot be reached. */
-export async function getServerLog(after: number): Promise<LogLine[]> {
+/** What the server logged since line `after`, and when it started (Unix
+ *  seconds); null when it cannot be reached. */
+export async function getServerLog(after: number): Promise<{ lines: LogLine[]; started: number } | null> {
   try {
     const res = await fetch(`${BASE}/server/log?after=${after}`, { cache: 'no-store' })
-    return res.ok ? (await res.json()).lines : []
+    return res.ok ? await res.json() : null
   } catch {
-    return []
+    return null
   }
 }
 
