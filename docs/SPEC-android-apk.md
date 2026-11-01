@@ -70,7 +70,16 @@ certificates. Debian only provides glibc and the dynamic loader.
   - *Open in Chrome*: a button that opens the current page in Chrome, where web casting already works.
   DLNA works as it does today: the server builds its media URL from the phone's Wi-Fi address.
 - Video fullscreen through `WebChromeClient.onShowCustomView`.
-- Picture-in-picture when leaving the app during playback.
+- **Picture-in-picture**: leaving the app while a video plays (Home, app switch) shrinks it into
+  Android's floating window. PiP takes the whole activity, so on entering it the app tells the page to
+  show only the playing video, at the video's aspect ratio; leaving restores the page. Play/pause and
+  ±10 s as PiP actions. The page reports play and pause to the app over a JavaScript bridge, so PiP
+  triggers only during playback; inside the app, the web player's own PiP button asks for the native
+  one (the WebView has no web PiP API).
+- **Background play**: playback continues with the screen off or another app in front (the WebView is
+  not paused while a video plays), with lock-screen and notification controls (play/pause, ±10 s,
+  title, poster) through a MediaSession on the server's notification. The foreground service and its
+  Wi-Fi lock (§3) keep the server and the stream alive meanwhile.
 - "This device" downloads: `DownloadListener` → Android's `DownloadManager`.
 - Links to other sites (TMDB guide, trailers) open in the phone's browser.
 - Waits for the server: a native "Starting…" screen until it answers.
@@ -136,10 +145,11 @@ means every user must uninstall and reinstall; it gets a second copy outside Git
    dismiss even a foreground service's notification, a dismissal re-posts it (`setDeleteIntent`) for
    as long as the server runs.
 5. **WebView shell**: full screen, back button, fullscreen video, external links, "Starting…" screen.
-6. **Downloads and PiP**.
+6. **Downloads, picture-in-picture and background play** (lock-screen controls).
 7. **Chromecast**: native Cast SDK bridge, and "Open in Chrome".
 8. **Release and auto-update**: signing key as secrets, APK attached to each release by the
-   release-please workflow, in-app updater, README section.
+   release-please workflow, in-app updater (on launch, once a day) and a "Check for updates" button
+   in Settings (shown only inside the app, next to the app's version), README section.
 
 ## 9. Testing
 
