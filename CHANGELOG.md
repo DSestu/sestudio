@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.3.0](https://github.com/DSestu/sestudio/compare/v1.2.0...v1.3.0) (2026-11-01)
+
+
+### New features
+
+* an Android app QR code beside the Colab one in Settings → Share sestudio ([#172](https://github.com/DSestu/sestudio/issues/172)) ([36c2eca](https://github.com/DSestu/sestudio/commit/36c2eca427e9da5f80a6aefd2dbacfc0fc2dc4b4))
+* attach the Android app to every release as sestudio.apk, signed with the release key ([#167](https://github.com/DSestu/sestudio/issues/167)) ([b154716](https://github.com/DSestu/sestudio/commit/b154716e14ff1d9d2ecb2c757400e87aaded7f8a))
+* the Android app shows sestudio at the phone's Wi-Fi address over HTTPS, with fullscreen video ([#168](https://github.com/DSestu/sestudio/issues/168)) ([e65a0f0](https://github.com/DSestu/sestudio/commit/e65a0f078230ba338379435bc6a4f2f8efba0155))
+
+
+### Bug fixes
+
+* say why a Twitch broadcast will not play, and start YouTube videos on their original audio instead of an AI dub ([#170](https://github.com/DSestu/sestudio/issues/170)) ([b703b33](https://github.com/DSestu/sestudio/commit/b703b33fed1864c7422ca1031451b0d811a9d780))
+* stop phone pages being 6 px wider than the screen, which let them slide up and down ([#173](https://github.com/DSestu/sestudio/issues/173)) ([df02015](https://github.com/DSestu/sestudio/commit/df020153d9bbe083ee33ce300dc998e31205e374))
+
+
+### Documentation
+
+* lead the README with the three ways to run sestudio, the Android app's QR code among them ([#171](https://github.com/DSestu/sestudio/issues/171)) ([e5ef410](https://github.com/DSestu/sestudio/commit/e5ef410d15071b9fba32aa1a3f7490fcff2b34d1))
+
 ## [1.2.0](https://github.com/DSestu/sestudio/compare/v1.1.1...v1.2.0) (2026-11-01)
 
 
