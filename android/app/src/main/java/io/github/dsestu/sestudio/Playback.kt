@@ -84,6 +84,13 @@ class Playback(private val activity: Activity, private val web: WebView) {
         activity.finishAndRemoveTask()
     }
 
+    /** Settings' Nightly switch: the server on main instead of the latest release. */
+    @JavascriptInterface
+    fun nightly() = ServerService.nightly(activity)
+
+    @JavascriptInterface
+    fun setNightly(on: Boolean) = ServerService.setNightly(activity, on)
+
     fun control(command: String, value: Double = 0.0) = activity.runOnUiThread {
         web.evaluateJavascript("window.__sestudioControl && __sestudioControl('$command', $value)", null)
     }

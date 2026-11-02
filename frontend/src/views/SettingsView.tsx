@@ -443,6 +443,7 @@ export default function SettingsView({ settings, onUpdate }: Props) {
             are removed from the server's disk for good — there is no undo.
           </p>
         </div>
+        {window.SestudioApp?.setNightly && <NightlyToggle />}
         <RestartServer />
       </section>
     </div>
@@ -461,11 +462,12 @@ const RESTART_WAY: Record<RestartWay, string> = {
 function useRestart() {
   const [state, setState] = useState<'idle' | 'restarting' | 'failed'>('idle')
 
-  async function run() {
-    if (!window.confirm('Restart the server? Playback and casts stop for a few seconds.')) return
+  /** [restart]: how; the Android app restarts it itself when Nightly flips. */
+  async function run(restart: () => unknown = restartServer) {
+    if (!window.confirm('Restart the server? Playback and casts stop for a few seconds.')) return false
     setState('restarting')
     try {
-      await restartServer()
+      await restart()
     } catch {
       setState('failed')
       return
@@ -475,14 +477,49 @@ function useRestart() {
     for (let i = 0; i < 120; i++) {
       if (await serverRestartWay()) {
         window.location.reload()
-        return
+        return true
       }
       await new Promise(r => setTimeout(r, 1000))
     }
     setState('failed')
+    return true
   }
 
   return { state, run }
+}
+
+/** The Android app's Nightly: its server on GitHub's main branch instead of
+ *  the latest release. Flipping it restarts the server on the other one. */
+function NightlyToggle() {
+  const app = window.SestudioApp!
+  const [on, setOn] = useState(() => app.nightly!())
+  const { state, run } = useRestart()
+
+  async function flip(next: boolean) {
+    setOn(next)
+    if (!(await run(() => app.setNightly!(next)))) setOn(!next)
+  }
+
+  return (
+    <div>
+      <label className="flex items-center gap-3 cursor-pointer text-sm">
+        <input
+          type="checkbox"
+          className="toggle toggle-error toggle-sm"
+          checked={on}
+          disabled={state === 'restarting'}
+          onChange={e => { void flip(e.target.checked) }}
+        />
+        <span>Nightly</span>
+        {state === 'restarting' && <span className="loading loading-spinner loading-xs" />}
+      </label>
+      <p className="text-xs text-base-content/50 mt-1">
+        {state === 'failed'
+          ? 'Not back yet: the first start on new code can take a few minutes. Reload the page later.'
+          : 'Runs the newest code on GitHub instead of the latest release: new features first, and new bugs. Each start fetches it again. Posters need your own TMDB key.'}
+      </p>
+    </div>
+  )
 }
 
 function RestartServer() {
@@ -572,7 +609,9 @@ function uptime(started: number): string {
 
 /** The Android app's own bridge, when the page runs inside it. */
 declare global {
-  interface Window { SestudioApp?: { stopServer?: () => void } }
+  interface Window {
+    SestudioApp?: { stopServer?: () => void; nightly?: () => boolean; setNightly?: (on: boolean) => void }
+  }
 }
 
 /**
