@@ -15,6 +15,7 @@ from sestudio.models import sanitize_path_component
 from sestudio.sites import site_for
 from sestudio.web.download_service import DownloadSpec, episode_path, queue_download
 from sestudio.web.proxy import TokenError, verify
+from sestudio.web.streaming import ClosingStreamingResponse
 from sestudio.web.worker import DownloadJob
 
 logger = logging.getLogger(__name__)
@@ -172,7 +173,7 @@ def download_stream(token: str, filename: str, request: Request) -> StreamingRes
             upstream.close()
             client.close()
 
-    return StreamingResponse(body(), status_code=200, headers=relay)
+    return ClosingStreamingResponse(body(), status_code=200, headers=relay)
 
 
 @router.post("/downloads/check")
