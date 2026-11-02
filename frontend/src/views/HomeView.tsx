@@ -6,10 +6,12 @@ import FirstRun from '../components/home/FirstRun'
 import ContinueWidget from '../components/home/ContinueWidget'
 import LiveWidget from '../components/home/LiveWidget'
 import NewEpisodesWidget from '../components/home/NewEpisodesWidget'
+import ForYouWidget from '../components/home/ForYouWidget'
 import NowStrip from '../components/home/NowStrip'
 import PosterStrip from '../components/home/PosterStrip'
 import Widget, { WidgetGrid } from '../components/home/Widget'
 import { orderWidgets, pinTiers, type WidgetDescriptor, type WidgetId, type WidgetTier } from '../homeOrder'
+import { useForYou } from '../forYou'
 import { useLastVisit } from '../lastVisit'
 import type { Navigate } from '../nav'
 import { useLive } from '../liveNow'
@@ -51,6 +53,7 @@ export default function HomeView({
   const { events: activity } = useNotifications()
   // The previous visit: what ended since then is new to the Now strip.
   const lastVisit = useLastVisit()
+  const forYou = useForYou()
   const [pinned] = useState(() => new Map<WidgetId, WidgetTier>())
   const [shownFindings] = useState(() => new Set<number>())
   const findings = newFindings(activity, shownFindings)
@@ -100,6 +103,7 @@ export default function HomeView({
     inProgress.length > 0 && { id: 'continue', size: 'L', tier: 'continue' },
     findings.length > 0 && { id: 'new-episodes', size: 'M', tier: 'fresh' },
     live.length > 0 && { id: 'live', size: 'M', tier: 'fresh' },
+    forYou !== null && { id: 'for-you', size: 'L', tier: 'browse' },
     watchlist.length > 0 && { id: 'watchlist', size: 'M', tier: 'browse' },
     favourites.length > 0 && { id: 'favourites', size: 'M', tier: 'browse' },
     (discoverLoading || Boolean(discover?.cards.length)) && { id: 'discover', size: 'M', tier: 'browse' },
@@ -140,6 +144,17 @@ export default function HomeView({
             live={live}
             onWatch={s => onOpen(videoSeasonCard(s), 0, settings.lang)}
             onSeeAll={() => onNavigate('creators')}
+          />
+        )
+      case 'for-you':
+        return forYou && (
+          <ForYouWidget
+            key={id}
+            style={style}
+            group={forYou}
+            lang={settings.lang}
+            onOpen={onOpen}
+            onSeeAll={() => onNavigate('search')}
           />
         )
       case 'watchlist':

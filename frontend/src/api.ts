@@ -1362,6 +1362,32 @@ export async function getUpcoming(): Promise<UpcomingEpisode[]> {
   return res?.ok ? res.json().then(b => b.episodes ?? [], () => []) : []
 }
 
+/** A title like one recently watched that a site carries. */
+export interface ForYouItem {
+  title: string
+  year: number | null
+  tmdb_id: number
+  kind: 'tv' | 'movie'
+  poster_url: string | null
+  rating: number | null
+  /** The versions the site offers, VF first. */
+  versions: string[]
+  /** The site's card, opened as a search result is. */
+  card: SeasonCard
+}
+
+export interface ForYouGroup {
+  because: { title: string; tmdb_id: number; kind: 'tv' | 'movie' }
+  items: ForYouItem[]
+}
+
+/** [] when the check fails: recommendations are optional on Home. */
+export async function getForYou(): Promise<ForYouGroup[]> {
+  const res = await fetch(`${BASE}/home/foryou`).catch(() => null)
+  // A server older than the endpoint answers with the app's HTML.
+  return res?.ok ? res.json().then(b => b.groups ?? [], () => []) : []
+}
+
 /** One thing wrong, worst first in `Health.issues`. */
 export interface HealthIssue {
   kind: 'disk' | 'site' | 'watcher'
