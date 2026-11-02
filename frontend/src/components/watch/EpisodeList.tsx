@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { EpisodeDetail } from '../../api'
 import type { ShowSeason } from '../../useShowSeasons'
+import type { SeasonList } from '../../useSeasonLists'
 import LangSwitcher from '../season/LangSwitcher'
 
 interface Props {
@@ -28,8 +29,14 @@ interface Props {
   season: number
   /** Every season of this show on this site, empty when there is only one. */
   seasons: ShowSeason[]
-  /** Open another season's playlist. */
-  onSelectSeason: (season: ShowSeason) => void
+  /** The episodes of the show's other seasons, as far as they have been opened. */
+  seasonLists: Record<number, SeasonList>
+  /** Ask for a season's episodes; `retry` forces another attempt after a failure. */
+  onLoadSeason: (season: number, retry?: boolean) => void
+  /** Play an episode of another season (the page moves to that season). */
+  onPlayOther: (season: ShowSeason, ep: EpisodeDetail) => void
+  /** Watched flag and part-watched progress of any season's episode. */
+  watchOf: (season: number, episode: number) => { watched: boolean; progress?: number }
   onSelect: (ep: EpisodeDetail) => void
   onToggle: (num: number) => void
   onToggleAll: () => void
@@ -40,12 +47,31 @@ interface Props {
   headerAction?: ReactNode
 }
 
+/** Scroll a season's header to the top of its list, on the first click even
+ *  though the fold is still growing: an eased move, then keep aiming at it. */
+function scrollSeasonIntoView(box: HTMLElement, el: HTMLElement) {
+  const target = () => Math.min(el.offsetTop, box.scrollHeight - box.clientHeight)
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { box.scrollTop = target(); return }
+  const t0 = performance.now()
+  const from = box.scrollTop
+  const settle = () => {
+    box.scrollTop += (target() - box.scrollTop) * 0.25
+    if (Math.abs(target() - box.scrollTop) > 1 && performance.now() - t0 < 1400) requestAnimationFrame(settle)
+  }
+  const step = (now: number) => {
+    const k = Math.min(1, (now - t0) / 420)
+    box.scrollTop = from + (target() - from) * (1 - Math.pow(1 - k, 3))
+    requestAnimationFrame(k < 1 ? step : settle)
+  }
+  requestAnimationFrame(step)
+}
+
 /** The left-hand playlist: every episode in the season, always visible. */
 export default function EpisodeList({
   episodes, currentNumber, checked, watchedNumbers, progress, langs, activeLang,
   epLangs, epTitles, downloadedLangs, isFilm, filmLabel = 'Film', season, seasons,
   onSelect, onToggle, onToggleAll, onLang, onToggleWatched, onSelectEpisodeLang,
-  onSelectSeason, headerAction,
+  seasonLists, onLoadSeason, onPlayOther, watchOf, headerAction,
 }: Props) {
   // The list reads as a queue: it opens on the episode playing, with what comes
   // next below it. Only the list scrolls, never the page around it.
@@ -84,7 +110,7 @@ export default function EpisodeList({
     }))
   const rows = [...episodes, ...foreign].sort((a, b) => a.number - b.number)
 
-  const episodeItems = rows.map(ep => {
+  const episodeItems = rows.map((ep, idx) => {
     // A file on disk is a source in its own right: a title opened from the
     // downloaded library has no embeds at all, and every episode of it would
     // otherwise read as unplayable.
@@ -96,10 +122,10 @@ export default function EpisodeList({
     // said so, or the probe found it in another language only.
     const missingHere = !playable && available.length > 0
     return (
-      <li key={ep.number}>
+      <li key={ep.number} className="ep-in" style={{ '--i': Math.min(idx, 12) } as CSSProperties}>
         <div
-          className={`group flex items-center gap-2 rounded-box px-2 py-2 transition-colors ${
-            current ? 'bg-primary/15 ring-1 ring-primary/40' : 'hover:bg-base-300/60'
+          className={`group flex items-center gap-2 rounded-[10px] px-2 py-2 transition-colors ${
+            current ? 'bg-primary/22' : 'hover:bg-base-300/60'
           }`}
         >
           {/* Nothing to download for an episode this language lacks, but
@@ -149,7 +175,7 @@ export default function EpisodeList({
                     {current ? '▶' : 'E'}{String(ep.number).padStart(2, '0')}
                   </span>
                 )}
-                <span className="text-sm truncate flex-1">{ep.title}</span>
+                <span className={`text-sm truncate flex-1 ${current ? 'text-primary' : ''}`}>{ep.title}</span>
                 {watchedNumbers.has(ep.number) && (
                   <span className="text-success text-xs shrink-0" title="Watched" aria-label="Watched">✓</span>
                 )}
@@ -264,18 +290,138 @@ export default function EpisodeList({
     )
   })
 
+  // ---- seasons: one accordion, several open at once --------------------------
+  const [open, setOpen] = useState<Set<number>>(() => new Set([season]))
+  /** The pill under the cursor of the last jump; the playing season until one. */
+  const [picked, setPicked] = useState(season)
+  // A new playing season opens itself and takes the pill (adjusted during
+  // render rather than in an effect, so there is no frame with the old one).
+  const [lastSeason, setLastSeason] = useState(season)
+  if (lastSeason !== season) {
+    setLastSeason(season)
+    setPicked(season)
+    setOpen(prev => (prev.has(season) ? prev : new Set(prev).add(season)))
+  }
+  const [flash, setFlash] = useState<number | null>(null)
+  const seasonEls = useRef(new Map<number, HTMLElement>())
+  const pillEls = useRef(new Map<number, HTMLButtonElement>())
+  const [pill, setPill] = useState<{ left: number; width: number } | null>(null)
+  const multi = seasons.length > 1
+
+  // The sliding pill follows the picked season's button.
+  useLayoutEffect(() => {
+    const el = pillEls.current.get(picked)
+    setPill(el ? { left: el.offsetLeft, width: el.offsetWidth } : null)
+  }, [picked, seasons.length])
+
+  // Empty room after the last season, so it too can be scrolled up to the top.
+  const [spacer, setSpacer] = useState(0)
+  useEffect(() => {
+    const box = scroller.current
+    const last = seasons.length ? seasonEls.current.get(seasons[seasons.length - 1].season_number) : undefined
+    if (!box || !last || !multi) { setSpacer(0); return }
+    const measure = () => setSpacer(Math.max(0, box.clientHeight - last.offsetHeight - 8))
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(box)
+    watch.observe(last)
+    return () => watch.disconnect()
+  }, [seasons, multi, open])
+
+  const follow = (n: number) => {
+    const box = scroller.current
+    const el = seasonEls.current.get(n)
+    if (box && el) scrollSeasonIntoView(box, el)
+  }
+
+  const ensureOpen = (n: number) => {
+    setOpen(prev => (prev.has(n) ? prev : new Set(prev).add(n)))
+    if (n !== season) onLoadSeason(n)
+  }
+  const jump = (n: number) => {
+    ensureOpen(n)
+    setPicked(n)
+    follow(n)
+    setFlash(n)
+    window.setTimeout(() => setFlash(f => (f === n ? null : f)), 700)
+  }
+  const toggleSeason = (n: number) => {
+    if (open.has(n)) setOpen(prev => { const next = new Set(prev); next.delete(n); return next })
+    else ensureOpen(n)
+  }
+
+  /** Watched / total for a season, when its episodes are known. */
+  const statsOf = (n: number): { watched: number; total: number } | null => {
+    if (n === season) {
+      return { watched: episodes.filter(e => watchedNumbers.has(e.number)).length, total: episodes.length }
+    }
+    const list = seasonLists[n]
+    if (list?.status !== 'ok') return null
+    return { watched: list.episodes.filter(e => watchOf(n, e.number).watched).length, total: list.episodes.length }
+  }
+
+  const otherRows = (s: ShowSeason, list: Extract<SeasonList, { status: 'ok' }>) => (
+    <ul className="space-y-0.5">
+      {list.episodes.map((ep, i) => {
+        const w = watchOf(s.season_number, ep.number)
+        const playable = Object.keys(ep.embed_urls).length > 0
+        return (
+          <li key={ep.number} className="ep-in" style={{ '--i': Math.min(i, 12) } as CSSProperties}>
+            <button
+              type="button"
+              disabled={!playable}
+              onClick={() => onPlayOther(s, ep)}
+              title={playable ? 'Play this episode' : 'No source for this episode'}
+              className={`w-full text-left rounded-[10px] px-2 py-2 transition-colors ${
+                playable ? 'hover:bg-base-300/60 cursor-pointer' : 'opacity-50 cursor-default'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono shrink-0 text-base-content/40">E{String(ep.number).padStart(2, '0')}</span>
+                <span className="text-sm truncate flex-1">{ep.title}</span>
+                {w.watched && <span className="text-success text-xs shrink-0" aria-label="Watched">✓</span>}
+              </div>
+              {w.progress !== undefined && w.progress > 0 && w.progress < 1 && (
+                <div className="h-0.5 bg-base-300 rounded-full mt-1.5 overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: `${Math.round(w.progress * 100)}%` }} />
+                </div>
+              )}
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+
+  const seasonBody = (s: ShowSeason) => {
+    if (s.season_number === season) return <ul className="space-y-0.5">{episodeItems}</ul>
+    const list = seasonLists[s.season_number]
+    if (!list || list.status === 'loading') {
+      return (
+        <ul className="space-y-2 py-2" aria-busy="true">
+          {[0, 1, 2, 3].map(i => <li key={i} className="h-2.5 w-3/5 rounded bg-base-300 animate-pulse" />)}
+        </ul>
+      )
+    }
+    if (list.status === 'error') {
+      return (
+        <p className="py-2 text-sm text-base-content/60">
+          Couldn&apos;t load this season.{' '}
+          <button type="button" className="link link-primary" onClick={() => onLoadSeason(s.season_number, true)}>Retry</button>
+        </p>
+      )
+    }
+    return otherRows(s, list)
+  }
+
   return (
     <div className="flex flex-col min-h-0 h-full">
-      {/* List header: season, language, select-all */}
-      <div className="px-3 py-3 border-b border-base-300 flex flex-col gap-2">
+      {/* List header: what this is, language, then the season pills and select-all */}
+      <div className="px-3 py-3 flex flex-col gap-2.5">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-medium">
-            {isFilm
-              ? filmLabel
-              : seasons.length > 1
-                ? `${seasons.length} seasons`
-                : `Season ${season}`}
-            <span className="text-base-content/40 ml-2 text-xs">
+            {isFilm ? filmLabel : 'Episodes'}
+            <span className="text-base-content/45 ml-2 text-xs">
               {rows.length} {rows.length === 1 ? 'item' : 'episodes'}
             </span>
           </p>
@@ -284,6 +430,41 @@ export default function EpisodeList({
             {headerAction}
           </div>
         </div>
+        {multi && (
+          <div className="relative flex gap-1 rounded-xl bg-black/22 p-0.75 overflow-x-auto [scrollbar-width:none]" role="tablist" aria-label="Seasons">
+            {pill && (
+              <span
+                aria-hidden="true"
+                className="absolute top-0.75 bottom-0.75 left-0 rounded-[9px] bg-primary/24 transition-[translate,width] duration-300 ease-smooth motion-reduce:transition-none"
+                style={{ width: pill.width, translate: `${pill.left}px 0` }}
+              />
+            )}
+            {seasons.map(s => {
+              const st = statsOf(s.season_number)
+              return (
+                <button
+                  key={s.season_number}
+                  ref={el => { if (el) pillEls.current.set(s.season_number, el); else pillEls.current.delete(s.season_number) }}
+                  type="button"
+                  role="tab"
+                  aria-selected={picked === s.season_number}
+                  onClick={() => jump(s.season_number)}
+                  className={`relative flex-1 min-w-10 flex flex-col items-center gap-1 rounded-[9px] px-2 pt-1.5 pb-1.5 text-xs font-semibold ${
+                    s.season_number === season ? 'text-primary' : 'text-base-content/70 hover:text-base-content'
+                  }`}
+                >
+                  S{s.season_number}
+                  <span className="block w-3/5 h-0.75 rounded-full bg-white/10 overflow-hidden">
+                    <span
+                      className="block h-full bg-success transition-[width] duration-300 ease-smooth"
+                      style={{ width: st && st.total ? `${(st.watched / st.total) * 100}%` : 0 }}
+                    />
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
         <label className="flex items-center gap-2 text-xs text-base-content/60 cursor-pointer">
           <input
             type="checkbox"
@@ -295,37 +476,68 @@ export default function EpisodeList({
           Select all for download
         </label>
       </div>
-      {/* Episodes, under their season when the show has more than one. Only
-          the open season is expanded: the others are links, since loading them
-          all would fetch a page per season for a list nobody asked to see. */}
-      <div ref={scroller} className="overflow-y-auto flex-1 min-h-0 p-2">
-        {seasons.length === 0 ? (
-          <ul className="space-y-1">{episodeItems}</ul>
+      {/* Episodes. With several seasons each is a fold: opening one loads it in
+          place, and a pill above scrolls it into view. */}
+      <div ref={scroller} className="relative overflow-y-auto flex-1 min-h-0 px-2 pb-2">
+        {!multi ? (
+          <ul className="space-y-0.5">{episodeItems}</ul>
         ) : (
-          seasons.map(s => (
-            <div key={s.season_number} className="mb-1">
-              <button
-                type="button"
-                onClick={() => { if (!s.current) onSelectSeason(s) }}
-                aria-expanded={s.current}
-                className={`w-full flex items-center gap-2 rounded-box px-2 py-1.5 text-sm text-left transition-colors ${
-                  s.current
-                    ? 'font-medium bg-base-300/40'
-                    : 'text-base-content/60 hover:bg-base-300/60 cursor-pointer'
-                }`}
-              >
-                <span className="text-xs font-mono w-3 shrink-0" aria-hidden="true">
-                  {s.current ? '▾' : '▸'}
-                </span>
-                Season {s.season_number}
-              </button>
-              {s.current && (
-                <ul className="space-y-1 mt-1 ml-2 pl-1 border-l border-base-300">
-                  {episodeItems}
-                </ul>
-              )}
-            </div>
-          ))
+          <>
+            {seasons.map(s => {
+              const n = s.season_number
+              const isOpen = open.has(n)
+              const st = statsOf(n)
+              return (
+                <div
+                  key={n}
+                  ref={el => { if (el) seasonEls.current.set(n, el); else seasonEls.current.delete(n) }}
+                  className="mb-1"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleSeason(n)}
+                    aria-expanded={isOpen}
+                    className={`sticky top-0 z-1 w-full flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm text-left transition-colors duration-300 ${
+                      flash === n ? 'bg-primary/30' : isOpen ? 'bg-base-300' : 'bg-base-200 hover:bg-base-300'
+                    }`}
+                  >
+                    <svg
+                      className={`w-3.5 h-3.5 shrink-0 text-base-content/60 transition-transform duration-300 ease-smooth motion-reduce:transition-none ${isOpen ? 'rotate-90' : ''}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="font-semibold">Season {n}</span>
+                    {st && <span className="text-xs text-base-content/55">{st.total} ep</span>}
+                    <span className="ml-auto flex items-center gap-2">
+                      {n === season ? (
+                        <span className="rounded-md bg-primary/22 text-primary text-[10px] font-bold px-1.5 py-0.5">PLAYING</span>
+                      ) : st ? (
+                        <span className="text-xs text-base-content/55">{st.watched}/{st.total}</span>
+                      ) : null}
+                      <span className="w-11 h-1 rounded-full bg-white/10 overflow-hidden">
+                        <span
+                          className="block h-full bg-success transition-[width] duration-300 ease-smooth"
+                          style={{ width: st && st.total ? `${(st.watched / st.total) * 100}%` : 0 }}
+                        />
+                      </span>
+                    </span>
+                  </button>
+                  <div
+                    inert={!isOpen}
+                    className={`grid transition-[grid-template-rows] duration-[280ms] ease-smooth motion-reduce:transition-none ${
+                      isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                    }`}
+                  >
+                    <div className="overflow-hidden min-h-0">
+                      <div className="mt-1 mb-1.5 ml-2.5 pl-1.5 border-l border-base-content/10">{seasonBody(s)}</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            <div aria-hidden="true" style={{ height: spacer }} />
+          </>
         )}
       </div>
     </div>

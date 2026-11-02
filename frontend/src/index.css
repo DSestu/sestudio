@@ -233,3 +233,14 @@
 @media (prefers-reduced-motion: reduce) {
   .rows-follow > * { translate: none; transition-delay: 0s !important; }
 }
+
+/* The playlist's episodes fade in one after another when a season opens (docs/SPEC-watch-page.md). */
+@keyframes ep-in { from { opacity: 0; translate: 0 6px; } }
+@keyframes ep-fade { from { opacity: 0; } }
+.ep-in {
+  animation: ep-in 240ms var(--ease-smooth) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ep-in { animation-name: ep-fade; animation-duration: 120ms; animation-delay: 0s; }
+}

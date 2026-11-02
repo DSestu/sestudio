@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { SeasonDetail } from '../../api'
-import { getSeason } from '../../api'
+import { getSeasonCached } from '../../seasonCache'
 
 /** Stable empty map, so consumers don't see a fresh identity every render. */
 const EMPTY_LANGS: Record<number, string[]> = {}
@@ -70,7 +70,7 @@ export function useSeasonDetail(
     // A dead mirror shouldn't sink the others, so failures resolve to null.
     Promise.all(
       targets.map(t =>
-        getSeason(t.url, activeLang, t.source).then(
+        getSeasonCached(t.url, activeLang, t.source).then(
           d => ({ url: t.url, source: d.source ?? t.source, detail: d }) as Probe,
           () => null,
         ),
@@ -135,7 +135,7 @@ export function useSeasonDetail(
     Promise.all(
       targets.flatMap(t =>
         all.map(l =>
-          getSeason(t.url, l, t.source).then(
+          getSeasonCached(t.url, l, t.source).then(
             d => ({ lang: l, detail: d }),
             () => null,
           ),

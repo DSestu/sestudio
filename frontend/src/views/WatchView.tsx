@@ -29,6 +29,7 @@ import type { SourceListing } from '../useSourceListings'
 import { useSourceListings } from '../useSourceListings'
 import type { ShowSeason } from '../useShowSeasons'
 import { useShowSeasons } from '../useShowSeasons'
+import { useSeasonLists } from '../useSeasonLists'
 import { InPortal, OutPortal } from '../reversePortal'
 import { isDocumentPiPSupported, openDocumentPiP } from '../documentPiP'
 import { closePiP, usePiPWindow } from '../pipSession'
@@ -330,15 +331,19 @@ export default function WatchView({
    *  watch-state key and the poster survive the move. No episode travels: a
    *  different season's numbering means nothing here, so it opens at its own
    *  first playable episode. */
-  function switchSeason(next: ShowSeason) {
+  function switchSeason(next: ShowSeason, ep?: EpisodeDetail) {
     navigate('watch', {
       u: next.page_url,
       t: seriesName,
       p: posterUrl,
       lang: activeLang,
       src: next.source,
+      ep: ep?.number,
     })
   }
+
+  // The other seasons' episodes, loaded when the playlist opens one.
+  const { lists: seasonLists, load: loadSeason } = useSeasonLists(showSeasons, activeLang)
 
   // Language first: when the open episode has nothing to play in the chosen
   // language but another site carries it, move there rather than silently
@@ -630,6 +635,12 @@ export default function WatchView({
     if (w && w.duration > 0) progress[e.number] = w.position / w.duration
   }
 
+  /** Watched flag and part-watched progress of any season's episode. */
+  const watchOf = (s: number, n: number) => {
+    const w = watch[watchKey(seriesName, s, n)]
+    return { watched: !!w?.watched, progress: w && w.duration > 0 ? w.position / w.duration : undefined }
+  }
+
   const downloadedLangs = useMemo(() => {
     const out: Record<number, string[]> = {}
     for (const e of detail?.episodes ?? []) {
@@ -718,7 +729,10 @@ export default function WatchView({
       isFilm={detail.is_film}
       season={season}
       seasons={showSeasons}
-      onSelectSeason={switchSeason}
+      seasonLists={seasonLists}
+      onLoadSeason={loadSeason}
+      onPlayOther={switchSeason}
+      watchOf={watchOf}
       // While browsing, picking an episode is the request to start playing it.
       onSelect={playing ? setCurrent : (ep => onRequestPlayback(ep.number))}
       onToggle={toggleEpisode}
