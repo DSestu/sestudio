@@ -374,3 +374,25 @@ def test_youtube_original_audio_becomes_the_default_ahead_of_ai_dubs():
     assert all("DEFAULT=NO" in line for line in audio[1:]) and len(audio) == 3
     single = b'#EXTM3U\n#EXT-X-MEDIA:URI="a.m3u8",TYPE=AUDIO,GROUP-ID="1",NAME="English",DEFAULT=NO\n'
     assert creators.original_audio_first(single) == single
+
+
+def test_a_failed_video_lookup_is_remembered_and_its_page_still_loads(monkeypatch):
+    """A locked video was looked up again by every route and every retry."""
+    calls: list[str] = []
+
+    def locked(*args, **_kw):
+        calls.append(args[-1])
+        raise SiteError(
+            "Subscribers only: Twitch keeps this broadcast for the channel's subscribers"
+        )
+
+    monkeypatch.setattr(creators, "ytdlp_json", locked)
+    site = TwitchSite()
+    url = "https://www.twitch.tv/videos/1"
+
+    page = site.fetch_page(url)
+    with pytest.raises(SiteError, match="Subscribers only"):
+        site.resolve_candidate(StreamCandidate("twitch", url), {})
+
+    assert page.episodes[0].embed_urls == {"twitch": url}
+    assert calls == [url]

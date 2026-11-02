@@ -41,6 +41,8 @@ LANG = "vo"
 # stop asking for a while (asking again only extends the ban), and never ask
 # more than two things at once.
 _YOUTUBE_COOLDOWN = 15 * 60
+# How long a failed video lookup is remembered rather than asked again.
+_FAILURE_TTL = 10 * 60
 _youtube_blocked_until = 0.0
 _youtube_slots = threading.BoundedSemaphore(2)
 
@@ -152,6 +154,10 @@ class _YtDlpSite(ContentSite):
         # One yt-dlp run per URL at a time: the watch view asks for the title
         # page and the link card together, and each run costs seconds.
         self._info_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
+        # Failed lookups by URL, with when: a locked or missing video is asked
+        # for by several routes at once and again on every retry, and each ask
+        # is a yt-dlp run (one more toward YouTube's rate limit).
+        self._failed: dict[str, tuple[float, str]] = {}
         self._channels = TtlCache(600)
 
     def owns_url(self, url: str) -> bool:
@@ -166,7 +172,14 @@ class _YtDlpSite(ContentSite):
 
     def info(self, url: str) -> dict[str, Any]:
         with self._info_locks[url]:
-            return self._info.get(url, lambda: ytdlp_json("--no-playlist", url))
+            failed = self._failed.get(url)
+            if failed and time.monotonic() - failed[0] < _FAILURE_TTL:
+                raise SiteError(failed[1])
+            try:
+                return self._info.get(url, lambda: ytdlp_json("--no-playlist", url))
+            except SiteError as exc:
+                self._failed[url] = (time.monotonic(), str(exc))
+                raise
 
     def video(self, url: str) -> dict[str, Any]:
         """What the app shows for one video or live stream."""
@@ -196,10 +209,15 @@ class _YtDlpSite(ContentSite):
         raise NotImplementedError
 
     def fetch_page(self, url: str, lang: str = LANG) -> PageResult:
-        info = self.info(url)
+        # A video that cannot be looked up still gets its page: the player then
+        # says why it will not play, rather than the whole view failing.
+        try:
+            title = self.info(url).get("title") or url
+        except SiteError:
+            title = url
         episode = Episode(
             number=1,
-            title=info.get("title") or url,
+            title=title,
             season=0,
             embed_urls={self.id: url},
             langs=[LANG],
