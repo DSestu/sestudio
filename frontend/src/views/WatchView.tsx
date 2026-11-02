@@ -12,6 +12,7 @@ import ConfirmDownloadModal from '../components/ConfirmDownloadModal'
 import { pickHost } from '../downloadPrefs'
 import { VIDEO_SOURCES } from '../sourceLook'
 import { channelHref, useLink } from '../videoLinks'
+import { videoSeasonCard, type VideoInfo } from '../api'
 import EmptyState from '../components/EmptyState'
 import SaveToggles from '../components/SaveToggles'
 import WatchToggle from '../components/WatchToggle'
@@ -20,6 +21,8 @@ import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
 import PlaylistRail from '../components/watch/PlaylistRail'
 import { useFinePointer } from '../useFinePointer'
+import { useChannelVideos } from '../useChannelVideos'
+import { ChannelVideos, SimilarTitles } from '../components/watch/SideLists'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
 import BrowserFrameRate from '../components/watch/BrowserFrameRate'
 import BrowserPerformance from '../components/watch/BrowserPerformance'
@@ -60,6 +63,8 @@ const NO_AUDIO: DownloadedTrack[] = []
 // tab. Details is not among them: the TMDB metadata sits below the player.
 const MOBILE_TABS = ['episodes', 'sources', 'output'] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
+/** A film or a video has no episodes to list. */
+const SINGLE_TABS = ['sources', 'output'] as const
 
 interface Props {
   pageUrl: string
@@ -215,6 +220,19 @@ export default function WatchView({
 
   // A channel name is no film title: TMDB would only find a namesake.
   const meta = useTmdb(seriesName, 0, !!detail?.is_film, !!settings.tmdb_configured && !isVideo)
+
+  // A film or a video is one item: no playlist, and a right column only when
+  // there is something real for it (docs/SPEC-watch-page.md, A).
+  const isSingle = !!detail?.is_film
+  const similar = !isVideo ? (meta?.recommendations ?? []) : []
+  const moreVideos = useChannelVideos(isVideo ? videoLink?.channel_url : undefined, sourceUrl)
+  const side = isSingle ? (similar.length ? 'similar' : moreVideos.length ? 'more' : null) : null
+  const tabs: readonly MobileTab[] = isSingle ? SINGLE_TABS : MOBILE_TABS
+  const shownTab: MobileTab = tabs.includes(tab) ? tab : tabs[0]
+  const openVideo = (v: VideoInfo) => {
+    const c = videoSeasonCard(v)
+    navigate('watch', { u: c.page_url, t: c.series_name, p: c.poster_url, lang: activeLang, src: c.source })
+  }
 
   const {
     sources: siteSources,
@@ -801,6 +819,27 @@ export default function WatchView({
     </div>
   )
 
+  // A film or a video has no playlist to carry the download bar, so its Download
+  // sits with the controls: beside the version switch on desktop, on its own row on phones.
+  const downloadButton = (className: string) => (
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={checked.size === 0 || submitting || loading}
+      className={`btn btn-primary btn-sm ${className}`}
+    >
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true">
+        <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+      </svg>
+      {submitting ? 'Checking…' : 'Download'}
+    </button>
+  )
+
+  // A title opened from disk with nothing beside it: say which file is playing.
+  const diskFile = isSingle && !side && sourceId === DOWNLOADED_SOURCE && currentNumber !== null
+    ? fileFor(downloadedTitles, seriesName, season, currentNumber, activeLang)
+    : undefined
+
   // Below desktop the player docks instead of staying whole: it scrolls with
   // the page until only its bottom third (seek bar, time, fullscreen) is left
   // under the top bar, and the part leaving the screen dims as it goes. Both
@@ -1038,7 +1077,9 @@ export default function WatchView({
       {detail && detail.episodes.length > 0 && (
         <div
           className={`flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 lg:transition-[grid-template-columns] lg:duration-[360ms] ease-smooth motion-reduce:transition-none ${
-            collapsed ? 'lg:grid-cols-[minmax(0,1fr)_5.25rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem]'
+            isSingle
+              ? side ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : 'lg:grid-cols-[minmax(0,55rem)] lg:justify-center'
+              : collapsed ? 'lg:grid-cols-[minmax(0,1fr)_5.25rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem]'
           }`}
         >
           {/* Now playing: the player first, then one line saying what plays and
@@ -1168,7 +1209,16 @@ export default function WatchView({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
+                {isSingle && downloadButton('hidden lg:inline-flex ml-auto')}
               </div>
+              {isSingle && <div className="lg:hidden flex">{downloadButton('ml-auto')}</div>}
+              {diskFile && (
+                <div className="flex items-center gap-3 rounded-box bg-base-200 px-3 py-2.5 text-sm">
+                  <code className="flex-1 min-w-0 truncate font-mono text-xs opacity-70">{diskFile.path}</code>
+                  <span>{fmtSize(diskFile.size)}</span>
+                  <span className="text-base-content/55">Downloaded</span>
+                </div>
+              )}
 
               {/* Where the video goes. Send to TV stays on every breakpoint; the
                   finer controls sit here on desktop and in the Output tab on a
@@ -1218,17 +1268,24 @@ export default function WatchView({
 
             {/* About the title: right under the controls, on every breakpoint.
                 Renders nothing without a TMDB key or a match. */}
-            <div className="order-last mt-5"><TitleHeader meta={meta} navigate={navigate} /></div>
+            <div className="order-last mt-5">
+              <TitleHeader meta={meta} navigate={navigate} similarOnPhoneOnly={side === 'similar'} />
+              {side === 'more' && videoLink && (
+                <div className="lg:hidden mt-4 rounded-box bg-base-200 p-3 flex flex-col gap-3">
+                  <ChannelVideos channel={videoLink.channel} channelLink={channelHref(videoLink.channel_url, sourceId)} videos={moreVideos} onOpen={openVideo} />
+                </div>
+              )}
+            </div>
 
             {/* Phone: everything the desktop shows alongside, one tab at a time. */}
             <div className="lg:hidden">
               <Segmented
-                tabs={MOBILE_TABS.map(id => ({ id, label: id[0].toUpperCase() + id.slice(1) }))}
-                tab={tab}
+                tabs={tabs.map(id => ({ id, label: id[0].toUpperCase() + id.slice(1) }))}
+                tab={shownTab}
                 onTab={setTab}
               />
               <div className="mt-3">
-                {tab === 'episodes' && (
+                {shownTab === 'episodes' && (
                   // Bounded to the space between the pinned player and the
                   // dock, so the list scrolls inside itself, opens on the episode
                   // playing, and keeps the download bar in reach.
@@ -1237,8 +1294,8 @@ export default function WatchView({
                     {downloadBar}
                   </div>
                 )}
-                {tab === 'sources' && sourceControl}
-                {tab === 'output' && (
+                {shownTab === 'sources' && sourceControl}
+                {shownTab === 'output' && (
                   playing && current ? (
                     <div className="flex flex-col gap-4">
                       <div className="flex flex-wrap items-center gap-3">
@@ -1260,51 +1317,64 @@ export default function WatchView({
           {/* Desktop queue. Pinned, it is a column with the episode playing and what
               comes next; collapsed, a glass rail whose list opens over the player on hover
               (see docs/SPEC-watch-page.md, C). */}
-          <div
-            {...peekProps}
-            // Touch: a tap on the rail (not on one of its buttons) opens the list.
-            onClick={e => {
-              const hit = e.target as Element
-              if (fine || !collapsed || peek) return
-              if (hit.closest('button') && !hit.closest('[data-rail-open]')) return
-              setPeek(true)
-            }}
-            data-open={collapsed && peek ? true : undefined}
-            data-pinned={!collapsed ? true : undefined}
-            className="hidden lg:block relative lg:sticky lg:top-16 lg:z-30 lg:h-[calc(100dvh-5.5rem)]"
-          >
-            <PlaylistRail
-              season={season}
-              episodes={detail.episodes}
-              seasons={showSeasons}
-              seasonLists={seasonLists}
-              currentNumber={currentNumber}
-              nextLabel={nextEp ? `S${season} · E${String(nextEp.number).padStart(2, '0')}` : null}
-              watchOf={watchOf}
-              onPlay={selectEpisode}
-              onPlayOther={switchSeason}
-              onNext={() => {
-                const next = detail.episodes.find(e => e.number === nextEp?.number)
-                if (next) selectEpisode(next)
-              }}
-              onOpen={() => setPeek(true)}
-              hidden={!collapsed || peek}
-              leaving={!collapsed}
-            />
+          {!isSingle && (
             <div
-              inert={collapsed && !peek}
-              className={`absolute top-0 right-0 h-full w-96 z-30 overflow-hidden flex flex-col transition-[opacity,translate,filter,background-color,box-shadow,border-radius] ease-smooth motion-reduce:[filter:none] ${
-                collapsed ? 'glass rounded-2xl' : 'bg-base-200 rounded-box'
-              } ${
-                !collapsed || peek
-                  ? 'duration-300 [filter:none]'
-                  : 'duration-200 opacity-0 translate-x-3 pointer-events-none [filter:blur(10px)]'
-              }`}
+              {...peekProps}
+              // Touch: a tap on the rail (not on one of its buttons) opens the list.
+              onClick={e => {
+                const hit = e.target as Element
+                if (fine || !collapsed || peek) return
+                if (hit.closest('button') && !hit.closest('[data-rail-open]')) return
+                setPeek(true)
+              }}
+              data-open={collapsed && peek ? true : undefined}
+              data-pinned={!collapsed ? true : undefined}
+              className="hidden lg:block relative lg:sticky lg:top-16 lg:z-30 lg:h-[calc(100dvh-5.5rem)]"
             >
-              <div className="flex-1 min-h-0">{renderList(true)}</div>
-              {downloadBar}
+              <PlaylistRail
+                season={season}
+                episodes={detail.episodes}
+                seasons={showSeasons}
+                seasonLists={seasonLists}
+                currentNumber={currentNumber}
+                nextLabel={nextEp ? `S${season} · E${String(nextEp.number).padStart(2, '0')}` : null}
+                watchOf={watchOf}
+                onPlay={selectEpisode}
+                onPlayOther={switchSeason}
+                onNext={() => {
+                  const next = detail.episodes.find(e => e.number === nextEp?.number)
+                  if (next) selectEpisode(next)
+                }}
+                onOpen={() => setPeek(true)}
+                hidden={!collapsed || peek}
+                leaving={!collapsed}
+              />
+              <div
+                inert={collapsed && !peek}
+                className={`absolute top-0 right-0 h-full w-96 z-30 overflow-hidden flex flex-col transition-[opacity,translate,filter,background-color,box-shadow,border-radius] ease-smooth motion-reduce:[filter:none] ${
+                  collapsed ? 'glass rounded-2xl' : 'bg-base-200 rounded-box'
+                } ${
+                  !collapsed || peek
+                    ? 'duration-300 [filter:none]'
+                    : 'duration-200 opacity-0 translate-x-3 pointer-events-none [filter:blur(10px)]'
+                }`}
+              >
+                <div className="flex-1 min-h-0">{renderList(true)}</div>
+                {downloadBar}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* A film or a video: a right column only when there is a list for it. */}
+          {isSingle && side && (
+            <aside className="hidden lg:flex flex-col gap-3 rounded-box bg-base-200 p-3 lg:sticky lg:top-16 lg:max-h-[calc(100dvh-5.5rem)] overflow-y-auto">
+              {side === 'similar' ? (
+                <SimilarTitles items={similar} onOpen={title => navigate('search', { q: title })} />
+              ) : videoLink && (
+                <ChannelVideos channel={videoLink.channel} channelLink={channelHref(videoLink.channel_url, sourceId)} videos={moreVideos} onOpen={openVideo} />
+              )}
+            </aside>
+          )}
 
         </div>
       )}

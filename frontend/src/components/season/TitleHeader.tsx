@@ -6,6 +6,8 @@ import RatingBadge from '../RatingBadge'
 interface Props {
   meta: TmdbMeta | null
   navigate: Navigate
+  /** Desktop shows the similar titles beside the player instead. */
+  similarOnPhoneOnly?: boolean
 }
 
 /**
@@ -14,7 +16,7 @@ interface Props {
  * it did. Cast and directors link to their person page; similar titles run a
  * fresh source search.
  */
-export default function TitleHeader({ meta, navigate }: Props) {
+export default function TitleHeader({ meta, navigate, similarOnPhoneOnly }: Props) {
   if (!meta) return null
   const hasBody = meta.overview || meta.genres.length > 0 || meta.cast.length > 0
   if (!meta.backdrop_url && !hasBody) return null
@@ -112,7 +114,7 @@ export default function TitleHeader({ meta, navigate }: Props) {
             </div>
           )}
           {meta.recommendations.length > 0 && (
-            <div className="pt-1">
+            <div className={`pt-1 ${similarOnPhoneOnly ? 'lg:hidden' : ''}`}>
               <MediaRow
                 title="Similar titles"
                 items={meta.recommendations.map(r => ({
