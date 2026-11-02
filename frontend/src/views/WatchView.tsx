@@ -1328,8 +1328,9 @@ export default function WatchView({
                 setPeek(true)
               }}
               data-open={collapsed && peek ? true : undefined}
+              // Sticks below the header card (pinned at 0.75rem, 4rem tall), not under it.
               data-pinned={!collapsed ? true : undefined}
-              className="hidden lg:block relative lg:sticky lg:top-16 lg:z-30 lg:h-[calc(100dvh-5.5rem)]"
+              className="hidden lg:block relative lg:sticky lg:top-24 lg:z-30 lg:h-[calc(100dvh-7.25rem)]"
             >
               <PlaylistRail
                 season={season}
@@ -1367,7 +1368,7 @@ export default function WatchView({
 
           {/* A film or a video: a right column only when there is a list for it. */}
           {isSingle && side && (
-            <aside className="hidden lg:flex flex-col gap-3 rounded-box bg-base-200 p-3 lg:sticky lg:top-16 lg:max-h-[calc(100dvh-5.5rem)] overflow-y-auto">
+            <aside className="hidden lg:flex flex-col gap-3 rounded-box bg-base-200 p-3 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7.25rem)] overflow-y-auto">
               {side === 'similar' ? (
                 <SimilarTitles items={similar} onOpen={title => navigate('search', { q: title })} />
               ) : videoLink && (
