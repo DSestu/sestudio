@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from sestudio import downloaded
@@ -41,6 +41,7 @@ from sestudio.web.routes.downloaded import (
     tv_seek,
     tv_stream,
 )
+from sestudio.web.streaming import ClosingStreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -442,7 +443,9 @@ def proxy_stream(
             upstream.close()
             _release(client)
 
-    return StreamingResponse(body(), status_code=upstream.status_code, headers=relay)
+    return ClosingStreamingResponse(
+        body(), status_code=upstream.status_code, headers=relay
+    )
 
 
 async def _probe(

@@ -24,6 +24,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from sestudio import downloaded, interpolate, library
 from sestudio.config import load_config
+from sestudio.web.streaming import ClosingStreamingResponse
 
 router = APIRouter()
 
@@ -287,7 +288,7 @@ async def get_downloaded_file(
         }
         if request.method == "HEAD":
             return Response(status_code=206, media_type=media_type, headers=headers)
-        return StreamingResponse(
+        return ClosingStreamingResponse(
             _from_offset(target, offset),
             status_code=206,
             media_type=media_type,
@@ -614,7 +615,7 @@ def tv_stream(
     if first.isdigit() and int(first) > 0:
         status = 206
         headers["Content-Range"] = f"bytes {first}-{int(first) + 10**12 - 1}/*"
-    return StreamingResponse(
+    return ClosingStreamingResponse(
         _live_piped(start, settings, run_from),
         status_code=status,
         media_type=downloaded.TV_MEDIA_TYPE,
