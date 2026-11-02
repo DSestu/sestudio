@@ -244,3 +244,16 @@
 @media (prefers-reduced-motion: reduce) {
   .ep-in { animation-name: ep-fade; animation-duration: 120ms; animation-delay: 0s; }
 }
+
+/* The playlist sheet's rows follow it in, top to bottom, and leave together:
+   the same motion as .rows-follow, from the other side (docs/SPEC-watch-page.md). */
+.follow-row {
+  opacity: 0;
+  translate: 8px 0;
+  transition: opacity 260ms, translate 260ms var(--ease-smooth);
+}
+[data-open] .follow-row, [data-pinned] .follow-row { opacity: 1; translate: 0 0; }
+[data-open] .follow-row { transition-delay: var(--d); }
+@media (prefers-reduced-motion: reduce) {
+  .follow-row { translate: none; transition-delay: 0s !important; }
+}

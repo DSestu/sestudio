@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent } from 'react'
 import { togglePlaylistCollapsed, usePlaylistCollapsed } from '../playlistCollapsed'
 import type {
   AppSettings, DownloadDestination, DownloadItem, EpisodeDetail, SeasonDetail,
@@ -18,6 +18,8 @@ import WatchToggle from '../components/WatchToggle'
 import PageHeader, { Segmented } from '../components/PageHeader'
 import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
+import PlaylistRail from '../components/watch/PlaylistRail'
+import { useFinePointer } from '../useFinePointer'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
 import BrowserFrameRate from '../components/watch/BrowserFrameRate'
 import BrowserPerformance from '../components/watch/BrowserPerformance'
@@ -125,6 +127,36 @@ export default function WatchView({
    *  lands. Null outside a language switch. */
   const [pendingNumber, setPendingNumber] = useState<number | null>(null)
   const collapsed = usePlaylistCollapsed()
+  // Desktop: collapsed, the playlist is a rail, and hovering it opens the list
+  // over the player ("peek") with the Discover flyout's timing: open on enter,
+  // close 150 ms after leaving. Pinned, it is a column again. On touch there
+  // is no hover, so the rail is tapped open and a dimmed player closes it.
+  const fine = useFinePointer()
+  const [peek, setPeek] = useState(false)
+  const peekTimer = useRef<number | undefined>(undefined)
+  const [lastCollapsed, setLastCollapsed] = useState(collapsed)
+  if (lastCollapsed !== collapsed) {
+    // Pinning or folding settles the sheet either way.
+    setLastCollapsed(collapsed)
+    setPeek(false)
+  }
+  const openPeek = () => { clearTimeout(peekTimer.current); if (collapsed) setPeek(true) }
+  const peekProps = fine
+    ? {
+        onMouseEnter: openPeek,
+        onMouseLeave: () => { peekTimer.current = window.setTimeout(() => setPeek(false), 150) },
+        onFocus: openPeek,
+        onBlur: (e: FocusEvent<HTMLDivElement>) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPeek(false)
+        },
+      }
+    : {}
+  useEffect(() => {
+    if (!peek) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPeek(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [peek])
   const [tab, setTab] = useState<MobileTab>('episodes')
   const [autoplay, setAutoplay] = useState(true)
   /** The sources panel under the now-playing line (desktop). */
@@ -549,10 +581,6 @@ export default function WatchView({
     setChecked(all ? new Set() : new Set(detail.episodes.map(e => e.number)))
   }
 
-  function toggleCollapsed() {
-    togglePlaylistCollapsed()
-  }
-
   async function handleDownload() {
     if (!detail) return
     const filmFilename = detail.is_film ? sanitizeName(seriesName) + '.mp4' : null
@@ -700,23 +728,35 @@ export default function WatchView({
     />
   )
 
-  // Desktop only: the queue folds to a strip for a wider player. It sits in
-  // the list header, so the queue spends one row on chrome, not two.
-  const collapseButton = (
+  // Desktop only: keeps the playlist open as a column (lit), or folds it back into
+  // the rail. A click on the list header's empty space does the same.
+  const pin = (
     <button
-      onClick={toggleCollapsed}
-      aria-expanded={!collapsed}
-      aria-label={collapsed ? 'Expand playlist' : 'Collapse playlist'}
-      title={collapsed ? 'Expand playlist' : 'Collapse playlist'}
-      className="hidden lg:inline-flex btn btn-ghost btn-xs btn-square"
+      type="button"
+      data-pin
+      onClick={togglePlaylistCollapsed}
+      aria-pressed={!collapsed}
+      aria-label={collapsed ? 'Keep the playlist open' : 'Fold the playlist into the rail'}
+      title={collapsed ? 'Keep open' : 'Fold into the rail'}
+      className={`grid place-items-center w-8 h-8 rounded-[10px] transition-[scale,background-color,color] duration-100 active:scale-92 ${
+        collapsed ? 'bg-white/6 text-base-content/85' : 'bg-primary/22 text-primary'
+      }`}
     >
-      <svg className={`w-4 h-4 ${collapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7" />
       </svg>
     </button>
   )
 
-  const list = detail && (
+  // Choosing an episode: while browsing it is the request to start playing it.
+  const selectEpisode = (ep: EpisodeDetail) => {
+    if (!fine) setPeek(false)
+    if (playing) setCurrent(ep)
+    else onRequestPlayback(ep.number)
+  }
+
+  /** The playlist; the desktop copy carries the pin and follows its sheet in. */
+  const renderList = (desktop: boolean) => detail && (
     <EpisodeList
       filmLabel={isVideo ? 'Video' : undefined}
       episodes={detail.episodes}
@@ -736,14 +776,15 @@ export default function WatchView({
       onLoadSeason={loadSeason}
       onPlayOther={switchSeason}
       watchOf={watchOf}
-      // While browsing, picking an episode is the request to start playing it.
-      onSelect={playing ? setCurrent : (ep => onRequestPlayback(ep.number))}
+      onSelect={selectEpisode}
       onToggle={toggleEpisode}
       onToggleAll={toggleAll}
       onLang={selectLang}
       onToggleWatched={toggleWatched}
       onSelectEpisodeLang={selectEpisodeLang}
-      headerAction={collapseButton}
+      headerAction={desktop ? pin : undefined}
+      followIn={desktop}
+      onHeaderClick={desktop ? togglePlaylistCollapsed : undefined}
     />
   )
 
@@ -996,13 +1037,23 @@ export default function WatchView({
 
       {detail && detail.episodes.length > 0 && (
         <div
-          className={`flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 ${
-            collapsed ? 'lg:grid-cols-[minmax(0,1fr)_3rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem]'
+          className={`flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 lg:transition-[grid-template-columns] lg:duration-[360ms] ease-smooth motion-reduce:transition-none ${
+            collapsed ? 'lg:grid-cols-[minmax(0,1fr)_5.25rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem]'
           }`}
         >
           {/* Now playing: the player first, then one line saying what plays and
               where it goes. */}
-          <div className="min-w-0 flex flex-col gap-3">
+          <div className="relative min-w-0 flex flex-col gap-3">
+            {/* On touch, the player dims while the playlist sheet is open; tapping it closes the sheet. */}
+            {!fine && (
+              <div
+                onClick={() => setPeek(false)}
+                aria-hidden="true"
+                className={`hidden lg:block absolute inset-0 z-20 rounded-box bg-black/45 transition-opacity duration-300 ease-smooth ${
+                  peek && collapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+              />
+            )}
             {/* Below desktop it docks with its bottom third showing (see dock
                 above); static on desktop. The browser always plays the browsed
                 episode; casting to a TV is a separate, non-disruptive action
@@ -1182,7 +1233,7 @@ export default function WatchView({
                   // dock, so the list scrolls inside itself, opens on the episode
                   // playing, and keeps the download bar in reach.
                   <div className="h-[calc(100dvh-6rem-var(--dock-clear)-(100vw-2rem)*9/16)] min-h-72 flex flex-col rounded-box bg-base-200 overflow-hidden">
-                    <div className="flex-1 min-h-0">{list}</div>
+                    <div className="flex-1 min-h-0">{renderList(false)}</div>
                     {downloadBar}
                   </div>
                 )}
@@ -1206,31 +1257,54 @@ export default function WatchView({
             </div>
           </div>
 
-          {/* Desktop queue: opens on the episode playing, with what comes next
-              below it. Collapsible to a strip for a wider player. */}
-          <aside
-            className={`hidden lg:flex lg:flex-col rounded-box bg-base-200 overflow-hidden lg:sticky lg:top-16 lg:h-[calc(100dvh-5.5rem)]`}
+          {/* Desktop queue. Pinned, it is a column with the episode playing and what
+              comes next; collapsed, a glass rail whose list opens over the player on hover
+              (see docs/SPEC-watch-page.md, C). */}
+          <div
+            {...peekProps}
+            // Touch: a tap on the rail (not on one of its buttons) opens the list.
+            onClick={e => {
+              const hit = e.target as Element
+              if (fine || !collapsed || peek) return
+              if (hit.closest('button') && !hit.closest('[data-rail-open]')) return
+              setPeek(true)
+            }}
+            data-open={collapsed && peek ? true : undefined}
+            data-pinned={!collapsed ? true : undefined}
+            className="hidden lg:block relative lg:sticky lg:top-16 lg:z-30 lg:h-[calc(100dvh-5.5rem)]"
           >
-            {collapsed ? (
-              <>
-              <div className="flex justify-center py-2 border-b border-base-300">{collapseButton}</div>
-              <button
-                onClick={toggleCollapsed}
-                className="flex-1 flex items-start justify-center pt-3 text-base-content/50 hover:text-base-content"
-                aria-label="Expand playlist"
-              >
-                <span className="[writing-mode:vertical-rl] text-xs tracking-wide">
-                  {detail.episodes.length} episodes
-                </span>
-              </button>
-              </>
-            ) : (
-              <>
-                <div className="flex-1 min-h-0">{list}</div>
-                {downloadBar}
-              </>
-            )}
-          </aside>
+            <PlaylistRail
+              season={season}
+              episodes={detail.episodes}
+              seasons={showSeasons}
+              seasonLists={seasonLists}
+              currentNumber={currentNumber}
+              nextLabel={nextEp ? `S${season} · E${String(nextEp.number).padStart(2, '0')}` : null}
+              watchOf={watchOf}
+              onPlay={selectEpisode}
+              onPlayOther={switchSeason}
+              onNext={() => {
+                const next = detail.episodes.find(e => e.number === nextEp?.number)
+                if (next) selectEpisode(next)
+              }}
+              onOpen={() => setPeek(true)}
+              hidden={!collapsed || peek}
+              leaving={!collapsed}
+            />
+            <div
+              inert={collapsed && !peek}
+              className={`absolute top-0 right-0 h-full w-96 z-30 overflow-hidden flex flex-col transition-[opacity,translate,filter,background-color,box-shadow,border-radius] ease-smooth motion-reduce:[filter:none] ${
+                collapsed ? 'glass rounded-2xl' : 'bg-base-200 rounded-box'
+              } ${
+                !collapsed || peek
+                  ? 'duration-300 [filter:none]'
+                  : 'duration-200 opacity-0 translate-x-3 pointer-events-none [filter:blur(10px)]'
+              }`}
+            >
+              <div className="flex-1 min-h-0">{renderList(true)}</div>
+              {downloadBar}
+            </div>
+          </div>
 
         </div>
       )}
