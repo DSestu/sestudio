@@ -10,6 +10,10 @@ from pathlib import Path
 
 import psutil
 
+#: Set in a restarted server's environment: its page is already open in the
+#: browser, so it does not open another.
+RESTARTED = "SESTUDIO_RESTARTED"
+
 #: Run by the old server's Python: waits for it (argv[1], a process id) to exit,
 #: then runs the rest of argv. Before the new server, not inside it: `uv run`
 #: installs what new code needs first, and on Windows a library the old server
@@ -85,5 +89,9 @@ def spawn() -> str:
     """Start the next server once this one has exited and let go of its ports
     (see :data:`WAITER`). Says which way it is started (see :func:`command`)."""
     argv, how, cwd = command()
-    subprocess.Popen([sys.executable, "-c", WAITER, str(os.getpid()), *argv], cwd=cwd)
+    subprocess.Popen(
+        [sys.executable, "-c", WAITER, str(os.getpid()), *argv],
+        cwd=cwd,
+        env={**os.environ, RESTARTED: "1"},
+    )
     return how

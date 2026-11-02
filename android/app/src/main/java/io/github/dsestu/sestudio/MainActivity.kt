@@ -25,6 +25,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
+import android.webkit.WebResourceError
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -38,6 +39,8 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.Inet4Address
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.net.URL
@@ -198,13 +201,13 @@ class MainActivity : Activity() {
     private fun tail(file: File, lines: Int = 15) =
         if (file.exists()) file.readLines().takeLast(lines).joinToString("\n") else ""
 
-    /** Whether the server answers HTTP yet. */
+    /** Whether the server answers HTTP yet, and listens on HTTPS: the two ports come up one after the other. */
     private fun answers(): Boolean = try {
         (URL(SERVER_URL).openConnection() as HttpURLConnection).run {
             connectTimeout = 1000
             readTimeout = 2000
             responseCode in 200..399
-        }
+        } && Socket().use { it.connect(InetSocketAddress("127.0.0.1", BuildConfig.HTTPS_PORT), 1000); true }
     } catch (_: Exception) {
         false
     }
@@ -238,6 +241,11 @@ class MainActivity : Activity() {
                 override fun onPageFinished(view: WebView, url: String) {
                     playback?.inject()
                     cast?.inject()
+                }
+
+                // The server not answering (still starting, restarting): try the page again in a second.
+                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                    if (request.isForMainFrame) view.postDelayed({ view.loadUrl(request.url.toString()) }, 1000)
                 }
 
                 // Google's web Cast library does not run here; CastBridge stands in for it.

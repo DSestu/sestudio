@@ -64,7 +64,11 @@ def test_the_next_server_is_started_waiting_for_this_one_and_this_one_stops(
 
     started: list[list[str]] = []
     monkeypatch.setattr(
-        restart.subprocess, "Popen", lambda argv, cwd=None: started.append((argv, cwd))
+        restart.subprocess,
+        "Popen",
+        lambda argv, cwd=None, env=None: started.append(
+            (argv, cwd, env[restart.RESTARTED])
+        ),
     )
     monkeypatch.setattr(
         restart, "command", lambda: (["sestudio", "-v"], "launcher", "/x")
@@ -79,7 +83,7 @@ def test_the_next_server_is_started_waiting_for_this_one_and_this_one_stops(
     client.app.state.servers = [type("S", (), {"should_exit": False})()]
     assert client.post("/api/server/restart").json() == {"restart": "launcher"}
     waiter = [restart.sys.executable, "-c", restart.WAITER, str(os.getpid())]
-    assert started == [([*waiter, "sestudio", "-v"], "/x")]
+    assert started == [([*waiter, "sestudio", "-v"], "/x", "1")]
 
 
 def test_the_waiter_runs_the_next_server_once_the_old_one_is_gone(tmp_path):

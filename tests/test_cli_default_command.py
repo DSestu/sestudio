@@ -53,3 +53,23 @@ def test_download_command_removed() -> None:
     """The CLI no longer exposes a `download` command or the old command group."""
     assert not hasattr(cli, "Entrypoint")
     assert not hasattr(cli, "default_argv")
+
+
+def test_browser_opens_once_every_server_listens() -> None:
+    """The HTTP server listening is not enough: the page waits for HTTPS too."""
+
+    class Server:
+        def __init__(self, started: bool) -> None:
+            self.started = started
+
+    http, https = Server(True), Server(False)
+    with patch("sestudio.cli.webbrowser.open") as mock_open:
+        waiter = cli.threading.Thread(
+            target=cli._open_when_ready, args=([http, https], "https://lan:8443")
+        )
+        waiter.start()
+        waiter.join(0.3)
+        mock_open.assert_not_called()
+        https.started = True
+        waiter.join(2)
+    mock_open.assert_called_once_with("https://lan:8443")
