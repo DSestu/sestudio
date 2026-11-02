@@ -129,12 +129,15 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   const [peek, setPeek] = useState(false)
   const peekTimer = useRef<number | undefined>(undefined)
   const openPeek = () => { clearTimeout(peekTimer.current); setPeek(true) }
+  // Both the Discover item and the flyout carry data-peek: a tap focuses the
+  // button it lands on, so focus moving from one to the other is not leaving.
   const peekProps = {
+    'data-peek': '',
     onMouseEnter: openPeek,
     onMouseLeave: () => { peekTimer.current = window.setTimeout(() => setPeek(false), 150) },
     onFocus: openPeek,
     onBlur: (e: FocusEvent<HTMLDivElement>) => {
-      if (!e.currentTarget.contains(e.relatedTarget)) setPeek(false)
+      if (!(e.relatedTarget as Element | null)?.closest?.('[data-peek]')) setPeek(false)
     },
   }
   return (
