@@ -29,6 +29,7 @@ import { useTitlesMeta, type TitleRef } from '../useTitlesMeta'
 import type { SortKey } from '../sortItems'
 import { SORTS_FOR, defaultSortFor, sortItems } from '../sortItems'
 import SearchBar from '../components/SearchBar'
+import { AWAY, useBarsHidden } from '../barsHidden'
 import { downloadToDevice } from '../deviceDownloads'
 import { fmtSize, useDownloadedLibrary } from '../downloadedLibrary'
 import { episodeCode, episodeHits, groupOnDisk, resumePoint } from '../diskShows'
@@ -143,6 +144,8 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
     [merged],
   )
   const folded = useScrolledDown() && lastQuery !== ''
+  // The sticky header leaves and comes back with the top card.
+  const barsHidden = useBarsHidden()
   const { open: optionsOpen, sourcesOpen } = useSearchOptions()
   // The phone has no room for a side panel: the same list opens as a sheet.
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -424,7 +427,7 @@ export default function SearchView({ settings, params, onOpenDetail, onUpdateSet
           folds the search away so only the kinds stay. */}
       <div
         className={`md:hidden flex flex-col ${lastQuery !== ''
-          ? 'sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 mx-[calc(-1*var(--gutter))] -mt-5 px-(--gutter) pt-3 pb-3 border-b border-base-300 bg-base-100/95 backdrop-blur'
+          ? `sticky top-[calc(3.5rem+env(safe-area-inset-top))] transition-[translate,opacity] ${AWAY(barsHidden, '-translate-y-[calc(100%+3.5rem+env(safe-area-inset-top))]')} z-20 mx-[calc(-1*var(--gutter))] -mt-5 px-(--gutter) pt-3 pb-3 border-b border-base-300 bg-base-100/95 backdrop-blur`
           : ''}`}
       >
         <div
