@@ -9,6 +9,7 @@ import NewEpisodesWidget from '../components/home/NewEpisodesWidget'
 import ForYouWidget from '../components/home/ForYouWidget'
 import NowStrip from '../components/home/NowStrip'
 import PosterStrip from '../components/home/PosterStrip'
+import UpcomingWidget from '../components/home/UpcomingWidget'
 import Widget, { WidgetGrid } from '../components/home/Widget'
 import { orderWidgets, pinTiers, type WidgetDescriptor, type WidgetId, type WidgetTier } from '../homeOrder'
 import { useForYou } from '../forYou'
@@ -18,6 +19,7 @@ import { useLive } from '../liveNow'
 import { markRead, newFindings, useNotifications } from '../notifications'
 import { openWatching, savedItems, type OpenTitle } from '../rowItems'
 import { useWatchers } from '../watchers'
+import { useUpcoming } from '../upcoming'
 import { useWatchState, watching } from '../watchState'
 
 /** Rows New episodes shows before deferring to Activity. */
@@ -54,6 +56,7 @@ export default function HomeView({
   // The previous visit: what ended since then is new to the Now strip.
   const lastVisit = useLastVisit()
   const forYou = useForYou()
+  const upcoming = useUpcoming()
   const [pinned] = useState(() => new Map<WidgetId, WidgetTier>())
   const [shownFindings] = useState(() => new Set<number>())
   const findings = newFindings(activity, shownFindings)
@@ -106,6 +109,7 @@ export default function HomeView({
     forYou !== null && { id: 'for-you', size: 'L', tier: 'browse' },
     watchlist.length > 0 && { id: 'watchlist', size: 'M', tier: 'browse' },
     favourites.length > 0 && { id: 'favourites', size: 'M', tier: 'browse' },
+    Boolean(upcoming?.length) && { id: 'upcoming', size: 'M', tier: 'browse' },
     (discoverLoading || Boolean(discover?.cards.length)) && { id: 'discover', size: 'M', tier: 'browse' },
   ]
   const placed = orderWidgets(pinTiers(present.filter(w => w !== false), pinned))
@@ -195,6 +199,18 @@ export default function HomeView({
           >
             <PosterStrip items={favourites.slice(0, STRIP_LIMIT)} ledge />
           </Widget>
+        )
+      case 'upcoming':
+        return (
+          <UpcomingWidget
+            key={id}
+            style={style}
+            episodes={upcoming ?? []}
+            lang={settings.lang}
+            onOpen={onOpen}
+            onSearchTerm={onSearchTerm}
+            onSeeAll={() => onNavigate('notifications')}
+          />
         )
       case 'discover':
         return (
