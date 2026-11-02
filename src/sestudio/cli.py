@@ -4,12 +4,15 @@ import logging
 import os
 import sys
 import threading
+import time
+import webbrowser
 
 from fire import Fire
 from rich.console import Console
 
 from sestudio.logging_config import setup_logging
 from sestudio.resolver import resolve_live_domain
+from sestudio.restart import RESTARTED
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -102,6 +105,14 @@ def serve(
     # thread so Ctrl-C (its signal handlers) stops the whole process. Kept on
     # the app, so a restart from the settings page can stop them.
     app.state.servers = [uvicorn.Server(cfg) for _scheme, cfg in servers]
+    # Run from a terminal: the web UI in the browser, on the LAN address casting needs.
+    if sys.stdout.isatty() and not os.environ.get(RESTARTED):
+        scheme, port = ("http", http_port) if no_https else ("https", https_port)
+        threading.Thread(
+            target=_open_when_ready,
+            args=(app.state.servers, f"{scheme}://{shown}:{port}"),
+            daemon=True,
+        ).start()
     for bg in app.state.servers[:-1]:
         bg.install_signal_handlers = lambda: None
         threading.Thread(target=bg.run, daemon=True).start()
@@ -110,6 +121,14 @@ def serve(
         # Replaced (see the settings page's restart): out at once, rather than
         # wait on the threads still finishing segments nobody will watch.
         os._exit(0)
+
+
+def _open_when_ready(servers: list, url: str) -> None:
+    """Opens url in the browser once every server listens: they start one
+    after the other, and a page opened early is a blank one."""
+    while not all(server.started for server in servers):
+        time.sleep(0.1)
+    webbrowser.open(url)
 
 
 def _display_host(host: str) -> str:
