@@ -316,8 +316,10 @@ export default function WatchView({
   }, [epLangs, epTitles, listings, allLangs])
 
   // The show's other seasons, for the playlist's season tree.
+  // A video has no seasons: never look its title up on the streaming sites,
+  // even before (or without) its page loading.
   const showSeasons = useShowSeasons(
-    seriesName, sourceId, sourceUrl, !!detail?.is_film, season,
+    seriesName, sourceId, sourceUrl, !!detail?.is_film || isVideo, season,
   )
 
   /** Move to another site's listing from the sources panel, optionally in a
