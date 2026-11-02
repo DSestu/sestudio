@@ -45,6 +45,11 @@ interface Props {
   onToggleWatched: (ep: EpisodeDetail) => void
   /** Ends the header row, after the language switch (the desktop collapse). */
   headerAction?: ReactNode
+  /** The list opens over the player as a sheet: its rows follow it in, one after
+   *  another (desktop). */
+  followIn?: boolean
+  /** A click on the header row's empty space, which does what the pin does. */
+  onHeaderClick?: () => void
 }
 
 /** Scroll a season's header to the top of its list, on the first click even
@@ -71,8 +76,11 @@ export default function EpisodeList({
   episodes, currentNumber, checked, watchedNumbers, progress, langs, activeLang,
   epLangs, epTitles, downloadedLangs, isFilm, filmLabel = 'Film', season, seasons,
   onSelect, onToggle, onToggleAll, onLang, onToggleWatched, onSelectEpisodeLang,
-  seasonLists, onLoadSeason, onPlayOther, watchOf, headerAction,
+  seasonLists, onLoadSeason, onPlayOther, watchOf, headerAction, followIn, onHeaderClick,
 }: Props) {
+  /** Class and delay that make a block follow the sheet in (see .follow-row). */
+  const fr = (i: number): { className?: string; style?: CSSProperties } =>
+    followIn ? { className: 'follow-row', style: { '--d': `${Math.min(90 + 35 * i, 300)}ms` } as CSSProperties } : {}
   // The list reads as a queue: it opens on the episode playing, with what comes
   // next below it. Only the list scrolls, never the page around it.
   const scroller = useRef<HTMLDivElement>(null)
@@ -424,7 +432,18 @@ export default function EpisodeList({
     <div className="flex flex-col min-h-0 h-full">
       {/* List header: what this is, language, then the season pills and select-all */}
       <div className="px-3 py-3 flex flex-col gap-2.5">
-        <div className="flex items-center justify-between gap-2">
+        <div
+          style={fr(0).style}
+          onClick={onHeaderClick && (e => {
+            // Empty space only: the language switch, buttons and chips keep their clicks.
+            if (!(e.target as Element).closest('button,a,input,label,select,[role=button],.badge')) onHeaderClick()
+          })}
+          className={`flex items-center justify-between gap-2 ${followIn ? 'follow-row' : ''} ${
+            onHeaderClick
+              ? 'cursor-pointer rounded-[10px] -mx-1.5 px-1.5 -my-1 py-1 hover:bg-white/4 [&:hover_[data-pin]]:bg-primary/14 [&:hover_[data-pin]]:text-primary'
+              : ''
+          }`}
+        >
           <p className="text-sm font-medium">
             {isFilm ? filmLabel : 'Episodes'}
             <span className="text-base-content/45 ml-2 text-xs">
@@ -437,7 +456,12 @@ export default function EpisodeList({
           </div>
         </div>
         {multi && (
-          <div className="relative flex gap-1 rounded-xl bg-black/22 p-0.75 overflow-x-auto [scrollbar-width:none]" role="tablist" aria-label="Seasons">
+          <div
+            style={fr(1).style}
+            className={`relative flex gap-1 rounded-xl bg-black/22 p-0.75 overflow-x-auto [scrollbar-width:none] ${fr(1).className ?? ''}`}
+            role="tablist"
+            aria-label="Seasons"
+          >
             {pill && (
               <span
                 aria-hidden="true"
@@ -471,7 +495,10 @@ export default function EpisodeList({
             })}
           </div>
         )}
-        <label className="flex items-center gap-2 text-xs text-base-content/60 cursor-pointer">
+        <label
+          style={fr(2).style}
+          className={`flex items-center gap-2 text-xs text-base-content/60 cursor-pointer ${fr(2).className ?? ''}`}
+        >
           <input
             type="checkbox"
             checked={allChecked}
@@ -486,10 +513,10 @@ export default function EpisodeList({
           place, and a pill above scrolls it into view. */}
       <div ref={scroller} className="relative overflow-y-auto flex-1 min-h-0 px-2 pb-2">
         {!multi ? (
-          <ul className="space-y-0.5">{episodeItems}</ul>
+          <ul {...fr(3)} className={`space-y-0.5 ${fr(3).className ?? ''}`}>{episodeItems}</ul>
         ) : (
           <>
-            {seasons.map(s => {
+            {seasons.map((s, si) => {
               const n = s.season_number
               const isOpen = open.has(n)
               const st = statsOf(n)
@@ -497,7 +524,8 @@ export default function EpisodeList({
                 <div
                   key={n}
                   ref={el => { if (el) seasonEls.current.set(n, el); else seasonEls.current.delete(n) }}
-                  className="mb-1"
+                  style={fr(3 + si).style}
+                  className={`mb-1 ${fr(3 + si).className ?? ''}`}
                 >
                   <button
                     type="button"
