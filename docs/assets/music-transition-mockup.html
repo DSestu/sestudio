@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Music on the TV: one stream, crossfades</title><style>
+:root{--tx:oklch(92% 0.01 240);--pr:oklch(72% 0.16 230);--ease:cubic-bezier(.2,.8,.2,1)}
+*{box-sizing:border-box}body{margin:0;padding:16px;background:#111;color:#ddd;font-family:system-ui}
+.note{font-size:13px;color:#999;margin:0 0 12px;line-height:1.5;max-width:900px}.note b{color:#eee}
+.tv{position:relative;width:100%;max-width:960px;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000;color:var(--tx)}
+.bg{position:absolute;inset:-10%;background-size:cover;background-position:center;filter:blur(40px) saturate(1.4);opacity:0;transition:opacity 3s linear}
+.bg.on{opacity:.55}
+canvas{position:absolute;inset:0;width:100%;height:100%}
+.cover{position:absolute;left:50%;top:44%;translate:-50% -50%;width:30%;aspect-ratio:1;border-radius:12px;object-fit:cover;box-shadow:0 18px 40px rgb(0 0 0/.55);opacity:0;transform:scale(.92);transition:opacity 2s var(--ease),transform 2.4s var(--ease)}
+.cover.on{opacity:1;transform:scale(1)}
+.meta{position:absolute;left:24px;bottom:28px;opacity:0;translate:0 10px;transition:opacity .8s var(--ease),translate .8s var(--ease)}
+.meta.on{opacity:1;translate:0 0}
+.meta b{display:block;font-size:22px;letter-spacing:-.01em}.meta span{font-size:13px;opacity:.7}
+.next{position:absolute;right:24px;bottom:28px;font-size:12px;opacity:.6;text-align:right}.next b{display:block;font-size:13px;opacity:1}
+.bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgb(255 255 255/.15)}.bar i{display:block;height:100%;background:var(--pr);transition:width .1s linear}
+.tl{display:flex;gap:4px;margin-top:10px;font-size:11px;color:#999;max-width:960px}
+.tl div{flex:1;padding:6px 8px;border-radius:6px;background:#222}.tl div.x{flex:.5;background:color-mix(in oklch,var(--pr) 30%,transparent);color:#eee}
+</style></head><body>
+<p class="note"><b>One stream, no reload.</b> The TV loads the station once. Four seconds before a track ends, the server crossfades the sound and the picture: the cover eases out, the next eases in, the ambient colour drifts to the new cover, the title slides in. The bars never stop because they're drawn from the mixed audio. <b>Watch:</b> it loops every 8 s.</p>
+<div class="tv" id="tv"><canvas id="c"></canvas><div class="bar"><i id="p"></i></div></div>
+<div class="tl"><div>Track A · body</div><div class="x">4 s crossfade</div><div>Track B · body</div><div class="x">4 s crossfade</div><div>Track C…</div></div>
+<script>
+const yt=id=>`https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+const T=[{t:'Uptown Funk',a:'Mark Ronson ft. Bruno Mars',img:yt('OPf0YbXqDm0')},{t:'Shape of You',a:'Ed Sheeran',img:yt('JGwWNGJdvx8')},{t:'Hello',a:'Adele',img:yt('YQHsXMglC9A')}];
+const tv=document.getElementById('tv');
+const layers=T.map((x,i)=>{const bg=document.createElement('div');bg.className='bg';bg.style.backgroundImage=`url(${x.img})`;const cv=document.createElement('img');cv.className='cover';cv.src=x.img;const m=document.createElement('div');m.className='meta';m.innerHTML=`<b>${x.t}</b><span>${x.a}</span>`;tv.prepend(bg);tv.append(cv,m);return{bg,cv,m}});
+const nx=document.createElement('div');nx.className='next';tv.append(nx);
+let cur=0;function show(i){layers.forEach((l,k)=>{const on=k===i;l.bg.classList.toggle('on',on);l.cv.classList.toggle('on',on);l.m.classList.toggle('on',on)});nx.innerHTML=`Next<b>${T[(i+1)%T.length].t}</b>`}
+show(0);setInterval(()=>{cur=(cur+1)%T.length;show(cur)},8000);
+const c=document.getElementById('c'),ctx=c.getContext('2d'),p=document.getElementById('p');let t=0,t0=performance.now();
+(function f(){const w=c.width=c.clientWidth,h=c.height=c.clientHeight;ctx.clearRect(0,0,w,h);t+=.04;const N=56,bw=w/N;for(let i=0;i<N;i++){const v=Math.abs(Math.sin(t*1.3+i*.37))*.6+Math.abs(Math.sin(t*.7+i*.11))*.4;const bh=v*h*.4;ctx.fillStyle=`oklch(72% .16 230 / ${.35+v*.5})`;ctx.fillRect(i*bw+2,h-bh-6,bw-4,bh)}p.style.width=((performance.now()-t0)%8000)/80+'%';requestAnimationFrame(f)})();
+</script></body></html>
