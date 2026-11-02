@@ -197,9 +197,11 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
             open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           }`}
         >
-          <div className="overflow-hidden">
+          {/* Bottom-anchored: the panel's lower edge stays on the bar while the
+              reveal grows, so it rises out of the bar instead of wiping down. */}
+          <div className="overflow-hidden flex flex-col justify-end">
             <div
-              className={`relative rounded-t-2xl glass p-3 flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
+              className={`relative shrink-0 rounded-t-2xl glass p-3 flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
                 open ? 'opacity-100' : 'opacity-0'
               }`}
             >
