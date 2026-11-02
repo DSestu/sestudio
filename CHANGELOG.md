@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.8.0](https://github.com/DSestu/sestudio/compare/v1.7.0...v1.8.0) (2026-11-02)
+
+
+### New features
+
+* new sestudio logo, an S and a D drawn from two stacked circles, on the favicon, sidebar, web app and Android icons ([#241](https://github.com/DSestu/sestudio/issues/241)) ([6b64215](https://github.com/DSestu/sestudio/commit/6b642159f3443475051024439e3c4e6974d5ff02))
+* warn when the firewall keeps phones and TVs out, and keep casting working across network changes ([#239](https://github.com/DSestu/sestudio/issues/239)) ([77ddc49](https://github.com/DSestu/sestudio/commit/77ddc49b492d0386dc2e57b50808efd04b7825ee))
+
+
+### Bug fixes
+
+* a player error reloads the source, then resolves it again, before the source counts as dead ([#234](https://github.com/DSestu/sestudio/issues/234)) ([d141c04](https://github.com/DSestu/sestudio/commit/d141c04b8bab709b67351aaad58f137f6f053d04))
+* a Twitch live stream casts to a DLNA TV ([#228](https://github.com/DSestu/sestudio/issues/228)) ([2a7f342](https://github.com/DSestu/sestudio/commit/2a7f342fed215c602c05b1c170d6cf25d8a01a9c))
+* navigating fast no longer hangs the server until it is restarted ([#240](https://github.com/DSestu/sestudio/issues/240)) ([05acce7](https://github.com/DSestu/sestudio/commit/05acce7f6117da7da5a85ac49b508736d39f1daf))
+* on phones a carousel's right-edge fade is 2.5rem, not a third of the screen ([#238](https://github.com/DSestu/sestudio/issues/238)) ([c259a4e](https://github.com/DSestu/sestudio/commit/c259a4ef7ae00cdc10bd9540a41fa83d1327be32))
+* on phones Continue watching grows with its content, while desktop keeps widgets side by side the same height ([#236](https://github.com/DSestu/sestudio/issues/236)) ([10934ad](https://github.com/DSestu/sestudio/commit/10934ad73c7211c18ca87c45f00fd86beea258aa))
+* on phones Continue watching is as short as the titles it holds ([#231](https://github.com/DSestu/sestudio/issues/231)) ([547e521](https://github.com/DSestu/sestudio/commit/547e52103ec6c8182fd68fa81eb62256c2d8b101))
+* on phones the cast bar, its controls, the Discover menu and the dock join into one rounded shape, squared where they meet ([#237](https://github.com/DSestu/sestudio/issues/237)) ([0961d09](https://github.com/DSestu/sestudio/commit/0961d092672eff5b3270c251943a9933faadba0e))
+* the Android app waits for the HTTPS port before opening sestudio, and a terminal launch opens the browser once the server is ready ([#233](https://github.com/DSestu/sestudio/issues/233)) ([df97c41](https://github.com/DSestu/sestudio/commit/df97c4172266f68e4b97ed44203f11069edc239a))
+* the Android notification's Stop kills the server, so the next start runs its latest version ([#230](https://github.com/DSestu/sestudio/issues/230)) ([059e290](https://github.com/DSestu/sestudio/commit/059e290d806432802b01624dbdec43ed8ad76934))
+* the cast controls rise out of the Now Casting bar instead of wiping down from their top ([#229](https://github.com/DSestu/sestudio/issues/229)) ([6c4e30b](https://github.com/DSestu/sestudio/commit/6c4e30b8acf40ce6d0460eb113372673c4a46b67))
+* the cast controls stay on the Now Casting bar while they open, instead of floating above it and dropping into place ([#235](https://github.com/DSestu/sestudio/issues/235)) ([55ab044](https://github.com/DSestu/sestudio/commit/55ab0444df0717bddf1183a9ab79930d105f846b))
+* the rail's Discover flyout stays open when a finger taps into it ([#227](https://github.com/DSestu/sestudio/issues/227)) ([d69e2f8](https://github.com/DSestu/sestudio/commit/d69e2f83c1f72da62d4bd4ab508b8a9d177b037b))
+* the watch page's playlist column is pinned to the viewport below the header card, so the two always move together ([#232](https://github.com/DSestu/sestudio/issues/232)) ([8a49462](https://github.com/DSestu/sestudio/commit/8a4946229685ba1cc97a5609f3d3defb61e0ddc6))
+* the watch page's playlist column sticks below the header card instead of sliding under it ([#225](https://github.com/DSestu/sestudio/issues/225)) ([4a0f592](https://github.com/DSestu/sestudio/commit/4a0f5928b42cac6374e3e72d0fe9e8531273cea6))
+
 ## [1.7.0](https://github.com/DSestu/sestudio/compare/v1.6.0...v1.7.0) (2026-11-02)
 
 
