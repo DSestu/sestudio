@@ -1078,8 +1078,8 @@ export default function WatchView({
         <div
           className={`flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 lg:transition-[grid-template-columns] lg:duration-[360ms] ease-smooth motion-reduce:transition-none ${
             isSingle
-              ? side ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : 'lg:grid-cols-[minmax(0,55rem)] lg:justify-center'
-              : collapsed ? 'lg:grid-cols-[minmax(0,1fr)_5.25rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem]'
+              ? side ? 'lg:grid-cols-[minmax(0,1fr)_20rem] lg:[--col-w:20rem]' : 'lg:grid-cols-[minmax(0,55rem)] lg:justify-center'
+              : collapsed ? 'lg:grid-cols-[minmax(0,1fr)_5.25rem] lg:[--col-w:5.25rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem] lg:[--col-w:24rem]'
           }`}
         >
           {/* Now playing: the player first, then one line saying what plays and
@@ -1318,6 +1318,8 @@ export default function WatchView({
               comes next; collapsed, a glass rail whose list opens over the player on hover
               (see docs/SPEC-watch-page.md, C). */}
           {!isSingle && (
+            // The grid cell that keeps the column's place; the column itself is fixed.
+            <div className="hidden lg:block lg:h-[calc(100dvh-7.25rem)]">
             <div
               {...peekProps}
               // Touch: a tap on the rail (not on one of its buttons) opens the list.
@@ -1328,9 +1330,11 @@ export default function WatchView({
                 setPeek(true)
               }}
               data-open={collapsed && peek ? true : undefined}
-              // Sticks below the header card (pinned at 0.75rem, 4rem tall), not under it.
+              // Pinned to the viewport below the header card (itself pinned at 0.75rem,
+              // 4rem tall), so the two never move against each other; a sticky column
+              // is pushed up by the page's bottom padding, under the card.
               data-pinned={!collapsed ? true : undefined}
-              className="hidden lg:block relative lg:sticky lg:top-24 lg:z-30 lg:h-[calc(100dvh-7.25rem)]"
+              className="relative lg:fixed lg:top-24 lg:z-30 lg:w-(--col-w) lg:h-[calc(100dvh-7.25rem)] lg:transition-[width] lg:duration-[360ms] ease-smooth motion-reduce:transition-none"
             >
               <PlaylistRail
                 season={season}
@@ -1364,17 +1368,20 @@ export default function WatchView({
                 {downloadBar}
               </div>
             </div>
+            </div>
           )}
 
           {/* A film or a video: a right column only when there is a list for it. */}
           {isSingle && side && (
-            <aside className="hidden lg:flex flex-col gap-3 rounded-box bg-base-200 p-3 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7.25rem)] overflow-y-auto">
+            <div className="hidden lg:block">
+            <aside className="flex flex-col gap-3 rounded-box bg-base-200 p-3 lg:fixed lg:top-24 lg:w-(--col-w) lg:max-h-[calc(100dvh-7.25rem)] overflow-y-auto">
               {side === 'similar' ? (
                 <SimilarTitles items={similar} onOpen={title => navigate('search', { q: title })} />
               ) : videoLink && (
                 <ChannelVideos channel={videoLink.channel} channelLink={channelHref(videoLink.channel_url, sourceId)} videos={moreVideos} onOpen={openVideo} />
               )}
             </aside>
+            </div>
           )}
 
         </div>
