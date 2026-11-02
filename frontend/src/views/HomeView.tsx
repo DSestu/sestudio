@@ -3,6 +3,7 @@ import type { AppSettings, DownloadedFile, DownloadedTitle, DownloadJob, Shelf, 
 import { getShelves, videoSeasonCard } from '../api'
 import { entries, useCollections, type ListName } from '../collections'
 import FirstRun from '../components/home/FirstRun'
+import ChannelsWidget from '../components/home/ChannelsWidget'
 import ContinueWidget from '../components/home/ContinueWidget'
 import LiveWidget from '../components/home/LiveWidget'
 import NewEpisodesWidget from '../components/home/NewEpisodesWidget'
@@ -13,6 +14,7 @@ import PosterStrip from '../components/home/PosterStrip'
 import UpcomingWidget from '../components/home/UpcomingWidget'
 import Widget, { WidgetGrid } from '../components/home/Widget'
 import { useHealth } from '../homeHealth'
+import { summarizeChannels, useChannelsLatest } from '../homeChannels'
 import { orderWidgets, pinTiers, type WidgetDescriptor, type WidgetId, type WidgetTier } from '../homeOrder'
 import { useForYou } from '../forYou'
 import { useLastVisit } from '../lastVisit'
@@ -64,6 +66,10 @@ export default function HomeView({
   const [shownFindings] = useState(() => new Set<number>())
   const findings = newFindings(activity, shownFindings)
   const live = useLive(useWatchers().filter(w => w.kind === 'channel').length)
+  // Absent while loading, unlike the others: its tier hangs on the data, and a
+  // skeleton would pin it to 'browse' before the new uploads are known.
+  const channelsLatest = useChannelsLatest(useWatchers().filter(w => w.kind === 'channel').length)
+  const channels = channelsLatest && summarizeChannels(channelsLatest, lastVisit)
 
   // One shelf from the catalogue last browsed — a way into Discover, not a
   // copy of it. Tagged with its catalogue so a switch never shows a stale one.
@@ -113,6 +119,7 @@ export default function HomeView({
     watchlist.length > 0 && { id: 'watchlist', size: 'M', tier: 'browse' },
     favourites.length > 0 && { id: 'favourites', size: 'M', tier: 'browse' },
     Boolean(upcoming?.length) && { id: 'upcoming', size: 'M', tier: 'browse' },
+    Boolean(channels?.videos.length) && { id: 'channels', size: 'M', tier: channels?.fresh ? 'fresh' : 'browse' },
     (discoverLoading || Boolean(discover?.cards.length)) && { id: 'discover', size: 'M', tier: 'browse' },
     Boolean(health?.issues?.length) && { id: 'health', size: 'S', tier: 'status' },
   ]
@@ -174,6 +181,16 @@ export default function HomeView({
             lang={settings.lang}
             onOpen={onOpen}
             onSeeAll={() => onNavigate('search')}
+          />
+        )
+      case 'channels':
+        return channels && (
+          <ChannelsWidget
+            key={id}
+            style={style}
+            summary={channels}
+            onPlay={card => onOpen(card, 0, settings.lang)}
+            onSeeAll={() => onNavigate('creators')}
           />
         )
       case 'watchlist':
