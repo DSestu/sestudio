@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom'
 import { GLASS_BUTTON, pageHeaderMounted, useDeskSlots } from '../pageHeader'
 import { AWAY, useBarsHidden } from '../barsHidden'
+import { useDiscoverTall } from '../discoverMenu'
 
 // The phone's top card (docs/SPEC-nav-redesign.md §4.2): one floating glass
 // card per page with its name, a status line, a ⋯ menu of the page's actions
@@ -32,7 +33,9 @@ export function TopCard({ children, away: forced = false }: {
   away?: boolean
 }) {
   const card = useRef<HTMLElement>(null)
-  const away = useBarsHidden() || forced
+  const hidden = useBarsHidden()
+  const discoverTall = useDiscoverTall()
+  const away = hidden || discoverTall || forced
   useLayoutEffect(() => {
     const el = card.current
     if (!el) return

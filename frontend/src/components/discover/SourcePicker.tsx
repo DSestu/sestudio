@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { CatalogInfo, SeasonCard } from '../../api'
-import { closeDiscoverMenu, closeDiscoverMenuThen, openDiscoverMenu, useDiscoverMenuOpen } from '../../discoverMenu'
+import { closeDiscoverMenu, closeDiscoverMenuThen, openDiscoverMenu, setDiscoverTall, useDiscoverMenuOpen } from '../../discoverMenu'
 import { useModalBack } from '../../useModalBack'
 import { useSourcePosters } from './sourcePosters'
 import SourceIcon from '../SourceIcon'
@@ -158,6 +158,8 @@ export function DiscoverMenu({
     vv.addEventListener('resize', onResize)
     return () => vv.removeEventListener('resize', onResize)
   }, [expanded])
+  const tall = open && expanded
+  useEffect(() => { setDiscoverTall(tall); return () => setDiscoverTall(false) }, [tall])
   // A folded menu forgets the search, so it reopens on the list.
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {

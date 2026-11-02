@@ -33,3 +33,21 @@ export function closeDiscoverMenuThen(act: () => void) {
   window.addEventListener('popstate', () => act(), { once: true })
   set(false)
 }
+
+// Whether the open menu has grown to the top of the screen (searching), where
+// the phone's top card would cover its search field; the card leaves meanwhile.
+let tall = false
+const tallListeners = new Set<() => void>()
+
+export function setDiscoverTall(next: boolean) {
+  if (next === tall) return
+  tall = next
+  tallListeners.forEach(l => l())
+}
+
+export function useDiscoverTall(): boolean {
+  return useSyncExternalStore(
+    l => { tallListeners.add(l); return () => tallListeners.delete(l) },
+    () => tall,
+  )
+}
