@@ -34,6 +34,8 @@ interface Props {
   badge?: number
   /** Drawn before the title (a heart, a ribbon). */
   icon?: ReactNode
+  /** Drawn after the title (Live now's tally). */
+  after?: ReactNode
   /** The header opens the widget's full view. */
   onOpen?: () => void
   /** The frame classes saying what is inside (spec §6), e.g. `f-continue`. */
@@ -46,13 +48,14 @@ interface Props {
 
 /** One widget on Home: a flat Aisle Dark panel whose header opens the full view. */
 export default function Widget({
-  size, lone, title, sub, count, badge, icon, onOpen, frame = '', style, loading, children,
+  size, lone, title, sub, count, badge, icon, after, onOpen, frame = '', style, loading, children,
 }: Props) {
   const heading = (
     <>
       {icon}
       <span className="truncate">{title}</span>
       {sub && <span className="truncate text-xs font-normal text-base-content/50">{sub}</span>}
+      {after}
       {badge ? (
         <span className="shrink-0 rounded-full bg-primary px-[7px] text-[11px] leading-[18px] font-semibold text-primary-content">{badge}</span>
       ) : count ? (

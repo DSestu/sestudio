@@ -20,6 +20,11 @@
   @keyframes dock-rise {
     from { opacity: 0; transform: translateY(100%); }
   }
+  /* Live now's on-air light: its ring swells and fades every 2 s. */
+  --animate-tally: tally 2s ease-in-out infinite;
+  @keyframes tally {
+    50% { box-shadow: 0 0 0 6px transparent; }
+  }
   /* One step lighter than base-300, for frame details on Home's widgets (a
      ribbon, a shelf ledge, a dashed outline): visible on base-200 without a tint. */
   --color-base-400: oklch(34% 0.025 240);
@@ -34,6 +39,15 @@
   height: 3px;
   z-index: 3;
   background: linear-gradient(to right, var(--color-primary) var(--p), color-mix(in oklch, var(--color-base-content) 12%, transparent) var(--p));
+}
+
+/* Live now with one stream: its thumbnail fills the widget, shaded at the top
+   for the header and at the bottom for the channel, title and Watch. */
+.live-shade {
+  background: linear-gradient(to bottom,
+    color-mix(in oklch, var(--color-base-100) 75%, transparent),
+    transparent 30% 42%,
+    color-mix(in oklch, var(--color-base-100) 92%, transparent) 82%);
 }
 
 /* Bottom-sheet modals clear the home indicator / notch inset on mobile, on top

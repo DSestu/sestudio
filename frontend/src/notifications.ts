@@ -133,6 +133,21 @@ export function watchParamsForEvent(
   }
 }
 
+/**
+ * Home's New episodes: the findings unseen when Home first showed them,
+ * newest first. A channel's videos and live streams are not findings here
+ * (Live now and the channels widget show those), nor are watcher problems.
+ *
+ * *shown* keeps, for the life of the view, every finding that was unseen: one
+ * opened from Home stays in place as seen rather than vanishing under the
+ * thumb (spec §2). A remount starts afresh.
+ */
+export function newFindings(events: WatcherEvent[], shown: Set<number>): WatcherEvent[] {
+  const found = events.filter(e => e.event_type === 'new_item' && e.watcher_kind !== 'channel')
+  for (const e of found) if (e.read_at === null) shown.add(e.id)
+  return found.filter(e => shown.has(e.id))
+}
+
 /** A short relative age, e.g. "4h ago". Timeline rows are scanned, not read. */
 export function timeAgo(unixSeconds: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor(now / 1000) - unixSeconds)
