@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import logging
 import re
 
@@ -30,7 +31,13 @@ _YEAR_RE = re.compile(r"\s*\((\d{4})\)\s*$")
 
 
 def _unslash(text: str) -> str:
-    """The site's engine backslash-escapes quotes in titles ("l\\'ombre")."""
+    """The site's engine backslash-escapes quotes in titles ("l\\'ombre") and
+    leaves HTML entities in them, sometimes encoded twice ("&amp;amp;")."""
+    for _ in range(3):
+        decoded = html.unescape(text)
+        if decoded == text:
+            break
+        text = decoded
     return text.replace("\\'", "'").replace('\\"', '"')
 
 
@@ -225,7 +232,7 @@ def fetch_season(url: str, lang: str = "vf") -> tuple[int, list[Episode], list[s
     def _title_of(num: int) -> str:
         info = info_data.get(str(num), {})
         title: str | None = info.get("title") if isinstance(info, dict) else None  # type: ignore[union-attr]
-        return title or f"Episode {num}"
+        return _unslash(title) if title else f"Episode {num}"
 
     episodes: list[Episode] = []
     for key, providers in lang_data.items():
