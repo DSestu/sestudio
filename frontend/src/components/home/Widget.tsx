@@ -1,23 +1,23 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { WidgetSize } from '../../homeOrder'
 
-// Grid cells per size, on a 2-column phone / 4-column desktop grid of 80px rows.
-// Heights add up: an S is as tall as an M, and from md: an L is two Ms, so
-// widgets side by side end on the same line. A phone L has nothing beside it,
-// so it keeps the height its content needs.
+// Grid cells per size on desktop: a 4-column grid of 80px rows where heights
+// add up (an S is as tall as an M, an L is two Ms), so widgets side by side end
+// on the same line. Phones stack in 2 columns with rows as tall as their
+// widgets, so each size has a fixed phone height instead, and a fit widget
+// (Continue watching) takes just the height its content needs.
 const SPAN: Record<WidgetSize, string> = {
-  S: 'col-span-1 row-span-3',
-  M: 'col-span-2 row-span-3',
-  L: 'col-span-2 md:row-span-6',
+  S: 'col-span-1 h-[260px] md:h-auto md:row-span-3',
+  M: 'col-span-2 h-[260px] md:h-auto md:row-span-3',
+  L: 'col-span-2 h-[440px] md:h-auto md:row-span-6',
 }
-// An L on a phone sits alone, so it can be shorter when it holds little.
-const PHONE_ROWS = { 3: 'row-span-3', 4: 'row-span-4', 5: 'row-span-5' }
+const LONE = 'col-span-2 h-[260px] md:h-auto md:row-span-3'
 
 /** Home's grid: widgets place themselves by size, and packing is dense so an S
  *  fills the gap another S left (docs/SPEC-home-dashboard.md §2). */
 export function WidgetGrid({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 auto-rows-[80px] grid-flow-row-dense gap-2.5 md:gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-4 md:auto-rows-[80px] grid-flow-row-dense gap-2.5 md:gap-3">
       {children}
     </div>
   )
@@ -45,14 +45,14 @@ interface Props {
   style?: CSSProperties
   /** While the data loads: a skeleton at the widget's final size, so nothing jumps. */
   loading?: boolean
-  /** Phone height of an L, in grid rows (default 5). */
-  phoneRows?: keyof typeof PHONE_ROWS
+  /** On phones, as tall as its content rather than a fixed height. */
+  fit?: boolean
   children?: ReactNode
 }
 
 /** One widget on Home: a flat Aisle Dark panel whose header opens the full view. */
 export default function Widget({
-  size, lone, title, sub, count, badge, icon, after, onOpen, frame = '', style, loading, phoneRows = 5, children,
+  size, lone, title, sub, count, badge, icon, after, onOpen, frame = '', style, loading, fit, children,
 }: Props) {
   const heading = (
     <>
@@ -78,7 +78,7 @@ export default function Widget({
     <section
       aria-label={title}
       style={style}
-      className={`relative isolate flex flex-col min-w-0 overflow-hidden rounded-box bg-base-200 p-3 animate-rise motion-reduce:animate-none ${lone ? 'col-span-2 row-span-3' : size === 'L' ? `${SPAN.L} ${PHONE_ROWS[phoneRows]}` : SPAN[size]} ${frame}`}
+      className={`relative isolate flex flex-col min-w-0 overflow-hidden rounded-box bg-base-200 p-3 animate-rise motion-reduce:animate-none ${lone ? LONE : SPAN[size]} ${fit ? 'max-md:h-auto' : ''} ${frame}`}
     >
       <h2 className="-mx-1 -mt-1.5 mb-1.5">
         {onOpen ? (
