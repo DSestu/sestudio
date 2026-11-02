@@ -88,6 +88,9 @@ interface Props {
   /** Ask to take over the player and start playing, optionally at an episode.
    *  Only called while browsing (playerNode === null). */
   onRequestPlayback: (episode?: number) => void
+  /** Move to another season of this show without leaving the page: the route
+   *  changes and the playing title follows, but this view stays mounted. */
+  onSwitchSeason: (params: Record<string, string | number | undefined>) => void
 }
 
 /**
@@ -98,7 +101,7 @@ interface Props {
 export default function WatchView({
   pageUrl, source: sourceProp, altPageUrls, altSources, seriesName, posterUrl, lang, episode,
   settings, onUpdateSettings, navigate, onJobsCreated, visible, playerNode,
-  onRequestPlayback,
+  onRequestPlayback, onSwitchSeason,
 }: Props) {
   // Browsing vs playing: without the shared player node this view shows the
   // title and its episodes only, and probes nothing, so opening a title never
@@ -332,7 +335,7 @@ export default function WatchView({
    *  different season's numbering means nothing here, so it opens at its own
    *  first playable episode. */
   function switchSeason(next: ShowSeason, ep?: EpisodeDetail) {
-    navigate('watch', {
+    onSwitchSeason({
       u: next.page_url,
       t: seriesName,
       p: posterUrl,
@@ -975,7 +978,7 @@ export default function WatchView({
         />
       )}
 
-      {loading && <p className="text-base-content/60">Loading…</p>}
+      {loading && !detail && <p className="text-base-content/60">Loading…</p>}
       {error && <p role="alert" className="text-error">{error}</p>}
 
       {detail && detail.episodes.length === 0 && (
