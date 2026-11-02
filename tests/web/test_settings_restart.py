@@ -100,3 +100,21 @@ def test_the_waiter_runs_the_next_server_once_the_old_one_is_gone(tmp_path):
     )  # fmt: skip
     assert code == 0
     assert marker.read_text() == "ok"
+
+
+def test_the_lan_answer_says_whether_the_browser_is_on_this_machine():
+    client = TestClient(create_app(live_domain="https://x"))
+    client.app.state.lan = {"ip": "192.168.1.5", "problem": "firewall"}
+    # TestClient's peer is "testclient": not this machine.
+    assert client.get("/api/server/lan").json() == {
+        "lan": {"ip": "192.168.1.5", "problem": "firewall"},
+        "here": False,
+    }
+
+
+def test_check_again_runs_the_lan_check_anew():
+    client = TestClient(create_app(live_domain="https://x"))
+    client.app.state.lan = {"ip": "192.168.1.5", "problem": "firewall"}
+    client.app.state.lan_check = lambda: {"ip": "192.168.1.5", "problem": None}
+    assert client.get("/api/server/lan").json()["lan"]["problem"] == "firewall"
+    assert client.get("/api/server/lan?recheck=1").json()["lan"]["problem"] is None

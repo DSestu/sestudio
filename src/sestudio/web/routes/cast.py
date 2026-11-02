@@ -53,7 +53,7 @@ async def tls_permission() -> Response:
 
 
 @router.get("/cast/http-port")
-async def http_port(request: Request) -> dict[str, int | None]:
+async def http_port(request: Request) -> dict[str, Any]:
     """The direct HTTP port cast devices should fetch media on (see app.state.http_port).
 
     Used by the browser to build a plain-HTTP media URL for Chromecast even when
@@ -65,8 +65,12 @@ async def http_port(request: Request) -> dict[str, int | None]:
     an ``http://`` URL on the TLS port instead — what this used to do — leaves
     the receiver fetching plaintext from a TLS socket, so it buffers at 00:00
     until it times out.
+
+    ``lan_host``: this machine's LAN address now, for a page opened on
+    localhost, whose own host would point the receiver at itself.
     """
-    return {"http_port": request.app.state.http_port}
+    lan_state = getattr(request.app.state, "lan", None) or {}
+    return {"http_port": request.app.state.http_port, "lan_host": lan_state.get("ip")}
 
 
 @router.get("/cast/dlna/renderers")

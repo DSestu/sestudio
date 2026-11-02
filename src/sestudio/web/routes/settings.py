@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sestudio import interpolate, restart
 from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.config import DEFAULT_DOWNLOAD_ORDER, load_config, save_config, tmdb_key
+from sestudio.dlna import _local_ipv4s
 from sestudio.downloader import js_runtime
 from sestudio.logging_config import LOG_BUFFER
 
@@ -168,6 +169,25 @@ async def get_server_log(after: int = 0) -> dict[str, Any]:
     """What the server logged since line *after* (0: all it still holds), and
     when it started (Unix seconds), for its uptime."""
     return {"lines": LOG_BUFFER.since(after), "started": _STARTED}
+
+
+@router.get("/server/lan")
+async def get_server_lan(request: Request, recheck: bool = False) -> dict[str, Any]:
+    """Where phones and TVs reach the server now and what is in the way
+    (``lan.state``; null until known, or when bound to one address), and
+    whether the asking browser runs on this machine: a page there can always
+    fall back to localhost when the LAN address moves. *recheck* checks again
+    first, after a firewall change say."""
+    state = request.app.state
+    if recheck and getattr(state, "lan", None) is not None:
+        state.lan = await asyncio.to_thread(state.lan_check)
+    client = request.client.host if request.client else ""
+    here = (
+        client.startswith("127.")
+        or client == "::1"
+        or client in await asyncio.to_thread(_local_ipv4s)
+    )
+    return {"lan": getattr(request.app.state, "lan", None), "here": here}
 
 
 @router.get("/server")

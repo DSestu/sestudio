@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sestudio import cli
@@ -55,17 +56,26 @@ def test_download_command_removed() -> None:
     assert not hasattr(cli, "default_argv")
 
 
-def test_browser_opens_once_every_server_listens() -> None:
-    """The HTTP server listening is not enough: the page waits for HTTPS too."""
+def test_browser_opens_once_every_server_listens(monkeypatch) -> None:
+    """The HTTP server listening is not enough: the page waits for HTTPS too,
+    then opens on the LAN address when other devices can reach it."""
 
     class Server:
         def __init__(self, started: bool) -> None:
             self.started = started
 
     http, https = Server(True), Server(False)
+    app = SimpleNamespace(state=SimpleNamespace(servers=[http, https], lan=None))
+    monkeypatch.setattr(
+        cli.lan,
+        "state",
+        lambda *a: {"ip": "lan", "url": "https://lan:8443", "problem": None},
+    )
     with patch("sestudio.cli.webbrowser.open") as mock_open:
         waiter = cli.threading.Thread(
-            target=cli._open_when_ready, args=([http, https], "https://lan:8443")
+            target=cli._when_ready,
+            args=(app, "https", 8443, 8080),
+            kwargs={"on_lan": True, "browser": True},
         )
         waiter.start()
         waiter.join(0.3)
@@ -73,3 +83,24 @@ def test_browser_opens_once_every_server_listens() -> None:
         https.started = True
         waiter.join(2)
     mock_open.assert_called_once_with("https://lan:8443")
+
+
+def test_blocked_from_other_devices_the_browser_opens_on_this_machine(
+    monkeypatch,
+) -> None:
+    server = SimpleNamespace(started=True)
+    app = SimpleNamespace(state=SimpleNamespace(servers=[server], lan=None))
+    monkeypatch.setattr(
+        cli.lan,
+        "state",
+        lambda *a: {
+            "ip": "lan",
+            "url": "https://lan:8443",
+            "problem": "firewall",
+            "program": "py",
+        },
+    )
+    with patch("sestudio.cli.webbrowser.open") as mock_open:
+        cli._when_ready(app, "https", 8443, 8080, on_lan=True, browser=True)
+    mock_open.assert_called_once_with("https://localhost:8443")
+    assert app.state.lan["problem"] == "firewall"

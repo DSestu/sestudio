@@ -12,6 +12,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Insets
 import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.net.http.SslError
@@ -54,6 +56,7 @@ class MainActivity : Activity() {
     private var web: WebView? = null
     private var playback: Playback? = null
     private var cast: CastBridge? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     /** Re-renders the setup screen; set while it is showing. */
     private var refreshSetup: (() -> Unit)? = null
@@ -216,8 +219,7 @@ class MainActivity : Activity() {
     private fun showWeb(savedInstanceState: Bundle?) {
         refreshSetup = null
         val start = serverUrl()
-        val host = Uri.parse(start).host
-        val trusted = serverCertificate()
+        var host = Uri.parse(start).host
         val view = PlayerWebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true // the library and settings live in localStorage
@@ -228,8 +230,10 @@ class MainActivity : Activity() {
             settings.loadWithOverviewMode = true
             webViewClient = object : WebViewClient() {
                 // The server's certificate is self-signed: trust that one, and only it.
+                // Read afresh each time: the server makes a new one when the phone gets a new address.
                 override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                     val presented = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) error.certificate.x509Certificate else null
+                    val trusted = serverCertificate()
                     if (trusted != null && presented == trusted) {
                         handler.proceed()
                     } else {
@@ -283,6 +287,21 @@ class MainActivity : Activity() {
         web = view
         show(view)
         if (savedInstanceState == null) view.loadUrl(start) else view.restoreState(savedInstanceState)
+
+        // The phone on another network, or another address on it: the page follows, on the
+        // same screen, so casting keeps working without reopening the app. After a pause, as
+        // the server takes a few seconds to make a cert for the new address.
+        fun follow() { view.postDelayed({
+            val next = serverUrl()
+            val nextHost = Uri.parse(next).host
+            if (nextHost == host) return@postDelayed
+            host = nextHost
+            view.loadUrl(next + (Uri.parse(view.url ?: "").fragment?.let { "/#$it" } ?: ""))
+        }, 6000) }
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) = follow()
+            override fun onLost(network: Network) = follow()
+        }.also { getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(it) }
     }
 
     /**
@@ -360,6 +379,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        networkCallback?.let { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) }
         playback?.release()
         cast?.release()
         super.onDestroy()

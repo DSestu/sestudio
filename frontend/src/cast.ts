@@ -158,6 +158,9 @@ export function loadCast(): Promise<boolean> {
     s.onerror = () => resolve(false)
     document.head.appendChild(s)
   })
+  // A failed load (offline, a network change) is tried again next time
+  // rather than kept for the life of the page.
+  castReady.then(ok => { if (!ok) castReady = null })
   return castReady
 }
 
