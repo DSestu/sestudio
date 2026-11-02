@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import type { AppSettings, DownloadedFile, DownloadedTitle, DownloadJob, Shelf, WatcherEvent } from '../api'
 import { getShelves, videoSeasonCard } from '../api'
 import { entries, useCollections, type ListName } from '../collections'
-import EmptyState from '../components/EmptyState'
+import FirstRun from '../components/home/FirstRun'
 import ContinueWidget from '../components/home/ContinueWidget'
 import LiveWidget from '../components/home/LiveWidget'
 import NewEpisodesWidget from '../components/home/NewEpisodesWidget'
@@ -86,20 +86,12 @@ export default function HomeView({
   // the finding hidden behind the empty state.
   if (
     !inProgress.length &&
-    !discoverLoading &&
-    !discover?.cards.length &&
     !watchlist.length &&
     !favourites.length &&
     !findings.length &&
     !live.length
   ) {
-    return (
-      <EmptyState
-        title="Nothing here yet"
-        message="Search for a series or film to start watching, casting or downloading."
-        action={{ label: 'Discover', onClick: () => onNavigate('search') }}
-      />
-    )
+    return <FirstRun lang={settings.lang} onOpen={onOpen} onNavigate={onNavigate} onSearchTerm={onSearchTerm} onOpenCatalog={onOpenCatalog} />
   }
 
   // Present widgets only: one with nothing to show is absent, never empty. A

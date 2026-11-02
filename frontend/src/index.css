@@ -50,6 +50,29 @@
     color-mix(in oklch, var(--color-base-100) 92%, transparent) 82%);
 }
 
+/* First run: Continue watching's timeline, dashed until something plays, and
+   the fade that lays the poster mosaic under the welcome text. */
+.f-welcome::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: repeating-linear-gradient(to right, color-mix(in oklch, var(--color-primary) 70%, transparent) 0 8px, transparent 8px 14px);
+}
+.welcome-fade {
+  background: linear-gradient(to bottom,
+    color-mix(in oklch, var(--color-base-200) 30%, transparent),
+    color-mix(in oklch, var(--color-base-200) 75%, transparent) 42%,
+    var(--color-base-200) 70%);
+}
+@media (width >= 48rem) {
+  .welcome-fade {
+    background:
+      linear-gradient(to top, var(--color-base-200), transparent 40%),
+      linear-gradient(to right, var(--color-base-200) 32%, color-mix(in oklch, var(--color-base-200) 20%, transparent));
+  }
+}
+
 /* Bottom-sheet modals clear the home indicator / notch inset on mobile, on top
    of their own padding. Phones only: from `sm:` the sheet is a centred dialog
    and keeps daisyUI's padding. */
