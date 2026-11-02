@@ -334,6 +334,12 @@ export default function EpisodeList({
     if (box && el) scrollSeasonIntoView(box, el)
   }
 
+  // A season that was the playing one and has been left still shows open: it
+  // is an ordinary other season now, so its episodes are loaded (from cache).
+  useEffect(() => {
+    for (const n of open) if (n !== season && !seasonLists[n]) onLoadSeason(n)
+  }, [open, season, seasonLists, onLoadSeason])
+
   const ensureOpen = (n: number) => {
     setOpen(prev => (prev.has(n) ? prev : new Set(prev).add(n)))
     if (n !== season) onLoadSeason(n)

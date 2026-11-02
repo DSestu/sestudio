@@ -34,6 +34,12 @@ import WatchView from './views/WatchView'
 
 type WatchFields = Record<string, string | number | undefined>
 
+/** A show's seasons are separate pages but one title: the view is keyed by the
+ *  title, so moving between its seasons keeps the page (and the player) mounted. */
+function titleKey(rec: WatchFields): string {
+  return `${rec.src ?? 'fstream'}|${rec.t}`
+}
+
 /** Field-by-field equality for the open-watch record. */
 function sameWatch(a: WatchFields | null, b: WatchFields): boolean {
   if (!a) return false
@@ -353,7 +359,11 @@ export default function App() {
         {/* Kept mounted (hidden off-route) so playback continues in the
             mini-player; remounts only when a different title is opened. */}
         {watchViews.map(({ rec, owner, visible }) => (
-          <div key={String(rec.u)} hidden={!visible}>
+          <div
+            // A browsed season of the title already playing is its own view.
+            key={!owner && playingWatch && titleKey(playingWatch) === titleKey(rec) ? `browse|${rec.u}` : titleKey(rec)}
+            hidden={!visible}
+          >
             <WatchView
               pageUrl={String(rec.u ?? '')}
               source={rec.src ? String(rec.src) : undefined}
@@ -366,6 +376,17 @@ export default function App() {
               visible={visible}
               playerNode={owner ? playerNode : null}
               onRequestPlayback={ep => setPlayingWatch(ep === undefined ? rec : { ...rec, ep })}
+              onSwitchSeason={params => {
+                // The record the route derives from these params, so the playing
+                // title follows the move instead of being left on the old season.
+                if (owner) {
+                  setPlayingWatch({
+                    u: params.u, t: params.t, p: params.p, lang: params.lang, ep: params.ep,
+                    alt: undefined, src: params.src, altsrc: undefined,
+                  })
+                }
+                navigate('watch', params)
+              }}
               settings={settings}
               onUpdateSettings={updateSettings}
               navigate={navigate}
