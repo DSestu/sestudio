@@ -35,6 +35,7 @@ class ServerService : Service() {
             }
             // Swiped away (Android 14+ allows it even here): it is the only Stop button, so it comes back.
             ACTION_REPOST -> if (process != null) getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
+            ACTION_RESTART -> restart()
             else -> start()
         }
         return START_STICKY
@@ -61,12 +62,27 @@ class ServerService : Service() {
         wifiLock = getSystemService(WifiManager::class.java)
             .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "sestudio:server").apply { acquire() }
 
+        launch()
+    }
+
+    /** The server again, on the source [nightly] now picks, once the old one has let go of its ports. */
+    private fun restart() {
+        val old = process ?: return start()
+        process = null // so its watcher does not stop the service
+        old.destroy()
+        thread(name = "server-restart") {
+            old.waitFor()
+            launch()
+        }
+    }
+
+    private fun launch() {
         val runtime = Runtime(this)
         writeFirstConfig(runtime)
         val downloads = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!.apply { mkdirs() }
-        // sestudio-dev builds main afresh on every start (same URL, new code: hence the refresh);
+        // Nightly builds main afresh on every start (same URL, new code: hence the refresh);
         // a build from source has no default TMDB key, so posters need one in Settings.
-        val source = if (BuildConfig.FROM_MAIN) {
+        val source = if (nightly(this)) {
             arrayOf("--refresh-package", "sestudio", "--from", MAIN_ARCHIVE, "sestudio")
         } else {
             arrayOf("sestudio@latest")
@@ -125,6 +141,7 @@ class ServerService : Service() {
     companion object {
         const val ACTION_STOP = "io.github.dsestu.sestudio.STOP"
         private const val ACTION_REPOST = "io.github.dsestu.sestudio.REPOST"
+        private const val ACTION_RESTART = "io.github.dsestu.sestudio.RESTART"
         private const val CHANNEL = "server"
         private const val NOTIFICATION_ID = 1
 
@@ -141,6 +158,17 @@ class ServerService : Service() {
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, ServerService::class.java))
+        }
+
+        private fun prefs(context: Context) = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+        /** Whether the server runs main instead of the latest release: off by default, on in sestudio-dev. */
+        fun nightly(context: Context) = prefs(context).getBoolean("nightly", BuildConfig.FROM_MAIN)
+
+        /** Switches [nightly] and restarts the server on it. */
+        fun setNightly(context: Context, on: Boolean) {
+            prefs(context).edit().putBoolean("nightly", on).apply()
+            context.startService(Intent(context, ServerService::class.java).setAction(ACTION_RESTART))
         }
     }
 }
