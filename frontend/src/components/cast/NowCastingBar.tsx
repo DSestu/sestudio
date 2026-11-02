@@ -21,6 +21,7 @@ import type { Navigate } from '../../nav'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
 import { requestPullback } from '../../pullback'
 import { saveProgress } from '../../watchState'
+import { usePhoneStrip } from '../../phoneStrip'
 
 
 // Relative-seek magnitudes — one per column, applied backward (top row) and
@@ -85,6 +86,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   // Only one target is ever connected; DLNA takes precedence if both somehow are.
   const target: 'dlna' | 'chromecast' | null =
     dlna.connected ? 'dlna' : cast.connected ? 'chromecast' : null
+  usePhoneStrip(!!target && !desktop)
   if (!target) return null
 
   const live = target === 'dlna'
@@ -363,10 +365,11 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
       {/* Bar — clicking anywhere on it (except the controls) returns to the
           casting title's watch view. */}
       {/* A floating glass dock on desktop; on phones it sits on the dock as one
-          glass object. The accordion, when open, joins on top of it. */}
+          glass object. The accordion, when open, joins on top of it. Only the
+          corners with nothing against them are rounded. */}
       <div className={`relative glass overflow-hidden md:mx-auto md:max-w-3xl max-md:animate-dock-rise motion-reduce:animate-none ${
-        open ? "md:rounded-b-2xl" : away ? "max-md:rounded-2xl md:rounded-2xl" : "max-md:rounded-t-2xl md:rounded-2xl"
-      }`}>
+        open ? '' : 'rounded-t-2xl'
+      } ${away ? 'max-md:rounded-b-2xl' : ''} md:rounded-b-2xl`}>
         <div
           onClick={desktop ? openSeries : () => setOpen(o => !o)}
           className={`w-full flex items-center gap-3 px-3 md:px-6 py-2 ${
