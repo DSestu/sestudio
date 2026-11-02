@@ -8,8 +8,10 @@ import type { WidgetSize } from '../../homeOrder'
 const SPAN: Record<WidgetSize, string> = {
   S: 'col-span-1 row-span-3',
   M: 'col-span-2 row-span-3',
-  L: 'col-span-2 row-span-5 md:row-span-6',
+  L: 'col-span-2 md:row-span-6',
 }
+// An L on a phone sits alone, so it can be shorter when it holds little.
+const PHONE_ROWS = { 3: 'row-span-3', 4: 'row-span-4', 5: 'row-span-5' }
 
 /** Home's grid: widgets place themselves by size, and packing is dense so an S
  *  fills the gap another S left (docs/SPEC-home-dashboard.md §2). */
@@ -43,12 +45,14 @@ interface Props {
   style?: CSSProperties
   /** While the data loads: a skeleton at the widget's final size, so nothing jumps. */
   loading?: boolean
+  /** Phone height of an L, in grid rows (default 5). */
+  phoneRows?: keyof typeof PHONE_ROWS
   children?: ReactNode
 }
 
 /** One widget on Home: a flat Aisle Dark panel whose header opens the full view. */
 export default function Widget({
-  size, lone, title, sub, count, badge, icon, after, onOpen, frame = '', style, loading, children,
+  size, lone, title, sub, count, badge, icon, after, onOpen, frame = '', style, loading, phoneRows = 5, children,
 }: Props) {
   const heading = (
     <>
@@ -74,7 +78,7 @@ export default function Widget({
     <section
       aria-label={title}
       style={style}
-      className={`relative isolate flex flex-col min-w-0 overflow-hidden rounded-box bg-base-200 p-3 animate-rise motion-reduce:animate-none ${lone ? 'col-span-2 row-span-3' : SPAN[size]} ${frame}`}
+      className={`relative isolate flex flex-col min-w-0 overflow-hidden rounded-box bg-base-200 p-3 animate-rise motion-reduce:animate-none ${lone ? 'col-span-2 row-span-3' : size === 'L' ? `${SPAN.L} ${PHONE_ROWS[phoneRows]}` : SPAN[size]} ${frame}`}
     >
       <h2 className="-mx-1 -mt-1.5 mb-1.5">
         {onOpen ? (

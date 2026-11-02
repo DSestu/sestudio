@@ -51,6 +51,8 @@ export default function ContinueWidget({ items, onOpen, onSeeAll, style }: Props
       count={items.length}
       onOpen={onSeeAll}
       frame="f-continue"
+      // A phone shows it alone: the lead is 3 rows, each row under it adds about one.
+      phoneRows={rest.length === 0 ? 3 : rest.length === 1 ? 4 : 5}
       style={{ ...style, '--p': `${Math.round(fraction(lead) * 100)}%` } as CSSProperties}
     >
       {/* The show's own light behind the header and hero, fading into the panel. */}
