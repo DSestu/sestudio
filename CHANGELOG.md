@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.6.0](https://github.com/DSestu/sestudio/compare/v1.5.0...v1.6.0) (2026-11-02)
+
+
+### New features
+
+* an empty Home opens on a welcome lit by trending posters, with two tiles that show what is still to come ([#212](https://github.com/DSestu/sestudio/issues/212)) ([681e70a](https://github.com/DSestu/sestudio/commit/681e70af32232512e55ea349c10f069216cb84ea))
+* Home lists your series' episodes airing this week, with a button to be told when the VF lands ([#208](https://github.com/DSestu/sestudio/issues/208)) ([8b4d940](https://github.com/DSestu/sestudio/commit/8b4d94033553fb9894081f08b330a1f2bbb01f67))
+* Home shows a health widget only when something is wrong, and a quiet All good line otherwise ([#209](https://github.com/DSestu/sestudio/issues/209)) ([dd21e7c](https://github.com/DSestu/sestudio/commit/dd21e7c31ead2247067a0ca8bd840e78b53509cf))
+* Home shows the download queue filling its frame, and what is saved on this device ([#213](https://github.com/DSestu/sestudio/issues/213)) ([8f94db0](https://github.com/DSestu/sestudio/commit/8f94db0ad1eecb9599994681f8d5a6b0689f03c2))
+* Home shows the latest videos from your channels, marked when they are new since your last visit ([#210](https://github.com/DSestu/sestudio/issues/210)) ([6c87812](https://github.com/DSestu/sestudio/commit/6c8781260359ac166e247430e4a24f9fab071a10))
+* Home suggests titles like one you watched, lit by the top pick's own poster ([#207](https://github.com/DSestu/sestudio/issues/207)) ([ec2b310](https://github.com/DSestu/sestudio/commit/ec2b310c3c911a8da640214775b8e50f0430a52a))
+* Home's live channels and new episodes become half-width widgets instead of a full-width feed ([#205](https://github.com/DSestu/sestudio/issues/205)) ([e4a37b6](https://github.com/DSestu/sestudio/commit/e4a37b6fcd66ab59f0e306d276265451b1be4b34))
+* playing an episode from another season of the watch playlist keeps the page and the player in place instead of reloading it ([#218](https://github.com/DSestu/sestudio/issues/218)) ([b6a704a](https://github.com/DSestu/sestudio/commit/b6a704a65ab6c82bf51c92bc93a2e04d24a8a296))
+* the Android app installs on 32-bit ARM, x86_64 and 16 KB-page phones, and on kernels where proot's seccomp mode fails ([#217](https://github.com/DSestu/sestudio/issues/217)) ([49ae00d](https://github.com/DSestu/sestudio/commit/49ae00d4a577a5844cd28c956ca79453ae29c4a5))
+* the collapsed watch playlist is a glass rail that opens over the player on hover, with a pin and a click on its header to keep it open ([#221](https://github.com/DSestu/sestudio/issues/221)) ([948b6e9](https://github.com/DSestu/sestudio/commit/948b6e9d5e2c25f1386faa88e25949e1cd9ba913))
+* the watch page joins the glass header: title, status and a ⋯ menu, sliding-pill tabs on phones ([#214](https://github.com/DSestu/sestudio/issues/214)) ([56b8e42](https://github.com/DSestu/sestudio/commit/56b8e42f5ad22069c5e4f13880c9500456582172))
+* the watch playlist lists every season in one accordion that opens in place, with pills that scroll to a season on the first click ([#216](https://github.com/DSestu/sestudio/issues/216)) ([3ead933](https://github.com/DSestu/sestudio/commit/3ead93388d4559ffe2d55fe923ae26c95dba4073))
+
+
+### Bug fixes
+
+* HTML entities in episode titles, even encoded twice, show as the characters they stand for ([#220](https://github.com/DSestu/sestudio/issues/220)) ([f87cb73](https://github.com/DSestu/sestudio/commit/f87cb735333148c67451aaf4d7f6bf1ae850ee8b))
+* the phone top card slides away while the search sheet is full screen, so it no longer covers the search field ([#215](https://github.com/DSestu/sestudio/issues/215)) ([6be859e](https://github.com/DSestu/sestudio/commit/6be859ead0e1dbc96e0fb63d20fb2b2004fcd811))
+
 ## [1.5.0](https://github.com/DSestu/sestudio/compare/v1.4.0...v1.5.0) (2026-11-01)
 
 
