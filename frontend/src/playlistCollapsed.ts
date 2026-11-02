@@ -9,9 +9,10 @@ const STORAGE_KEY = 'sestudio.playlist.collapsed'
 
 function read(): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY) === '1'
+    // Folded into the rail until someone pins it open.
+    return localStorage.getItem(STORAGE_KEY) !== '0'
   } catch {
-    return false
+    return true
   }
 }
 

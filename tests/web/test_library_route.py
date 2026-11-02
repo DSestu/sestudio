@@ -38,7 +38,7 @@ def test_get_library_empty(client):
         "watch": {},
         "collections": {"watchlist": {}, "favourites": {}},
         "player": None,
-        "playlist_collapsed": False,
+        "playlist_collapsed": True,
         "library_layout": None,
     }
 

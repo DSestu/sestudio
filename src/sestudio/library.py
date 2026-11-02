@@ -203,7 +203,7 @@ def get_snapshot() -> dict[str, Any]:
         "watch": watch,
         "collections": collections,
         "player": prefs.get("player"),
-        "playlist_collapsed": bool(prefs.get("playlist_collapsed", False)),
+        "playlist_collapsed": bool(prefs.get("playlist_collapsed", True)),
         "library_layout": prefs.get("library_layout"),
     }
 

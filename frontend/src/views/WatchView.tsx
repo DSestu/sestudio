@@ -396,7 +396,7 @@ export default function WatchView({
   }
 
   // The other seasons' episodes, loaded when the playlist opens one.
-  const { lists: seasonLists, load: loadSeason } = useSeasonLists(showSeasons, activeLang)
+  const { lists: seasonLists, load: loadSeason } = useSeasonLists(showSeasons, activeLang, !!detail)
 
   // Language first: when the open episode has nothing to play in the chosen
   // language but another site carries it, move there rather than silently
