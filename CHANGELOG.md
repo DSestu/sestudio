@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.7.0](https://github.com/DSestu/sestudio/compare/v1.6.0...v1.7.0) (2026-11-02)
+
+
+### New features
+
+* a film or a video on the watch page drops the one-row playlist: similar titles or more from its channel on the right, Download beside the controls ([#223](https://github.com/DSestu/sestudio/issues/223)) ([d45a383](https://github.com/DSestu/sestudio/commit/d45a383ec1c3329226476ace79b2ec41dee4550a))
+* a Nightly switch in the Android app's Settings runs the server on GitHub's main instead of the latest release ([#219](https://github.com/DSestu/sestudio/issues/219)) ([beba4dc](https://github.com/DSestu/sestudio/commit/beba4dcdb8f55dacc2b3334bb7fdd095dd9aca6e))
+* the watch playlist starts folded into its rail, and every season's episodes are loaded in the background so their counts show ([#224](https://github.com/DSestu/sestudio/issues/224)) ([1846854](https://github.com/DSestu/sestudio/commit/1846854de636a6c889d2dfa5e21210d0538f21f6))
+
 ## [1.6.0](https://github.com/DSestu/sestudio/compare/v1.5.0...v1.6.0) (2026-11-02)
 
 
