@@ -1,0 +1,361 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{--b1:oklch(16% 0.015 240);--b2:oklch(20% 0.02 240);--b3:oklch(26% 0.025 240);--b4:oklch(34% 0.025 240);--tx:oklch(92% 0.01 240);--pr:oklch(72% 0.16 230);--pri:oklch(18% 0.05 230);--ok:oklch(76% 0.17 155);--ease:cubic-bezier(.2,.8,.2,1)}
+*{box-sizing:border-box}body{margin:0}
+.wrap{font-family:var(--font-sans,system-ui);display:flex;flex-direction:column;gap:14px}
+.tabbar{display:flex;gap:6px;flex-wrap:wrap}
+.tabbar button{font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--border,#444);background:transparent;color:var(--foreground,#ddd);cursor:pointer}
+.tabbar button.on{background:var(--primary,#0af);color:var(--primary-foreground,#000);border-color:transparent}
+.tabbar.sub button{font-size:12px;padding:4px 10px}
+.note{font-size:13px;color:var(--muted-foreground,#999);margin:0;line-height:1.5}.note b{color:var(--foreground,#eee)}
+.lbl{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground,#999);margin:8px 0 0}
+.scaler{position:relative;width:100%;overflow:hidden;border-radius:var(--radius,8px)}
+.scaler>.screen{position:absolute;top:0;left:0;transform-origin:0 0}
+.phones{display:flex;justify-content:center}.phones .scaler{width:auto}
+.screen{background:var(--b1);color:var(--tx);font-family:ui-sans-serif,system-ui,sans-serif;font-size:14px;overflow:hidden;position:relative}
+.row{display:flex;align-items:center}
+.muted{color:color-mix(in oklch,var(--tx) 60%,transparent)}.faint{color:color-mix(in oklch,var(--tx) 45%,transparent)}
+svg{flex:none}
+/* ---- Signal glass (index.css @utility glass) ---- */
+.glass{background:hsl(205 62% 14% / .66);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);box-shadow:inset 0 0 0 1px rgb(255 255 255/.08),0 8px 24px rgb(0 0 0/.35)}
+.gbtn{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;border:0;background:rgb(255 255 255/.06);color:color-mix(in oklch,var(--tx) 85%,transparent);cursor:pointer;transition:scale .12s,background .2s,color .2s}
+.gbtn:active{scale:.92}.gbtn svg{width:20px;height:20px}
+.gbtn.lit{background:color-mix(in oklch,var(--pr) 22%,transparent);color:var(--pr)}
+.gbtn.sm{width:32px;height:32px;border-radius:10px}.gbtn.sm svg{width:16px;height:16px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:12px;border:0;background:rgb(255 255 255/.06);color:var(--tx);font:500 13px ui-sans-serif,system-ui;cursor:pointer;white-space:nowrap;transition:scale .12s}
+.btn:active{scale:.92}.btn svg{width:16px;height:16px}
+.btn.pri{background:var(--pr);color:var(--pri);font-weight:600}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.chip.p{background:color-mix(in oklch,var(--pr) 22%,transparent);color:var(--pr)}.chip.g{background:var(--b3)}.chip.ok{background:color-mix(in oklch,var(--ok) 22%,transparent);color:var(--ok)}.chip.red{background:oklch(62% .22 25);color:#fff}
+/* ---- desktop shell: slim rail + header card ---- */
+.navrail{position:absolute;left:12px;top:12px;bottom:12px;width:84px;border-radius:16px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:16px 0}
+.mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#8b5cf6,#38bdf8);display:grid;place-items:center;margin-bottom:12px}.mark svg{width:16px;height:16px;fill:#fff}
+.sbtn{width:52px;height:52px;border-radius:16px;background:var(--pr);color:var(--pri);display:grid;place-items:center;margin-bottom:12px}.sbtn svg{width:24px;height:24px}
+.ni{width:72px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 9px;font-size:11px;color:color-mix(in oklch,var(--tx) 70%,transparent);position:relative}
+.ni i{display:grid;place-items:center;width:52px;height:30px;border-radius:10px}.ni svg{width:20px;height:20px}
+.ni.on{color:var(--pr)}.ni.on i{background:color-mix(in oklch,var(--pr) 22%,transparent)}
+.deskmain{position:absolute;left:108px;right:0;top:0;bottom:0;padding:12px 20px 20px 20px;display:flex;flex-direction:column;gap:18px}
+.hcard{border-radius:16px;height:64px;display:flex;align-items:center;gap:24px;padding:0 12px 0 16px;flex:none}
+.ttl{display:flex;align-items:center;gap:8px;min-width:0;max-width:30%}
+.ttl h2{margin:0;font-size:18px;font-weight:650;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl p{margin:1px 0 0;font-size:12px;color:color-mix(in oklch,var(--tx) 60%,transparent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ttl p em{font-style:normal;color:var(--pr)}
+.field{flex:1;min-width:300px;max-width:560px;height:42px;border-radius:12px;background:rgb(0 0 0/.25);box-shadow:inset 0 0 0 1px rgb(255 255 255/.08);display:flex;align-items:center;gap:10px;padding:0 12px;font-size:13px;color:color-mix(in oklch,var(--tx) 45%,transparent)}
+.field svg{width:16px;height:16px}.field kbd{margin-left:auto;font:11px ui-monospace,monospace;padding:2px 6px;border-radius:6px;background:rgb(255 255 255/.08)}
+/* ---- phone shell: top card + dock ---- */
+.pcard{position:absolute;left:12px;right:12px;top:12px;border-radius:16px;padding:10px 12px 10px 10px;z-index:4}
+.pcard .ttl{max-width:none;flex:1}
+.dock{position:absolute;left:12px;right:12px;bottom:12px;height:66px;border-radius:16px;display:grid;grid-template-columns:repeat(5,1fr);align-items:center;z-index:4}
+.dock .ni{width:auto;padding:0;gap:3px;font-size:10px}.dock .ni i{width:52px;height:30px}
+.dock .sbtn{margin:0 auto;width:52px;height:52px}
+/* ---- player and content ---- */
+.player{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000;flex:none}
+.player img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.6}
+.play{position:absolute;left:50%;top:50%;translate:-50% -50%;width:60px;height:60px;border-radius:18px;background:var(--pr);display:grid;place-items:center}
+.play svg{width:26px;height:26px;margin-left:3px;fill:var(--pri)}
+.seek{position:absolute;left:12px;right:12px;bottom:12px;height:4px;border-radius:2px;background:rgb(255 255 255/.25)}.seek i{display:block;height:100%;width:22%;background:var(--pr);border-radius:2px}
+.vswitch{display:inline-flex;align-items:center;height:34px;border-radius:12px;background:rgb(255 255 255/.06);padding:3px;font-size:13px;white-space:nowrap}
+.vswitch b{height:100%;display:grid;place-items:center;padding:0 10px;border-radius:9px;background:color-mix(in oklch,var(--pr) 24%,transparent);color:var(--pr)}
+.panel{background:var(--b2);border-radius:8px}
+.h3{font-size:17px;font-weight:600;letter-spacing:-.02em;margin:0}
+.syn{font-size:14px;line-height:1.5;color:color-mix(in oklch,var(--tx) 80%,transparent);margin:0}
+.cap{margin:0;font-weight:600;font-size:13px}
+.sim{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sim img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;display:block;background:var(--b3)}.sim p{margin:5px 0 0;font-size:12px}
+.vids{display:flex;flex-direction:column;gap:10px}
+.vid{display:flex;gap:10px;align-items:flex-start;font-size:12px;line-height:1.35}
+.vid img{width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;flex:none;background:var(--b3)}
+.vid p{margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vid span{font-size:11px;color:color-mix(in oklch,var(--tx) 45%,transparent)}
+.filebar{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;background:var(--b2);font-size:13px}
+.filebar code{font:12px ui-monospace,monospace;opacity:.7}
+.avatar{width:32px;height:32px;border-radius:50%;background:oklch(62% .22 25);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+/* segmented, as PageHeader's */
+.seg{position:relative;display:grid;grid-template-columns:repeat(3,1fr);border-radius:12px;background:rgb(0 0 0/.22);padding:3px}
+.seg .pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px)/3);border-radius:9px;background:color-mix(in oklch,var(--pr) 24%,transparent);transition:translate .3s var(--ease)}
+.seg button{position:relative;height:34px;border:0;background:none;color:color-mix(in oklch,var(--tx) 70%,transparent);font:500 13px ui-sans-serif,system-ui;cursor:pointer}
+.seg button.on{color:var(--tx);font-weight:600}
+/* playlist */
+.pl{display:flex;flex-direction:column;min-height:0;height:100%}
+.plhead{padding:12px 12px 10px;display:flex;flex-direction:column;gap:10px}
+.srail{position:relative;display:flex;gap:4px;border-radius:12px;background:rgb(0 0 0/.22);padding:3px}
+.srail .pill{position:absolute;top:3px;bottom:3px;left:0;border-radius:9px;background:color-mix(in oklch,var(--pr) 24%,transparent);transition:translate .3s var(--ease),width .3s var(--ease)}
+.srail button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0 6px;border-radius:9px;border:0;background:transparent;color:color-mix(in oklch,var(--tx) 70%,transparent);font:600 12px ui-sans-serif,system-ui;cursor:pointer}
+.srail button.cur{color:var(--pr)}
+.srail button u{display:block;width:60%;height:3px;border-radius:2px;background:rgb(255 255 255/.1);overflow:hidden;text-decoration:none}.srail button u s{display:block;height:100%;background:var(--ok);transition:width .3s var(--ease)}
+.plbody{position:relative;flex:1;min-height:0;overflow-y:auto;padding:0 8px 8px;scrollbar-width:thin}
+.season{margin-bottom:4px;scroll-margin-top:6px}
+.shead{position:sticky;top:0;z-index:2;width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;border:0;background:var(--b2);color:var(--tx);font:14px ui-sans-serif,system-ui;text-align:left;cursor:pointer;transition:background .3s}
+.glass .shead{background:hsl(205 50% 15%)}
+.shead:hover{background:var(--b3)}.season.open>.shead{background:var(--b3)}
+.season.flash>.shead{background:color-mix(in oklch,var(--pr) 28%,var(--b3))}
+.chev{width:14px;height:14px;transition:rotate .28s var(--ease);opacity:.6}.season.open .chev{rotate:90deg}
+.sname{font-weight:600}.smeta{font-size:12px;color:color-mix(in oklch,var(--tx) 55%,transparent)}
+.sprog{margin-left:auto;display:flex;align-items:center;gap:8px}
+.sbar{width:44px;height:4px;border-radius:2px;background:rgb(255 255 255/.1);overflow:hidden}.sbar i{display:block;height:100%;background:var(--ok);transition:width .3s var(--ease)}
+.playing{font-size:10px;font-weight:700;color:var(--pr);background:color-mix(in oklch,var(--pr) 22%,transparent);border-radius:6px;padding:2px 6px}
+.fold{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s var(--ease)}.season.open>.fold{grid-template-rows:1fr}.fold>div{overflow:hidden;min-height:0}
+.eps{list-style:none;margin:4px 0 6px 10px;padding:0 0 0 6px;border-left:1px solid var(--b4)}
+.ep{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;cursor:pointer;font-size:14px;opacity:0;translate:0 6px;transition:opacity .24s var(--ease),translate .24s var(--ease),background .15s}
+.season.open .ep.in{opacity:1;translate:0 0}.ep:hover{background:rgb(255 255 255/.05)}
+.ep.cur{background:color-mix(in oklch,var(--pr) 22%,transparent)}
+.ep .n{font:12px ui-monospace,monospace;color:color-mix(in oklch,var(--tx) 45%,transparent);width:28px;flex:none}.ep.cur .n,.ep.cur .t{color:var(--pr)}
+.ep .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ep .w{width:16px;height:16px;color:var(--ok)}
+.skel .t b{display:block;height:10px;width:60%;border-radius:4px;background:var(--b3);animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.4}}
+.ep .prog{height:2px;background:var(--b4);border-radius:1px;margin-top:5px;overflow:hidden}.ep .prog i{display:block;height:100%;background:var(--pr)}
+.dlbar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid rgb(255 255 255/.06);font-size:12px}
+/* ---- C: rail, peek, pin ---- */
+.grid{display:grid;gap:20px;align-items:start;transition:grid-template-columns .36s var(--ease)}
+.side{position:relative;height:100%}
+.strip{position:absolute;inset:0;width:86px;border-radius:16px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 7px;transition:opacity .22s var(--ease),translate .36s var(--ease)}
+.strip .ni{width:72px;cursor:pointer}
+.strip .now{width:100%;text-align:center;border-radius:10px;padding:6px 0;background:color-mix(in oklch,var(--pr) 22%,transparent)}
+.strip .now b{display:block;font-size:13px;color:var(--pr)}.strip .now span{font-size:10px;opacity:.7}
+.strip .nx{width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border-radius:10px;border:0;background:rgb(255 255 255/.06);color:var(--tx);cursor:pointer;font:600 12px ui-sans-serif,system-ui;transition:scale .12s}
+.strip .nx:active{scale:.92}.strip .nx span{font-size:10px;font-weight:400;opacity:.6}
+.map{display:flex;flex-direction:column;gap:8px;overflow-y:auto;width:100%;flex:1;min-height:0;scrollbar-width:none;padding-top:4px}
+.map p{margin:0 0 4px;font-size:10px;font-weight:700;opacity:.55;text-align:center}
+.dots{display:grid;grid-template-columns:repeat(4,13px);gap:4px;justify-content:center}
+.dots b{width:13px;height:13px;border-radius:4px;background:rgb(255 255 255/.07);cursor:pointer;transition:transform .15s}
+.dots b:hover{transform:scale(1.25)}.dots b.w{background:color-mix(in oklch,var(--ok) 65%,transparent)}
+.dots b.c{background:var(--pr);box-shadow:0 0 0 2px color-mix(in oklch,var(--pr) 35%,transparent)}
+.dots b.h{background:linear-gradient(90deg,color-mix(in oklch,var(--pr) 70%,transparent) 40%,rgb(255 255 255/.07) 40%)}
+.sheet{position:absolute;top:0;right:0;width:380px;height:100%;z-index:6;border-radius:16px;overflow:hidden;opacity:0;translate:12px 0;filter:blur(10px);pointer-events:none;transition:opacity .2s var(--ease),translate .2s var(--ease),filter .2s var(--ease),background .36s var(--ease),box-shadow .36s var(--ease),border-radius .36s var(--ease)}
+.side.peek .sheet,.side.pinned .sheet{opacity:1;translate:0 0;filter:none;pointer-events:auto;transition-duration:.3s}
+/* Discover's .rows-follow: rows follow the sheet in, top to bottom, and leave together */
+.sheet .fl{opacity:0;translate:8px 0;transition:opacity 260ms,translate 260ms var(--ease)}
+.side.peek .sheet .fl,.side.pinned .sheet .fl{opacity:1;translate:0 0}
+.side.peek .sheet .fl{transition-delay:var(--d)}
+.sheet .bar{cursor:pointer;border-radius:10px;margin:-4px -6px;padding:4px 6px;transition:opacity 260ms,translate 260ms var(--ease),background .2s}
+.sheet .bar:hover{background:rgb(255 255 255/.04)}
+.sheet .bar:hover [data-pin]{background:color-mix(in oklch,var(--pr) 14%,transparent);color:var(--pr)}
+.side.pinned .sheet{background:var(--b2);box-shadow:none;backdrop-filter:none;border-radius:8px}
+.side.pinned .sheet .shead{background:var(--b2)}.side.pinned .sheet .season.open>.shead{background:var(--b3)}
+.side.peek .strip,.side.pinned .strip{opacity:0;pointer-events:none}
+.side.pinned .strip{translate:-16px 0}
+.scrim{position:absolute;inset:0;border-radius:12px;background:rgb(0 0 0/.45);opacity:0;pointer-events:none;transition:opacity .3s var(--ease);z-index:5}
+.scrim.on{opacity:1;pointer-events:auto}
+.mode{display:inline-flex;gap:4px;margin-left:8px}
+.pinhint{font-size:11px;color:color-mix(in oklch,var(--tx) 55%,transparent)}
+</style></head>
+<body><div class="wrap">
+<div class="tabbar" id="tabs">
+  <button data-t="a" class="on">A · Single item</button>
+  <button data-t="b">B · Seasons on one page</button>
+  <button data-t="c">C · Collapsed playlist</button>
+</div>
+
+<section data-t="a">
+<p class="note"><b>Same rule, new shell:</b> the right column only exists when there is a list for it. The title, status line and page actions (watch, watchlist, favourite) move into the glass header card next to the search field, behind <b>⋯</b>, as on every other page. Panels are flat <code>base-200</code> like Home's widgets; glass stays for what floats.</p>
+<div class="tabbar sub" id="atabs">
+  <button data-v="film" class="on">Film on TMDB</button>
+  <button data-v="yt">YouTube video</button>
+  <button data-v="file">Local file, no TMDB match</button>
+</div>
+<p class="lbl">Desktop</p>
+<div class="scaler" data-w="1120" data-h="700"><div class="screen" id="adesk" style="width:1120px;height:700px"></div></div>
+<p class="lbl">Phone</p>
+<div class="phones"><div class="scaler" data-w="390" data-h="844" data-s=".74"><div class="screen" id="aphone" style="width:390px;height:844px"></div></div></div>
+</section>
+
+<section data-t="b" hidden>
+<p class="note"><b>Every season on one page.</b> The S1–S5 pills are a segmented control now: the glass pill slides to the season you pick, which opens in place and scrolls into view on the first click, its header flashing. Skeleton rows while it loads, then episodes fade in one by one. The playing episode uses the app's active pill instead of an outline. <b>Try it:</b> click S4, then an episode.</p>
+<p class="lbl">Desktop</p>
+<div class="scaler" data-w="1120" data-h="700"><div class="screen" id="bdesk" style="width:1120px;height:700px"></div></div>
+<p class="lbl">Phone</p>
+<div class="phones"><div class="scaler" data-w="390" data-h="844" data-s=".74"><div class="screen" id="bphone" style="width:390px;height:844px"></div></div></div>
+</section>
+
+<section data-t="c" hidden>
+<p class="note"><b>No new button.</b> Closed, the playlist is a glass rail, the twin of the nav rail on the left: same 84px width, an <b>Episodes</b> item at the top, then Playing, Next and the episode map. <b>Hover it</b> and the list opens over the player as a glass sheet with Discover's exact motion (fades, slides out of the rail and sharpens, its rows following one after another); leave and it closes. <b>Pin</b> in the sheet's header, or a click anywhere empty on that header row, keeps it open: the column grows with the animation you liked, and the pin stays lit; click it again to fold back. On a touch screen: tap the rail to open, tap the dimmed player to close.
+<span class="mode tabbar sub" id="cmode"><button data-m="mouse" class="on">Mouse</button><button data-m="touch">Touch tablet</button></span></p>
+<p class="lbl">Desktop</p>
+<div class="scaler" data-w="1120" data-h="760"><div class="screen" id="cdesk" style="width:1120px;height:760px"></div></div>
+<p class="note">Phone: unchanged from B; the list lives in the Episodes tab under the player.</p>
+</section>
+</div>
+<script>
+const ICONS={
+ back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+ more:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+ search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+ home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>',
+ compass:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>',
+ heart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+ media:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="13" rx="2"/><path d="M10 8.5v5l4-2.5z" fill="currentColor"/><path d="M8 20h8"/></svg>',
+ bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/></svg>',
+ settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
+ list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg>',
+ pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/></svg>',
+ cast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M2 12a9 9 0 0 1 8 8M2 16a5 5 0 0 1 4 4M2 20h.01"/></svg>',
+ pip:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 11h-8v6h8v-6zm4 8V5a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2zm-2 0H3V5h18v14z"/></svg>',
+ down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>'};
+const I=k=>ICONS[k];
+const MARK='<div class="mark"><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></svg></div>';
+const navrail=()=>`<aside class="navrail glass">${MARK}<div class="sbtn">${I('search')}</div>
+ ${[['home','Home'],['compass','Discover'],['heart','Library'],['media','Media'],['bell','Activity']].map(([k,l])=>`<div class="ni"><i>${I(k)}</i>${l}</div>`).join('')}
+ <div class="ni" style="margin-top:auto"><i>${I('settings')}</i>Settings</div></aside>`;
+const hcard=(t,s)=>`<header class="hcard glass"><div class="ttl"><button class="gbtn" style="margin-left:-4px">${I('back')}</button><div style="min-width:0"><h2>${t}</h2><p>${s}</p></div></div>
+ <div class="field">${I('search')}<span>Search titles, or paste a YouTube or Twitch link</span><kbd>Ctrl K</kbd></div><button class="gbtn" style="margin-left:auto">${I('more')}</button></header>`;
+const pcard=(t,s)=>`<header class="pcard glass"><div class="row" style="gap:8px"><button class="gbtn">${I('back')}</button><div class="ttl" style="flex:1"><div style="min-width:0"><h2 style="font-size:19px">${t}</h2><p>${s}</p></div></div><button class="gbtn">${I('more')}</button></div></header>`;
+const dock=()=>`<nav class="dock glass">${[['home','Home'],['heart','Library']].map(([k,l])=>`<div class="ni"><i>${I(k)}</i>${l}</div>`).join('')}<div class="sbtn">${I('search')}</div>${[['media','Media'],['bell','Activity']].map(([k,l])=>`<div class="ni"><i>${I(k)}</i>${l}</div>`).join('')}</nav>`;
+const seg=(labels,on=0)=>`<div class="seg"><span class="pill" style="translate:${on*100}% 0"></span>${labels.map((l,i)=>`<button class="${i===on?'on':''}" data-i="${i}">${l}</button>`).join('')}</div>`;
+function wireSeg(root){root.querySelectorAll('.seg').forEach(s=>s.querySelectorAll('button').forEach(b=>b.onclick=()=>{s.querySelector('.pill').style.translate=`${b.dataset.i*100}% 0`;s.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b))}))}
+const nowline=(ver)=>`<div class="row" style="gap:8px;flex-wrap:wrap">${ver}<button class="btn">${I('cast')}Send to TV</button><button class="btn">${I('pip')}Pop out</button><span style="margin-left:auto" class="muted" style="font-size:13px">Autoplay next <span style="color:var(--pr)">●</span></span></div>`;
+
+// ---------- A: single item ----------
+const PLAY='<div class="play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>';
+const YT=[['🔥LE TIRAGE DES Bo5 WORLDS, T1 sur LE MATCH LE PLUS HYPE OMG?? (SKYYART REACT)','N7K6-pojLoQ','i3','2 h ago'],
+ ['HLE vs BLG🔥UNE VRAIE DEMI FINALE (LE PERDANT = ÉLIMINÉ)','z_L9AX4GMxY','i3','12 h ago'],
+ ['KC vs KOI 🔥 LE MATCH LE PLUS IMPORTANT DE LA KC !','owaLijdIPNQ','i4','1 day ago'],
+ ['G2 vs HLE🔥De Loin Le Match LE PLUS IMPORTANT DES SWISS STAGE 🔥(PIRE DRAW)','0iHpCa_YM8k','i1','2 days ago'],
+ ['BLG Grand Favoris Se Font Humilié ?🔥BLG vs TES','n5GgId_gWGU','i3','3 days ago']];
+const thumb=v=>`https://${v[2]}.ytimg.com/vi/${v[1]}/hqdefault.jpg`;
+const A={
+ film:{title:'Inception',sub:'Film · 2010 · <em>★ 8.4</em>',img:'https://image.tmdb.org/t/p/w1280/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg',
+  ver:'<span class="vswitch"><b>VF</b><span style="padding:0 9px;opacity:.8">FStream ▾</span></span>',
+  meta:'<div class="row" style="gap:8px"><span class="chip ok">★ 8.4</span><span class="faint" style="font-size:12px">39,910 votes</span><span class="chip g">Action</span><span class="chip g">Science-Fiction</span></div>',
+  body:'<p class="syn">Dom Cobb est un voleur expérimenté, le meilleur dans l\'art dangereux de l\'extraction, voler les secrets les plus intimes enfouis au plus profond du subconscient durant une phase de rêve…</p>',
+  side:`<p class="cap">Similar titles</p><div class="sim">
+   <div><img src="https://image.tmdb.org/t/p/w342/1uCDk42ayyjEtIsHIgR6yBy8DlM.jpg"><p>Paycheck</p></div>
+   <div><img src="https://image.tmdb.org/t/p/w342/kCHcLVt4kR2RrTjMA6rDIZGQEh7.jpg"><p>La Tour sombre</p></div>
+   <div><img src="https://image.tmdb.org/t/p/w342/hzxAClsBFWLYcIkejLnMH9I5pIt.jpg"><p>Push</p></div>
+   <div><img src="https://image.tmdb.org/t/p/w342/8JoIYZGwaMfS9p4kUyylCnQhbC5.jpg"><p>Impostor</p></div></div>`},
+ yt:{title:YT[1][0],sub:'Video · <em>Skyyart</em> · 12 h ago',img:thumb(YT[1]),
+  ver:'<span class="chip red" style="height:34px;border-radius:12px;padding:0 12px">YouTube</span>',
+  meta:'<div class="row" style="gap:10px"><span class="avatar">S</span><div style="flex:1"><b style="font-size:14px">Skyyart</b><div class="faint" style="font-size:12px">Followed</div></div><button class="btn">Open channel</button></div>',
+  body:'',
+  side:`<div class="row"><p class="cap" style="flex:1">More from Skyyart</p><span class="faint" style="font-size:12px">See all ›</span></div><div class="vids">${YT.filter((v,i)=>i!==1).map(v=>`<div class="vid"><img src="${thumb(v)}"><div><p>${v[0]}</p><span>${v[3]}</span></div></div>`).join('')}</div>`},
+ file:{title:'Inception',sub:'Film · on disk',img:null,
+  ver:'<span class="vswitch"><b>OTHER</b><span style="padding:0 9px;opacity:.8">On disk</span></span>',
+  meta:`<div class="filebar"><span style="opacity:.6;display:inline-flex;width:16px">${I('pip')}</span><code style="flex:1">vieux_dd/Inception.avi</code><span>734 MB</span><span class="faint">·</span><span class="muted">Downloaded</span></div>`,
+  body:'',side:null}};
+function renderA(v){
+ const d=A[v],player=`<div class="player">${d.img?`<img src="${d.img}">`:''}${PLAY}</div>`;
+ const actions=`<div class="row" style="gap:8px">${d.ver}<button class="btn">${I('cast')}Send to TV</button><button class="btn">${I('pip')}Pop out</button><button class="btn pri" style="margin-left:auto">${I('down')}Download</button></div>`;
+ const left=`<div style="display:flex;flex-direction:column;gap:14px;min-width:0">${player}${actions}${d.meta}${d.body}</div>`;
+ const desk=document.getElementById('adesk');
+ desk.innerHTML=navrail()+`<main class="deskmain">${hcard(d.title,d.sub)}`+(d.side
+  ?`<div style="display:grid;grid-template-columns:1fr 320px;gap:20px;min-height:0">${left}<aside class="panel" style="padding:12px;display:flex;flex-direction:column;gap:12px;max-height:560px;overflow:hidden">${d.side}</aside></div>`
+  :`<div style="width:100%;max-width:880px;margin:0 auto">${left}</div>`)+'</main>';
+ const ph=document.getElementById('aphone');
+ ph.innerHTML=pcard(d.title,d.sub)+`<div style="position:absolute;inset:0;padding:100px 16px 100px;display:flex;flex-direction:column;gap:14px;overflow:hidden">${player}
+   <div class="row" style="gap:8px">${d.ver}<button class="btn">${I('cast')}TV</button><button class="btn pri" style="margin-left:auto">${I('down')}Download</button></div>
+   ${d.meta}${d.body}
+   ${d.side?`<div class="panel" style="padding:12px;display:flex;flex-direction:column;gap:12px">${d.side.replace('class="sim"','class="sim" style="grid-template-columns:repeat(4,1fr)"')}</div>`:''}
+  </div>`+dock();
+}
+document.querySelectorAll('#atabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#atabs button').forEach(x=>x.classList.toggle('on',x===b));renderA(b.dataset.v)});
+renderA('film');
+
+// ---------- B / C: Breaking Bad ----------
+const BB='https://image.tmdb.org/t/p/w1280/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg';
+const VER='<span class="vswitch"><b>VOSTFR</b><span style="padding:0 9px;opacity:.8">KissKH ▾</span></span>';
+const deskWatch=(side)=>navrail()+`<main class="deskmain">${hcard('Breaking Bad','<em>5 seasons</em> · 2008 · watching')}${side}</main>`;
+document.getElementById('bdesk').innerHTML=deskWatch(`<div style="display:grid;grid-template-columns:1fr 380px;gap:20px;flex:1;min-height:0">
+ <div style="display:flex;flex-direction:column;gap:14px;min-width:0"><div class="player"><img src="${BB}"><div class="seek"><i></i></div></div>
+  <p class="h3 nowt">S01E01 · Episode 1</p>${nowline(VER)}</div>
+ <aside class="panel" style="overflow:hidden;min-height:0" data-pl="desk"></aside></div>`);
+document.getElementById('bphone').innerHTML=pcard('Breaking Bad','<em>5 seasons</em> · 2008')+`<div style="position:absolute;inset:0;padding:100px 16px 90px;display:flex;flex-direction:column;gap:12px">
+ <div class="player"><img src="${BB}"><div class="seek"><i></i></div></div>
+ <div class="row" style="gap:8px"><p class="h3 nowt" style="flex:1;font-size:15px">S01E01 · Episode 1</p><span class="chip p">VOSTFR</span><button class="btn" style="height:32px">${I('cast')}TV</button></div>
+ ${seg(['Episodes','Sources','Output'])}
+ <div class="panel" style="flex:1;min-height:0;overflow:hidden" data-pl="phone"></div></div>`+dock();
+document.getElementById('cdesk').innerHTML=deskWatch(`<div class="grid" id="cgrid" style="grid-template-columns:1fr 86px;flex:1;min-height:0">
+ <div style="display:flex;flex-direction:column;gap:14px;min-width:0;position:relative"><div class="player"><img src="${BB}"><div class="seek"><i></i></div></div>
+  <p class="h3 nowt">S01E01 · Episode 1</p>${nowline(VER)}<div class="scrim" id="cscrim"></div></div>
+ <aside class="side" id="cside">
+  <div class="strip glass">
+   <div class="ni" data-open><i>${I('list')}</i>Episodes</div>
+   <div class="now"><span>Playing</span><b class="nowshort">S1 · E01</b></div>
+   <button class="nx" data-next>▶ Next<span class="nextshort">S1 · E02</span></button>
+   <div class="map" data-map></div>
+  </div>
+  <div class="sheet glass" data-pl="c"></div>
+ </aside></div>`);
+wireSeg(document);
+
+const r=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
+const SEASONS=[{n:1,eps:r(0,7)},{n:2,eps:r(1,13)},{n:3,eps:r(1,13)},{n:4,eps:r(1,13)},{n:5,eps:r(1,16)}];
+const watched=new Set(['1-0']),half={'1-1':.22};let cur={s:1,e:1};const loaded=new Set([1]);
+const pad=n=>String(n).padStart(2,'0');
+const W='<svg class="w" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="oklch(16% .015 240)" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>';
+const lists=[];
+function buildPlaylist(host,collapse){
+  host.innerHTML=`<div class="pl"><div class="plhead"><div class="row" style="gap:8px"><span style="font-weight:600;font-size:15px">Episodes</span><span class="faint" style="font-size:12px">58</span><span class="chip p" style="margin-left:auto">VOSTFR</span><button class="btn" style="height:32px;padding:0 10px;font-size:12px">${I('down')}Select</button>${collapse?`<button class="gbtn sm" data-pin title="Keep open">${I('pin')}</button>`:''}</div>
+  <div class="srail"><span class="pill"></span>${SEASONS.map(s=>`<button data-jump="${s.n}">S${s.n}<u><s style="width:0"></s></u></button>`).join('')}</div></div>
+  <div class="plbody">${SEASONS.map(s=>`<div class="season" data-s="${s.n}"><button class="shead"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg><span class="sname">Season ${s.n}</span><span class="smeta">${s.eps.length} ep</span><span class="sprog"><span class="badge"></span><span class="sbar"><i style="width:0"></i></span></span></button><div class="fold"><div><ul class="eps"></ul></div></div></div>`).join('')}</div></div>`;
+  const body=host.querySelector('.plbody');
+  host.querySelectorAll('.season').forEach(el=>{const n=+el.dataset.s;el.querySelector('.shead').onclick=()=>toggle(el,n);if(n===cur.s){fill(el,n);el.classList.add('open');stagger(el)}});
+  host.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{
+    const el=host.querySelector(`.season[data-s="${b.dataset.jump}"]`);
+    if(!el.classList.contains('open'))toggle(el,+b.dataset.jump);
+    follow(body,el);movePill(host,b);
+    el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),700);
+  });
+  lists.push(host);
+}
+function movePill(host,b){const p=host.querySelector('.srail .pill');p.style.width=b.offsetWidth+'px';p.style.translate=b.offsetLeft+'px 0'}
+function follow(body,el){
+  const t0=performance.now(),from=body.scrollTop;
+  const step=now=>{const k=Math.min(1,(now-t0)/420),e=1-Math.pow(1-k,3);
+    const target=Math.min(el.offsetTop,body.scrollHeight-body.clientHeight);
+    body.scrollTop=from+(target-from)*e;
+    if(k<1)requestAnimationFrame(step);else if(Math.abs(body.scrollTop-el.offsetTop)>2&&now-t0<1200)requestAnimationFrame(step2);};
+  const step2=()=>{const target=Math.min(el.offsetTop,body.scrollHeight-body.clientHeight);body.scrollTop+=(target-body.scrollTop)*.25;if(Math.abs(target-body.scrollTop)>1&&performance.now()-t0<1400)requestAnimationFrame(step2)};
+  requestAnimationFrame(step);
+}
+function toggle(el,n){
+  if(el.classList.contains('open')){el.classList.remove('open');el.querySelectorAll('.ep').forEach(e=>e.classList.remove('in'));return}
+  if(!loaded.has(n)){el.querySelector('.eps').innerHTML='<li class="ep skel in"><span class="n">···</span><span class="t"><b></b></span></li>'.repeat(4);el.classList.add('open');
+    setTimeout(()=>{loaded.add(n);fill(el,n);requestAnimationFrame(()=>stagger(el))},420)}
+  else{fill(el,n);el.classList.add('open');requestAnimationFrame(()=>stagger(el))}
+}
+function fill(el,n){const s=SEASONS.find(x=>x.n===n);
+  el.querySelector('.eps').innerHTML=s.eps.map(e=>{const k=n+'-'+e,c=cur.s===n&&cur.e===e,p=half[k];
+    return `<li class="ep${c?' cur':''}" data-e="${e}"><span class="n">${c?'▶':'E'}${pad(e)}</span><span class="t">Episode ${e}${p&&!watched.has(k)?`<div class="prog"><i style="width:${p*100}%"></i></div>`:''}</span>${watched.has(k)?W:''}</li>`}).join('');
+  el.querySelectorAll('.ep').forEach(li=>li.onclick=()=>playEp(n,+li.dataset.e))}
+function stagger(el){el.querySelectorAll('.ep').forEach((li,i)=>setTimeout(()=>li.classList.add('in'),Math.min(i,12)*30))}
+function playEp(s,e){if(cur.s!==s||cur.e!==e)watched.add(cur.s+'-'+cur.e);cur={s,e};
+  document.querySelectorAll('.nowt').forEach(x=>x.textContent=`S${pad(s)}E${pad(e)} · Episode ${e}`);
+  lists.forEach(h=>h.querySelectorAll('.season.open').forEach(el=>{const n=+el.dataset.s;if(loaded.has(n)){fill(el,n);el.querySelectorAll('.ep').forEach(li=>li.classList.add('in'))}}));refresh()}
+function nextOf(c){const s=SEASONS.find(x=>x.n===c.s),i=s.eps.indexOf(c.e);if(i<s.eps.length-1)return{s:c.s,e:s.eps[i+1]};const ns=SEASONS.find(x=>x.n===c.s+1);return ns?{s:ns.n,e:ns.eps[0]}:null}
+function refresh(){
+  lists.forEach(h=>{SEASONS.forEach(s=>{const w=s.eps.filter(e=>watched.has(s.n+'-'+e)).length,f=w/s.eps.length*100+'%';
+    const b=h.querySelector(`[data-jump="${s.n}"]`);b.classList.toggle('cur',s.n===cur.s);b.querySelector('s').style.width=f;
+    const el=h.querySelector(`.season[data-s="${s.n}"]`);el.querySelector('.sbar i').style.width=f;
+    el.querySelector('.badge').innerHTML=s.n===cur.s?'<span class="playing">PLAYING</span>':`<span class="smeta">${w}/${s.eps.length}</span>`});
+    const cb=h.querySelector(`[data-jump="${cur.s}"]`);if(cb.offsetWidth)movePill(h,cb)});
+  const nx=nextOf(cur);
+  document.querySelectorAll('.nowshort').forEach(x=>x.textContent=`S${cur.s} · E${pad(cur.e)}`);
+  document.querySelectorAll('.nextshort').forEach(x=>x.textContent=nx?`S${nx.s} · E${pad(nx.e)}`:'—');
+  document.querySelectorAll('[data-map]').forEach(m=>{m.innerHTML=SEASONS.map(s=>`<div><p>S${s.n}</p><div class="dots">${s.eps.map(e=>{const k=s.n+'-'+e,c=cur.s===s.n&&cur.e===e?'c':watched.has(k)?'w':half[k]?'h':'';return `<b class="${c}" title="S${pad(s.n)}E${pad(e)} · Episode ${e}" data-s="${s.n}" data-e="${e}"></b>`}).join('')}</div></div>`).join('');
+    m.querySelectorAll('b').forEach(b=>b.onclick=ev=>{ev.stopPropagation();playEp(+b.dataset.s,+b.dataset.e)})})}
+document.querySelectorAll('[data-pl]').forEach(h=>buildPlaylist(h,h.dataset.pl==='c'));refresh();
+
+// ---------- C: hover to peek, pin to keep ----------
+const cside=document.getElementById('cside'),cgrid=document.getElementById('cgrid'),scrim=document.getElementById('cscrim'),pinBtn=cside.querySelector('[data-pin]');
+let state='closed',touch=false,tOpen,tClose;
+function set(s){state=s;cside.classList.toggle('peek',s==='peek');cside.classList.toggle('pinned',s==='pinned');
+  cgrid.style.gridTemplateColumns=s==='pinned'?'1fr 380px':'1fr 86px';pinBtn.classList.toggle('lit',s==='pinned');
+  pinBtn.title=s==='pinned'?'Fold into the rail':'Keep open';scrim.classList.toggle('on',touch&&s==='peek');
+  if(s!=='closed')requestAnimationFrame(()=>refresh())}
+// Same timing as Discover's flyout: opens on enter, closes 150 ms after leaving.
+cside.addEventListener('mouseenter',()=>{clearTimeout(tClose);if(touch||state!=='closed')return;set('peek')});
+cside.addEventListener('mouseleave',()=>{if(touch||state!=='peek')return;tClose=setTimeout(()=>set('closed'),150)});
+const sheet=cside.querySelector('.sheet');
+sheet.querySelectorAll('.plhead>*,.season').forEach((el,i)=>{el.classList.add('fl');el.style.setProperty('--d',Math.min(90+35*i,300)+'ms')});
+// A click on the header row's empty space does what the pin does.
+const bar=sheet.querySelector('.plhead>.row');bar.classList.add('bar');bar.title='Click to pin or fold';
+bar.addEventListener('click',ev=>{if(!ev.target.closest('button,.chip'))pinBtn.click()});
+cside.querySelector('.strip').addEventListener('click',()=>{if(state==='closed')set('peek')});
+scrim.onclick=()=>set('closed');
+pinBtn.onclick=()=>set(state==='pinned'?'closed':'pinned');
+cside.querySelector('[data-next]').onclick=ev=>{ev.stopPropagation();const n=nextOf(cur);if(n)playEp(n.s,n.e)};
+document.querySelectorAll('#cmode button').forEach(b=>b.onclick=()=>{touch=b.dataset.m==='touch';document.querySelectorAll('#cmode button').forEach(x=>x.classList.toggle('on',x===b));set('closed')});
+set('closed');
+
+function fit(){document.querySelectorAll('section:not([hidden]) .scaler').forEach(s=>{const w=+s.dataset.w,h=+s.dataset.h,sc=s.dataset.s?+s.dataset.s:s.clientWidth/w;if(s.dataset.s)s.style.width=w*sc+'px';s.style.height=h*sc+'px';s.firstElementChild.style.transform=`scale(${sc})`});refresh()}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('section[data-t]').forEach(s=>s.hidden=s.dataset.t!==b.dataset.t);fit()});
+addEventListener('resize',fit);fit();
+</script>
+</body></html>

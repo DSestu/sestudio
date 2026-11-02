@@ -57,10 +57,10 @@ export function TopCard({ children, away: forced = false }: {
 }
 
 /** Name and status line, the left of the card's first row. */
-export function CardTitle({ title, status }: { title: ReactNode; status?: ReactNode }) {
+export function CardTitle({ title, status, wrap = false }: { title: ReactNode; status?: ReactNode; wrap?: boolean }) {
   return (
     <div className="min-w-0 flex-1 flex flex-col justify-center leading-tight">
-      <h2 className="text-xl font-semibold tracking-tight truncate">{title}</h2>
+      <h2 className={`text-xl font-semibold tracking-tight ${wrap ? "line-clamp-2 break-words" : "truncate"}`}>{title}</h2>
       {status && <p className="mt-0.5 text-xs text-base-content/60 truncate">{status}</p>}
     </div>
   )
@@ -83,9 +83,13 @@ interface Props<T extends string> {
   tabs?: HeaderTab<T>[]
   tab?: T
   onTab?: (id: T) => void
+  /** Keep the phone card out of the way (a page that pins its own content). */
+  away?: boolean
+  /** Let a long title take two lines instead of ending in an ellipsis. */
+  wrapTitle?: boolean
 }
 
-export default function PageHeader<T extends string>({ title, status, onBack, menu, tabs, tab, onTab }: Props<T>) {
+export default function PageHeader<T extends string>({ title, status, onBack, menu, tabs, tab, onTab, away, wrapTitle }: Props<T>) {
   useEffect(() => { pageHeaderMounted(1); return () => pageHeaderMounted(-1) }, [])
   const desk = useDeskSlots()
   const back = onBack && (
@@ -98,10 +102,10 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
   const segmented = tabs && onTab && <Segmented tabs={tabs} tab={tab} onTab={onTab} />
   return (
     <>
-      <TopCard>
+      <TopCard away={away}>
         <div className="flex items-center gap-2 min-h-11">
           {back}
-          <CardTitle title={title} status={status} />
+          <CardTitle title={title} status={status} wrap={wrapTitle} />
           {menu && <Menu>{menu}</Menu>}
           {!onBack && <SettingsButton />}
         </div>
@@ -111,7 +115,7 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
       {desk.title && createPortal(
         <div className="flex items-center gap-2 min-w-0 max-w-[30%]">
           {back}
-          <CardTitle title={title} status={status} />
+          <CardTitle title={title} status={status} wrap={wrapTitle} />
         </div>,
         desk.title,
       )}
@@ -153,7 +157,7 @@ function Menu({ children }: { children: ReactNode }) {
 }
 
 /** The page's tabs as a segmented control, its pill sliding under the selected one. */
-function Segmented<T extends string>({ tabs, tab, onTab }: { tabs: HeaderTab<T>[]; tab?: T; onTab: (id: T) => void }) {
+export function Segmented<T extends string>({ tabs, tab, onTab }: { tabs: HeaderTab<T>[]; tab?: T; onTab: (id: T) => void }) {
   const index = Math.max(0, tabs.findIndex(t => t.id === tab))
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   /** Arrow keys move between tabs, as the tablist role promises. */
