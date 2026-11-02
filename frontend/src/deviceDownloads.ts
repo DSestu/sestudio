@@ -50,6 +50,50 @@ function remove(id: string) {
   emit()
 }
 
+// What this browser has been handed, kept per device so Home can say what is
+// saved here. shortcut: a record of hand-offs, not of the files themselves: a
+// copy deleted from the OS downloads folder still counts, and a direct MP4's
+// size is unknown (0). Upgrade if the app ever stores copies itself (OPFS).
+
+export interface DeviceCopy {
+  name: string
+  poster_url: string
+  /** Bytes; 0 when unknown. */
+  size: number
+}
+
+const COPIES_KEY = 'sestudio.deviceCopies'
+
+let copies: DeviceCopy[] = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(COPIES_KEY) ?? '[]') as DeviceCopy[]
+  } catch {
+    return []
+  }
+})()
+
+/** React hook: copies handed to this device, newest first. */
+export function useDeviceCopies(): DeviceCopy[] {
+  return useSyncExternalStore(subscribe, () => copies)
+}
+
+/** Note a file handed to this device; the same name again replaces the old entry. */
+export function recordDeviceCopy(copy: DeviceCopy): void {
+  copies = [copy, ...copies.filter(c => c.name !== copy.name)]
+  try {
+    localStorage.setItem(COPIES_KEY, JSON.stringify(copies))
+  } catch {
+    // ignore
+  }
+  emit()
+}
+
+/** yt-dlp's size ("412.53MiB", "1.2GiB") in bytes; 0 when it can't say. */
+export function parseSize(size?: string): number {
+  const m = /([\d.]+)\s*([KMGT]?)i?B/i.exec(size ?? '')
+  return m ? Number(m[1]) * 1024 ** ' KMGT'.indexOf(m[2].toUpperCase() || ' ') : 0
+}
+
 /**
  * Send items to this device. A direct MP4 is relayed straight to the browser
  * (instant, nothing stored server-side). HLS has no single file to relay, so
@@ -86,6 +130,7 @@ export async function downloadToDevice(downloads: DownloadItem[]): Promise<boole
       document.body.appendChild(a)
       a.click()
       a.remove()
+      recordDeviceCopy({ name: item.episode_name, poster_url: item.poster_url ?? '', size: 0 })
       update(id, { status: 'saving' })
       await new Promise(r => setTimeout(r, 800))
     } catch (err) {

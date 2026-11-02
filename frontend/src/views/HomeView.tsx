@@ -9,6 +9,8 @@ import LiveWidget from '../components/home/LiveWidget'
 import NewEpisodesWidget from '../components/home/NewEpisodesWidget'
 import ForYouWidget from '../components/home/ForYouWidget'
 import HealthWidget, { HealthStatusLine } from '../components/home/HealthWidget'
+import DeviceWidget from '../components/home/DeviceWidget'
+import DownloadsWidget from '../components/home/DownloadsWidget'
 import NowStrip from '../components/home/NowStrip'
 import PosterStrip from '../components/home/PosterStrip'
 import UpcomingWidget from '../components/home/UpcomingWidget'
@@ -17,6 +19,8 @@ import { useHealth } from '../homeHealth'
 import { summarizeChannels, useChannelsLatest } from '../homeChannels'
 import { orderWidgets, pinTiers, type WidgetDescriptor, type WidgetId, type WidgetTier } from '../homeOrder'
 import { useForYou } from '../forYou'
+import { useDeviceCopies } from '../deviceDownloads'
+import { useHomeDownloads } from '../homeDownloads'
 import { useLastVisit } from '../lastVisit'
 import type { Navigate } from '../nav'
 import { useLive } from '../liveNow'
@@ -86,6 +90,9 @@ export default function HomeView({
   const discoverLoading = Boolean(catalogId) && shelf.id !== catalogId
   const discover = shelf.id === catalogId ? shelf.shelf : null
 
+  const { rows: downloadRows, fill: downloadFill } = useHomeDownloads(jobs, lastVisit)
+  const deviceCopies = useDeviceCopies()
+
   const inProgress = watching(watch)
   // Home's posters carry no per-item controls: Home is for launching, the
   // Library is for managing (#26). The version they were saved in rides along.
@@ -122,6 +129,8 @@ export default function HomeView({
     Boolean(channels?.videos.length) && { id: 'channels', size: 'M', tier: channels?.fresh ? 'fresh' : 'browse' },
     (discoverLoading || Boolean(discover?.cards.length)) && { id: 'discover', size: 'M', tier: 'browse' },
     Boolean(health?.issues?.length) && { id: 'health', size: 'S', tier: 'status' },
+    downloadRows.length > 0 && { id: 'downloads', size: 'S', tier: 'status' },
+    deviceCopies.length > 0 && { id: 'device', size: 'S', tier: 'status' },
   ]
   const placed = orderWidgets(pinTiers(present.filter(w => w !== false), pinned))
 
@@ -136,6 +145,27 @@ export default function HomeView({
             health={health}
             onReload={reloadHealth}
             onOpenSettings={() => onNavigate('settings')}
+          />
+        )
+      case 'downloads':
+        return (
+          <DownloadsWidget
+            key={id}
+            style={style}
+            lone={lone}
+            rows={downloadRows}
+            fill={downloadFill}
+            onOpen={() => onNavigate('media', { tab: 'queue' })}
+          />
+        )
+      case 'device':
+        return (
+          <DeviceWidget
+            key={id}
+            style={style}
+            lone={lone}
+            copies={deviceCopies}
+            onOpen={() => onNavigate('media', { tab: 'queue' })}
           />
         )
       case 'continue':

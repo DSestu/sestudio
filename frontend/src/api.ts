@@ -408,6 +408,10 @@ export interface DownloadJob {
   to_device?: boolean
   /** When it finished or failed, epoch seconds; null while it runs. */
   finished_at?: number | null
+  /** What it is of, for showing it with its title and poster. */
+  series?: string
+  season?: number
+  poster_url?: string
 }
 
 /** URL serving a finished device-bound job's file as an attachment. */

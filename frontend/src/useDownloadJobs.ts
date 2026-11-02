@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DownloadJob } from './api'
 import { cancelJob, clearHistory, getJobs, jobFileUrl } from './api'
+import { parseSize, recordDeviceCopy } from './deviceDownloads'
 
 export interface DownloadJobsApi {
   jobs: DownloadJob[]
@@ -34,6 +35,7 @@ export function useDownloadJobs(refreshTrigger: number, onClearHistory: () => vo
     document.body.appendChild(a)
     a.click()
     a.remove()
+    recordDeviceCopy({ name: job.episode_name, poster_url: job.poster_url ?? '', size: parseSize(job.total_size) })
   }
 
   useEffect(() => {
