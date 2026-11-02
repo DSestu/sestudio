@@ -30,7 +30,7 @@ export default function ResultsGrid({ cards, checkedIds, onToggle, onOpenDetail,
   return (
     <div className={row
       // No scrollbar; the right edge fades out to say the row goes on.
-      ? 'flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar mask-[linear-gradient(to_right,#000_calc(100%-8rem),transparent)] snap-x scroll-px-1 px-1 -mx-1 pb-2'
+      ? 'flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar mask-[linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] sm:mask-[linear-gradient(to_right,#000_calc(100%-8rem),transparent)] snap-x scroll-px-1 px-1 -mx-1 pb-2'
       : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4'}
     >
       {cards.map(card => (
