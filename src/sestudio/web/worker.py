@@ -51,6 +51,10 @@ class DownloadJob:
     # When it finished or failed (epoch seconds): Home's Now strip shows what
     # ended since the last visit.
     finished_at: float | None = None
+    # What the job is of, for showing it with its title and poster (Home).
+    series: str = ""
+    season: int = 0
+    poster_url: str = ""
 
 
 class JobStore:
@@ -89,6 +93,9 @@ class JobStore:
         to_device: bool = False,
         site_id: str = "fstream",
         lane: str = "user",
+        series: str = "",
+        season: int = 0,
+        poster_url: str = "",
     ) -> DownloadJob:
         job = DownloadJob(
             id=str(uuid.uuid4()),
@@ -100,6 +107,9 @@ class JobStore:
             to_device=to_device,
             site_id=site_id,
             lane=lane,
+            series=series,
+            season=season,
+            poster_url=poster_url,
         )
         cancel_event = threading.Event()
         with self._lock:

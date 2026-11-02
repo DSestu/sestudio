@@ -145,3 +145,14 @@ def test_upstream_error_maps_to_502(client, httpx_mock: HTTPXMock):
         params={"token": _token("https://cdn.example/v.mp4"), "filename": "ep.mp4"},
     )
     assert resp.status_code == 502
+
+
+def test_job_listing_carries_its_title_and_poster(client, tmp_path):
+    job = _staged_job(client, tmp_path)
+    job.series, job.season, job.poster_url = "Frieren", 2, "https://img/p.jpg"
+    listed = client.get("/api/downloads").json()[0]
+    assert (listed["series"], listed["season"], listed["poster_url"]) == (
+        "Frieren",
+        2,
+        "https://img/p.jpg",
+    )

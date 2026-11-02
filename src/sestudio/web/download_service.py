@@ -207,5 +207,8 @@ async def queue_download(
         to_device=spec.to_device,
         site_id=site.id,
         lane=lane,
+        series=spec.series_name,
+        season=spec.season,
+        poster_url=spec.poster_url,
     )
     return QueueResult(spec.episode_name, "queued", job=job)
