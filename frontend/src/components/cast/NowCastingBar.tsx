@@ -190,10 +190,12 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
         away ? "max-md:translate-y-[4.125rem]" : "max-md:translate-y-[calc(-1*var(--discover-lift,0px))]"
       }`}
     >
-      {/* Accordion — grid-rows 0fr→1fr gives a smooth slide-up reveal. */}
+      {/* Accordion — grid-rows 0fr→1fr gives a smooth slide-up reveal. Mid-way
+          the grid is taller than its row (a fractional fr is applied twice), so
+          content-end keeps the row, and the panel, sitting on the bar. */}
       <div className="mx-auto w-full md:max-w-3xl">
         <div
-          className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+          className={`grid content-end transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
             open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           }`}
         >
