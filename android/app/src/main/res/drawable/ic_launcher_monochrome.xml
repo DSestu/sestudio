@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- sestudio mark: S stroke and solid D on two stacked circles, inside the 66 dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.25"
+        android:scaleY="0.25"
+        android:translateX="21.6"
+        android:translateY="21.6">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M141 90.14A75 75 0 0 1 141 237.86Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M169.78 38.75A51 51 0 1 0 106.75 114.36A15 15 0 0 0 119.25 87.09A21 21 0 1 1 145.2 55.95A15 15 0 0 0 169.78 38.75ZM109.25 236.62A75 75 0 0 1 53 164A15 15 0 0 1 83 164A45 45 0 0 0 116.75 207.57A15 15 0 0 1 109.25 236.62Z" />
+    </group>
+</vector>
