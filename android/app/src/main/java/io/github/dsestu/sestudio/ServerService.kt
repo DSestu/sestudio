@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.IBinder
 import android.os.PowerManager
+import android.system.Os
 import java.io.File
 import kotlin.concurrent.thread
 
@@ -69,11 +70,23 @@ class ServerService : Service() {
     private fun restart() {
         val old = process ?: return start()
         process = null // so its watcher does not stop the service
-        old.destroy()
+        killServer()
         thread(name = "server-restart") {
             old.waitFor()
             launch()
         }
+    }
+
+    /**
+     * Kills the server. proot ignores SIGTERM (Process.destroy), and a SIGKILL to
+     * proot alone leaves its children running untraced; so every other process of
+     * this app goes, which is proot and everything the server spawned.
+     */
+    private fun killServer() {
+        val me = android.os.Process.myPid()
+        File("/proc").listFiles().orEmpty().mapNotNull { it.name.toIntOrNull() }
+            .filter { it != me && runCatching { Os.stat("/proc/$it").st_uid == Os.getuid() }.getOrDefault(false) }
+            .forEach { android.os.Process.killProcess(it) }
     }
 
     private fun launch() {
@@ -132,7 +145,7 @@ class ServerService : Service() {
         val server = process
         process = null
         running = false
-        server?.destroy() // proot's --kill-on-exit takes the server down with it
+        if (server != null) killServer()
         wakeLock?.release()
         wifiLock?.release()
         super.onDestroy()

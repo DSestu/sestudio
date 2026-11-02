@@ -63,6 +63,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshSetup?.invoke() // back from the battery settings
+        // Stopped from the notification: start over, which runs the server's latest version.
+        if (web != null && !ServerService.running) recreate()
     }
 
     private class Step(val label: String) {
