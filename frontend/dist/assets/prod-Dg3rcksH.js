@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:frontend/dist/assets/prod-B9cpXeKb.js
-import{_ as e,c as t,d as n,f as r,g as i,h as a,i as o,l as s,m as c,n as l,o as u,p as d,r as f,t as p,u as m,v as h}from"./prod-D5NPyztC.js";export{p as CaptionsRenderer,l as ParseError,f as ParseErrorCode,o as TextCue,u as VTTCue,t as VTTRegion,s as createVTTCueTemplate,m as parseByteStream,n as parseResponse,r as parseText,d as parseTextStream,c as parseVTTTimestamp,a as renderVTTCueString,i as renderVTTTokensString,e as tokenizeVTTCue,h as updateTimedVTTCueNodes};
-========
-import{_ as e,c as t,d as n,f as r,g as i,h as a,i as o,l as s,m as c,n as l,o as u,p as d,r as f,t as p,u as m,v as h}from"./prod-ygeUNR8O.js";export{p as CaptionsRenderer,l as ParseError,f as ParseErrorCode,o as TextCue,u as VTTCue,t as VTTRegion,s as createVTTCueTemplate,m as parseByteStream,n as parseResponse,r as parseText,d as parseTextStream,c as parseVTTTimestamp,a as renderVTTCueString,i as renderVTTTokensString,e as tokenizeVTTCue,h as updateTimedVTTCueNodes};
->>>>>>>> 6084584 (feat: an empty Home opens on a welcome lit by trending posters, with two tiles that show what is still to come):frontend/dist/assets/prod-Dg3rcksH.js
