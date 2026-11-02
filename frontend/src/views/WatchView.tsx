@@ -15,6 +15,7 @@ import { channelHref, useLink } from '../videoLinks'
 import EmptyState from '../components/EmptyState'
 import SaveToggles from '../components/SaveToggles'
 import WatchToggle from '../components/WatchToggle'
+import PageHeader, { Segmented } from '../components/PageHeader'
 import TitleHeader from '../components/season/TitleHeader'
 import EpisodeList from '../components/watch/EpisodeList'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
@@ -867,6 +868,37 @@ export default function WatchView({
   const quality = <BrowserQuality source={source} />
   const frameRate = <BrowserFrameRate source={source} settings={settings} onUpdateSettings={onUpdateSettings} />
 
+  // The phone's top card leaves once the page scrolls, so it never sits over
+  // the pinned player. Listens only while this view is the visible one.
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    if (!visible) return
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [visible])
+
+  // Under the title: what it is, then its year, then (for a video) its channel.
+  const statusLine = (
+    <>
+      {[
+        detail && (detail.is_film
+          ? (isVideo ? 'Video' : 'Film')
+          : showSeasons.length > 1 ? <em key="n">{showSeasons.length} seasons</em> : `Season ${detail.season}`),
+        meta?.year,
+      ].filter(Boolean).flatMap((part, i) => (i ? [' · ', part] : [part]))}
+      {videoLink?.channel_url && (
+        <>
+          {' · '}
+          <a href={channelHref(videoLink.channel_url, sourceId)} className="link link-hover text-base-content/70">
+            {videoLink.channel}
+          </a>
+        </>
+      )}
+    </>
+  )
+
   return (
     <div className="flex flex-col gap-4">
       {/* The player lives in a shared, persistent node so it survives navigation
@@ -890,63 +922,44 @@ export default function WatchView({
       </InPortal>
       )}
 
-      {/* Title bar. On desktop the search bar above it is the pinned one. A
-          long title wraps; the buttons stay level with its first line. */}
-      <div className="flex items-start gap-3">
-        <button
+      {/* The glass header every page has. Only the visible view renders it:
+          a second, hidden one (playing while another title is browsed) would
+          otherwise add a second card and desktop portal. */}
+      {visible && (
+        <PageHeader
+          title={seriesName}
+          wrapTitle
+          away={scrolled}
           // Real history back, so a search (with its query and filters in the
           // URL) is restored exactly; fall back to search on a deep link.
-          onClick={() => { if (history.length > 1) history.back(); else navigate('search') }}
-          aria-label="Back"
-          className="btn btn-ghost btn-sm btn-square"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-semibold text-lg tracking-tight break-words">{seriesName}</h2>
-          <p className="text-base-content/50 text-xs truncate">
-            {[
-              detail && (detail.is_film ? (isVideo ? 'Video' : 'Film') : `Season ${detail.season}`),
-              meta?.year,
-            ].filter(Boolean).join(' · ')}
-            {videoLink?.channel_url && (
-              <>
-                {' · '}
-                <a href={channelHref(videoLink.channel_url, sourceId)} className="link link-hover text-base-content/70">
-                  {videoLink.channel}
-                </a>
-              </>
-            )}
-          </p>
-        </div>
-        {detail && (
-          <div className="flex items-center gap-2">
-            {/* Labelled, not an icon: between the star and the heart a bare bell
-                read as decoration and nobody found it. */}
-            {!isVideo && <WatchToggle
-              pageUrl={sourceUrl}
-              source={sourceId}
-              seriesName={seriesName}
-              posterUrl={posterUrl}
-              isFilm={Boolean(detail.is_film)}
-              variant="button"
-            />}
-            <SaveToggles
-              entry={{
-                series: seriesName,
-                season,
-                label: seriesName,
-                poster_url: posterUrl,
-                page_url: sourceUrl,
-                lang: activeLang,
-                source: sourceId,
-              }}
-            />
-          </div>
-        )}
-      </div>
+          onBack={() => { if (history.length > 1) history.back(); else navigate('search') }}
+          status={statusLine}
+          menu={detail && (
+            <>
+              {/* Labelled, not an icon: a bare bell read as decoration. */}
+              {!isVideo && <WatchToggle
+                pageUrl={sourceUrl}
+                source={sourceId}
+                seriesName={seriesName}
+                posterUrl={posterUrl}
+                isFilm={Boolean(detail.is_film)}
+                variant="button"
+              />}
+              <SaveToggles
+                entry={{
+                  series: seriesName,
+                  season,
+                  label: seriesName,
+                  poster_url: posterUrl,
+                  page_url: sourceUrl,
+                  lang: activeLang,
+                  source: sourceId,
+                }}
+              />
+            </>
+          )}
+        />
+      )}
 
       {loading && <p className="text-base-content/60">Loading…</p>}
       {error && <p role="alert" className="text-error">{error}</p>}
@@ -1141,25 +1154,17 @@ export default function WatchView({
 
             {/* Phone: everything the desktop shows alongside, one tab at a time. */}
             <div className="lg:hidden">
-              <div role="tablist" className="tabs tabs-box w-full">
-                {MOBILE_TABS.map(t => (
-                  <button
-                    key={t}
-                    role="tab"
-                    aria-selected={tab === t}
-                    onClick={() => setTab(t)}
-                    className={`tab flex-1 capitalize ${tab === t ? 'tab-active' : ''}`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                tabs={MOBILE_TABS.map(id => ({ id, label: id[0].toUpperCase() + id.slice(1) }))}
+                tab={tab}
+                onTab={setTab}
+              />
               <div className="mt-3">
                 {tab === 'episodes' && (
                   // Bounded to the space between the pinned player and the
                   // dock, so the list scrolls inside itself, opens on the episode
                   // playing, and keeps the download bar in reach.
-                  <div className="h-[calc(100dvh-6rem-var(--dock-clear)-(100vw-2rem)*9/16)] min-h-72 flex flex-col rounded-box border border-base-300 bg-base-200 overflow-hidden">
+                  <div className="h-[calc(100dvh-6rem-var(--dock-clear)-(100vw-2rem)*9/16)] min-h-72 flex flex-col rounded-box bg-base-200 overflow-hidden">
                     <div className="flex-1 min-h-0">{list}</div>
                     {downloadBar}
                   </div>
@@ -1187,7 +1192,7 @@ export default function WatchView({
           {/* Desktop queue: opens on the episode playing, with what comes next
               below it. Collapsible to a strip for a wider player. */}
           <aside
-            className={`hidden lg:flex lg:flex-col rounded-box border border-base-300 bg-base-200 overflow-hidden lg:sticky lg:top-16 lg:h-[calc(100dvh-5.5rem)]`}
+            className={`hidden lg:flex lg:flex-col rounded-box bg-base-200 overflow-hidden lg:sticky lg:top-16 lg:h-[calc(100dvh-5.5rem)]`}
           >
             {collapsed ? (
               <>
