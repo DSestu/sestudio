@@ -106,7 +106,7 @@ class MainActivity : Activity() {
                         steps.take(index).forEach { it.state = "done"; it.fraction = null }
                         steps[index].apply {
                             state = "run"
-                            detail = "${done / 1_000_000} MB"
+                            detail = if (done >= 0) "${done / 1_000_000} MB" else ""
                             fraction = if (total > 0) done.toDouble() / total else null
                         }
                         render()

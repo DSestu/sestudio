@@ -10,6 +10,7 @@ import java.io.FilterInputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.TimeUnit
 
 /**
  * The Linux sestudio runs in: proot over a Debian root filesystem, with uv.
@@ -19,12 +20,14 @@ class Runtime(private val context: Context) {
     val rootfs = File(context.filesDir, "debian")
     private val readyMark = File(context.filesDir, "runtime.ready")
     private val libDir = File(context.applicationInfo.nativeLibraryDir)
+    // Android names the native library folder after the ABI it picked: arm64, arm or x86_64.
+    private val arch = Arch.of(libDir.name)
 
     val isReady get() = readyMark.exists()
 
     /**
-     * Sets everything up. [progress] gets the step ([STEP_LINUX], [STEP_UV]) and
-     * its bytes so far out of its total (-1 when unknown), as they arrive.
+     * Sets everything up. [progress] gets the step ([STEP_LINUX], [STEP_UV],
+     * [STEP_PACKAGES]) and its bytes so far out of its total (-1 when unknown).
      */
     fun install(progress: (step: Int, done: Long, total: Long) -> Unit) {
         if (isReady) return
@@ -46,10 +49,21 @@ class Runtime(private val context: Context) {
         val bin = File(rootfs, "usr/local/bin").apply { mkdirs() }
         for (name in listOf("uv", "uvx")) {
             val target = File(bin, name)
-            File(uv, "uv-aarch64-unknown-linux-musl/$name").copyTo(target, overwrite = true)
+            File(uv, "uv-${arch.uv}/$name").copyTo(target, overwrite = true)
             Os.chmod(target.path, "755".toInt(8))
         }
         uv.deleteRecursively()
+        if (arch.packages.isNotEmpty()) {
+            progress(STEP_PACKAGES, -1, -1)
+            // proot's fake root can't drop to apt's sandbox user.
+            val apt = command(
+                "sh", "-c",
+                "export DEBIAN_FRONTEND=noninteractive; apt-get -o APT::Sandbox::User=root update && " +
+                    "apt-get -o APT::Sandbox::User=root install -y --no-install-recommends ${arch.packages.joinToString(" ")}",
+            ).start()
+            val log = apt.inputStream.bufferedReader().readText()
+            check(apt.waitFor() == 0) { "Installing ${arch.packages.joinToString()} failed:\n" + log.takeLast(1500) }
+        }
         readyMark.writeText("1")
     }
 
@@ -57,7 +71,23 @@ class Runtime(private val context: Context) {
      * A process running [args] inside Debian, stdout and stderr merged. [binds]
      * are extra (phone path, Debian path) folders to show inside.
      */
-    fun command(vararg args: String, binds: List<Pair<String, String>> = emptyList()): ProcessBuilder {
+    fun command(vararg args: String, binds: List<Pair<String, String>> = emptyList()): ProcessBuilder =
+        proot(args.toList(), binds).apply {
+            if (!seccompWorks()) environment()["PROOT_NO_SECCOMP"] = "1"
+        }
+
+    /**
+     * Whether proot's seccomp mode works on this kernel. Some kernels break it and
+     * every syscall then fails with ENOSYS; without it proot is slower but works.
+     */
+    private fun seccompWorks(): Boolean = seccomp ?: run {
+        val probe = proot(listOf("true")).redirectOutput(File("/dev/null")).start()
+        val works = probe.waitFor(30, TimeUnit.SECONDS) && probe.exitValue() == 0
+        if (!works) probe.destroy()
+        works.also { seccomp = it }
+    }
+
+    private fun proot(args: List<String>, binds: List<Pair<String, String>> = emptyList()): ProcessBuilder {
         val tmp = File(context.cacheDir, "proot").apply { mkdirs() }
         val argv = listOf(
             File(libDir, "libproot.so").path, "--kill-on-exit", "--link2symlink",
@@ -69,25 +99,29 @@ class Runtime(private val context: Context) {
             "TERM=dumb", "LANG=C.UTF-8",
             // Only uv's own Linux Python: anything else on the path may report Android.
             "UV_PYTHON_PREFERENCE=only-managed", "UV_LINK_MODE=copy",
-        ) + args
+        ) + arch.env + args
         return ProcessBuilder(argv).redirectErrorStream(true).apply {
             environment()["PROOT_LOADER"] = File(libDir, "libproot-loader.so").path
             environment()["PROOT_TMP_DIR"] = tmp.path
+            // proot's libtalloc and libandroid-shmem sit beside it.
+            environment()["LD_LIBRARY_PATH"] = libDir.path
         }
     }
 
     /**
-     * The registry token and the arm64 layers (digest, size) of Debian's slim
-     * image, from Docker Hub as proot-distro does.
+     * The registry token and this phone's layers (digest, size) of Debian's
+     * slim image, from Docker Hub as proot-distro does.
      */
     private fun debianLayers(): Pair<String, List<Pair<String, Long>>> {
         val token = JSONObject(read(open(TOKEN_URL).inputStream)).getString("token")
         val index = JSONObject(read(open("$REGISTRY/manifests/stable-slim", token, INDEX_TYPES).inputStream))
         val manifests = index.getJSONArray("manifests")
-        val arm64 = (0 until manifests.length()).map(manifests::getJSONObject).first {
-            it.getJSONObject("platform").optString("architecture") == "arm64"
+        val image = (0 until manifests.length()).map(manifests::getJSONObject).first {
+            val platform = it.getJSONObject("platform")
+            platform.optString("architecture") == arch.docker &&
+                (arch.variant == null || platform.optString("variant") == arch.variant)
         }
-        val manifest = JSONObject(read(open("$REGISTRY/manifests/${arm64.getString("digest")}", token, MANIFEST_TYPES).inputStream))
+        val manifest = JSONObject(read(open("$REGISTRY/manifests/${image.getString("digest")}", token, MANIFEST_TYPES).inputStream))
         val layers = manifest.getJSONArray("layers")
         return token to (0 until layers.length()).map {
             val layer = layers.getJSONObject(it)
@@ -188,9 +222,39 @@ class Runtime(private val context: Context) {
             }
         }
 
+    /**
+     * A CPU architecture: its Docker platform, its uv build, and what it needs
+     * beyond Debian and uv. [env] goes to every command inside Debian.
+     */
+    private class Arch(
+        val docker: String,
+        val variant: String?,
+        val uv: String,
+        val packages: List<String> = emptyList(),
+        val env: List<String> = emptyList(),
+    ) {
+        companion object {
+            fun of(abi: String) = when (abi) {
+                "arm64" -> Arch("arm64", null, "aarch64-unknown-linux-musl")
+                "x86_64" -> Arch("amd64", null, "x86_64-unknown-linux-musl")
+                // 32-bit ARM: PyPI lacks wheels for several dependencies. piwheels has most,
+                // gcc builds the rest (psutil), and ffmpeg comes from Debian, not imageio-ffmpeg.
+                "arm" -> Arch(
+                    "arm", "v7", "armv7-unknown-linux-musleabihf",
+                    packages = listOf("ffmpeg", "gcc", "libc6-dev"),
+                    env = listOf("UV_EXTRA_INDEX_URL=https://www.piwheels.org/simple", "UV_INDEX_STRATEGY=unsafe-best-match"),
+                )
+                else -> error("Unsupported CPU: $abi")
+            }
+        }
+    }
+
     companion object {
         const val STEP_LINUX = 0
         const val STEP_UV = 1
+        const val STEP_PACKAGES = 2
+
+        @Volatile private var seccomp: Boolean? = null
 
         private const val REGISTRY = "https://registry-1.docker.io/v2/library/debian"
         private const val TOKEN_URL = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/debian:pull"

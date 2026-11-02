@@ -20,7 +20,7 @@ android {
         versionCode = sestudioVersion.split(".").map(String::toInt).let { (major, minor, patch) ->
             major * 10000 + minor * 100 + patch
         }
-        ndk { abiFilters += "arm64-v8a" } // proot is bundled for arm64 only
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") } // the ABIs proot is bundled for
     }
 
     // Every release is signed with the same key, or Android refuses it as an update.

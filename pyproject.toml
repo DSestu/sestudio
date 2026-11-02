@@ -34,7 +34,8 @@ dependencies = [
     # even with a compiler: its setup.py passes the GCC-only flag
     # `-Werror=incompatible-pointer-types`, which MSVC rejects (D8021).
     # jsdecode.py still prefers it when importable, so a manual install works.
-    "mini-racer>=0.14.1",
+    # No 32-bit ARM wheel (and V8 can't build there): those devices go without.
+    "mini-racer>=0.14.1; platform_machine != 'armv7l'",
     "rich>=15.0.0",
     "uvicorn[standard]>=0.34",
     # curl-cffi: Chrome TLS impersonation. vidzy's CDN 403s any non-browser TLS
