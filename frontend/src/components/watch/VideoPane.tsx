@@ -21,6 +21,9 @@ import BufferingInfo, { bufferedAhead } from './BufferingInfo'
 /** Persist progress at most every SAVE_INTERVAL ms of playback. */
 const SAVE_INTERVAL = 5000
 
+/** Times a source is loaded again after an error before it counts as dead. */
+const RELOADS = 2
+
 /** Saved position worth resuming from, or null (unwatched and not near the end). */
 function resumePointFor(ep: PlayableEpisode): number | null {
   const saved = getProgress(ep)
@@ -41,7 +44,10 @@ interface Props {
   /** Title of the episode queued after this one, if any. */
   nextTitle: string | null
   autoplay: boolean
+  /** The source failed even loaded again: hand it up as dead. */
   onSourceError: () => void
+  /** Probe every source again, from the "no source" overlays. */
+  onRetry: () => void
   onAdvance: () => void
   /** Report the live position outward (for cast handoff). */
   onPosition: (seconds: number) => void
@@ -90,7 +96,7 @@ function setReadAhead(player: MediaPlayerInstance | null, seconds: number | null
 }
 
 export default function VideoPane({
-  ep, source, probing, pending = null, failure = null, nextTitle, autoplay, onSourceError, onAdvance, onPosition,
+  ep, source, probing, pending = null, failure = null, nextTitle, autoplay, onSourceError, onRetry, onAdvance, onPosition,
 }: Props) {
   const playerRef = useRef<MediaPlayerInstance>(null)
   const lastSaveRef = useRef(0)
@@ -127,10 +133,20 @@ export default function VideoPane({
   if (loaded.url !== ladderUrl || loaded.untouched !== untouched) {
     setLoaded({ url: ladderUrl, untouched, fps: playingFps, live: Math.random().toString(36).slice(2) })
   }
-  const mediaUrl = !displaySource ? ''
+  // Reloads of the source shown after an error (see `handleError`). A reload
+  // is a new URL — the server ignores the extra parameter — which the player
+  // loads like another source and resumes where it played.
+  const [reload, setReload] = useState<{ src: StreamSource | null; n: number }>({ src: null, n: 0 })
+  const reloads = reload.src === displaySource ? reload.n : 0
+  const loadUrl = !displaySource ? ''
     : untouched && direct ? direct.url
       : ladderUrl ? `${withFps(ladderUrl, loaded.fps)}&live=${loaded.live}`
         : displaySource.proxy_url
+  const mediaUrl = loadUrl && reloads
+    ? `${loadUrl}${loadUrl.includes('?') ? '&' : '?'}reload=${reloads}`
+    : loadUrl
+  const mediaUrlRef = useRef(mediaUrl)
+  useEffect(() => { mediaUrlRef.current = mediaUrl }, [mediaUrl])
   const mediaKind = untouched && direct ? direct.kind : displaySource?.kind
   const sentFps = useRef<Record<string, number>>({})
   useEffect(() => {
@@ -312,6 +328,37 @@ export default function VideoPane({
     retryRef.current = window.setTimeout(retry, 400)
   }
 
+  // Pending answer to a player error; cleared on unmount.
+  const recoverRef = useRef(0)
+  useEffect(() => () => window.clearTimeout(recoverRef.current), [])
+
+  /** A player error, answered by loading the source again rather than dropping
+   *  it: the server may still be encoding the first segment, or the network
+   *  dropped a moment. Handed up as dead only once RELOADS reloads failed too.
+   *
+   *  Ignored when it came from a source already replaced — it would blame the
+   *  new one — and when the video plays on through it: hls.js stopped fetching,
+   *  and is told to fetch again rather than the source reloaded. */
+  function handleError() {
+    const p = playerRef.current
+    const url = mediaUrl
+    if (!p || !url || p.state.source?.src !== url) return
+    const at = p.currentTime
+    const n = reloads
+    const src = displaySource
+    window.clearTimeout(recoverRef.current)
+    recoverRef.current = window.setTimeout(() => {
+      const q = playerRef.current
+      if (!q || mediaUrlRef.current !== url) return
+      if (q.currentTime > at + 1) {
+        if (isHLSProvider(q.provider)) q.provider.instance?.startLoad()
+        return
+      }
+      if (n >= RELOADS) onSourceError()
+      else setReload({ src, n: n + 1 })
+    }, 2000 * (n + 1))
+  }
+
   // Tick the auto-next countdown; the advance happens in the timer callback.
   useEffect(() => {
     if (nextIn === null) return
@@ -414,7 +461,7 @@ export default function VideoPane({
           }}
           onEnded={handleEnded}
           onAutoPlayFail={handleAutoPlayFail}
-          onError={onSourceError}
+          onError={handleError}
         >
           {/* Keyed on the source kind: vidstack's React outlet renders one
               <video> for both HLS and plain MP4 and only wires a provider to it
@@ -482,11 +529,13 @@ export default function VideoPane({
           {failure && (
             <p className="mt-1 text-xs text-white/60">{failure.replace(/^All providers failed — [\w-]+: /, '')}</p>
           )}
+          <button onClick={onRetry} className="btn btn-sm btn-ghost text-white mt-3">Try again</button>
         </div>
       )}
       {displaySource && !probing && !source && (
-        <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-center px-6">
+        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-3 text-center px-6">
           <p className="text-error text-sm">This episode has no working source. Pick another below.</p>
+          <button onClick={onRetry} className="btn btn-sm btn-ghost text-white">Try again</button>
         </div>
       )}
     </div>

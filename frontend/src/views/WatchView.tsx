@@ -542,7 +542,7 @@ export default function WatchView({
     [downloadedPath, fresh, audioTrack, downloadedSubs, subs.playable],
   )
 
-  const { providers, status, sources, active, select, markFailed, probing, failure } =
+  const { providers, status, sources, active, select, markFailed, retry, probing, failure } =
     useProviderSources(
       playing ? (current?.embed_urls ?? NO_EMBEDS) : NO_EMBEDS,
       sourceId,
@@ -1012,6 +1012,7 @@ export default function WatchView({
             nextTitle={nextEp?.title ?? null}
             autoplay={autoplay}
             onSourceError={() => { if (active) markFailed(active) }}
+            onRetry={retry}
             onAdvance={advance}
             onPosition={setPosition}
           />

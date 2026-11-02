@@ -88,7 +88,12 @@ export interface ProviderSources {
   sources: Record<string, StreamSource>  // successfully-tested providers only
   active: string | null
   select: (provider: string) => void
+  /** The player gave up on *provider*'s source. A host's link is resolved
+   *  again once, since links expire; after that, or for the copy on disk, the
+   *  source is dropped and the next one that works takes the screen. */
   markFailed: (provider: string) => void
+  /** Start over: every source probed again, as for a new episode. */
+  retry: () => void
   probing: boolean
   /** Why the last source failed, as the server put it; null when none did. */
   failure: string | null
@@ -152,7 +157,24 @@ export function useProviderSources(
   const sourcesRef = useRef<Record<string, StreamSource>>({})
   const activeRef = useRef<string | null>(null)
 
+  // Aborted when the probing restarts, so a late re-resolve is dropped.
+  const controllerRef = useRef<AbortController | null>(null)
+  // Hosts already resolved again after their source died: once each.
+  const renewedRef = useRef(new Set<string>())
+  // Bumped by `retry` to probe everything again.
+  const [round, setRound] = useState(0)
+
   const setActiveBoth = (p: string | null) => { activeRef.current = p; setActive(p) }
+
+  const reset = () => {
+    setStatus(seedStatus(providers))
+    setFailure(null)
+    setSources({})
+    // Plain setter, not setActiveBoth: this can run during render, and the ref
+    // is the effect's to assign (it does so before awaiting anything).
+    setActive(null)
+    setProbing(true)
+  }
 
   // Reset when the episode (embedUrls) changes without remounting the consumer,
   // so the video player element can persist across episodes (keeps fullscreen).
@@ -162,17 +184,13 @@ export function useProviderSources(
   )
   if (prev.embeds !== embedUrls || prev.local !== local) {
     setPrev({ embeds: embedUrls, local })
-    setStatus(seedStatus(providers))
-    setFailure(null)
-    setSources({})
-    // Plain setter, not setActiveBoth: this runs during render, and the ref is
-    // the effect's to assign (it does so before awaiting anything).
-    setActive(null)
-    setProbing(true)
+    reset()
   }
 
   useEffect(() => {
     const controller = new AbortController()
+    controllerRef.current = controller
+    renewedRef.current = new Set()
     let cancelled = false
     sourcesRef.current = {}
     activeRef.current = null
@@ -233,11 +251,11 @@ export function useProviderSources(
       setProbing(false)
     })
     return () => { cancelled = true; controller.abort() }
-  }, [providers, remote, local, embedUrls, source])
+  }, [providers, remote, local, embedUrls, source, round])
 
   const select = (p: string) => setActiveBoth(p)
 
-  const markFailed = (p: string) => {
+  const drop = (p: string) => {
     setStatus(prev => ({ ...prev, [p]: 'failed' }))
     delete sourcesRef.current[p]
     setSources(prev => { const next = { ...prev }; delete next[p]; return next })
@@ -246,5 +264,34 @@ export function useProviderSources(
     }
   }
 
-  return { providers, status, sources, active, select, markFailed, probing, failure }
+  const markFailed = (p: string) => {
+    const signal = controllerRef.current?.signal
+    if (p === DOWNLOADED_PROVIDER || !embedUrls[p] || !signal || renewedRef.current.has(p)) {
+      drop(p)
+      return
+    }
+    renewedRef.current.add(p)
+    // The source stays meanwhile: the player still holds it, and its chip spins.
+    setStatus(prev => ({ ...prev, [p]: 'loading' }))
+    probeSource(p, embedUrls[p], signal, source).then(
+      src => {
+        if (signal.aborted) return
+        sourcesRef.current[p] = src
+        setSources(prev => ({ ...prev, [p]: src }))
+        setStatus(prev => ({ ...prev, [p]: 'ok' }))
+      },
+      (e: unknown) => {
+        if (signal.aborted) return
+        if (e instanceof Error) setFailure(e.message)
+        drop(p)
+      },
+    )
+  }
+
+  const retry = () => {
+    reset()
+    setRound(r => r + 1)
+  }
+
+  return { providers, status, sources, active, select, markFailed, retry, probing, failure }
 }
