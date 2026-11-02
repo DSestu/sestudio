@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { CatalogInfo, SeasonCard } from '../../api'
+import { usePhoneStripShown } from '../../phoneStrip'
 import { closeDiscoverMenu, closeDiscoverMenuThen, openDiscoverMenu, setDiscoverTall, useDiscoverMenuOpen } from '../../discoverMenu'
 import { useModalBack } from '../../useModalBack'
 import { useSourcePosters } from './sourcePosters'
@@ -12,10 +13,10 @@ import { RecentSearchChips, SearchIcon, TitleResults } from '../search/SearchPar
 // so it is set apart from the video sources wherever they are listed.
 const TMDB = 'tmdb'
 
-// From just above the dock to near the top of the screen. min and max both, so
+// From the dock to near the top of the screen. min and max both, so
 // the height animates (min-height grows) and stays put whatever the results.
 const FULL_HEIGHT =
-  'min-h-[calc(100dvh_-_var(--dock-clear)_-_0.75rem_-_env(safe-area-inset-top))] max-h-[calc(100dvh_-_var(--dock-clear)_-_0.75rem_-_env(safe-area-inset-top))]'
+  'min-h-[calc(100dvh_-_var(--dock-top)_-_0.75rem_-_env(safe-area-inset-top))] max-h-[calc(100dvh_-_var(--dock-top)_-_0.75rem_-_env(safe-area-inset-top))]'
 
 /**
  * The Discover heading: names the open catalogue and what it holds. On a phone
@@ -159,6 +160,10 @@ export function DiscoverMenu({
     return () => vv.removeEventListener('resize', onResize)
   }, [expanded])
   const tall = open && expanded
+  // A now-playing strip sits on top (it rides up with the menu), so the top
+  // corners square off to meet it. Grown to the top of the screen, the strip
+  // is pushed off it and the corners round again.
+  const joinedTop = usePhoneStripShown() && !tall
   useEffect(() => { setDiscoverTall(tall); return () => setDiscoverTall(false) }, [tall])
   // A folded menu forgets the search, so it reopens on the list.
   const [wasOpen, setWasOpen] = useState(open)
@@ -184,7 +189,7 @@ export function DiscoverMenu({
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       />
-      {/* Floats just above the dock and grows out of its Search button: it starts
+      {/* Sits on the dock and grows out of its Search button: it starts
           as a sliver the button's width on its own bottom edge (a clip-path, with a
           faint glow rising from that edge and fading out) and stretches into the sheet. The
           content is there from the first frame, rising a little and sharpening
@@ -192,7 +197,7 @@ export function DiscoverMenu({
       <div
         id="discover-menu"
         inert={!open}
-        className={`fixed inset-x-3 z-[35] bottom-(--dock-clear) ${
+        className={`fixed inset-x-3 z-[35] bottom-(--dock-top) ${
           open ? '' : 'pointer-events-none'
         }`}
       >
@@ -200,9 +205,9 @@ export function DiscoverMenu({
           ref={panel}
           role="dialog"
           aria-label="Discover"
-          className={`relative flex flex-col overflow-hidden glass rounded-2xl transition-[clip-path,filter,opacity,min-height,max-height] ease-smooth after:absolute after:inset-0 after:bg-[linear-gradient(to_top,color-mix(in_oklab,var(--color-primary)_30%,transparent),transparent_40%)] after:pointer-events-none after:transition-opacity after:duration-[320ms] *:transition-[translate] *:duration-[380ms] *:ease-smooth motion-reduce:[clip-path:none] motion-reduce:[filter:none] motion-reduce:after:hidden motion-reduce:*:translate-y-0 motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
+          className={`relative flex flex-col overflow-hidden glass ${joinedTop ? '' : 'rounded-t-2xl'} transition-[clip-path,filter,opacity,min-height,max-height] ease-smooth after:absolute after:inset-0 after:bg-[linear-gradient(to_top,color-mix(in_oklab,var(--color-primary)_30%,transparent),transparent_40%)] after:pointer-events-none after:transition-opacity after:duration-[320ms] *:transition-[translate] *:duration-[380ms] *:ease-smooth motion-reduce:[clip-path:none] motion-reduce:[filter:none] motion-reduce:after:hidden motion-reduce:*:translate-y-0 motion-reduce:transition-opacity motion-reduce:duration-[120ms] ${
             open
-              ? 'duration-[420ms] [clip-path:inset(0_round_16px)] [filter:none] after:opacity-0 *:translate-y-0'
+              ? `duration-[420ms] ${joinedTop ? '[clip-path:inset(0)]' : '[clip-path:inset(0_round_16px_16px_0_0)]'} [filter:none] after:opacity-0 *:translate-y-0`
               : 'duration-300 motion-reduce:opacity-0 [clip-path:inset(100%_calc(50%_-_1.625rem)_0_calc(50%_-_1.625rem)_round_16px)] [filter:blur(12px)] after:opacity-100 *:translate-y-3.5'
           } ${expanded ? FULL_HEIGHT : 'min-h-0 max-h-[70dvh]'}`}
         >

@@ -4,6 +4,7 @@ import { MINI_PLAYER_FONT_SIZE } from '../../subtitleStyle'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
 import { OutPortal } from '../../reversePortal'
 import { useBarsHidden } from '../../barsHidden'
+import { usePhoneStrip } from '../../phoneStrip'
 import type { PortalNode } from '../../portalNode'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -35,12 +36,12 @@ export default function MiniPlayer({ node, onOpen, onClose }: Props) {
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
-  if (!browser) return null
   // Handoff: the episode is the one on the TV (local auto-paused) → the cast
-  // bar represents it, no mini-player.
-  if (sameEpisode(castSession?.episode, browser.episode)) return null
-  // Mobile shows a single now-playing surface — the cast bar wins when casting.
-  if (!desktop && castSession) return null
+  // bar represents it, no mini-player. Mobile shows a single now-playing
+  // surface — the cast bar wins when casting.
+  const shown = !!browser && !sameEpisode(castSession?.episode, browser.episode) && (desktop || !castSession)
+  usePhoneStrip(shown && !desktop)
+  if (!browser || !shown) return null
 
   const ep = browser.episode
   const heading = ep.series_name

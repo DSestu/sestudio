@@ -10,6 +10,7 @@ import SourceIcon from './SourceIcon'
 import CreatorLinks from './CreatorLinks'
 import { SettingsButton, TopCard } from './PageHeader'
 import { deskSlotRef, usePageHeaderMounted } from '../pageHeader'
+import { usePhoneStripShown } from '../phoneStrip'
 import { AWAY, setBarsHidden, useBarsHidden } from '../barsHidden'
 
 // Stable callback refs for the desktop card's slots (a fresh function each
@@ -82,6 +83,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
   const browserSession = useBrowserSession()
   const miniActive = view !== 'watch' && browserSession !== null
   const bottomBar = castConnected || dlnaConnected || miniActive
+  const phoneStrip = usePhoneStripShown()
   // While the library is selecting, its action bar takes the tab bar's slot
   // instead of stacking on top of it, so fixed chrome height never grows (#26).
   const selecting = useSelectionActive()
@@ -241,7 +243,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
 
       {/* Phone dock — hidden while the selection bar occupies this slot. */}
       {!selecting && (
-        <PhoneDock view={view} menuOpen={menuOpen} joined={bottomBar && !menuOpen} onNavigate={onNavigate} badgeFor={badgeFor} />
+        <PhoneDock view={view} menuOpen={menuOpen} joined={phoneStrip || menuOpen} onNavigate={onNavigate} badgeFor={badgeFor} />
       )}
     </div>
   )
@@ -268,7 +270,8 @@ const closeIcon = (
 function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
   view: View
   menuOpen: boolean
-  /** A playing strip sits on top, so the top corners square off to meet it. */
+  /** A playing strip or the Discover menu sits on top, so the top corners
+   *  square off to meet it. */
   joined: boolean
   onNavigate: (v: Tab) => void
   badgeFor: (id: Tab) => number
