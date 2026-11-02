@@ -32,7 +32,7 @@ export default function MediaRow({ title, items, onSeeAll }: Props) {
         {onSeeAll && <SeeAllButton onClick={onSeeAll} />}
       </div>
       {/* The right edge fades out to say the row goes on. */}
-      <div className="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar mask-[linear-gradient(to_right,#000_calc(100%-8rem),transparent)] pb-1 mx-[calc(-1*var(--gutter))] px-(--gutter) sm:mx-0 sm:px-0 snap-x">
+      <div className="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar mask-[linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] sm:mask-[linear-gradient(to_right,#000_calc(100%-8rem),transparent)] pb-1 mx-[calc(-1*var(--gutter))] px-(--gutter) sm:mx-0 sm:px-0 snap-x">
         {items.map(item => (
           <div key={item.key} className="w-[7.5rem] sm:w-36 lg:w-40 shrink-0 snap-start">
             <MediaCard item={item} removeContext={title} />
