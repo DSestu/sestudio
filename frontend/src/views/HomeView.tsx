@@ -7,10 +7,12 @@ import ContinueWidget from '../components/home/ContinueWidget'
 import LiveWidget from '../components/home/LiveWidget'
 import NewEpisodesWidget from '../components/home/NewEpisodesWidget'
 import ForYouWidget from '../components/home/ForYouWidget'
+import HealthWidget, { HealthStatusLine } from '../components/home/HealthWidget'
 import NowStrip from '../components/home/NowStrip'
 import PosterStrip from '../components/home/PosterStrip'
 import UpcomingWidget from '../components/home/UpcomingWidget'
 import Widget, { WidgetGrid } from '../components/home/Widget'
+import { useHealth } from '../homeHealth'
 import { orderWidgets, pinTiers, type WidgetDescriptor, type WidgetId, type WidgetTier } from '../homeOrder'
 import { useForYou } from '../forYou'
 import { useLastVisit } from '../lastVisit'
@@ -57,6 +59,7 @@ export default function HomeView({
   const lastVisit = useLastVisit()
   const forYou = useForYou()
   const upcoming = useUpcoming()
+  const [health, reloadHealth] = useHealth()
   const [pinned] = useState(() => new Map<WidgetId, WidgetTier>())
   const [shownFindings] = useState(() => new Set<number>())
   const findings = newFindings(activity, shownFindings)
@@ -111,11 +114,23 @@ export default function HomeView({
     favourites.length > 0 && { id: 'favourites', size: 'M', tier: 'browse' },
     Boolean(upcoming?.length) && { id: 'upcoming', size: 'M', tier: 'browse' },
     (discoverLoading || Boolean(discover?.cards.length)) && { id: 'discover', size: 'M', tier: 'browse' },
+    Boolean(health?.issues?.length) && { id: 'health', size: 'S', tier: 'status' },
   ]
   const placed = orderWidgets(pinTiers(present.filter(w => w !== false), pinned))
 
-  const render = (id: WidgetId, style: CSSProperties): ReactNode => {
+  const render = (id: WidgetId, style: CSSProperties, lone: boolean): ReactNode => {
     switch (id) {
+      case 'health':
+        return health && (
+          <HealthWidget
+            key={id}
+            style={style}
+            lone={lone}
+            health={health}
+            onReload={reloadHealth}
+            onOpenSettings={() => onNavigate('settings')}
+          />
+        )
       case 'continue':
         return (
           <ContinueWidget
@@ -259,8 +274,11 @@ export default function HomeView({
       />
 
       <WidgetGrid>
-        {placed.map((w, i) => render(w.id, { animationDelay: `${i * 40}ms` }))}
+        {placed.map((w, i) => render(w.id, { animationDelay: `${i * 40}ms` }, w.lone))}
       </WidgetGrid>
+
+      {/* All good: a quiet line instead of a widget. */}
+      {health?.ok && <HealthStatusLine health={health} />}
     </div>
   )
 }
