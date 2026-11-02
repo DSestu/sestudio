@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A play triangle: notification icons are drawn white on the system's colour. -->
+<!-- The sestudio mark: notification icons are drawn white on the system's colour. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M8,5v14l11,-7z" />
+    <group
+        android:scaleX="0.1"
+        android:scaleY="0.1"
+        android:translateX="-0.46"
+        android:translateY="-0.46">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M144 88.68A77 77 0 0 1 144 239.32Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M171.42 37.6A53 53 0 1 0 102.97 114.72A17 17 0 0 0 119.03 84.75A19 19 0 1 1 143.56 57.1A17 17 0 0 0 171.42 37.6ZM106.18 237.84A77 77 0 0 1 51 164A17 17 0 0 1 85 164A43 43 0 0 0 115.82 205.24A17 17 0 0 1 106.18 237.84Z" />
+    </group>
 </vector>
