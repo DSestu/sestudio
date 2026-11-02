@@ -1465,9 +1465,10 @@ def _probe_stream(url: str, hls: bool) -> StreamProbe | None:
 
 def _parse_stream_probe(text: str, hls: bool) -> StreamProbe | None:
     duration = _DURATION_RE.search(text)
-    if not duration:
+    # A live stream has no length: 0, which everything reads as unknown.
+    if not duration and "Duration: N/A" not in text:
         return None
-    hours, minutes, rest = duration.groups()
+    hours, minutes, rest = duration.groups() if duration else (0, 0, 0)
     videos: list[tuple[int, int, bool, float]] = []
     audios = 0
     for line in text.splitlines():

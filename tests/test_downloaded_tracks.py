@@ -535,6 +535,17 @@ def test_a_stream_is_read_at_its_best_variant():
     assert (probe.video, probe.audio) == (1, 1)
 
 
+def test_a_live_stream_is_read_with_no_length():
+    """ffmpeg has no duration for a live stream: a TV still gets it."""
+    probe = downloaded._parse_stream_probe(
+        _MASTER_REPORT.replace("Duration: 00:42:10.50", "Duration: N/A"), hls=True
+    )
+
+    assert probe is not None
+    assert probe.duration == 0
+    assert probe.height == 1080
+
+
 def test_a_stream_segment_reads_through_the_proxy_at_the_best_variant(
     tmp_path: Path, monkeypatch
 ):
