@@ -199,6 +199,28 @@ Soft and forgiving: ghost by default, one solid Signal Blue primary per area.
 ### Player
 Vidstack-based. It morphs between the full pane and the mini-player with a View Transition (250ms); its overlay type is bold white with tabular numbers.
 
+### Home dashboard
+A grid of widgets laid out by urgency (docs/SPEC-home-dashboard.md): 2 columns on phones, 4 from `md:`, 80px rows, dense packing. Each widget has one fixed size: **S** is 1 column, **M** is 2 columns, both 3 rows; **L** is 2 columns and two Ms tall. Heights add up, so widgets side by side always end on the same line; an S with no partner stretches to the full row. A widget with nothing to show is absent, never an empty shell.
+
+Widgets are Aisle Dark panels, `rounded.box`, flat. The frame says what is inside, and each device appears only once on Home:
+
+| Widget | Frame |
+|---|---|
+| Continue watching | A 3px Signal Blue progress line on the top edge, over a blurred backdrop of the show |
+| Live now | A 1px red hairline and a LIVE tally |
+| New episodes | Unseen rows sit raised on Row Dark; seen ones sink |
+| From your channels | The channels' faces lead the header |
+| For you | A spotlight cast from the top pick's poster |
+| Upcoming | Dashed: no fill, dashed outline and day tiles |
+| Watchlist | A ribbon hanging from the top edge |
+| Discover | Runs off the right edge of the screen |
+| Favourites | Posters on a 1px shelf ledge, one Ember Coral heart |
+| Downloads | Fills from the bottom with the queue's progress |
+| Health | A pulse trace on the top edge |
+| On this device | Inset into the page |
+
+Two sanctioned exceptions to the rules above: **On this device** carries an inner shadow (an inset, not elevation), and **Discover** breaks the content padding to run off the screen. On a first run the empty widgets are previewed as dashed ghost tiles drawn with their own shapes, never as empty panels.
+
 ## Do's and Don'ts
 
 ### Do:
