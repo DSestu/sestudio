@@ -119,14 +119,20 @@ def test_play_falls_back_to_https_when_no_http_server(client, monkeypatch):
 
 
 def test_http_port_endpoint_reports_the_real_port(client):
-    assert client.get("/api/cast/http-port").json() == {"http_port": 8080}
+    assert client.get("/api/cast/http-port").json() == {
+        "http_port": 8080,
+        "lan_host": None,
+    }
 
 
 def test_http_port_is_null_without_an_http_server(client):
     """The browser needs to know there is no HTTP port so it keeps cast media on
     the page's own (publicly trusted) HTTPS origin."""
     client.app.state.http_port = None
-    assert client.get("/api/cast/http-port").json() == {"http_port": None}
+    assert client.get("/api/cast/http-port").json() == {
+        "http_port": None,
+        "lan_host": None,
+    }
 
 
 def test_play_provider_hls_goes_to_the_tv_re_encoded(client, monkeypatch):

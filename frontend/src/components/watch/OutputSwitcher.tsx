@@ -9,6 +9,7 @@ import { castSeek, castToChromecast, describeCastError, loadCast, useCastState }
 import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
 import { startCastQueue } from '../../castQueue'
 import { startCastSession } from '../../playbackSession'
+import { isLoopback } from '../../serverLan'
 import { loadPlayerPrefs } from '../../playerPrefs'
 import type { PlayableEpisode } from '../../providers'
 import CastFrameRate from '../cast/CastFrameRate'
@@ -150,8 +151,10 @@ export default function OutputSwitcher({
       // Reached by a public name, or with no HTTP server running at all, that
       // rewrite has nothing to point at: keep the media on this origin, whose
       // cert the receiver can verify.
-      const port = await getCastHttpPort()
-      const host = window.location.hostname
+      const { port, lanHost } = await getCastHttpPort()
+      // On this machine's own name the receiver would fetch from itself: the
+      // LAN address it has now instead, asked fresh so a network change holds.
+      const host = isLoopback(window.location.hostname) && lanHost ? lanHost : window.location.hostname
       const base = port !== null && isLanHost(host) ? `http://${host}:${port}` : window.location.origin
       const onLan = (path: string) => `${base}${path}`
       // The master playlist, under an id of its own: the server holds its

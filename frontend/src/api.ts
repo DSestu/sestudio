@@ -490,10 +490,40 @@ export interface Renderer {
  * null when the server runs HTTPS-only (`serve --no-http`) and there is no such
  * port — callers must then keep the media on the page's own origin.
  */
-export async function getCastHttpPort(): Promise<number | null> {
+/** The plain-HTTP port cast media is fetched on (null: none), and this
+ *  machine's LAN address now (null: unknown, or the server is bound to one). */
+export async function getCastHttpPort(): Promise<{ port: number | null; lanHost: string | null }> {
   const res = await fetch(`${BASE}/cast/http-port`)
   if (!res.ok) throw new Error(`http-port fetch failed: ${res.status}`)
-  return (await res.json()).http_port ?? null
+  const body = await res.json()
+  return { port: body.http_port ?? null, lanHost: body.lan_host ?? null }
+}
+
+export interface ServerLan {
+  /** What other devices reach the server by, and what is in the way; null
+   *  until the server knows, or when it is bound to one address. */
+  lan: {
+    ip: string | null
+    url: string | null
+    problem: 'firewall' | 'unreachable' | 'offline' | null
+    /** The network category the firewall blocks on: Private, Public or Domain. */
+    network?: string | null
+    http_port: number | null
+    program: string
+  } | null
+  /** Whether this browser runs on the server's machine. */
+  here: boolean
+}
+
+/** Where phones and TVs reach the server now (checked anew with *recheck*);
+ *  null when it doesn't answer. */
+export async function getServerLan(recheck = false): Promise<ServerLan | null> {
+  try {
+    const res = await fetch(`${BASE}/server/lan${recheck ? '?recheck=1' : ''}`, { cache: 'no-store' })
+    return res.ok ? await res.json() : null
+  } catch {
+    return null
+  }
 }
 
 /** Discover DLNA MediaRenderers on the LAN (a ~4s SSDP scan). */

@@ -10,6 +10,7 @@ import webbrowser
 from fire import Fire
 from rich.console import Console
 
+from sestudio import lan
 from sestudio.logging_config import setup_logging
 from sestudio.resolver import resolve_live_domain
 from sestudio.restart import RESTARTED
@@ -72,6 +73,7 @@ def serve(
         from sestudio.tls import ensure_cert
 
         cert_path, key_path = ensure_cert()
+        cert_files = (cert_path, key_path)
         servers.append(
             (
                 "https",
@@ -100,19 +102,42 @@ def serve(
             "[dim]HTTPS uses a self-signed cert — trust it on the casting device "
             "(see README). DLNA/plain browsing can use the HTTP site.[/dim]"
         )
+    if sys.platform == "win32":
+        console.print(
+            "[dim]Phones or TVs can't open it? Let Python through the firewall: Windows "
+            "Security → Firewall & network protection → Allow an app through firewall.[/dim]"
+        )
+    else:
+        console.print(
+            f"[dim]Phones or TVs can't open it? Open ports {http_port} and "
+            f"{https_port} in this machine's firewall.[/dim]"
+        )
 
     # Run all but the last server in daemon threads; the last runs in the main
     # thread so Ctrl-C (its signal handlers) stops the whole process. Kept on
     # the app, so a restart from the settings page can stop them.
     app.state.servers = [uvicorn.Server(cfg) for _scheme, cfg in servers]
-    # Run from a terminal: the web UI in the browser, on the LAN address casting needs.
-    if sys.stdout.isatty() and not os.environ.get(RESTARTED):
-        scheme, port = ("http", http_port) if no_https else ("https", https_port)
-        threading.Thread(
-            target=_open_when_ready,
-            args=(app.state.servers, f"{scheme}://{shown}:{port}"),
-            daemon=True,
-        ).start()
+    # Where other devices reach it, kept up to date as the network changes; and
+    # run from a terminal, the web UI in the browser once it is ready.
+    scheme, port = ("http", http_port) if no_https else ("https", https_port)
+    app.state.lan = None
+    # The modal's "Check again" (see /api/server/lan) runs the same check.
+    app.state.lan_check = lambda: lan.state(scheme, port, app.state.http_port)
+    threading.Thread(
+        target=_watch_network,
+        args=(
+            app,
+            scheme,
+            port,
+            app.state.http_port,
+            cert_files if not no_https else None,
+        ),
+        kwargs={
+            "on_lan": host in ("0.0.0.0", "::"),
+            "browser": sys.stdout.isatty() and not os.environ.get(RESTARTED),
+        },
+        daemon=True,
+    ).start()
     for bg in app.state.servers[:-1]:
         bg.install_signal_handlers = lambda: None
         threading.Thread(target=bg.run, daemon=True).start()
@@ -123,22 +148,81 @@ def serve(
         os._exit(0)
 
 
-def _open_when_ready(servers: list, url: str) -> None:
-    """Opens url in the browser once every server listens: they start one
-    after the other, and a page opened early is a blank one."""
-    while not all(server.started for server in servers):
+def _when_ready(
+    app, scheme: str, port: int, http_port: int | None, *, on_lan: bool, browser: bool
+) -> None:
+    """Once every server listens (they start one after the other, and a page
+    opened early is a blank one): checks the LAN address, says what is in the
+    way, and opens the browser there, or on this machine when other devices
+    can't reach it."""
+    while not all(server.started for server in app.state.servers):
         time.sleep(0.1)
-    webbrowser.open(url)
+    if on_lan:
+        app.state.lan = lan.state(scheme, port, http_port)
+        _report(app.state.lan, port)
+        url = app.state.lan["url"] if app.state.lan["problem"] is None else None
+    else:
+        url = None
+    if browser:
+        webbrowser.open(url or f"{scheme}://localhost:{port}")
+
+
+def _report(state: dict, port: int) -> None:
+    """Tells the terminal why phones and TVs can't reach the server, if they can't."""
+    why = {
+        "firewall": f"Windows Firewall blocks other devices on this "
+        f"{state.get('network', '')} network. Allow this Python through it for "
+        f"{state.get('network', 'this')} networks: {state.get('program')}",
+        "unreachable": f"{state.get('ip')}:{port} does not answer, even from here.",
+        "offline": "This machine is on no network.",
+    }.get(state["problem"])
+    if why:
+        console.print(
+            f"[yellow]Phones and TVs can't reach sestudio, so casting won't work. "
+            f"{why}[/yellow]"
+        )
+
+
+def _watch_network(
+    app,
+    scheme: str,
+    port: int,
+    http_port: int | None,
+    cert_files: tuple | None,
+    *,
+    on_lan: bool,
+    browser: bool,
+    interval: float = 5.0,
+) -> None:
+    """Startup (see :func:`_when_ready`), then follows the machine onto other
+    networks: a new LAN address gets a cert covering it, loaded into the
+    running HTTPS server, and a fresh /api/server/lan answer."""
+    _when_ready(app, scheme, port, http_port, on_lan=on_lan, browser=browser)
+    if not on_lan:
+        return
+    while True:
+        time.sleep(interval)
+        if lan.primary_ip() == app.state.lan["ip"]:
+            continue
+        if cert_files:
+            from sestudio.tls import ensure_cert
+
+            ensure_cert()
+            for server in app.state.servers:
+                if server.config.ssl is not None:
+                    server.config.ssl.load_cert_chain(*map(str, cert_files))
+        app.state.lan = lan.state(scheme, port, http_port)
+        console.print(
+            f"[bold green]Network changed[/bold green] → {app.state.lan['url'] or 'offline'}"
+        )
+        _report(app.state.lan, port)
 
 
 def _display_host(host: str) -> str:
     """A clickable host for the printed URL: a LAN IP when bound to all interfaces."""
     if host not in ("0.0.0.0", "::"):
         return host
-    from sestudio.dlna import _local_ipv4s
-
-    ips = _local_ipv4s()
-    return ips[0] if ips else "localhost"
+    return lan.primary_ip() or "localhost"
 
 
 def main() -> None:

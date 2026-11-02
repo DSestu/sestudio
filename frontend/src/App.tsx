@@ -31,6 +31,8 @@ import DesktopSearch from './components/search/DesktopSearch'
 import { type Kind, parseKind, rememberSearch } from './titleSearch'
 import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
+import LanWarningModal from './components/LanWarningModal'
+import { isLoopback, useServerLan } from './serverLan'
 
 type WatchFields = Record<string, string | number | undefined>
 
@@ -55,6 +57,13 @@ export default function App() {
   // The catalogue Discover shows: the URL's, else the last one browsed.
   const catalogId = pickCatalog(catalogs, route.view === 'search' ? route.params.get('cat') : null)
   useEffect(() => { if (catalogId) rememberCatalog(catalogId) }, [catalogId])
+
+  // Opened on localhost because phones and TVs can't reach the server: say why,
+  // once per problem and session.
+  const [serverLan, recheckLan] = useServerLan()
+  const [lanDismissed, setLanDismissed] = useState(() => sessionStorage.getItem('lanWarning'))
+  const lanProblem = serverLan?.lan?.problem
+  const showLanWarning = !!lanProblem && isLoopback(window.location.hostname) && lanDismissed !== lanProblem
 
   const [downloadTick, setDownloadTick] = useState(0)
   const [skippedJobs, setSkippedJobs] = useState<DownloadJob[]>([])
@@ -406,6 +415,17 @@ export default function App() {
           onSearchTerm={searchTitles}
         />
       </AppShell>
+
+      {showLanWarning && serverLan?.lan && (
+        <LanWarningModal
+          lan={serverLan.lan}
+          onRecheck={recheckLan}
+          onClose={() => {
+            sessionStorage.setItem('lanWarning', lanProblem)
+            setLanDismissed(lanProblem)
+          }}
+        />
+      )}
 
       {/* One persistent Now-Casting surface, on every view. Renders nothing
           unless a cast (Chromecast or DLNA) is active. */}

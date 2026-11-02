@@ -24,18 +24,30 @@ def _cache_dir() -> Path:
     return _config_path().parent
 
 
-def _san_entries() -> list[x509.GeneralName]:
-    """SANs so cast devices trust the cert by LAN IP: loopback + localhost + LAN IPv4s."""
+def _san_entries(kept: frozenset[str] = frozenset()) -> list[x509.GeneralName]:
+    """SANs so cast devices trust the cert by LAN IP: loopback + localhost + LAN
+    IPv4s, plus the *kept* ones of the cert it replaces, so going back to a
+    network it already covered needs no new one."""
     entries: list[x509.GeneralName] = [
         x509.DNSName("localhost"),
         x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
     ]
-    for ip in _local_ipv4s():
+    for ip in sorted(set(_local_ipv4s()) | kept - {"127.0.0.1"}):
         try:
             entries.append(x509.IPAddress(ipaddress.ip_address(ip)))
         except ValueError:
             continue
     return entries
+
+
+def _covered_ips(cert_path: Path) -> frozenset[str]:
+    """The IP addresses the cert at *cert_path* is valid for; none if unreadable."""
+    try:
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    except Exception:
+        return frozenset()
+    return frozenset(str(ip) for ip in san.value.get_values_for_type(x509.IPAddress))
 
 
 def _still_valid(cert_path: Path) -> bool:
@@ -44,10 +56,15 @@ def _still_valid(cert_path: Path) -> bool:
     except Exception:
         return False
     now = datetime.datetime.now(datetime.timezone.utc)
-    return cert.not_valid_after_utc > now + datetime.timedelta(days=1)
+    if cert.not_valid_after_utc <= now + datetime.timedelta(days=1):
+        return False
+    # On a new network the LAN address changes, and a cert without it is refused there.
+    return set(_local_ipv4s()) <= _covered_ips(cert_path)
 
 
-def _generate(cert_path: Path, key_path: Path) -> None:
+def _generate(
+    cert_path: Path, key_path: Path, kept: frozenset[str] = frozenset()
+) -> None:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "sestudio")])
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -59,7 +76,7 @@ def _generate(cert_path: Path, key_path: Path) -> None:
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - datetime.timedelta(minutes=5))
         .not_valid_after(now + datetime.timedelta(days=825))
-        .add_extension(x509.SubjectAlternativeName(_san_entries()), critical=False)
+        .add_extension(x509.SubjectAlternativeName(_san_entries(kept)), critical=False)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .sign(key, hashes.SHA256())
     )
@@ -81,8 +98,8 @@ def _generate(cert_path: Path, key_path: Path) -> None:
 def ensure_cert(cache_dir: Path | None = None) -> tuple[Path, Path]:
     """Return ``(cert_path, key_path)`` for a self-signed cert covering the LAN IPs.
 
-    Generated once and cached under the config dir; regenerated only when missing
-    or within a day of expiry.
+    Generated once and cached under the config dir; regenerated when missing,
+    within a day of expiry, or missing a LAN IP this machine now has.
     """
     directory = cache_dir or _cache_dir()
     cert_path = directory / _CERT_NAME
@@ -90,5 +107,5 @@ def ensure_cert(cache_dir: Path | None = None) -> tuple[Path, Path]:
     if cert_path.exists() and key_path.exists() and _still_valid(cert_path):
         return cert_path, key_path
     directory.mkdir(parents=True, exist_ok=True)
-    _generate(cert_path, key_path)
+    _generate(cert_path, key_path, _covered_ips(cert_path))
     return cert_path, key_path
