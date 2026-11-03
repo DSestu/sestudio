@@ -58,8 +58,6 @@ export class TimelineRenderer {
   private pts = new Points()
   private ys = new Float64Array(2048)
   private widths = new Map<string, number>()
-  /** The labels drawn last frame, for hover and presses (page pixels). `i`: layout index; a press below `split` is on the second line. */
-  hits: { i: number; x: number; y: number; w: number; h: number; split: number }[] = []
   private W = 0
   private H = 0
   private dpr = 1
@@ -93,8 +91,20 @@ export class TimelineRenderer {
     this.M = new Mapper(W, H)
   }
 
+  /** The labels drawn last frame, for hit tests: the join they open (index of the incoming item) and their box. */
+  private hits: { i: number; x0: number; x1: number; ty: number }[] = []
+
+  /** The label under a point of the canvas, and whether it is the second line (the transition). */
+  labelAt(x: number, y: number): { i: number; x0: number; ty: number; second: boolean } | null {
+    for (const h of this.hits) {
+      if (x >= h.x0 && x <= h.x1 && y >= h.ty - 14 && y <= h.ty + 18) return { i: h.i, x0: h.x0, ty: h.ty, second: y > h.ty + 3 }
+    }
+    return null
+  }
+
   draw(f: Frame) {
     const { W, H, dpr, page: g2, off, M } = this
+    this.hits.length = 0
     if (!W) return
     const o2 = off.x
     const { X } = M.at(f.t)
@@ -359,7 +369,6 @@ export class TimelineRenderer {
     const { avoid } = f
     g2.textBaseline = 'alphabetic'
     let last = -1e9
-    this.hits.length = 0
     for (let i = 1; i < f.items.length; i++) {
       const it = f.items[i]
       if (!it.plan) continue
@@ -373,7 +382,7 @@ export class TimelineRenderer {
       const box = Math.max(tw, 120) + 12
       if (avoid && x0 + box > avoid.left && x0 < avoid.right && ty - 14 < avoid.bottom && ty + 18 > avoid.top) continue
       last = x0
-      this.hits.push({ i, x: x0, y: ty - 14, w: box, h: 46, split: ty + 3 })
+      this.hits.push({ i, x0, x1: x0 + box, ty })
       if (f.hover === i) {
         g2.fillStyle = 'oklch(72% .16 230 / .16)'
         g2.beginPath()

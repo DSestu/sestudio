@@ -200,6 +200,10 @@ export const queueActions = {
     action: 'play' | 'pause' | 'seek' | 'next' | 'prev' | 'repeat',
     extra: { position?: number; repeat?: boolean } = {},
   ) => send('POST', '/transport', { action, ...extra }),
+  /** A pair's own mix settings (every field: the server stores them whole). */
+  setMix: (from: string, to: string, settings: MixSettings) =>
+    send('PUT', `/mix/${encodeURIComponent(from)}/${encodeURIComponent(to)}`, settings),
+  setDefaultMix: (mode: 'fade' | 'sync') => send('PUT', '/mix/default', { mode }),
 }
 
 // --- adding from the library views ----------------------------------------------
@@ -256,6 +260,7 @@ export interface TrackInfo {
 export interface Analysis {
   bpm?: number
   beat0?: number
+  bar0?: number
   hue?: number
   /** Mean bass, mids, highs, 0..1. */
   balance?: [number, number, number]
@@ -322,7 +327,7 @@ export function useAnalysis(id: string | undefined): Analysis | null {
  *  highs = the rest, SPEC-music-player §6.1). */
 export function parseAnalysis(a: Record<string, unknown>): Analysis {
   const num = (v: unknown) => (typeof v === 'number' && isFinite(v) ? v : undefined)
-  const out: Analysis = { bpm: num(a.bpm), beat0: num(a.beat0), hue: num(a.hue) }
+  const out: Analysis = { bpm: num(a.bpm), beat0: num(a.beat0), bar0: num(a.bar0), hue: num(a.hue) }
   const bands = a.bands as number[][] | undefined
   if (Array.isArray(bands) && bands.length === 8 && bands[0]?.length) {
     // The server serves whole percents.

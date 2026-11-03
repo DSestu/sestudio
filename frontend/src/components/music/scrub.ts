@@ -160,7 +160,7 @@ export class Scrubber {
   }
 
   private hit(x: number, y: number) {
-    return this.o.r.hits.find(h => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)
+    return this.o.r.labelAt(x, y)
   }
 
   private down = (e: PointerEvent) => {
@@ -216,8 +216,8 @@ export class Scrubber {
     if (!d.moved) {
       const h = d.label >= 0 ? this.hit(e.clientX, e.clientY) : undefined
       this.view = null
-      // The label's second line opens the transition popover (not built yet): the upper part glides.
-      if (h) { if (e.clientY <= h.split) this.glideTo(m.TS[h.i]) }
+      // The label's second line opens the transition popover (Timeline); the upper part glides.
+      if (h) { if (!h.second) this.glideTo(m.TS[h.i]) }
       else this.glideTo(this.nowG + this.map().s(e.clientX))
       return
     }
