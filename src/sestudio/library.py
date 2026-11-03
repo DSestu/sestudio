@@ -110,7 +110,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_watcher_events_dedupe
     ON watcher_events(watcher_id, item_key) WHERE item_key <> '';
 """
 
-_MIGRATIONS: tuple[str, ...] = (_MIGRATION_1_WATCHERS,)
+# The music queue (sestudio.music.queue): one row per station holding the whole
+# queue as a JSON document, its revision beside it.
+_MIGRATION_2_MUSIC_QUEUE = """
+CREATE TABLE IF NOT EXISTS music_queue (
+    station TEXT    PRIMARY KEY,
+    rev     INTEGER NOT NULL,
+    data    TEXT    NOT NULL
+);
+"""
+
+_MIGRATIONS: tuple[str, ...] = (_MIGRATION_1_WATCHERS, _MIGRATION_2_MUSIC_QUEUE)
 
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
