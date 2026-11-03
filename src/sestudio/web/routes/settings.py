@@ -64,6 +64,7 @@ def _public(cfg, request: Request) -> dict[str, Any]:
     # Libraries carry other servers' tokens, and the share tokens' hashes are not the client's either:
     # both are read through /music/libraries and /music/share-tokens.
     data.pop("music_libraries", None)
+    data.pop("music_dismissed", None)
     data.pop("music_share_tokens", None)
     data["tmdb_configured"] = bool(tmdb_key())
     # Same treatment as the TMDB key: a secret the client sets but never reads

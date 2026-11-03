@@ -1,5 +1,6 @@
 package io.github.dsestu.sestudio
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,13 +8,17 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Environment
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.storage.StorageManager
 import android.system.Os
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import kotlin.concurrent.thread
 
@@ -100,10 +105,13 @@ class ServerService : Service() {
         } else {
             arrayOf("sestudio@latest")
         }
+        val storage = storageRoots()
+        writeStorage(runtime, storage)
         process = runtime.command(
             "uvx", *source,
             "--http_port", "${BuildConfig.HTTP_PORT}", "--https_port", "${BuildConfig.HTTPS_PORT}",
-            binds = listOf(downloads.path to DOWNLOADS),
+            // Shared storage at the same paths inside, so they match what Android shows.
+            binds = listOf(downloads.path to DOWNLOADS) + storage.map { it.second to it.second },
         )
             .redirectOutput(logFile(this))
             .start()
@@ -114,6 +122,42 @@ class ServerService : Service() {
                     if (process === started) stopSelf()
                 }
             }
+    }
+
+    /**
+     * The phone's shared storage (label, path) the server may read: the internal one and each
+     * mounted SD card. Empty without the audio permission, which the user may have refused.
+     */
+    private fun storageRoots(): List<Pair<String, String>> {
+        val permission = audioPermission()
+        if (permission != null && checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) return emptyList()
+        val cards = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getSystemService(StorageManager::class.java).storageVolumes
+                .filter { !it.isPrimary && it.state == Environment.MEDIA_MOUNTED }
+                .mapNotNull { it.directory?.path }
+        } else {
+            // <card>/Android/data/<package>/files: the card is what comes before "/Android".
+            getExternalFilesDirs(null).drop(1).filterNotNull().map { it.path.substringBefore("/Android/") }
+        }
+        val phone = "Phone" to Environment.getExternalStorageDirectory().path
+        return (listOf(phone) + cards.mapIndexed { i, path -> (if (i == 0) "SD card" else "SD card ${i + 1}") to path })
+            .filter { File(it.second).isDirectory }
+    }
+
+    /** What the server finds out about the storage: the roots to browse, and the standard music folders in them. */
+    private fun writeStorage(runtime: Runtime, storage: List<Pair<String, String>>) {
+        fun entry(label: String, path: String) = JSONObject().put("label", label).put("path", path)
+        val folders = storage.flatMap { (label, root) ->
+            MUSIC_FOLDERS.filter { File(root, it).isDirectory }.map { entry("$label · $it", "$root/$it") }
+        }
+        val file = File(runtime.rootfs, "root/.config/sestudio/android_storage.json")
+        file.parentFile!!.mkdirs()
+        file.writeText(
+            JSONObject()
+                .put("roots", JSONArray(storage.map { entry(it.first, it.second) }))
+                .put("folders", JSONArray(folders))
+                .toString(),
+        )
     }
 
     /** sestudio's settings on first start: downloads in the app's Movies folder, no AI frames. */
@@ -166,6 +210,16 @@ class ServerService : Service() {
 
         /** Where downloads appear inside Debian: the app's Movies folder on the phone. */
         const val DOWNLOADS = "/downloads"
+
+        /** The standard folders that become libraries by themselves (not Ringtones, Notifications, Alarms). */
+        private val MUSIC_FOLDERS = listOf("Music", "Download", "Podcasts", "Recordings")
+
+        /** The permission that lets the app read audio files by path on this Android, or null when none is needed. */
+        fun audioPermission(): String? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
 
         fun logFile(context: Context) = File(context.filesDir, "server.log")
 

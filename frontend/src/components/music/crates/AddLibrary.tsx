@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ResponsiveModal from '../../ResponsiveModal'
+import FolderPicker from './FolderPicker'
 import { librariesApi, type NewLibrary } from '../../../musicLibraries'
 
 const KINDS = [
@@ -13,6 +14,7 @@ type Kind = (typeof KINDS)[number]['id']
 export default function AddLibrary({ onClose }: { onClose: () => void }) {
   const [kind, setKind] = useState<Kind>('local_folder')
   const [path, setPath] = useState('')
+  const [label, setLabel] = useState('')
   const [url, setUrl] = useState('')
   const [token, setToken] = useState('')
   const [cookies, setCookies] = useState('')
@@ -32,7 +34,7 @@ export default function AddLibrary({ onClose }: { onClose: () => void }) {
           body: JSON.stringify({ ytmusic_cookies: cookies }),
         })
       }
-      const body: NewLibrary = kind === 'local_folder' ? { kind, path } : kind === 'remote_sestudio' ? { kind, url, token } : { kind }
+      const body: NewLibrary = kind === 'local_folder' ? { kind, path, label } : kind === 'remote_sestudio' ? { kind, url, token } : { kind }
       await librariesApi.add(body)
       onClose()
     } catch (e) {
@@ -52,11 +54,19 @@ export default function AddLibrary({ onClose }: { onClose: () => void }) {
       </div>
       <form onSubmit={e => { e.preventDefault(); if (ready && !busy) void submit() }} className="flex flex-col gap-3">
         {kind === 'local_folder' && (
-          <label className="block">
-            <span className="text-sm text-base-content/60">Folder on this machine</span>
-            <input value={path} onChange={e => setPath(e.target.value)} className={`${field} font-mono`} placeholder="Z:\Music or /mnt/nas/music" autoFocus />
-            <span className="text-xs text-base-content/50">A NAS works when it is mounted here.</span>
-          </label>
+          <>
+            <span className="text-sm text-base-content/60">Folder on this server</span>
+            <FolderPicker onPick={(p, name) => { setPath(p); setLabel(name) }} />
+            {path && (
+              <div className="rounded-lg bg-base-200 p-3 flex flex-col gap-2">
+                <span className="text-xs text-base-content/60 font-mono break-all">{path}</span>
+                <label className="block">
+                  <span className="text-sm text-base-content/60">Name</span>
+                  <input value={label} onChange={e => setLabel(e.target.value)} className={field} />
+                </label>
+              </div>
+            )}
+          </>
         )}
         {kind === 'remote_sestudio' && (
           <>

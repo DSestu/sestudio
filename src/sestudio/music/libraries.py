@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 LOCAL = downloaded.LOCAL_LIBRARY
 FOLDER, REMOTE, YTMUSIC = "local_folder", "remote_sestudio", "ytmusic_account"
 KINDS = (FOLDER, REMOTE, YTMUSIC)
+ANDROID_STORAGE = "android_storage.json"
 
 #: How long a remote's (or YT Music's) listing is trusted before it is fetched again.
 TTL = 60.0
@@ -127,12 +128,54 @@ def remove(library_id: str) -> None:
     kept = [lib for lib in cfg.music_libraries if lib["id"] != library_id]
     if len(kept) == len(cfg.music_libraries):
         raise Invalid(f"unknown library: {library_id}")
+    gone = next(lib for lib in cfg.music_libraries if lib["id"] == library_id)
+    if gone["kind"] == FOLDER and gone["path"] not in cfg.music_dismissed:
+        cfg.music_dismissed.append(gone["path"])
     cfg.music_libraries = kept
     save_config(cfg)
     with _lock:
         _remote.pop(library_id, None)
         _ytmusic.pop(library_id, None)
     (config_dir() / "music_remote" / f"{library_id}.json").unlink(missing_ok=True)
+
+
+def android_storage() -> dict[str, list[dict[str, Any]]]:
+    """What the Android app says is exposed to this server: ``{roots, folders}``, each
+    ``{label, path}``. The app writes it into the config dir before starting the server."""
+    try:
+        data = json.loads((config_dir() / ANDROID_STORAGE).read_text("utf-8"))
+        return {
+            k: [x for x in data.get(k, []) if isinstance(x, dict)]
+            for k in ("roots", "folders")
+        }
+    except (OSError, ValueError, AttributeError):
+        return {"roots": [], "folders": []}
+
+
+def sync_defaults() -> None:
+    """Add the app's standard music folders that exist and are not libraries yet.
+
+    Idempotent; a folder the user removed (``music_dismissed``) stays removed.
+    """
+    cfg = load_config()
+    known = {lib.get("path") for lib in cfg.music_libraries} | set(cfg.music_dismissed)
+    added = False
+    for d in android_storage()["folders"]:
+        path, label = str(d.get("path", "")), str(d.get("label", ""))
+        if not path or path in known or not Path(path).is_dir():
+            continue
+        cfg.music_libraries.append(
+            {
+                "id": "f" + secrets.token_hex(3),
+                "kind": FOLDER,
+                "label": label or Path(path).name,
+                "path": path,
+            }
+        )
+        known.add(path)
+        added = True
+    if added:
+        save_config(cfg)
 
 
 def folder_roots() -> list[tuple[str, Path]]:
