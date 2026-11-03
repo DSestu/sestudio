@@ -16,9 +16,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        exclude: ^\.github/workflows/
+        exclude: ^(\.github/workflows/|docs/proto/)
       - id: ruff-format
-        exclude: ^\.github/workflows/
+        exclude: ^(\.github/workflows/|docs/proto/)
 
   # frontend/dist is committed and force-included into the wheel
   # (see [tool.hatch.build.targets.wheel.force-include]), so it must never lag

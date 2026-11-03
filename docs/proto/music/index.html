@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Music · sestudio prototype</title>
+<style>
+:root{--b0:oklch(12% .012 240);--b1:oklch(16% .015 240);--b2:oklch(20% .02 240);--b3:oklch(26% .025 240);--b4:oklch(34% .025 240);--tx:oklch(92% .01 240);--pr:oklch(72% .16 230);--pri:oklch(18% .05 230);--ease:cubic-bezier(.2,.8,.2,1);--h:230}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--b1);color:var(--tx);font:14px/1.4 ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+::selection{background:color-mix(in oklch,var(--pr) 40%,transparent)}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--pr);outline-offset:2px;border-radius:10px}
+.mut{color:color-mix(in oklch,var(--tx) 60%,transparent)}.fnt{color:color-mix(in oklch,var(--tx) 42%,transparent)}
+.glass{background:hsl(205 62% 14%/.66);backdrop-filter:blur(24px) saturate(1.4);box-shadow:inset 0 0 0 1px rgb(255 255 255/.08),0 8px 24px rgb(0 0 0/.35)}
+svg{flex:none}
+/* shell */
+.rail{position:fixed;left:12px;top:12px;bottom:12px;width:84px;border-radius:16px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:16px 0;z-index:5}
+.mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#8b5cf6,#38bdf8);margin-bottom:12px}
+.sb{width:52px;height:52px;border-radius:16px;background:var(--pr);color:var(--pri);display:grid;place-items:center;margin-bottom:10px}
+.ni{width:72px;display:flex;flex-direction:column;align-items:center;gap:5px;padding:7px 0 8px;font-size:11px;color:color-mix(in oklch,var(--tx) 68%,transparent)}
+.ni i{display:grid;place-items:center;width:52px;height:30px;border-radius:10px}.ni.on{color:var(--pr)}.ni.on i{background:color-mix(in oklch,var(--pr) 22%,transparent)}
+.main{position:fixed;left:108px;right:0;top:0;bottom:0;padding:12px 20px 20px;display:flex;flex-direction:column;gap:16px;min-height:0}
+.hc{border-radius:16px;min-height:64px;display:flex;align-items:center;gap:16px;padding:0 12px 0 14px;flex:none}
+.hc h1{font-size:18px;font-weight:600;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hc p{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gb{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:rgb(255 255 255/.06);color:color-mix(in oklch,var(--tx) 85%,transparent);flex:none;transition:scale .12s,background .2s,color .2s}
+.gb:hover{background:rgb(255 255 255/.1)}.gb:active{scale:.92}.gb.sm{width:32px;height:32px;border-radius:10px}.gb.on{color:var(--pr);background:color-mix(in oklch,var(--pr) 20%,transparent)}
+.play{width:64px;height:64px;border-radius:22px;background:var(--pr);color:var(--pri);display:grid;place-items:center;transition:scale .12s}.play:active{scale:.92}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px;flex:1;min-height:0}
+.left{display:flex;flex-direction:column;gap:14px;min-width:0;min-height:0}
+/* stage: the horizon */
+.stage{position:relative;flex:1;min-height:300px;border-radius:14px;overflow:hidden;background:oklch(9% .02 var(--h))}
+.sky{position:absolute;inset:0;background:
+  radial-gradient(120% 60% at 50% 100%,oklch(50% .15 calc(var(--h) + 25) / .95),transparent 62%),
+  linear-gradient(to top,oklch(30% .12 var(--h)) 0%,oklch(15% .06 var(--h)) 38%,oklch(9% .02 var(--h)) 72%)}
+.sky::after{content:"";position:absolute;inset:0;background:radial-gradient(80% 40% at 50% 104%,oklch(70% .12 calc(var(--h) + 40) / .35),transparent 70%);animation:breathe 9s ease-in-out infinite alternate}
+@keyframes breathe{to{transform:translateY(-3%) scaleY(1.12);opacity:.7}}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.titles{position:absolute;left:28px;right:28px;top:26px;pointer-events:none}
+.ttl{position:absolute;left:0;top:0;transition:opacity .9s var(--ease),translate .9s var(--ease),filter .9s var(--ease)}
+.ttl.out{opacity:0;translate:0 -10px;filter:blur(6px)}.ttl.in-wait{opacity:0;translate:0 10px;filter:blur(6px)}
+.ttl p{font-size:15px;margin-bottom:4px}.ttl h2{font-size:clamp(40px,6.2vw,92px);line-height:.95;font-weight:700;letter-spacing:-.04em;text-wrap:balance;max-width:16ch}
+.clock{position:absolute;right:20px;top:20px;font-size:12px;padding:6px 10px;border-radius:10px}
+.start{position:absolute;inset:0;display:grid;place-items:center;background:rgb(0 0 0/.35);backdrop-filter:blur(4px);z-index:3}
+.start button{display:flex;align-items:center;gap:10px;height:52px;padding:0 22px;border-radius:16px;background:var(--pr);color:var(--pri);font-weight:600;font-size:15px}
+.bar{display:flex;align-items:center;gap:14px;flex:none}
+.seek{position:relative;flex:1;height:18px;display:flex;align-items:center;cursor:pointer}
+.seek::before{content:"";position:absolute;left:0;right:0;height:4px;border-radius:2px;background:rgb(255 255 255/.16)}
+.seek i{position:absolute;left:0;height:4px;border-radius:2px;background:var(--pr)}
+.t{font-size:12px;min-width:34px}
+.bench{display:flex;align-items:center;gap:18px;font-size:12px;flex-wrap:wrap}
+.bench label{display:flex;align-items:center;gap:8px}
+input[type=range]{accent-color:var(--pr);width:110px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:11px;background:rgb(255 255 255/.06);font-size:12px;font-weight:500;white-space:nowrap}
+.chip:hover{background:rgb(255 255 255/.1)}.chip.on{background:color-mix(in oklch,var(--pr) 22%,transparent);color:var(--pr)}
+/* queue */
+.q{background:var(--b2);border-radius:8px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.qh{display:flex;align-items:center;gap:8px;padding:12px 12px 8px}.qh b{flex:1;font-size:13px;font-weight:600}
+.src{display:flex;gap:10px;align-items:center;margin:0 12px 6px;padding:8px 10px;border-radius:10px;background:rgb(255 255 255/.04);font-size:12px}
+.list{flex:1;overflow-y:auto;padding:0 8px 8px;scrollbar-width:thin;scrollbar-color:var(--b4) transparent}
+.row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;font-size:13px;cursor:pointer;transition:background .15s,opacity .3s}
+.row:hover{background:rgb(255 255 255/.05)}.row .g{color:color-mix(in oklch,var(--tx) 28%,transparent);cursor:grab;display:flex}
+.row .m{flex:1;min-width:0}.row .m b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row .m span{font-size:11px;color:color-mix(in oklch,var(--tx) 52%,transparent)}
+.row .d{font-size:11px;color:color-mix(in oklch,var(--tx) 45%,transparent)}
+.row.cur{background:color-mix(in oklch,var(--pr) 22%,transparent)}.row.cur .m b{color:var(--pr)}.row.done{opacity:.42}
+.row.next .d{color:var(--pr)}
+.row.drag{opacity:.3}.row.over{box-shadow:inset 0 2px 0 var(--pr)}
+.cv{border-radius:6px;display:block}
+.eq{display:flex;gap:2px;align-items:end;height:14px;width:14px}.eq i{flex:1;background:var(--pr);animation:eq .55s ease-in-out infinite alternate}.eq i:nth-child(2){animation-delay:.18s}.eq i:nth-child(3){animation-delay:.36s}
+.paused .eq i{animation-play-state:paused}
+@keyframes eq{from{height:25%}to{height:100%}}
+.dock{display:none}
+/* TV view: the stage alone, as the TV gets it */
+body.tv .rail,body.tv .hc,body.tv .q,body.tv .bar,body.tv .bench,body.tv .dock{display:none}
+body.tv .main{left:0;padding:0}body.tv .layout{grid-template-columns:1fr}body.tv .stage{border-radius:0}
+body.tv .tvexit{display:flex}
+.tvexit{display:none;position:fixed;right:16px;bottom:16px;z-index:9}
+/* phone */
+@media (max-width:760px){
+ .rail{display:none}.main{left:0;padding:12px 12px 90px;gap:12px;overflow-y:auto;position:fixed}
+ .layout{display:flex;flex-direction:column;gap:12px;flex:none}
+ .stage{flex:none;height:52vh;min-height:320px}.ttl h2{font-size:44px}.titles{left:18px;top:18px}
+ .q{max-height:none;overflow:visible}.list{overflow:visible}
+ .bench{gap:12px}.hide-sm{display:none}
+ .bar{flex-wrap:wrap;justify-content:center;gap:12px 14px}.bar .t,.bar .seek{order:-1}.bar .seek{flex:1 1 calc(100% - 110px)}
+ .dock{display:grid;position:fixed;left:12px;right:12px;bottom:12px;height:66px;border-radius:16px;grid-template-columns:repeat(5,1fr);align-items:center;z-index:6}
+ .dock .ni{width:auto;padding:0;gap:3px;font-size:10px}.dock .sb{margin:0 auto}
+}
+@media (prefers-reduced-motion:reduce){.sky::after,.eq i{animation:none}.ttl{transition:opacity .2s}}
+</style></head>
+<body class="paused">
+<aside class="rail glass" aria-label="Main navigation">
+ <div class="mark"></div><div class="sb" data-i="search"></div>
+ <div class="ni"><i data-i="home"></i>Home</div><div class="ni"><i data-i="compass"></i>Discover</div><div class="ni"><i data-i="heart"></i>Library</div>
+ <div class="ni on"><i data-i="music"></i>Music</div><div class="ni"><i data-i="media"></i>Media</div><div class="ni"><i data-i="bell"></i>Activity</div>
+ <div class="ni" style="margin-top:auto"><i data-i="settings"></i>Settings</div>
+</aside>
+<main class="main">
+ <header class="hc glass">
+  <button class="gb" aria-label="Back" data-i="back"></button>
+  <div style="min-width:0;flex:1"><h1 id="hTitle">Music</h1><p class="mut" id="hSub">neuro soundcloud</p></div>
+  <button class="chip" id="tvBtn" title="T">TV view</button>
+  <button class="gb" aria-label="More" data-i="more"></button>
+ </header>
+ <div class="layout">
+  <section class="left">
+   <div class="stage" id="stage">
+    <div class="sky"></div>
+    <canvas id="flow" aria-label="The music, flowing through the playhead"></canvas>
+    <div class="titles" id="titles"></div>
+    <span class="clock glass mut" id="clock"></span>
+    <div class="start" id="start"><button id="startBtn"><span data-i="play"></span>Play neuro soundcloud</button></div>
+   </div>
+   <div class="bar">
+    <button class="gb sm" id="shuffleBtn" aria-label="Shuffle what is left" data-i="shuffle"></button>
+    <button class="gb" id="prevBtn" aria-label="Previous" data-i="prev"></button>
+    <button class="play" id="playBtn" aria-label="Play or pause"><span data-i="play"></span></button>
+    <button class="gb" id="nextBtn" aria-label="Next, with a crossfade" data-i="next"></button>
+    <button class="gb sm on" id="repeatBtn" aria-label="Repeat the queue" data-i="repeat"></button>
+    <span class="t fnt" id="tNow">0:00</span><div class="seek" id="seek"><i id="seekFill"></i></div><span class="t fnt" id="tDur">0:00</span>
+   </div>
+   <div class="bench mut">
+    <label>Crossfade <input type="range" id="fadeIn" min="1" max="12" step="0.5" value="4"><b id="fadeOut">4 s</b></label>
+    <label class="hide-sm">Flow zoom <input type="range" id="zoomIn" min="20" max="180" step="5" value="60"><b id="zoomOut">60 s</b></label>
+    <label>Flow height <input type="range" id="ampIn" min="0.3" max="1.4" step="0.05" value="0.85"></label>
+    <span class="fnt hide-sm">Space plays · N skips with a crossfade · T is the TV view</span>
+   </div>
+  </section>
+  <aside class="q" aria-label="Queue">
+   <div class="qh"><b>Queue</b><span class="fnt" style="font-size:12px" id="qMeta"></span></div>
+   <div class="src"><span class="gb sm" data-i="folder"></span><div style="flex:1"><b style="display:block;font-size:13px;font-weight:600">neuro soundcloud</b><span class="fnt">Folder · keeps going when the queue ends</span></div></div>
+   <div class="list" id="list"></div>
+  </aside>
+ </div>
+</main>
+<nav class="dock glass"><div class="ni"><i data-i="home"></i>Home</div><div class="ni on"><i data-i="music"></i>Music</div><div class="sb" data-i="search"></div><div class="ni"><i data-i="media"></i>Media</div><div class="ni"><i data-i="bell"></i>Activity</div></nav>
+<button class="chip glass tvexit" id="tvExit">Leave TV view</button>
+<script>
+const P={back:'<path d="M15 18l-6-6 6-6"/>',more:'<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
+search:'<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',home:'<path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/>',compass:'<circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',media:'<rect x="3.5" y="4" width="17" height="13" rx="2"/><path d="M8 20h8"/>',music:'<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+bell:'<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/>',settings:'<path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/>',
+shuffle:'<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',repeat:'<path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>',
+grip:'<circle cx="9" cy="7" r="1.3" fill="currentColor"/><circle cx="15" cy="7" r="1.3" fill="currentColor"/><circle cx="9" cy="12" r="1.3" fill="currentColor"/><circle cx="15" cy="12" r="1.3" fill="currentColor"/><circle cx="9" cy="17" r="1.3" fill="currentColor"/><circle cx="15" cy="17" r="1.3" fill="currentColor"/>',
+play:'<path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>',pause:'<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" stroke="none"/>',prev:'<path d="M18 6v12l-9-6zM6 6v12"/>',next:'<path d="M6 6v12l9-6zM18 6v12"/>',
+folder:'<path d="M3.5 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/>'};
+const ic=(k,s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k]}</svg>`;
+document.querySelectorAll('[data-i]').forEach(e=>{const k=e.dataset.i;e.insertAdjacentHTML('afterbegin',ic(k,k==='search'?24:k==='play'?26:20))});
+const $=id=>document.getElementById(id);
+const fmt=s=>{s=Math.max(0,Math.round(s));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};
+const cover=(t,size)=>{const n=24,k=Math.floor(t.env.length/n);let b='';for(let i=0;i<n;i++){let v=0;for(let j=i*k;j<(i+1)*k;j++)v=Math.max(v,t.env[j]);const w=100/n;b+=`<rect x="${(i*w+w*.2).toFixed(1)}" y="${(50-v*34).toFixed(1)}" width="${(w*.6).toFixed(1)}" height="${Math.max(v*68,2).toFixed(1)}" rx="1.2"/>`}
+ return `<svg class="cv" width="${size}" height="${size}" viewBox="0 0 100 100"><rect width="100" height="100" style="fill:oklch(24% .05 ${t.hue})"/><g style="fill:oklch(76% .14 ${t.hue})">${b}</g></svg>`};
+
+let T=[],queue=[],cur=0,FADE=4,WINDOW=60,AMP=.85,repeat=true,started=false,playing=false;
+let ctx,master,analyser,freq,els=[],gains=[],active=0,fade=null,idleFor=-1,level=0;
+const st={fadeStart:null};
+
+fetch('tracks.json').then(r=>r.json()).then(d=>{T=d;queue=d.map((_,i)=>i);renderQueue();renderTitle(true);setHue(T[queue[0]].hue);tick()});
+
+function initAudio(){
+ ctx=new AudioContext();master=ctx.createGain();analyser=ctx.createAnalyser();analyser.fftSize=1024;analyser.smoothingTimeConstant=.8;freq=new Uint8Array(analyser.frequencyBinCount);
+ master.connect(analyser);analyser.connect(ctx.destination);
+ for(let i=0;i<2;i++){const a=new Audio();a.preload='auto';const s=ctx.createMediaElementSource(a);const g=ctx.createGain();g.gain.value=0;s.connect(g);g.connect(master);els.push(a);gains.push(g)}
+}
+const track=k=>T[queue[k]];
+const nextIndex=()=>cur+1<queue.length?cur+1:(repeat?0:-1);
+const endOf=()=>st.fadeStart??Math.max(0,track(cur).dur-FADE);
+
+function start(){
+ initAudio();started=true;$('start').remove();
+ els[0].src=track(0).src;gains[0].gain.value=1;els[0].play();playing=true;document.body.classList.remove('paused');setPlayIcon();
+ setInterval(engine,100);
+}
+function preloadNext(){const n=nextIndex();if(n<0||fade)return;const idle=1-active;if(idleFor!==queue[n]){els[idle].src=track(n).src;els[idle].load();idleFor=queue[n]}}
+function engine(){
+ if(!started)return;preloadNext();
+ const a=els[active];
+ if(fade){if(ctx.currentTime>=fade.end)finishFade();return}
+ if(playing&&a.duration&&a.currentTime>=endOf()-.05){const n=nextIndex();if(n>=0)crossfadeTo(n)}
+}
+function crossfadeTo(n,len=FADE){
+ if(fade)finishFade();
+ const from=active,to=1-active,now=ctx.currentTime,N=64;
+ if(idleFor!==queue[n]){els[to].src=track(n).src;idleFor=queue[n]}
+ els[to].currentTime=0;els[to].play();
+ const out=new Float32Array(N),inn=new Float32Array(N);
+ const g0=gains[from].gain.value;
+ for(let i=0;i<N;i++){const p=i/(N-1);out[i]=g0*Math.cos(p*Math.PI/2);inn[i]=Math.sin(p*Math.PI/2)}
+ gains[from].gain.cancelScheduledValues(now);gains[to].gain.cancelScheduledValues(now);
+ gains[from].gain.setValueCurveAtTime(out,now,len);gains[to].gain.setValueCurveAtTime(inn,now,len);
+ st.fadeStart=els[from].currentTime;
+ fade={from,to,n,start:now,end:now+len,len,fromT:track(cur),toT:track(n)};
+ renderTitle(false,track(n));
+}
+function finishFade(){
+ if(!fade)return;const {from,to,n}=fade;
+ gains[from].gain.cancelScheduledValues(0);gains[from].gain.value=0;gains[to].gain.cancelScheduledValues(0);gains[to].gain.value=1;
+ els[from].pause();active=to;cur=n;fade=null;st.fadeStart=null;idleFor=-1;renderQueue();
+}
+function togglePlay(){
+ if(!started){start();return}
+ if(playing){if(fade)finishFade();els[active].pause();playing=false}else{els[active].play();playing=true}
+ document.body.classList.toggle('paused',!playing);setPlayIcon();
+}
+function setPlayIcon(){$('playBtn').innerHTML=ic(playing?'pause':'play',26)}
+function playNow(k){if(!started){start();if(k===0)return;setTimeout(()=>crossfadeTo(k,2),300);return}if(k===cur&&!fade)return;crossfadeTo(k,Math.min(FADE,3))}
+
+/* titles */
+function renderTitle(instant,t=track(cur)){
+ const box=$('titles');const old=[...box.children];
+ const el=document.createElement('div');el.className='ttl'+(instant?'':' in-wait');
+ el.innerHTML=`<p class="mut">${t.artist}</p><h2>${t.title}</h2>`;box.append(el);
+ if(!instant)requestAnimationFrame(()=>requestAnimationFrame(()=>{el.classList.remove('in-wait');old.forEach(o=>{o.classList.add('out');setTimeout(()=>o.remove(),1000)})}));
+ else old.forEach(o=>o.remove());
+ $('hTitle').textContent=t.title;$('hSub').textContent=`${t.artist} · neuro soundcloud`;
+}
+function setHue(h){document.documentElement.style.setProperty('--h',h.toFixed(1))}
+
+/* queue */
+let dragFrom=-1;
+function renderQueue(){
+ const list=$('list');list.innerHTML='';const n=nextIndex();
+ queue.forEach((ti,k)=>{const t=T[ti];const r=document.createElement('div');
+  r.className='row'+(k===cur?' cur':k<cur?' done':'')+(k===n&&k!==cur?' next':'');r.draggable=true;r.tabIndex=0;
+  r.innerHTML=`<span class="g">${ic('grip',14)}</span>${cover(t,40)}<div class="m"><b>${t.title}</b><span>${t.artist}</span></div>${k===cur?'<div class="eq"><i></i><i></i><i></i></div>':`<span class="d">${k===n?'next · ':''}${fmt(t.dur)}</span>`}`;
+  r.onclick=()=>playNow(k);r.onkeydown=e=>{if(e.key==='Enter')playNow(k)};
+  r.ondragstart=e=>{dragFrom=k;r.classList.add('drag');e.dataTransfer.effectAllowed='move'};
+  r.ondragend=()=>r.classList.remove('drag');
+  r.ondragover=e=>{e.preventDefault();r.classList.add('over')};r.ondragleave=()=>r.classList.remove('over');
+  r.ondrop=e=>{e.preventDefault();r.classList.remove('over');move(dragFrom,k)};
+  list.append(r)});
+ const left=queue.length-cur-1;const mins=queue.slice(cur+1).reduce((s,i)=>s+T[i].dur,0)/60;
+ $('qMeta').textContent=`${left} left · ${Math.round(mins)} min`;
+}
+function move(a,b){if(a<0||a===b||fade)return;const curId=queue[cur];const [x]=queue.splice(a,1);queue.splice(b,0,x);cur=queue.indexOf(curId);idleFor=-1;renderQueue()}
+$('shuffleBtn').onclick=()=>{if(fade)return;const rest=queue.slice(cur+1);for(let i=rest.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]]}queue=[...queue.slice(0,cur+1),...rest];idleFor=-1;renderQueue()};
+$('repeatBtn').onclick=e=>{repeat=!repeat;e.currentTarget.classList.toggle('on',repeat);renderQueue()};
+$('nextBtn').onclick=()=>{if(!started)return start();const n=nextIndex();if(n>=0)crossfadeTo(n,Math.min(FADE,3))};
+$('prevBtn').onclick=()=>{if(!started)return;if(els[active].currentTime>4&&!fade){els[active].currentTime=0;return}if(cur>0)crossfadeTo(cur-1,Math.min(FADE,3))};
+$('playBtn').onclick=togglePlay;$('startBtn').onclick=start;
+$('seek').onclick=e=>{if(!started||fade)return;const r=e.currentTarget.getBoundingClientRect();els[active].currentTime=(e.clientX-r.left)/r.width*track(cur).dur};
+$('fadeIn').oninput=e=>{FADE=+e.target.value;$('fadeOut').textContent=FADE+' s'};
+$('zoomIn').oninput=e=>{WINDOW=+e.target.value;$('zoomOut').textContent=WINDOW+' s'};
+$('ampIn').oninput=e=>{AMP=+e.target.value};
+const tv=on=>document.body.classList.toggle('tv',on);
+$('tvBtn').onclick=()=>tv(true);$('tvExit').onclick=()=>tv(false);
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.code==='Space'){e.preventDefault();togglePlay()}if(e.key==='n'||e.key==='N')$('nextBtn').click();if(e.key==='t'||e.key==='T')tv(!document.body.classList.contains('tv'));if(e.key==='Escape')tv(false)});
+
+/* the flow */
+const cv=$('flow'),g=cv.getContext('2d');
+function segments(){
+ // each visible track as {t, at}: "at" is where its 0 s sits relative to now (seconds)
+ const out=[];if(!T.length)return out;
+ const a=started?els[active].currentTime:0;
+ let at=-a,k=cur,end=endOf();
+ out.push({t:track(k),at,cut:end+(fade?fade.len:FADE),fadeAt:end,role:'cur'});
+ if(fade){out.push({t:fade.toT,at:-els[fade.to].currentTime,cut:Infinity,fadeIn:0,role:'in'});k=fade.n;at=-els[fade.to].currentTime;end=Math.max(0,fade.toT.dur-FADE)}
+ else{const n=nextIndex();if(n<0)return out;k=n;at=at+end;out.push({t:track(k),at,cut:Infinity,fadeIn:0,role:'next'});end=Math.max(0,track(k).dur-FADE)}
+ for(let i=0;i<3;i++){const n=k+1<queue.length?k+1:(repeat?0:-1);if(n<0)break;at=at+end;k=n;out.push({t:track(k),at,role:'later'});end=Math.max(0,track(k).dur-FADE)}
+ return out;
+}
+function tick(){
+ const dpr=Math.min(devicePixelRatio||1,2),W=cv.clientWidth,H=cv.clientHeight;
+ if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr}
+ g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+ if(analyser&&playing){analyser.getByteFrequencyData(freq);let s=0;for(let i=2;i<48;i++)s+=freq[i];level=level*.7+(s/46/255)*.3}else level*=.95;
+ const px=W*.34,pps=W/WINDOW,base=H*.72,amp=H*.26*AMP,bw=Math.max(1.5,pps/10*.62),step=Math.max(1,Math.round(1/(pps/10)/1.4));
+ const segs=segments();
+ // hue follows the crossfade
+ if(fade){const p=Math.min(1,(ctx.currentTime-fade.start)/fade.len);setHue(fade.fromT.hue+(fade.toT.hue-fade.fromT.hue)*p)}else if(T.length)setHue(track(cur).hue);
+ // joins: where one track blends into the next
+ for(let i=0;i<segs.length-1;i++){const a=segs[i],b=segs[i+1];const j0=b.at,j1=b.at+(a.role==='cur'&&fade?fade.len:FADE);
+  const x0=px+j0*pps,x1=px+j1*pps;if(x1<0||x0>W)continue;
+  const gr=g.createLinearGradient(x0,0,x1,0);gr.addColorStop(0,'oklch(72% .16 230 / 0)');gr.addColorStop(.5,'oklch(72% .16 230 / .22)');gr.addColorStop(1,'oklch(72% .16 230 / 0)');
+  g.fillStyle=gr;g.fillRect(x0,base-amp*1.25,x1-x0,amp*2.5);
+  if(x0>px+20){g.font='600 12px ui-sans-serif,system-ui';g.fillStyle='oklch(92% .01 240 / .85)';const lbl=`${b.t.title}`;g.fillText(lbl,x0+6,base-amp*1.25-22);
+   g.font='500 11px ui-sans-serif,system-ui';g.fillStyle='oklch(72% .16 230 / .9)';g.fillText(`in ${fmt(j0)} · ${Math.round(j1-j0)} s blend`,x0+6,base-amp*1.25-7)}}
+ // waveforms
+ for(const s of segs){const t=s.t,env=t.env;
+  const from=Math.max(0,Math.floor((-px/pps-s.at)*10)),to=Math.min(env.length,Math.ceil(((W-px)/pps-s.at)*10)+1);
+  for(let i=from;i<to;i+=step){const sec=i/10,x=px+(s.at+sec)*pps;
+   let w=1;if(s.role==='cur'&&s.fadeAt!=null){const f=(sec-s.fadeAt)/((fade?fade.len:FADE));if(f>1)continue;if(f>0)w=Math.cos(f*Math.PI/2)}
+   if(s.role!=='cur'){const f=sec/(FADE);if(f<1)w=Math.sin(Math.max(0,f)*Math.PI/2)}
+   const d=x-px,near=Math.exp(-(d*d)/(2*(pps*1.4)**2));
+   let v=env[i]*(1+near*level*1.6)*w;const h=Math.max(1.5,v*amp);
+   const past=x<px;const L=past?40:(near>.2?78+near*10:62),C=past?.06:.15,A=past?.4:(s.role==='later'?.55:.85);
+   g.fillStyle=`oklch(${L}% ${C} ${t.hue} / ${A})`;g.fillRect(x-bw/2,base-h,bw,h);
+   g.fillStyle=`oklch(${L}% ${C} ${t.hue} / ${A*.28})`;g.fillRect(x-bw/2,base+2,bw,h*.45)}}
+ // playhead
+ const ph=g.createLinearGradient(0,base-amp*1.4,0,base+amp*.6);ph.addColorStop(0,'oklch(92% .01 240 / 0)');ph.addColorStop(.6,'oklch(92% .01 240 / .9)');ph.addColorStop(1,'oklch(92% .01 240 / 0)');
+ g.fillStyle=ph;g.fillRect(px-1,base-amp*1.4,2,amp*2);
+ g.beginPath();g.arc(px,base,4+level*10,0,Math.PI*2);g.fillStyle=`oklch(92% .01 240 / ${.25+level*.6})`;g.fill();
+ // ui numbers
+ if(T.length){const t=track(cur),now=started?els[active].currentTime:0;$('tNow').textContent=fmt(now);$('tDur').textContent=fmt(t.dur);$('seekFill').style.width=(now/t.dur*100)+'%';
+  const rest=(t.dur-now)+queue.slice(cur+1).reduce((s,i)=>s+T[i].dur-FADE,0);const end=new Date(Date.now()+rest*1000);
+  $('clock').textContent=`${fade?'Blending into '+fade.toT.title:'Ends '+end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`}
+ requestAnimationFrame(tick);
+}
+</script>
+</body></html>
