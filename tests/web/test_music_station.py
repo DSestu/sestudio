@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import tempfile
 import threading
 import time
 
@@ -56,9 +57,23 @@ def _stopped():
 
 
 def decode(ts: bytes, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [ffmpeg_binary(), "-i", "pipe:0", *args], input=ts, capture_output=True
-    )
+    # From a file, not a pipe: a seekable input lets ffmpeg probe the whole capture.
+    with tempfile.NamedTemporaryFile(suffix=".ts") as f:
+        f.write(ts)
+        f.flush()
+        return subprocess.run(
+            [
+                ffmpeg_binary(),
+                "-probesize",
+                "50M",
+                "-analyzeduration",
+                "20M",
+                "-i",
+                f.name,
+                *args,
+            ],
+            capture_output=True,
+        )
 
 
 def test_one_stream_with_picture_and_sound_and_a_clock_the_tv_can_follow(
@@ -90,7 +105,11 @@ def test_one_stream_with_picture_and_sound_and_a_clock_the_tv_can_follow(
     assert cap.closed and not first.running and queue._station_clock is None
 
     assert ts[0] == 0x47 and len(ts) % 188 == 0
-    info = decode(ts, "-f", "null", "-").stderr.decode()
+    run = decode(ts, "-f", "null", "-")
+    info = run.stderr.decode()
+    assert (
+        "Input #0" in info
+    ), f"ffmpeg exit {run.returncode}, {len(ts)} bytes: {info[-400:]}"
     assert "Video: h264" in info and "Audio: aac" in info and "640x360" in info
     # Sound and picture end together, and the tone is the first track's.
     pcm = decode(ts, "-vn", "-f", "s16le", "-ac", "1", "-ar", "44100", "-").stdout
