@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AiHeldFrames from '../components/AiHeldFrames'
 import AiSetupProgress from '../components/AiSetupProgress'
+import LibrariesSettings from '../components/music/LibrariesSettings'
 import PageHeader from '../components/PageHeader'
 import { goBack } from '../pageHeader'
 import RankRow from '../components/RankRow'
@@ -324,6 +325,10 @@ export default function SettingsView({ settings, onUpdate }: Props) {
       <div className="divider my-0" />
 
       <NotificationsSection settings={settings} onUpdate={onUpdate} />
+
+      <div className="divider my-0" />
+
+      <LibrariesSettings settings={settings} onUpdate={onUpdate} />
 
       <div className="divider my-0" />
 

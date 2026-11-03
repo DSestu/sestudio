@@ -215,8 +215,8 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
       <main
         className={`flex-1 min-w-0 pt-[calc(var(--top-card-h,4.25rem)+env(safe-area-inset-top)+1.25rem)] md:pt-5 px-(--gutter) [--gutter:clamp(0.6rem,1.5vw,1.5rem)] ${
           bottomBar
-            ? 'pb-[calc(var(--dock-clear)+4.75rem)] md:pb-24'
-            : 'pb-[calc(var(--dock-clear)+1rem)] md:pb-10'
+            ? 'pb-[calc(var(--dock-clear)+4.75rem+var(--music-bar,0rem))] md:pb-[calc(6rem+var(--music-bar,0rem))]'
+            : 'pb-[calc(var(--dock-clear)+1rem+var(--music-bar,0rem))] md:pb-[calc(2.5rem+var(--music-bar,0rem))]'
         }`}
       >
         {searchBar && (

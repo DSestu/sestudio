@@ -245,3 +245,13 @@ def test_keepalive_and_disconnect(client):
     assert chunks[0].startswith("id: 0\nevent: state")
     assert chunks[1:] == [": ping\n\n"] * 2
     assert queue._subs == set()
+
+
+def test_play_at_a_position_keeps_the_transport_state(client):
+    s = add(client, A, B)
+    ids = [i["item_id"] for i in s["items"]]
+    client.post("/api/music/queue/transport", json={"action": "pause", "position": 3})
+    s = client.post(
+        "/api/music/queue/play", json={"item_id": ids[1], "position": 42}
+    ).json()
+    assert (s["current"], s["playing"], s["position"]) == (1, False, 42)

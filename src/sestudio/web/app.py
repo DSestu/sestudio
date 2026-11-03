@@ -37,6 +37,7 @@ from sestudio.web.routes import (
     downloaded,
     home,
     music,
+    music_libraries,
     search,
     seasons,
     settings,
@@ -195,6 +196,8 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(creators.router, prefix="/api")
     app.include_router(home.router, prefix="/api")
     app.include_router(music.router, prefix="/api")
+    app.include_router(music_libraries.router, prefix="/api")
+    app.include_router(music_libraries.share, prefix="/api")
     app.include_router(health.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)

@@ -8,8 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from sestudio import downloaded
-from sestudio.config import load_config
-from sestudio.music import online, playlists, queue
+from sestudio.music import libraries, online, playlists, queue
 from sestudio.web.routes.music_queue import TrackRef, _check_tracks, _online_item
 
 router = APIRouter(prefix="/music/playlists")
@@ -80,9 +79,9 @@ def _refs(tracks: list[TrackRef]) -> list[dict[str, Any]]:
 
 def _library_tracks() -> list[dict[str, Any]]:
     return [
-        {"track_id": f.track_id, "mtime": f.mtime}
-        for f in downloaded.scan(load_config().output_root)
-        if f.kind == "audio"
+        {"library": lib_id, "track_id": f.track_id, "mtime": f.mtime}
+        for lib_id, root in libraries.folder_roots()
+        for f in downloaded.audio_files(root, lib_id)
     ]
 
 

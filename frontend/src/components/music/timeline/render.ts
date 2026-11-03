@@ -33,6 +33,8 @@ export interface Frame {
   palette: Palette
   /** Where the queue sheet is, so labels stay clear of it. */
   avoid: { left: number; right: number; top: number; bottom: number } | null
+  /** Layout index of the label under the pointer. */
+  hover?: number
 }
 
 export function mixLabel(p?: Plan): string {
@@ -381,7 +383,13 @@ export class TimelineRenderer {
       if (avoid && x0 + box > avoid.left && x0 < avoid.right && ty - 14 < avoid.bottom && ty + 18 > avoid.top) continue
       last = x0
       this.hits.push({ i, x0, x1: x0 + box, ty })
-      g2.fillStyle = 'oklch(92% .01 240 / .92)'
+      if (f.hover === i) {
+        g2.fillStyle = 'oklch(72% .16 230 / .16)'
+        g2.beginPath()
+        g2.roundRect(x0, ty - 14, box, 46, 8)
+        g2.fill()
+      }
+      g2.fillStyle = f.hover === i ? 'oklch(98% .01 240)' : 'oklch(92% .01 240 / .92)'
       g2.fillText(it.title, x0 + 6, ty)
       g2.font = '500 11px ui-sans-serif,system-ui'
       g2.fillStyle = `${SIGNAL})`
