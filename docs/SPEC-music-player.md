@@ -6,7 +6,7 @@
 > document wins**. Everything about audio items, the station (TV flux), libraries, sources and sets
 > (`SPEC-music.md` §13) and the review lab stays in `SPEC-music.md`.
 >
-> **Reference implementation: `.impeccable/mocks/music-proto/scrub.html`.** One HTML file, inline JS and
+> **Reference implementation: `docs/proto/music/scrub.html`.** One HTML file, inline JS and
 > CSS, real Web Audio. This text describes it exactly; every number below comes from it unless marked
 > otherwise. Where this text and the prototype disagree, **this text wins** (the prototype has known
 > shortcuts, each marked "prototype shortcut" below, and a few things it lacks, listed in §11).

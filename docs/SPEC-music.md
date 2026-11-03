@@ -178,7 +178,7 @@ Rewritten 2026-11-03; replaces the 9-PR plan, whose stage styles (`Bars`, `Spect
 were superseded by the player in [`SPEC-music-player.md`](SPEC-music-player.md).
 
 **How to work a PR.** Read this section, then the spec sections it names. The reference implementation
-is the prototype `docs/proto/music/scrub.html` (PR 0 moves it there from `.impeccable/mocks/music-proto/`).
+is the prototype `docs/proto/music/scrub.html`.
 Copy its numbers, not its code structure. Ship behind the `lab` flag until PR 12 removes it. Review
 happens live with real audio (§8). A PR that needs a decision marked **Ask** stops and asks the user
 before building that part. Commit, PR and merge rules are the repo's (`CLAUDE.md`).

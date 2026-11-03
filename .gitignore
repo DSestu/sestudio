@@ -140,3 +140,8 @@ micromamba
 # TMDB key baked into release wheels by CI — never committed
 src/sestudio/_tmdb_default.py
 .dmux/
+
+# music prototype data
+docs/proto/music/lib.json
+docs/proto/music/lib/
+docs/proto/music/audio/
