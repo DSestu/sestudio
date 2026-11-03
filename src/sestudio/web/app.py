@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from sestudio.config import load_config
 from sestudio.logging_config import capture_logs
+from sestudio.music import runner
 from sestudio.models import StreamSource
 from sestudio.providers.filmoon import FilmoonProvider
 from sestudio.providers.luluvid import LuluvidProvider
@@ -34,6 +35,7 @@ from sestudio.web.routes import (
     music_queue,
     downloaded,
     home,
+    music,
     search,
     seasons,
     settings,
@@ -109,6 +111,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     network.
     """
     capture_logs()
+    runner.kick(load_config().output_root)
     await _refresh_sites(app)
     tasks = [asyncio.create_task(_refresh_loop(app))]
     if watchers_enabled():
@@ -189,6 +192,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(watchers.router, prefix="/api")
     app.include_router(creators.router, prefix="/api")
     app.include_router(home.router, prefix="/api")
+    app.include_router(music.router, prefix="/api")
     app.include_router(health.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)

@@ -110,6 +110,34 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_watcher_events_dedupe
     ON watcher_events(watcher_id, item_key) WHERE item_key <> '';
 """
 
+# Music analysis (SPEC-music §13.3): one row per track id, the raw measurements
+# only (envelopes as float16 blobs: `bands` is 8 rows of `n` values).
+# `extra` is a JSON object for what later analyses add (key, genre, energy,
+# structure) without another migration. `music_state` holds the
+# library-wide normalisation, derived from these rows and rebuildable.
+_MIGRATION_3_MUSIC_ANALYSIS = """
+CREATE TABLE IF NOT EXISTS music_analysis (
+    track_id    TEXT PRIMARY KEY,
+    mtime       REAL NOT NULL,
+    size        INTEGER NOT NULL,
+    analysed_at INTEGER NOT NULL,
+    duration    REAL NOT NULL,
+    zcr         REAL NOT NULL,
+    bpm         REAL,
+    beat0       REAL,
+    bar0        REAL,
+    bpm_conf    REAL,
+    n           INTEGER NOT NULL,
+    bands       BLOB NOT NULL,
+    loudness    BLOB NOT NULL,
+    extra       TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS music_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
 # The music queue (sestudio.music.queue): one row per station holding the whole
 # queue as a JSON document, its revision beside it.
 _MIGRATION_2_MUSIC_QUEUE = """
@@ -120,7 +148,11 @@ CREATE TABLE IF NOT EXISTS music_queue (
 );
 """
 
-_MIGRATIONS: tuple[str, ...] = (_MIGRATION_1_WATCHERS, _MIGRATION_2_MUSIC_QUEUE)
+_MIGRATIONS: tuple[str, ...] = (
+    _MIGRATION_1_WATCHERS,
+    _MIGRATION_2_MUSIC_QUEUE,
+    _MIGRATION_3_MUSIC_ANALYSIS,
+)
 
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
