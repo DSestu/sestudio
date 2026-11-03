@@ -30,6 +30,7 @@ import { DiscoverMenu } from './components/discover/SourcePicker'
 import DesktopSearch from './components/search/DesktopSearch'
 import { type Kind, parseKind, rememberSearch } from './titleSearch'
 import LabMusicView from './views/LabMusicView'
+import MusicView from './views/MusicView'
 import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
 import LanWarningModal from './components/LanWarningModal'
@@ -257,6 +258,7 @@ export default function App() {
         onNavigate={navigate}
         downloadBadge={downloads.activeCount}
         unreadBadge={unread}
+        lab={!!settings.lab}
         onOpenSettings={() => navigate('settings')}
         catalogs={catalogs}
         catalogId={route.view === 'search' && !route.params.get('q') ? catalogId : ''}
@@ -313,6 +315,7 @@ export default function App() {
           />
         )}
         {route.view === 'lab/music' && <LabMusicView />}
+        {route.view === 'music' && <MusicView />}
         {route.view === 'creators' && (
           <CreatorsView
             source={route.params.get('src') ?? ''}
