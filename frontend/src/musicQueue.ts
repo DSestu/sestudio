@@ -300,7 +300,8 @@ export function parseAnalysis(a: Record<string, unknown>): Analysis {
   const out: Analysis = { bpm: num(a.bpm), beat0: num(a.beat0), hue: num(a.hue) }
   const bands = a.bands as number[][] | undefined
   if (Array.isArray(bands) && bands.length === 8 && bands[0]?.length) {
-    const mean = (rows: number[][]) => rows.reduce((s, r) => s + r.reduce((x, y) => x + y, 0) / r.length, 0) / rows.length
+    // The server serves whole percents.
+    const mean = (rows: number[][]) => rows.reduce((s, r) => s + r.reduce((x, y) => x + y, 0) / r.length, 0) / rows.length / 100
     out.balance = [mean(bands.slice(0, 2)), mean(bands.slice(2, 5)), mean(bands.slice(5))]
   } else if (Array.isArray(a.balance) && a.balance.length === 3) {
     out.balance = a.balance as [number, number, number]

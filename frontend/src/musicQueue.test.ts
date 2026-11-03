@@ -81,7 +81,7 @@ describe('applyEvent', () => {
 
 describe('parseAnalysis', () => {
   it('reads tempo, hue and the three band means from 8 envelopes', () => {
-    const bands = [1, 1, 0.5, 0.5, 0.5, 0, 0, 0].map(v => [v, v])
+    const bands = [100, 100, 50, 50, 50, 0, 0, 0].map(v => [v, v])
     const a = parseAnalysis({ bpm: 174, beat0: 0.2, hue: 200, bands })
     expect(a).toMatchObject({ bpm: 174, beat0: 0.2, hue: 200, balance: [1, 0.5, 0] })
   })
