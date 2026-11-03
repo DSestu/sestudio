@@ -111,6 +111,8 @@ class AppConfig:
     # browser that draws it: a path or a channel (chrome, msedge); empty finds one.
     station_fps: int = 20
     station_browser: str = ""
+    # Detect music genres with the offline Discogs model (SPEC-music §9).
+    music_genre_model: bool = True
 
 
 def _config_path() -> Path:
@@ -167,6 +169,7 @@ def load_config() -> AppConfig:
             ytmusic_cookies=str(data.get("ytmusic_cookies", "")),
             station_fps=min(30, max(10, int(data.get("station_fps", 20)))),
             station_browser=str(data.get("station_browser", "")),
+            music_genre_model=bool(data.get("music_genre_model", True)),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

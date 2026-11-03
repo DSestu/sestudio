@@ -24,7 +24,7 @@ import yt_dlp
 
 from sestudio.downloader import js_runtime_args
 from sestudio.media import ffmpeg_location
-from sestudio.music import analysis, runner, store
+from sestudio.music import analysis, genres, runner, store
 from sestudio.sites.creators import ytdlp_json
 
 logger = logging.getLogger(__name__)
@@ -207,7 +207,13 @@ def _analyse(tid: str, vid: str) -> None:
         with yt_dlp.YoutubeDL(parsed.ydl_opts) as ydl:
             ydl.download([url])
         file = next(p for p in work.iterdir() if p.suffix != ".part")
-        store.save(tid, 0.0, file.stat().st_size, analysis.analyse_file(str(file)))
+        a = analysis.analyse_file(str(file))
+        with _lock:
+            info = (_resolved.get(vid) or (0, {}))[1].get("info") or {}
+        a.extra = genres.decide(
+            a.extra, str(file), a.duration, genres.source_genre(info), "source"
+        )
+        store.save(tid, 0.0, file.stat().st_size, a)
         store.renormalise_if_needed()
     except Exception:
         logger.warning("Could not analyse %s", tid, exc_info=True)

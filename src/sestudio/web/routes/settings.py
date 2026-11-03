@@ -44,6 +44,7 @@ class SettingsBody(BaseModel):
     ytmusic_cookies: str | None = None
     station_fps: int | None = Field(default=None, ge=10, le=30)
     station_browser: str | None = None
+    music_genre_model: bool | None = None
 
 
 def _known_hosts(request: Request) -> list[str]:
@@ -149,6 +150,8 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.station_fps = body.station_fps
     if body.station_browser is not None:
         cfg.station_browser = body.station_browser.strip().strip('"')
+    if body.music_genre_model is not None:
+        cfg.music_genre_model = body.music_genre_model
     if body.allow_file_deletion is not None:
         cfg.allow_file_deletion = body.allow_file_deletion
     if body.frame_interpolation is not None:

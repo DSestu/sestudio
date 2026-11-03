@@ -100,10 +100,11 @@ _setup: dict[str, Any] = {"step": "idle", "progress": None, "error": None}
 _BUSY = ("starting", "runtime", "model", "measure")
 
 
-def _failed(what: str, exc: object) -> None:
-    """Log a setup failure and keep it for the web UI."""
+def _failed(what: str, exc: object, state: dict[str, Any] | None = None) -> None:
+    """Log a setup failure and keep it for the web UI (in *state*: the music
+    analysis keeps its own, so its failures stay out of the AI panel)."""
     logger.warning("%s: %s", what, exc)
-    _setup["error"] = f"{what}: {exc}"
+    (_setup if state is None else state)["error"] = f"{what}: {exc}"
 
 
 def runtime_dir(flavour: str = "") -> Path:
@@ -159,28 +160,52 @@ def _importable() -> bool:
     return True
 
 
-def ensure_runtime() -> bool:
+def _ort_importable() -> bool:
+    try:
+        import onnxruntime  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def ensure_runtime(
+    state: dict[str, Any] | None = None, *, shared: bool = False
+) -> bool:
     """Whether ONNX Runtime imports, installed into :func:`runtime_dir` first
-    if it is not already importable (it is in a dev checkout)."""
-    if _importable():
+    if it is not already importable (it is in a dev checkout).
+
+    *shared* is for a caller that only needs onnxruntime and no GPU (the music
+    genre model): it takes whatever flavour is already installed, the NVIDIA
+    one of the AI frames included, and installs only the plain flavour when
+    there is none. Its progress and errors go to *state*, not to the AI setup's.
+    """
+    st = _setup if state is None else state
+    ok = _ort_importable if shared else _importable
+    if ok():
         return True
-    for flavour, packages in _flavours():
+    flavours = _flavours()
+    if shared:
+        flavours = [f for f in flavours if (runtime_dir(f[0]) / ".complete").is_file()]
+        flavours = flavours or _flavours()[-1:]
+    for flavour, packages in flavours:
         target = runtime_dir(flavour)
         if not (target / ".complete").is_file():
-            _setup.update(step="runtime", progress=None)
-            if not _install_runtime(target, packages):
+            st.update(step="runtime", progress=None)
+            if not _install_runtime(target, packages, st):
                 continue
         # Last, so the environment's own packages (numpy among them) still win.
         if str(target) not in sys.path:
             sys.path.append(str(target))
             importlib.invalidate_caches()
-        if _importable():
+        if ok():
             return True
         sys.path.remove(str(target))
     return False
 
 
-def _install_runtime(target: Path, packages: list[str]) -> bool:
+def _install_runtime(
+    target: Path, packages: list[str], state: dict[str, Any] | None = None
+) -> bool:
     """Install the runtime into *target*. With uv where it is on the path — a
     `uvx` environment has no pip — else with this interpreter's pip. Built
     beside *target* and moved in only once complete, so an interrupted install
@@ -201,12 +226,13 @@ def _install_runtime(target: Path, packages: list[str]) -> bool:
             text=True,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        _failed("Could not install the interpolation runtime", exc)
+        _failed("Could not install the interpolation runtime", exc, state)
         return False
     if result.returncode != 0:
         _failed(
             "Could not install the interpolation runtime",
             result.stderr.strip()[-500:],
+            state,
         )
         shutil.rmtree(building, ignore_errors=True)
         return False
@@ -250,9 +276,10 @@ def ensure_model() -> Path | None:
             archive.unlink(missing_ok=True)
 
 
-def _download(url: str, to: Path) -> None:
+def _download(url: str, to: Path, state: dict[str, Any] | None = None) -> None:
     """*url* into *to*, its progress shown as the setup's model step."""
-    _setup.update(step="model", progress=0.0)
+    st = _setup if state is None else state
+    st.update(step="model", progress=0.0)
     with httpx.stream("GET", url, follow_redirects=True, timeout=60) as r:
         r.raise_for_status()
         total = int(r.headers.get("content-length") or 0)
@@ -260,7 +287,7 @@ def _download(url: str, to: Path) -> None:
             for chunk in r.iter_bytes():
                 f.write(chunk)
                 if total:
-                    _setup["progress"] = min(1.0, f.tell() / total)
+                    st["progress"] = min(1.0, f.tell() / total)
 
 
 def ncnn_model_path() -> Path:
@@ -536,7 +563,9 @@ def setup() -> None:
     if "onnxruntime" not in sys.modules:
         for folder in (config_dir() / "runtime").glob(f"{runtime_dir().name}*"):
             shutil.rmtree(folder, ignore_errors=True)
-    shutil.rmtree(model_path().parent, ignore_errors=True)
+    # Only RIFE's files: the music genre model lives beside them.
+    model_path().unlink(missing_ok=True)
+    shutil.rmtree(ncnn_model_path(), ignore_errors=True)
     with _prepare_lock:
         _prepared_at[:] = [time.monotonic()]
     threading.Thread(target=_prepare, daemon=True).start()

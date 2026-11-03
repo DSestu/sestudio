@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from sestudio import downloaded, library
 from sestudio.media import ffmpeg_binary
-from sestudio.music import analysis, runner, store
+from sestudio.music import analysis, genres, runner, store
 from sestudio.web.app import create_app
 
 SR = 22050
@@ -144,7 +144,7 @@ def test_runner_analyses_new_files_once_and_serves_them(
     # Not an audio file: ignored.
     (root / "notes.txt").write_text("x")
     assert runner.run_once(root, workers=2) == 2
-    assert runner.status() == {"done": 2, "total": 2, "running": False}
+    assert runner.status().items() >= {"done": 2, "total": 2, "running": False}.items()
     assert runner.run_once(root, workers=2) == 0
 
     downloaded.invalidate()
@@ -206,3 +206,48 @@ def test_real_library_bpms():
     first = sorted(folder.glob("*.m4a"))[0]
     a = analysis.analyse_file(str(first))
     assert a.bpm and 70 <= a.bpm <= 200
+
+
+def _tagged(path: Path, genre: str) -> None:
+    raw = path.with_name("raw.flac")
+    _write_wav(raw, clicks(174, 12))
+    cmd = [ffmpeg_binary(), "-v", "error", "-y", "-i", str(raw)]
+    subprocess.run([*cmd, "-metadata", f"genre={genre}", str(path)], check=True)
+    raw.unlink()
+
+
+def test_the_genre_is_the_file_tag_and_the_user_overrides_it(db, root, tmp_path):
+    _tagged(root / "Artist - Tagged.flac", "Drum and Bass")
+    runner.run_once(root, workers=1)
+    downloaded.invalidate()
+    tid = next(f.track_id for f in downloaded.scan(root) if f.kind == "audio")
+    got = store.get([tid])[tid]
+    assert (got["genre"], got["genreConf"], got["genreSource"]) == (
+        "Drum & Bass",
+        1.0,
+        "tag",
+    )
+    assert store.set_genre(tid, "Liquid Drum & Bass")
+    assert store.get([tid])[tid]["genreSource"] == "user"
+
+
+def test_an_untagged_track_gets_the_models_genre_else_the_rules(
+    db, root, tmp_path, monkeypatch
+):
+    _write_wav(root / "Artist - Plain.flac", clicks(174, 12))
+    monkeypatch.setattr(genres, "model_enabled", lambda: True)
+    monkeypatch.setattr(genres, "_get_session", lambda: None)
+    runner.run_once(root, workers=1)
+    downloaded.invalidate()
+    tid = next(f.track_id for f in downloaded.scan(root) if f.kind == "audio")
+    assert store.get([tid])[tid]["genreSource"] == "rules"
+    assert tid in store.pending_genre(True)  # retried once the model works
+    assert tid not in store.pending_genre(False)
+
+    monkeypatch.setattr(
+        genres, "classify", lambda *_: {"genre": "Jungle", "genreConf": 0.6}
+    )
+    runner.run_once(root, workers=1)
+    got = store.get([tid])[tid]
+    assert (got["genre"], got["genreSource"]) == ("Jungle", "model")
+    assert tid not in store.pending_genre(True)

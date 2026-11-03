@@ -1788,8 +1788,19 @@ def duration_of(file: Path) -> float | None:
     return seconds
 
 
-_META_RE = re.compile(r"^    (title|artist|album)\s*:\s*(.*?)\s*$", re.IGNORECASE)
+_META_RE = re.compile(r"^    (title|artist|album|genre)\s*:\s*(.*?)\s*$", re.IGNORECASE)
 _audio_infos: dict[tuple[str, int, float], tuple[str, str, str, float | None]] = {}
+_audio_genres: dict[tuple[str, int, float], str] = {}
+
+
+def audio_genre(file: Path) -> str:
+    """The genre tag of an audio file ("" when untagged), read with `audio_info`."""
+    audio_info(file)
+    try:
+        stat = file.stat()
+    except OSError:
+        return ""
+    return _audio_genres.get((str(file), stat.st_size, stat.st_mtime), "")
 
 
 def audio_info(file: Path) -> tuple[str, str, str, float | None]:
@@ -1834,6 +1845,7 @@ def audio_info(file: Path) -> tuple[str, str, str, float | None]:
         seconds,
     )
     _audio_infos[key] = info
+    _audio_genres[key] = tags.get("genre", "")
     return info
 
 

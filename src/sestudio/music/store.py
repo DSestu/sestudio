@@ -21,7 +21,16 @@ from sestudio.music.analysis import RawAnalysis
 GROWTH = 0.10
 
 #: What v2 adds to a track's analysis response (the raw chroma stays server-side).
-V2_FIELDS = ("key", "camelot", "keyConf", "energy", "structure", "genre", "genreConf")
+V2_FIELDS = (
+    "key",
+    "camelot",
+    "keyConf",
+    "energy",
+    "structure",
+    "genre",
+    "genreConf",
+    "genreSource",
+)
 
 
 #: A genre the user confirmed or fixed; wins over the detected one everywhere.
@@ -76,6 +85,26 @@ def pending_v2() -> list[str]:
             for r in rows
             if json.loads(r["extra"]).get("v2") != profile.VERSION
         ]
+
+
+def pending_genre(model: bool) -> dict[str, tuple[dict[str, Any], float]]:
+    """(profile, duration) of the tracks whose genre was not decided yet, by
+    id: those at an older version, and, once the *model* may run, those
+    decided without it."""
+    from sestudio.music import genres
+
+    with library._lock:
+        rows = library._connect().execute(
+            "SELECT track_id, duration, extra FROM music_analysis"
+        )
+        found = {r["track_id"]: (json.loads(r["extra"]), r["duration"]) for r in rows}
+    return {
+        t: (e, d)
+        for t, (e, d) in found.items()
+        if e.get("v2") == profile.VERSION
+        and e.get("genreV") != genres.VERSION
+        and (model or e.get("genreV") is None)
+    }
 
 
 def load_raw(track_id: str) -> RawAnalysis | None:
@@ -223,7 +252,7 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
             # Mean bass, mids, highs (SPEC-music-player §6.1), 0..1.
             **{k: v for k, v in extra.items() if k in V2_FIELDS},
             **(
-                {"genre": extra[OVERRIDE], "genreConf": 1.0}
+                {"genre": extra[OVERRIDE], "genreConf": 1.0, "genreSource": "user"}
                 if extra.get(OVERRIDE)
                 else {}
             ),

@@ -12,9 +12,10 @@ import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any
 
 from sestudio import downloaded
-from sestudio.music import analysis, libraries, store
+from sestudio.music import analysis, genres, libraries, store
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,10 @@ def enabled() -> bool:
     return value not in ("0", "false", "no", "off")
 
 
-def status() -> dict[str, int | bool]:
+def status() -> dict[str, Any]:
     with _lock:
-        return {"done": _done, "total": _total, "running": _running}
+        out: dict[str, Any] = {"done": _done, "total": _total, "running": _running}
+    return out | genres.status()
 
 
 def kick(root: str | Path) -> None:
@@ -91,6 +93,27 @@ def _upgrade_v2(base: Path, files: list, workers: int) -> int:
     return n
 
 
+def _decide_genres(base: Path, files: list, workers: int) -> None:
+    """Pick each track's genre: its file tag, else the model, else the rules (SPEC-music §9)."""
+    todo = store.pending_genre(genres.model_enabled())
+    mine = [f for f in files if f.track_id in todo]
+
+    def one(f) -> None:
+        extra, duration = todo[f.track_id]
+        path = base / f.path
+        tag = genres.normalise(downloaded.audio_genre(path))
+        new = genres.decide(extra, str(path), duration, tag)
+        if new != extra:
+            store.set_extra(f.track_id, new)
+
+    with ThreadPoolExecutor(min(workers, 2), thread_name_prefix="genre") as ex:
+        for future in as_completed([ex.submit(one, f) for f in mine]):
+            try:
+                future.result()
+            except Exception:
+                logger.warning("Could not decide a genre", exc_info=True)
+
+
 def run_once(
     root: str | Path,
     workers: int | None = None,
@@ -111,6 +134,7 @@ def run_once(
     workers = workers or max(1, min(4, (os.cpu_count() or 2) // 2))
     ok = _upgrade_v2(base, files, workers)
     if not pending:
+        _decide_genres(base, files, workers)
         return ok
     with ThreadPoolExecutor(workers, thread_name_prefix="analyse") as ex:
         futures = {
@@ -127,4 +151,5 @@ def run_once(
             with _lock:
                 _done += 1
     store.renormalise_if_needed()
+    _decide_genres(base, files, workers)
     return ok
