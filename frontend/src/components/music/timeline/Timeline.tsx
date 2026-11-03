@@ -95,13 +95,13 @@ function paintRows(queueEl: Element | null, m: Model, k: number) {
   })
 }
 
-export default function Timeline({ q, info, progress = 0, palette = TIMELINE_PALETTE, onOutside }: {
+export default function Timeline({ q, info, progress = () => 0, palette = TIMELINE_PALETTE, onOutside }: {
   q: QueueState
   info: (id: string) => TrackInfo | undefined
   /** A press on the timeline outside the scrub band. */
   onOutside?: () => void
   /** Mode progress, 0 default, 1 expanded. */
-  progress?: number
+  progress?: () => number
   palette?: PaletteName
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -142,7 +142,7 @@ export default function Timeline({ q, info, progress = 0, palette = TIMELINE_PAL
       root: (cv.closest('[role="dialog"]') as HTMLElement | null) ?? document.body,
       r,
       model: () => { const m = live.current.model; return m.items.length ? { TS: shown.ts, ids: m.ids, end: m.end } : null },
-      progress: () => live.current.progress,
+      progress: () => live.current.progress(),
       outside: () => live.current.onOutside?.(),
     })
     const fit = () => r.resize(cv.clientWidth, cv.clientHeight, window.devicePixelRatio)
@@ -183,7 +183,8 @@ export default function Timeline({ q, info, progress = 0, palette = TIMELINE_PAL
         slow = seen = 0
       }
       last = now
-      const { model: m, progress: t, palette: pal } = live.current
+      const { model: m, progress, palette: pal } = live.current
+      const t = progress()
       if (m !== seenModel) {
         if (seenModel && seenModel.items.length && m.items.length && differs(seenModel.ids, m.ids)) {
           morph = makeMorph(seenModel, m, movedId, now)
