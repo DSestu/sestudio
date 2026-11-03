@@ -94,6 +94,8 @@ export interface AppSettings {
   /** Drawings held up to this many frames are drawn across as one by AI
    *  (anime); 0, off. */
   ai_max_hold?: number
+  /** Server started with SESTUDIO_LAB=1: unfinished pages under #/lab are reachable. */
+  lab?: boolean
   /** CallMeBot number, international form without the leading '+'. Not secret. */
   callmebot_phone?: string
   /** Write-only: sent when saving, never returned. */

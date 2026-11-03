@@ -12,7 +12,7 @@ import { hydrateLibrary } from './hydrateLibrary'
 import { DocumentPiPPortal } from './documentPiP'
 import { usePiPWindow } from './pipSession'
 import { createPortalNode } from './portalNode'
-import { useRoute, type Navigate } from './nav'
+import { gateRoute, useRoute, type Navigate } from './nav'
 import { clearPullback, usePullback } from './pullback'
 import { useDownloadJobs } from './useDownloadJobs'
 import { useSettings } from './useSettings'
@@ -29,6 +29,7 @@ import SearchView from './views/SearchView'
 import { DiscoverMenu } from './components/discover/SourcePicker'
 import DesktopSearch from './components/search/DesktopSearch'
 import { type Kind, parseKind, rememberSearch } from './titleSearch'
+import LabMusicView from './views/LabMusicView'
 import SettingsView from './views/SettingsView'
 import WatchView from './views/WatchView'
 import LanWarningModal from './components/LanWarningModal'
@@ -51,8 +52,9 @@ function sameWatch(a: WatchFields | null, b: WatchFields): boolean {
 }
 
 export default function App() {
-  const [route, rawNavigate] = useRoute()
+  const [routed, rawNavigate] = useRoute()
   const [settings, updateSettings] = useSettings()
+  const route = gateRoute(routed, !!settings.lab)
   const catalogs = useCatalogs(settings)
   // The catalogue Discover shows: the URL's, else the last one browsed.
   const catalogId = pickCatalog(catalogs, route.view === 'search' ? route.params.get('cat') : null)
@@ -310,6 +312,7 @@ export default function App() {
             onSkipped={jobs => setSkippedJobs(prev => [...prev, ...jobs])}
           />
         )}
+        {route.view === 'lab/music' && <LabMusicView />}
         {route.view === 'creators' && (
           <CreatorsView
             source={route.params.get('src') ?? ''}

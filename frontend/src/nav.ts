@@ -8,11 +8,17 @@ export type Tab = (typeof TABS)[number]
  * All routable views. `watch` is reachable only by opening a title, `settings`
  * only from the settings control, `person` only from a cast/director credit,
  * `channel` only from a YouTube or Twitch video, `creators` from Discover —
- * none takes a slot in the nav.
+ * none takes a slot in the nav. `lab/music` needs the server's lab flag, see
+ * gateRoute.
  */
-export type View = Tab | 'watch' | 'settings' | 'person' | 'channel' | 'creators'
+export type View = Tab | 'watch' | 'settings' | 'person' | 'channel' | 'creators' | 'lab/music'
 
-const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person', 'channel', 'creators']
+const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person', 'channel', 'creators', 'lab/music']
+
+/** A lab route without the lab flag is an unknown route: it lands on home. */
+export function gateRoute(route: Route, lab: boolean): Route {
+  return route.view.startsWith('lab/') && !lab ? { ...route, view: 'home' } : route
+}
 
 export interface Route {
   view: View

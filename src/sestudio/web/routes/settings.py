@@ -71,6 +71,8 @@ def _public(cfg, request: Request) -> dict[str, Any]:
     data["default_hosts"] = list(DEFAULT_DOWNLOAD_ORDER)
     # Empty when YouTube can't be extracted properly; Settings warns about it.
     data["js_runtime"] = js_runtime()
+    # Unfinished pages (the music lab) show only on an instance started for them.
+    data["lab"] = os.environ.get("SESTUDIO_LAB") == "1"
     return data
 
 
