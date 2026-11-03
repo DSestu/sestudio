@@ -9,11 +9,21 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from sestudio.config import load_config
-from sestudio.music import online, runner, search, store
+from sestudio.music import libraries, online, runner, search, store
 from sestudio.sites import SiteError
 from sestudio.web.routes.stream import _proxy_url
 
 router = APIRouter()
+
+
+def _analyses(ids: list[str]) -> dict[str, Any]:
+    """Stored analyses; a remote library's tracks are asked of their own server."""
+    found = store.get(ids)
+    for tid in ids:
+        remote = None if tid in found else libraries.split_remote(tid)
+        if remote and (a := libraries.remote_analysis(*remote)):
+            found[tid] = a
+    return found
 
 
 @router.get("/music/analysis/status")
@@ -31,12 +41,12 @@ async def renormalise() -> dict[str, Any]:
 async def tracks_analysis(ids: str = Query(...)) -> dict[str, Any]:
     """Several analyses at once (``?ids=a,b,c``); unanalysed ids are left out."""
     wanted = [i for i in ids.split(",") if i]
-    return await asyncio.to_thread(store.get, wanted)
+    return await asyncio.to_thread(_analyses, wanted)
 
 
 @router.get("/music/tracks/{track_id}/analysis")
 async def track_analysis(track_id: str) -> dict[str, Any]:
-    found = await asyncio.to_thread(store.get, [track_id])
+    found = await asyncio.to_thread(_analyses, [track_id])
     if track_id not in found:
         raise HTTPException(status_code=404, detail="Not analysed (yet)")
     return found[track_id]

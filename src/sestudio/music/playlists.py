@@ -417,7 +417,7 @@ def evaluate(
                 )
             )
     return [
-        {"library": "local", "track_id": c["track_id"]}
+        {"library": c.get("library", "local"), "track_id": c["track_id"]}
         for c in candidates
         if matches(
             rules,

@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from sestudio import downloaded
-from sestudio.music import online
+from sestudio.music import libraries, online
 from sestudio.sites.creators import ytdlp_json
 
 logger = logging.getLogger(__name__)
@@ -117,22 +117,37 @@ def search_online(
 
 
 def search_library(query: str, root: str) -> list[dict[str, Any]]:
+    """Tracks of every library (the downloads folder first) holding every word."""
     words = query.casefold().split()
-    out: list[dict[str, Any]] = []
-    for f in downloaded.scan(root):
-        if f.kind != "audio":
-            continue
-        hay = f"{f.title} {f.artist} {f.album}".casefold()
+    tracks = [
+        {
+            "library": downloaded.LOCAL_LIBRARY,
+            "id": f.track_id,
+            "title": f.title,
+            "artist": f.artist,
+            "album": f.album,
+            "duration": f.duration or 0,
+        }
+        for f in downloaded.scan(root)
+        if f.kind == "audio"
+    ]
+    try:
+        tracks += libraries.other_tracks()
+    except Exception:
+        logger.warning("Could not list the other libraries", exc_info=True)
+    out = []
+    for t in tracks:
+        hay = f"{t['title']} {t.get('artist', '')} {t.get('album', '')}".casefold()
         if all(w in hay for w in words):
             out.append(
                 {
-                    "library": downloaded.LOCAL_LIBRARY,
-                    "track_id": f.track_id,
-                    "id": f.track_id,
-                    "title": f.title,
-                    "artist": f.artist,
-                    "album": f.album,
-                    "duration": f.duration or 0,
+                    "library": t["library"],
+                    "track_id": t["id"],
+                    "id": t["id"],
+                    "title": t["title"],
+                    "artist": t.get("artist", ""),
+                    "album": t.get("album", ""),
+                    "duration": t.get("duration") or 0,
                 }
             )
     return out[:LIBRARY_LIMIT]

@@ -22,6 +22,7 @@ from __future__ import annotations
 import functools
 import glob
 import contextlib
+import dataclasses
 import hashlib
 import io
 import os
@@ -420,6 +421,18 @@ def scan(root: str | Path) -> list[DownloadedFile]:
     with _lock:
         _cache[key] = (now, files)
     return files
+
+
+def audio_files(root: str | Path, library: str = LOCAL_LIBRARY) -> list[DownloadedFile]:
+    """The audio files under *root*, with track ids of *library*.
+
+    ``local`` ids are the ones every earlier build wrote; another library hashes
+    its own id in, so the same relative path in two folders is two tracks.
+    """
+    files = [f for f in scan(root) if f.kind == "audio"]
+    if library == LOCAL_LIBRARY:
+        return files
+    return [dataclasses.replace(f, track_id=track_id(f.path, library)) for f in files]
 
 
 def invalidate() -> None:

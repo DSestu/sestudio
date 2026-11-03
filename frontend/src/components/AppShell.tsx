@@ -55,8 +55,6 @@ interface Props {
   downloadBadge?: number
   /** Unread watcher events, rendered on the Activity destination when non-zero. */
   unreadBadge?: number
-  /** The lab flag: adds the Music tab and moves Activity to a bell in the top card. */
-  lab?: boolean
   /** Navigates to the settings page. */
   onOpenSettings: () => void
   /** Browsable catalogues, listed under Discover in the rail. */
@@ -74,9 +72,9 @@ interface Props {
  * App chrome: a persistent rail on `md:` and up, a bottom tab bar below it.
  * The content column scrolls independently on desktop so the rail stays put.
  */
-export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBadge = 0, lab = false, onOpenSettings, catalogs = [], catalogId = '', onOpenCatalog, searchBar, children }: Props) {
-  const tabs = navTabs(lab)
-  useEffect(() => { setBell(lab, unreadBadge) }, [lab, unreadBadge])
+export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBadge = 0, onOpenSettings, catalogs = [], catalogId = '', onOpenCatalog, searchBar, children }: Props) {
+  const tabs = navTabs()
+  useEffect(() => { setBell(true, unreadBadge) }, [unreadBadge])
   const badgeFor = (id: Tab) =>
     BADGES[id] === 'download' ? downloadBadge : BADGES[id] === 'unread' ? unreadBadge : 0
   // When a cast is active the Now-Casting bar sits above the mobile tab bar
@@ -217,8 +215,8 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
       <main
         className={`flex-1 min-w-0 pt-[calc(var(--top-card-h,4.25rem)+env(safe-area-inset-top)+1.25rem)] md:pt-5 px-(--gutter) [--gutter:clamp(0.6rem,1.5vw,1.5rem)] ${
           bottomBar
-            ? 'pb-[calc(var(--dock-clear)+4.75rem)] md:pb-24'
-            : 'pb-[calc(var(--dock-clear)+1rem)] md:pb-10'
+            ? 'pb-[calc(var(--dock-clear)+4.75rem+var(--music-bar,0rem))] md:pb-[calc(6rem+var(--music-bar,0rem))]'
+            : 'pb-[calc(var(--dock-clear)+1rem+var(--music-bar,0rem))] md:pb-[calc(2.5rem+var(--music-bar,0rem))]'
         }`}
       >
         {searchBar && (
