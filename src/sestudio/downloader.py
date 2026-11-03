@@ -43,6 +43,32 @@ class ProgressEvent:
     fragment: str = ""
 
 
+#: Best audio stream, the container it comes in (m4a preferred: every browser plays
+#: it); a webm one is remuxed to .opus, which the library lists as audio.
+AUDIO_ONLY_ARGS = ("-f", "ba[ext=m4a]/ba", "--remux-video", "webm>opus")
+
+
+def _audio_siblings(stem: Path) -> list[Path]:
+    """Files yt-dlp wrote for an audio-only download named *stem* (no extension)."""
+    if not stem.parent.is_dir():
+        return []
+    return [
+        p
+        for p in stem.parent.iterdir()
+        if p.name.startswith(stem.name + ".") and p.is_file()
+    ]
+
+
+def audio_file(stem: Path) -> Path | None:
+    """The finished audio file of an audio-only download, if there is one."""
+    for p in _audio_siblings(stem):
+        if p.suffix.lower() in (".m4a", ".opus", ".ogg", ".mp3", ".flac") and (
+            p.stat().st_size > 0
+        ):
+            return p
+    return None
+
+
 def check_yt_dlp() -> str:
     """Return the path to yt-dlp or raise RuntimeError if not found."""
     path = shutil.which("yt-dlp")
@@ -122,7 +148,9 @@ def download(
     if source.provider in IMPERSONATE_PROVIDERS:
         cmd += ["--impersonate", "chrome"]
     cmd += js_runtime_args()
-    if source.extract_url:
+    if source.audio_only:
+        cmd += list(AUDIO_ONLY_ARGS)
+    elif source.extract_url:
         # H.264 + AAC first so the merged mp4 plays on every browser and TV; a
         # site with only combined formats (Twitch, live) falls through to `b`.
         cmd += ["-f", "bv*[vcodec^=avc1][height<=1080]+ba[ext=m4a]/b[height<=1080]/b"]
@@ -131,31 +159,35 @@ def download(
     ffmpeg_dir = ffmpeg_location()
     if ffmpeg_dir:
         cmd += ["--ffmpeg-location", ffmpeg_dir]
-    cmd += [
-        # Subtitles the manifest itself advertises. yt-dlp names them
-        # `<stem>.<lang>.vtt`, matching where download_subtitles puts the sidecar
-        # ones, so both kinds land in the same place. A no-op when there are none.
-        "--write-subs",
-        "--sub-langs",
-        "all",
-        "--sub-format",
-        "vtt",
-        "--merge-output-format",
-        "mp4",
-        # `--merge-output-format` only governs *merging* separate audio and video
-        # streams; a single HLS stream is written in its native container, so an
-        # `.mp4` from a TS-segment manifest held MPEG-TS and no browser would
-        # play it (MEDIA_ERR_SRC_NOT_SUPPORTED, and the file's own name lied
-        # about it to every client that trusts the extension). Remuxing puts the
-        # stream in the container the name claims; it is a copy, not a re-encode.
-        "--remux-video",
-        "mp4",
-        "-o",
-        str(output_path),
-        "--progress",
-        "--newline",
-        source.extract_url or source.url,
-    ]
+    if source.audio_only:
+        # yt-dlp picks the extension, so the name is a stem it completes.
+        cmd += ["-o", f"{output_path}.%(ext)s", "--progress", "--newline"]
+    else:
+        cmd += [
+            # Subtitles the manifest itself advertises. yt-dlp names them
+            # `<stem>.<lang>.vtt`, matching where download_subtitles puts the sidecar
+            # ones, so both kinds land in the same place. A no-op when there are none.
+            "--write-subs",
+            "--sub-langs",
+            "all",
+            "--sub-format",
+            "vtt",
+            "--merge-output-format",
+            "mp4",
+            # `--merge-output-format` only governs *merging* separate audio and video
+            # streams; a single HLS stream is written in its native container, so an
+            # `.mp4` from a TS-segment manifest held MPEG-TS and no browser would
+            # play it (MEDIA_ERR_SRC_NOT_SUPPORTED, and the file's own name lied
+            # about it to every client that trusts the extension). Remuxing puts the
+            # stream in the container the name claims; it is a copy, not a re-encode.
+            "--remux-video",
+            "mp4",
+            "-o",
+            str(output_path),
+            "--progress",
+            "--newline",
+        ]
+    cmd.append(source.extract_url or source.url)
     logger.debug("Running: %s", " ".join(cmd))
 
     for attempt in range(_MAX_RETRIES):
@@ -208,7 +240,10 @@ def download(
         proc.wait()
         stderr_thread.join()
 
-        if proc.returncode == 0:
+        if proc.returncode == 0 and source.audio_only:
+            if audio_file(output_path) is not None:
+                return True
+        elif proc.returncode == 0:
             _MIN_SIZE = 5 * 1024 * 1024  # 5 MB
             if output_path.exists() and output_path.stat().st_size >= _MIN_SIZE:
                 # Only once the video is known good, so a discarded attempt does
@@ -224,6 +259,8 @@ def download(
 
         # Clean up any partial/empty file left by yt-dlp before retrying or giving up
         _cleanup(output_path)
+        for leftover in _audio_siblings(output_path) if source.audio_only else ():
+            leftover.unlink(missing_ok=True)
 
         stderr = "\n".join(stderr_lines).strip()
 
