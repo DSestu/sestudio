@@ -31,6 +31,7 @@ from sestudio.web.routes import (
     downloads,
     health,
     library,
+    music_queue,
     downloaded,
     home,
     search,
@@ -179,6 +180,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(settings.router, prefix="/api")
     app.include_router(library.router, prefix="/api")
     app.include_router(downloaded.router, prefix="/api")
+    app.include_router(music_queue.router, prefix="/api")
     app.include_router(stream.router, prefix="/api")
     app.include_router(cast.router, prefix="/api")
     app.include_router(tmdb.router, prefix="/api")
