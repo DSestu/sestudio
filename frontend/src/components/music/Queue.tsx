@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { queueActions, useAnalysis, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
 import { BLEND } from './engine'
 import { fmtBpm, fmtTime } from './format'
@@ -18,9 +18,10 @@ interface RowProps {
   source: DragSource
   /** A row that has been removed and is sliding out. */
   leaving?: () => void
+  tv: boolean
 }
 
-function Row({ item, info, playing, source, leaving }: RowProps) {
+function Row({ item, info, playing, source, leaving, tv }: RowProps) {
   const analysis = useAnalysis(item.track_id)
   const el = useRef<HTMLDivElement>(null)
 
@@ -59,7 +60,7 @@ function Row({ item, info, playing, source, leaving }: RowProps) {
       {/* --hl (0..1) is animated by the timeline: the row under the view takes a Signal Blue wash and an accent edge. The title goes near-white, not blue: blue text on a blue wash is hard to read. */}
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-primary" style={{ opacity: 'calc(var(--hl, 0) * .22)' }} />
       <span aria-hidden="true" className="pointer-events-none absolute left-0 inset-y-1 w-0.5 rounded-full bg-primary" style={{ opacity: 'var(--hl, 0)' }} />
-      <span
+      {!tv && <span
         aria-label="Drag to reorder"
         data-grip
         className="relative flex shrink-0 px-0.5 py-1 text-base-content/30 hover:text-base-content cursor-grab touch-none"
@@ -69,7 +70,7 @@ function Row({ item, info, playing, source, leaving }: RowProps) {
         <svg className="size-3.5" viewBox="0 0 14 14" fill="currentColor">
           {[3, 7, 11].map(y => [4, 10].map(x => <circle key={`${x}${y}`} cx={x} cy={y} r="1.1" />))}
         </svg>
-      </span>
+      </span>}
       <div className="relative flex-1 min-w-0">
         <b className="block truncate font-medium" style={{ color: 'color-mix(in oklch, white calc(var(--hl, 0) * 100%), currentColor)' }}>{info?.title ?? '…'}</b>
         <span className="block truncate text-[11px] text-base-content/52">
@@ -79,7 +80,7 @@ function Row({ item, info, playing, source, leaving }: RowProps) {
       </div>
       {analysis?.balance && <Meter balance={analysis.balance} />}
       <span className="relative w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{info?.duration ? fmtTime(info.duration) : ''}</span>
-      {playing ? (
+      {tv ? null : playing ? (
         <span className="size-[22px]" />
       ) : (
         <button
@@ -103,13 +104,15 @@ interface Leaving {
 let dropped: string | null = null
 
 /** The queue sheet: header and rows. Rows slide in, out and over each other (SPEC-music-player §7.7). */
-export default function Queue({ q, info, adding, onAdd, expanded, onPin }: {
+export default function Queue({ q, info, adding, onAdd, expanded, onPin, tv = false }: {
   q: QueueState
   info: (id: string) => TrackInfo | undefined
   adding: boolean
   onAdd: () => void
   expanded: boolean
   onPin: () => void
+  /** The station's picture: read-only, and it scrolls itself to the playing row. */
+  tv?: boolean
 }) {
   const list = useRef<HTMLDivElement>(null)
   const seen = useRef<{ ids: string[]; tops: Map<string, number> }>({ ids: [], tops: new Map() })
@@ -173,6 +176,14 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin }: {
     }
   })
 
+  const cur = q.current
+  // The playing row sits 56 px below the header.
+  useEffect(() => {
+    if (!tv) return
+    const row = list.current?.querySelector<HTMLElement>('[aria-current]')
+    if (row) list.current!.scrollTo({ top: row.offsetTop - 56, behavior: 'smooth' })
+  }, [tv, cur, q.items.length])
+
   const left = q.items.slice(q.current + 1)
   const seconds = left.reduce((s, i) => s + (info(i.track_id)?.duration ?? 0) - BLEND.auto, 0)
 
@@ -193,29 +204,29 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin }: {
       {/* The layer cross-fades these two with the mode: glass by default, a flat column expanded. */}
       <span aria-hidden="true" data-qglass className="glass absolute inset-0 rounded-[inherit]" />
       <span aria-hidden="true" data-qflat className="absolute inset-0 rounded-[inherit] bg-base-200 opacity-0" />
-      <button onClick={onPin} aria-label={expanded ? 'Back to the default view' : 'Open the expanded view'} data-handle className="relative md:hidden grid h-[22px] shrink-0 place-items-center">
+      {!tv && <button onClick={onPin} aria-label={expanded ? 'Back to the default view' : 'Open the expanded view'} data-handle className="relative md:hidden grid h-[22px] shrink-0 place-items-center">
         <span data-bar className="h-1 w-9 rounded-full bg-white/30" />
-      </button>
+      </button>}
       <header className="relative flex items-center gap-2 px-3 pt-3 pb-2 text-[13px] font-semibold max-md:pt-0">
         <span>Queue</span>
         <span className="ml-auto text-xs font-normal text-base-content/42">
           {left.length} left · {Math.max(0, Math.round(seconds / 60))} min
         </span>
-        <button
+        {!tv && <button
           aria-expanded={adding}
           className={`h-[26px] rounded-[9px] bg-primary/20 px-2.5 text-xs font-semibold text-primary hover:bg-primary/30 ${expanded ? '' : 'max-md:hidden'}`}
           onClick={onAdd}
         >
           + Add
-        </button>
-        <button
+        </button>}
+        {!tv && <button
           aria-label={expanded ? 'Unpin the queue' : 'Pin the queue'}
           aria-pressed={expanded}
           className={`max-md:hidden grid size-[26px] place-items-center rounded-[9px] hover:bg-white/10 ${expanded ? 'bg-primary/20 text-primary' : 'text-base-content/60'}`}
           onClick={onPin}
         >
           <svg className="size-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3l5 5-3 1-3.5 3.5.5 4.5-2 2-3.5-5.5L5 20l-1-1 4.5-4.5L3 11l2-2 4.5.5L13 6z" /></svg>
-        </button>
+        </button>}
       </header>
       <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden'}`}>
         <span
@@ -230,6 +241,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin }: {
             info={info(item.track_id)}
             playing={!gone && i === q.current}
             source={source(i, item)}
+            tv={tv}
             leaving={gone ? () => setLeaving(l => l.filter(x => x.item.item_id !== item.item_id)) : undefined}
           />
         ))}

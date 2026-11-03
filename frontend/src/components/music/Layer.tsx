@@ -24,8 +24,8 @@ function fade(el: HTMLElement | null, o: number, dy: number) {
   el.style.visibility = o < 0.01 ? 'hidden' : 'visible'
 }
 
-/** The full-screen player, over the whole app (rail and dock included). */
-export default function Layer() {
+/** The full-screen player, over the whole app (rail and dock included). `tv` is the station's picture: the default view, no controls, no sound, no cursor. */
+export default function Layer({ tv = false }: { tv?: boolean }) {
   const q = useMusicQueue()
   const info = useTrackInfo(q)
   const item = q.items[q.current]
@@ -37,7 +37,7 @@ export default function Layer() {
   const look = useLook()
   useEffect(() => { Object.assign(tlook, look.tl) }, [look.tl])
 
-  const expanded = useMode() === 'expanded'
+  const expanded = useMode() === 'expanded' && !tv
   // The phone's add panel is a sheet over the list, so it goes when the list does.
   const [was, setWas] = useState(expanded)
   if (was !== expanded) {
@@ -180,6 +180,7 @@ export default function Layer() {
   }, [kick])
 
   useEffect(() => {
+    if (tv) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closePlayer()
       else if (e.key === ' ' && !(e.target as HTMLElement).closest('button, [role=slider], [role=button], input')) {
@@ -189,7 +190,7 @@ export default function Layer() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [tv])
 
   const closeIcon = <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
 
@@ -198,7 +199,7 @@ export default function Layer() {
       ref={root}
       role="dialog"
       aria-label="Music player"
-      className="fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content"
+      className={`fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content ${tv ? 'pointer-events-none cursor-none select-none' : ''}`}
       // Swipe down closes it on a phone, except from inside the queue (which scrolls).
       onTouchStart={e => { touch.current = (e.target as HTMLElement).closest('[data-queue], [data-addp]') ? null : e.touches[0].clientY }}
       onTouchEnd={e => {
@@ -210,32 +211,32 @@ export default function Layer() {
       <div ref={skyEl} aria-hidden="true" className="absolute inset-0 -z-30" style={{ background: sky(analysis?.hue ?? DEFAULT_HUE) }}>
         <Background />
       </div>
-      <button
+      {!tv && <button
         ref={topRow}
         aria-label="Close the player"
         onClick={closePlayer}
         className="absolute left-3.5 top-3.5 md:left-8 md:top-4.5 z-10 size-10 rounded-xl glass grid place-items-center"
       >
         {closeIcon}
-      </button>
-      <div ref={card} className="absolute top-3 left-3.5 right-3.5 md:left-32 md:right-5 z-10 h-16 rounded-2xl glass flex items-center gap-3 px-3 invisible">
+      </button>}
+      {!tv && <div ref={card} className="absolute top-3 left-3.5 right-3.5 md:left-32 md:right-5 z-10 h-16 rounded-2xl glass flex items-center gap-3 px-3 invisible">
         <button aria-label="Close the player" onClick={closePlayer} className="size-10 shrink-0 rounded-xl hover:bg-white/10 grid place-items-center">{closeIcon}</button>
         <div className="min-w-0 leading-tight">
           <b className="block truncate text-[15px]">{track?.title ?? ''}</b>
           <span className="block truncate text-xs text-primary">{track?.artist ?? ''}</span>
         </div>
-      </div>
+      </div>}
       <div ref={titleEl} className="absolute left-0 top-0 min-w-0 origin-top-left">
         <Title info={track} analysis={analysis} />
       </div>
       <Timeline q={q} info={info} palette={look.tlPal} progress={progress} onOutside={() => setAdding(false)} />
       <div ref={transportEl} className="absolute left-0 top-0">
-        <Transport q={q} position={position} duration={track?.duration ?? 0} />
+        <Transport q={q} position={position} duration={track?.duration ?? 0} tv={tv} />
       </div>
       <div ref={queueEl} className="absolute">
-        <Queue q={q} info={info} adding={adding} onAdd={() => setAdding(a => !a)} expanded={expanded} onPin={toggle} />
+        <Queue q={q} info={info} adding={adding} onAdd={() => setAdding(a => !a)} expanded={expanded} onPin={toggle} tv={tv} />
       </div>
-      {adding && <AddPanel q={q} onClose={() => setAdding(false)} />}
+      {adding && !tv && <AddPanel q={q} onClose={() => setAdding(false)} />}
     </div>
   )
 }

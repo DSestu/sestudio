@@ -121,6 +121,56 @@ Reference: mockup C and the transition mockup.
 - **Metadata**: the cast load carries the queue's title and the current cover, updated through the
   existing playhead / status routes so the TV's own overlay and the Android notification are right.
 
+### Station renderer: measured (PR 13 spike)
+
+Decision taken before the spike: the picture is a **headless Chromium rendering the real `?tv` page**
+(Playwright, system Chrome/Edge via `channel` or an explicit path, bundled Chromium as fallback), its
+frames piped as JPEGs into ffmpeg (`src/sestudio/music/station_spike.py`,
+`scripts/station_spike.py`). The `?tv` page is the desktop immersive layer at 1920 × 1080 with every
+control removed, no cursor, no sound of its own, following the server queue from SSE. Measured
+here, in WSL2 (12 logical cores, no GPU flags, Chrome 156, 8 real tracks playing, local sestudio,
+x264 `veryfast` `zerolatency`, 2 minutes per row). **Windows numbers are still to be taken**
+(`uv run --extra station python scripts/station_spike.py "http://127.0.0.1:8090/?tv" --channel msedge --seconds 1800`).
+
+| Capture | Out | Captured fps | Gap p50 / p95 / max | Chromium CPU (cores) | ffmpeg CPU (cores) | RSS |
+|---|---|---|---|---|---|---|
+| CDP `Page.startScreencast` | 720p30 | 18.6 | 52 / 65 / 93 ms | 1.85 | 0.34 (peak 1.1) | 1.6 GB + 70 MB |
+| CDP `Page.startScreencast` | 1080p30 | 19.7 | 50 / 58 / 91 ms | 2.03 | 0.55 (peak 1.1) | 1.7 GB + 155 MB |
+| `page.screenshot` loop | 720p30 | 5.1 | 194 / 250 / 317 ms | 1.85 | 0.39 | 1.6 GB + 90 MB |
+| `page.screenshot` loop | 1080p30 | 5.3 | 190 / 219 / 286 ms | 1.85 | 0.50 | 1.6 GB + 155 MB |
+| Screencast, 720p **20 fps**, 20 min | 720p20 | 19.3 | 51 / 57 / 1385 ms | 1.85 | 0.22 (peak 0.87) | 1.66 GB flat, ffmpeg 73 MB |
+
+- **The encoder is output-paced**: the pump writes the latest frame at a constant 30 (or 20) fps and
+  repeats one when the page is slower, because ffmpeg reads the pipe as constant frame rate. Output
+  fps was 29.9 and tick lateness p95 about 2 ms in every row; the output plays at the right speed
+  (checked: 1280 × 720 H.264, 19:59.85 for a 1200 s run, the timeline and queue moving).
+- **Screencast beats screenshots by 4×** and costs the same CPU. Use the screencast.
+- **720p30 is not reached in WSL**: the page itself delivers about **19 fps** (about 38 % of the
+  30 fps output frames are repeats). It is the page, not the pipe: a trivial animated page captured at
+  60 fps with 1 core; hiding the page's canvases (`visibility: hidden`) lifts the capture to 60 fps;
+  removing `backdrop-filter` changes little (21 fps). The cost is rasterising the full-screen timeline
+  and background canvases (Canvas 2D `filter: blur`, software raster without a GPU), not the
+  JavaScript. A render scale of 0.667 (`--dsf`, canvases follow `devicePixelRatio`) cut Chromium to 1.6
+  cores but kept 18 fps; SwiftShader (`--use-angle=swiftshader`) is far worse (1.5 fps, 8 cores).
+- **Resolution barely matters** to the capture rate (19.7 fps at 1080p, 18.6 at 720p): the cost
+  is per canvas operation, not per output pixel. ffmpeg is cheap (0.3 to 0.55 cores).
+- **Long run**: 20 minutes at 720p20 held 20.0 fps output, 3 % repeated frames, RSS flat (no leak);
+  one 1.4 s capture stall in 20 min (a repeated frame, not a desync, since the audio will be mixed
+  server-side against a fixed clock). A/V sync is not measured: the spike has no audio (PR 14).
+
+**Recommendation.** Keep headless Chromium: it is the real renderer, so the TV matches the app with
+no second implementation. Plan PR 14 for **720p at 20 fps** (the rate the page sustains here, 1.9
+cores of Chromium + 0.3 of ffmpeg), and treat 30 fps as a target to reach by making the TV page
+cheaper rather than by a faster capture: in `?tv`, draw the background and timeline canvases
+without Canvas 2D `filter: blur` (blur once on a small canvas, or use a pre-blurred gradient) and at
+a lower canvas resolution, then re-measure. On the Windows machine Edge normally has a GPU
+process (ANGLE/D3D11) and the same canvases should rasterise much faster; measure that before
+spending on the page. Fallbacks if it is still short: 540p (Chromium 1.4 cores), 15 fps, a lower
+x264 preset load (`superfast`), or a pre-baked still background on the TV. One cast costs about
+2 cores while it runs, so §10's "one TV is fine" holds on a 4-core machine only if the page is made
+cheaper first. The Python port of the renderer (b) was not built: (a) works, and a port would
+duplicate every look change.
+
 ## 8. How this is reviewed and tested (the lab)
 
 The UI and UX are reviewed **live, in the real app, with real audio**, not on HTML mockups.
@@ -168,6 +218,7 @@ HTML mockups are used only for layout questions, before motion or sound exist.
 | 2026-11-03 | Analysis v2 (PR 20): DSP heuristics only, numpy only, in `music/profile.py`; results live in `music_analysis.extra` with a `v2` version (bump `profile.VERSION` to redo all), the chroma is kept there so the key can be redone without decoding, and tracks analysed before v2 are profiled from their stored row plus one decode. Key = peak-picked, log-weighted chroma (60 Hz-5 kHz) correlated with the 24 Krumhansl-Kessler rotations, confidence = margin to the runner-up. Energy per bar = 70 % loudness + 30 % high share. Structure = cuts on the 4/8/16-bar grid (min 8 bars) from a band-balance + energy novelty curve, labelled by rules (drop = high energy; intro = low first; outro = low last; buildup = rising low before a drop; breakdown = other lows). Genre = rule scores over tempo, band balance, energy variance and mid roughness; confidence under .7 is doubtful. **Known limits:** the key leans on kicks and sub bass (the 46 test tracks land almost all on 5A and 10A, mean key confidence .27), so treat it as a hint under .5; tempo is taken as detected (no half-time handling, a wrong octave gives a wrong genre); structure needs a steady grid and 8+ bars, a track with tempo changes or no kick drifts; labels cannot tell a second verse from a drop; genre knows only a handful of electronic genres, everything else falls to "Electronic" (.25). |
 | 2026-11-03 | Timeline (PR 8): the canvas is `fixed inset-0 -z-10` inside the timeline slot, so it covers the whole layer (all coordinates are page pixels, §6.5) and sits above the sky but under every control. Analyses come from the batch `GET /api/music/tracks/analysis` (40 ids per request); tracks the server has not analysed yet draw flat and are asked again every 15 s. Pixel density: DPR capped at 2 (1.5 under 760 px), and lowered by 0.5 down to 1 when frames average over 25 ms for 90 frames. Compositing is limited to the curves band plus 64 px of halo. The handover plan is a function (`layoutQueue(tracks, planOf)`), a 4 s fade until PR 12; the glide flash of §6.11, hover and hit boxes of labels are left to PR 10. |
 | 2026-11-03 | YouTube as music (PR 16): a streamed track is the queue item `{library: "online", source: "youtube" or "ytmusic", track_id: "yt:<video id>", title, artist, duration}`, its metadata kept in the item (no table); a bare item is looked up with yt-dlp, one that carries a title is trusted. `GET /api/music/online/{id}/audio` resolves the best audio stream (cached an hour) and 307-redirects to the existing signed stream proxy, so the audio is same-origin for Web Audio; the first fetch also analyses the track once in the background (audio fetched to a temp dir, analysis saved under the track id, the audio deleted at once: no cache to size). `GET /api/music/online/link?url=` expands a video or a playlist (first 200) into queue items; the client replaces or appends with the normal queue POST. Audio-only download: `-f ba[ext=m4a]/ba` (m4a preferred, a webm is remuxed to .opus), output `<name>.%(ext)s`; not offered for "This device". |
+| 2026-11-03 | Station spike (PR 13): the TV page is `/?tv`, which `main.tsx` renders as `<Layer tv />` instead of the app: no controls, no close button, read-only progress line and queue that keeps the playing row 56 px below the header, no cursor, no audio engine, queue from SSE; not lab-gated (read-only, no settings needed). Headless Chromium + ffmpeg is the renderer, with the CDP screencast (4× the frame rate of a screenshot loop) resampled to a constant rate and piped as JPEG to x264. Measured in WSL2 the page sustains about 19 fps, so PR 14 plans for 720p20 and a cheaper TV canvas path (see §7 "Station renderer: measured"); Windows numbers still to be taken. Playwright is the optional `station` extra. |
 | 2026-11-03 | Interactions (PR 10): jumps inside a track send `POST /queue/play` with a `position` (the `go` event then carries `position` and `keep`, so play or pause stays as it was; without a position it still starts playing). Scrub, inertia and tap use the prototype defaults, inertia as a per-frame-rate-independent decay (.9 per 16 ms); in-track seeks cut hard (the crossfade .12 / .4 s applies only across tracks, via a one-shot blend hint the engine reads on the `go` event). A press on a label's second line does nothing until the transition popover (PR 12). Queue adds, removes and moves animate from the item ids of every queue change, local or from SSE; more than 3 changes at once (a replaced queue, a playlist) just appear. "+ Add" shows on phones in the default mode too until the expanded mode (PR 11). Not built: the "Wait for the blend to finish" refusal, the add panel closing on leaving expanded. Player bar sits above the Now-Casting bar when casting, and the page padding clears it through `--music-bar`. |
 | 2026-11-03 | Several libraries (PR 19): the registry is in `config.json` (`music_libraries`: `{id, kind: local_folder / remote_sestudio / ytmusic_account, label, path / url, token}`); `local` (the download root, "This PC") is implicit and its track ids are unchanged, any other folder hashes its own id in (`sha1(library id + NUL + path)`). The analysis runner also walks every folder library. A remote sestudio server is read through `/api/music/share/*` (listing with metadata, per-track analysis, audio with ranges), protected by a per-server bearer token: tokens are made in Settings (`/api/music/share-tokens`), shown once, stored as a SHA-256 hash and revocable; it is the only part of the API that asks for credentials. The client keeps the last listing on disk (`music_remote/<id>.json`), marks the library offline with the time of the first failed contact, retries every 60 s, proxies audio (Range passed through) and asks the remote for analyses on demand rather than caching them. Remote track ids are `<library id>-<remote id>`. YouTube Music account: `ytmusic_cookies` (a cookies.txt path, Settings) lets yt-dlp list the likes playlist (first 500, cached 10 min) as online items; no file reads as "needs sign-in". The UI filters by `crate` (the library list) because a YT Music like is queued as `library: "online"`. Smart lists now draw from every folder library; remote and YT Music tracks are not in smart lists yet. |
 | 2026-11-03 | Beat-synced mixing (PR 12): the plan is `mix/plan.ts` (pure), shared by the timeline layout and the engine; the analysis cache moved to `mix/analysis.ts` so the engine plans with the layer closed. A pair's stored settings are whole (the server fills defaults on every PUT), so a pair that changed a field no longer follows the default mode. A beat sync enters the next track mid-song, so after the `next` the client sends a `seek` with the real position, and again when the tempo glide ends (the server clock runs at rate 1). Layout changes ease over a 100 ms time constant (about 400 ms). The popover opens above its label and carries the Default mix control. The Music tab, the Activity bell, the layer and the bar are no longer behind the lab flag; `#/lab/music` and the Look panel stay lab-only. |
@@ -181,7 +232,7 @@ HTML mockups are used only for layout questions, before motion or sound exist.
   with no duration. Both to be checked in the first lab session; DLNA is the fallback for Chromecast,
   and vice versa.
 - **Skip latency** on the TV (3–6 s) is inherent to buffering; the browser shows the change at once.
-- **Python renderer speed**: if 720p30 can't be drawn in time, fall back to 540p or 24 fps.
+- **Renderer speed**: headless Chromium sustains about 19 fps in WSL2 (§7 measured); plan 720p20, make the TV canvases cheaper, measure Windows (Edge, GPU) before promising 30 fps.
 - **Safari** does not play `.opus`.
 
 ## 11. Plan (one PR each; agents pick them from the tracking issue)

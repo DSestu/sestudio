@@ -6,7 +6,7 @@ import { togglePlay } from './player'
 
 const SEEK_KEYS: Record<string, number> = { ArrowRight: 5, ArrowLeft: -5, PageUp: 30, PageDown: -30 }
 
-function Seek({ position, duration }: { position: number; duration: number }) {
+function Seek({ position, duration, readOnly = false }: { position: number; duration: number; readOnly?: boolean }) {
   const bar = useRef<HTMLDivElement>(null)
   // While dragging the bar shows (and the sound follows) the pointer, not the server.
   const [scrub, setScrub] = useState<number | null>(null)
@@ -23,6 +23,11 @@ function Seek({ position, duration }: { position: number; duration: number }) {
   return (
     <div className="flex items-center gap-3 text-xs text-base-content/45 tabular-nums">
       <span className="w-9 text-right">{fmtTime(shown)}</span>
+      {readOnly ? (
+        <div className="flex-1 h-1 rounded-full bg-white/16">
+          <div className="h-full rounded-full bg-primary" style={{ width: `${duration ? (position / duration) * 100 : 0}%` }} />
+        </div>
+      ) : (
       <div
         ref={bar}
         role="slider"
@@ -72,6 +77,7 @@ function Seek({ position, duration }: { position: number; duration: number }) {
           </span>
         )}
       </div>
+      )}
       <span className="w-9">{fmtTime(duration)}</span>
     </div>
   )
@@ -80,8 +86,9 @@ function Seek({ position, duration }: { position: number; duration: number }) {
 const stepBtn = 'size-12 rounded-xl bg-white/6 grid place-items-center hover:bg-white/10 disabled:opacity-40'
 
 /** Seek row and transport (SPEC-music-player §5.6). Send-to-TV arrives with the cast PR. */
-export default function Transport({ q, position, duration }: { q: QueueState; position: number; duration: number }) {
+export default function Transport({ q, position, duration, tv = false }: { q: QueueState; position: number; duration: number; tv?: boolean }) {
   const idle = q.current < 0
+  if (tv) return <div className="w-105"><Seek position={position} duration={duration} readOnly /></div>
   return (
     <div className="flex flex-col gap-3 w-full md:w-105">
       <Seek position={position} duration={duration} />
