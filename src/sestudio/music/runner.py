@@ -68,6 +68,27 @@ def _loop(root: str) -> None:
             _running = False
 
 
+def _upgrade_v2(base: Path, files: list, workers: int) -> int:
+    """Profile (key, genre, energy, structure) tracks analysed before v2, from their stored row."""
+    old = set(store.pending_v2())
+    todo = [f for f in files if f.track_id in old]
+
+    def one(f) -> None:
+        raw = store.load_raw(f.track_id)
+        if raw is not None:
+            store.set_extra(f.track_id, analysis.upgrade(str(base / f.path), raw))
+
+    n = 0
+    with ThreadPoolExecutor(workers, thread_name_prefix="profile") as ex:
+        for future in as_completed([ex.submit(one, f) for f in todo]):
+            try:
+                future.result()
+                n += 1
+            except Exception:
+                logger.warning("Could not profile a track", exc_info=True)
+    return n
+
+
 def run_once(root: str | Path, workers: int | None = None) -> int:
     """Analyse every pending audio file under *root*; returns how many succeeded."""
     global _total, _done
@@ -81,10 +102,10 @@ def run_once(root: str | Path, workers: int | None = None) -> int:
     ]  # fmt: skip
     with _lock:
         _total, _done = len(files), len(files) - len(pending)
-    if not pending:
-        return 0
     workers = workers or max(1, min(4, (os.cpu_count() or 2) // 2))
-    ok = 0
+    ok = _upgrade_v2(base, files, workers)
+    if not pending:
+        return ok
     with ThreadPoolExecutor(workers, thread_name_prefix="analyse") as ex:
         futures = {
             ex.submit(analysis.analyse_file, str(base / f.path)): f for f in pending

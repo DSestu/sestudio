@@ -14,10 +14,14 @@ from typing import Any
 import numpy as np
 
 from sestudio import library
+from sestudio.music import profile
 from sestudio.music.analysis import RawAnalysis
 
 #: Renormalise when the analysed set has grown by more than this since the last time.
 GROWTH = 0.10
+
+#: What v2 adds to a track's analysis response (the raw chroma stays server-side).
+V2_FIELDS = ("key", "camelot", "keyConf", "energy", "structure", "genre", "genreConf")
 
 
 def save(track_id: str, mtime: float, size: int, a: RawAnalysis) -> None:
@@ -25,15 +29,53 @@ def save(track_id: str, mtime: float, size: int, a: RawAnalysis) -> None:
         conn = library._connect()
         conn.execute(
             "INSERT OR REPLACE INTO music_analysis (track_id, mtime, size, analysed_at,"
-            " duration, zcr, bpm, beat0, bar0, bpm_conf, n, bands, loudness)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " duration, zcr, bpm, beat0, bar0, bpm_conf, n, bands, loudness, extra)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 track_id, mtime, size, int(time.time()), a.duration, a.zcr, a.bpm,
                 a.beat0, a.bar0, a.bpm_conf, a.bands.shape[1],
                 a.bands.astype(np.float16).tobytes(),
-                a.loudness.astype(np.float16).tobytes(),
+                a.loudness.astype(np.float16).tobytes(), json.dumps(a.extra),
             ),
         )  # fmt: skip
+        conn.commit()
+
+
+def pending_v2() -> list[str]:
+    """Ids of tracks analysed before the current v2 profile (or without one)."""
+    with library._lock:
+        rows = library._connect().execute("SELECT track_id, extra FROM music_analysis")
+        return [
+            r["track_id"]
+            for r in rows
+            if json.loads(r["extra"]).get("v2") != profile.VERSION
+        ]
+
+
+def load_raw(track_id: str) -> RawAnalysis | None:
+    with library._lock:
+        r = (
+            library._connect()
+            .execute("SELECT * FROM music_analysis WHERE track_id = ?", (track_id,))
+            .fetchone()
+        )
+    if r is None:
+        return None
+    bands = np.frombuffer(r["bands"], dtype=np.float16).reshape(8, r["n"])
+    return RawAnalysis(
+        r["duration"], bands.astype(np.float32),
+        np.frombuffer(r["loudness"], dtype=np.float16).astype(np.float32),
+        r["zcr"], r["bpm"], r["beat0"], r["bar0"], r["bpm_conf"],
+    )  # fmt: skip
+
+
+def set_extra(track_id: str, extra: dict[str, Any]) -> None:
+    with library._lock:
+        conn = library._connect()
+        conn.execute(
+            "UPDATE music_analysis SET extra = ? WHERE track_id = ?",
+            (json.dumps(extra), track_id),
+        )
         conn.commit()
 
 
@@ -133,6 +175,7 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
         bands = bands.astype(np.float32)
         loud = np.frombuffer(r["loudness"], dtype=np.float16).astype(np.float32)
         p = np.searchsorted(zcr, r["zcr"]) / (len(zcr) - 1) if len(zcr) > 1 else 0.5
+        extra = json.loads(r["extra"])
         mean = [float(np.mean(np.minimum(bands[i] / norm[i], 1))) for i in range(8)]
         loud_norm = float(np.sort(loud)[int(len(loud) * 0.98)]) if len(loud) else 1.0
         out[r["track_id"]] = {
@@ -146,6 +189,7 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
             "bands": [_percent(bands[i], norm[i]) for i in range(8)],
             "loudness": _percent(loud, loud_norm or 1.0),
             # Mean bass, mids, highs (SPEC-music-player §6.1), 0..1.
+            **{k: v for k, v in extra.items() if k in V2_FIELDS},
             "balance": [
                 round(sum(mean[0:2]) / 2, 3),
                 round(sum(mean[2:5]) / 3, 3),

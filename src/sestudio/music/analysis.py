@@ -17,11 +17,13 @@ for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")
 
 import subprocess  # noqa: E402
-from dataclasses import dataclass  # noqa: E402
+from dataclasses import dataclass, field  # noqa: E402
+from typing import Any  # noqa: E402
 
 import numpy as np  # noqa: E402
 
 from sestudio.media import ffmpeg_binary  # noqa: E402
+from sestudio.music import profile  # noqa: E402
 
 CENTERS = (60, 120, 250, 500, 1000, 2000, 4000)
 FILTERS = [f"bandpass=f={c}:width_type=o:w=1" for c in CENTERS] + ["highpass=f=7000"]
@@ -44,6 +46,8 @@ class RawAnalysis:
     beat0: float | None
     bar0: float | None
     bpm_conf: float | None
+    #: Key, genre, energy, structure (:mod:`sestudio.music.profile`).
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 def decode(path: str, rate: int, af: str | None = None) -> np.ndarray:
@@ -140,8 +144,15 @@ def analyse_file(path: str) -> RawAnalysis:
     if duration <= 0:
         raise ValueError("no audio decoded")
     bpm = beat0 = bar0 = conf = None
+    x = decode(path, TEMPO_SR)
     if duration >= MIN_TEMPO_SECONDS:
-        bpm, beat0, bar0, conf = tempo(decode(path, TEMPO_SR))
-    return RawAnalysis(
-        duration, _bands(path), _rms(low, 4, 400), zcr, bpm, beat0, bar0, conf
-    )
+        bpm, beat0, bar0, conf = tempo(x)
+    bands, loud = _bands(path), _rms(low, 4, 400)
+    extra = profile.profile(profile.chroma(x, TEMPO_SR), bands, loud, bpm, bar0)
+    return RawAnalysis(duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra)
+
+
+def upgrade(path: str, a: RawAnalysis) -> dict[str, Any]:
+    """v2 profile of an already analysed file from its stored v1 row: one decode, for the chroma."""
+    chroma = profile.chroma(decode(path, TEMPO_SR), TEMPO_SR)
+    return profile.profile(chroma, a.bands, a.loudness, a.bpm, a.bar0)
