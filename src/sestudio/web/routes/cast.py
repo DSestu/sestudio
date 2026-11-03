@@ -22,7 +22,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_MIME_BY_KIND = {"mp4": "video/mp4", "hls": "application/vnd.apple.mpegurl"}
+_MIME_BY_KIND = {
+    "mp4": "video/mp4",
+    "hls": "application/vnd.apple.mpegurl",
+    # The station: live MPEG-TS, which a TV is told about like the encoded streams.
+    "ts": downloaded.TV_MEDIA_TYPE,
+}
 
 
 def _local_ip_for(host: str) -> str:
@@ -550,6 +555,10 @@ async def dlna_status(request: Request) -> dict[str, Any]:
             "volume": dmr.volume_level if dmr.volume_level is not None else 1.0,
             "muted": bool(dmr.is_volume_muted),
             "can_pause": bool(dmr.can_pause),
+            # What it was sent: the player tells the station's stream from a video.
+            "media": getattr(
+                getattr(request.app.state, "dlna_play", None), "proxy_url", ""
+            ),
         }
     except Exception as exc:  # noqa: BLE001 — renderer gone/unreachable
         logger.debug("DLNA status update failed: %s", exc)

@@ -129,6 +129,12 @@ export function applyEvent(s: QueueState, ev: QueueEvent, serverNow: number): Qu
   }
 }
 
+/** The TV's volume while casting: a signal pushed on every change. */
+export interface TvVolume {
+  level: number
+  muted: boolean
+}
+
 /** What the station (the TV's stream) is playing now, on the server's clock. */
 export function withStation(s: QueueState, st: StationClock | null | undefined): QueueState {
   if (!st?.item_id) return s
@@ -144,6 +150,8 @@ let raw: QueueState = EMPTY_QUEUE
 let state: QueueState = EMPTY_QUEUE
 let station: StationClock | null = null
 let following = false
+let volume: TvVolume | null = null
+let volumeEvents = 0
 let skew = 0
 let source: EventSource | null = null
 const listeners = new Set<() => void>()
@@ -193,6 +201,12 @@ function connect() {
       eventListeners.forEach(l => l(ev, before, state))
     })
   }
+  // The TV's volume moved: the TV page shows its pill.
+  source.addEventListener('volume', e => {
+    volume = JSON.parse((e as MessageEvent).data) as TvVolume
+    volumeEvents++
+    emit()
+  })
   // A clock, not a change: no revision.
   source.addEventListener('station', e => {
     const ev = JSON.parse((e as MessageEvent).data) as StationClock
@@ -209,6 +223,14 @@ export function onQueueEvent(fn: (ev: QueueEvent, before: QueueState, after: Que
 }
 
 export const getQueue = () => state
+export const stationClock = () => station
+
+/** The TV's volume and how many changes of it have been pushed: the page opened mid-cast shows no pill. */
+export function useTvVolume(): { volume: TvVolume | null; changes: number } {
+  useEffect(connect, [])
+  useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => volumeEvents)
+  return { volume, changes: volumeEvents }
+}
 export const serverNow = () => Date.now() / 1000 + skew
 export const clockSkew = () => skew
 

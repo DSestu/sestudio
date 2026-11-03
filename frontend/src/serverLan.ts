@@ -7,6 +7,26 @@ export function isLoopback(host: string): boolean {
   return host === 'localhost' || /^127\./.test(host) || host === '[::1]'
 }
 
+/**
+ * Is *host* a plain-LAN address the app is reached at directly?
+ *
+ * Only then is the plain-HTTP media trick (below) both possible and necessary.
+ * Reached through a public name — a Tailscale Funnel domain, say — the app has a
+ * publicly trusted cert, so the receiver can just use the page's own origin;
+ * rewriting to http://<that name>:<port> would instead point it at a port
+ * nothing serves plaintext on.
+ */
+export function isLanHost(host: string): boolean {
+  return (
+    host === 'localhost' ||
+    host.endsWith('.local') ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  )
+}
+
 /** Missed answers, after a network change, before a page on the server's own
  *  machine moves to localhost. */
 const MISSES_BEFORE_MOVING = 2

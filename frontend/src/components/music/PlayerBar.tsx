@@ -3,6 +3,7 @@ import { useCastState } from '../../cast'
 import { useDlnaState } from '../../dlnaControl'
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, fmtBpm } from './format'
+import SendToTv from './SendToTv'
 import { openPlayer, togglePlay, usePosition } from './player'
 
 /** The strip that stays on every page while a track is current: opens the player. */
@@ -60,6 +61,7 @@ export default function PlayerBar() {
           <svg className="size-5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
         )}
       </button>
+      <SendToTv className="size-10 rounded-xl hover:bg-white/8" />
       <button aria-label="Expand the player" className="size-10 rounded-xl grid place-items-center hover:bg-white/8" onClick={e => { e.stopPropagation(); openPlayer() }}>
         <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6" /></svg>
       </button>

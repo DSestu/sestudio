@@ -50,7 +50,11 @@ const TAB_ID = Math.random().toString(36).slice(2)
 export function claimSound() {
   localStorage.setItem(SOUND_KEY, TAB_ID)
 }
-export const isSoundTab = () => localStorage.getItem(SOUND_KEY) === TAB_ID
+export const isSoundTab = () => !onTv && localStorage.getItem(SOUND_KEY) === TAB_ID
+
+// While the queue plays on a TV the sound is the TV's only.
+let onTv = false
+export const setSoundOnTv = (v: boolean) => { onTv = v }
 
 // --- the engine --------------------------------------------------------------
 

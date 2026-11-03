@@ -3,6 +3,7 @@ import type { MusicTrack } from '../../musicLibrary'
 import { addPayload, type AddPayload, onQueueEvent, post, positionNow, queueActions, clockSkew, useMusicQueue, type QueueState, useTrackInfo } from '../../musicQueue'
 import { BLEND, claimSound, engine, isSoundTab } from './engine'
 import { glideToItem, takeBlend } from './scrub'
+import { useMusicCastSync } from '../../musicCast'
 import { loadAnalyses, RETRY_MS } from './mix/analysis'
 
 // Whether the full-screen player layer is up, and the entry points that start
@@ -42,6 +43,7 @@ export function togglePlay(playing: boolean, position: number) {
 
 /** Keeps the sound following the queue. Mount once. */
 export function useMusicHost() {
+  useMusicCastSync()
   const q = useMusicQueue()
   const info = useTrackInfo(q)
   useEffect(() => {

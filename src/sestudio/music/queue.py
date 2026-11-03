@@ -89,6 +89,7 @@ def _view(rev: int, doc: dict[str, Any]) -> dict[str, Any]:
         "default_mix": doc["default_mix"],
         "mix": doc["mix"],
         "station": _station_clock,
+        "volume": _volume,
     }
 
 
@@ -128,6 +129,8 @@ def unsubscribe(sub: Sub) -> None:
 
 _listeners: list[Callable[[dict[str, Any]], None]] = []
 _station_clock: dict[str, Any] | None = None
+#: The TV's volume while casting (``level`` 0..1, ``muted``), None when not casting.
+_volume: dict[str, Any] | None = None
 
 
 def listen(fn: Callable[[dict[str, Any]], None]) -> Callable[[], None]:
@@ -141,13 +144,23 @@ def publish_station(clock: dict[str, Any] | None) -> None:
     """Push the station's playback clock (``item_id``, ``position``, ``playing``,
     ``at``), or None when the station stopped. It has no revision of its own:
     the TV page follows it instead of the queue's client clock."""
-    global _station_clock
+    global _station_clock, _volume
     _station_clock = clock
+    if clock is None:
+        _volume = None
     _publish({"rev": 0, "op": "station", **(clock or {"item_id": None})})
 
 
+def publish_volume(level: float, muted: bool) -> None:
+    """Tell every page the TV's volume changed (the TV page shows its pill).
+    A signal like the station clock, with no revision."""
+    global _volume
+    _volume = {"level": max(0.0, min(1.0, level)), "muted": muted}
+    _publish({"rev": 0, "op": "volume", **_volume, "at": time.time()})
+
+
 def _publish(event: dict[str, Any]) -> None:
-    if event["op"] != "station":
+    if event["op"] not in ("station", "volume"):
         for fn in list(_listeners):
             fn(event)
     with _subs_lock:

@@ -180,9 +180,49 @@ def test_routes_start_status_stream_and_stop_over_the_real_queue(client):
             break
         time.sleep(0.25)
     assert clock and clock["item_id"] and clock["playing"] is True
+    # The same encode is also a live HLS playlist for a Chromecast, in a temp dir that goes with the run.
+    hls_dir = st.hls_dir
+    for _ in range(80):
+        playlist = client.get("/api/music/station/hls/live.m3u8")
+        if playlist.status_code == 200 and "seg0.ts" in playlist.text:
+            break
+        time.sleep(0.25)
+    assert playlist.status_code == 200
+    assert playlist.headers["content-type"] == "application/vnd.apple.mpegurl"
+    segment = client.get("/api/music/station/hls/seg0.ts")
+    assert segment.status_code == 200 and segment.content[0] == 0x47
+    assert client.get("/api/music/station/hls/nope.ts").status_code == 404
     # The test client only returns a response once it has ended: the stop ends the stream.
     threading.Timer(3, lambda: client.post("/api/music/station/stop")).start()
     resp = client.get("/api/music/station/stream")
     assert resp.status_code == 200 and resp.headers["content-type"] == "video/mpeg"
     assert resp.content[0] == 0x47 and len(resp.content) > 20_000
     assert client.get("/api/music/queue").json()["station"] is None
+    assert st.done.wait(15) and not hls_dir.exists()
+    assert client.get("/api/music/station/hls/live.m3u8").status_code == 404
+
+
+def test_the_volume_the_player_sets_reaches_every_page_and_ends_with_the_station():
+    async def go() -> dict:
+        sub = queue.subscribe()
+        queue.publish_volume(1.4, False)  # clamped
+        queue.publish_volume(0.35, True)
+        events = [await asyncio.wait_for(sub[1].get(), 2) for _ in range(2)]
+        queue.unsubscribe(sub)
+        return events[-1]
+
+    ev = asyncio.run(go())
+    assert ev["op"] == "volume" and ev["rev"] == 0
+    assert ev["level"] == 0.35 and ev["muted"] is True
+    assert queue.get_state()["volume"] == {"level": 0.35, "muted": True}
+    queue.publish_station(None)
+    assert queue.get_state()["volume"] is None
+
+
+def test_the_volume_route_validates_and_publishes(client):
+    assert (
+        client.post("/api/music/station/volume", json={"level": 2}).status_code == 422
+    )
+    r = client.post("/api/music/station/volume", json={"level": 0.5, "muted": False})
+    assert r.status_code == 200
+    assert client.get("/api/music/queue").json()["volume"]["level"] == 0.5

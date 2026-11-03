@@ -22,6 +22,9 @@ import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSe
 import { requestPullback } from '../../pullback'
 import { saveProgress } from '../../watchState'
 import { usePhoneStrip } from '../../phoneStrip'
+import { pullBackFromTv, useMusicCasting } from '../../musicCast'
+import { queueActions, useMusicQueue, useTrackInfo } from '../../musicQueue'
+import { usePosition } from '../music/player'
 
 
 // Relative-seek magnitudes — one per column, applied backward (top row) and
@@ -59,6 +62,11 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   const session = useCastSession()
   const browserSession = useBrowserSession()
   const controls = useBrowserPlayerControls()
+  // The station on the TV: the bar then speaks for the queue, not for a video.
+  const music = useMusicCasting()
+  const q = useMusicQueue()
+  const track = useTrackInfo(q)(q.items[q.current]?.track_id ?? '')
+  const musicPosition = usePosition(q, track?.duration ?? 0)
   const [open, setOpen] = useState(false)
   const away = useBarsHidden()
   // While dragging the timeline, show the local value instead of live updates.
@@ -89,7 +97,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   usePhoneStrip(!!target && !desktop)
   if (!target) return null
 
-  const live = target === 'dlna'
+  const base = target === 'dlna'
     ? {
         position: dlna.position, duration: dlna.duration, isPaused: dlna.isPaused,
         muted: dlna.muted, volume: dlna.volume, canSeek: true, canControlVolume: true,
@@ -107,10 +115,20 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
         onToggleMute: castToggleMute, onSetVolume: castSetVolume, onVolumeBy: castVolumeBy,
         stop: castStop,
       }
+  const live = music
+    ? {
+        ...base, position: musicPosition, duration: track?.duration ?? 0, isPaused: !q.playing,
+        canSeek: false, title: track?.title ?? '',
+        onPlayPause: () => void queueActions.transport(q.playing ? 'pause' : 'play', { position: musicPosition }),
+        stop: () => void pullBackFromTv(music),
+      }
+    : base
 
   const ep = session?.episode
   const heading = ep?.series_name || live.title || 'Casting'
-  const sub = ep
+  const sub = music
+    ? (q.items[q.current]?.artist || track?.artist || `On ${music.device}`)
+    : ep
     ? (ep.season === 0 ? ep.title : `S${pad(ep.season)}·E${pad(ep.number)} — ${ep.title}`)
     : (target === 'dlna' ? 'On your TV' : 'On Chromecast')
   const pct = live.duration > 0 ? Math.min(100, (live.position / live.duration) * 100) : 0
@@ -171,6 +189,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
 
   /** Pull playback back to this browser, resuming where the TV left off. */
   function watchHere() {
+    if (music) return void pullBackFromTv(music)
     if (!ep) return
     saveProgress(ep, live.position, live.duration)
     requestPullback(getCastQueue() ?? { episodes: [ep], index: 0 })
@@ -325,7 +344,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
 
               {/* DLNA always: the server knows what it sent. Chromecast when
                   what it plays is one of the server's re-encoded playlists. */}
-              {(target === 'dlna' || cast.liveId) && (
+              {!music && (target === 'dlna' || cast.liveId) && (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-3 flex-wrap">
                     <CastQuality
@@ -356,7 +375,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
 
               {/* Voice and captions. A Chromecast switches its own captions
                   without reloading; the rest change in place, as quality does. */}
-              <CastTracks target={target} position={live.position} />
+              {!music && <CastTracks target={target} position={live.position} />}
             </div>
           </div>
         </div>
@@ -392,7 +411,12 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
             {fmt(live.position)} / {fmt(live.duration)}
           </span>
 
-          {ep && (
+          {music && (
+            <button onClick={e => { e.stopPropagation(); void queueActions.transport('next') }} aria-label="Next" title="Next" className="btn btn-ghost btn-sm btn-square shrink-0">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM4 6v12l10.5-6z" /></svg>
+            </button>
+          )}
+          {(ep || music) && (
             <button onClick={e => { e.stopPropagation(); watchHere() }} aria-label="Watch here" title="Watch here" className="btn btn-ghost btn-sm btn-square shrink-0">
               {/* Monitor with a play mark — "play on this screen", not a download */}
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -3,6 +3,8 @@ import { queueActions, type QueueState } from '../../musicQueue'
 import { engine } from './engine'
 import { fmtTime } from './format'
 import { togglePlay } from './player'
+import CastStrip from './CastStrip'
+import SendToTv from './SendToTv'
 
 const SEEK_KEYS: Record<string, number> = { ArrowRight: 5, ArrowLeft: -5, PageUp: 30, PageDown: -30 }
 
@@ -85,7 +87,7 @@ function Seek({ position, duration, readOnly = false }: { position: number; dura
 
 const stepBtn = 'size-12 rounded-xl bg-white/6 grid place-items-center hover:bg-white/10 disabled:opacity-40'
 
-/** Seek row and transport (SPEC-music-player §5.6). Send-to-TV arrives with the cast PR. */
+/** Seek row and transport (SPEC-music-player §5.6). The cast button and the "Playing on" strip sit with it. */
 export default function Transport({ q, position, duration, tv = false }: { q: QueueState; position: number; duration: number; tv?: boolean }) {
   const idle = q.current < 0
   if (tv) return <div className="w-105"><Seek position={position} duration={duration} readOnly /></div>
@@ -112,7 +114,9 @@ export default function Transport({ q, position, duration, tv = false }: { q: Qu
         <button className={stepBtn} aria-label="Next" disabled={idle} onClick={() => void queueActions.transport('next')}>
           <svg className="size-6" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM4 6v12l10.5-6z" /></svg>
         </button>
+        <SendToTv />
       </div>
+      <CastStrip />
     </div>
   )
 }
