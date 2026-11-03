@@ -2,16 +2,20 @@ import { useEffect, useRef } from 'react'
 import { useAnalysis, useMusicQueue, useTrackInfo, type QueueState, type TrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
 import { closePlayer, usePosition } from './player'
+import Background from './background/Background'
+import { useLook } from './background/settings'
 import Queue from './Queue'
+import type { PaletteName } from './timeline/palette'
+import { tlook } from './timeline/render'
 import Timeline from './timeline/Timeline'
 import Title from './Title'
 import Transport from './Transport'
 
 /** The strip along the bottom; the canvas itself covers the whole layer, behind everything. */
-function TimelineSlot({ q, info }: { q: QueueState; info: (id: string) => TrackInfo | undefined }) {
+function TimelineSlot({ q, info, palette }: { q: QueueState; info: (id: string) => TrackInfo | undefined; palette: PaletteName }) {
   return (
     <div data-slot="timeline" className="flex-1 min-h-16 md:flex-none md:absolute md:inset-x-0 md:bottom-0 md:h-[34vh]">
-      <Timeline q={q} info={info} />
+      <Timeline q={q} info={info} palette={palette} />
     </div>
   )
 }
@@ -25,6 +29,8 @@ export default function Layer() {
   const analysis = useAnalysis(item?.track_id)
   const position = usePosition(q, track?.duration ?? 0)
   const touch = useRef<number | null>(null)
+  const look = useLook()
+  useEffect(() => { Object.assign(tlook, look.tl) }, [look.tl])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -51,7 +57,7 @@ export default function Layer() {
         touch.current = null
       }}
     >
-      {/* The sky above is the placeholder for the spectral background (PR 9). */}
+      <Background />
       <button
         aria-label="Close the player"
         onClick={closePlayer}
@@ -62,7 +68,7 @@ export default function Layer() {
       <div className="pt-19 px-5.5 md:pt-29.5 md:pl-34 md:pr-96 min-w-0">
         <Title info={track} analysis={analysis} />
       </div>
-      <TimelineSlot q={q} info={info} />
+      <TimelineSlot q={q} info={info} palette={look.tlPal} />
       <div className="px-3.5 pt-3.5 md:absolute md:left-34 md:top-62.5 md:p-0">
         <Transport q={q} position={position} duration={track?.duration ?? 0} />
       </div>

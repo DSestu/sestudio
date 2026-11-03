@@ -148,10 +148,30 @@ CREATE TABLE IF NOT EXISTS music_queue (
 );
 """
 
+# Music playlists (sestudio.music.playlists): a tree of folders, playlists and
+# smart lists. `data` is a JSON document (items and parts, or rules).
+# `music_plays` remembers every track that has been played, for the "never
+# played" smart rule.
+_MIGRATION_4_MUSIC_PLAYLISTS = """
+CREATE TABLE IF NOT EXISTS music_playlists (
+    id       TEXT    PRIMARY KEY,
+    parent   TEXT,
+    kind     TEXT    NOT NULL,
+    name     TEXT    NOT NULL,
+    position INTEGER NOT NULL,
+    data     TEXT    NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS music_plays (
+    track_id  TEXT PRIMARY KEY,
+    played_at INTEGER NOT NULL
+);
+"""
+
 _MIGRATIONS: tuple[str, ...] = (
     _MIGRATION_1_WATCHERS,
     _MIGRATION_2_MUSIC_QUEUE,
     _MIGRATION_3_MUSIC_ANALYSIS,
+    _MIGRATION_4_MUSIC_PLAYLISTS,
 )
 
 _conn: sqlite3.Connection | None = None

@@ -9,10 +9,11 @@ import { oklch, type Palette } from './palette'
 import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
 
 const GQ = 0.25 // glow layer resolution
-const K = { lo: 0.7, mi: 0.9, hi: 0.42 }
-const ALPHA = { lo: 0.9, mi: 0.5, hi: 0.82 }
-const BLUR = 3.5
-const GLOW = 0.75
+/** Shape and look numbers; the lab Look panel overwrites them (SPEC-music-player Appendix). */
+export const tlook = { klo: 0.7, kmi: 0.9, khi: 0.42, alo: 0.9, ami: 0.5, ahi: 0.82, edge: 1, glow: 0.75, bb: 3.5 }
+
+/** What the spectral background reads from the last frame: horizon, amplitude and the blurred glow layer. */
+export const probe = { y0: 0, amp: 0, W: 0, H: 0, glow: null as HTMLCanvasElement | null }
 const SIGNAL = 'oklch(72% .16 230'
 
 export interface LabelItem extends DrawItem {
@@ -106,6 +107,11 @@ export class TimelineRenderer {
     const o2 = off.x
     const { X } = M.at(f.t)
     const { R, px, y0, amp } = M
+    probe.y0 = y0
+    probe.amp = amp
+    probe.W = W
+    probe.H = H
+    probe.glow = this.g2.c
     const e = f.t
     const items = f.items
 
@@ -288,10 +294,10 @@ export class TimelineRenderer {
         P.closePath()
         return P
       }
-      const pLo = shape(0, K.lo, true)
-      const pMi = shape(1, K.mi, false)
-      const pHi = shape(2, K.hi, false)
-      const sHi = shape(2, K.hi, false, true)
+      const pLo = shape(0, tlook.klo, true)
+      const pMi = shape(1, tlook.kmi, false)
+      const pHi = shape(2, tlook.khi, false)
+      const sHi = shape(2, tlook.khi, false, true)
       const { palette: pal } = f
       // One shape, painted once per brightness region.
       const paint = (c: CanvasRenderingContext2D, P: Path2D, alpha: number, stroke = false) => {
@@ -314,14 +320,14 @@ export class TimelineRenderer {
       g1.x.fillStyle = oklch(pal.hi)
       paint(g1.x, pHi, 0.7)
       lo.x.fillStyle = oklch(pal.lo)
-      paint(lo.x, pLo, ALPHA.lo)
+      paint(lo.x, pLo, tlook.alo)
       top.x.fillStyle = oklch(pal.mi)
-      paint(top.x, pMi, ALPHA.mi)
+      paint(top.x, pMi, tlook.ami)
       top.x.fillStyle = oklch(pal.hi)
-      paint(top.x, pHi, ALPHA.hi)
+      paint(top.x, pHi, tlook.ahi)
       top.x.strokeStyle = oklch(pal.edge)
-      top.x.lineWidth = 1
-      paint(top.x, sHi, 1, true)
+      top.x.lineWidth = tlook.edge
+      if (tlook.edge > 0) paint(top.x, sHi, 1, true)
     }
     g1.x.globalCompositeOperation = 'source-over'
 
@@ -339,16 +345,16 @@ export class TimelineRenderer {
     q.filter = 'none'
     o2.save()
     o2.globalCompositeOperation = 'lighter'
-    o2.globalAlpha = Math.min(1, GLOW * 0.5)
+    o2.globalAlpha = Math.min(1, tlook.glow * 0.5)
     o2.imageSmoothingEnabled = true
     o2.drawImage(g2.c, 0, cy * GQ, g2.c.width, ch * GQ, 0, cy, W, ch)
-    if (GLOW * 0.5 > 1) {
-      o2.globalAlpha = GLOW * 0.5 - 1
+    if (tlook.glow * 0.5 > 1) {
+      o2.globalAlpha = tlook.glow * 0.5 - 1
       o2.drawImage(g2.c, 0, cy * GQ, g2.c.width, ch * GQ, 0, cy, W, ch)
     }
     o2.restore()
     o2.globalCompositeOperation = 'source-over'
-    o2.filter = `blur(${BLUR}px)`
+    o2.filter = `blur(${tlook.bb}px)`
     o2.drawImage(lo.c, bx, by, W, bh, bx, by, W, bh)
     o2.filter = 'none'
     o2.globalAlpha = 1
