@@ -154,6 +154,13 @@ def _mutate(
             raise StaleRev(rev)
         detail = change(doc)
         rev += 1
+        for item in doc["items"] if doc["playing"] else ():
+            if item["item_id"] == doc["current_item"]:
+                conn.execute(
+                    "INSERT OR IGNORE INTO music_plays (track_id, played_at) "
+                    "VALUES (?, ?)",
+                    (item["track_id"], int(time.time())),
+                )
         conn.execute(
             "INSERT INTO music_queue (station, rev, data) VALUES (?, ?, ?) "
             "ON CONFLICT(station) DO UPDATE SET rev = excluded.rev, data = excluded.data",

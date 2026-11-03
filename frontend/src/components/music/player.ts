@@ -18,7 +18,7 @@ export const openPlayer = () => set(true)
 export const closePlayer = () => set(false)
 export const useLayerOpen = () => useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => open)
 
-function start(action: () => Promise<void>): Promise<void> {
+export function startPlayback(action: () => Promise<void>): Promise<void> {
   claimSound()
   engine.unlock()
   openPlayer()
@@ -26,16 +26,16 @@ function start(action: () => Promise<void>): Promise<void> {
 }
 
 /** The library views' buttons: the track (or the whole list, replacing the queue) plays now and the layer opens. */
-export const playNow = (t: MusicTrack) => start(() => post(addPayload([t], 'play_now')))
+export const playNow = (t: MusicTrack) => startPlayback(() => post(addPayload([t], 'play_now')))
 /** Streamed tracks (a pasted link): they replace the queue and play from the first. */
-export const playPayload = (tracks: AddPayload['tracks']) => start(() => post({ tracks, replace: true }))
-export const playAll = (ts: MusicTrack[]) => start(() => post(addPayload(ts, 'replace')))
+export const playPayload = (tracks: AddPayload['tracks']) => startPlayback(() => post({ tracks, replace: true }))
+export const playAll = (ts: MusicTrack[]) => startPlayback(() => post(addPayload(ts, 'replace')))
 /** Play a row of the queue. */
-export const playItem = (itemId: string) => start(() => queueActions.play(itemId))
+export const playItem = (itemId: string) => startPlayback(() => queueActions.play(itemId))
 /** Play / pause from the transport or the bar. */
 export function togglePlay(playing: boolean, position: number) {
   if (playing) void queueActions.transport('pause', { position })
-  else void start(() => queueActions.transport('play', { position }))
+  else void startPlayback(() => queueActions.transport('play', { position }))
 }
 
 /** Keeps the sound following the queue. Mount once, while the lab is on. */

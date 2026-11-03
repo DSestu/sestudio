@@ -1,3 +1,5 @@
+import PlaylistTree from './PlaylistTree'
+
 export interface Crate {
   /** '' for "All". */
   id: string
@@ -5,11 +7,14 @@ export interface Crate {
   count: number
 }
 
-/** The LIBRARIES list, a column on desktop and the body of the phone's sheet. */
-export default function Crates({ crates, active, onPick }: {
+/** The libraries and playlists column on desktop, and the body of the phone's sheet. */
+export default function Crates({ crates, active, onPick, node, onNode }: {
   crates: Crate[]
   active: string
   onPick: (id: string) => void
+  /** The selected playlist or smart list, '' when a library is. */
+  node: string
+  onNode: (id: string) => void
 }) {
   return (
     <nav aria-label="Libraries">
@@ -19,9 +24,9 @@ export default function Crates({ crates, active, onPick }: {
           <li key={c.id}>
             <button
               onClick={() => onPick(c.id)}
-              aria-current={c.id === active}
+              aria-current={!node && c.id === active}
               className={`w-full flex items-center justify-between gap-2 rounded-xl px-3 h-10 text-sm text-left transition-colors ${
-                c.id === active ? 'bg-primary/20 font-semibold' : 'hover:bg-white/5 text-base-content/80'
+                !node && c.id === active ? 'bg-primary/20 font-semibold' : 'hover:bg-white/5 text-base-content/80'
               }`}
             >
               <span className="truncate">{c.label}</span>
@@ -30,6 +35,7 @@ export default function Crates({ crates, active, onPick }: {
           </li>
         ))}
       </ul>
+      <PlaylistTree active={node} onPick={onNode} />
     </nav>
   )
 }
