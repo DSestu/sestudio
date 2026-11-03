@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { queueActions, useAnalysis, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
 import { BLEND } from './engine'
 import { fmtBpm, fmtTime } from './format'
@@ -10,9 +10,10 @@ interface RowProps {
   info?: TrackInfo
   state: 'played' | 'playing' | 'next'
   onGrip: (e: React.PointerEvent) => void
+  tv: boolean
 }
 
-function Row({ item, info, state, onGrip }: RowProps) {
+function Row({ item, info, state, onGrip, tv }: RowProps) {
   const analysis = useAnalysis(item.track_id)
   const playing = state === 'playing'
   return (
@@ -23,12 +24,13 @@ function Row({ item, info, state, onGrip }: RowProps) {
       className={`group relative flex items-center gap-2.5 px-3 py-[7px] text-[13px] cursor-pointer select-none transition-opacity hover:bg-white/5 ${
         playing ? 'bg-primary/22' : ''
       } ${state === 'played' ? 'opacity-[.42]' : ''}`}
-      onClick={() => { if (!playing) playItem(item.item_id) }}
-      onKeyDown={e => { if (e.key === 'Enter' && !playing) playItem(item.item_id) }}
+      data-playing={playing || undefined}
+      onClick={tv ? undefined : () => { if (!playing) playItem(item.item_id) }}
+      onKeyDown={tv ? undefined : e => { if (e.key === 'Enter' && !playing) playItem(item.item_id) }}
     >
       {/* The playing row keeps its title near-white on the tint, plus an accent edge: Signal Blue text on a Signal Blue wash is hard to read. */}
       {playing && <span aria-hidden="true" className="absolute left-0 inset-y-1 w-0.5 rounded-full bg-primary" />}
-      <span
+      {!tv && <span
         aria-label="Drag to reorder"
         className="flex shrink-0 px-0.5 py-1 text-base-content/30 hover:text-base-content cursor-grab touch-none"
         onPointerDown={onGrip}
@@ -37,7 +39,7 @@ function Row({ item, info, state, onGrip }: RowProps) {
         <svg className="size-3.5" viewBox="0 0 14 14" fill="currentColor">
           {[3, 7, 11].map(y => [4, 10].map(x => <circle key={`${x}${y}`} cx={x} cy={y} r="1.1" />))}
         </svg>
-      </span>
+      </span>}
       <div className="flex-1 min-w-0">
         <b className={`block truncate font-medium ${playing ? 'text-white' : ''}`}>{info?.title ?? '…'}</b>
         <span className="block truncate text-[11px] text-base-content/52">
@@ -47,7 +49,7 @@ function Row({ item, info, state, onGrip }: RowProps) {
       </div>
       {analysis?.balance && <Meter balance={analysis.balance} />}
       <span className="w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{info?.duration ? fmtTime(info.duration) : ''}</span>
-      {playing ? (
+      {tv ? null : playing ? (
         <span className="size-[22px]" />
       ) : (
         <button
@@ -67,10 +69,18 @@ function DropLine() {
 }
 
 /** The queue sheet: header and rows. Reordering drags from the grip. */
-export default function Queue({ q, info }: { q: QueueState; info: (id: string) => TrackInfo | undefined }) {
+export default function Queue({ q, info, tv = false }: { q: QueueState; info: (id: string) => TrackInfo | undefined; tv?: boolean }) {
   const list = useRef<HTMLDivElement>(null)
   // The row boundary the dragged row would land on (0..n), shown as a drop line.
   const [drop, setDrop] = useState<number | null>(null)
+
+  const cur = q.current
+  // On the TV the sheet keeps the playing row 56 px below the header by itself.
+  useEffect(() => {
+    if (!tv) return
+    const row = list.current?.querySelector<HTMLElement>('[data-playing]')
+    if (row) list.current!.scrollTo({ top: row.offsetTop - 56, behavior: 'smooth' })
+  }, [tv, cur, q.items.length])
 
   const left = q.items.slice(q.current + 1)
   const seconds = left.reduce((s, i) => s + (info(i.track_id)?.duration ?? 0) - BLEND.auto, 0)
@@ -124,6 +134,7 @@ export default function Queue({ q, info }: { q: QueueState; info: (id: string) =
               info={info(item.track_id)}
               state={i < q.current ? 'played' : i === q.current ? 'playing' : 'next'}
               onGrip={grip(i)}
+              tv={tv}
             />
           </div>
         ))}
