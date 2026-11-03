@@ -3,9 +3,11 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import Layer from './components/music/Layer'
+import { followStation } from './musicQueue'
 
 // The station renders this page headless: the player's picture and nothing else (SPEC-music §7).
 const tv = new URLSearchParams(window.location.search).has('tv')
+if (tv) followStation()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

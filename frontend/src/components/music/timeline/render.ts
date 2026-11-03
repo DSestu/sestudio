@@ -7,8 +7,12 @@ import { fmtTime } from '../format'
 import { isPhone, Mapper } from './mapping'
 import { oklch, type Palette } from './palette'
 import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
+import { TV } from '../tv'
 
-const GQ = 0.25 // glow layer resolution
+const GQ = TV ? 0.125 : 0.25 // glow layer resolution
+/** The glow's blur radii follow its resolution; the bass is blurred by scaling it through a layer this much smaller (TV only). */
+const GB = TV ? 0.5 : 1
+const LQ = 0.25
 /** Shape and look numbers; the lab Look panel overwrites them (SPEC-music-player Appendix). */
 export const tlook = { klo: 0.7, kmi: 0.9, khi: 0.42, alo: 0.9, ami: 0.5, ahi: 0.82, edge: 1, glow: 0.75, bb: 3.5 }
 
@@ -53,6 +57,7 @@ export class TimelineRenderer {
   private off = layer()
   private top = layer() // mids, highs, edge (device resolution)
   private lo = layer() // bass (CSS resolution, blurred once)
+  private lo2 = layer() // bass, small: the TV's blur
   private g1 = layer() // curves for the glow (quarter resolution)
   private g2 = layer() // blurred glow (quarter resolution)
   private pts = new Points()
@@ -86,6 +91,8 @@ export class TimelineRenderer {
     this.canvas.height = this.off.c.height = this.top.c.height = dh
     this.lo.c.width = W
     this.lo.c.height = H
+    this.lo2.c.width = Math.ceil(W * LQ)
+    this.lo2.c.height = Math.ceil(H * LQ)
     this.g1.c.width = this.g2.c.width = Math.ceil(W * GQ)
     this.g1.c.height = this.g2.c.height = Math.ceil(H * GQ)
     this.M = new Mapper(W, H)
@@ -339,10 +346,10 @@ export class TimelineRenderer {
     q.clearRect(0, 0, g2.c.width, g2.c.height)
     q.globalCompositeOperation = 'lighter'
     q.globalAlpha = 1
-    q.filter = 'blur(14px)'
+    q.filter = `blur(${14 * GB}px)`
     q.drawImage(g1.c, 0, 0)
     q.globalAlpha = 0.45
-    q.filter = 'blur(7px)'
+    q.filter = `blur(${7 * GB}px)`
     q.drawImage(g1.c, 0, 0)
     q.filter = 'none'
     o2.save()
@@ -356,9 +363,18 @@ export class TimelineRenderer {
     }
     o2.restore()
     o2.globalCompositeOperation = 'source-over'
-    o2.filter = `blur(${tlook.bb}px)`
-    o2.drawImage(lo.c, bx, by, W, bh, bx, by, W, bh)
-    o2.filter = 'none'
+    if (TV) {
+      // No filter: the bass band drawn small and scaled back up is as soft, at a fraction of the work.
+      const s = this.lo2
+      s.x.clearRect(0, 0, s.c.width, s.c.height)
+      s.x.drawImage(lo.c, bx, by, W, bh, bx * LQ, by * LQ, W * LQ, bh * LQ)
+      o2.imageSmoothingEnabled = true
+      o2.drawImage(s.c, bx * LQ, by * LQ, W * LQ, bh * LQ, bx, by, W, bh)
+    } else {
+      o2.filter = `blur(${tlook.bb}px)`
+      o2.drawImage(lo.c, bx, by, W, bh, bx, by, W, bh)
+      o2.filter = 'none'
+    }
     o2.globalAlpha = 1
     o2.drawImage(top.c, bx * dpr, by * dpr, W * dpr, bh * dpr, bx, by, W, bh)
   }

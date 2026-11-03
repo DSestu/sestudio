@@ -88,6 +88,7 @@ def _view(rev: int, doc: dict[str, Any]) -> dict[str, Any]:
         "repeat": doc["repeat"],
         "default_mix": doc["default_mix"],
         "mix": doc["mix"],
+        "station": _station_clock,
     }
 
 
@@ -125,7 +126,30 @@ def unsubscribe(sub: Sub) -> None:
         _subs.discard(sub)
 
 
+_listeners: list[Callable[[dict[str, Any]], None]] = []
+_station_clock: dict[str, Any] | None = None
+
+
+def listen(fn: Callable[[dict[str, Any]], None]) -> Callable[[], None]:
+    """Call *fn* with every change event, in the thread that made it (the
+    station's mixer follows the queue this way). Returns the way to stop."""
+    _listeners.append(fn)
+    return lambda: _listeners.remove(fn) if fn in _listeners else None
+
+
+def publish_station(clock: dict[str, Any] | None) -> None:
+    """Push the station's playback clock (``item_id``, ``position``, ``playing``,
+    ``at``), or None when the station stopped. It has no revision of its own:
+    the TV page follows it instead of the queue's client clock."""
+    global _station_clock
+    _station_clock = clock
+    _publish({"rev": 0, "op": "station", **(clock or {"item_id": None})})
+
+
 def _publish(event: dict[str, Any]) -> None:
+    if event["op"] != "station":
+        for fn in list(_listeners):
+            fn(event)
     with _subs_lock:
         subs = list(_subs)
     for sub in subs:

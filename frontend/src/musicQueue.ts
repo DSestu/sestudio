@@ -41,6 +41,15 @@ export interface QueueState {
   repeat: boolean
   default_mix: string
   mix: Record<string, MixSettings>
+  /** The station's playback clock while one runs (SPEC-music §7). */
+  station?: StationClock | null
+}
+export interface StationClock {
+  item_id: string | null
+  /** Seconds into that item, at server time `at`. */
+  position: number
+  playing: boolean
+  at: number
 }
 /** One pushed change: `op` names it, the rest is that op's own fields. */
 export interface QueueEvent {
@@ -120,9 +129,21 @@ export function applyEvent(s: QueueState, ev: QueueEvent, serverNow: number): Qu
   }
 }
 
+/** What the station (the TV's stream) is playing now, on the server's clock. */
+export function withStation(s: QueueState, st: StationClock | null | undefined): QueueState {
+  if (!st?.item_id) return s
+  const i = s.items.findIndex(x => x.item_id === st.item_id)
+  return i < 0 ? s : { ...s, current: i, position: st.position, updated_at: st.at, playing: st.playing }
+}
+
 // --- the store ---------------------------------------------------------------
 
+// `raw` is the queue as the server has it, which events apply to; `state` is what is shown:
+// the same, except on the TV page, which follows the station's clock (the sound it is sent).
+let raw: QueueState = EMPTY_QUEUE
 let state: QueueState = EMPTY_QUEUE
+let station: StationClock | null = null
+let following = false
 let skew = 0
 let source: EventSource | null = null
 const listeners = new Set<() => void>()
@@ -130,9 +151,20 @@ const eventListeners = new Set<(ev: QueueEvent, before: QueueState, after: Queue
 
 const emit = () => listeners.forEach(l => l())
 
+const show = () => { state = following ? withStation(raw, station) : raw }
+
 function setState(s: QueueState) {
-  state = s
+  raw = s
+  station = s.station ?? null
+  show()
   if (s.server_time) skew = s.server_time - Date.now() / 1000
+  emit()
+}
+
+/** The TV page: show what the station plays, not the queue's own clock. */
+export function followStation() {
+  following = true
+  show()
   emit()
 }
 
@@ -151,15 +183,23 @@ function connect() {
   for (const op of OPS) {
     source.addEventListener(op, e => {
       const ev: QueueEvent = JSON.parse((e as MessageEvent).data)
-      if (ev.rev <= state.rev) return
-      const next = applyEvent(state, ev, Date.now() / 1000 + skew)
+      if (ev.rev <= raw.rev) return
+      const next = applyEvent(raw, ev, Date.now() / 1000 + skew)
       if (!next) { void refetch(); return }
       const before = state
-      state = next
+      raw = next
+      show()
       emit()
-      eventListeners.forEach(l => l(ev, before, next))
+      eventListeners.forEach(l => l(ev, before, state))
     })
   }
+  // A clock, not a change: no revision.
+  source.addEventListener('station', e => {
+    const ev = JSON.parse((e as MessageEvent).data) as StationClock
+    station = ev.item_id ? ev : null
+    show()
+    emit()
+  })
 }
 
 /** Run *fn* for every pushed change, after the state has been updated. */
