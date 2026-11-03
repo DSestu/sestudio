@@ -78,8 +78,9 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
       lastSig = sig
       return moved
     }
-    // Half the display rate is plenty for a blur this soft.
-    return frameLoop(step, () => (getQueue().playing ? 30 : 0))
+    // Every display frame: at 30 fps a 30 ms attack lands in one coarse step and the analyser misses
+    // short hits, which flattens the dynamics the Rollers look was tuned for. The 96×54 canvas is cheap.
+    return frameLoop(step)
   }, [])
 
   return (
