@@ -259,7 +259,6 @@ export default function App() {
         onNavigate={navigate}
         downloadBadge={downloads.activeCount}
         unreadBadge={unread}
-        lab={!!settings.lab}
         onOpenSettings={() => navigate('settings')}
         catalogs={catalogs}
         catalogId={route.view === 'search' && !route.params.get('q') ? catalogId : ''}
@@ -438,7 +437,7 @@ export default function App() {
           unless a cast (Chromecast or DLNA) is active. */}
       <NowCastingBar navigate={navigate} />
 
-      {settings.lab && <MusicPlayer />}
+      <MusicPlayer />
 
       {/* Minimised browser player — shown whenever the playing title is not the
           one on screen, which includes browsing a *different* title in the

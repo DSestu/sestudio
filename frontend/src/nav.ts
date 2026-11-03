@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react'
 export const TABS = ['home', 'search', 'library', 'media', 'notifications', 'music'] as const
 export type Tab = (typeof TABS)[number]
 
-/** The nav's destinations in order. With the lab flag on, Music joins and
- *  Activity moves out to the bell in the top card. */
-export function navTabs(lab: boolean): Tab[] {
-  return lab ? ['home', 'media', 'search', 'music', 'library'] : ['home', 'search', 'library', 'media', 'notifications']
+/** The nav's destinations in order. Activity is out of it, at the bell in the top card. */
+export function navTabs(): Tab[] {
+  return ['home', 'media', 'search', 'music', 'library']
 }
 
 /**
@@ -21,9 +20,9 @@ export type View = Tab | 'watch' | 'settings' | 'person' | 'channel' | 'creators
 
 const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person', 'channel', 'creators', 'lab/music']
 
-/** A lab route (and the Music tab) without the lab flag is an unknown route: it lands on home. */
+/** A lab route without the lab flag is an unknown route: it lands on home. */
 export function gateRoute(route: Route, lab: boolean): Route {
-  return (route.view.startsWith('lab/') || route.view === 'music') && !lab ? { ...route, view: 'home' } : route
+  return route.view.startsWith('lab/') && !lab ? { ...route, view: 'home' } : route
 }
 
 export interface Route {

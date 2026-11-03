@@ -60,7 +60,7 @@ export default function Layer() {
         <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
       </button>
       <div className="pt-19 px-5.5 md:pt-29.5 md:pl-34 md:pr-96 min-w-0">
-        <Title info={track} analysis={analysis} position={position} />
+        <Title info={track} analysis={analysis} />
       </div>
       <TimelineSlot q={q} info={info} />
       <div className="px-3.5 pt-3.5 md:absolute md:left-34 md:top-62.5 md:p-0">

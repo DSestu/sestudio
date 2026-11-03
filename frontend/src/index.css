@@ -10,11 +10,6 @@
   @keyframes rise {
     from { opacity: 0; transform: translateY(8px); }
   }
-  /* The player's beat dot: a flash at each beat, its length set by --beat. */
-  @keyframes music-beat {
-    0% { opacity: 1; transform: scale(1.5); }
-    100% { opacity: .35; transform: scale(1); }
-  }
   /* Content swapped sideways (another season's episodes) slides in. */
   --animate-slide: slide 240ms cubic-bezier(.2, .8, .2, 1) both;
   @keyframes slide {
