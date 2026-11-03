@@ -115,7 +115,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_watcher_events_dedupe
 # `extra` is a JSON object for what later analyses add (key, genre, energy,
 # structure) without another migration. `music_state` holds the
 # library-wide normalisation, derived from these rows and rebuildable.
-_MIGRATION_2_MUSIC_ANALYSIS = """
+_MIGRATION_3_MUSIC_ANALYSIS = """
 CREATE TABLE IF NOT EXISTS music_analysis (
     track_id    TEXT PRIMARY KEY,
     mtime       REAL NOT NULL,
@@ -138,7 +138,21 @@ CREATE TABLE IF NOT EXISTS music_state (
 );
 """
 
-_MIGRATIONS: tuple[str, ...] = (_MIGRATION_1_WATCHERS, _MIGRATION_2_MUSIC_ANALYSIS)
+# The music queue (sestudio.music.queue): one row per station holding the whole
+# queue as a JSON document, its revision beside it.
+_MIGRATION_2_MUSIC_QUEUE = """
+CREATE TABLE IF NOT EXISTS music_queue (
+    station TEXT    PRIMARY KEY,
+    rev     INTEGER NOT NULL,
+    data    TEXT    NOT NULL
+);
+"""
+
+_MIGRATIONS: tuple[str, ...] = (
+    _MIGRATION_1_WATCHERS,
+    _MIGRATION_2_MUSIC_QUEUE,
+    _MIGRATION_3_MUSIC_ANALYSIS,
+)
 
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { GLASS_BUTTON, pageHeaderMounted, useDeskSlots } from '../pageHeader'
+import { GLASS_BUTTON, pageHeaderMounted, useBell, useDeskSlots } from '../pageHeader'
 import { AWAY, useBarsHidden } from '../barsHidden'
 import { useDiscoverTall } from '../discoverMenu'
 
@@ -20,6 +20,24 @@ const gearIcon = (
 export function SettingsButton() {
   return (
     <a href="#/settings" aria-label="Settings" className={GLASS_BUTTON}>{gearIcon}</a>
+  )
+}
+
+/** Activity as a bell with its unread count, shown only while the lab flag has moved Activity out of the nav. */
+export function ActivityBell() {
+  const { on, unread } = useBell()
+  if (!on) return null
+  return (
+    <a
+      href="#/notifications"
+      aria-label={unread > 0 ? `Activity, ${unread} unread` : 'Activity'}
+      className={`${GLASS_BUTTON} relative`}
+    >
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0" />
+      </svg>
+      {unread > 0 && <span className="absolute -top-1 -right-1 badge badge-primary badge-xs">{unread}</span>}
+    </a>
   )
 }
 
@@ -107,6 +125,7 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
           {back}
           <CardTitle title={title} status={status} wrap={wrapTitle} />
           {menu && <Menu>{menu}</Menu>}
+          {!onBack && <ActivityBell />}
           {!onBack && <SettingsButton />}
         </div>
         {segmented && <div className="mt-2.5 -ml-2.5">{segmented}</div>}

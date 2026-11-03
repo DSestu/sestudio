@@ -1,0 +1,226 @@
+"""The server-side music queue and its change feed (SPEC-music §6).
+
+Mutations take the revision the client last saw as ``If-Match`` (or ``?rev=``)
+and answer 409 with the current state when it is stale. Every change is pushed
+on ``/queue/events`` as a Server-Sent Event named after the op.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, Literal
+
+from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+from sestudio import downloaded
+from sestudio.config import load_config
+from sestudio.music import queue
+
+router = APIRouter(prefix="/music/queue")
+
+PING_SECONDS = 15.0
+
+
+class TrackRef(BaseModel):
+    library: str = downloaded.LOCAL_LIBRARY
+    track_id: str
+
+
+class AddBody(BaseModel):
+    tracks: list[TrackRef]
+    index: int | None = None
+    play_now: bool = False
+    replace: bool = False
+
+
+class MoveBody(BaseModel):
+    item_id: str
+    to: int
+
+
+class PlayBody(BaseModel):
+    item_id: str
+
+
+class TransportBody(BaseModel):
+    action: Literal["play", "pause", "seek", "next", "prev", "repeat"]
+    position: float | None = Field(default=None, ge=0)
+    repeat: bool | None = None
+
+
+class MixBody(BaseModel):
+    mode: str = "sync"
+    bars: int = 8
+    tempo: bool = True
+    swap: bool = True
+    nudge: int = 0
+
+
+class DefaultMixBody(BaseModel):
+    mode: str
+
+
+def _known_tracks() -> set[tuple[str, str]]:
+    root = load_config().output_root
+    return {
+        (downloaded.LOCAL_LIBRARY, f.track_id)
+        for f in downloaded.scan(root)
+        if f.kind == "audio"
+    }
+
+
+def _rev(if_match: str | None, rev: int | None) -> int | None:
+    raw = if_match.strip().removeprefix("W/").strip('"') if if_match else rev
+    try:
+        return None if raw is None else int(raw)
+    except ValueError:
+        raise HTTPException(400, "If-Match must be a revision number") from None
+
+
+def _run(fn: Callable[[], dict[str, Any]]) -> Any:
+    try:
+        return fn()
+    except queue.StaleRev:
+        return JSONResponse(queue.get_state(), status_code=409)
+    except queue.Invalid as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+def _check_tracks(pairs: list[tuple[str, str]]) -> None:
+    known = _known_tracks()
+    missing = [t for lib, t in pairs if (lib, t) not in known]
+    if missing:
+        raise HTTPException(404, f"unknown tracks: {', '.join(missing)}")
+
+
+@router.get("")
+def get_queue() -> dict[str, Any]:
+    return queue.get_state()
+
+
+@router.post("")
+def add_tracks(
+    body: AddBody,
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    _check_tracks([(t.library, t.track_id) for t in body.tracks])
+    refs = [t.model_dump() for t in body.tracks]
+    return _run(
+        lambda: queue.add(
+            refs, body.index, body.play_now, body.replace, _rev(if_match, rev)
+        )
+    )
+
+
+@router.delete("/{item_id}")
+def remove_item(
+    item_id: str,
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    return _run(lambda: queue.remove(item_id, _rev(if_match, rev)))
+
+
+@router.post("/move")
+def move_item(
+    body: MoveBody,
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    return _run(lambda: queue.move(body.item_id, body.to, _rev(if_match, rev)))
+
+
+@router.post("/play")
+def play_item(
+    body: PlayBody,
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    return _run(lambda: queue.play(body.item_id, _rev(if_match, rev)))
+
+
+@router.post("/transport")
+def transport(
+    body: TransportBody,
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    return _run(
+        lambda: queue.transport(
+            body.action, body.position, body.repeat, _rev(if_match, rev)
+        )
+    )
+
+
+@router.put("/mix/default")
+def put_default_mix(
+    body: DefaultMixBody,
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    return _run(lambda: queue.set_default_mix(body.mode, _rev(if_match, rev)))
+
+
+@router.put("/mix/{from_track}/{to_track}")
+def put_mix(
+    from_track: str,
+    to_track: str,
+    body: MixBody,
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    _check_tracks(
+        [(downloaded.LOCAL_LIBRARY, from_track), (downloaded.LOCAL_LIBRARY, to_track)]
+    )
+    return _run(
+        lambda: queue.set_mix(
+            from_track, to_track, body.model_dump(), _rev(if_match, rev)
+        )
+    )
+
+
+def _sse(event: str, data: dict[str, Any], rev: int | None = None) -> str:
+    head = f"id: {rev}\n" if rev is not None else ""
+    return f"{head}event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+async def event_stream(
+    is_disconnected: Callable[[], Awaitable[bool]], ping: float = PING_SECONDS
+) -> AsyncIterator[str]:
+    """The snapshot, then one event per change, with a comment ping when idle.
+
+    Subscribing before the snapshot means a change made in between is queued,
+    and ones the snapshot already contains are dropped by revision.
+    """
+    sub = queue.subscribe()
+    try:
+        state = await asyncio.to_thread(queue.get_state)
+        yield _sse("state", state, state["rev"])
+        seen = state["rev"]
+        while True:
+            try:
+                event = await asyncio.wait_for(sub[1].get(), ping)
+            except asyncio.TimeoutError:
+                if await is_disconnected():
+                    return
+                yield ": ping\n\n"
+                continue
+            if event["rev"] > seen:
+                seen = event["rev"]
+                yield _sse(event["op"], event, event["rev"])
+    finally:
+        queue.unsubscribe(sub)
+
+
+@router.get("/events")
+async def events(request: Request) -> StreamingResponse:
+    return StreamingResponse(
+        event_stream(request.is_disconnected),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

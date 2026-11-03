@@ -49,3 +49,23 @@ export function useDeskSlots(): Partial<Record<DeskSlot, HTMLElement>> {
     () => slots,
   )
 }
+
+// Whether Activity is a bell in the top card (lab flag on) and its unread
+// count. AppShell publishes it; the bell renders in every page's card.
+
+let bell: { on: boolean; unread: number } = { on: false, unread: 0 }
+const bellListeners = new Set<() => void>()
+
+export function setBell(on: boolean, unread: number) {
+  if (bell.on === on && bell.unread === unread) return
+  bell = { on, unread }
+  bellListeners.forEach(l => l())
+}
+
+export function useBell() {
+  return useSyncExternalStore(
+    l => { bellListeners.add(l); return () => bellListeners.delete(l) },
+    () => bell,
+    () => bell,
+  )
+}
