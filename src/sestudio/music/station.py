@@ -18,9 +18,11 @@ import asyncio
 import logging
 import shutil
 import socket
+import tempfile
 import threading
 import time
 from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 from typing import Any, Protocol
 
 from sestudio.media import ffmpeg_binary
@@ -34,6 +36,8 @@ IDLE_SECONDS = 20.0
 CLOCK_SECONDS = 0.5
 TS_PACKET = 188
 START_TIMEOUT = 45.0
+HLS_PLAYLIST = "live.m3u8"
+HLS_SEGMENT = "seg%d.ts"
 
 
 class StationError(RuntimeError):
@@ -109,7 +113,9 @@ class BrowserCapture:
 
 
 def mux_command(audio_port: int, height: int, fps: int) -> list[str]:
-    """ffmpeg: PCM from a local socket it listens on, JPEG frames from stdin, MPEG-TS to stdout."""
+    """ffmpeg: PCM from a local socket it listens on, JPEG frames from stdin; one encode
+    written twice: MPEG-TS to stdout (DLNA) and a live HLS playlist in the working
+    directory (Chromecast's receiver plays HLS, not a bare TS stream)."""
     return [
         ffmpeg_binary(), "-hide_banner", "-loglevel", "error",
         "-f", "s16le", "-ar", str(SR), "-ac", "2",
@@ -120,8 +126,10 @@ def mux_command(audio_port: int, height: int, fps: int) -> list[str]:
         "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
         "-g", str(fps * 2), "-sc_threshold", "0", "-r", str(fps),
         "-c:a", "aac", "-b:a", "160k",
-        "-f", "mpegts", "-muxdelay", "0", "-flush_packets", "1", "-pat_period", "0.2",
-        "pipe:1",
+        "-f", "tee",
+        "[f=mpegts:max_delay=0:flush_packets=1:pat_period=0.2]pipe\\:1|[f=hls:hls_time=2:hls_list_size=6:"
+        f"hls_flags=delete_segments+independent_segments:hls_segment_filename={HLS_SEGMENT}]"
+        f"{HLS_PLAYLIST}",
     ]  # fmt: skip
 
 
@@ -146,6 +154,8 @@ class Station:
         self.capture, self.fps, self.height, self.idle = capture, fps, height, idle
         self.mixer = mixer or Mixer()
         self.error: str | None = None
+        #: Where ffmpeg writes the HLS playlist and segments; removed when the run ends.
+        self.hls_dir = Path(tempfile.mkdtemp(prefix="sestudio-station-"))
         self.started_at = 0.0
         self.live = threading.Event()  # first picture written: the stream is flowing
         self.fresh = 0  # distinct pictures the page has delivered
@@ -243,6 +253,7 @@ class Station:
         finally:
             self.mixer.stop()
             queue.publish_station(None)
+            shutil.rmtree(self.hls_dir, ignore_errors=True)
             self._close_clients()
             self.done.set()
 
@@ -255,6 +266,7 @@ class Station:
             *mux_command(port, self.height, self.fps),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
+            cwd=self.hls_dir,
         )
         tasks: list[asyncio.Task] = []
         try:

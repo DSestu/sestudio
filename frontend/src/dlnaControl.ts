@@ -16,9 +16,11 @@ export interface DlnaState {
   duration: number
   volume: number
   muted: boolean
+  /** What the renderer was sent (the server's own path), '' when unknown. */
+  mediaUrl: string
 }
 
-const EMPTY: DlnaState = { connected: false, title: '', isPaused: false, position: 0, duration: 0, volume: 1, muted: false }
+const EMPTY: DlnaState = { connected: false, title: '', isPaused: false, position: 0, duration: 0, volume: 1, muted: false, mediaUrl: '' }
 let snapshot: DlnaState = EMPTY
 const listeners = new Set<() => void>()
 
@@ -61,6 +63,7 @@ export async function refreshDlna(): Promise<void> {
       duration: Number(d.duration) || 0,
       volume: typeof d.volume === 'number' ? d.volume : 1,
       muted: Boolean(d.muted),
+      mediaUrl: d.media ?? '',
     })
     startPolling()
     // Watch-state: persist progress (throttled) for the casting episode while

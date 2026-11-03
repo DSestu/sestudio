@@ -1,3 +1,4 @@
+import VolumePill from './VolumePill'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
@@ -236,6 +237,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       <div ref={queueEl} className="absolute">
         <Queue q={q} info={info} adding={adding} onAdd={() => setAdding(a => !a)} expanded={expanded} onPin={toggle} tv={tv} />
       </div>
+      {tv && <VolumePill />}
       {adding && !tv && <AddPanel q={q} onClose={() => setAdding(false)} />}
     </div>
   )

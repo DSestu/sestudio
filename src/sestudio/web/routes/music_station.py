@@ -4,21 +4,23 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from sestudio import downloaded
 from sestudio.config import load_config
-from sestudio.music import station
+from sestudio.music import queue, station
 from sestudio.music.station import BrowserCapture, Station
 from sestudio.web.streaming import ClosingStreamingResponse
 
 router = APIRouter(prefix="/music/station")
 
 STREAM_PATH = "/api/music/station/stream"
+HLS_PATH = "/api/music/station/hls/live.m3u8"
 
 
 class StartBody(BaseModel):
@@ -49,6 +51,7 @@ def _status(request: Request) -> dict[str, Any]:
     return {
         **(st.status() if st else {"running": False}),
         "path": STREAM_PATH,
+        "hls_path": HLS_PATH,
         "url": f"{request.base_url}{STREAM_PATH.lstrip('/')}",
     }
 
@@ -98,4 +101,32 @@ async def stream(request: Request) -> Response:
         return Response(media_type=downloaded.TV_MEDIA_TYPE, headers=headers)
     return ClosingStreamingResponse(
         _stream(st), media_type=downloaded.TV_MEDIA_TYPE, headers=headers
+    )
+
+
+class VolumeBody(BaseModel):
+    level: float = Field(ge=0, le=1)
+    muted: bool = False
+
+
+@router.post("/volume")
+async def volume(body: VolumeBody) -> dict[str, Any]:
+    """The player moved the TV's volume: the TV page shows its pill for it."""
+    queue.publish_volume(body.level, body.muted)
+    return {"level": body.level, "muted": body.muted}
+
+
+@router.get("/hls/{name}")
+async def hls(name: str) -> FileResponse:
+    """The station as a live HLS playlist (what a Chromecast plays) and its segments."""
+    st = station.current()
+    path = st.hls_dir / name if st else None
+    # Only the files ffmpeg writes: a bare name, no path.
+    if path is None or name != Path(name).name or not path.is_file():
+        raise HTTPException(status_code=404, detail="No such part of the station")
+    kind = "application/vnd.apple.mpegurl" if name.endswith(".m3u8") else "video/mp2t"
+    return FileResponse(
+        path,
+        media_type=kind,
+        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"},
     )

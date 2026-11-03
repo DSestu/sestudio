@@ -55,13 +55,15 @@ export interface CastState {
   liveId: string
   /** The URL the receiver is playing, '' when none. */
   mediaUrl: string
+  /** The picked device's name, '' when none. */
+  deviceName: string
 }
 
 const state: CastState = {
   available: false, connected: false, title: '', isPaused: false,
   currentTime: 0, duration: 0, volume: 1, muted: false,
   canSeek: false, canControlVolume: false,
-  textTracks: [], activeTextTrackId: null, liveId: '', mediaUrl: '',
+  textTracks: [], activeTextTrackId: null, liveId: '', mediaUrl: '', deviceName: '',
 }
 let snapshot: CastState = { ...state }
 const listeners = new Set<() => void>()
@@ -101,6 +103,7 @@ function bindRemotePlayer(w: Cast) {
       state.canSeek = !!player.canSeek
       state.canControlVolume = !!player.canControlVolume
       state.mediaUrl = player.mediaInfo?.contentId ?? ''
+      state.deviceName = w.cast.framework.CastContext.getInstance().getCurrentSession()?.getCastDevice?.()?.friendlyName ?? ''
       state.liveId = LADDER_URL.test(state.mediaUrl)
         ? new URL(state.mediaUrl).searchParams.get('live') ?? ''
         : ''
@@ -232,6 +235,10 @@ export async function castToChromecast(
   subtitles: CastTextTrack[] = [],
   /** Told each step as it starts, so a long wait reads as progress, not a hang. */
   onStep: (text: string) => void = () => {},
+  /** Runs once the device is picked, before the media loads (the station starting, which must not eat the press the picker needs). */
+  beforeLoad: () => Promise<void> = async () => {},
+  /** Second line the TV shows under the title. */
+  subtitle = '',
 ): Promise<void> {
   onStep('Loading the Chromecast library…')
   const ok = await loadCast()
@@ -248,10 +255,12 @@ export async function castToChromecast(
   }
   if (!session) throw new Error('No Chromecast session')
   const device = session.getCastDevice?.()?.friendlyName || 'the Chromecast'
+  await beforeLoad()
   onStep(`${device} is loading the video from the server…`)
   const mediaInfo = new w.chrome.cast.media.MediaInfo(url, contentType)
   mediaInfo.metadata = new w.chrome.cast.media.GenericMediaMetadata()
   mediaInfo.metadata.title = title
+  if (subtitle) mediaInfo.metadata.subtitle = subtitle
 
   const tracks = buildTextTracks(w, subtitles)
   const request = new w.chrome.cast.media.LoadRequest(mediaInfo)
