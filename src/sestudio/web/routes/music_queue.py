@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field
 
 from sestudio import downloaded
 from sestudio.config import load_config
-from sestudio.music import queue
+from sestudio.music import online, queue
+from sestudio.sites import SiteError
 
 router = APIRouter(prefix="/music/queue")
 
@@ -28,6 +29,11 @@ PING_SECONDS = 15.0
 class TrackRef(BaseModel):
     library: str = downloaded.LOCAL_LIBRARY
     track_id: str
+    # Streamed tracks carry what the queue shows; a bare one is looked up.
+    source: str | None = None
+    title: str | None = None
+    artist: str | None = None
+    duration: float | None = None
 
 
 class AddBody(BaseModel):
@@ -90,6 +96,15 @@ def _run(fn: Callable[[], dict[str, Any]]) -> Any:
         raise HTTPException(400, str(exc)) from None
 
 
+def _online_item(ref: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return online.complete(ref)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from None
+    except SiteError as exc:
+        raise HTTPException(502, str(exc)) from None
+
+
 def _check_tracks(pairs: list[tuple[str, str]]) -> None:
     known = _known_tracks()
     missing = [t for lib, t in pairs if (lib, t) not in known]
@@ -108,8 +123,14 @@ def add_tracks(
     if_match: str | None = Header(default=None),
     rev: int | None = Query(default=None),
 ) -> Any:
-    _check_tracks([(t.library, t.track_id) for t in body.tracks])
-    refs = [t.model_dump() for t in body.tracks]
+    local = [t for t in body.tracks if t.library != online.ONLINE_LIBRARY]
+    _check_tracks([(t.library, t.track_id) for t in local])
+    refs = [
+        _online_item(t.model_dump(exclude_none=True))
+        if t.library == online.ONLINE_LIBRARY
+        else {"library": t.library, "track_id": t.track_id}
+        for t in body.tracks
+    ]
     return _run(
         lambda: queue.add(
             refs, body.index, body.play_now, body.replace, _rev(if_match, rev)
@@ -175,7 +196,11 @@ def put_mix(
     rev: int | None = Query(default=None),
 ) -> Any:
     _check_tracks(
-        [(downloaded.LOCAL_LIBRARY, from_track), (downloaded.LOCAL_LIBRARY, to_track)]
+        [
+            (downloaded.LOCAL_LIBRARY, t)
+            for t in (from_track, to_track)
+            if online.video_id(t) is None
+        ]
     )
     return _run(
         lambda: queue.set_mix(

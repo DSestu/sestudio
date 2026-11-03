@@ -657,7 +657,7 @@ export default function WatchView({
     }
   }
 
-  async function confirmDownload(destination: DownloadDestination) {
+  async function confirmDownload(destination: DownloadDestination, audioOnly = false) {
     if (!pendingItems) return
     setSubmitting(true)
     try {
@@ -667,7 +667,10 @@ export default function WatchView({
         void downloadToDevice(items).then(queued => { if (queued) onJobsCreated() })
         return
       }
-      await postDownloads(pendingItems)
+      // yt-dlp picks the audio container, so the name loses its .mp4.
+      await postDownloads(audioOnly
+        ? pendingItems.map(i => ({ ...i, audio_only: true, episode_name: i.episode_name.replace(/\.mp4$/, '') }))
+        : pendingItems)
       onJobsCreated()
       setPendingItems(null)
     } finally {
@@ -1396,6 +1399,7 @@ export default function WatchView({
           outputRoot={settings.output_root}
           existingFiles={existingFiles}
           destination={settings.download_destination}
+          audioOption
           siteOptions={listings.map(l => ({ id: l.source, label: l.label }))}
           preferredSites={settings.preferred_sites}
           preferredHosts={settings.preferred_hosts}

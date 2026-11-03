@@ -84,3 +84,6 @@ class StreamSource:
     # A page yt-dlp downloads from itself (YouTube, Twitch), choosing and merging
     # the best formats, instead of the single stream in ``url`` a player gets.
     extract_url: str = ""
+    # Keep only the sound: yt-dlp fetches the best audio stream, in the container
+    # it comes in, and the file lands next to the videos as a music track.
+    audio_only: bool = False

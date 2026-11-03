@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { MusicTrack } from '../../musicLibrary'
-import { addPayload, onQueueEvent, post, positionNow, queueActions, clockSkew, useMusicQueue, type QueueState, useTrackInfo } from '../../musicQueue'
+import { addPayload, type AddPayload, onQueueEvent, post, positionNow, queueActions, clockSkew, useMusicQueue, type QueueState, useTrackInfo } from '../../musicQueue'
 import { BLEND, claimSound, engine, isSoundTab } from './engine'
 
 // Whether the full-screen player layer is up, and the entry points that start
@@ -27,6 +27,8 @@ function start(action: () => Promise<void>): Promise<void> {
 
 /** The library views' buttons: the track (or the whole list, replacing the queue) plays now and the layer opens. */
 export const playNow = (t: MusicTrack) => start(() => post(addPayload([t], 'play_now')))
+/** Streamed tracks (a pasted link): they replace the queue and play from the first. */
+export const playPayload = (tracks: AddPayload['tracks']) => start(() => post({ tracks, replace: true }))
 export const playAll = (ts: MusicTrack[]) => start(() => post(addPayload(ts, 'replace')))
 /** Play a row of the queue. */
 export const playItem = (itemId: string) => start(() => queueActions.play(itemId))

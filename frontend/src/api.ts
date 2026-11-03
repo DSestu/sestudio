@@ -390,6 +390,8 @@ export interface DownloadItem {
    *  and offer a way back to the title. Neither survives in the path. */
   poster_url?: string
   page_url?: string
+  /** Keep only the sound, as a music track (YouTube). */
+  audio_only?: boolean
 }
 
 export interface DownloadJob {
