@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { MusicTrack } from '../../musicLibrary'
 import { addPayload, type AddPayload, onQueueEvent, post, positionNow, queueActions, clockSkew, useMusicQueue, type QueueState, useTrackInfo } from '../../musicQueue'
 import { BLEND, claimSound, engine, isSoundTab } from './engine'
+import { glideToItem, takeBlend } from './scrub'
 import { loadAnalyses, RETRY_MS } from './mix/analysis'
 
 // Whether the full-screen player layer is up, and the entry points that start
@@ -31,8 +32,8 @@ export const playNow = (t: MusicTrack) => startPlayback(() => post(addPayload([t
 /** Streamed tracks (a pasted link): they replace the queue and play from the first. */
 export const playPayload = (tracks: AddPayload['tracks']) => startPlayback(() => post({ tracks, replace: true }))
 export const playAll = (ts: MusicTrack[]) => startPlayback(() => post(addPayload(ts, 'replace')))
-/** Play a row of the queue. */
-export const playItem = (itemId: string) => startPlayback(() => queueActions.play(itemId))
+/** A row of the queue: the timeline glides to it and plays it. */
+export const playItem = (itemId: string) => startPlayback(async () => { if (!glideToItem(itemId)) await queueActions.play(itemId) })
 /** Play / pause from the transport or the bar. */
 export function togglePlay(playing: boolean, position: number) {
   if (playing) void queueActions.transport('pause', { position })
@@ -48,7 +49,7 @@ export function useMusicHost() {
     engine.onAdvance = sync => void queueActions.transport('next').then(() => { if (sync) engine.resync() })
     engine.onResync = position => void queueActions.transport('seek', { position })
     // A next/prev (its event says whether it keeps playing) blends over 3 s, anything else .6 s.
-    return onQueueEvent(ev => { engine.blend = ev.op === 'go' && 'playing' in ev ? BLEND.skip : BLEND.glide })
+    return onQueueEvent(ev => { engine.blend = ev.op === 'go' ? ('playing' in ev ? BLEND.skip : takeBlend() ?? BLEND.glide) : BLEND.glide })
   }, [])
   useEffect(() => {
     engine.follow(q, info)
