@@ -103,11 +103,13 @@ interface Leaving {
 let dropped: string | null = null
 
 /** The queue sheet: header and rows. Rows slide in, out and over each other (SPEC-music-player §7.7). */
-export default function Queue({ q, info, adding, onAdd }: {
+export default function Queue({ q, info, adding, onAdd, expanded, onPin }: {
   q: QueueState
   info: (id: string) => TrackInfo | undefined
   adding: boolean
   onAdd: () => void
+  expanded: boolean
+  onPin: () => void
 }) {
   const list = useRef<HTMLDivElement>(null)
   const seen = useRef<{ ids: string[]; tops: Map<string, number> }>({ ids: [], tops: new Map() })
@@ -187,22 +189,35 @@ export default function Queue({ q, info, adding, onAdd }: {
   for (const l of leaving) entries.splice(Math.min(l.at, entries.length), 0, { item: l.item, i: -1, gone: true })
 
   return (
-    <section data-queue className="glass rounded-2xl flex flex-col min-h-0 h-full overflow-hidden">
-      <header className="flex items-center gap-2 px-3 pt-3 pb-2 text-[13px] font-semibold">
+    <section data-queue className="relative rounded-[inherit] flex flex-col min-h-0 h-full overflow-hidden">
+      {/* The layer cross-fades these two with the mode: glass by default, a flat column expanded. */}
+      <span aria-hidden="true" data-qglass className="glass absolute inset-0 rounded-[inherit]" />
+      <span aria-hidden="true" data-qflat className="absolute inset-0 rounded-[inherit] bg-base-200 opacity-0" />
+      <button onClick={onPin} aria-label={expanded ? 'Back to the default view' : 'Open the expanded view'} data-handle className="relative md:hidden grid h-[22px] shrink-0 place-items-center">
+        <span data-bar className="h-1 w-9 rounded-full bg-white/30" />
+      </button>
+      <header className="relative flex items-center gap-2 px-3 pt-3 pb-2 text-[13px] font-semibold max-md:pt-0">
         <span>Queue</span>
         <span className="ml-auto text-xs font-normal text-base-content/42">
           {left.length} left · {Math.max(0, Math.round(seconds / 60))} min
         </span>
-        {/* shortcut: on phones this shows in the default mode too, until the expanded mode (PR 11) exists to host it. */}
         <button
           aria-expanded={adding}
-          className="h-[26px] rounded-[9px] bg-primary/20 px-2.5 text-xs font-semibold text-primary hover:bg-primary/30"
+          className={`h-[26px] rounded-[9px] bg-primary/20 px-2.5 text-xs font-semibold text-primary hover:bg-primary/30 ${expanded ? '' : 'max-md:hidden'}`}
           onClick={onAdd}
         >
           + Add
         </button>
+        <button
+          aria-label={expanded ? 'Unpin the queue' : 'Pin the queue'}
+          aria-pressed={expanded}
+          className={`max-md:hidden grid size-[26px] place-items-center rounded-[9px] hover:bg-white/10 ${expanded ? 'bg-primary/20 text-primary' : 'text-base-content/60'}`}
+          onClick={onPin}
+        >
+          <svg className="size-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3l5 5-3 1-3.5 3.5.5 4.5-2 2-3.5-5.5L5 20l-1-1 4.5-4.5L3 11l2-2 4.5.5L13 6z" /></svg>
+        </button>
       </header>
-      <div ref={list} data-list className="relative flex-1 overflow-y-auto overscroll-contain">
+      <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden'}`}>
         <span
           data-dropline
           aria-hidden="true"
