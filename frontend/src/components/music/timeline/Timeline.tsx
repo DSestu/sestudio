@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clockSkew, getQueue, onQueueEvent, positionNow, queueActions, type QueueState, type TrackInfo } from '../../../musicQueue'
 import { claimSound, engine, useSyncStatus } from '../engine'
+import { frameLoop, wake } from '../idle'
 import { bez, crossed, dipScale, flash, MORPH_MS, morphOffsets, stepHl } from '../interact'
 import { loadAnalyses, mixOf, rawOf, RETRY_MS, trackOf } from '../mix/analysis'
 import { plan } from '../mix/plan'
@@ -121,7 +122,11 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const model = useMemo(() => buildModel(q, info), [q.rev, ids, titles, version])
   const live = useRef({ model, progress, palette, onOutside })
-  useEffect(() => { live.current = { model, progress, palette, onOutside } })
+  // Any render may carry a change the loop should draw (queue, mode, look).
+  useEffect(() => {
+    live.current = { model, progress, palette, onOutside }
+    wake()
+  })
 
   useEffect(() => {
     const cv = canvas.current!
@@ -129,7 +134,6 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
     let bins = new Uint8Array(0)
     let level = 0
-    let hid = 0
     let last = performance.now()
     let avoid: DOMRect | null = null
     let avoidAt = -1e9
@@ -145,7 +149,10 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       progress: () => live.current.progress(),
       outside: () => live.current.onOutside?.(),
     })
-    const fit = () => r.resize(cv.clientWidth, cv.clientHeight, window.devicePixelRatio)
+    const fit = () => {
+      r.resize(cv.clientWidth, cv.clientHeight, window.devicePixelRatio)
+      wake()
+    }
     fit()
     const ro = new ResizeObserver(fit)
     ro.observe(cv)
@@ -169,11 +176,13 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       } else setOpen(null)
     }
     root.addEventListener('pointerdown', down)
+    const poke = ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'touchstart']
+    for (const ev of poke) root.addEventListener(ev, wake, { passive: true })
 
     let slow = 0
     let seen = 0
-    const frame = (now: number) => {
-      hid = requestAnimationFrame(frame)
+    let lastSig = ''
+    const step = (now: number): boolean => {
       const raw = now - last
       const dt = Math.min(0.1, raw / 1000)
       // A device that cannot keep ~40 fps renders at a lower pixel density.
@@ -198,7 +207,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         lastG = null
         seenModel = m
       }
-      if (m.cur < 0) { r.draw({ items: [], G: 0, t, level: 0, palette: PALETTES[pal], avoid: null }); return }
+      if (m.cur < 0) { r.draw({ items: [], G: 0, t, level: 0, palette: PALETTES[pal], avoid: null }); return false }
       // The drawn layout eases toward the planned one, so a changed plan moves the joins.
       const n = m.items.length
       const snap = shown.ts.length !== n || still.matches
@@ -242,7 +251,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         let s = 0
         for (let i = 8; i < 192; i++) s += bins[i]
         level = level * 0.7 + (s / 184 / 255) * 0.3
-      } else level *= 0.95
+      } else level = level < 1e-3 ? 0 : level * 0.95
       if (now - avoidAt > 250) {
         avoidAt = now
         queueEl = document.querySelector('[data-queue]')
@@ -250,16 +259,24 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       }
       paintRows(queueEl, m, k)
       r.draw({ items, G, t, level, palette: PALETTES[pal], avoid, hover: scrub.hovered })
+      // Nothing to draw next frame when this one matches the last (and nothing plays).
+      let sum = 0
+      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol
+      const sig = `${G.toFixed(3)}|${t.toFixed(3)}|${level.toFixed(3)}|${scrub.hovered}|${sum.toFixed(3)}|${items.length}`
+      const moved = sig !== lastSig || getQueue().playing
+      lastSig = sig
+      return moved
     }
-    hid = requestAnimationFrame(frame)
+    const stop = frameLoop(step)
     const dropScrub = scrub.attach()
     registerScrubber(scrub)
     // Another screen's move names the row that moved, so it dips like a local one.
     const dropEvents = onQueueEvent(ev => { if (ev.op === 'mv') movedId = ev.item_id as string })
     return () => {
-      cancelAnimationFrame(hid)
+      stop()
       ro.disconnect()
       root.removeEventListener('pointerdown', down)
+      for (const ev of poke) root.removeEventListener(ev, wake)
       dropScrub()
       registerScrubber(null)
       dropEvents()

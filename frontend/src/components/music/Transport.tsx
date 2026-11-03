@@ -24,7 +24,7 @@ function Seek({ position, duration, readOnly = false }: { position: number; dura
   }
   return (
     <div className="flex items-center gap-3 text-xs text-base-content/45 tabular-nums">
-      <span className="w-9 text-right">{fmtTime(shown)}</span>
+      <span>{fmtTime(shown)}</span>
       {readOnly ? (
         <div className="flex-1 h-1 rounded-full bg-white/16">
           <div className="h-full rounded-full bg-primary" style={{ width: `${duration ? (position / duration) * 100 : 0}%` }} />
@@ -80,7 +80,7 @@ function Seek({ position, duration, readOnly = false }: { position: number; dura
         )}
       </div>
       )}
-      <span className="w-9">{fmtTime(duration)}</span>
+      <span>{fmtTime(duration)}</span>
     </div>
   )
 }
@@ -96,7 +96,7 @@ export default function Transport({ q, position, duration, tv = false }: { q: Qu
       <Seek position={position} duration={duration} />
       <div className="flex items-center justify-center gap-3.5">
         <button className={stepBtn} aria-label="Previous" disabled={idle} onClick={() => void queueActions.transport('prev')}>
-          <svg className="size-6" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM20 6v12L9.5 12z" /></svg>
+          <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6v12l-9-6zM6 6v12" /></svg>
         </button>
         <button
           className="size-16 rounded-[22px] bg-primary text-primary-content grid place-items-center disabled:opacity-40"
@@ -106,13 +106,13 @@ export default function Transport({ q, position, duration, tv = false }: { q: Qu
           onClick={() => togglePlay(q.playing, position)}
         >
           {q.playing ? (
-            <svg className="size-7" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+            <svg className="size-7" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /></svg>
           ) : (
             <svg className="size-7" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
           )}
         </button>
         <button className={stepBtn} aria-label="Next" disabled={idle} onClick={() => void queueActions.transport('next')}>
-          <svg className="size-6" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM4 6v12l10.5-6z" /></svg>
+          <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 6v12l9-6zM18 6v12" /></svg>
         </button>
         <SendToTv />
       </div>

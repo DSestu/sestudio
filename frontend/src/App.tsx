@@ -29,6 +29,7 @@ import CreatorsView from './views/CreatorsView'
 import SearchView from './views/SearchView'
 import { DiscoverMenu } from './components/discover/SourcePicker'
 import DesktopSearch from './components/search/DesktopSearch'
+import MusicHeaderSearch from './components/music/MusicHeaderSearch'
 import { type Kind, parseKind, rememberSearch } from './titleSearch'
 import LabMusicView from './views/LabMusicView'
 import MusicView from './views/MusicView'
@@ -264,7 +265,7 @@ export default function App() {
         catalogId={route.view === 'search' && !route.params.get('q') ? catalogId : ''}
         onOpenCatalog={openCatalog}
         searchBar={
-          <DesktopSearch
+          route.view === 'music' ? <MusicHeaderSearch /> : <DesktopSearch
             // A fresh bar per visit, holding the query and kind of the page it is on.
             key={route.visit}
             catalogs={catalogs}

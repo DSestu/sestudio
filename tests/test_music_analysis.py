@@ -190,6 +190,9 @@ def test_analysis_api(db, root, tmp_path, monkeypatch):
     } <= set(one.json())
     batch = c.get("/api/music/tracks/analysis", params={"ids": ",".join([*ids, "zzz"])})
     assert set(batch.json()) == set(ids)
+    light = c.get("/api/music/tracks/summary", params={"ids": ",".join(ids)}).json()
+    assert set(light) == set(ids)
+    assert "bands" not in light[ids[0]] and "bpm" in light[ids[0]]
     assert c.get("/api/music/tracks/zzz/analysis").status_code == 404
     assert c.get("/api/music/analysis/status").json()["total"] == 2
     assert c.post("/api/music/analysis/renormalise").json() == {"tracks": 2}

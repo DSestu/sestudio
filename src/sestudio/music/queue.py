@@ -227,11 +227,13 @@ def add(
     play_now: bool = False,
     replace: bool = False,
     if_rev: int | None = None,
+    start: int = 0,
 ) -> dict[str, Any]:
     """Insert *tracks* (``{library, track_id}``) at *index* (default: the end).
 
     ``replace`` swaps the whole queue for them (play all of a folder) and
-    starts at the first; ``play_now`` jumps to the first inserted one.
+    starts at the first (or at *start*);
+    ``play_now`` jumps to the first inserted one.
     """
     if not tracks:
         raise Invalid("no tracks")
@@ -243,9 +245,10 @@ def add(
             doc["next_item"] += 1
         if replace:
             doc["items"] = new
-            _go(doc, new[0]["item_id"])
+            at = max(0, min(start, len(new) - 1))
+            _go(doc, new[at]["item_id"])
             doc["playing"] = True
-            return {"items": new}
+            return {"items": new, "start": at}
         at = (
             len(doc["items"])
             if index is None

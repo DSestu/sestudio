@@ -4,10 +4,10 @@ import {
   isSet, itemsOf, locate, playlistApi, statsOf,
   type PartStats, type PlaylistItem, type PlaylistNode,
 } from '../../../musicPlaylists'
-import { useMusicQueue } from '../../../musicQueue'
+import { post, useMusicQueue } from '../../../musicQueue'
 import { mixOf, rawOf, trackOf, useAnalyses } from '../mix/analysis'
 import { plan } from '../mix/plan'
-import { playNow, playPayload, startPlayback, usePosition } from '../player'
+import { startPlayback, usePosition } from '../player'
 import FillDialog from './FillDialog'
 import GenreTag from './GenreTag'
 import { SmartForm } from './PlaylistTree'
@@ -58,6 +58,8 @@ interface RowProps {
   meta: Meta
   chips?: Chip[]
   onGenre: () => void
+  /** Replace the queue with the playlist, starting here. */
+  onPlay: () => void
   /** Position among its group, and where the menu can send it. */
   index: number
   last: boolean
@@ -71,11 +73,10 @@ interface RowProps {
   onToPart?: (part: string) => void
 }
 
-function Row({ item, track, meta, chips, onGenre, parts, here, last, index, ...ev }: RowProps) {
+function Row({ item, track, meta, chips, onGenre, onPlay, parts, here, last, index, ...ev }: RowProps) {
   const title = track?.title ?? item.title ?? 'Missing track'
   const artist = track?.artist ?? item.artist ?? ''
   const duration = track?.duration ?? item.duration ?? 0
-  const play = () => run(item.library === 'online' ? playPayload([{ library: item.library, track_id: item.track_id, source: item.source, title: item.title, artist: item.artist, duration: item.duration }]) : track ? playNow(track) : Promise.resolve())
   return (
     <li
       draggable={!!ev.onDragStart}
@@ -87,7 +88,7 @@ function Row({ item, track, meta, chips, onGenre, parts, here, last, index, ...e
       {ev.onDragStart && (
         <svg className="ml-1 w-4 h-4 shrink-0 cursor-grab text-base-content/30" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
       )}
-      <button onClick={play} className="flex-1 min-w-0 flex items-center gap-3 px-3 h-12 text-left">
+      <button onClick={onPlay} className="flex-1 min-w-0 flex items-center gap-3 px-3 h-12 text-left">
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-sm font-medium">{title}</span>
           <span className="block truncate text-xs text-base-content/60">{artist}</span>
@@ -157,6 +158,17 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   }
   const setOf = (i: PlaylistItem) => { const f = facts(i); return setTrack(i.track_id, f.duration, f.bpm, i.item_id) }
   const flat = useMemo(() => items.map(setOf), [items, byId, tick]) // eslint-disable-line react-hooks/exhaustive-deps
+  /** The playlist replaces the queue and plays from this row; rows whose track is gone are left out. */
+  const playFrom = (from: PlaylistItem) => {
+    const rows = items.filter(i => i.library === 'online' || byId.has(i.track_id))
+    run(startPlayback(() => post({
+      tracks: rows.map(i => i.library === 'online'
+        ? { library: i.library, track_id: i.track_id, source: i.source, title: i.title, artist: i.artist, duration: i.duration }
+        : { library: i.library, track_id: i.track_id }),
+      replace: true,
+      start: Math.max(0, rows.findIndex(i => i.item_id === from.item_id)),
+    })))
+  }
   const flatIndex = (itemId: string) => items.findIndex(i => i.item_id === itemId)
 
   // Where the set is playing, on the curve's time axis.
@@ -294,6 +306,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
                     meta={metaOf(item)}
                     chips={chipsAfter(item, g.id)}
                     onGenre={reload}
+                    onPlay={() => playFrom(item)}
                     index={i}
                     last={i === g.items.length - 1}
                     parts={partRefs}

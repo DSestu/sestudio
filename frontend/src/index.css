@@ -172,6 +172,13 @@
   }
 }
 
+/* Over the player layer's moving canvases a backdrop blur would be redone every
+   frame, and what is behind is already soft: the same tint, a little denser, no blur. */
+.music-layer .glass {
+  backdrop-filter: none;
+  background: hsl(205 62% 14% / 0.78);
+}
+
 /* "Cinematic dark"— near-black low-chroma base so poster art carries the color;
    electric cyan-blue primary for actions, warm coral secondary for accents. */
 @plugin "daisyui/theme" {

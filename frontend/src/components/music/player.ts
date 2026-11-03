@@ -28,8 +28,9 @@ export function startPlayback(action: () => Promise<void>): Promise<void> {
   return action()
 }
 
-/** The library views' buttons: the track (or the whole list, replacing the queue) plays now and the layer opens. */
-export const playNow = (t: MusicTrack) => startPlayback(() => post(addPayload([t], 'play_now')))
+/** A track of a list (album, artist, playlist, search): the list replaces the queue and plays from that track, and the layer opens. */
+export const playFrom = (list: MusicTrack[], t: MusicTrack) =>
+  startPlayback(() => post(addPayload(list, 'replace', list.findIndex(x => x.id === t.id))))
 /** Streamed tracks (a pasted link): they replace the queue and play from the first. */
 export const playPayload = (tracks: AddPayload['tracks']) => startPlayback(() => post({ tracks, replace: true }))
 export const playAll = (ts: MusicTrack[]) => startPlayback(() => post(addPayload(ts, 'replace')))

@@ -5,7 +5,7 @@ import { probe } from '../timeline/render'
 import { liveBands } from './bands'
 import { CH, CW, History, paint } from './draw'
 import { bgPalette, getLook, useLook } from './settings'
-import { TV } from '../tv'
+import { frameLoop, wake } from '../idle'
 
 // The blurred, live spectrum behind the timeline (SPEC-music-player §5.8).
 
@@ -20,22 +20,24 @@ export interface Rect {
 export default function Background({ clip = null }: { clip?: Rect | null }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   // Subscribing re-renders on a change; the frame loop reads the store itself.
-  useLook()
+  const lookNow = useLook()
+  useEffect(wake, [lookNow])
 
   useEffect(() => {
     const cv = canvas.current!
-    // The TV page paints on a scratch canvas and blurs it into the visible one while it is still tiny.
-    const scratch = TV ? Object.assign(document.createElement('canvas'), { width: CW, height: CH }) : null
-    const g = (scratch ?? cv).getContext('2d')!
+    // Painted on a scratch canvas and blurred into the visible one while it is still tiny: the page scales
+    // it up smoothly, so no CSS blur re-blurs a viewport-sized layer every frame.
+    const scratch = Object.assign(document.createElement('canvas'), { width: CW, height: CH })
+    const g = scratch.getContext('2d')!
+    const v = cv.getContext('2d')!
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
     const hist = new History()
     const beat = { fr: 1, db: false }
     let fq = new Uint8Array(0)
     let nb = 0
     let last = 0
-    let id = 0
-    const frame = (now: number) => {
-      id = requestAnimationFrame(frame)
+    let lastSig = ''
+    const step = (now: number): boolean => {
       const look = getLook()
       const p = { ...look.s }
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 60
@@ -55,7 +57,6 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
       liveBands.update(bins, an?.context.sampleRate ?? 44100, dt, p)
 
       const s = cv.style
-      if (!TV) s.filter = `blur(${look.blur[look.style]}px) saturate(${p.sat})`
       s.transform = `scale(${p.zoom})`
       s.opacity = String(p.op)
       const H = probe.H || innerHeight
@@ -66,15 +67,19 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
         beat,
         now,
       })
-      if (scratch) {
-        const v = cv.getContext('2d')!
-        v.filter = `blur(${look.blur[look.style] * CW / (cv.clientWidth || CW)}px) saturate(${p.sat})`
-        v.clearRect(0, 0, CW, CH)
-        v.drawImage(scratch, 0, 0)
-      }
+      v.filter = `blur(${(look.blur[look.style] * CW) / (cv.clientWidth || CW)}px) saturate(${p.sat})`
+      v.clearRect(0, 0, CW, CH)
+      v.drawImage(scratch, 0, 0)
+      // Still when the bands, the timeline and the settings are.
+      let sum = 0
+      for (let i = 0; i < nb; i++) sum += liveBands.SE[i]
+      const sig = `${sum.toFixed(3)}|${probe.frame}|${probe.y0}|${probe.amp}|${look.preset}`
+      const moved = sig !== lastSig || (bins !== null && !still.matches)
+      lastSig = sig
+      return moved
     }
-    id = requestAnimationFrame(frame)
-    return () => cancelAnimationFrame(id)
+    // Half the display rate is plenty for a blur this soft.
+    return frameLoop(step, () => (getQueue().playing ? 30 : 0))
   }, [])
 
   return (

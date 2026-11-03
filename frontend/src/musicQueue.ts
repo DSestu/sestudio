@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { downloadedFileUrl, getDownloadedLibrary } from './api'
 import { fetchLibraryTracks, libraryAudioUrl } from './musicLibraries'
-import type { MusicTrack } from './musicLibrary'
+import { albumNameOf, type MusicTrack } from './musicLibrary'
+import { sourceLabel } from './musicSearch'
 
 // The music queue lives on the server (SPEC-music §6). This module is the
 // client side: the API calls, the Server-Sent Events subscription that keeps a
@@ -92,7 +93,7 @@ export function applyEvent(s: QueueState, ev: QueueEvent, serverNow: number): Qu
     }
     case 'set':
       next.items = ev.items as QueueItem[]
-      return Object.assign(next, restart(0, true))
+      return Object.assign(next, restart((ev.start as number | undefined) ?? 0, true))
     case 'rm': {
       const i = ev.index as number
       const items = s.items.filter(x => x.item_id !== ev.item_id)
@@ -275,11 +276,13 @@ export interface AddPayload {
   tracks: (TrackRef & Partial<Pick<QueueItem, 'source' | 'title' | 'artist' | 'duration'>>)[]
   play_now?: boolean
   replace?: boolean
+  /** With replace: the index of the track to start at. */
+  start?: number
   /** Where in the queue to insert (default: the end). */
   index?: number
 }
 
-export function addPayload(tracks: MusicTrack[], mode: 'play_now' | 'replace' | 'append'): AddPayload {
+export function addPayload(tracks: MusicTrack[], mode: 'play_now' | 'replace' | 'append', start = 0): AddPayload {
   return {
     // A streamed track carries what the queue shows; the server does not look it up again.
     tracks: tracks.map(t => t.library === 'online'
@@ -287,7 +290,7 @@ export function addPayload(tracks: MusicTrack[], mode: 'play_now' | 'replace' | 
       : { library: t.library, track_id: t.id }),
     ...(mode === 'play_now' && { play_now: true }),
     // The server starts at the first track of a replacement.
-    ...(mode === 'replace' && { replace: true }),
+    ...(mode === 'replace' && { replace: true, ...(start > 0 && { start }) }),
   }
 }
 
@@ -321,6 +324,8 @@ export interface TrackInfo {
   title: string
   artist: string
   duration: number
+  /** The album tag, else the folder, else the library (a streamed track: its source). */
+  album: string
   url: string
 }
 export interface Analysis {
@@ -342,9 +347,15 @@ function loadTracks(): Promise<void> {
       const next = new Map<string, TrackInfo>()
       for (const t of titles) for (const f of t.files) {
         if (!f.id) continue
-        next.set(f.id, { id: f.id, title: f.title, artist: f.artist ?? '', duration: f.duration ?? 0, url: downloadedFileUrl(f.path) })
+        next.set(f.id, {
+          id: f.id, title: f.title, artist: f.artist ?? '', duration: f.duration ?? 0, url: downloadedFileUrl(f.path),
+          album: albumNameOf([f.album ?? ''], t.folder, f.library_label ?? ''),
+        })
       }
-      for (const t of others) if (t.library !== 'online') next.set(t.id, { id: t.id, title: t.title, artist: t.artist, duration: t.duration, url: libraryAudioUrl(t) })
+      for (const t of others) if (t.library !== 'online') next.set(t.id, {
+        id: t.id, title: t.title, artist: t.artist, duration: t.duration, url: libraryAudioUrl(t),
+        album: albumNameOf([t.name || t.album], t.folder, t.library_label),
+      })
       tracks = next
       trackListeners.forEach(l => l())
     })
@@ -359,6 +370,7 @@ export function useTrackInfo(q: QueueState): (id: string) => TrackInfo | undefin
   useSyncExternalStore(l => { trackListeners.add(l); return () => trackListeners.delete(l) }, () => tracks)
   const online = useMemo(() => new Map(q.items.filter(i => i.library === 'online').map(i => [i.track_id, {
     id: i.track_id, title: i.title ?? '', artist: i.artist ?? '', duration: i.duration ?? 0,
+    album: i.source ? sourceLabel(i.source) : '',
     url: `${BASE}/online/${encodeURIComponent(i.track_id)}/audio`,
   }])), [q.items])
   const missing = q.items.some(i => i.library !== 'online' && !tracks.has(i.track_id))
@@ -366,25 +378,43 @@ export function useTrackInfo(q: QueueState): (id: string) => TrackInfo | undefin
   return id => tracks.get(id) ?? online.get(id)
 }
 
-const analyses = new Map<string, Analysis | null>()
+const analyses = new Map<string, Analysis>()
+const missedAt = new Map<string, number>()
+const inflight = new Set<string>()
 const analysisListeners = new Set<() => void>()
 let analysisVersion = 0
+/** A track the server had no analysis for (still being analysed) is asked again after this long. */
+export const ANALYSIS_RETRY_MS = 10_000
 
-/** Server analysis of a track; null while absent (the endpoint may not exist yet). */
+/** Ask for a track's analysis unless it is known, in flight, or missed less than a retry ago; true when it arrived. */
+export async function loadAnalysis(id: string): Promise<boolean> {
+  const at = missedAt.get(id)
+  if (analyses.has(id) || inflight.has(id) || (at !== undefined && Date.now() - at < ANALYSIS_RETRY_MS)) return false
+  inflight.add(id)
+  missedAt.set(id, Date.now())
+  try {
+    const r = await fetch(`${BASE}/tracks/${encodeURIComponent(id)}/analysis`)
+    if (!r.ok) return false
+    analyses.set(id, parseAnalysis(await r.json()))
+    missedAt.delete(id)
+    analysisVersion++
+    analysisListeners.forEach(l => l())
+    return true
+  } catch {
+    return false
+  } finally {
+    inflight.delete(id)
+  }
+}
+
+/** Server analysis of a track; null while absent (asked again every few seconds until it exists). */
 export function useAnalysis(id: string | undefined): Analysis | null {
   useSyncExternalStore(l => { analysisListeners.add(l); return () => analysisListeners.delete(l) }, () => analysisVersion)
   useEffect(() => {
-    if (!id || analyses.has(id)) return
-    analyses.set(id, null)
-    fetch(`${BASE}/tracks/${encodeURIComponent(id)}/analysis`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(a => {
-        if (!a) return
-        analyses.set(id, parseAnalysis(a))
-        analysisVersion++
-        analysisListeners.forEach(l => l())
-      })
-      .catch(() => {})
+    if (!id) return
+    void loadAnalysis(id)
+    const t = window.setInterval(() => { if (analyses.has(id)) window.clearInterval(t); else void loadAnalysis(id) }, ANALYSIS_RETRY_MS)
+    return () => window.clearInterval(t)
   }, [id])
   return id ? analyses.get(id) ?? null : null
 }

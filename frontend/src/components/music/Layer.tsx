@@ -200,7 +200,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       ref={root}
       role="dialog"
       aria-label="Music player"
-      className={`fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content ${tv ? 'pointer-events-none cursor-none select-none' : ''}`}
+      className={`music-layer fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content ${tv ? 'pointer-events-none cursor-none select-none' : ''}`}
       // Swipe down closes it on a phone, except from inside the queue (which scrolls).
       onTouchStart={e => { touch.current = (e.target as HTMLElement).closest('[data-queue], [data-addp]') ? null : e.touches[0].clientY }}
       onTouchEnd={e => {

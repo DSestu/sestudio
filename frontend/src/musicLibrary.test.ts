@@ -3,8 +3,8 @@ import type { DownloadedFile, DownloadedTitle } from './api'
 import { albumsOf, artistsOf, matchTracks } from './musicLibrary'
 import { addPayload } from './musicQueue'
 
-const file = (id: string, title: string, artist: string): DownloadedFile =>
-  ({ path: `${id}.mp3`, number: 0, title, lang: '', size: 1, mtime: 0, id, artist, album: 'A', duration: 60, library: 'local' })
+const file = (id: string, title: string, artist: string, album = ''): DownloadedFile =>
+  ({ path: `${id}.mp3`, number: 0, title, lang: '', size: 1, mtime: 0, id, artist, album, duration: 60, library: 'local' })
 
 const folder = (name: string, kind: string, files: DownloadedFile[]): DownloadedTitle => ({
   key: name, kind, folder: name, series: name, season: 0, is_film: false,
@@ -23,6 +23,15 @@ describe('albums', () => {
   it('are one per audio folder and skip video', () => {
     expect(albums.map(a => a.name)).toEqual(['Neuro', 'Mix'])
     expect(albums[0].tracks.map(t => t.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('are named by their folder, not their first track, unless the tracks share one album tag', () => {
+    const named = albumsOf([
+      { ...folder('', 'audio', [file('f', 'Found You', 'X'), file('g', 'Statues', 'X')]), series: 'Found You' },
+      folder('a/neuro soundcloud', 'audio', [file('h', 'H', 'X', 'Tagged'), file('i', 'I', 'X', 'Tagged')]),
+      folder('a/mixed', 'audio', [file('j', 'J', 'X', 'One'), file('k', 'K', 'X', 'Two')]),
+    ])
+    expect(named.map(a => a.name)).toEqual(['This PC', 'Tagged', 'mixed'])
   })
 
   it('take the majority artist, else Various artists', () => {
@@ -52,6 +61,12 @@ describe('queue payloads', () => {
   })
   it('replace for play all', () => {
     expect(addPayload([t], 'replace')).toEqual({ tracks: [{ library: 'local', track_id: 'a' }], replace: true })
+  })
+  it('replace from a track of the list starts there', () => {
+    const list = albumsOf(titles)[0].tracks
+    expect(addPayload(list, 'replace', 2)).toEqual({
+      tracks: list.map(x => ({ library: 'local', track_id: x.id })), replace: true, start: 2,
+    })
   })
   it('append is just the tracks', () => {
     expect(addPayload([t], 'append')).toEqual({ tracks: [{ library: 'local', track_id: 'a' }] })
