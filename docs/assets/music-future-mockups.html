@@ -1,0 +1,326 @@
+<!doctype html><meta charset=utf-8>
+<style>
+:root{--pr:oklch(72% .16 230);--ink:oklch(18% .05 230);--tx:oklch(93% .01 240);--mu:oklch(68% .02 240);--b0:oklch(12.5% .015 240);--b1:oklch(16.5% .02 235);--b2:oklch(21% .025 232);--b3:oklch(27% .03 230);--g:hsla(205 62% 12%/.94);--hair:1px solid rgb(255 255 255/.08)}
+body{font:13px/1.4 var(--font-sans,system-ui)}
+h2{font-size:16px;margin:26px 0 2px}h2 small{font-weight:400;color:var(--muted-foreground);font-size:13px}
+p.l{margin:0 0 8px;color:var(--muted-foreground);font-size:13px}
+ul.n{margin:6px 0 4px 18px;padding:0;color:var(--muted-foreground);font-size:12.5px}
+.row{display:flex;gap:10px;align-items:flex-start;margin-bottom:4px}.d{flex:1 1 0;min-width:0}.m{flex:0 0 26%}
+.cap{font-size:11.5px;color:var(--muted-foreground);margin:3px 0 0}
+.fw{position:relative;overflow:hidden;border-radius:8px}
+.fr{position:absolute;left:0;top:0;transform-origin:0 0;font-family:system-ui,sans-serif;color:var(--tx);background:var(--b0);font-size:14px}
+.fr *{box-sizing:border-box}
+.abs{position:absolute}
+.glass{background:var(--g);border:var(--hair);box-shadow:0 10px 30px rgb(0 0 0/.4)}
+.rail{position:absolute;left:12px;top:12px;width:84px;bottom:12px;border-radius:16px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.rail .it{width:72px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11.5px;color:var(--mu);padding:5px 0}
+.rail .it span{width:52px;height:32px;border-radius:10px;display:grid;place-items:center}
+.rail .it.on{color:var(--tx)}.rail .it.on span{background:oklch(30% .07 230);color:var(--pr)}
+.logo{width:38px;height:38px;border-radius:10px;margin:16px 0 8px;background:linear-gradient(135deg,#7c4dff,#2f6bff)}
+.sbtn{width:52px;height:52px;border-radius:14px;background:var(--pr);display:grid;place-items:center;color:var(--ink);margin-bottom:12px}
+.hdr{position:absolute;left:127px;right:20px;top:20px;border-radius:16px}
+.field{display:flex;align-items:center;gap:10px;height:42px;border-radius:12px;border:1.5px solid var(--pr);background:oklch(14% .02 240);padding:0 14px;color:var(--mu)}
+.bell{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--b2);position:relative;flex:none}
+.bell em{position:absolute;top:-6px;right:-8px;min-width:20px;height:18px;padding:0 5px;border-radius:9px;background:var(--pr);color:var(--ink);font:600 11px/18px system-ui;text-align:center;font-style:normal}
+.seg{display:flex;padding:3px;border-radius:12px;background:var(--b1);gap:2px}
+.seg div{padding:7px 14px;border-radius:9px;font-size:13px;color:var(--mu);white-space:nowrap}.seg div.on{background:oklch(30% .07 230);color:var(--tx)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:10px;background:var(--b1);border:var(--hair);font-size:13px;color:var(--mu);white-space:nowrap}
+.chip.on{background:oklch(26% .06 228);color:var(--tx);border-color:oklch(50% .1 230/.5)}
+.chip b{font-weight:500;color:var(--tx)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}.ok{background:oklch(75% .17 150)}.off{background:oklch(55% .02 240)}.warn{background:oklch(78% .15 80)}
+.src{display:inline-grid;place-items:center;height:18px;padding:0 6px;border-radius:5px;font:700 10px/18px system-ui;letter-spacing:.02em;color:#fff;flex:none}
+.s-pc{background:oklch(45% .08 240)}.s-nas{background:oklch(48% .1 280)}.s-rem{background:oklch(48% .1 170)}.s-ytm{background:oklch(55% .2 25)}.s-yt{background:oklch(52% .21 27)}.s-sc{background:oklch(64% .18 50)}.s-bc{background:oklch(52% .1 200)}
+.cov{border-radius:12px;display:grid;place-items:center;font-weight:700;color:oklch(92% .05 190);background:linear-gradient(135deg,oklch(42% .11 215),oklch(30% .14 280));position:relative}
+.cov .src{position:absolute;left:8px;bottom:8px}
+.card{border-radius:14px;background:var(--b1);padding:10px}.card .cov{width:100%;aspect-ratio:1;font-size:24px;margin-bottom:8px}.card b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.card i{font-style:normal;font-size:12px;color:var(--mu)}
+.grid{display:grid;gap:12px}
+.sec{font-weight:600;font-size:15px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}.sec span{font-weight:400;color:var(--mu);font-size:13px}
+.trk{display:flex;align-items:center;gap:12px;height:48px;padding:0 12px;border-radius:10px}
+.trk .t{flex:1;min-width:0}.trk .t b{display:block;font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.trk .t i{font-style:normal;font-size:12px;color:var(--mu)}
+.trk .c{font-size:12px;color:var(--mu);white-space:nowrap}.trk.on{background:oklch(23% .05 222)}.trk.on .t b{color:var(--pr)}
+.trk .th{width:36px;height:36px;border-radius:8px;flex:none;background:linear-gradient(135deg,oklch(40% .1 220),oklch(28% .12 270))}
+.gen{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;background:oklch(26% .05 200);color:oklch(85% .08 190);white-space:nowrap}
+.gen.q{background:none;border:1px dashed oklch(60% .08 190/.6)}
+.key{display:inline-grid;place-items:center;width:30px;height:20px;border-radius:6px;font:600 11px system-ui;color:#fff}
+.act{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--b2);color:var(--tx);flex:none}
+.act.p{background:var(--pr);color:var(--ink)}
+.pbtn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:10px;background:var(--pr);color:var(--ink);font-weight:600;font-size:13px;white-space:nowrap}
+.gbtn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:10px;background:var(--b2);color:var(--tx);font-size:13px;white-space:nowrap}
+.pl{position:absolute;display:flex;align-items:center;gap:12px;border-radius:16px;padding:0 14px}
+.pl .t{flex:1;min-width:0}.pl .t b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pl .t i{font-style:normal;font-size:12px;color:var(--mu)}
+.wave{border-radius:10px;background:oklch(16% .03 230)}
+.dock{position:absolute;left:12px;right:12px;bottom:12px;height:66px;border-radius:16px;display:flex;align-items:center;justify-content:space-around}
+.dock .it{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--mu);width:60px}
+.dock .it span{height:26px;width:46px;border-radius:10px;display:grid;place-items:center}.dock .it.on{color:var(--tx)}.dock .it.on span{color:var(--pr);background:oklch(30% .07 230)}
+.dock .s{width:52px;height:52px;border-radius:14px;background:var(--pr);display:grid;place-items:center;color:var(--ink)}
+.ptop{position:absolute;left:12px;right:12px;top:10px;border-radius:16px;padding:12px 14px}
+.tag{position:absolute;padding:3px 8px;border-radius:8px;background:oklch(80% .14 85);color:oklch(20% .05 85);font:600 11px system-ui;white-space:nowrap;z-index:9}
+.panel{border-radius:14px;background:var(--b1);border:var(--hair)}
+.lib{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;font-size:13.5px}
+.lib.on{background:oklch(24% .05 228)}
+.lib .t{flex:1;min-width:0}.lib .t i{display:block;font-style:normal;font-size:11.5px;color:var(--mu)}
+.tree{font-size:13.5px}.tree div{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;color:var(--mu)}.tree div b{color:var(--tx);font-weight:500}.tree .in{padding-left:30px}
+.sh{position:absolute;left:0;right:0;bottom:0;border-radius:18px 18px 0 0;padding:10px 14px 20px}
+.grab{width:40px;height:4px;border-radius:2px;background:oklch(45% .02 240);margin:0 auto 12px}
+.secrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:oklch(19% .035 225);margin-top:10px}
+.secrow b{font-size:15px}.secrow i{font-style:normal;color:var(--mu);font-size:12.5px}
+.tr{display:flex;align-items:center;gap:8px;height:22px;padding-left:58px;font-size:11.5px;color:var(--mu)}
+.tr span{display:inline-flex;align-items:center;gap:4px;padding:0 8px;height:20px;border-radius:6px;background:oklch(22% .04 225)}
+.frB .pl{left:420px!important;width:700px!important}
+.tr .ok2{color:oklch(80% .12 190)}.tr .bad{color:oklch(80% .14 70);background:oklch(26% .05 70)}
+</style>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21H3z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="i-media" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="m10 8.5 4.5 2.5-4.5 2.5z"/></g></symbol>
+<symbol id="i-disc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></g></symbol>
+<symbol id="i-music" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></g></symbol>
+<symbol id="i-lib" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></g></symbol>
+<symbol id="i-srch" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></g></symbol>
+<symbol id="i-set" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></g></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-srv" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></g></symbol>
+<symbol id="i-pc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/></g></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 9.5 4.3 4.3 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="i-fold" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h9M3 6h1M3 12h1M3 18h1" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="9" cy="7" r="1.4"/><circle cx="15" cy="7" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="17" r="1.4"/><circle cx="15" cy="17" r="1.4"/></g></symbol>
+<symbol id="i-wave" viewBox="0 0 96 44"><path d="M0 26 C8 18 12 22 18 14 S30 20 36 12 S50 18 56 10 S70 20 76 14 S90 22 96 16 V26Z" fill="oklch(72% .13 188/.8)"/><path d="M0 26 C10 30 16 26 24 32 S40 28 48 34 S64 28 72 32 S88 28 96 30 V26Z" fill="oklch(44% .11 215)"/></symbol>
+</defs></svg>
+
+<template id="rail"><div class="rail glass"><div class="logo"></div><div class="sbtn"><svg width="22" height="22"><use href="#i-srch"/></svg></div>
+<div class="it"><span><svg width="20" height="20"><use href="#i-home"/></svg></span>Home</div><div class="it"><span><svg width="20" height="20"><use href="#i-media"/></svg></span>Media</div><div class="it"><span><svg width="20" height="20"><use href="#i-disc"/></svg></span>Discover</div><div class="it on"><span><svg width="20" height="20"><use href="#i-music"/></svg></span>Music</div><div class="it"><span><svg width="20" height="20"><use href="#i-lib"/></svg></span>Library</div><div class="it" style="margin-top:auto;margin-bottom:10px"><span><svg width="20" height="20"><use href="#i-set"/></svg></span>Settings</div></div></template>
+<template id="bar"><div class="pl glass" style="left:330px;width:760px;bottom:16px;height:64px"><svg class="wave" width="90" height="42"><use href="#i-wave"/></svg><div class="t"><b>Concussion (Mefjus Remix)</b><i>Noisia · 172 BPM · Friday neuro set · 2 / 3 Peak</i></div><div class="act p" style="width:38px;height:38px"><svg width="18" height="18"><use href="#i-pause"/></svg></div></div></template>
+<template id="dock"><div class="pl glass" style="left:12px;right:12px;bottom:86px;height:56px;padding:0 10px;gap:10px"><svg class="wave" width="54" height="36"><use href="#i-wave"/></svg><div class="t"><b style="font-size:13px">Concussion (Mefjus Remix)</b><i>Noisia · 172 BPM</i></div><div class="act p"><svg width="16" height="16"><use href="#i-pause"/></svg></div></div>
+<div class="dock glass"><div class="it"><span><svg width="20" height="20"><use href="#i-home"/></svg></span>Home</div><div class="it"><span><svg width="20" height="20"><use href="#i-media"/></svg></span>Media</div><div class="s"><svg width="22" height="22"><use href="#i-srch"/></svg></div><div class="it on"><span><svg width="20" height="20"><use href="#i-music"/></svg></span>Music</div><div class="it"><span><svg width="20" height="20"><use href="#i-lib"/></svg></span>Library</div></div></template>
+
+<!-- ============ 1A ============ -->
+<h2>1 · Several libraries <small>A: a library switcher in the header</small></h2>
+<p class="l">Every library is a source: folders on this PC, a NAS, a remote sestudio server, a YouTube Music account. "All" merges them; each cover carries a small badge for where it lives. Genres are detected and become filters.</p>
+<div class="row">
+<div class="d"><div class="fw" data-w="1280" data-h="800"><div class="fr" style="width:1280px;height:800px">
+ <div data-t="rail"></div>
+ <div class="hdr glass" style="padding:12px 16px">
+  <div style="display:flex;align-items:center;gap:14px"><b style="font-size:20px;font-weight:600;width:70px">Music</b><div class="field" style="flex:1"><svg width="16" height="16" style="color:var(--pr)"><use href="#i-srch"/></svg>Search your libraries and online, or paste a link</div><div class="bell"><svg width="20" height="20"><use href="#i-bell"/></svg><em>12</em></div></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+   <div class="seg"><div class="on">Albums</div><div>Artists</div><div>Tracks</div><div>Playlists</div></div>
+   <div style="flex:1"></div>
+   <span class="chip on"><b>All</b> 3 362</span>
+   <span class="chip"><span class="dot ok"></span><svg width="15" height="15"><use href="#i-pc"/></svg>This PC <b>46</b></span>
+   <span class="chip"><span class="dot ok"></span><svg width="15" height="15"><use href="#i-srv"/></svg>NAS <b>2 140</b></span>
+   <span class="chip"><span class="dot off"></span><svg width="15" height="15"><use href="#i-cloud"/></svg>Studio <b>offline</b></span>
+   <span class="chip"><span class="dot ok"></span><span class="src s-ytm">YTM</span><b>1 176</b></span>
+   <span class="chip" style="width:32px;padding:0;justify-content:center"><svg width="16" height="16"><use href="#i-plus"/></svg></span>
+  </div>
+ </div>
+ <div class="abs" style="left:127px;right:20px;top:146px">
+  <div style="display:flex;gap:8px;align-items:center"><span style="color:var(--mu);font-size:13px;margin-right:4px">Genres, detected</span><span class="chip on">All</span><span class="chip">Neurofunk <b>540</b></span><span class="chip">Liquid <b>312</b></span><span class="chip">Jump-up <b>188</b></span><span class="chip">Dubstep <b>220</b></span><span class="chip">Riddim <b>96</b></span><span class="chip">Halftime <b>74</b></span><span class="chip">170–175 BPM</span></div>
+  <div class="sec">Recently added <span>across all libraries</span></div>
+  <div class="grid" style="grid-template-columns:repeat(7,1fr)">
+   <div class="card"><div class="cov">NS<span class="src s-pc">PC</span></div><b>neuro soundcloud</b><i>46 · Neurofunk</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(45% .12 190),oklch(32% .1 240))">LQ<span class="src s-nas">NAS</span></div><b>Liquid picks</b><i>18 · Liquid</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(40% .14 260),oklch(28% .12 300))">VR<span class="src s-nas">NAS</span></div><b>Virtual Riot</b><i>9 · Dubstep</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(52% .16 25),oklch(32% .12 330))">♥<span class="src s-ytm">YTM</span></div><b>Liked music</b><i>1 176 · streamed</i></div>
+   <div class="card" style="opacity:.5"><div class="cov" style="background:linear-gradient(135deg,oklch(42% .08 170),oklch(28% .08 220))">ST<span class="src s-rem">REM</span></div><b>Studio bounces</b><i>offline · 64</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(42% .13 230),oklch(30% .12 270))">FB<span class="src s-nas">NAS</span></div><b>Fade Black</b><i>6 · Neurofunk</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(44% .1 200),oklch(28% .1 250))">MJ<span class="src s-pc">PC</span></div><b>Mefjus</b><i>11 · Neurofunk</i></div>
+  </div>
+ </div>
+ <div data-t="bar"></div>
+ <div class="tag" style="left:760px;top:124px">Library switcher · status dot · count</div>
+ <div class="tag" style="left:320px;top:186px">Genre filters</div>
+</div></div><p class="cap">Desktop</p></div>
+<div class="m"><div class="fw" data-w="412" data-h="915"><div class="fr" style="width:412px;height:915px">
+ <div class="ptop glass" style="height:150px">
+  <div style="display:flex;align-items:center;gap:8px"><b style="font-size:24px;font-weight:600;flex:1">Music</b><div class="bell" style="width:40px;height:40px"><svg width="20" height="20"><use href="#i-bell"/></svg><em>12</em></div><div class="bell" style="width:40px;height:40px"><svg width="20" height="20"><use href="#i-set"/></svg></div></div>
+  <span class="chip on" style="margin-top:6px;height:30px"><b>All libraries</b> · 3 362<svg width="14" height="14"><use href="#i-down"/></svg></span>
+  <div class="seg" style="margin-top:10px"><div class="on" style="flex:1;text-align:center">Albums</div><div style="flex:1;text-align:center">Artists</div><div style="flex:1;text-align:center">Tracks</div><div style="flex:1;text-align:center">Lists</div></div>
+ </div>
+ <div class="abs" style="left:12px;right:0;top:172px;display:flex;gap:6px;overflow:hidden"><span class="chip on">All</span><span class="chip">Neurofunk</span><span class="chip">Liquid</span><span class="chip">Dubstep</span><span class="chip">Jump-up</span></div>
+ <div class="abs grid" style="left:12px;right:12px;top:216px;grid-template-columns:1fr 1fr;gap:10px">
+  <div class="card"><div class="cov">NS<span class="src s-pc">PC</span></div><b>neuro soundcloud</b><i>46 · Neurofunk</i></div>
+  <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(45% .12 190),oklch(32% .1 240))">LQ<span class="src s-nas">NAS</span></div><b>Liquid picks</b><i>18 · Liquid</i></div>
+  <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(52% .16 25),oklch(32% .12 330))">♥<span class="src s-ytm">YTM</span></div><b>Liked music</b><i>1 176 · streamed</i></div>
+  <div class="card" style="opacity:.5"><div class="cov" style="background:linear-gradient(135deg,oklch(42% .08 170),oklch(28% .08 220))">ST<span class="src s-rem">REM</span></div><b>Studio bounces</b><i>offline</i></div>
+ </div>
+ <div data-t="dock"></div>
+</div></div><p class="cap">Phone: one "All libraries" pill opens the list</p></div>
+</div>
+
+<!-- ============ 1B ============ -->
+<h2>1 · Several libraries <small>B: a side column with libraries and playlists</small></h2>
+<p class="l">Same data, but libraries, playlists (with sub-playlists in folders) and smart lists live in a column on the left, the way DJ software lays out its crates. On the phone the column becomes a sheet.</p>
+<div class="row">
+<div class="d"><div class="fw" data-w="1280" data-h="800"><div class="fr frB" style="width:1280px;height:800px">
+ <div data-t="rail"></div>
+ <div class="hdr glass" style="padding:12px 16px;height:66px"><div style="display:flex;align-items:center;gap:14px"><b style="font-size:20px;font-weight:600;width:70px">Music</b><div class="field" style="flex:1"><svg width="16" height="16" style="color:var(--pr)"><use href="#i-srch"/></svg>Search your libraries and online, or paste a link</div><div class="bell"><svg width="20" height="20"><use href="#i-bell"/></svg><em>12</em></div></div></div>
+ <div class="abs panel" style="left:127px;top:100px;width:250px;bottom:16px;padding:10px">
+  <div style="font-size:11px;letter-spacing:.06em;color:var(--mu);margin:4px 10px 6px">LIBRARIES</div>
+  <div class="lib on"><svg width="17" height="17"><use href="#i-music"/></svg><div class="t">All<i>3 362 tracks</i></div></div>
+  <div class="lib"><span class="dot ok"></span><svg width="17" height="17"><use href="#i-pc"/></svg><div class="t">This PC<i>46 · R:\Musique</i></div></div>
+  <div class="lib"><span class="dot ok"></span><svg width="17" height="17"><use href="#i-srv"/></svg><div class="t">NAS<i>2 140 · indexing 82 %</i></div></div>
+  <div class="lib"><span class="dot off"></span><svg width="17" height="17"><use href="#i-cloud"/></svg><div class="t">Studio (remote)<i>offline since 14:02</i></div></div>
+  <div class="lib"><span class="dot ok"></span><span class="src s-ytm">YTM</span><div class="t">YouTube Music<i>Likes · 1 176</i></div></div>
+  <div class="lib" style="color:var(--mu)"><svg width="17" height="17"><use href="#i-plus"/></svg>Add a library</div>
+  <div style="font-size:11px;letter-spacing:.06em;color:var(--mu);margin:14px 10px 6px">PLAYLISTS</div>
+  <div class="tree">
+   <div><svg width="14" height="14"><use href="#i-down"/></svg><svg width="16" height="16"><use href="#i-fold"/></svg><b>Sets</b></div>
+   <div class="in" style="background:oklch(24% .05 228);color:var(--tx)"><svg width="15" height="15"><use href="#i-list"/></svg><b>Friday neuro set</b><span style="margin-left:auto;font-size:11px">3 parts</span></div>
+   <div class="in"><svg width="15" height="15"><use href="#i-list"/></svg>Liquid Sunday</div>
+   <div><svg width="14" height="14"><use href="#i-right"/></svg><svg width="16" height="16"><use href="#i-fold"/></svg><b>Workouts</b></div>
+   <div><svg width="15" height="15" style="margin-left:22px"><use href="#i-list"/></svg>Car</div>
+  </div>
+  <div style="font-size:11px;letter-spacing:.06em;color:var(--mu);margin:14px 10px 6px">SMART LISTS</div>
+  <div class="tree"><div><svg width="15" height="15"><use href="#i-spark"/></svg>Neurofunk 172–175</div><div><svg width="15" height="15"><use href="#i-spark"/></svg>New this week</div><div><svg width="15" height="15"><use href="#i-spark"/></svg>Never played</div></div>
+ </div>
+ <div class="abs" style="left:393px;right:20px;top:100px">
+  <div style="display:flex;align-items:center;gap:10px"><div class="seg"><div class="on">Albums</div><div>Artists</div><div>Tracks</div></div><div style="flex:1"></div><span class="chip on">All genres</span><span class="chip">Neurofunk</span><span class="chip">Liquid</span><span class="chip">Dubstep</span></div>
+  <div class="grid" style="grid-template-columns:repeat(5,1fr);margin-top:14px">
+   <div class="card"><div class="cov">NS<span class="src s-pc">PC</span></div><b>neuro soundcloud</b><i>46 · Neurofunk</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(45% .12 190),oklch(32% .1 240))">LQ<span class="src s-nas">NAS</span></div><b>Liquid picks</b><i>18 · Liquid</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(40% .14 260),oklch(28% .12 300))">VR<span class="src s-nas">NAS</span></div><b>Virtual Riot</b><i>9 · Dubstep</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(52% .16 25),oklch(32% .12 330))">♥<span class="src s-ytm">YTM</span></div><b>Liked music</b><i>1 176 · streamed</i></div>
+   <div class="card"><div class="cov" style="background:linear-gradient(135deg,oklch(42% .13 230),oklch(30% .12 270))">FB<span class="src s-nas">NAS</span></div><b>Fade Black</b><i>6 · Neurofunk</i></div>
+  </div>
+ </div>
+ <div data-t="bar"></div>
+ <div class="tag" style="left:250px;top:92px">Crates column</div>
+</div></div><p class="cap">Desktop</p></div>
+<div class="m"><div class="fw" data-w="412" data-h="915"><div class="fr" style="width:412px;height:915px">
+ <div class="ptop glass" style="height:96px"><div style="display:flex;align-items:center;gap:8px"><b style="font-size:24px;font-weight:600;flex:1">Music</b><div class="bell" style="width:40px;height:40px"><svg width="20" height="20"><use href="#i-bell"/></svg><em>12</em></div></div><span class="chip on" style="margin-top:6px;height:30px"><b>All libraries</b> · Playlists<svg width="14" height="14"><use href="#i-down"/></svg></span></div>
+ <div class="abs" style="inset:0;background:rgb(0 0 0/.5)"></div>
+ <div class="sh glass" style="height:640px">
+  <div class="grab"></div>
+  <div style="font-size:11px;letter-spacing:.06em;color:var(--mu);margin:0 4px 6px">LIBRARIES</div>
+  <div class="lib on"><svg width="17" height="17"><use href="#i-music"/></svg><div class="t">All<i>3 362 tracks</i></div></div>
+  <div class="lib"><span class="dot ok"></span><svg width="17" height="17"><use href="#i-pc"/></svg><div class="t">This PC<i>46</i></div></div>
+  <div class="lib"><span class="dot ok"></span><svg width="17" height="17"><use href="#i-srv"/></svg><div class="t">NAS<i>2 140 · indexing 82 %</i></div></div>
+  <div class="lib"><span class="dot off"></span><svg width="17" height="17"><use href="#i-cloud"/></svg><div class="t">Studio (remote)<i>offline</i></div></div>
+  <div class="lib"><span class="dot ok"></span><span class="src s-ytm">YTM</span><div class="t">YouTube Music<i>Likes · 1 176</i></div></div>
+  <div style="font-size:11px;letter-spacing:.06em;color:var(--mu);margin:12px 4px 6px">PLAYLISTS</div>
+  <div class="tree"><div><svg width="14" height="14"><use href="#i-down"/></svg><svg width="16" height="16"><use href="#i-fold"/></svg><b>Sets</b></div><div class="in"><svg width="15" height="15"><use href="#i-list"/></svg><b>Friday neuro set</b></div><div class="in"><svg width="15" height="15"><use href="#i-list"/></svg>Liquid Sunday</div><div><svg width="15" height="15"><use href="#i-spark"/></svg>Neurofunk 172–175</div></div>
+ </div>
+</div></div><p class="cap">Phone: the column as a sheet</p></div>
+</div>
+<ul class="n"><li><b>A</b> keeps the page wide and simple; good up to 5–6 libraries. <b>B</b> scales to many libraries and deep playlist folders, and is what DJs expect; it costs 250 px of width.</li></ul>
+
+<!-- ============ 2 ============ -->
+<h2>2 · Search online, like for videos</h2>
+<p class="l">One search covers your libraries and online sources, with the same source picker as video search. A YouTube video plays as music (audio only, the picture is dropped), and anything online can be saved into a chosen library.</p>
+<div class="row">
+<div class="d"><div class="fw" data-w="1280" data-h="800"><div class="fr" style="width:1280px;height:800px">
+ <div data-t="rail"></div>
+ <div class="hdr glass" style="padding:12px 16px">
+  <div style="display:flex;align-items:center;gap:14px"><b style="font-size:20px;font-weight:600;width:70px">Music</b><div class="field" style="flex:1;color:var(--tx)"><svg width="16" height="16" style="color:var(--pr)"><use href="#i-srch"/></svg>noisia</div><div class="bell"><svg width="20" height="20"><use href="#i-bell"/></svg><em>12</em></div></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-top:12px"><span class="chip on"><b>Everywhere</b></span><span class="chip">Your libraries <b>14</b></span><span class="chip"><span class="src s-ytm">YTM</span>YouTube Music</span><span class="chip"><span class="src s-yt">YT</span>YouTube</span><span class="chip"><span class="src s-sc">SC</span>SoundCloud</span><span class="chip"><span class="src s-bc">BC</span>Bandcamp</span><span class="chip" style="width:32px;padding:0;justify-content:center"><svg width="16" height="16"><use href="#i-plus"/></svg></span></div>
+ </div>
+ <div class="abs" style="left:127px;top:146px;width:360px">
+  <div class="panel" style="padding:16px;display:flex;gap:14px;align-items:center"><div class="cov" style="width:96px;height:96px;border-radius:50%;font-size:26px">N</div><div><div style="font-size:12px;color:var(--mu)">Top match · artist</div><b style="font-size:22px">Noisia</b><div style="font-size:12.5px;color:var(--mu);margin:2px 0 10px">Neurofunk · 14 in your libraries · 212 online</div><span class="pbtn"><svg width="14" height="14"><use href="#i-play"/></svg>Mix it</span></div></div>
+  <div class="sec" style="margin-top:14px">In your libraries <span>14</span></div>
+  <div class="trk on"><div class="th"></div><div class="t"><b>Concussion (Mefjus Remix)</b><i>Noisia</i></div><span class="src s-pc">PC</span><span class="c">172</span></div>
+  <div class="trk"><div class="th"></div><div class="t"><b>Tentacles</b><i>Noisia</i></div><span class="src s-nas">NAS</span><span class="c">174</span></div>
+  <div class="trk"><div class="th"></div><div class="t"><b>Dead Limit</b><i>Noisia & The Upbeats</i></div><span class="src s-nas">NAS</span><span class="c">174</span></div>
+ </div>
+ <div class="abs" style="left:503px;right:20px;top:146px">
+  <div class="sec" style="margin-top:0">Online <span>sorted by relevance, sources mixed</span></div>
+  <div class="trk"><div class="th"></div><div class="t"><b>Outer Edges</b><i>Noisia · album · 2016</i></div><span class="src s-ytm">YTM</span><span class="gen">Neurofunk</span><span class="c">4:52</span><div class="act p"><svg width="14" height="14"><use href="#i-play"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-plus"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-dl"/></svg></div></div>
+  <div class="trk"><div class="th" style="width:64px;border-radius:6px;background:linear-gradient(135deg,oklch(30% .03 240),oklch(22% .02 240))"></div><div class="t"><b>Noisia — Live at Let It Roll 2019 (full set)</b><i>YouTube video · plays as music · 1:02:14</i></div><span class="src s-yt">YT</span><span class="gen q">Mix · detect after play</span><div class="act p"><svg width="14" height="14"><use href="#i-play"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-plus"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-dl"/></svg></div></div>
+  <div class="trk"><div class="th"></div><div class="t"><b>Stigma (VIP)</b><i>Noisia · unreleased dub</i></div><span class="src s-sc">SC</span><span class="gen">Neurofunk</span><span class="c">5:10</span><div class="act p"><svg width="14" height="14"><use href="#i-play"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-plus"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-dl"/></svg></div></div>
+  <div class="trk"><div class="th"></div><div class="t"><b>Purpose (Noisia Remix)</b><i>Ivy Lab</i></div><span class="src s-bc">BC</span><span class="gen">Halftime</span><span class="c">6:01</span><div class="act p"><svg width="14" height="14"><use href="#i-play"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-plus"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-dl"/></svg></div></div>
+  <div class="trk"><div class="th"></div><div class="t"><b>Shellshock</b><i>Noisia · Split the Atom</i></div><span class="src s-ytm">YTM</span><span class="gen">Neurofunk</span><span class="c">5:27</span><div class="act p"><svg width="14" height="14"><use href="#i-play"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-plus"/></svg></div><div class="act"><svg width="15" height="15"><use href="#i-dl"/></svg></div></div>
+  <div class="panel" style="position:absolute;right:0;top:110px;width:250px;padding:8px;box-shadow:0 14px 40px rgb(0 0 0/.6)">
+   <div style="font-size:12px;color:var(--mu);padding:4px 8px 6px">Save "Live at Let It Roll" to…</div>
+   <div class="lib"><svg width="17" height="17"><use href="#i-pc"/></svg><div class="t">This PC<i>audio only · m4a</i></div></div>
+   <div class="lib on"><svg width="17" height="17"><use href="#i-srv"/></svg><div class="t">NAS<i>audio only · 112 MB</i></div></div>
+   <div class="lib" style="color:var(--mu)"><svg width="17" height="17"><use href="#i-cloud"/></svg><div class="t">Studio (remote)<i>offline</i></div></div>
+  </div>
+ </div>
+ <div data-t="bar"></div>
+ <div class="tag" style="left:560px;top:122px">Same source picker as video search</div>
+ </div></div><p class="cap">Desktop</p></div>
+<div class="m"><div class="fw" data-w="412" data-h="915"><div class="fr" style="width:412px;height:915px">
+ <div class="ptop glass" style="height:112px"><div class="field" style="color:var(--tx)"><svg width="16" height="16" style="color:var(--pr)"><use href="#i-srch"/></svg>noisia</div><div style="display:flex;gap:6px;margin-top:10px;overflow:hidden"><span class="chip on"><b>Everywhere</b></span><span class="chip">Libraries</span><span class="chip"><span class="src s-ytm">YTM</span></span><span class="chip"><span class="src s-yt">YT</span></span><span class="chip"><span class="src s-sc">SC</span></span></div></div>
+ <div class="abs" style="left:12px;right:12px;top:134px">
+  <div class="panel" style="padding:12px;display:flex;gap:12px;align-items:center"><div class="cov" style="width:64px;height:64px;border-radius:50%;font-size:20px">N</div><div><b style="font-size:18px">Noisia</b><div style="font-size:12px;color:var(--mu)">14 in your libraries · 212 online</div></div></div>
+  <div class="sec">In your libraries <span>14</span></div>
+  <div class="trk" style="padding:0 4px"><div class="th"></div><div class="t"><b>Concussion (Mefjus Remix)</b><i>Noisia · 172</i></div><span class="src s-pc">PC</span></div>
+  <div class="trk" style="padding:0 4px"><div class="th"></div><div class="t"><b>Tentacles</b><i>Noisia · 174</i></div><span class="src s-nas">NAS</span></div>
+  <div class="sec">Online</div>
+  <div class="trk" style="padding:0 4px"><div class="th"></div><div class="t"><b>Outer Edges</b><i>Album · 2016</i></div><span class="src s-ytm">YTM</span></div>
+  <div class="trk" style="padding:0 4px"><div class="th" style="width:50px;border-radius:6px;background:oklch(26% .02 240)"></div><div class="t"><b>Live at Let It Roll 2019</b><i>Video · plays as music · 1:02:14</i></div><span class="src s-yt">YT</span></div>
+  <div class="trk" style="padding:0 4px"><div class="th"></div><div class="t"><b>Stigma (VIP)</b><i>Unreleased dub · 5:10</i></div><span class="src s-sc">SC</span></div>
+ </div>
+ <div data-t="dock"></div>
+</div></div><p class="cap">Phone</p></div>
+</div>
+
+<!-- ============ 3 ============ -->
+<h2>3 · Sets: playlists with parts, built to mix</h2>
+<p class="l">A set is a playlist split into parts (sub-playlists). Each track shows its tempo, key and detected genre, and each gap shows how the two tracks will mix. The curve on top shows tempo and energy across the whole set. Auto-order and fill tools work on one part or on the whole set.</p>
+<div class="row">
+<div class="d"><div class="fw" data-w="1280" data-h="800"><div class="fr" style="width:1280px;height:800px">
+ <div data-t="rail"></div>
+ <div class="hdr glass" style="padding:14px 18px;height:196px">
+  <div style="display:flex;align-items:center;gap:12px"><div class="cov" style="width:56px;height:56px;font-size:18px">FN</div><div style="flex:1"><div style="font-size:12px;color:var(--mu)">Set · Sets folder</div><b style="font-size:22px">Friday neuro set</b><div style="font-size:12.5px;color:var(--mu)">3 parts · 21 tracks · 1 h 18 · 170–175 BPM · from NAS and This PC</div></div>
+   <span class="gbtn"><svg width="15" height="15"><use href="#i-spark"/></svg>Auto-order<svg width="13" height="13"><use href="#i-down"/></svg></span><span class="gbtn"><svg width="15" height="15"><use href="#i-plus"/></svg>Fill from library</span><span class="pbtn"><svg width="14" height="14"><use href="#i-play"/></svg>Play set</span><div class="bell"><svg width="20" height="20"><use href="#i-bell"/></svg><em>12</em></div></div>
+  <svg class="abs" style="left:18px;right:18px;top:92px" width="1097" height="92" viewBox="0 0 1097 92">
+   <rect x="0" y="0" width="300" height="92" rx="8" fill="oklch(22% .04 220/.6)"/><rect x="304" y="0" width="470" height="92" rx="8" fill="oklch(24% .06 230/.6)"/><rect x="778" y="0" width="319" height="92" rx="8" fill="oklch(22% .04 200/.6)"/>
+   <text x="10" y="16" fill="#9fb4c8" font-size="11">1 · Warm-up</text><text x="314" y="16" fill="#9fb4c8" font-size="11">2 · Peak</text><text x="788" y="16" fill="#9fb4c8" font-size="11">3 · Cool down</text>
+   <path d="M0 70 C80 66 160 60 300 50 S520 22 640 20 S760 26 790 40 S960 62 1097 66" fill="none" stroke="oklch(80% .13 190)" stroke-width="2.5"/>
+   <path d="M0 62 L300 58 L310 46 L774 46 L784 58 L1097 60" fill="none" stroke="oklch(72% .16 230)" stroke-width="1.5" stroke-dasharray="4 3"/>
+   <circle cx="420" cy="34" r="5" fill="#fff"/>
+   <text x="1004" y="86" fill="#9fb4c8" font-size="10.5">— energy  - - BPM</text>
+  </svg>
+ </div>
+ <div class="abs" style="left:127px;right:20px;top:228px">
+  <div class="secrow" style="margin-top:0"><svg width="15" height="15"><use href="#i-right"/></svg><b>1 · Warm-up</b><i>7 tracks · 25 min · 170 → 172 BPM · Liquid, Neurofunk</i></div>
+  <div class="secrow"><svg width="15" height="15"><use href="#i-down"/></svg><b>2 · Peak</b><i>8 tracks · 31 min · 174 BPM · Neurofunk</i><span style="flex:1"></span><span class="gen">auto-order: tempo ↗ then energy</span></div>
+  <div class="trk"><svg width="16" height="16" style="color:var(--mu)"><use href="#i-grip"/></svg><div class="th"></div><div class="t"><b>Noir</b><i>Teddy Killerz</i></div><span class="gen">Neurofunk</span><span class="src s-nas">NAS</span><span class="c" style="width:60px;text-align:right">174 BPM</span><span class="key" style="background:oklch(52% .14 160)">8A</span><span class="c">3:46</span></div>
+  <div class="tr"><span class="ok2">8 bars · synced</span><span>8A → 9A · harmonic</span></div>
+  <div class="trk on"><svg width="16" height="16" style="color:var(--mu)"><use href="#i-grip"/></svg><div class="th"></div><div class="t"><b>Concussion (Mefjus Remix)</b><i>Noisia</i></div><span class="gen">Neurofunk</span><span class="src s-pc">PC</span><span class="c" style="width:60px;text-align:right">172 BPM</span><span class="key" style="background:oklch(52% .14 175)">9A</span><span class="c">3:46</span></div>
+  <div class="tr"><span class="ok2">16 bars · synced · +1.2 %</span><span>9A → 9A</span></div>
+  <div class="trk"><svg width="16" height="16" style="color:var(--mu)"><use href="#i-grip"/></svg><div class="th"></div><div class="t"><b>Pure Action</b><i>Kumarion</i></div><span class="gen">Neurofunk</span><span class="src s-nas">NAS</span><span class="c" style="width:60px;text-align:right">174 BPM</span><span class="key" style="background:oklch(52% .14 175)">9A</span><span class="c">3:22</span></div>
+  <div class="tr"><span class="bad">fade 4 s · 174 → 150 is too far to sync</span><span style="color:var(--pr)">Move to Cool down?</span></div>
+  <div class="trk"><svg width="16" height="16" style="color:var(--mu)"><use href="#i-grip"/></svg><div class="th"></div><div class="t"><b>Statues</b><i>Virtual Riot</i></div><span class="gen">Dubstep</span><span class="gen q">Melodic? 62 %</span><span class="src s-nas">NAS</span><span class="c" style="width:60px;text-align:right">150 BPM</span><span class="key" style="background:oklch(52% .14 280)">4B</span><span class="c">4:03</span></div>
+  <div class="secrow"><svg width="15" height="15"><use href="#i-right"/></svg><b>3 · Cool down</b><i>6 tracks · 22 min · 170 BPM · Liquid</i></div>
+ </div>
+ <div class="tag" style="left:420px;top:352px">Gap = how they will mix</div>
+ <div class="tag" style="left:560px;top:100px">Parts = sub-playlists</div>
+ <div class="tag" style="left:770px;top:578px">Low-confidence genre</div>
+</div></div><p class="cap">Desktop</p></div>
+<div class="m"><div class="fw" data-w="412" data-h="915"><div class="fr" style="width:412px;height:915px">
+ <div class="ptop glass" style="height:212px">
+  <div style="display:flex;align-items:center;gap:10px"><div class="cov" style="width:46px;height:46px;font-size:15px">FN</div><div style="flex:1"><b style="font-size:18px">Friday neuro set</b><div style="font-size:12px;color:var(--mu)">3 parts · 21 tracks · 1 h 18</div></div></div>
+  <svg style="margin-top:10px" width="358" height="70" viewBox="0 0 358 70"><rect x="0" y="0" width="98" height="70" rx="6" fill="oklch(22% .04 220/.6)"/><rect x="101" y="0" width="153" height="70" rx="6" fill="oklch(24% .06 230/.6)"/><rect x="257" y="0" width="101" height="70" rx="6" fill="oklch(22% .04 200/.6)"/><path d="M0 54 C30 50 60 44 98 38 S170 16 210 15 S250 20 260 30 S310 48 358 50" fill="none" stroke="oklch(80% .13 190)" stroke-width="2.2"/><circle cx="140" cy="24" r="4" fill="#fff"/><text x="6" y="14" fill="#9fb4c8" font-size="10">Warm-up</text><text x="107" y="14" fill="#9fb4c8" font-size="10">Peak</text><text x="263" y="14" fill="#9fb4c8" font-size="10">Cool down</text></svg>
+  <div style="display:flex;gap:8px;margin-top:10px"><span class="pbtn" style="flex:1;justify-content:center"><svg width="14" height="14"><use href="#i-play"/></svg>Play set</span><span class="gbtn"><svg width="15" height="15"><use href="#i-spark"/></svg>Auto-order</span></div>
+ </div>
+ <div class="abs" style="left:12px;right:12px;top:234px">
+  <div class="secrow" style="margin-top:0"><b>1 · Warm-up</b><i>7 · 25 min · 170</i></div><div class="secrow"><b>2 · Peak</b><i>8 · 31 min · 174</i></div>
+  <div class="trk" style="padding:0 4px"><div class="th"></div><div class="t"><b>Noir</b><i>Teddy Killerz · Neurofunk</i></div><span class="c">174</span><span class="key" style="background:oklch(52% .14 160)">8A</span></div>
+  <div class="tr" style="padding-left:48px"><span class="ok2">8 bars · synced</span></div>
+  <div class="trk on" style="padding:0 4px"><div class="th"></div><div class="t"><b>Concussion (Mefjus Remix)</b><i>Noisia · Neurofunk</i></div><span class="c">172</span><span class="key" style="background:oklch(52% .14 175)">9A</span></div>
+  <div class="tr" style="padding-left:48px"><span class="ok2">16 bars · synced</span></div>
+  <div class="trk" style="padding:0 4px"><div class="th"></div><div class="t"><b>Pure Action</b><i>Kumarion · Neurofunk</i></div><span class="c">174</span><span class="key" style="background:oklch(52% .14 175)">9A</span></div>
+  <div class="tr" style="padding-left:48px"><span class="bad">fade · too far to sync</span></div>
+  <div class="trk" style="padding:0 4px"><div class="th"></div><div class="t"><b>Statues</b><i>Virtual Riot · Dubstep</i></div><span class="c">150</span><span class="key" style="background:oklch(52% .14 280)">4B</span></div>
+  <div class="secrow"><b>3 · Cool down</b><i>6 · 22 min · 170</i></div>
+ </div>
+ <div data-t="dock"></div>
+</div></div><p class="cap">Phone</p></div>
+</div>
+<ul class="n">
+<li><b>Genre detection</b> runs with the tempo analysis. Confident genres show as solid tags; doubtful ones are dashed with a percentage, and one click confirms or fixes them.</li>
+<li><b>Auto-order</b> picks among: smooth tempo, harmonic (key wheel), energy arc. It moves tracks only inside a part, unless you ask for the whole set.</li>
+<li><b>Fill from library</b> asks for a genre, a tempo range and a length, and proposes tracks from any library, online ones included.</li>
+</ul>
+<script>
+document.querySelectorAll('[data-t]').forEach(el=>{const t=document.getElementById(el.dataset.t);el.replaceWith(t.content.cloneNode(true))});
+const fit=()=>document.querySelectorAll('.fw').forEach(w=>{const s=w.clientWidth/+w.dataset.w;w.style.height=(+w.dataset.h*s)+'px';w.firstElementChild.style.transform=`scale(${s})`});
+fit();addEventListener('resize',fit);
+</script>
