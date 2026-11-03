@@ -15,6 +15,7 @@ import {
 } from '../musicLibrary'
 import { addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
 import { playAll, playNow, playPayload } from '../components/music/player'
+import MusicSearch from '../components/music/MusicSearch'
 import { useModalBack } from '../useModalBack'
 
 const TABS = [
@@ -161,8 +162,15 @@ export default function MusicView() {
   const pick = (id: string) => { setLibrary(id); setNodeId(''); setSheet(false) }
   const pickNode = (id: string) => { setNodeId(id); setSheet(false) }
 
+  const searching = !node && query.trim() !== '' && !LINK_RE.test(query.trim())
   const body = node ? (
     <PlaylistView key={node.id} node={node} byId={byId} />
+  ) : searching ? (
+    <MusicSearch
+      query={query}
+      byId={byId}
+      renderLibrary={ts => <ul>{ts.map(t => <TrackRow key={t.id} track={t} onPlaylist={setPickFor} />)}</ul>}
+    />
   ) : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
   ) : !tracks.length ? (

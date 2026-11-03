@@ -31,11 +31,14 @@ logger = logging.getLogger(__name__)
 
 ONLINE_LIBRARY = "online"
 PREFIX = "yt:"
+#: SoundCloud tracks (``sc:<numeric id>``) stream the same way, from their API address.
+SC_PREFIX = "sc:"
 MAX_PLAYLIST = 200
 #: A resolved audio URL is good for hours; an hour of reuse keeps skips cheap.
 _TTL = 3600.0
 
 _ID_RE = re.compile(r"^[\w-]{11}$")
+_SC_RE = re.compile(r"^sc:\d+$")
 _HOSTS = ("youtube.com", "youtu.be")
 
 
@@ -82,8 +85,18 @@ def track_id(video_id: str) -> str:
     return PREFIX + video_id
 
 
+def page_url(key: str) -> str:
+    """The address yt-dlp reads a resolvable id (see `video_id`) from."""
+    if key.startswith(SC_PREFIX):
+        return "https://api.soundcloud.com/tracks/soundcloud%3Atracks%3A" + key[3:]
+    return f"https://www.youtube.com/watch?v={key}"
+
+
 def video_id(tid: str) -> str | None:
-    """The video id inside a track id, or None for anything that is not one."""
+    """What a track id resolves by: the bare video id of a YouTube track, the
+    whole id of a SoundCloud one, None for anything else."""
+    if _SC_RE.match(tid):
+        return tid
     vid = tid.removeprefix(PREFIX)
     return vid if tid.startswith(PREFIX) and _ID_RE.match(vid) else None
 
@@ -104,7 +117,7 @@ def item(info: dict[str, Any], source: str) -> dict[str, Any]:
     return {
         "library": ONLINE_LIBRARY,
         "source": source,
-        "track_id": track_id(info["id"]),
+        "track_id": (SC_PREFIX if source == "soundcloud" else PREFIX) + str(info["id"]),
         "title": info.get("track") or info.get("title") or info["id"],
         "artist": _artist(info),
         "duration": float(info.get("duration") or 0),
@@ -123,8 +136,10 @@ def resolve(vid: str) -> dict[str, Any]:
         hit = _resolved.get(vid)
     if hit and hit[0] > time.monotonic():
         return hit[1]
-    page = f"https://www.youtube.com/watch?v={vid}"
-    info = ytdlp_json("--no-playlist", "-f", "ba", page)
+    # SoundCloud's HLS variants do not play in a browser: take its plain file.
+    fmt = "ba[protocol^=http]/ba" if vid.startswith(SC_PREFIX) else "ba"
+    page = page_url(vid)
+    info = ytdlp_json("--no-playlist", "-f", fmt, page)
     url = info.get("url") or next(
         (f["url"] for f in reversed(info.get("formats") or []) if f.get("url")), ""
     )
@@ -140,14 +155,15 @@ def complete(ref: dict[str, Any]) -> dict[str, Any]:
     when the lookup fails."""
     vid = video_id(str(ref.get("track_id", "")))
     if vid is None:
-        raise ValueError(f"not a YouTube track: {ref.get('track_id')}")
-    if ref.get("title"):
-        return {
-            **ref,
-            "library": ONLINE_LIBRARY,
-            "source": ref.get("source") or "youtube",
-        }
-    return item(resolve(vid)["info"], ref.get("source") or "youtube")
+        raise ValueError(f"not an online track: {ref.get('track_id')}")
+    source = ref.get("source") or (
+        "soundcloud" if vid.startswith(SC_PREFIX) else "youtube"
+    )
+    # A search hit may lack its length, which the timeline needs: look it up.
+    if ref.get("title") and ref.get("duration"):
+        return {**ref, "library": ONLINE_LIBRARY, "source": source}
+    info = resolve(vid)["info"]
+    return item({**info, "id": vid.removeprefix(SC_PREFIX)}, source)
 
 
 def expand(link: Link) -> dict[str, Any]:
@@ -186,7 +202,7 @@ def _analyse(tid: str, vid: str) -> None:
         if ffmpeg := ffmpeg_location():
             argv += ["--ffmpeg-location", ffmpeg]
         argv += [*js_runtime_args(), "-o", str(work / "%(id)s.%(ext)s")]
-        url = f"https://www.youtube.com/watch?v={vid}"
+        url = page_url(vid)
         parsed = yt_dlp.parse_options([*argv, url])
         with yt_dlp.YoutubeDL(parsed.ydl_opts) as ydl:
             ydl.download([url])
