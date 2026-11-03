@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from sestudio.music import libraries, online, runner, store
 from sestudio.sites import SiteError
@@ -49,6 +50,19 @@ async def track_analysis(track_id: str) -> dict[str, Any]:
     if track_id not in found:
         raise HTTPException(status_code=404, detail="Not analysed (yet)")
     return found[track_id]
+
+
+class GenreBody(BaseModel):
+    genre: str | None = None
+
+
+@router.put("/music/tracks/{track_id}/genre")
+async def track_genre(track_id: str, body: GenreBody) -> dict[str, bool]:
+    """Confirm or fix a track's genre (None clears the choice)."""
+    genre = (body.genre or "").strip()[:60] or None
+    if not await asyncio.to_thread(store.set_genre, track_id, genre):
+        raise HTTPException(status_code=404, detail="Not analysed (yet)")
+    return {"ok": True}
 
 
 @router.get("/music/online/link")

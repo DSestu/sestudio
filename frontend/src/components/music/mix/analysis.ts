@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { MixSettings, QueueItem, QueueState, TrackInfo } from '../../../musicQueue'
 import { prepTrack, type Plan, type RawAnalysis, type Track } from '../timeline/sampling'
 import { plan } from './plan'
@@ -36,6 +37,32 @@ export async function loadAnalyses(ids: string[]): Promise<boolean> {
 }
 
 export const rawOf = (id: string) => cache.get(id)?.raw
+
+/** Load the analyses of some tracks; the number changes when new ones arrive, and `reload` forces a redraw. */
+export function useAnalyses(ids: string[]): [number, () => void] {
+  const [tick, setTick] = useState(0)
+  const key = ids.join(',')
+  useEffect(() => {
+    let live = true
+    loadAnalyses(key ? key.split(',') : []).then(changed => { if (live && changed) setTick(t => t + 1) })
+    return () => { live = false }
+  }, [key])
+  return [tick, () => setTick(t => t + 1)]
+}
+
+/** Confirm or fix a track's genre on the server (null clears it) and in the local copy. */
+export async function setGenre(id: string, genre: string | null): Promise<void> {
+  const res = await fetch(`/api/music/tracks/${encodeURIComponent(id)}/genre`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ genre }),
+  })
+  if (!res.ok) throw new Error(`genre: ${res.status}`)
+  const c = cache.get(id)
+  if (!c?.raw) return
+  if (genre) c.raw = { ...c.raw, genre, genreConf: 1 }
+  else cache.delete(id) // back to the detected genre: fetch it again
+}
 
 /** The track prepared for drawing and planning, kept until its analysis changes. */
 export function trackOf(id: string, dur: number): Track {

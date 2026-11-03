@@ -45,6 +45,34 @@ describe('plan', () => {
   })
 })
 
+describe('plan with structure', () => {
+  const seg = (label: string, a: number, b: number) => ({ label, a, b })
+  const withSegs = (t: ReturnType<typeof track>, ...segs: ReturnType<typeof seg>[]) => ({ ...t, segs })
+  const bar = 240 / 172
+  const phrase = (p: ReturnType<typeof plan>, t: ReturnType<typeof track>) => ((p.mixOut - t.bar0) / (4 * bar)) % 1
+
+  it('keeps today\'s rule when the track has no structure or ends on an outro', () => {
+    const a = track('a', 172)
+    const plain = plan(a, track('b', 172), SYNC)
+    expect(plan(withSegs(a, seg('drop', 100, 150), seg('outro', 150, 240)), track('b', 172), SYNC).mixOut).toBeCloseTo(plain.mixOut)
+  })
+  it('never blends over a drop: a track that ends on one is left before it, on a phrase', () => {
+    const a = track('a', 172)
+    const p = plan(withSegs(a, seg('breakdown', 120, 150), seg('drop', 150, 240)), track('b', 172), SYNC)
+    expect(p.mode).toBe('sync')
+    expect(p.mixOut + p.len).toBeLessThanOrEqual(150 + 60 / 172)
+    expect(p.mixOut).toBeGreaterThanOrEqual(120 - 60 / 172)
+    expect(phrase(p, a)).toBeCloseTo(0, 6)
+  })
+  it('enters the incoming track within its intro, so the blend stops before its drop', () => {
+    const b = withSegs(track('b', 172), seg('intro', 0, 6), seg('drop', 6, 100))
+    const p = plan(track('a', 172), b, SYNC)
+    expect(p.bars).toBe(4)
+    expect(p.len).toBeCloseTo(4 * bar)
+    expect(p.startOff).toBeCloseTo(b.bar0)
+  })
+})
+
 describe('mixOf', () => {
   it('lays the pair over the default mode', () => {
     const q = { default_mix: 'fade', mix: { 'a>b': { ...SYNC, bars: 16 } } }
