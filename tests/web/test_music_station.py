@@ -57,14 +57,16 @@ def _stopped():
 
 
 def decode(ts: bytes, *args: str) -> subprocess.CompletedProcess:
-    # From a file with one decoder thread: the static ffmpeg segfaults (exit -11) on the CI runner when it
-    # decodes this capture from a pipe with its default threads.
+    # From a file, one thread, no SIMD: the bundled static ffmpeg segfaults (exit -11) on the CI
+    # runner's CPU while probing this capture; it encodes fine there.
     with tempfile.NamedTemporaryFile(suffix=".ts") as f:
         f.write(ts)
         f.flush()
         return subprocess.run(
             [
                 ffmpeg_binary(),
+                "-cpuflags",
+                "0",
                 "-threads",
                 "1",
                 "-probesize",
