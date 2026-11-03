@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { downloadedFileUrl, getDownloadedLibrary } from './api'
+import { fetchLibraryTracks, libraryAudioUrl } from './musicLibraries'
 import type { MusicTrack } from './musicLibrary'
 
 // The music queue lives on the server (SPEC-music §6). This module is the
@@ -214,7 +215,10 @@ export interface AddPayload {
 
 export function addPayload(tracks: MusicTrack[], mode: 'play_now' | 'replace' | 'append'): AddPayload {
   return {
-    tracks: tracks.map(t => ({ library: t.library, track_id: t.id })),
+    // A streamed track carries what the queue shows; the server does not look it up again.
+    tracks: tracks.map(t => t.library === 'online'
+      ? { library: t.library, track_id: t.id, source: t.source, title: t.title, artist: t.artist, duration: t.duration }
+      : { library: t.library, track_id: t.id }),
     ...(mode === 'play_now' && { play_now: true }),
     // The server starts at the first track of a replacement.
     ...(mode === 'replace' && { replace: true }),
@@ -267,13 +271,14 @@ let tracksLoading: Promise<void> | null = null
 const trackListeners = new Set<() => void>()
 
 function loadTracks(): Promise<void> {
-  tracksLoading ??= getDownloadedLibrary()
-    .then(titles => {
+  tracksLoading ??= Promise.all([getDownloadedLibrary(), fetchLibraryTracks().catch(() => [])])
+    .then(([titles, others]) => {
       const next = new Map<string, TrackInfo>()
       for (const t of titles) for (const f of t.files) {
         if (!f.id) continue
         next.set(f.id, { id: f.id, title: f.title, artist: f.artist ?? '', duration: f.duration ?? 0, url: downloadedFileUrl(f.path) })
       }
+      for (const t of others) if (t.library !== 'online') next.set(t.id, { id: t.id, title: t.title, artist: t.artist, duration: t.duration, url: libraryAudioUrl(t) })
       tracks = next
       trackListeners.forEach(l => l())
     })

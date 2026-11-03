@@ -5,8 +5,14 @@ import type { DownloadedFile, DownloadedTitle } from './api'
 
 export interface MusicTrack {
   id: string
+  /** The queue's library: a folder or server id, or "online" for a streamed track. */
   library: string
+  /** The library list it belongs to (differs from `library` for a YouTube Music like). */
+  crate?: string
   libraryLabel: string
+  source?: string
+  /** The album card's name, when the server gives one. */
+  albumName?: string
   title: string
   artist: string
   album: string
@@ -54,6 +60,20 @@ export function albumsOf(titles: DownloadedTitle[]): MusicAlbum[] {
     byFolder.set(t.folder, album)
   }
   const out = [...byFolder.values()].filter(a => a.tracks.length)
+  for (const a of out) a.artist = topArtist(a.tracks)
+  return out
+}
+
+/** Albums of tracks that did not come with the downloads listing: one per library and folder. */
+export function albumsOfTracks(tracks: MusicTrack[]): MusicAlbum[] {
+  const byFolder = new Map<string, MusicAlbum>()
+  for (const t of tracks) {
+    const key = `${t.crate ?? t.library}|${t.folder}`
+    const album = byFolder.get(key) ?? { folder: t.folder, name: t.albumName || t.libraryLabel, artist: '', tracks: [] }
+    album.tracks.push(t)
+    byFolder.set(key, album)
+  }
+  const out = [...byFolder.values()]
   for (const a of out) a.artist = topArtist(a.tracks)
   return out
 }
