@@ -39,6 +39,30 @@ export interface NewLibrary {
   token?: string
 }
 
+export interface FolderRoot {
+  label: string
+  path: string
+}
+
+export interface FolderRow {
+  name: string
+  path: string
+  readable: boolean
+  has_children: boolean
+  /** Audio files found under it; the count stops at a cap (then `capped`). */
+  audio: number
+  capped: boolean
+}
+
+export interface FolderListing {
+  path: string
+  /** Empty at the top of a drive. */
+  parent: string
+  crumbs: { name: string; path: string }[]
+  readable: boolean
+  folders: FolderRow[]
+}
+
 interface ServerTrack {
   id: string
   library: string
@@ -145,6 +169,11 @@ export function useLibraryTracks(): MusicTrack[] {
 }
 
 const reloaded = <T,>(p: Promise<T>) => p.then(async r => { await reloadLibraries(); return r })
+
+export const foldersApi = {
+  roots: () => call<{ roots: FolderRoot[] }>('/folders').then(r => r.roots),
+  browse: (path: string) => call<FolderListing>(`/folders?path=${encodeURIComponent(path)}`),
+}
 
 export const librariesApi = {
   add: (lib: NewLibrary) => reloaded(call<LibraryStatus>('/libraries', 'POST', lib)),

@@ -97,6 +97,9 @@ class AppConfig:
     # Music libraries beyond the download root (SPEC-music §13.1): dicts
     # `{id, kind, label, path | url, token}`; see `sestudio.music.libraries`.
     music_libraries: list[dict] = field(default_factory=list)
+    # Folders the user removed from the libraries the server added by itself
+    # (the Android app's Music/Download folders): they are not added again.
+    music_dismissed: list[str] = field(default_factory=list)
     # Bearer tokens this server issues to other sestudio servers to read its
     # music: `{id, label, hash, created}`. Only the hash is kept.
     music_share_tokens: list[dict] = field(default_factory=list)
@@ -155,6 +158,7 @@ def load_config() -> AppConfig:
             music_libraries=[
                 d for d in data.get("music_libraries", []) or [] if isinstance(d, dict)
             ],
+            music_dismissed=[str(p) for p in data.get("music_dismissed", []) or []],
             music_share_tokens=[
                 d
                 for d in data.get("music_share_tokens", []) or []

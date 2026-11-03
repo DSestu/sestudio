@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from sestudio import downloaded
 from sestudio.config import load_config
-from sestudio.music import libraries, runner, store
+from sestudio.music import folders, libraries, runner, store
 
 router = APIRouter(prefix="/music")
 
@@ -75,6 +75,17 @@ def rename_library(library_id: str, body: RenameBody) -> dict:
 def remove_library(library_id: str) -> dict[str, bool]:
     _run(libraries.remove, library_id)
     return {"ok": True}
+
+
+@router.get("/folders")
+def browse_folders(path: str = "") -> dict:
+    """Subfolders of *path* for the library picker; with no path, the suggested starting points."""
+    if not path.strip():
+        return {"roots": folders.roots()}
+    try:
+        return folders.browse(path.strip())
+    except folders.Unreadable as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 @router.get("/libraries/tracks")

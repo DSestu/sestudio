@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from sestudio.config import load_config
 from sestudio.logging_config import capture_logs
-from sestudio.music import runner
+from sestudio.music import libraries, runner
 from sestudio.models import StreamSource
 from sestudio.providers.filmoon import FilmoonProvider
 from sestudio.providers.luluvid import LuluvidProvider
@@ -114,6 +114,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     network.
     """
     capture_logs()
+    libraries.sync_defaults()
     runner.kick(load_config().output_root)
     await _refresh_sites(app)
     tasks = [asyncio.create_task(_refresh_loop(app))]
