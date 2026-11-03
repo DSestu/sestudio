@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Crates, { type Crate } from '../components/music/crates/Crates'
 import EmptyState from '../components/EmptyState'
 import PageHeader from '../components/PageHeader'
@@ -8,8 +8,8 @@ import {
   albumsOf, artistsOf, formatDuration, initials, matchTracks,
   type MusicAlbum, type MusicTrack,
 } from '../musicLibrary'
-import { addToQueue } from '../musicQueue'
-import { playAll, playNow } from '../components/music/player'
+import { addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
+import { playAll, playNow, playPayload } from '../components/music/player'
 import { useModalBack } from '../useModalBack'
 
 const TABS = [
@@ -75,6 +75,37 @@ function TrackRow({ track }: { track: MusicTrack }) {
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
       </button>
     </li>
+  )
+}
+
+const LINK_RE = /^https?:\/\/(\S+\.)?(youtube\.com|youtu\.be)\//i
+
+/** A pasted YouTube / YouTube Music link: play it as music or queue it. */
+function LinkCard({ url }: { url: string }) {
+  const [found, setFound] = useState<{ url: string; link?: OnlineLink; error?: string }>()
+  useEffect(() => {
+    let live = true
+    resolveLink(url).then(
+      link => live && setFound({ url, link }),
+      (e: Error) => live && setFound({ url, error: e.message }),
+    )
+    return () => { live = false }
+  }, [url])
+  const done = found?.url === url ? found : undefined
+  const link = done?.link
+  const what = link?.kind === 'playlist' ? `${link.title || 'Playlist'} · ${link.tracks.length} tracks` : link?.tracks[0]?.title
+  return (
+    <div className="rounded-2xl bg-white/5 p-3 flex flex-wrap items-center gap-3">
+      <p className="flex-1 min-w-40 truncate text-sm">
+        {done?.error ?? what ?? 'Looking it up…'}
+      </p>
+      {link && (
+        <>
+          <button onClick={() => run(playPayload(link.tracks))} className="btn btn-primary btn-sm">Play as music</button>
+          <button onClick={() => run(post({ tracks: link.tracks }))} className="btn btn-ghost btn-sm">Add to queue</button>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -165,6 +196,7 @@ export default function MusicView() {
             aria-label="Search your libraries"
             className="input input-bordered w-full"
           />
+          {LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {body}
         </div>
       </div>

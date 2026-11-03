@@ -40,6 +40,7 @@ class DownloadRequest(BaseModel):
     to_device: bool = False
     # Id of the ContentSite that produced the embeds; it owns their resolution.
     source: str = "fstream"
+    audio_only: bool = False
 
     def to_spec(self) -> DownloadSpec:
         return DownloadSpec(**self.model_dump())

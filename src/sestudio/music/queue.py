@@ -178,7 +178,7 @@ def _go(doc: dict[str, Any], item_id: str | None, position: float = 0.0) -> None
 
 
 def add(
-    tracks: list[dict[str, str]],
+    tracks: list[dict[str, Any]],
     index: int | None = None,
     play_now: bool = False,
     replace: bool = False,
