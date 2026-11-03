@@ -160,6 +160,7 @@ HTML mockups are used only for layout questions, before motion or sound exist.
 | 2026-11-02 | Player page after four mockup rounds: default = light + fisheye flow on the floor + floating queue; expanded (pinned) = stage with life-size flow + docked column; one 620 ms motion between them. Full detail in SPEC-music-player.md. |
 | 2026-11-03 | Nav: Home · Media · Discover · Music · Library; Activity becomes a bell in the top card; the player is a full-screen layer with a player bar on every page (SPEC-music-player.md §4). |
 | 2026-11-03 | Ready for later (§13): several libraries in a **side column** (layout B), tracks keyed by library + source, playlists as a tree with parts and cross-source items, offline analysis incl. structure, one search across sources with per-source sub-search. Mockups: `docs/assets/music-future-mockups.html`. |
+| 2026-11-03 | Audio items (PR 2): track id = first 16 hex of sha1(library id + NUL + path relative to the library), so it survives rescans and moving the root but not a rename inside it; tags and duration come from `ffmpeg -i` (no ffprobe is bundled); audio is listed as one group per folder with `kind: "audio"`, never regrouped into shows. |
 
 ## 10. Risks
 

@@ -63,14 +63,16 @@ def _listing(root: str) -> list[dict[str, Any]]:
     files = downloaded.scan(root)
     manifest = library.downloaded_files()
 
-    groups: dict[tuple[str, int], dict[str, Any]] = {}
+    groups: dict[tuple[str, int, str], dict[str, Any]] = {}
     for file in files:
         meta = manifest.get(file.path, {})
-        key = (file.series, file.season)
+        key = (file.series, file.season, file.kind)
         group = groups.get(key)
         if group is None:
             group = groups[key] = {
-                "key": f"{file.series}|S{file.season}",
+                "key": f"{file.series}|S{file.season}"
+                + ("|audio" if file.kind == "audio" else ""),
+                "kind": file.kind,
                 # Falls back to the sanitised folder name for anything
                 # downloaded before the manifest existed.
                 "series": meta.get("series_name") or file.series,
@@ -95,16 +97,25 @@ def _listing(root: str) -> list[dict[str, Any]]:
 
         if file.lang and file.lang not in group["langs"]:
             group["langs"].append(file.lang)
-        group["files"].append(
-            {
-                "path": file.path,
-                "number": file.number,
-                "title": file.title,
-                "lang": file.lang,
-                "size": file.size,
-                "mtime": file.mtime,
-            }
-        )
+        entry = {
+            "path": file.path,
+            "number": file.number,
+            "title": file.title,
+            "lang": file.lang,
+            "size": file.size,
+            "mtime": file.mtime,
+        }
+        if file.kind == "audio":
+            entry.update(
+                id=file.track_id,
+                artist=file.artist,
+                album=file.album,
+                duration=file.duration,
+                library=downloaded.LOCAL_LIBRARY,
+                library_label=downloaded.LOCAL_LIBRARY_LABEL,
+                source="file",
+            )
+        group["files"].append(entry)
         group["size"] += file.size
         group["mtime"] = max(group["mtime"], file.mtime)
 

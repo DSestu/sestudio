@@ -92,6 +92,22 @@ _MEDIA_TYPES = {
     ".mpeg": "video/mpeg",
 }
 
+# Music. An audio file is never regrouped into a show: it is listed as a track
+# (see `_describe_audio`).
+_AUDIO_MEDIA_TYPES = {
+    ".m4a": "audio/mp4",
+    ".mp3": "audio/mpeg",
+    ".opus": "audio/ogg",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+}
+_AUDIO_SUFFIXES = frozenset(_AUDIO_MEDIA_TYPES)
+_MEDIA_TYPES.update(_AUDIO_MEDIA_TYPES)
+
+#: The one library there is for now (SPEC-music §13.1): the download root.
+LOCAL_LIBRARY = "local"
+LOCAL_LIBRARY_LABEL = "This PC"
+
 # Deep enough for any sane arrangement, shallow enough that a stray mount or a
 # link loop cannot turn a listing into a filesystem crawl.
 _MAX_DEPTH = 6
@@ -135,6 +151,13 @@ class DownloadedFile:
     folder: str
     size: int
     mtime: float
+    #: "video" or "audio". The fields below are only filled for audio.
+    kind: str = "video"
+    #: See `track_id`.
+    track_id: str = ""
+    artist: str = ""
+    album: str = ""
+    duration: float | None = None
 
     @property
     def is_film(self) -> bool:
@@ -178,7 +201,8 @@ def _walk(root: Path) -> Iterator[Path]:
                     if depth < _MAX_DEPTH and not entry.is_symlink():
                         stack.append((entry, depth + 1))
                 elif (
-                    entry.suffix.lower() in _VIDEO_SUFFIXES and entry.stat().st_size > 0
+                    entry.suffix.lower() in _VIDEO_SUFFIXES | _AUDIO_SUFFIXES
+                    and entry.stat().st_size > 0
                 ):
                     yield entry
             except OSError:
@@ -249,6 +273,57 @@ def _describe(file: Path, root: Path) -> DownloadedFile:
     )
 
 
+def track_id(relative: str, library: str = LOCAL_LIBRARY) -> str:
+    """Id of a track: a hash of its library and its path inside it.
+
+    It survives rescans, restarts and moving the whole root, and it is what the
+    queue and the analysis table key on. It does not survive a rename or a move
+    of the file inside the library: the path is all a bare file has to say who it
+    is, and a content hash would mean reading every file on every scan.
+    """
+    return hashlib.sha1(f"{library}\0{relative}".encode()).hexdigest()[:16]
+
+
+# `Title [1234567]`: the numeric id SoundCloud downloads append.
+_TRAILING_ID_RE = re.compile(r"\s*\[\d+\]$")
+_ARTIST_SPLIT_RE = re.compile(r"\s+-\s+")
+
+
+def parse_track_name(stem: str) -> tuple[str, str]:
+    """(artist, title) out of a file name, for a file with no tags.
+
+    ``Artist - Title [id]`` gives both; ``Title [id]`` gives a title and no artist.
+    """
+    stem = _TRAILING_ID_RE.sub("", stem).strip()
+    parts = _ARTIST_SPLIT_RE.split(stem, maxsplit=1)
+    return (parts[0].strip(), parts[1].strip()) if len(parts) == 2 else ("", stem)
+
+
+def _describe_audio(file: Path, root: Path) -> DownloadedFile:
+    rel = file.relative_to(root)
+    artist, title, album, duration = audio_info(file)
+    if not title:
+        artist, title = parse_track_name(file.stem)
+    stat = file.stat()
+    folder = rel.parent.as_posix() if rel.parent.parts else ""
+    return DownloadedFile(
+        path=rel.as_posix(),
+        series=rel.parent.name or title,
+        season=0,
+        number=0,
+        title=title,
+        lang=UNKNOWN_LANG,
+        folder=folder,
+        size=stat.st_size,
+        mtime=stat.st_mtime,
+        kind="audio",
+        track_id=track_id(rel.as_posix()),
+        artist=artist,
+        album=album,
+        duration=duration,
+    )
+
+
 def _common_prefix(values: list[str]) -> str:
     first, last = min(values), max(values)
     for i, ch in enumerate(first):
@@ -312,10 +387,13 @@ def _scan_uncached(root: Path) -> list[DownloadedFile]:
     # of something cannot be told from the file alone — only from what sits
     # beside it.
     by_folder: dict[Path, list[Path]] = {}
-    for file in _walk(root):
-        by_folder.setdefault(file.parent, []).append(file)
-
     found: list[DownloadedFile] = []
+    for file in _walk(root):
+        if file.suffix.lower() in _AUDIO_SUFFIXES:
+            found.append(_describe_audio(file, root))
+        else:
+            by_folder.setdefault(file.parent, []).append(file)
+
     for folder, files in by_folder.items():
         described = [_describe(file, root) for file in files]
         # Only files that came out as standalone films are candidates: anything
@@ -1695,6 +1773,55 @@ def duration_of(file: Path) -> float | None:
 
     _durations[key] = seconds
     return seconds
+
+
+_META_RE = re.compile(r"^    (title|artist|album)\s*:\s*(.*?)\s*$", re.IGNORECASE)
+_audio_infos: dict[tuple[str, int, float], tuple[str, str, str, float | None]] = {}
+
+
+def audio_info(file: Path) -> tuple[str, str, str, float | None]:
+    """(artist, title, album, duration) read from a file's tags; "" when untagged.
+
+    From ffmpeg's report, like `duration_of`: the file-level tags are the
+    ``Metadata:`` block before ``Duration:`` (stream tags sit deeper).
+    """
+    try:
+        stat = file.stat()
+    except OSError:
+        return "", "", "", None
+    key = (str(file), stat.st_size, stat.st_mtime)
+    if key in _audio_infos:
+        return _audio_infos[key]
+    tags: dict[str, str] = {}
+    seconds: float | None = None
+    try:
+        result = subprocess.run(
+            [ffmpeg_binary(), "-nostdin", "-hide_banner", "-i", str(file)],
+            timeout=30,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        for line in result.stderr.decode("utf-8", "replace").splitlines():
+            if line.lstrip().startswith("Duration:"):
+                match = _DURATION_RE.search(line)
+                if match:
+                    hours, minutes, rest = match.groups()
+                    seconds = int(hours) * 3600 + int(minutes) * 60 + float(rest)
+                break
+            match = _META_RE.match(line)
+            if match:
+                tags.setdefault(match.group(1).lower(), match.group(2))
+    except (RuntimeError, OSError, subprocess.SubprocessError):
+        pass
+    info = (
+        tags.get("artist", ""),
+        tags.get("title", ""),
+        tags.get("album", ""),
+        seconds,
+    )
+    _audio_infos[key] = info
+    return info
 
 
 def content_features(time_seekable: bool) -> str:
