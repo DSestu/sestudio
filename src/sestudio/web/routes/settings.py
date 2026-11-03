@@ -41,6 +41,7 @@ class SettingsBody(BaseModel):
     allow_file_deletion: bool | None = None
     frame_interpolation: bool | None = None
     ai_max_hold: int | None = Field(default=None, ge=0, le=4)
+    ytmusic_cookies: str | None = None
 
 
 def _known_hosts(request: Request) -> list[str]:
@@ -60,6 +61,10 @@ def _public(cfg, request: Request) -> dict[str, Any]:
     """Settings for the client, with the API key replaced by a set/unset flag."""
     data = dataclasses.asdict(cfg)
     data.pop("tmdb_api_key", None)
+    # Libraries carry other servers' tokens, and the share tokens' hashes are not the client's either:
+    # both are read through /music/libraries and /music/share-tokens.
+    data.pop("music_libraries", None)
+    data.pop("music_share_tokens", None)
     data["tmdb_configured"] = bool(tmdb_key())
     # Same treatment as the TMDB key: a secret the client sets but never reads
     # back. The phone number is not secret and stays, so the field can show what
@@ -135,6 +140,8 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.callmebot_phone = "".join(ch for ch in body.callmebot_phone if ch.isdigit())
     if body.callmebot_apikey is not None:
         cfg.callmebot_apikey = body.callmebot_apikey.strip()
+    if body.ytmusic_cookies is not None:
+        cfg.ytmusic_cookies = body.ytmusic_cookies.strip().strip('"')
     if body.allow_file_deletion is not None:
         cfg.allow_file_deletion = body.allow_file_deletion
     if body.frame_interpolation is not None:

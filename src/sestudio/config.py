@@ -94,6 +94,15 @@ class AppConfig:
     # repeated for up to that many frames is drawn across as one, so AI frames
     # smooth it out; held longer, it is a pause and stays still. 0, off.
     ai_max_hold: int = 0
+    # Music libraries beyond the download root (SPEC-music §13.1): dicts
+    # `{id, kind, label, path | url, token}`; see `sestudio.music.libraries`.
+    music_libraries: list[dict] = field(default_factory=list)
+    # Bearer tokens this server issues to other sestudio servers to read its
+    # music: `{id, label, hash, created}`. Only the hash is kept.
+    music_share_tokens: list[dict] = field(default_factory=list)
+    # A Netscape cookies.txt of a signed-in YouTube session, for the YouTube
+    # Music account library; empty means not signed in.
+    ytmusic_cookies: str = ""
 
 
 def _config_path() -> Path:
@@ -138,6 +147,15 @@ def load_config() -> AppConfig:
             allow_file_deletion=bool(data.get("allow_file_deletion", False)),
             frame_interpolation=bool(data.get("frame_interpolation", True)),
             ai_max_hold=int(data.get("ai_max_hold", 0)),
+            music_libraries=[
+                d for d in data.get("music_libraries", []) or [] if isinstance(d, dict)
+            ],
+            music_share_tokens=[
+                d
+                for d in data.get("music_share_tokens", []) or []
+                if isinstance(d, dict)
+            ],
+            ytmusic_cookies=str(data.get("ytmusic_cookies", "")),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)
