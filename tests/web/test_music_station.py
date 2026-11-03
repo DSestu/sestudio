@@ -57,13 +57,16 @@ def _stopped():
 
 
 def decode(ts: bytes, *args: str) -> subprocess.CompletedProcess:
-    # From a file, not a pipe: a seekable input lets ffmpeg probe the whole capture.
+    # From a file with one decoder thread: the static ffmpeg segfaults (exit -11) on the CI runner when it
+    # decodes this capture from a pipe with its default threads.
     with tempfile.NamedTemporaryFile(suffix=".ts") as f:
         f.write(ts)
         f.flush()
         return subprocess.run(
             [
                 ffmpeg_binary(),
+                "-threads",
+                "1",
                 "-probesize",
                 "50M",
                 "-analyzeduration",
