@@ -102,6 +102,8 @@ export interface AppSettings {
   callmebot_apikey?: string
   /** Whether a CallMeBot number and key are both stored. Read-only. */
   callmebot_configured?: boolean
+  /** Path of a cookies.txt from a signed-in YouTube session, for the YouTube Music library. */
+  ytmusic_cookies?: string
   /** Concurrent downloads a watcher may run, kept below the interactive pool. */
   watcher_max_concurrent?: number
   /** Every host a download could use, for the ranking control. Read-only. */

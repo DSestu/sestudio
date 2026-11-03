@@ -13,6 +13,19 @@ export interface RawAnalysis {
   bar0?: number | null
   /** 8 band envelopes, whole percents at 10 Hz. */
   bands?: number[][]
+  /** Analysis v2: segments in bars from the first whole bar. */
+  structure?: { label: string; start_bar: number; end_bar: number }[]
+  energy?: number[]
+  camelot?: string
+  genre?: string
+  genreConf?: number
+}
+
+/** A structure segment (intro, buildup, drop, breakdown, outro) in the track's own seconds. */
+export interface Seg {
+  label: string
+  a: number
+  b: number
 }
 
 export interface Track {
@@ -22,6 +35,8 @@ export interface Track {
   bpm: number
   /** The first downbeat, seconds. */
   bar0: number
+  /** Structure segments, empty when the track has none. */
+  segs: Seg[]
   /** Cumulative band means per group (bass, mids, highs): cum[g][i + 1] = cum[g][i] + mean at i. */
   cum: [Float64Array, Float64Array, Float64Array]
 }
@@ -43,14 +58,19 @@ export function prepTrack(id: string, dur: number, raw?: RawAnalysis | null): Tr
     return c
   }) as Track['cum']
   const bpm = raw?.bpm && raw.bpm > 0 ? raw.bpm : 0
-  let bar0 = 0
-  if (bpm) {
-    const bar = 240 / bpm
-    let b = (raw?.bar0 ?? 0) % bar
-    if (b > bar - 0.06) b -= bar
-    bar0 = Math.max(0, b)
-  }
-  return { id, dur, bpm, bar0, cum }
+  const bar0 = normBar0(bpm, raw?.bar0)
+  const bar = bpm ? 240 / bpm : 0
+  const segs = bpm && raw?.structure ? raw.structure.map(g => ({ label: g.label, a: bar0 + g.start_bar * bar, b: bar0 + g.end_bar * bar })) : []
+  return { id, dur, bpm, bar0, segs, cum }
+}
+
+/** The first bar line, folded into the first bar (a hair before the next one counts as 0). */
+export function normBar0(bpm: number, bar0?: number | null): number {
+  if (!bpm) return 0
+  const bar = 240 / bpm
+  let b = (bar0 ?? 0) % bar
+  if (b > bar - 0.06) b -= bar
+  return Math.max(0, b)
 }
 
 // --- the global time axis -----------------------------------------------------------
@@ -63,6 +83,12 @@ export interface Plan {
   startOff: number
   rate: number
   bars?: number
+  /** Beat sync only: bass swap, and the two tempos the phase lock counts beats with. */
+  swap?: boolean
+  bpmA?: number
+  bpmB?: number
+  /** Why a sync fell back to a fade. */
+  why?: 'tempo' | 'short'
 }
 
 export const fadePlan = (a: Track): Plan => ({ mode: 'fade', mixOut: a.dur - FADE, len: FADE, startOff: 0, rate: 1 })
@@ -83,7 +109,6 @@ export interface QueueLayout {
   plans: Plan[]
 }
 
-/** The per-pair plan is plugged in by PR 12; until then every handover is a fade. */
 export function layoutQueue(tracks: Track[], planOf: (a: Track, b: Track) => Plan = fadePlan): QueueLayout {
   const plans = tracks.slice(0, -1).map((a, i) => planOf(a, tracks[i + 1]))
   const TS: number[] = []

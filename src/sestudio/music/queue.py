@@ -154,6 +154,13 @@ def _mutate(
             raise StaleRev(rev)
         detail = change(doc)
         rev += 1
+        for item in doc["items"] if doc["playing"] else ():
+            if item["item_id"] == doc["current_item"]:
+                conn.execute(
+                    "INSERT OR IGNORE INTO music_plays (track_id, played_at) "
+                    "VALUES (?, ?)",
+                    (item["track_id"], int(time.time())),
+                )
         conn.execute(
             "INSERT INTO music_queue (station, rev, data) VALUES (?, ?, ?) "
             "ON CONFLICT(station) DO UPDATE SET rev = excluded.rev, data = excluded.data",
@@ -246,12 +253,21 @@ def move(item_id: str, to: int, if_rev: int | None = None) -> dict[str, Any]:
     return _mutate("mv", if_rev, change)
 
 
-def play(item_id: str, if_rev: int | None = None) -> dict[str, Any]:
+def play(
+    item_id: str, position: float | None = None, if_rev: int | None = None
+) -> dict[str, Any]:
+    """Go to *item_id* and play it. With a *position* (a scrub or a jump on the
+    timeline) it lands there and stays playing or paused as it was."""
+
     def change(doc: dict[str, Any]) -> dict[str, Any]:
         i = _find(doc, item_id)
-        _go(doc, item_id)
-        doc["playing"] = True
-        return {"item_id": item_id, "index": i}
+        _go(doc, item_id, position or 0.0)
+        detail: dict[str, Any] = {"item_id": item_id, "index": i}
+        if position is None:
+            doc["playing"] = True
+        else:
+            detail.update(position=doc["position"], keep=True)
+        return detail
 
     return _mutate("go", if_rev, change)
 

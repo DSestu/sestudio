@@ -7,12 +7,24 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
-from sestudio.music import online, runner, store
+from sestudio.config import load_config
+from sestudio.music import libraries, online, runner, search, store
 from sestudio.sites import SiteError
 from sestudio.web.routes.stream import _proxy_url
 
 router = APIRouter()
+
+
+def _analyses(ids: list[str]) -> dict[str, Any]:
+    """Stored analyses; a remote library's tracks are asked of their own server."""
+    found = store.get(ids)
+    for tid in ids:
+        remote = None if tid in found else libraries.split_remote(tid)
+        if remote and (a := libraries.remote_analysis(*remote)):
+            found[tid] = a
+    return found
 
 
 @router.get("/music/analysis/status")
@@ -30,15 +42,41 @@ async def renormalise() -> dict[str, Any]:
 async def tracks_analysis(ids: str = Query(...)) -> dict[str, Any]:
     """Several analyses at once (``?ids=a,b,c``); unanalysed ids are left out."""
     wanted = [i for i in ids.split(",") if i]
-    return await asyncio.to_thread(store.get, wanted)
+    return await asyncio.to_thread(_analyses, wanted)
 
 
 @router.get("/music/tracks/{track_id}/analysis")
 async def track_analysis(track_id: str) -> dict[str, Any]:
-    found = await asyncio.to_thread(store.get, [track_id])
+    found = await asyncio.to_thread(_analyses, [track_id])
     if track_id not in found:
         raise HTTPException(status_code=404, detail="Not analysed (yet)")
     return found[track_id]
+
+
+@router.get("/music/search")
+async def music_search(
+    q: str = Query(...),
+    source: str = Query("all"),
+    limit: int = Query(12, ge=1, le=30),
+) -> dict[str, Any]:
+    """The libraries and the online sources for one query, or one source of them."""
+    if source not in search.SOURCES:
+        raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
+    root = load_config().output_root
+    return await asyncio.to_thread(search.search, q, source, limit, root)
+
+
+class GenreBody(BaseModel):
+    genre: str | None = None
+
+
+@router.put("/music/tracks/{track_id}/genre")
+async def track_genre(track_id: str, body: GenreBody) -> dict[str, bool]:
+    """Confirm or fix a track's genre (None clears the choice)."""
+    genre = (body.genre or "").strip()[:60] or None
+    if not await asyncio.to_thread(store.set_genre, track_id, genre):
+        raise HTTPException(status_code=404, detail="Not analysed (yet)")
+    return {"ok": True}
 
 
 @router.get("/music/online/link")

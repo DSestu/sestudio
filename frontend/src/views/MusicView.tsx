@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
+import AddToPlaylist from '../components/music/crates/AddToPlaylist'
+import AddLibrary from '../components/music/crates/AddLibrary'
 import Crates, { type Crate } from '../components/music/crates/Crates'
+import PlaylistView from '../components/music/crates/PlaylistView'
 import EmptyState from '../components/EmptyState'
 import PageHeader from '../components/PageHeader'
 import ResponsiveModal from '../components/ResponsiveModal'
 import { useDownloadedLibrary } from '../downloadedLibrary'
+import { usePlaylists } from '../musicPlaylists'
+import { stateLine, useLibraries, useLibraryTracks, type LibraryStatus } from '../musicLibraries'
 import {
-  albumsOf, artistsOf, formatDuration, initials, matchTracks,
+  albumsOf, albumsOfTracks, artistsOf, formatDuration, initials, matchTracks,
   type MusicAlbum, type MusicTrack,
 } from '../musicLibrary'
 import { addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
 import { playAll, playNow, playPayload } from '../components/music/player'
+import MusicSearch from '../components/music/MusicSearch'
 import { useModalBack } from '../useModalBack'
 
 const TABS = [
@@ -18,6 +24,12 @@ const TABS = [
   { id: 'tracks', label: 'Tracks' },
 ] as const
 type MusicTab = (typeof TABS)[number]['id']
+
+const DOT: Record<LibraryStatus['state'], string> = {
+  online: 'bg-success',
+  offline: 'bg-base-content/30',
+  needs_signin: 'bg-warning',
+}
 
 const run = (p: Promise<void>) => { p.catch(() => {}) }
 
@@ -53,7 +65,7 @@ function AlbumCard({ album }: { album: MusicAlbum }) {
   )
 }
 
-function TrackRow({ track }: { track: MusicTrack }) {
+function TrackRow({ track, onPlaylist }: { track: MusicTrack; onPlaylist: (t: MusicTrack) => void }) {
   return (
     <li className="flex items-center gap-1 rounded-xl hover:bg-white/5">
       <button
@@ -67,13 +79,15 @@ function TrackRow({ track }: { track: MusicTrack }) {
         {track.bpm !== undefined && <span className="text-[11px] text-base-content/40 tabular-nums">{Math.round(track.bpm)} bpm</span>}
         <span className="w-10 text-right text-xs text-base-content/60 tabular-nums">{formatDuration(track.duration)}</span>
       </button>
-      <button
-        onClick={() => run(addToQueue(track))}
-        aria-label={`Add ${track.title} to the queue`}
-        className="btn btn-ghost btn-circle btn-sm mr-1"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
-      </button>
+      <div className="dropdown dropdown-end">
+        <button tabIndex={0} aria-label={`Add ${track.title}`} className="btn btn-ghost btn-circle btn-sm mr-1">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+        </button>
+        <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 w-48 rounded-xl bg-base-200 p-1 shadow-lg">
+          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); run(addToQueue(track)) }}>Add to queue</button></li>
+          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); onPlaylist(track) }}>Add to playlist…</button></li>
+        </ul>
+      </div>
     </li>
   )
 }
@@ -115,41 +129,55 @@ export default function MusicView() {
   const [library, setLibrary] = useState('')
   const [query, setQuery] = useState('')
   const [sheet, setSheet] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [nodeId, setNodeId] = useState('')
+  const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(sheet, () => setSheet(false))
+  useModalBack(adding, () => setAdding(false))
+  const playlists = usePlaylists()
+  const node = playlists.find(n => n.id === nodeId)
 
-  const all = useMemo(() => albumsOf(titles).flatMap(a => a.tracks), [titles])
-  const crates = useMemo<Crate[]>(() => {
-    const byLib = new Map<string, Crate>()
-    for (const t of all) {
-      const c = byLib.get(t.library) ?? { id: t.library, label: t.libraryLabel, count: 0 }
-      c.count++
-      byLib.set(t.library, c)
-    }
-    return [{ id: '', label: 'All', count: all.length }, ...byLib.values()]
-  }, [all])
+  const others = useLibraryTracks()
+  const libraries = useLibraries()
+  const all = useMemo(() => [...albumsOf(titles).flatMap(a => a.tracks), ...others], [titles, others])
+  const crates = useMemo<Crate[]>(() => [
+    { id: '', label: 'All', count: all.length },
+    ...libraries.map(l => ({ id: l.id, label: l.label, count: l.count, dot: DOT[l.state], line: stateLine(l) })),
+  ], [all, libraries])
 
   const tracks = useMemo(
-    () => matchTracks(all.filter(t => !library || t.library === library), query),
+    () => matchTracks(all.filter(t => !library || (t.crate ?? t.library) === library), query),
     [all, library, query],
   )
   const albums = useMemo(() => {
     const ids = new Set(tracks.map(t => t.id))
-    return albumsOf(titles)
+    return [...albumsOf(titles), ...albumsOfTracks(others)]
       .map(a => ({ ...a, tracks: a.tracks.filter(t => ids.has(t.id)) }))
       .filter(a => a.tracks.length)
-  }, [titles, tracks])
+  }, [titles, others, tracks])
   const artists = useMemo(() => artistsOf(tracks), [tracks])
 
-  const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
-  const pick = (id: string) => { setLibrary(id); setSheet(false) }
+  const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
+  const activeLabel = node?.name ?? crates.find(c => c.id === library)?.label ?? 'All'
+  const pick = (id: string) => { setLibrary(id); setNodeId(''); setSheet(false) }
+  const pickNode = (id: string) => { setNodeId(id); setSheet(false) }
 
-  const body = !all.length ? (
+  const searching = !node && query.trim() !== '' && !LINK_RE.test(query.trim())
+  const body = node ? (
+    <PlaylistView key={node.id} node={node} byId={byId} />
+  ) : searching ? (
+    <MusicSearch
+      query={query}
+      byId={byId}
+      renderLibrary={ts => <ul>{ts.map(t => <TrackRow key={t.id} track={t} onPlaylist={setPickFor} />)}</ul>}
+    />
+  ) : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
   ) : !tracks.length ? (
     <EmptyState title="No match" message="Nothing in your libraries matches that search." />
   ) : tab === 'albums' ? (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-      {albums.map(a => <AlbumCard key={a.folder} album={a} />)}
+      {albums.map(a => <AlbumCard key={a.tracks[0].id} album={a} />)}
     </div>
   ) : tab === 'artists' ? (
     <div className="flex flex-col gap-5">
@@ -160,12 +188,12 @@ export default function MusicView() {
             <h3 className="flex-1 min-w-0 truncate text-sm font-semibold">{a.name}</h3>
             <button onClick={() => run(playAll(a.tracks))} className="btn btn-ghost btn-xs">Play all</button>
           </div>
-          <ul>{a.tracks.map(t => <TrackRow key={t.id} track={t} />)}</ul>
+          <ul>{a.tracks.map(t => <TrackRow key={t.id} track={t} onPlaylist={setPickFor} />)}</ul>
         </section>
       ))}
     </div>
   ) : (
-    <ul>{tracks.map(t => <TrackRow key={t.id} track={t} />)}</ul>
+    <ul>{tracks.map(t => <TrackRow key={t.id} track={t} onPlaylist={setPickFor} />)}</ul>
   )
 
   return (
@@ -175,7 +203,7 @@ export default function MusicView() {
         status={<><em>{all.length}</em> tracks</>}
         tabs={[...TABS]}
         tab={tab}
-        onTab={setTab}
+        onTab={t => { setTab(t); setNodeId('') }}
       />
       <div className="md:hidden">
         <button onClick={() => setSheet(true)} className="btn btn-sm rounded-full gap-1.5">
@@ -185,26 +213,30 @@ export default function MusicView() {
       </div>
       <div className="flex gap-6 items-start">
         <aside className="hidden md:block w-62.5 shrink-0 sticky top-24">
-          <Crates crates={crates} active={library} onPick={pick} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} />
         </aside>
         <div className="flex-1 min-w-0 flex flex-col gap-4">
-          <input
-            type="search"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search your libraries and online, or paste a link"
-            aria-label="Search your libraries"
-            className="input input-bordered w-full"
-          />
-          {LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
+          {!node && (
+            <input
+              type="search"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search your libraries and online, or paste a link"
+              aria-label="Search your libraries"
+              className="input input-bordered w-full"
+            />
+          )}
+          {!node && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {body}
         </div>
       </div>
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)}>
-          <Crates crates={crates} active={library} onPick={pick} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} />
         </ResponsiveModal>
       )}
+      {adding && <AddLibrary onClose={() => setAdding(false)} />}
+      {pickFor && <AddToPlaylist track={pickFor} onClose={() => setPickFor(undefined)} />}
     </div>
   )
 }

@@ -32,10 +32,12 @@ from sestudio.web.routes import (
     downloads,
     health,
     library,
+    music_playlists,
     music_queue,
     downloaded,
     home,
     music,
+    music_libraries,
     search,
     seasons,
     settings,
@@ -184,6 +186,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(library.router, prefix="/api")
     app.include_router(downloaded.router, prefix="/api")
     app.include_router(music_queue.router, prefix="/api")
+    app.include_router(music_playlists.router, prefix="/api")
     app.include_router(stream.router, prefix="/api")
     app.include_router(cast.router, prefix="/api")
     app.include_router(tmdb.router, prefix="/api")
@@ -193,6 +196,8 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(creators.router, prefix="/api")
     app.include_router(home.router, prefix="/api")
     app.include_router(music.router, prefix="/api")
+    app.include_router(music_libraries.router, prefix="/api")
+    app.include_router(music_libraries.share, prefix="/api")
     app.include_router(health.router, prefix="/api")
 
     # Serve built frontend if available (installed static dir or source dist)

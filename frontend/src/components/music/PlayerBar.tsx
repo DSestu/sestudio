@@ -1,3 +1,6 @@
+import { useEffect } from 'react'
+import { useCastState } from '../../cast'
+import { useDlnaState } from '../../dlnaControl'
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, fmtBpm } from './format'
 import { openPlayer, togglePlay, usePosition } from './player'
@@ -10,6 +13,16 @@ export default function PlayerBar() {
   const track = item && info(item.track_id)
   const analysis = useAnalysis(item?.track_id)
   const position = usePosition(q, track?.duration ?? 0)
+  // Above the Now-Casting bar when a cast is up; the page's bottom padding clears both (AppShell reads --music-bar).
+  const castUp = useCastState().connected
+  const dlnaUp = useDlnaState().connected
+  const casting = castUp || dlnaUp
+  const shown = !!item
+  useEffect(() => {
+    if (!shown) return
+    document.documentElement.style.setProperty('--music-bar', '4.5rem')
+    return () => { document.documentElement.style.removeProperty('--music-bar') }
+  }, [shown])
   if (!item) return null
   const hue = analysis?.hue ?? DEFAULT_HUE
   return (
@@ -19,7 +32,8 @@ export default function PlayerBar() {
       aria-label="Open the player"
       onClick={openPlayer}
       onKeyDown={e => { if (e.key === 'Enter') openPlayer() }}
-      className="fixed z-40 glass rounded-2xl h-16 flex items-center gap-3 px-3 cursor-pointer inset-x-3 bottom-[calc(var(--dock-clear)+0.5rem)] md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[min(36rem,calc(100vw-9rem))] md:bottom-4"
+      className="fixed z-40 glass rounded-2xl h-16 flex items-center gap-3 px-3 cursor-pointer inset-x-3 bottom-[calc(var(--dock-clear)+0.5rem+var(--lift))] md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[min(36rem,calc(100vw-9rem))] md:bottom-[calc(1rem+var(--lift))]"
+      style={{ '--lift': casting ? '4.5rem' : '0rem' } as React.CSSProperties}
     >
       <span
         aria-hidden="true"
