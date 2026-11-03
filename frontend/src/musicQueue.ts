@@ -100,6 +100,8 @@ export function applyEvent(s: QueueState, ev: QueueEvent, serverNow: number): Qu
       return Object.assign(next, { items, current: keep(items) })
     }
     case 'go':
+      // `keep`: a jump on the timeline lands at a position and leaves play / pause as it was.
+      if (ev.keep) return Object.assign(next, restart(ev.index as number, s.playing), { position: ev.position as number })
       return Object.assign(next, restart(ev.index as number, (ev.playing as boolean | undefined) ?? true))
     case 'transport':
       return Object.assign(next, {
@@ -191,7 +193,7 @@ async function send(method: string, path: string, body?: unknown): Promise<void>
 }
 
 export const queueActions = {
-  play: (itemId: string) => send('POST', '/play', { item_id: itemId }),
+  play: (itemId: string, position?: number) => send('POST', '/play', { item_id: itemId, position }),
   remove: (itemId: string) => send('DELETE', `/${itemId}`),
   move: (itemId: string, to: number) => send('POST', '/move', { item_id: itemId, to }),
   transport: (
@@ -206,6 +208,8 @@ export interface AddPayload {
   tracks: (TrackRef & Partial<Pick<QueueItem, 'source' | 'title' | 'artist' | 'duration'>>)[]
   play_now?: boolean
   replace?: boolean
+  /** Where in the queue to insert (default: the end). */
+  index?: number
 }
 
 export function addPayload(tracks: MusicTrack[], mode: 'play_now' | 'replace' | 'append'): AddPayload {

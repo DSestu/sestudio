@@ -50,6 +50,7 @@ class MoveBody(BaseModel):
 
 class PlayBody(BaseModel):
     item_id: str
+    position: float | None = Field(default=None, ge=0)
 
 
 class TransportBody(BaseModel):
@@ -162,7 +163,7 @@ def play_item(
     if_match: str | None = Header(default=None),
     rev: int | None = Query(default=None),
 ) -> Any:
-    return _run(lambda: queue.play(body.item_id, _rev(if_match, rev)))
+    return _run(lambda: queue.play(body.item_id, body.position, _rev(if_match, rev)))
 
 
 @router.post("/transport")

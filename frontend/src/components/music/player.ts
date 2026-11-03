@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { MusicTrack } from '../../musicLibrary'
 import { addPayload, type AddPayload, onQueueEvent, post, positionNow, queueActions, clockSkew, useMusicQueue, type QueueState, useTrackInfo } from '../../musicQueue'
 import { BLEND, claimSound, engine, isSoundTab } from './engine'
+import { glideToItem, takeBlend } from './scrub'
 
 // Whether the full-screen player layer is up, and the entry points that start
 // playback: they claim the sound for this tab, wake the audio engine (browsers
@@ -30,8 +31,8 @@ export const playNow = (t: MusicTrack) => start(() => post(addPayload([t], 'play
 /** Streamed tracks (a pasted link): they replace the queue and play from the first. */
 export const playPayload = (tracks: AddPayload['tracks']) => start(() => post({ tracks, replace: true }))
 export const playAll = (ts: MusicTrack[]) => start(() => post(addPayload(ts, 'replace')))
-/** Play a row of the queue. */
-export const playItem = (itemId: string) => start(() => queueActions.play(itemId))
+/** A row of the queue: the timeline glides to it and plays it. */
+export const playItem = (itemId: string) => start(async () => { if (!glideToItem(itemId)) await queueActions.play(itemId) })
 /** Play / pause from the transport or the bar. */
 export function togglePlay(playing: boolean, position: number) {
   if (playing) void queueActions.transport('pause', { position })
@@ -45,7 +46,7 @@ export function useMusicHost() {
   useEffect(() => {
     engine.onAdvance = () => void queueActions.transport('next')
     // A next/prev (its event says whether it keeps playing) blends over 3 s, anything else .6 s.
-    return onQueueEvent(ev => { engine.blend = ev.op === 'go' && 'playing' in ev ? BLEND.skip : BLEND.glide })
+    return onQueueEvent(ev => { engine.blend = ev.op === 'go' ? ('playing' in ev ? BLEND.skip : takeBlend() ?? BLEND.glide) : BLEND.glide })
   }, [])
   useEffect(() => {
     engine.follow(q, info)
