@@ -22,6 +22,12 @@ def test_get_settings_defaults(client):
     assert "output_root" in data
 
 
+def test_lab_flag_is_off_unless_the_env_var_is_set(client, monkeypatch):
+    assert client.get("/api/settings").json()["lab"] is False
+    monkeypatch.setenv("SESTUDIO_LAB", "1")
+    assert client.get("/api/settings").json()["lab"] is True
+
+
 def test_put_settings_persists(client):
     resp = client.put(
         "/api/settings", json={"lang": "vostfr", "output_root": "/tmp/test"}
