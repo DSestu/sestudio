@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import tempfile
 from dataclasses import dataclass, field
@@ -9,6 +10,7 @@ from typing import Literal
 
 from sestudio import downloaded, library
 from sestudio.config import AppConfig, load_config
+from sestudio.downloader import audio_file
 from sestudio.models import StreamSource, sanitize_path_component
 from sestudio.providers.base import ProviderError
 from sestudio.sites import ContentSite, SiteError, StreamCandidate, site_for
@@ -39,6 +41,8 @@ class DownloadSpec:
     page_url: str = ""
     to_device: bool = False
     source: str = "fstream"
+    # Only the sound, kept as a music track (a page yt-dlp downloads: YouTube).
+    audio_only: bool = False
 
 
 @dataclass
@@ -161,6 +165,10 @@ async def queue_download(
         logger.warning("Could not resolve %s: %s", spec.episode_name, last_error)
         return QueueResult(spec.episode_name, "error", error=last_error)
 
+    audio = spec.audio_only and not spec.to_device and bool(source.extract_url)
+    if audio:
+        source = dataclasses.replace(source, audio_only=True)
+
     safe_ep = sanitize_path_component(spec.episode_name)
     if spec.to_device:
         # Staged in a temp dir for the browser to collect; never treated as part
@@ -176,7 +184,7 @@ async def queue_download(
         # downloaded before this was kept.
         record_downloaded_file(cfg.output_root, out_path, spec)
 
-        if out_path.exists() and out_path.stat().st_size > 0:
+        if audio_file(out_path) or (out_path.exists() and out_path.stat().st_size > 0):
             logger.info(
                 "Skipping %s: already exists at %s", spec.episode_name, out_path
             )

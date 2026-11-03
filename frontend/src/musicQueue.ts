@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { downloadedFileUrl, getDownloadedLibrary } from './api'
 import type { MusicTrack } from './musicLibrary'
 
@@ -14,6 +14,11 @@ export interface TrackRef {
 }
 export interface QueueItem extends TrackRef {
   item_id: string
+  /** A streamed track (library "online") carries what the queue shows. */
+  source?: string
+  title?: string
+  artist?: string
+  duration?: number
 }
 export interface MixSettings {
   mode: string
@@ -198,7 +203,7 @@ export const queueActions = {
 // --- adding from the library views ----------------------------------------------
 
 export interface AddPayload {
-  tracks: { library: string; track_id: string }[]
+  tracks: (TrackRef & Partial<Pick<QueueItem, 'source' | 'title' | 'artist' | 'duration'>>)[]
   play_now?: boolean
   replace?: boolean
 }
@@ -219,6 +224,18 @@ export async function post(payload: AddPayload): Promise<void> {
     body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`queue: ${res.status}`)
+}
+
+/** A pasted YouTube / YouTube Music link as queue items (a playlist: every entry). */
+export interface OnlineLink {
+  kind: 'video' | 'playlist'
+  title: string
+  tracks: AddPayload['tracks']
+}
+export async function resolveLink(url: string): Promise<OnlineLink> {
+  const res = await fetch(`${BASE}/online/link?${new URLSearchParams({ url })}`)
+  if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { detail?: string } | null)?.detail ?? `link: ${res.status}`)
+  return res.json()
 }
 
 export const addToQueue = (t: MusicTrack) => post(addPayload([t], 'append'))
@@ -264,9 +281,13 @@ export const trackInfo = (id: string | undefined) => (id ? tracks.get(id) : unde
 /** Track metadata by id, reloaded when the queue holds one it has not seen. */
 export function useTrackInfo(q: QueueState): (id: string) => TrackInfo | undefined {
   useSyncExternalStore(l => { trackListeners.add(l); return () => trackListeners.delete(l) }, () => tracks)
-  const missing = q.items.some(i => !tracks.has(i.track_id))
+  const online = useMemo(() => new Map(q.items.filter(i => i.library === 'online').map(i => [i.track_id, {
+    id: i.track_id, title: i.title ?? '', artist: i.artist ?? '', duration: i.duration ?? 0,
+    url: `${BASE}/online/${encodeURIComponent(i.track_id)}/audio`,
+  }])), [q.items])
+  const missing = q.items.some(i => i.library !== 'online' && !tracks.has(i.track_id))
   useEffect(() => { if (missing) void loadTracks() }, [missing, q.rev])
-  return id => tracks.get(id)
+  return id => tracks.get(id) ?? online.get(id)
 }
 
 const analyses = new Map<string, Analysis | null>()

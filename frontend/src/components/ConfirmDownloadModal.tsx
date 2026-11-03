@@ -26,7 +26,9 @@ interface Props {
   onPreferences?: (patch: { preferred_sites?: string[]; preferred_hosts?: string[] }) => void
   /** Default destination from settings. */
   destination: DownloadDestination
-  onConfirm: (destination: DownloadDestination) => Promise<void>
+  /** Offer "Audio only" when every item is a YouTube video. */
+  audioOption?: boolean
+  onConfirm: (destination: DownloadDestination, audioOnly?: boolean) => Promise<void>
   onCancel: () => void
 }
 
@@ -57,13 +59,15 @@ function buildTree(items: DownloadItem[]): FileTree {
 }
 
 export default function ConfirmDownloadModal({
-  items, outputRoot, existingFiles, destination, onConfirm, onCancel,
+  items, outputRoot, existingFiles, destination, audioOption, onConfirm, onCancel,
   siteOptions = [], preferredSites = [], preferredHosts = [], onPreferences,
   hostOptions: knownHosts, defaultHosts = DEFAULT_HOST_ORDER,
 }: Props) {
   useModalBack(true, onCancel)
   const [confirming, setConfirming] = useState(false)
   const [dest, setDest] = useState<DownloadDestination>(destination)
+  const [audioOnly, setAudioOnly] = useState(false)
+  const canAudio = !!audioOption && dest === 'server' && items.every(i => i.source === 'youtube')
   const tree = buildTree(items)
   // Everything the server can resolve, so an order set here still holds for a
   // title fetched from elsewhere; the hosts these items carry are folded in so
@@ -145,6 +149,21 @@ export default function ConfirmDownloadModal({
             </span>
           )}
         </div>
+
+        {canAudio && (
+          <div className="px-6 py-3 border-b border-base-300 flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-base-content/40">Quality</span>
+            <div role="group" aria-label="Quality" className="join">
+              <button onClick={() => setAudioOnly(false)} aria-pressed={!audioOnly} className={`btn btn-sm join-item ${!audioOnly ? 'btn-primary' : 'btn-ghost'}`}>
+                Video
+              </button>
+              <button onClick={() => setAudioOnly(true)} aria-pressed={audioOnly} className={`btn btn-sm join-item ${audioOnly ? 'btn-primary' : 'btn-ghost'}`}>
+                Audio only
+              </button>
+            </div>
+            {audioOnly && <span className="text-xs text-base-content/50">Saved as a music track</span>}
+          </div>
+        )}
 
         {/* Preference: click a chip to rank it, click a ranked one to unrank.
             Ranked entries are tried first, unranked ones stay as fallback, so
@@ -246,7 +265,7 @@ export default function ConfirmDownloadModal({
             Cancel
           </button>
           <button
-            onClick={async () => { setConfirming(true); try { await onConfirm(dest) } finally { setConfirming(false) } }}
+            onClick={async () => { setConfirming(true); try { await onConfirm(dest, canAudio && audioOnly) } finally { setConfirming(false) } }}
             disabled={newCount === 0 || confirming}
             className="btn btn-primary btn-sm"
           >
