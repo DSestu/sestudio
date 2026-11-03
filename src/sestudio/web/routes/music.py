@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from sestudio.music import libraries, online, runner, store
+from sestudio.config import load_config
+from sestudio.music import libraries, online, runner, search, store
 from sestudio.sites import SiteError
 from sestudio.web.routes.stream import _proxy_url
 
@@ -50,6 +51,19 @@ async def track_analysis(track_id: str) -> dict[str, Any]:
     if track_id not in found:
         raise HTTPException(status_code=404, detail="Not analysed (yet)")
     return found[track_id]
+
+
+@router.get("/music/search")
+async def music_search(
+    q: str = Query(...),
+    source: str = Query("all"),
+    limit: int = Query(12, ge=1, le=30),
+) -> dict[str, Any]:
+    """The libraries and the online sources for one query, or one source of them."""
+    if source not in search.SOURCES:
+        raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
+    root = load_config().output_root
+    return await asyncio.to_thread(search.search, q, source, limit, root)
 
 
 class GenreBody(BaseModel):
