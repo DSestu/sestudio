@@ -50,17 +50,28 @@ function toTrack(f: DownloadedFile, folder: string): MusicTrack {
   }
 }
 
+/** The last segment of a folder path. */
+export const folderName = (folder: string) => folder.split('/').filter(Boolean).pop() ?? ''
+
+/** An album's name: the tag its tracks all share, else its folder, else the library it is in. */
+export function albumNameOf(tags: string[], folder: string, library: string): string {
+  return tags[0] && tags.every(t => t === tags[0]) ? tags[0] : folderName(folder) || library
+}
+
 /** One album per audio folder, in the listing's order (newest first). */
 export function albumsOf(titles: DownloadedTitle[]): MusicAlbum[] {
   const byFolder = new Map<string, MusicAlbum>()
   for (const t of titles) {
     if (t.kind !== 'audio') continue
-    const album = byFolder.get(t.folder) ?? { folder: t.folder, name: t.series, artist: '', tracks: [] }
+    const album = byFolder.get(t.folder) ?? { folder: t.folder, name: '', artist: '', tracks: [] }
     album.tracks.push(...t.files.filter(f => f.id).map(f => toTrack(f, t.folder)))
     byFolder.set(t.folder, album)
   }
   const out = [...byFolder.values()].filter(a => a.tracks.length)
-  for (const a of out) a.artist = topArtist(a.tracks)
+  for (const a of out) {
+    a.artist = topArtist(a.tracks)
+    a.name = albumNameOf(a.tracks.map(t => t.album), a.folder, a.tracks[0].libraryLabel)
+  }
   return out
 }
 
@@ -69,12 +80,15 @@ export function albumsOfTracks(tracks: MusicTrack[]): MusicAlbum[] {
   const byFolder = new Map<string, MusicAlbum>()
   for (const t of tracks) {
     const key = `${t.crate ?? t.library}|${t.folder}`
-    const album = byFolder.get(key) ?? { folder: t.folder, name: t.albumName || t.libraryLabel, artist: '', tracks: [] }
+    const album = byFolder.get(key) ?? { folder: t.folder, name: '', artist: '', tracks: [] }
     album.tracks.push(t)
     byFolder.set(key, album)
   }
   const out = [...byFolder.values()]
-  for (const a of out) a.artist = topArtist(a.tracks)
+  for (const a of out) {
+    a.artist = topArtist(a.tracks)
+    a.name = albumNameOf(a.tracks.map(t => t.albumName || t.album), a.folder, a.tracks[0].libraryLabel)
+  }
   return out
 }
 

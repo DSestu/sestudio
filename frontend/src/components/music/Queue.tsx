@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { queueActions, useAnalysis, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
+import { metaLine, useSummary } from '../../musicMeta'
+import { queueActions, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
 import { BLEND } from './engine'
-import { fmtBpm, fmtTime } from './format'
+import { fmtTime } from './format'
 import { ENTER_MS, FLIP_MS, flipOffsets, LEAVE_MS } from './interact'
 import Meter from './Meter'
 import { playItem } from './player'
@@ -22,7 +23,7 @@ interface RowProps {
 }
 
 function Row({ item, info, playing, source, leaving, tv }: RowProps) {
-  const analysis = useAnalysis(item.track_id)
+  const analysis = useSummary(item.library === 'online' ? undefined : item.track_id)
   const el = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
@@ -75,7 +76,7 @@ function Row({ item, info, playing, source, leaving, tv }: RowProps) {
         <b className="block truncate font-medium" style={{ color: 'color-mix(in oklch, white calc(var(--hl, 0) * 100%), currentColor)' }}>{info?.title ?? '…'}</b>
         <span className="block truncate text-[11px] text-base-content/52">
           {info?.artist}
-          {analysis?.bpm && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{fmtBpm(analysis.bpm)}</em>}
+          {metaLine(analysis) && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{metaLine(analysis)}</em>}
         </span>
       </div>
       {analysis?.balance && <Meter balance={analysis.balance} />}

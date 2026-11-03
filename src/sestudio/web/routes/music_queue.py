@@ -40,6 +40,8 @@ class AddBody(BaseModel):
     index: int | None = None
     play_now: bool = False
     replace: bool = False
+    # With replace: the index of the track to start at.
+    start: int = 0
 
 
 class MoveBody(BaseModel):
@@ -128,7 +130,12 @@ def add_tracks(
     ]
     return _run(
         lambda: queue.add(
-            refs, body.index, body.play_now, body.replace, _rev(if_match, rev)
+            refs,
+            body.index,
+            body.play_now,
+            body.replace,
+            _rev(if_match, rev),
+            body.start,
         )
     )
 

@@ -86,6 +86,12 @@ def test_play_now_and_replace(client):
     assert (s["current"], s["playing"]) == (0, True)
 
 
+def test_replace_can_start_mid_list(client):
+    s = add(client, A, B, C, replace=True, start=2)
+    assert order(s) == [A, B, C]
+    assert (s["current"], s["playing"]) == (2, True)
+
+
 def test_remove_move_play(client):
     s = add(client, A, B, C)
     ids = [i["item_id"] for i in s["items"]]

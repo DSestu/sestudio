@@ -7,17 +7,18 @@ import { fmtTime } from '../format'
 import { isPhone, Mapper } from './mapping'
 import { oklch, type Palette } from './palette'
 import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
-import { TV } from '../tv'
 
-const GQ = TV ? 0.125 : 0.25 // glow layer resolution
-/** The glow's blur radii follow its resolution; the bass is blurred by scaling it through a layer this much smaller (TV only). */
-const GB = TV ? 0.5 : 1
+// The blurs are made by drawing small and scaling up, not with a full-size Canvas `filter: blur`:
+// as soft, at a fraction of the work (measured 19 to 48 fps on the station's software renderer).
+const GQ = 0.125 // glow layer resolution
+/** The glow's blur radii follow its resolution; the bass is blurred by scaling it through a layer LQ times smaller. */
+const GB = 0.5
 const LQ = 0.25
 /** Shape and look numbers; the lab Look panel overwrites them (SPEC-music-player Appendix). */
 export const tlook = { klo: 0.7, kmi: 0.9, khi: 0.42, alo: 0.9, ami: 0.5, ahi: 0.82, edge: 1, glow: 0.75, bb: 3.5 }
 
 /** What the spectral background reads from the last frame: horizon, amplitude and the blurred glow layer. */
-export const probe = { y0: 0, amp: 0, W: 0, H: 0, glow: null as HTMLCanvasElement | null }
+export const probe = { y0: 0, amp: 0, W: 0, H: 0, glow: null as HTMLCanvasElement | null, /** Counts the frames drawn, so the background knows when the glow changed. */ frame: 0 }
 const SIGNAL = 'oklch(72% .16 230'
 
 export interface LabelItem extends DrawItem {
@@ -57,7 +58,7 @@ export class TimelineRenderer {
   private off = layer()
   private top = layer() // mids, highs, edge (device resolution)
   private lo = layer() // bass (CSS resolution, blurred once)
-  private lo2 = layer() // bass, small: the TV's blur
+  private lo2 = layer() // bass, small: its blur
   private g1 = layer() // curves for the glow (quarter resolution)
   private g2 = layer() // blurred glow (quarter resolution)
   private pts = new Points()
@@ -121,6 +122,7 @@ export class TimelineRenderer {
     probe.W = W
     probe.H = H
     probe.glow = this.g2.c
+    probe.frame++
     const e = f.t
     const items = f.items
 
@@ -363,18 +365,11 @@ export class TimelineRenderer {
     }
     o2.restore()
     o2.globalCompositeOperation = 'source-over'
-    if (TV) {
-      // No filter: the bass band drawn small and scaled back up is as soft, at a fraction of the work.
-      const s = this.lo2
-      s.x.clearRect(0, 0, s.c.width, s.c.height)
-      s.x.drawImage(lo.c, bx, by, W, bh, bx * LQ, by * LQ, W * LQ, bh * LQ)
-      o2.imageSmoothingEnabled = true
-      o2.drawImage(s.c, bx * LQ, by * LQ, W * LQ, bh * LQ, bx, by, W, bh)
-    } else {
-      o2.filter = `blur(${tlook.bb}px)`
-      o2.drawImage(lo.c, bx, by, W, bh, bx, by, W, bh)
-      o2.filter = 'none'
-    }
+    const s = this.lo2
+    s.x.clearRect(0, 0, s.c.width, s.c.height)
+    s.x.drawImage(lo.c, bx, by, W, bh, bx * LQ, by * LQ, W * LQ, bh * LQ)
+    o2.imageSmoothingEnabled = true
+    o2.drawImage(s.c, bx * LQ, by * LQ, W * LQ, bh * LQ, bx, by, W, bh)
     o2.globalAlpha = 1
     o2.drawImage(top.c, bx * dpr, by * dpr, W * dpr, bh * dpr, bx, by, W, bh)
   }

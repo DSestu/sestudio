@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { applyEvent, EMPTY_QUEUE, parseAnalysis, positionNow, withStation, type QueueEvent, type QueueItem, type QueueState } from './musicQueue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ANALYSIS_RETRY_MS, applyEvent, loadAnalysis, EMPTY_QUEUE, parseAnalysis, positionNow, withStation, type QueueEvent, type QueueItem, type QueueState } from './musicQueue'
 
 const item = (n: number): QueueItem => ({ item_id: `q${n}`, library: 'local', track_id: `t${n}` })
 const base = (over: Partial<QueueState> = {}): QueueState => ({
@@ -102,5 +102,31 @@ describe('withStation', () => {
     expect(withStation(s, null)).toBe(s)
     expect(withStation(s, { item_id: null, position: 0, playing: false, at: 0 })).toBe(s)
     expect(withStation(s, { item_id: 'gone', position: 1, playing: true, at: 1 })).toBe(s)
+  })
+})
+
+describe('set with a start', () => {
+  it('makes that row current', () => {
+    const s = applyEvent(base(), ev('set', { items: [item(7), item(8), item(9)], start: 2 }), 50)!
+    expect(s.current).toBe(2)
+  })
+})
+
+describe('loadAnalysis', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
+
+  it('asks again after a miss, but not before the retry delay, and keeps what it found', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ bpm: 174 }) })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await loadAnalysis('late')).toBe(false)
+    expect(await loadAnalysis('late')).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(ANALYSIS_RETRY_MS + 1)
+    expect(await loadAnalysis('late')).toBe(true)
+    expect(await loadAnalysis('late')).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

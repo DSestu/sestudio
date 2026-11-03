@@ -14,8 +14,11 @@ import {
   type MusicAlbum, type MusicTrack,
 } from '../musicLibrary'
 import { addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
-import { playAll, playNow, playPayload } from '../components/music/player'
+import { playAll, playFrom, playPayload } from '../components/music/player'
+import { factsLine, useSummaries, type Summary } from '../musicMeta'
+import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
+import { setMusicQuery, useMusicQuery } from '../musicQuery'
 import { useModalBack } from '../useModalBack'
 
 const TABS = [
@@ -44,7 +47,10 @@ function Cover({ name, className = '' }: { name: string; className?: string }) {
   )
 }
 
-function AlbumCard({ album }: { album: MusicAlbum }) {
+const subline = (parts: string[]) => parts.filter(Boolean).join(' · ')
+
+function AlbumCard({ album, get }: { album: MusicAlbum; get: (id: string) => Summary | undefined }) {
+  const facts = factsLine(album.tracks.map(t => get(t.id)), album.tracks.map(t => t.bpm))
   return (
     <div className="group relative flex flex-col gap-2 min-w-0">
       <div className="relative">
@@ -59,26 +65,26 @@ function AlbumCard({ album }: { album: MusicAlbum }) {
       </div>
       <div className="min-w-0 leading-tight">
         <p className="truncate text-sm font-medium">{album.name}</p>
-        <p className="truncate text-xs text-base-content/60">{album.artist} · {album.tracks.length} tracks</p>
+        <p className="line-clamp-2 text-xs text-base-content/60">{subline([album.artist, `${album.tracks.length} tracks`, facts])}</p>
       </div>
     </div>
   )
 }
 
-function TrackRow({ track, onPlaylist }: { track: MusicTrack; onPlaylist: (t: MusicTrack) => void }) {
+function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void }) {
   return (
     <li className="flex items-center gap-1 rounded-xl hover:bg-white/5">
       <button
-        onClick={() => run(playNow(track))}
+        onClick={() => run(playFrom(list, track))}
         className="flex-1 min-w-0 flex items-center gap-3 px-3 h-12 text-left"
       >
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-sm font-medium">{track.title}</span>
-          <span className="block truncate text-xs text-base-content/60">{track.artist}</span>
+          <span className="block truncate text-xs text-base-content/60">{track.artist}<MetaLine id={track.id} bpm={track.bpm} /></span>
         </span>
-        {track.bpm !== undefined && <span className="text-[11px] text-base-content/40 tabular-nums">{Math.round(track.bpm)} bpm</span>}
         <span className="w-10 text-right text-xs text-base-content/60 tabular-nums">{formatDuration(track.duration)}</span>
       </button>
+      <TrackMeta id={track.id} bpm={track.bpm} />
       <div className="dropdown dropdown-end">
         <button tabIndex={0} aria-label={`Add ${track.title}`} className="btn btn-ghost btn-circle btn-sm mr-1">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
@@ -127,7 +133,7 @@ export default function MusicView() {
   const titles = useDownloadedLibrary()
   const [tab, setTab] = useState<MusicTab>('albums')
   const [library, setLibrary] = useState('')
-  const [query, setQuery] = useState('')
+  const query = useMusicQuery()
   const [sheet, setSheet] = useState(false)
   const [adding, setAdding] = useState(false)
   const [nodeId, setNodeId] = useState('')
@@ -145,9 +151,25 @@ export default function MusicView() {
     ...libraries.map(l => ({ id: l.id, label: l.label, count: l.count, dot: DOT[l.state], line: stateLine(l) })),
   ], [all, libraries])
 
-  const tracks = useMemo(
+  const ids = useMemo(() => all.filter(t => t.library !== 'online').map(t => t.id), [all])
+  const { get, v } = useSummaries(ids)
+  const [genre, setGenre] = useState('')
+  const inLibrary = useMemo(
     () => matchTracks(all.filter(t => !library || (t.crate ?? t.library) === library), query),
     [all, library, query],
+  )
+  // Genres of what is listed, most common first.
+  const genres = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const t of inLibrary) {
+      const g = get(t.id)?.genre
+      if (g) n.set(g, (n.get(g) ?? 0) + 1)
+    }
+    return [...n].sort((a, b) => b[1] - a[1])
+  }, [inLibrary, v]) // eslint-disable-line react-hooks/exhaustive-deps
+  const tracks = useMemo(
+    () => (genre ? inLibrary.filter(t => get(t.id)?.genre === genre) : inLibrary),
+    [inLibrary, genre, v], // eslint-disable-line react-hooks/exhaustive-deps
   )
   const albums = useMemo(() => {
     const ids = new Set(tracks.map(t => t.id))
@@ -169,7 +191,7 @@ export default function MusicView() {
     <MusicSearch
       query={query}
       byId={byId}
-      renderLibrary={ts => <ul>{ts.map(t => <TrackRow key={t.id} track={t} onPlaylist={setPickFor} />)}</ul>}
+      renderLibrary={ts => <ul>{ts.map(t => <TrackRow key={t.id} track={t} list={ts} onPlaylist={setPickFor} />)}</ul>}
     />
   ) : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
@@ -177,7 +199,7 @@ export default function MusicView() {
     <EmptyState title="No match" message="Nothing in your libraries matches that search." />
   ) : tab === 'albums' ? (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-      {albums.map(a => <AlbumCard key={a.tracks[0].id} album={a} />)}
+      {albums.map(a => <AlbumCard key={a.tracks[0].id} album={a} get={get} />)}
     </div>
   ) : tab === 'artists' ? (
     <div className="flex flex-col gap-5">
@@ -185,15 +207,18 @@ export default function MusicView() {
         <section key={a.name}>
           <div className="flex items-center gap-3 px-3 pb-1">
             <Cover name={a.name} className="w-9 h-9 rounded-full text-xs" />
-            <h3 className="flex-1 min-w-0 truncate text-sm font-semibold">{a.name}</h3>
+            <div className="flex-1 min-w-0 leading-tight">
+              <h3 className="truncate text-sm font-semibold">{a.name}</h3>
+              <p className="truncate text-xs text-base-content/60">{subline([`${a.tracks.length} tracks`, factsLine(a.tracks.map(t => get(t.id)), a.tracks.map(t => t.bpm))])}</p>
+            </div>
             <button onClick={() => run(playAll(a.tracks))} className="btn btn-ghost btn-xs">Play all</button>
           </div>
-          <ul>{a.tracks.map(t => <TrackRow key={t.id} track={t} onPlaylist={setPickFor} />)}</ul>
+          <ul>{a.tracks.map(t => <TrackRow key={t.id} track={t} list={a.tracks} onPlaylist={setPickFor} />)}</ul>
         </section>
       ))}
     </div>
   ) : (
-    <ul>{tracks.map(t => <TrackRow key={t.id} track={t} onPlaylist={setPickFor} />)}</ul>
+    <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={setPickFor} />)}</ul>
   )
 
   return (
@@ -220,11 +245,25 @@ export default function MusicView() {
             <input
               type="search"
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={e => setMusicQuery(e.target.value)}
               placeholder="Search your libraries and online, or paste a link"
               aria-label="Search your libraries"
-              className="input input-bordered w-full"
+              className="input input-bordered w-full md:hidden"
             />
+          )}
+          {!node && !searching && genres.length > 0 && (
+            <div role="group" aria-label="Filter by genre" className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+              {[['', inLibrary.length] as const, ...genres].map(([g, n]) => (
+                <button
+                  key={g}
+                  aria-pressed={genre === g}
+                  onClick={() => setGenre(g)}
+                  className={`shrink-0 rounded-full px-3 h-8 text-xs font-medium ${genre === g ? 'bg-primary/20 text-primary' : 'bg-white/6 text-base-content/70 hover:bg-white/10'}`}
+                >
+                  {g || 'All'} <span className="tabular-nums opacity-60">{n}</span>
+                </button>
+              ))}
+            </div>
           )}
           {!node && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {body}

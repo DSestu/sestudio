@@ -45,6 +45,17 @@ async def tracks_analysis(ids: str = Query(...)) -> dict[str, Any]:
     return await asyncio.to_thread(_analyses, wanted)
 
 
+SUMMARY_KEYS = ("bpm", "camelot", "keyConf", "genre", "genreConf", "balance")
+
+
+@router.get("/music/tracks/summary")
+async def tracks_summary(ids: str = Query(...)) -> dict[str, Any]:
+    """What the track rows show (tempo, key, genre, balance) without the curves."""
+    wanted = [i for i in ids.split(",") if i]
+    found = await asyncio.to_thread(_analyses, wanted)
+    return {tid: {k: a[k] for k in SUMMARY_KEYS if k in a} for tid, a in found.items()}
+
+
 @router.get("/music/tracks/{track_id}/analysis")
 async def track_analysis(track_id: str) -> dict[str, Any]:
     found = await asyncio.to_thread(_analyses, [track_id])

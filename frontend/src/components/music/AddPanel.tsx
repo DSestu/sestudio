@@ -1,8 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
 import { albumsOf } from '../../musicLibrary'
-import { post, resolveLink, useAnalysis, type AddPayload, type OnlineLink, type QueueState } from '../../musicQueue'
-import { fmtBpm, fmtTime } from './format'
+import { metaLine, useSummary } from '../../musicMeta'
+import { post, resolveLink, type AddPayload, type OnlineLink, type QueueState } from '../../musicQueue'
+import { fmtTime } from './format'
 import { fitHeight } from './interact'
 import Meter from './Meter'
 import { armRowDrag, gripRowDrag, type DragSource } from './rowDrag'
@@ -33,8 +34,8 @@ const SHOWN = 60
 const add = (refs: Ref[], index?: number) => post({ tracks: refs, ...(index !== undefined && { index }) })
 
 function EntryRow({ e, q, queued, toast }: { e: Entry; q: QueueState; queued: boolean; toast: (m: string) => void }) {
-  const analysis = useAnalysis(e.analysisId)
-  const bpm = e.bpm ?? analysis?.bpm
+  const meta = useSummary(e.analysisId)
+  const bpm = e.bpm ?? meta?.bpm
   const source: DragSource = {
     from: null,
     cur: () => q.current,
@@ -61,10 +62,10 @@ function EntryRow({ e, q, queued, toast }: { e: Entry; q: QueueState; queued: bo
         <b className="block truncate font-medium">{e.title}</b>
         <span className="block truncate text-[11px] text-base-content/52">
           {e.artist}
-          {bpm && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{fmtBpm(bpm)}</em>}
+          {metaLine(meta, bpm) && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{metaLine(meta, bpm)}</em>}
         </span>
       </div>
-      {analysis?.balance && <Meter balance={analysis.balance} />}
+      {meta?.balance && <Meter balance={meta.balance} />}
       <span className="w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{e.duration ? fmtTime(e.duration) : ''}</span>
       {queued && <span className="text-[10.5px] text-base-content/42">In queue</span>}
       <button
