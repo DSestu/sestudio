@@ -1,13 +1,12 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { downloadedFileUrl, getDownloadedLibrary } from './api'
+import type { MusicTrack } from './musicLibrary'
 
 // The music queue lives on the server (SPEC-music §6). This module is the
 // client side: the API calls, the Server-Sent Events subscription that keeps a
 // local copy current, and the position extrapolated between events.
 
 const BASE = '/api/music'
-/** The library id of this server's own downloads folder. */
-const LOCAL = 'local'
 
 export interface TrackRef {
   library: string
@@ -186,13 +185,7 @@ async function send(method: string, path: string, body?: unknown): Promise<void>
   }
 }
 
-const here = (id: string): TrackRef => ({ library: LOCAL, track_id: id })
-
 export const queueActions = {
-  /** Play these tracks now: replace the queue (a folder) or insert and jump (one track). */
-  playTracks: (ids: string[], replace = true) =>
-    send('POST', '', { tracks: ids.map(here), replace, play_now: !replace }),
-  add: (ids: string[], index?: number) => send('POST', '', { tracks: ids.map(here), index }),
   play: (itemId: string) => send('POST', '/play', { item_id: itemId }),
   remove: (itemId: string) => send('DELETE', `/${itemId}`),
   move: (itemId: string, to: number) => send('POST', '/move', { item_id: itemId, to }),
@@ -201,6 +194,34 @@ export const queueActions = {
     extra: { position?: number; repeat?: boolean } = {},
   ) => send('POST', '/transport', { action, ...extra }),
 }
+
+// --- adding from the library views ----------------------------------------------
+
+export interface AddPayload {
+  tracks: { library: string; track_id: string }[]
+  play_now?: boolean
+  replace?: boolean
+}
+
+export function addPayload(tracks: MusicTrack[], mode: 'play_now' | 'replace' | 'append'): AddPayload {
+  return {
+    tracks: tracks.map(t => ({ library: t.library, track_id: t.id })),
+    ...(mode === 'play_now' && { play_now: true }),
+    // The server starts at the first track of a replacement.
+    ...(mode === 'replace' && { replace: true }),
+  }
+}
+
+export async function post(payload: AddPayload): Promise<void> {
+  const res = await fetch('/api/music/queue', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`queue: ${res.status}`)
+}
+
+export const addToQueue = (t: MusicTrack) => post(addPayload([t], 'append'))
 
 // --- what the queue's tracks are called ------------------------------------------
 

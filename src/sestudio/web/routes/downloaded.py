@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
 from sestudio import downloaded, interpolate, library
+from sestudio.music import runner
 from sestudio.config import load_config
 from sestudio.web.streaming import ClosingStreamingResponse
 
@@ -129,6 +130,7 @@ def _listing(root: str) -> list[dict[str, Any]]:
 @router.get("/downloaded")
 async def list_downloaded() -> list[dict[str, Any]]:
     cfg = load_config()
+    runner.kick(cfg.output_root)
     return await asyncio.to_thread(_listing, cfg.output_root)
 
 

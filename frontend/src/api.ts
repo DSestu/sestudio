@@ -1006,15 +1006,21 @@ export interface DownloadedFile {
   lang: string
   size: number
   mtime: number
-  /** Audio files only (music tracks). */
+  /** Audio files only: the stable track id and its tags. */
   id?: string
   artist?: string
   album?: string
   duration?: number
+  library?: string
+  library_label?: string
+  /** Set by tempo analysis when it has run. */
+  bpm?: number
 }
 
 export interface DownloadedTitle {
   key: string
+  /** 'audio' for a folder of music, else video. */
+  kind?: string
   /** Directory that named this title, relative to the download root, with the
    *  season and language folders stripped. '' for a file loose in the root. */
   folder: string
