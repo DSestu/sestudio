@@ -107,7 +107,7 @@ Reference: mockup C and the transition mockup.
   URL once.
 - **Rendering**: Python decodes the current track to PCM (ffmpeg), computes the FFT, draws each frame
   with the shared renderer, and pipes frames + audio into one ffmpeg encoder (H.264 + AAC, 720p30 by
-  default; 540p or 24 fps if the machine can't keep up).
+  default; 540p or 24 fps if the machine can't keep up). Superseded by "Station: built (PR 14)" below.
 - **Transitions**: `transition length` seconds before a track ends, the station mixes the tail of A
   and the head of B (equal-power crossfade), eases A's cover out and B's in, drifts the ambient colour,
   slides the title in. The visualiser reads the mixed audio, so it never stops.
@@ -171,6 +171,41 @@ x264 preset load (`superfast`), or a pre-baked still background on the TV. One c
 cheaper first. The Python port of the renderer (b) was not built: (a) works, and a port would
 duplicate every look change.
 
+### Station: built (PR 14)
+
+- **Sound**: `music/mixer.py` renders the queue as one 44.1 kHz stereo PCM stream with the same plan as
+  the browser (`music/mixplan.py`, a port of `mix/plan.ts` held identical by
+  `tests/fixtures/mixplan_vectors.json`, which pytest and vitest both read). Equal-power fades, the
+  incoming tempo by `atempo` (a constant rate for the blend, then eight constant-rate steps along the
+  smoothstep glide over 32 beats), the bass swap by a 180 Hz, −26 dB shelf mixed in over a 40 ms time
+  constant at the midpoint, sample-accurate entries. It renders 3 s ahead of what is pulled; a skip, seek
+  or play-now cuts over in 150 ms at the render head, add / remove / reorder / mix changes re-plan the
+  prepared handover.
+- **Picture + mux**: `music/station.py`. Chromium screencast (the spike's pump, constant rate) and the
+  mixer's PCM go into one ffmpeg (PCM over a local socket, JPEG on stdin) that writes H.264 + AAC as
+  MPEG-TS, the stream the DLNA routes already serve (`video/mpeg`, `GET /api/music/station/stream`).
+  Both inputs are written on one wall clock from the first picture, so they cannot drift apart.
+- **Lifecycle**: `POST /api/music/station/start` (`{fps?}`) returns the status and the stream path;
+  `stop`; `GET status`. One station at a time; it stops itself after 20 s with no client on the stream.
+  Settings: `station_fps` (20 default, 30), `station_browser` (path or channel; empty looks for the
+  system Chrome / Chromium / Edge, then Playwright's own).
+- **Clock**: the station publishes `{item_id, position, playing, at}` (the audio last pulled) twice a
+  second as a `station` event on the queue's feed and in the state (`station`); the `/?tv` page follows
+  it instead of the queue's client clock.
+- **Cheaper TV canvases** (`?tv` only): no Canvas 2D `filter: blur` on the full-size bass band (drawn
+  at ¼ size and scaled up), the glow layer at ⅛ instead of ¼ resolution with halved radii, and no CSS
+  `blur()` / `saturate()` on the 96 × 54 background (both applied to the tiny canvas before it is scaled).
+  Same machine as the spike (WSL2, 12 cores, Chrome, 8 real tracks, 720p, 60 s, no GPU):
+
+| TV page | Captured fps | Chromium CPU | ffmpeg CPU |
+|---|---|---|---|
+| before (PR 13) | 19.3 | 1.8 cores | 0.4 |
+| after | **48** | 2.2 cores | 0.3 at 20 fps, 0.4 at 30 fps |
+
+  The page now outruns 30 fps, so 720p30 holds with no repeated frames and 0 audio underruns (a
+  screencast takes whatever CPU the page leaves, hence the same ~2 cores). The picture is unchanged to
+  the eye. Windows (Edge, GPU) numbers are still to be taken.
+
 ## 8. How this is reviewed and tested (the lab)
 
 The UI and UX are reviewed **live, in the real app, with real audio**, not on HTML mockups.
@@ -223,6 +258,7 @@ HTML mockups are used only for layout questions, before motion or sound exist.
 | 2026-11-03 | Several libraries (PR 19): the registry is in `config.json` (`music_libraries`: `{id, kind: local_folder / remote_sestudio / ytmusic_account, label, path / url, token}`); `local` (the download root, "This PC") is implicit and its track ids are unchanged, any other folder hashes its own id in (`sha1(library id + NUL + path)`). The analysis runner also walks every folder library. A remote sestudio server is read through `/api/music/share/*` (listing with metadata, per-track analysis, audio with ranges), protected by a per-server bearer token: tokens are made in Settings (`/api/music/share-tokens`), shown once, stored as a SHA-256 hash and revocable; it is the only part of the API that asks for credentials. The client keeps the last listing on disk (`music_remote/<id>.json`), marks the library offline with the time of the first failed contact, retries every 60 s, proxies audio (Range passed through) and asks the remote for analyses on demand rather than caching them. Remote track ids are `<library id>-<remote id>`. YouTube Music account: `ytmusic_cookies` (a cookies.txt path, Settings) lets yt-dlp list the likes playlist (first 500, cached 10 min) as online items; no file reads as "needs sign-in". The UI filters by `crate` (the library list) because a YT Music like is queued as `library: "online"`. Smart lists now draw from every folder library; remote and YT Music tracks are not in smart lists yet. |
 | 2026-11-03 | Beat-synced mixing (PR 12): the plan is `mix/plan.ts` (pure), shared by the timeline layout and the engine; the analysis cache moved to `mix/analysis.ts` so the engine plans with the layer closed. A pair's stored settings are whole (the server fills defaults on every PUT), so a pair that changed a field no longer follows the default mode. A beat sync enters the next track mid-song, so after the `next` the client sends a `seek` with the real position, and again when the tempo glide ends (the server clock runs at rate 1). Layout changes ease over a 100 ms time constant (about 400 ms). The popover opens above its label and carries the Default mix control. The Music tab, the Activity bell, the layer and the bar are no longer behind the lab flag; `#/lab/music` and the Look panel stay lab-only. |
 | 2026-11-03 | Set builder (PR 21): ordering, filling and transition chips are pure functions in `crates/setBuilder.ts`; a bulk `POST .../items/reorder` applies an order (one part, or `whole`, re-dealt into the parts at their sizes). The genre the user picks is `genre_override` in the analysis `extra` (survives re-profiling, wins in the analysis API and smart lists, confidence shown as 1). `plan()` with structure keeps 4-bar phrases, leaves the outgoing track in its last outro (else last breakdown), never blends over a drop, and fits the blend inside the incoming intro (down to 4 bars). Fill proposes local-library tracks only (online items are not in the library list); phones show the genre tag on a second line. |
+| 2026-11-03 | Station (PR 14): the stream is MPEG-TS (H.264 + AAC, `video/mpeg`) served by `GET /api/music/station/stream`, the format the DLNA routes already send; Chromecast over HLS is left to PR 15 (the default receiver's progressive TS support is unverified). The mixer decodes a track whole (int16, at most four cached) and prepares the incoming track in a worker as audio on the output clock, so entries are sample accurate and no phase lock exists server-side; a tempo glide is eight constant-rate `atempo` steps. The mixer moves the queue itself at the start of a blend (`next`, then `seek` to the entry point, as the browser does), its own calls ignored through a thread-local flag on `queue.listen`; queue events drive it (go with `keep`, seek, set, ins with play = jump; anything else = re-plan). The station clock (a `station` SSE event and `station` in the state, no revision) is the audio last pulled, shown by `/?tv` through `withStation`; during a blend it names the incoming item, as the queue does. Remote-library tracks cannot be mixed (they are skipped); online tracks use their resolved stream URL. Not done: HLS output, a second station, volume (PR 15), Windows frame-rate numbers. |
 
 ## 10. Risks
 

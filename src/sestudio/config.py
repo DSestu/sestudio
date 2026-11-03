@@ -103,6 +103,11 @@ class AppConfig:
     # A Netscape cookies.txt of a signed-in YouTube session, for the YouTube
     # Music account library; empty means not signed in.
     ytmusic_cookies: str = ""
+    # The station's picture (SPEC-music §7): frames per second (20 is what a
+    # machine without a GPU sustains; 30 where the page keeps up), and the
+    # browser that draws it: a path or a channel (chrome, msedge); empty finds one.
+    station_fps: int = 20
+    station_browser: str = ""
 
 
 def _config_path() -> Path:
@@ -156,6 +161,8 @@ def load_config() -> AppConfig:
                 if isinstance(d, dict)
             ],
             ytmusic_cookies=str(data.get("ytmusic_cookies", "")),
+            station_fps=min(30, max(10, int(data.get("station_fps", 20)))),
+            station_browser=str(data.get("station_browser", "")),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)

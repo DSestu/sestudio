@@ -231,7 +231,9 @@ async def event_stream(
                     return
                 yield ": ping\n\n"
                 continue
-            if event["rev"] > seen:
+            if event["op"] == "station":  # a clock, not a change: no revision
+                yield _sse("station", event)
+            elif event["rev"] > seen:
                 seen = event["rev"]
                 yield _sse(event["op"], event, event["rev"])
     finally:

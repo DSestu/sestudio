@@ -42,6 +42,8 @@ class SettingsBody(BaseModel):
     frame_interpolation: bool | None = None
     ai_max_hold: int | None = Field(default=None, ge=0, le=4)
     ytmusic_cookies: str | None = None
+    station_fps: int | None = Field(default=None, ge=10, le=30)
+    station_browser: str | None = None
 
 
 def _known_hosts(request: Request) -> list[str]:
@@ -142,6 +144,10 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.callmebot_apikey = body.callmebot_apikey.strip()
     if body.ytmusic_cookies is not None:
         cfg.ytmusic_cookies = body.ytmusic_cookies.strip().strip('"')
+    if body.station_fps is not None:
+        cfg.station_fps = body.station_fps
+    if body.station_browser is not None:
+        cfg.station_browser = body.station_browser.strip().strip('"')
     if body.allow_file_deletion is not None:
         cfg.allow_file_deletion = body.allow_file_deletion
     if body.frame_interpolation is not None:

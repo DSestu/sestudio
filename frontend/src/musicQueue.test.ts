@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyEvent, EMPTY_QUEUE, parseAnalysis, positionNow, type QueueEvent, type QueueItem, type QueueState } from './musicQueue'
+import { applyEvent, EMPTY_QUEUE, parseAnalysis, positionNow, withStation, type QueueEvent, type QueueItem, type QueueState } from './musicQueue'
 
 const item = (n: number): QueueItem => ({ item_id: `q${n}`, library: 'local', track_id: `t${n}` })
 const base = (over: Partial<QueueState> = {}): QueueState => ({
@@ -87,5 +87,20 @@ describe('parseAnalysis', () => {
   })
   it('copes with a bare object', () => {
     expect(parseAnalysis({})).toEqual({ bpm: undefined, beat0: undefined, hue: undefined })
+  })
+})
+
+describe('withStation', () => {
+  it('shows the station clock instead of the queue clock, and leaves the queue alone', () => {
+    const s = base()
+    const v = withStation(s, { item_id: 'q3', position: 12, playing: true, at: 1234 })
+    expect(v).toMatchObject({ current: 2, position: 12, updated_at: 1234, playing: true, rev: 5 })
+    expect(s.current).toBe(1)
+  })
+  it('keeps the queue clock without a station, or for an item it does not hold', () => {
+    const s = base()
+    expect(withStation(s, null)).toBe(s)
+    expect(withStation(s, { item_id: null, position: 0, playing: false, at: 0 })).toBe(s)
+    expect(withStation(s, { item_id: 'gone', position: 1, playing: true, at: 1 })).toBe(s)
   })
 })

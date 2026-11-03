@@ -5,6 +5,7 @@ import { probe } from '../timeline/render'
 import { liveBands } from './bands'
 import { CH, CW, History, paint } from './draw'
 import { bgPalette, getLook, useLook } from './settings'
+import { TV } from '../tv'
 
 // The blurred, live spectrum behind the timeline (SPEC-music-player §5.8).
 
@@ -23,7 +24,9 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
 
   useEffect(() => {
     const cv = canvas.current!
-    const g = cv.getContext('2d')!
+    // The TV page paints on a scratch canvas and blurs it into the visible one while it is still tiny.
+    const scratch = TV ? Object.assign(document.createElement('canvas'), { width: CW, height: CH }) : null
+    const g = (scratch ?? cv).getContext('2d')!
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
     const hist = new History()
     const beat = { fr: 1, db: false }
@@ -52,7 +55,7 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
       liveBands.update(bins, an?.context.sampleRate ?? 44100, dt, p)
 
       const s = cv.style
-      s.filter = `blur(${look.blur[look.style]}px) saturate(${p.sat})`
+      if (!TV) s.filter = `blur(${look.blur[look.style]}px) saturate(${p.sat})`
       s.transform = `scale(${p.zoom})`
       s.opacity = String(p.op)
       const H = probe.H || innerHeight
@@ -63,6 +66,12 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
         beat,
         now,
       })
+      if (scratch) {
+        const v = cv.getContext('2d')!
+        v.filter = `blur(${look.blur[look.style] * CW / (cv.clientWidth || CW)}px) saturate(${p.sat})`
+        v.clearRect(0, 0, CW, CH)
+        v.drawImage(scratch, 0, 0)
+      }
     }
     id = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(id)
