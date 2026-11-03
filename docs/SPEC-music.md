@@ -4,6 +4,8 @@
 > [`docs/assets/music-mockup.html`](assets/music-mockup.html) (desktop, phone, TV; tabs A / B / C)
 > and [`docs/assets/music-transition-mockup.html`](assets/music-transition-mockup.html) (the crossfade
 > on the TV). They are the visual reference; where this text and a mockup disagree, this text wins.
+> **The player page's UI and UX are specified in [`SPEC-music-player.md`](SPEC-music-player.md)** (default and
+> expanded modes, the fisheye and life-size flow, the switch); it replaces §5 and §6 below where they differ.
 > **The UI and UX of this feature are reviewed precisely, live, with real audio** (§8). Nothing in §6
 > is final until it has been heard and seen in the lab.
 
@@ -64,6 +66,9 @@
   the queue runs yt-dlp with `-f ba` and keeps the container yt-dlp picks (m4a or opus).
 
 ## 5. The stage (the player pane for audio)
+
+> **Superseded** by [`SPEC-music-player.md`](SPEC-music-player.md) (the player layer, the timeline, the
+> spectral background). Kept for history; do not build the styles below.
 
 Reference: mockup A (desktop), B (phone).
 
@@ -152,6 +157,9 @@ HTML mockups are used only for layout questions, before motion or sound exist.
 | 2026-11-02 | Same renderer in browser and server, so the browser is a true preview. ffmpeg's stock visualiser filters are not used for the look. |
 | 2026-11-02 | Review is live, in the real app, with real audio, from a Windows test instance; HTML mockups for layout only. |
 | 2026-11-02 | Test music: `R:\Musique\Android\neuro soundcloud`. |
+| 2026-11-02 | Player page after four mockup rounds: default = light + fisheye flow on the floor + floating queue; expanded (pinned) = stage with life-size flow + docked column; one 620 ms motion between them. Full detail in SPEC-music-player.md. |
+| 2026-11-03 | Nav: Home · Media · Discover · Music · Library; Activity becomes a bell in the top card; the player is a full-screen layer with a player bar on every page (SPEC-music-player.md §4). |
+| 2026-11-03 | Ready for later (§13): several libraries in a **side column** (layout B), tracks keyed by library + source, playlists as a tree with parts and cross-source items, offline analysis incl. structure, one search across sources with per-source sub-search. Mockups: `docs/assets/music-future-mockups.html`. |
 
 ## 10. Risks
 
@@ -164,29 +172,118 @@ HTML mockups are used only for layout questions, before motion or sound exist.
 - **Python renderer speed**: if 720p30 can't be drawn in time, fall back to 540p or 24 fps.
 - **Safari** does not play `.opus`.
 
-## 11. Plan (one PR each, in order)
+## 11. Plan (one PR each; agents pick them from the tracking issue)
 
-| # | PR | Size |
-|---|---|---|
-| 1 | Test instance how-to (Windows, port 8444, own config/DB/downloads) + `lab` flag + empty `#/lab/music` route | S |
-| 2 | Audio items in the library: suffixes, mime types, file-name parser, covers, raw playback in Vidstack | S |
-| 3 | The stage in the browser: renderer v1 (`Bars`), Web Audio analyser, ambient cover; lab bench with knobs + presets | M |
-| 4 | More styles from approved presets (`Spectrum`, `Scope`, `Cover`) | S |
-| 5 | Server queue for audio + queue panel (reorder, shuffle, repeat, source row) + phone tabs + dock mini-player | M |
-| 6 | Station: Python renderer + ffmpeg encoder, one stream through the TV routes, style change in place | L |
-| 7 | Transitions: crossfade, cover and title animations, skip-now; boundary checks in tests | M |
-| 8 | Cast metadata, now-casting bar for music, pull back; TV preview toggle in the lab; offline clips command | S |
-| 9 | YouTube Music: audio-only download choice, playlist as a queue source | S |
+Rewritten 2026-11-03; replaces the 9-PR plan, whose stage styles (`Bars`, `Spectrum`, `Scope`, `Cover`)
+were superseded by the player in [`SPEC-music-player.md`](SPEC-music-player.md).
 
-PRs 1–4 are reviewable in the browser with sound. 5–8 bring the TV. Rough total: 2–3 weeks of work
-with reviews in between; §8's loop decides the pace.
+**How to work a PR.** Read this section, then the spec sections it names. The reference implementation
+is the prototype `docs/proto/music/scrub.html` (PR 0 moves it there from `.impeccable/mocks/music-proto/`).
+Copy its numbers, not its code structure. Ship behind the `lab` flag until PR 12 removes it. Review
+happens live with real audio (§8). A PR that needs a decision marked **Ask** stops and asks the user
+before building that part. Commit, PR and merge rules are the repo's (`CLAUDE.md`).
+
+**Sizes:** S ≈ half a day, M ≈ 1–2 days, L ≈ 3–5 days of agent work plus review.
+
+### Phase 0: groundwork
+
+| # | PR | Needs | Size |
+|---|---|---|---|
+| 0 | **Prototype in the repo.** Move `scrub.html`, `serve.py` and the `prep_*.py` scripts from `.impeccable/mocks/music-proto/` to `docs/proto/music/`, with a `README.md` saying how to rebuild `lib.json` from a music folder (`prep_lib.py`, then `prep_bpm.py`) and serve it (`serve.py <dir> 44391`). `lib.json` and audio stay out of git (`.gitignore`). Remove the test hooks (`window.__pts`, `__X`, `__sm`). | — | S |
+| 1 | **Test instance and lab.** How-to for the Windows test instance (port 8444, own `SESTUDIO_CONFIG` / `SESTUDIO_DB` / downloads dir, `SESTUDIO_WATCHERS=0`) in `docs/`; a `lab` flag (off on main) and an empty `#/lab/music` route. | — | S |
+
+### Phase 1: audio items and analysis (server)
+
+| # | PR | Needs | Size |
+|---|---|---|---|
+| 2 | **Audio items.** `.m4a .mp3 .opus .ogg .flac` in `downloaded.py` (suffixes, mime types); `kind: "audio"`; tags via ffprobe, else the file-name parser of §4 (`Artist - Title [id].ext`); raw playback through the existing file route. **Every entry gets `library` and `source` fields** (one library, "This PC", source `file`) and a stable track id (§13.1). Tests: the parser on the 46 test names, mime types, the id's stability across rescans. | 1 | S |
+| 3 | **Offline analysis v1.** A background job per audio track, run on indexing and when files appear: 8 band envelopes at 10 values/s normalised by the library-wide 98th percentile (`prep_bands8.py`), loudness envelope (`prep.py`), track hue (zero-crossing percentile, SPEC-music-player §5.1), tempo, beat0, bar0 and confidence (`prep_bpm.py`). Results in **their own table keyed by track id**, with room for more fields (§13.3); an API that serves them in compact form; progress visible on the Activity bell. Percentile normalisation re-runs when the library grows by more than 10 %. **Ask:** numpy as a dependency (the prototype needs it; check the Android proot build) versus pure ffmpeg filters. Tests: the 46 test tracks give the prototype's BPMs (172/174/175…, ±0.1). | 2 | M |
+| 4 | **Server queue for audio.** The queue lives on the server (§6): references to tracks (`library` + track id), never paths; current index, position, per-pair mix settings (SPEC-music-player beat sync). API: get, add (at index), remove, move, play-now, mix settings. Changes are pushed to every client: phone, desktop and TV. **Ask:** push channel (SSE vs polling; the app has none today). Tests: ops, concurrent edits, persistence across restart. | 2 | M |
+
+### Phase 2: the player in the browser
+
+| # | PR | Needs | Size |
+|---|---|---|---|
+| 5 | **Nav: Music tab and Activity bell** (SPEC-music-player §4). `nav.ts` tabs become Home · Media · Search/Discover · Music · Library; Activity leaves the dock/rail and becomes a bell with its count in the phone top card (left of Settings) and at the right end of the desktop header card, on every page; old `#/notifications` links still land. Phone and desktop. | 1 | S |
+| 6 | **Music tab v1, layout B** (§13). The page with the 250 px crates column (desktop) or sheet (phone): LIBRARIES shows "This PC" with count and indexing state; PLAYLISTS and SMART LISTS sections exist but stay empty until PR 18. Content: Albums (a folder = an album) / Artists / Tracks, with tempo shown small and muted on rows. Playing a track or "Play all" fills the server queue (PR 4). | 4, 5 | M |
+| 7 | **Player layer, player bar and audio engine.** The full-screen player layer over the app (open from any play, from the bar; Esc, collapse button, swipe down to close); the player bar on every page (desktop floating at the bottom of the content, phone pill above the dock); the audio graph and blend rules of SPEC-music-player §9 (two elements, gains, analyser, equal-power blends, preload); title, artist with BPM and beat dot, seek, transport; queue sheet with rows, balance meters (Reef palette) and the equaliser glyph. The light (§5.2) as a placeholder background. | 4 | M |
+| 8 | **The timeline (flow) renderer.** Canvas layers exactly as SPEC-music-player §6: one continuous spline per band across the queue, **fixed-grid sampling** (16th notes from the first downbeat, continuous window, thinning), fisheye and life-size mappings, bass below the horizon with 3.5 px blur, mids veil, highs and edge line, glow layer, minute grid, beat ticks, blend labels and thinning, playhead and live dot, per-track highlight regions, Reef palette. **Tests:** sampling has no frame-to-frame jump over 2 % of the curve height in a 60 fps simulation (port the measurement from this spec's work); performance budget on a mid phone (**Ask** if over 8 ms per frame). | 3, 7 | L |
+| 9 | **Spectral background.** SPEC-music-player's background section: analyser bands with per-band auto-gain, attack and release as time constants, loudness weight, colour picked along the **Abyss** palette by intensity, fixed size, **Rollers** values, the dark **halo** (3 px) cut by the timeline, clipped with the stage in expanded mode (clip on a wrapper, not on the zoomed canvas). The Look tuning panel only on `#/lab/music`. | 8 | M |
+| 10 | **Interactions.** Scrub only within the timeline band (grab, inertia, tap to jump, glide); title and timeline clicks glide; the highlight animates in and out and flashes every track crossed; drag to reorder from anywhere on a row except buttons (mouse threshold, touch long-press); add and remove animations (gap opens then the row slides in; the row slides out then the gap closes); reorder FLIP in 420 ms; "+ Add" panel with fitted, animated height (never on TV). All numbers from SPEC-music-player. | 8 | M |
+| 11 | **Two modes and the One-motion switch** (SPEC-music-player §7–8): default and expanded on desktop and phone, the persisted pin, the 620 ms switch with the flow morph, interruptible mid-motion, reduced motion. | 8, 10 | M |
+| 12 | **Beat-synced mixing.** The per-transition plan (4 s fade or sync of n bars from a 4-bar phrase, tempo match within ±8 %, glide back, bass swap, nudge), the phase lock, the transition popover from the label's second line with Hear it and live status, the default-mix option, per-pair settings saved in the server queue (PR 4). **Then remove the `lab` flag** from the Music tab and the player. Tests: plan() cases (fade fallback 172→150, 8-bar sync start on a phrase), PLL convergence in a simulation. | 4, 8 | M |
+
+### Phase 3: the TV (station)
+
+| # | PR | Needs | Size |
+|---|---|---|---|
+| 13 | **Station spike (Ask before building 14).** The TV picture is the desktop immersive view at 1920 × 1080 with controls removed (`?tv`). Measure on the Windows machine: (a) a headless Chromium rendering the real `?tv` page, captured to ffmpeg, against (b) a Python port of the renderers. Measure CPU, frame pacing and A/V sync over 30 min. Write the numbers and a recommendation into §7. This replaces the "same renderer in Python" assumption of §5 and §9 if (a) wins. | 8, 9 | S |
+| 14 | **Station.** One continuous stream through the TV routes (`_live_piped`, `tv_run_from`): server-side audio mix with the same plan as the browser (fades, beat sync, bass swap), the picture from the chosen renderer, timestamps continuous across tracks; skip, add, remove and reorder applied live with the app's motion. Boundary checks in tests (no gap, no click at transitions: ffmpeg silence and level detection). | 4, 12, 13 | L |
+| 15 | **Cast integration.** Send to TV from the player; while casting the sound is on the TV only; volume strip (mute, 0–100, wheel and ↑/↓ step 5) driving the Cast session volume; the TV's 1.6 s volume pill; cast metadata (title, artist, cover); now-casting bar for music; pull back. Chromecast and DLNA. | 14 | M |
+
+### Phase 4: online sources
+
+| # | PR | Needs | Size |
+|---|---|---|---|
+| 16 | **YouTube and YouTube Music as music.** An "Audio only" download choice (`-f ba`, keep the container yt-dlp picks); a YouTube video plays as music (audio only, the picture is dropped); a YouTube Music playlist as a queue source. Streamed tracks get their analysis on first fetch (§13.3). | 3, 7 | M |
+| 17 | **One music search across sources** (§13.4): libraries plus online sources through the existing source-picker search, with chips to search one source (Everywhere · Your libraries · YouTube Music · YouTube · SoundCloud · Bandcamp · +); top match; in-library and online sections; play now, queue, or save into a chosen library. **Ask:** which online sources at launch (SoundCloud and Bandcamp need extractors). | 6, 16 | M |
+
+### Phase 5: libraries, playlists and DJ sets (SPEC-music §13)
+
+| # | PR | Needs | Size |
+|---|---|---|---|
+| 18 | **Playlists as a tree.** Folders, playlists, cross-source items, parts (a set is a playlist with parts), smart lists (rules: genre, tempo range, added date, never played). The crates column fills in. | 6 | M |
+| 19 | **Several libraries.** More folders on this machine; a NAS path; a **remote sestudio server** as a library (its API federated: browse, stream, analysis); a YouTube Music account (likes). Status dot, counts, indexing and offline states; "Add a library". **Ask:** auth between sestudio servers. | 6 | L |
+| 20 | **Analysis v2 (offline).** Key (Camelot), genre with a confidence (doubtful ones dashed with a %, one click to confirm or fix), energy curve, and **structure**: intro, buildup, drop, breakdown and outro with their start bars. The mix uses structure: mix out of an outro into an intro, never over a drop. **Ask:** model choice and its size on the Android build. Starts with a research note comparing approaches on the test music. | 3 | L |
+| 21 | **Set builder.** The set page: tempo and energy curve over the parts, the transition shown between each pair (synced, fade, warnings with a suggested fix), key and genre on rows, auto-order (smooth tempo, harmonic, energy arc; within a part unless asked), "Fill from library" (genre, tempo range, length; any library, online included). | 12, 18, 20 | M |
+
+**Order and parallel work:** 0 → 1 → 2 → (3, 4) → 5 → 6, 7 → 8 → (9, 10, 12) → 11. The TV track
+(13 → 14 → 15) can start once 8 and 9 exist. Phases 4 and 5 follow, mostly in parallel with each other.
 
 ## 12. Files this touches (starting points)
 
-`src/sestudio/downloaded.py` (suffixes, mime, tags), `src/sestudio/web/routes/downloaded.py`
-(`_live_piped`, `tv_run_from`), `src/sestudio/web/routes/cast.py` (`cast_live`, tracks, metadata),
-`src/sestudio/sites/creators.py` (audio-only format), `src/sestudio/downloader.py` (`-f`),
-`frontend/src/components/watch/VideoPane.tsx` (stage), `frontend/src/components/watch/EpisodeList.tsx`
-and `frontend/src/castQueue.ts` (queue), `frontend/src/components/cast/NowCastingBar.tsx`,
-`frontend/src/cast.ts` (metadata only), new `src/sestudio/station.py`, new
-`frontend/src/components/music/` (Stage, Visualiser, Queue, Bench), new `frontend/src/lab/`.
+Server: `src/sestudio/downloaded.py` (suffixes, mime, tags, track ids), `src/sestudio/library.py` (SQLite:
+analysis and queue tables), `src/sestudio/web/routes/downloaded.py` (`_live_piped`, `tv_run_from`),
+`src/sestudio/web/routes/cast.py` (live stream, metadata, volume), `src/sestudio/web/routes/search.py`
+(source picker), `src/sestudio/sites/creators.py` and `src/sestudio/downloader.py` (audio-only `-f ba`),
+new `src/sestudio/music/` (analysis, queue, mix plan, station).
+
+Browser: `frontend/src/nav.ts` and `frontend/src/components/AppShell.tsx` (tabs, bell),
+`frontend/src/components/PageHeader.tsx` (bell in the header card), new `frontend/src/views/MusicView.tsx`,
+new `frontend/src/components/music/` (Layer, PlayerBar, Flow, Background, Queue, AddPanel, MixPopover,
+Crates), `frontend/src/cast.ts` (metadata and volume only), `frontend/src/playlistCollapsed.ts` (pattern
+for the persisted pin), new `frontend/src/lab/`.
+
+## 13. Ready for later: libraries, sources, sets (decided 2026-11-03, not built yet)
+
+Reference: `docs/assets/music-future-mockups.html` (layout **B** picked: the side column). None of this
+is in the 9-PR plan; the point is that the first PRs leave room for it instead of having to be undone.
+
+1. **Where a track lives.** Every track and album carries its **library** (this PC folder, NAS, a remote
+   sestudio server, a YouTube Music account…) and its **source** (file, YouTube Music, YouTube,
+   SoundCloud, Bandcamp). That is the default entry point: browsing, badges, filters and "Save to…" read
+   it. **Playlists are cross-source**: one playlist can mix tracks from any library and any source.
+2. **Playlists are a tree.** Folders hold playlists; a playlist can be split into **parts**
+   (sub-playlists). A **set** is a playlist with parts (Warm-up / Peak / Cool down), with the transition
+   between each pair of tracks shown and editable. Smart lists (rules: genre, tempo range, "new this
+   week"…) sit next to them.
+3. **Offline analysis**, run once per track on the server (local files at indexing; streamed tracks the
+   first time they are fetched), never in the browser: tempo, beat grid and first downbeat (as the
+   prototype's `prep_bpm.py`), **key** (Camelot), **genre with a confidence** (doubtful ones shown dashed
+   with a %, one click to confirm or fix), **energy** curve, and **structure**: intro, buildup, drop,
+   breakdown, outro, with their start bars. Structure feeds the mix (mix out of an outro into an intro,
+   never over a drop) and the set's energy curve.
+4. **One search across sources** (libraries + online), reusing the video search's source picker, with
+   **sub-search on one source** (chips: Everywhere · Your libraries · YouTube Music · YouTube ·
+   SoundCloud · Bandcamp · +). A YouTube video plays as music (audio only). Anything online can be played
+   now, queued, or saved into a chosen library.
+
+**Layout B, in short:** the Music page has a 250 px column (desktop) with LIBRARIES (status dot, count,
+indexing / offline state, "Add a library"), PLAYLISTS (folders, sets with their part count) and SMART
+LISTS; the content area shows Albums / Artists / Tracks with genre filters. On the phone the column is a
+sheet opened from an "All libraries" pill in the top card.
+
+**What the first PRs must do so this fits later:** give library entries a `library` and a `source`
+field (one library and source `file` to start); store the queue as references to tracks
+(library + id), never as file paths; keep analysis results in their own table keyed by track, with
+room for more fields; and route music search through the existing source-picker search.
