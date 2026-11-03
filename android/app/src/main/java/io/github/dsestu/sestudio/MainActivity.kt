@@ -1,6 +1,7 @@
 package io.github.dsestu.sestudio
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ClipData
@@ -120,10 +121,13 @@ class MainActivity : Activity() {
             error = ""
             steps.forEach { it.state = "wait"; it.detail = ""; it.fraction = null }
             render()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // The server's notification, with its Stop button.
-                runOnUiThread { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0) }
-            }
+            // The server's notification (with its Stop button), and the phone's music folders as libraries.
+            // Refusing either is fine: the server starts without it.
+            val asking = listOfNotNull(
+                Manifest.permission.POST_NOTIFICATIONS.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU },
+                ServerService.audioPermission(),
+            ).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+            if (asking.isNotEmpty()) runOnUiThread { requestPermissions(asking.toTypedArray(), 0) }
             thread(name = "boot") {
                 try {
                     runtime.install { index, done, total ->
