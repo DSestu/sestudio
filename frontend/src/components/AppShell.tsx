@@ -3,13 +3,13 @@ import type { CatalogInfo } from '../api'
 import { useBrowserSession } from '../playbackSession'
 import { useCastState } from '../cast'
 import { useDlnaState } from '../dlnaControl'
-import type { Tab, View } from '../nav'
+import { navTabs, type Tab, type View } from '../nav'
 import { useSelectionActive } from '../selectionMode'
 import { closeDiscoverMenuThen, toggleDiscoverMenu, useDiscoverMenuOpen } from '../discoverMenu'
 import SourceIcon from './SourceIcon'
 import CreatorLinks from './CreatorLinks'
-import { SettingsButton, TopCard } from './PageHeader'
-import { deskSlotRef, usePageHeaderMounted } from '../pageHeader'
+import { ActivityBell, SettingsButton, TopCard } from './PageHeader'
+import { deskSlotRef, setBell, usePageHeaderMounted } from '../pageHeader'
 import { usePhoneStripShown } from '../phoneStrip'
 import { AWAY, setBarsHidden, useBarsHidden } from '../barsHidden'
 
@@ -39,6 +39,7 @@ const DESTINATIONS: Destination[] = [
   // What is on the server's disk, and what is on its way there.
   { id: 'media', label: 'Media', icon: icon('M4 6a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM10 8.5v5l4-2.5-4-2.5zM8 21h8') },
   { id: 'notifications', label: 'Activity', icon: icon('M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0') },
+  { id: 'music', label: 'Music', icon: icon('M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z') },
 ]
 
 /** Destinations that carry a count badge, and which prop feeds it. */
@@ -54,6 +55,8 @@ interface Props {
   downloadBadge?: number
   /** Unread watcher events, rendered on the Activity destination when non-zero. */
   unreadBadge?: number
+  /** The lab flag: adds the Music tab and moves Activity to a bell in the top card. */
+  lab?: boolean
   /** Navigates to the settings page. */
   onOpenSettings: () => void
   /** Browsable catalogues, listed under Discover in the rail. */
@@ -71,7 +74,9 @@ interface Props {
  * App chrome: a persistent rail on `md:` and up, a bottom tab bar below it.
  * The content column scrolls independently on desktop so the rail stays put.
  */
-export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBadge = 0, onOpenSettings, catalogs = [], catalogId = '', onOpenCatalog, searchBar, children }: Props) {
+export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBadge = 0, lab = false, onOpenSettings, catalogs = [], catalogId = '', onOpenCatalog, searchBar, children }: Props) {
+  const tabs = navTabs(lab)
+  useEffect(() => { setBell(lab, unreadBadge) }, [lab, unreadBadge])
   const badgeFor = (id: Tab) =>
     BADGES[id] === 'download' ? downloadBadge : BADGES[id] === 'unread' ? unreadBadge : 0
   // When a cast is active the Now-Casting bar sits above the mobile tab bar
@@ -159,7 +164,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
           >
             {searchIcon}
           </button>
-          <RailNav view={view} onNavigate={onNavigate} badgeFor={badgeFor} discoverProps={catalogs.length > 0 ? peekProps : {}} />
+          <RailNav tabs={tabs} view={view} onNavigate={onNavigate} badgeFor={badgeFor} discoverProps={catalogs.length > 0 ? peekProps : {}} />
           <div className="mt-auto">
             <RailItem
               label="Settings"
@@ -201,6 +206,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
                 <p className="mt-0.5 text-xs text-base-content/60"><span className="text-primary font-semibold">{unreadBadge}</span> new for you</p>
               )}
             </div>
+            <ActivityBell />
             <SettingsButton />
           </div>
         </TopCard>
@@ -232,6 +238,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
                 <div ref={TITLE_SLOT} className="contents" />
                 <div className="flex-1 min-w-0">{searchBar}</div>
                 <div ref={MENU_SLOT} className="contents" />
+                <ActivityBell />
               </div>
               <div ref={TABS_SLOT} />
             </div>
@@ -243,14 +250,12 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
 
       {/* Phone dock — hidden while the selection bar occupies this slot. */}
       {!selecting && (
-        <PhoneDock view={view} menuOpen={menuOpen} joined={phoneStrip || menuOpen} onNavigate={onNavigate} badgeFor={badgeFor} />
+        <PhoneDock tabs={tabs} view={view} menuOpen={menuOpen} joined={phoneStrip || menuOpen} onNavigate={onNavigate} badgeFor={badgeFor} />
       )}
     </div>
   )
 }
 
-/** The phone dock's tabs, in order; Search sits in the middle of them. */
-const DOCK_TABS: Tab[] = ['home', 'library', 'media', 'notifications']
 const searchIcon = (
   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
@@ -267,7 +272,9 @@ const closeIcon = (
  * around a Search button that unfolds the Discover menu. The active tab's pill
  * slides between tabs rather than jumping.
  */
-function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
+function PhoneDock({ tabs, view, menuOpen, joined, onNavigate, badgeFor }: {
+  /** The nav's order; Search sits in the middle of the rest. */
+  tabs: Tab[]
   view: View
   menuOpen: boolean
   /** A playing strip or the Discover menu sits on top, so the top corners
@@ -277,8 +284,9 @@ function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
   badgeFor: (id: Tab) => number
 }) {
   const away = useBarsHidden()
+  const dockTabs = tabs.filter(id => id !== 'search')
   // An open menu covers whatever view is under it, so no tab is lit then.
-  const active = menuOpen ? undefined : DOCK_TABS.find(id => id === view)
+  const active = menuOpen ? undefined : dockTabs.find(id => id === view)
   const icons = useRef<Partial<Record<Tab, HTMLSpanElement | null>>>({})
   const pill = useRef<HTMLSpanElement>(null)
   // The first placement must not slide in from the left edge.
@@ -342,7 +350,7 @@ function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
         aria-hidden="true"
         className="absolute left-0 top-0 w-13 h-7.5 rounded-[10px] bg-primary/22 transition-[transform,opacity] duration-300 ease-smooth motion-reduce:transition-opacity"
       />
-      {DOCK_TABS.slice(0, 2).map(tab)}
+      {dockTabs.slice(0, 2).map(tab)}
       <button
         onClick={toggleDiscoverMenu}
         aria-label={menuOpen ? 'Close search' : 'Search'}
@@ -353,7 +361,7 @@ function PhoneDock({ view, menuOpen, joined, onNavigate, badgeFor }: {
       >
         {menuOpen ? closeIcon : searchIcon}
       </button>
-      {DOCK_TABS.slice(2).map(tab)}
+      {dockTabs.slice(2).map(tab)}
     </nav>
   )
 }
@@ -392,14 +400,15 @@ function RailItem({ label, icon, lit, badge = 0, current, onClick, iconRef }: {
 }
 
 /** The rail's destinations, with the lit one's pill sliding between them. */
-function RailNav({ view, onNavigate, badgeFor, discoverProps }: {
+function RailNav({ tabs, view, onNavigate, badgeFor, discoverProps }: {
+  tabs: Tab[]
   view: View
   onNavigate: (v: Tab) => void
   badgeFor: (id: Tab) => number
   discoverProps: HTMLAttributes<HTMLDivElement>
 }) {
   // Creators and channels are reached through Discover, so it stays lit there.
-  const active = view === 'creators' || view === 'channel' ? 'search' : DESTINATIONS.find(d => d.id === view)?.id
+  const active = view === 'creators' || view === 'channel' ? 'search' : tabs.find(id => id === view)
   const icons = useRef<Partial<Record<Tab, HTMLSpanElement | null>>>({})
   const pill = useRef<HTMLSpanElement>(null)
   const placed = useRef(false)
@@ -422,7 +431,7 @@ function RailNav({ view, onNavigate, badgeFor, discoverProps }: {
         aria-hidden="true"
         className="absolute left-1/2 -ml-6.5 top-0 w-13 h-8 rounded-[10px] bg-primary/22 transition-[transform,opacity] duration-300 ease-smooth motion-reduce:transition-opacity"
       />
-      {DESTINATIONS.map(d => (
+      {tabs.map(id => DESTINATIONS.find(d => d.id === id)!).map(d => (
         <div key={d.id} {...(d.id === 'search' ? discoverProps : {})}>
           <RailItem
             label={d.label}
