@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from sestudio import downloaded
-from sestudio.music import analysis, store
+from sestudio.music import analysis, libraries, store
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ def _loop(root: str) -> None:
     try:
         while True:
             run_once(root)
+            for library, folder in libraries.folder_roots()[1:]:
+                run_once(folder, library=library)
             with _lock:
                 if not _again:
                     _running = False
@@ -89,11 +91,15 @@ def _upgrade_v2(base: Path, files: list, workers: int) -> int:
     return n
 
 
-def run_once(root: str | Path, workers: int | None = None) -> int:
+def run_once(
+    root: str | Path,
+    workers: int | None = None,
+    library: str = downloaded.LOCAL_LIBRARY,
+) -> int:
     """Analyse every pending audio file under *root*; returns how many succeeded."""
     global _total, _done
     base = Path(root)
-    files = [f for f in downloaded.scan(base) if f.kind == "audio"]
+    files = downloaded.audio_files(base, library)
     known = store.stamps()
     pending = [
         f for f in files

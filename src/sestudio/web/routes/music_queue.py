@@ -17,8 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from sestudio import downloaded
-from sestudio.config import load_config
-from sestudio.music import online, queue
+from sestudio.music import libraries, online, queue
 from sestudio.sites import SiteError
 
 router = APIRouter(prefix="/music/queue")
@@ -71,12 +70,7 @@ class DefaultMixBody(BaseModel):
 
 
 def _known_tracks() -> set[tuple[str, str]]:
-    root = load_config().output_root
-    return {
-        (downloaded.LOCAL_LIBRARY, f.track_id)
-        for f in downloaded.scan(root)
-        if f.kind == "audio"
-    }
+    return libraries.known_tracks()
 
 
 def _rev(if_match: str | None, rev: int | None) -> int | None:
@@ -195,13 +189,14 @@ def put_mix(
     if_match: str | None = Header(default=None),
     rev: int | None = Query(default=None),
 ) -> Any:
-    _check_tracks(
-        [
-            (downloaded.LOCAL_LIBRARY, t)
-            for t in (from_track, to_track)
-            if online.video_id(t) is None
-        ]
-    )
+    known = {t for _, t in _known_tracks()}
+    missing = [
+        t
+        for t in (from_track, to_track)
+        if online.video_id(t) is None and t not in known
+    ]
+    if missing:
+        raise HTTPException(404, f"unknown tracks: {', '.join(missing)}")
     return _run(
         lambda: queue.set_mix(
             from_track, to_track, body.model_dump(), _rev(if_match, rev)
