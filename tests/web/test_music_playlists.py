@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sestudio import downloaded, library
-from sestudio.music import playlists, queue
+from sestudio.music import playlists, queue, store
 from sestudio.web.app import create_app
 
 NAMES = ["a.m4a", "b.m4a", "c.m4a", "d.m4a"]
@@ -230,3 +230,54 @@ def test_matches_unit():
     assert playlists.matches(rules, track, now=100.0 + 3600)
     assert not playlists.matches(rules, {**track, "bpm": 100}, now=100.0)
     assert not playlists.matches(rules, track, now=100.0 + 2 * 86400)
+
+
+def test_reorder_items(client):
+    pl = mk(client, "playlist", "P")
+    got = client.post(
+        f"/api/music/playlists/{pl['id']}/items",
+        json={"tracks": [{"library": "local", "track_id": t} for t in (A, B, C)]},
+    ).json()
+    order = [i["item_id"] for i in got["items"]][::-1]
+    url = f"/api/music/playlists/{pl['id']}/items/reorder"
+    r = client.post(url, json={"order": order})
+    assert [i["item_id"] for i in r.json()["items"]] == order
+    assert client.post(url, json={"order": order[:2]}).status_code == 400
+
+
+def test_genre_override(client):
+    conn = library._connect()
+    conn.execute(
+        "INSERT INTO music_analysis (track_id, mtime, size, analysed_at, duration, zcr,"
+        " bpm, n, bands, loudness, extra) VALUES (?, 0, 0, 0, 1, 0, 128, 1, ?, ?, ?)",
+        (A, bytes(16), bytes(2), json.dumps({"genre": "House", "genreConf": 0.4})),
+    )
+    conn.commit()
+    r = client.put(f"/api/music/tracks/{A}/genre", json={"genre": "Techno"})
+    assert r.status_code == 200
+    assert (
+        client.put(f"/api/music/tracks/{B}/genre", json={"genre": "x"}).status_code
+        == 404
+    )
+    store.set_extra(A, {"genre": "House"})  # a re-profile keeps the choice
+    got = store.get([A])[A]
+    assert (got["genre"], got["genreConf"]) == ("Techno", 1.0)
+    s = mk(client, "smart", "t", rules={"genres": ["techno"]})
+    refs = client.get(f"/api/music/playlists/{s['id']}/tracks").json()
+    assert [t["track_id"] for t in refs] == [A]
+
+
+def test_reorder_whole_set_keeps_part_sizes(client):
+    pl = mk(client, "playlist", "S")
+    base = f"/api/music/playlists/{pl['id']}"
+    client.post(f"{base}/parts", json={"name": "One"})
+    p2 = client.post(f"{base}/parts", json={"name": "Two"}).json()["parts"][1]["id"]
+    refs = [{"library": "local", "track_id": t} for t in (A, B, C)]
+    client.post(f"{base}/items", json={"tracks": refs, "part": None, "index": 0})
+    client.post(f"{base}/items", json={"tracks": [refs[0]], "part": p2})
+    node = {n["id"]: n for n in client.get("/api/music/playlists").json()}[pl["id"]]
+    ids = [i["item_id"] for p in node["parts"] for i in p["items"]]
+    r = client.post(f"{base}/items/reorder", json={"order": ids[::-1], "whole": True})
+    parts = r.json()["parts"]
+    assert [len(p["items"]) for p in parts] == [len(p["items"]) for p in node["parts"]]
+    assert [i["item_id"] for p in parts for i in p["items"]] == ids[::-1]

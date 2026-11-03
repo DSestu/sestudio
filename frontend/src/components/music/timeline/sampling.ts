@@ -13,6 +13,19 @@ export interface RawAnalysis {
   bar0?: number | null
   /** 8 band envelopes, whole percents at 10 Hz. */
   bands?: number[][]
+  /** Analysis v2: segments in bars from the first whole bar. */
+  structure?: { label: string; start_bar: number; end_bar: number }[]
+  energy?: number[]
+  camelot?: string
+  genre?: string
+  genreConf?: number
+}
+
+/** A structure segment (intro, buildup, drop, breakdown, outro) in the track's own seconds. */
+export interface Seg {
+  label: string
+  a: number
+  b: number
 }
 
 export interface Track {
@@ -22,6 +35,8 @@ export interface Track {
   bpm: number
   /** The first downbeat, seconds. */
   bar0: number
+  /** Structure segments, empty when the track has none. */
+  segs: Seg[]
   /** Cumulative band means per group (bass, mids, highs): cum[g][i + 1] = cum[g][i] + mean at i. */
   cum: [Float64Array, Float64Array, Float64Array]
 }
@@ -43,7 +58,10 @@ export function prepTrack(id: string, dur: number, raw?: RawAnalysis | null): Tr
     return c
   }) as Track['cum']
   const bpm = raw?.bpm && raw.bpm > 0 ? raw.bpm : 0
-  return { id, dur, bpm, bar0: normBar0(bpm, raw?.bar0), cum }
+  const bar0 = normBar0(bpm, raw?.bar0)
+  const bar = bpm ? 240 / bpm : 0
+  const segs = bpm && raw?.structure ? raw.structure.map(g => ({ label: g.label, a: bar0 + g.start_bar * bar, b: bar0 + g.end_bar * bar })) : []
+  return { id, dur, bpm, bar0, segs, cum }
 }
 
 /** The first bar line, folded into the first bar (a hair before the next one counts as 0). */

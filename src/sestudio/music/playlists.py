@@ -295,6 +295,32 @@ def move_item(
     return _mutate(node_id, change)
 
 
+def reorder(
+    node_id: str, order: list[str], part: str | None = None, whole: bool = False
+) -> dict[str, Any]:
+    """Put the items of *part* (default: the loose list) in the order of *order*, a permutation of their ids.
+
+    With *whole*, *order* covers every item of the playlist and is dealt back
+    into the loose list and the parts, each keeping its size.
+    """
+
+    def change(node: dict[str, Any]) -> None:
+        buckets = (
+            [node["items"], *(p["items"] for p in node["parts"])]
+            if whole
+            else [node["items"] if part is None else _bucket(node, part)]
+        )
+        by_id = {i["item_id"]: i for b in buckets for i in b}
+        if len(order) != len(by_id) or set(order) != set(by_id):
+            raise Invalid("order must list exactly the items it covers")
+        at = 0
+        for b in buckets:
+            b[:] = [by_id[i] for i in order[at : at + len(b)]]
+            at += len(b)
+
+    return _mutate(node_id, change)
+
+
 def add_part(node_id: str, name: str) -> dict[str, Any]:
     name = _name(name)
 
@@ -405,7 +431,7 @@ def evaluate(
                 chunk,
             ):
                 extra = json.loads(r["extra"])
-                genre = extra.get("genre")
+                genre = extra.get("genre_override") or extra.get("genre")
                 if isinstance(genre, dict):
                     genre = genre.get("name")
                 info[r["track_id"]] = {"bpm": r["bpm"], "genre": genre}
