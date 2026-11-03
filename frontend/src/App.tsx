@@ -6,6 +6,7 @@ import { loadCast } from './cast'
 import { refreshDlna } from './dlnaControl'
 import AppShell from './components/AppShell'
 import NowCastingBar from './components/cast/NowCastingBar'
+import MusicPlayer from './components/music/MusicPlayer'
 import MiniPlayer from './components/watch/MiniPlayer'
 import DownloadedLibrary from './components/downloaded/DownloadedLibrary'
 import { hydrateLibrary } from './hydrateLibrary'
@@ -436,6 +437,8 @@ export default function App() {
       {/* One persistent Now-Casting surface, on every view. Renders nothing
           unless a cast (Chromecast or DLNA) is active. */}
       <NowCastingBar navigate={navigate} />
+
+      {settings.lab && <MusicPlayer />}
 
       {/* Minimised browser player — shown whenever the playing title is not the
           one on screen, which includes browsing a *different* title in the

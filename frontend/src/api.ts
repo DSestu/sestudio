@@ -1006,6 +1006,11 @@ export interface DownloadedFile {
   lang: string
   size: number
   mtime: number
+  /** Audio files only (music tracks). */
+  id?: string
+  artist?: string
+  album?: string
+  duration?: number
 }
 
 export interface DownloadedTitle {
