@@ -43,14 +43,16 @@ export function prepTrack(id: string, dur: number, raw?: RawAnalysis | null): Tr
     return c
   }) as Track['cum']
   const bpm = raw?.bpm && raw.bpm > 0 ? raw.bpm : 0
-  let bar0 = 0
-  if (bpm) {
-    const bar = 240 / bpm
-    let b = (raw?.bar0 ?? 0) % bar
-    if (b > bar - 0.06) b -= bar
-    bar0 = Math.max(0, b)
-  }
-  return { id, dur, bpm, bar0, cum }
+  return { id, dur, bpm, bar0: normBar0(bpm, raw?.bar0), cum }
+}
+
+/** The first bar line, folded into the first bar (a hair before the next one counts as 0). */
+export function normBar0(bpm: number, bar0?: number | null): number {
+  if (!bpm) return 0
+  const bar = 240 / bpm
+  let b = (bar0 ?? 0) % bar
+  if (b > bar - 0.06) b -= bar
+  return Math.max(0, b)
 }
 
 // --- the global time axis -----------------------------------------------------------
@@ -63,6 +65,12 @@ export interface Plan {
   startOff: number
   rate: number
   bars?: number
+  /** Beat sync only: bass swap, and the two tempos the phase lock counts beats with. */
+  swap?: boolean
+  bpmA?: number
+  bpmB?: number
+  /** Why a sync fell back to a fade. */
+  why?: 'tempo' | 'short'
 }
 
 export const fadePlan = (a: Track): Plan => ({ mode: 'fade', mixOut: a.dur - FADE, len: FADE, startOff: 0, rate: 1 })
@@ -83,7 +91,6 @@ export interface QueueLayout {
   plans: Plan[]
 }
 
-/** The per-pair plan is plugged in by PR 12; until then every handover is a fade. */
 export function layoutQueue(tracks: Track[], planOf: (a: Track, b: Track) => Plan = fadePlan): QueueLayout {
   const plans = tracks.slice(0, -1).map((a, i) => planOf(a, tracks[i + 1]))
   const TS: number[] = []

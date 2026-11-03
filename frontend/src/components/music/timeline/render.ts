@@ -89,8 +89,20 @@ export class TimelineRenderer {
     this.M = new Mapper(W, H)
   }
 
+  /** The labels drawn last frame, for hit tests: the join they open (index of the incoming item) and their box. */
+  private hits: { i: number; x0: number; x1: number; ty: number }[] = []
+
+  /** The label under a point of the canvas, and whether it is the second line (the transition). */
+  labelAt(x: number, y: number): { i: number; x0: number; ty: number; second: boolean } | null {
+    for (const h of this.hits) {
+      if (x >= h.x0 && x <= h.x1 && y >= h.ty - 14 && y <= h.ty + 18) return { i: h.i, x0: h.x0, ty: h.ty, second: y > h.ty + 3 }
+    }
+    return null
+  }
+
   draw(f: Frame) {
     const { W, H, dpr, page: g2, off, M } = this
+    this.hits.length = 0
     if (!W) return
     const o2 = off.x
     const { X } = M.at(f.t)
@@ -368,6 +380,7 @@ export class TimelineRenderer {
       const box = Math.max(tw, 120) + 12
       if (avoid && x0 + box > avoid.left && x0 < avoid.right && ty - 14 < avoid.bottom && ty + 18 > avoid.top) continue
       last = x0
+      this.hits.push({ i, x0, x1: x0 + box, ty })
       g2.fillStyle = 'oklch(92% .01 240 / .92)'
       g2.fillText(it.title, x0 + 6, ty)
       g2.font = '500 11px ui-sans-serif,system-ui'

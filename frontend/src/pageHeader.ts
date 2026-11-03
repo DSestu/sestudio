@@ -50,7 +50,7 @@ export function useDeskSlots(): Partial<Record<DeskSlot, HTMLElement>> {
   )
 }
 
-// Whether Activity is a bell in the top card (lab flag on) and its unread
+// Whether Activity is a bell in the top card and its unread
 // count. AppShell publishes it; the bell renders in every page's card.
 
 let bell: { on: boolean; unread: number } = { on: false, unread: 0 }

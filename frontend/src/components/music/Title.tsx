@@ -1,27 +1,48 @@
-import type { Analysis, TrackInfo } from '../../musicQueue'
+import { useEffect, useRef } from 'react'
+import { clockSkew, getQueue, positionNow, type Analysis, type TrackInfo } from '../../musicQueue'
+import { engine, useSyncStatus } from './engine'
 import { fmtBpm } from './format'
+import { normBar0 } from './timeline/sampling'
+
+/** A dot that flashes on every beat of the playing track, bigger on the downbeat. */
+function BeatDot({ bpm, bar0, duration }: { bpm: number; bar0: number; duration: number }) {
+  const dot = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    let id = 0
+    const frame = () => {
+      id = requestAnimationFrame(frame)
+      const q = getQueue()
+      const ph = (positionNow(q, clockSkew(), Date.now(), duration || Infinity) - bar0) / (60 / bpm)
+      const fr = ph - Math.floor(ph)
+      const on = q.playing
+      const flash = Math.pow(1 - fr, 3)
+      const down = ((Math.floor(ph) % 4) + 4) % 4 === 0
+      const el = dot.current
+      if (!el) return
+      el.style.opacity = on ? String(0.25 + 0.75 * flash) : '.3'
+      el.style.transform = `scale(${on && down ? 1 + 0.6 * flash : 1})`
+    }
+    id = requestAnimationFrame(frame)
+    return () => cancelAnimationFrame(id)
+  }, [bpm, bar0, duration])
+  return <span ref={dot} aria-hidden="true" className="size-2 rounded-full bg-current shrink-0" />
+}
 
 /** Artist line (with the tempo and a dot that beats at it) over the big title. */
-export default function Title({ info, analysis, position }: { info?: TrackInfo; analysis: Analysis | null; position: number }) {
+export default function Title({ info, analysis }: { info?: TrackInfo; analysis: Analysis | null }) {
   const bpm = analysis?.bpm
-  const beat = bpm ? 60 / bpm : 0
-  // Phase the dot on the beat grid so it flashes with the track.
-  const delay = bpm ? -(((position - (analysis?.beat0 ?? 0)) % beat) + beat) % beat : 0
+  const sync = useSyncStatus()
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-2 text-[15px] text-base-content/60">
         <span className="truncate">{info?.artist || 'Unknown artist'}</span>
         {bpm && (
-          <>
-            <span className="shrink-0 tabular-nums">{fmtBpm(bpm)} BPM</span>
-            {/* key: restart the animation on a new track so the phase is right */}
-            <span
-              key={info?.id}
-              aria-hidden="true"
-              className="size-2 rounded-full bg-primary shrink-0 animate-[music-beat_var(--beat)_linear_infinite]"
-              style={{ '--beat': `${beat}s`, animationDelay: `${delay}s` } as React.CSSProperties}
-            />
-          </>
+          // A beat sync shows both tempos, in amber while it locks and Signal Blue once it has.
+          <span className={`shrink-0 inline-flex items-center gap-1.5 tabular-nums ${sync ? (sync.locked ? 'text-primary' : 'text-[oklch(80%_.12_75)]') : ''}`}>
+            {sync ? `${fmtBpm(sync.from)} → ${fmtBpm(sync.to)}` : `${fmtBpm(bpm * engine.rate)} BPM`}
+            {/* key: a new track restarts the loop on its own grid */}
+            <BeatDot key={info?.id} bpm={bpm} bar0={normBar0(bpm, analysis?.bar0)} duration={info?.duration ?? 0} />
+          </span>
         )}
       </div>
       <h2 className="mt-1 truncate font-bold leading-[.95] tracking-[-.04em] text-[clamp(2.25rem,8vw,6rem)] pb-1">

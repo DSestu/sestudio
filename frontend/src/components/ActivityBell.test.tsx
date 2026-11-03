@@ -4,11 +4,11 @@ import { setBell } from '../pageHeader'
 import { ActivityBell } from './PageHeader'
 
 describe('ActivityBell', () => {
-  it('renders nothing with the lab flag off', () => {
+  it('renders nothing before the shell has published it', () => {
     setBell(false, 3)
     expect(renderToStaticMarkup(<ActivityBell />)).toBe('')
   })
-  it('shows the unread count and links to Activity with the flag on', () => {
+  it('shows the unread count and links to Activity', () => {
     setBell(true, 3)
     const html = renderToStaticMarkup(<ActivityBell />)
     expect(html).toContain('href="#/notifications"')

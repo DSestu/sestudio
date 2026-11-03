@@ -23,7 +23,7 @@ export function SettingsButton() {
   )
 }
 
-/** Activity as a bell with its unread count, shown only while the lab flag has moved Activity out of the nav. */
+/** Activity as a bell with its unread count: Activity is out of the nav. */
 export function ActivityBell() {
   const { on, unread } = useBell()
   if (!on) return null
