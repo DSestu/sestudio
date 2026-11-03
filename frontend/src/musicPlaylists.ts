@@ -158,6 +158,8 @@ export const playlistApi = {
   removeItem: (id: string, itemId: string) => change<PlaylistNode>(`/${id}/items/${itemId}`, 'DELETE'),
   moveItem: (id: string, itemId: string, index: number, part?: string) =>
     change<PlaylistNode>(`/${id}/items/move`, 'POST', { item_id: itemId, index, part }),
+  reorder: (id: string, order: string[], part?: string, whole = false) =>
+    change<PlaylistNode>(`/${id}/items/reorder`, 'POST', { order, part, whole }),
   addPart: (id: string, name: string) => change<PlaylistNode>(`/${id}/parts`, 'POST', { name }),
   renamePart: (id: string, part: string, name: string) => change<PlaylistNode>(`/${id}/parts/${part}`, 'PATCH', { name }),
   removePart: (id: string, part: string) => change<PlaylistNode>(`/${id}/parts/${part}`, 'DELETE'),

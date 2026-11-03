@@ -24,6 +24,32 @@ GROWTH = 0.10
 V2_FIELDS = ("key", "camelot", "keyConf", "energy", "structure", "genre", "genreConf")
 
 
+#: A genre the user confirmed or fixed; wins over the detected one everywhere.
+OVERRIDE = "genre_override"
+
+
+def set_genre(track_id: str, genre: str | None) -> bool:
+    """Store (or with None, clear) the user's genre for an analysed track; False when it has no analysis."""
+    with library._lock:
+        conn = library._connect()
+        row = conn.execute(
+            "SELECT extra FROM music_analysis WHERE track_id = ?", (track_id,)
+        ).fetchone()
+        if row is None:
+            return False
+        extra = json.loads(row["extra"])
+        if genre:
+            extra[OVERRIDE] = genre
+        else:
+            extra.pop(OVERRIDE, None)
+        conn.execute(
+            "UPDATE music_analysis SET extra = ? WHERE track_id = ?",
+            (json.dumps(extra), track_id),
+        )
+        conn.commit()
+    return True
+
+
 def save(track_id: str, mtime: float, size: int, a: RawAnalysis) -> None:
     with library._lock:
         conn = library._connect()
@@ -70,8 +96,14 @@ def load_raw(track_id: str) -> RawAnalysis | None:
 
 
 def set_extra(track_id: str, extra: dict[str, Any]) -> None:
+    """Replace a track's profile; the user's genre choice survives a re-profile."""
     with library._lock:
         conn = library._connect()
+        row = conn.execute(
+            "SELECT extra FROM music_analysis WHERE track_id = ?", (track_id,)
+        ).fetchone()
+        if row and (g := json.loads(row["extra"]).get(OVERRIDE)):
+            extra = {**extra, OVERRIDE: g}
         conn.execute(
             "UPDATE music_analysis SET extra = ? WHERE track_id = ?",
             (json.dumps(extra), track_id),
@@ -190,6 +222,11 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
             "loudness": _percent(loud, loud_norm or 1.0),
             # Mean bass, mids, highs (SPEC-music-player §6.1), 0..1.
             **{k: v for k, v in extra.items() if k in V2_FIELDS},
+            **(
+                {"genre": extra[OVERRIDE], "genreConf": 1.0}
+                if extra.get(OVERRIDE)
+                else {}
+            ),
             "balance": [
                 round(sum(mean[0:2]) / 2, 3),
                 round(sum(mean[2:5]) / 3, 3),

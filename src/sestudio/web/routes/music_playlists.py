@@ -43,6 +43,12 @@ class ItemMoveBody(BaseModel):
     part: str | None = None
 
 
+class ReorderBody(BaseModel):
+    order: list[str]
+    part: str | None = None
+    whole: bool = False
+
+
 class PartBody(BaseModel):
     name: str | None = None
     index: int | None = None
@@ -128,6 +134,11 @@ def remove_item(node_id: str, item_id: str) -> dict[str, Any]:
 @router.post("/{node_id}/items/move")
 def move_item(node_id: str, body: ItemMoveBody) -> dict[str, Any]:
     return _run(playlists.move_item, node_id, body.item_id, body.index, body.part)
+
+
+@router.post("/{node_id}/items/reorder")
+def reorder_items(node_id: str, body: ReorderBody) -> dict[str, Any]:
+    return _run(playlists.reorder, node_id, body.order, body.part, body.whole)
 
 
 @router.post("/{node_id}/parts")
