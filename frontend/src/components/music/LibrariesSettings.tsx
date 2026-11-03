@@ -60,6 +60,22 @@ export default function LibrariesSettings({ settings, onUpdate }: {
       <div><button onClick={() => setAdding(true)} className="btn btn-sm">Add a library</button></div>
 
       <div>
+        <label className="flex items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="toggle toggle-primary toggle-sm"
+            checked={settings.music_genre_model !== false}
+            onChange={e => void onUpdate({ music_genre_model: e.target.checked })}
+          />
+          <span>Detect genres with an AI model (downloads about 18 MB once)</span>
+        </label>
+        <p className="text-xs text-base-content/50 mt-1">
+          A track's genre is its file tag when it has one, else what the model hears, else a guess from tempo and sound. Off means tags and the guess only.
+          The model is Essentia's Discogs-EffNet, licensed CC BY-NC-SA 4.0 (non-commercial use).
+        </p>
+      </div>
+
+      <div>
         <label htmlFor="set-yt-cookies" className="text-sm text-base-content/60 mb-1 block">YouTube Music cookies file</label>
         <div className="flex gap-2">
           <input

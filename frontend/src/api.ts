@@ -104,6 +104,8 @@ export interface AppSettings {
   callmebot_configured?: boolean
   /** Path of a cookies.txt from a signed-in YouTube session, for the YouTube Music library. */
   ytmusic_cookies?: string
+  /** Detect music genres with the offline Discogs model. */
+  music_genre_model?: boolean
   /** Concurrent downloads a watcher may run, kept below the interactive pool. */
   watcher_max_concurrent?: number
   /** Every host a download could use, for the ranking control. Read-only. */

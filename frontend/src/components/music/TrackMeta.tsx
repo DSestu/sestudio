@@ -7,7 +7,7 @@ export default function TrackMeta({ id, bpm }: { id: string; bpm?: number }) {
   const tempo = s?.bpm || bpm
   return (
     <span className="hidden sm:flex items-center gap-2">
-      {s?.genre && <GenreTag id={id} genre={s.genre} conf={s.genreConf ?? 1} onChange={() => refreshSummary(id)} />}
+      {s?.genre && <GenreTag id={id} genre={s.genre} conf={s.genreConf ?? 1} source={s.genreSource} onChange={() => refreshSummary(id)} />}
       {s?.camelot && (
         <span className={`rounded bg-white/8 px-1.5 py-0.5 text-[11px] leading-none tabular-nums ${(s.keyConf ?? 0) >= 0.5 ? 'text-base-content/70' : 'text-base-content/35'}`}>{s.camelot}</span>
       )}

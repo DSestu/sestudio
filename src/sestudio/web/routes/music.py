@@ -45,7 +45,15 @@ async def tracks_analysis(ids: str = Query(...)) -> dict[str, Any]:
     return await asyncio.to_thread(_analyses, wanted)
 
 
-SUMMARY_KEYS = ("bpm", "camelot", "keyConf", "genre", "genreConf", "balance")
+SUMMARY_KEYS = (
+    "bpm",
+    "camelot",
+    "keyConf",
+    "genre",
+    "genreConf",
+    "genreSource",
+    "balance",
+)
 
 
 @router.get("/music/tracks/summary")

@@ -173,7 +173,7 @@ def genre(
         elif rough < 0.2 and var < 0.2:
             name = "Liquid Drum & Bass"
     conf = top * (0.5 + 0.5 * float(np.clip((top - second) / 0.5, 0, 1)))
-    return {"genre": name, "genreConf": round(conf, 2)}
+    return {"genre": name, "genreConf": round(conf, 2), "genreSource": "rules"}
 
 
 def profile(

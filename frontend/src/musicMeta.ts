@@ -11,6 +11,8 @@ export interface Summary {
   keyConf?: number
   genre?: string
   genreConf?: number
+  /** Where the genre came from: the file's tag, an online source, the model, the rules or the user. */
+  genreSource?: 'tag' | 'source' | 'model' | 'rules' | 'user'
   /** Mean bass, mids, highs, 0..1. */
   balance?: [number, number, number]
 }
