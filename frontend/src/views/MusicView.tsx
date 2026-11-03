@@ -8,7 +8,8 @@ import {
   albumsOf, artistsOf, formatDuration, initials, matchTracks,
   type MusicAlbum, type MusicTrack,
 } from '../musicLibrary'
-import { addToQueue, playAll, playNow } from '../musicQueue'
+import { addToQueue } from '../musicQueue'
+import { playAll, playNow } from '../components/music/player'
 import { useModalBack } from '../useModalBack'
 
 const TABS = [
