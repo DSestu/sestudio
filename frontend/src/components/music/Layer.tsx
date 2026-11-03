@@ -1,14 +1,19 @@
 import { useEffect, useRef } from 'react'
-import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
+import { useAnalysis, useMusicQueue, useTrackInfo, type QueueState, type TrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
 import { closePlayer, usePosition } from './player'
 import Queue from './Queue'
+import Timeline from './timeline/Timeline'
 import Title from './Title'
 import Transport from './Transport'
 
-/** Where the timeline canvas goes (PR 8): the strip along the bottom, under the queue sheet's lower edge. */
-function TimelineSlot() {
-  return <div data-slot="timeline" className="flex-1 min-h-16 md:flex-none md:absolute md:inset-x-0 md:bottom-0 md:h-[34vh]" />
+/** The strip along the bottom; the canvas itself covers the whole layer, behind everything. */
+function TimelineSlot({ q, info }: { q: QueueState; info: (id: string) => TrackInfo | undefined }) {
+  return (
+    <div data-slot="timeline" className="flex-1 min-h-16 md:flex-none md:absolute md:inset-x-0 md:bottom-0 md:h-[34vh]">
+      <Timeline q={q} info={info} />
+    </div>
+  )
 }
 
 /** The full-screen player, over the whole app (rail and dock included). */
@@ -57,7 +62,7 @@ export default function Layer() {
       <div className="pt-19 px-5.5 md:pt-29.5 md:pl-34 md:pr-96 min-w-0">
         <Title info={track} analysis={analysis} position={position} />
       </div>
-      <TimelineSlot />
+      <TimelineSlot q={q} info={info} />
       <div className="px-3.5 pt-3.5 md:absolute md:left-34 md:top-62.5 md:p-0">
         <Transport q={q} position={position} duration={track?.duration ?? 0} />
       </div>
