@@ -85,7 +85,7 @@ def test_ffmpeg_accepts_the_piped_jpegs(tmp_path):
 
 @pytest.mark.exclude_ci
 def test_browser_renders_a_page(tmp_path):
-    """Needs Playwright and a browser (`--extra station`); not run in CI."""
+    """Needs a browser; not run in CI."""
     pytest.importorskip("playwright")
     browser = shutil.which("google-chrome") or shutil.which("chromium")
     if not browser:

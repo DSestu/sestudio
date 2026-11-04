@@ -1,6 +1,6 @@
 """Measure the station renderer (SPEC-music §7): run against a sestudio that is already playing a queue.
 
-uv run --extra station python scripts/station_spike.py http://127.0.0.1:8090/?tv --seconds 120 --height 720
+uv run python scripts/station_spike.py http://127.0.0.1:8090/?tv --seconds 120 --height 720
 """
 
 import argparse

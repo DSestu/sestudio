@@ -23,13 +23,20 @@ class Runtime(private val context: Context) {
     // Android names the native library folder after the ABI it picked: arm64, arm or x86_64.
     private val arch = Arch.of(libDir.name)
 
+    // The Debian packages installed so far, one per line: a newer app may want more.
+    private val packagesMark = File(context.filesDir, "runtime.packages")
+
     val isReady get() = readyMark.exists()
+
+    /** Whether a set-up runtime still lacks Debian packages this version of the app wants. */
+    val needsPackages get() = isReady && arch.packages.joinToString("\n") != packagesMark.takeIf { it.exists() }?.readText()
 
     /**
      * Sets everything up. [progress] gets the step ([STEP_LINUX], [STEP_UV],
      * [STEP_PACKAGES]) and its bytes so far out of its total (-1 when unknown).
      */
     fun install(progress: (step: Int, done: Long, total: Long) -> Unit) {
+        if (needsPackages) return installPackages(progress)
         if (isReady) return
         rootfs.deleteRecursively()
         rootfs.mkdirs()
@@ -53,6 +60,11 @@ class Runtime(private val context: Context) {
             Os.chmod(target.path, "755".toInt(8))
         }
         uv.deleteRecursively()
+        installPackages(progress)
+        readyMark.writeText("1")
+    }
+
+    private fun installPackages(progress: (step: Int, done: Long, total: Long) -> Unit) {
         if (arch.packages.isNotEmpty()) {
             progress(STEP_PACKAGES, -1, -1)
             // proot's fake root can't drop to apt's sandbox user.
@@ -64,7 +76,7 @@ class Runtime(private val context: Context) {
             val log = apt.inputStream.bufferedReader().readText()
             check(apt.waitFor() == 0) { "Installing ${arch.packages.joinToString()} failed:\n" + log.takeLast(1500) }
         }
-        readyMark.writeText("1")
+        packagesMark.writeText(arch.packages.joinToString("\n"))
     }
 
     /**
@@ -234,9 +246,12 @@ class Runtime(private val context: Context) {
         val env: List<String> = emptyList(),
     ) {
         companion object {
+            // The browser that draws the music station's TV picture; slim Debian has no fonts.
+            private val browser = listOf("chromium", "fonts-liberation")
+
             fun of(abi: String) = when (abi) {
-                "arm64" -> Arch("arm64", null, "aarch64-unknown-linux-musl")
-                "x86_64" -> Arch("amd64", null, "x86_64-unknown-linux-musl")
+                "arm64" -> Arch("arm64", null, "aarch64-unknown-linux-musl", packages = browser)
+                "x86_64" -> Arch("amd64", null, "x86_64-unknown-linux-musl", packages = browser)
                 // 32-bit ARM: PyPI lacks wheels for several dependencies. piwheels has most,
                 // gcc builds the rest (psutil), and ffmpeg comes from Debian, not imageio-ffmpeg.
                 "arm" -> Arch(

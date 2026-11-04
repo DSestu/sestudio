@@ -1735,16 +1735,12 @@ dependencies = [
     { name = "mini-racer", marker = "platform_machine != 'armv7l'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "playwright", marker = "platform_machine != 'armv7l'" },
     { name = "psutil" },
     { name = "python-multipart" },
     { name = "rich" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "yt-dlp", extra = ["curl-cffi"] },
-]
-
-[package.optional-dependencies]
-station = [
-    { name = "playwright" },
 ]
 
 [package.dev-dependencies]
@@ -1770,14 +1766,13 @@ requires-dist = [
     { name = "imageio-ffmpeg", specifier = ">=0.5.1" },
     { name = "mini-racer", marker = "platform_machine != 'armv7l'", specifier = ">=0.14.1" },
     { name = "numpy", specifier = ">=2.4.6" },
-    { name = "playwright", marker = "extra == 'station'", specifier = ">=1.64.1" },
+    { name = "playwright", marker = "platform_machine != 'armv7l'", specifier = ">=1.64.1" },
     { name = "psutil", specifier = ">=5.9" },
     { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
     { name = "yt-dlp", extras = ["curl-cffi"], specifier = ">=2026.3.17" },
 ]
-provides-extras = ["station"]
 
 [package.metadata.requires-dev]
 dev = [

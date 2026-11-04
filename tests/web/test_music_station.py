@@ -148,7 +148,7 @@ def test_it_stops_by_itself_when_no_one_pulls_the_stream(tmp_path, jpeg):
 
 @pytest.mark.exclude_ci
 def test_a_real_browser_delivers_pictures(tmp_path):
-    """Needs Playwright and a browser (`--extra station`); not run in CI."""
+    """Needs a browser; not run in CI."""
     pytest.importorskip("playwright")
     page = tmp_path / "p.html"
     page.write_text(
