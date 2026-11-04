@@ -24,6 +24,9 @@ _running = False
 _again = False
 _total = 0
 _done = 0
+#: The pass reading tonic and mode of tracks profiled before it (``modes``).
+_modes_total = 0
+_modes_done = 0
 #: Files that failed to analyse, so a bad file is not retried on every kick.
 _failed: dict[str, tuple[float, int]] = {}
 
@@ -35,7 +38,12 @@ def enabled() -> bool:
 
 def status() -> dict[str, Any]:
     with _lock:
-        out: dict[str, Any] = {"done": _done, "total": _total, "running": _running}
+        out: dict[str, Any] = {
+            "done": _done,
+            "total": _total,
+            "running": _running,
+            "modes": {"done": _modes_done, "total": _modes_total},
+        }
     return out | genres.status()
 
 
@@ -110,6 +118,29 @@ def _upgrade_v2(base: Path, files: list, workers: int) -> int:
     return n
 
 
+def _read_modes(base: Path, files: list, workers: int) -> None:
+    """Tonic and mode of tracks profiled before them (or at an older ``modes.VERSION``)."""
+    global _modes_total, _modes_done
+    todo = set(store.pending_modes())
+    mine = [f for f in files if f.track_id in todo]
+    if not mine:
+        return
+    with _lock:
+        _modes_total, _modes_done = len(mine), 0
+
+    def one(f) -> None:
+        store.merge_extra(f.track_id, analysis.harmony(str(base / f.path)))
+
+    with ThreadPoolExecutor(workers, thread_name_prefix="modes") as ex:
+        for future in as_completed([ex.submit(one, f) for f in mine]):
+            try:
+                future.result()
+            except Exception:
+                logger.warning("Could not read a track's mode", exc_info=True)
+            with _lock:
+                _modes_done += 1
+
+
 def _decide_genres(base: Path, files: list, workers: int) -> None:
     """Pick each track's genre: its file tag, else the model, else the rules (SPEC-music §9)."""
     todo = store.pending_genre(genres.model_enabled())
@@ -152,6 +183,7 @@ def run_once(
     ok = _upgrade_v2(base, files, workers)
     if not pending:
         _decide_genres(base, files, workers)
+        _read_modes(base, files, workers)
         return ok
 
     # Waiting files show as being analysed too, so a track just queued is not drawn as unknown.
@@ -180,4 +212,5 @@ def run_once(
                 _done += 1
     store.renormalise_if_needed()
     _decide_genres(base, files, workers)
+    _read_modes(base, files, workers)
     return ok

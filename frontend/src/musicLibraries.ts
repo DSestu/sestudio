@@ -175,7 +175,16 @@ export const foldersApi = {
   browse: (path: string) => call<FolderListing>(`/folders?path=${encodeURIComponent(path)}`),
 }
 
+/** GET /api/music/analysis/status: the background analysis, and its pass reading each track's tonic and mode. */
+export interface AnalysisStatus {
+  done: number
+  total: number
+  running: boolean
+  modes: { done: number; total: number }
+}
+
 export const librariesApi = {
+  analysisStatus: () => call<AnalysisStatus>('/analysis/status'),
   add: (lib: NewLibrary) => reloaded(call<LibraryStatus>('/libraries', 'POST', lib)),
   rename: (id: string, label: string) => reloaded(call<LibraryStatus>(`/libraries/${encodeURIComponent(id)}`, 'PATCH', { label })),
   remove: (id: string) => reloaded(call<{ ok: boolean }>(`/libraries/${encodeURIComponent(id)}`, 'DELETE')),

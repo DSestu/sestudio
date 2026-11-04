@@ -126,11 +126,21 @@ def chromanet(spec: np.ndarray) -> np.ndarray:
     return e / e.sum()
 
 
-def key(x: np.ndarray) -> tuple[int, bool, float] | None:
-    """(pitch class with C = 0, minor, probability) of an 11025 Hz signal; None when too short."""
+def probs(x: np.ndarray) -> np.ndarray | None:
+    """S-KEY's 24 probabilities for an 11025 Hz signal; None when too short."""
     if len(x) < HOP * 128:  # seven halvings of the time axis need 128 frames
         return None
-    p = chromanet(vqt(x))
+    return chromanet(vqt(x))
+
+
+def key(x: np.ndarray) -> tuple[int, bool, float] | None:
+    """(pitch class with C = 0, minor, probability) of an 11025 Hz signal; None when too short."""
+    p = probs(x)
+    return None if p is None else top(p)
+
+
+def top(p: np.ndarray) -> tuple[int, bool, float]:
+    """(pitch class with C = 0, minor, probability) of S-KEY's 24 probabilities."""
     i = int(p.argmax())
     return (
         ((9 + i) % 12, False, float(p[i]))

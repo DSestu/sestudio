@@ -3,7 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from sestudio.music import keynet, modes
+from sestudio import downloaded
+from sestudio.music import genres, keynet, modes, profile, runner, store
+from tests.test_music_analysis import _write_wav, db, root  # noqa: F401
 
 RATE = keynet.RATE
 E = 4  # pitch class
@@ -74,3 +76,32 @@ def test_analyse_reads_track_intro_and_outro():
     assert set(got) == {"track", "intro", "outro"}
     assert got["track"]["tonic"] == "E"
     assert modes.analyse(np.zeros(1000)) is None
+
+
+def test_tracks_get_their_harmony_and_old_ones_get_it_added(
+    db,  # noqa: F811
+    root,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    x = phrase(modes.SCALES["Phrygian"])
+    up = np.interp(np.arange(len(x) * 2) / 2, np.arange(len(x)), x)  # 11025 -> 22050
+    _write_wav(root / "Artist - Phrygian.flac", np.concatenate([up] * 2))
+    runner.run_once(root, workers=1)
+    downloaded.invalidate()
+    tid = next(f.track_id for f in downloaded.scan(root) if f.kind == "audio")
+    got = store.get([tid])[tid]["harmony"]
+    assert {"track", "intro", "outro"} <= set(got)
+    assert (got["track"]["tonic"], got["track"]["mode"]) == ("E", "Phrygian")
+
+    # A track profiled before modes existed: the pass adds them and keeps the rest.
+    old = {"v2": profile.VERSION, "genre": "Ambient", "genreSource": "tag"}
+    store.set_extra(tid, old | {"genreConf": 1.0, "genreV": genres.VERSION})
+    assert store.pending_modes() == [tid]
+    assert runner.run_once(root, workers=1) == 0
+    assert store.pending_modes() == []
+    after = store.get([tid])[tid]
+    assert after["genre"] == "Ambient"
+    assert after["harmony"]["track"]["mode"] == "Phrygian"
+    assert runner.status()["modes"] == {"done": 1, "total": 1}
