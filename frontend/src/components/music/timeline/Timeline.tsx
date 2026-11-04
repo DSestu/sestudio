@@ -227,7 +227,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         m.items[i].span = sp
       }
       const cur = m.items[m.cur]
-      const nowG = shown.ts[m.cur] + (barPos(now) ?? positionNow(m.q, clockSkew(), Date.now(), cur.track.dur))
+      const nowG = shown.ts[m.cur] + (barPos(now) ?? positionNow(m.q, clockSkew(), Date.now(), cur.track.dur) - engine.lag)
       const G = scrub.frame(now, nowG)
       const k = trackAt(shown.ts, G)
       if (lastG !== null) flash(m.items, crossed(shown.ts, lastG, G))

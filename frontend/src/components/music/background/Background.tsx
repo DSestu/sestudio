@@ -74,9 +74,13 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
       if (id !== track) { track = id; energy.reset() }
       if (raw !== grids.raw) grids = { raw, g: grid(raw) }
       const an = engine.analyser
-      // What is heard now: the media clock minus the output latency.
       const ac = an?.context as AudioContext | undefined
-      const heard = engine.time - (ac ? (ac.outputLatency || 0) + (ac.baseLatency || 0) : 0)
+      const out = ac ? (ac.outputLatency || 0) + (ac.baseLatency || 0) : 0
+      // The light reacts late: the FFT window's centre, the attack and one display frame. The sound waits that
+      // long behind the analyser (less what the speakers add), so the attack plays out before the hit and the peak lands on it.
+      if (an) engine.setLead(an.fftSize / 2 / an.context.sampleRate + (look.s.att + look.s.sync) / 1000 + 1 / 60 - out)
+      // What is heard now: the media clock minus the delay and the output latency.
+      const heard = engine.time - engine.lead - out
       energy.step(grids.g, heard, q.playing, dt, look.s)
       const { p, blurK } = bend({ ...look.s }, energy.I, grids.g?.bl ?? 0.5)
       if (p.nb !== nb) {

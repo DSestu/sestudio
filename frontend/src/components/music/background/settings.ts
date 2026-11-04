@@ -22,6 +22,7 @@ export const SPD = [
   ['warp', 'Band spacing  log ↔ mel', 0, 1, 0.05, 0, 'a', ''], ['abLo', 'Loudness from', 0, 200, 5, 110, 'a', ''], ['abHi', 'Loudness to', 120, 255, 5, 230, 'a', ''],
   ['gate', 'Gate', 0, 0.5, 0.01, 0, 'a', ''], ['agc', 'Auto level', 0, 1, 0.05, 0, 'a', ''], ['agcT', 'Auto level target', 0.3, 1.5, 0.05, 0.85, 'a', ''],
   ['agcSp', 'Auto level follow', 0.3, 8, 0.1, 2, 'a', ' s'], ['knee', 'Soft ceiling from', 0.4, 1, 0.05, 0.75, 'a', ''],
+  ['sync', 'Light ahead of the sound', -100, 250, 5, 220, 'a', ' ms'],
   ['en', 'Follow energy', 0, 1, 0.05, 0, 'e', ''], ['eq', 'Changes land on  beat ↔ bar ↔ 4 bars', 0, 3, 1, 2, 'e', ''],
   ['esm', 'Energy smoothing', 0, 16, 0.25, 2, 'e', ' beats'], ['dead', 'Ignore changes under', 0, 0.3, 0.01, 0.06, 'e', ''],
   ['efloor', 'Quietest intensity', 0, 1, 0.05, 0.3, 'e', ''], ['ecrv', 'Energy contrast', 0.3, 3, 0.05, 1, 'e', ''],
