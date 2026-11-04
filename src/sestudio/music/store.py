@@ -38,10 +38,20 @@ V2_FIELDS = (
 
 #: A genre the user confirmed or fixed; wins over the detected one everywhere.
 OVERRIDE = "genre_override"
+#: The tonic and mode the user settled by ear ({"tonic", "mode"}); wins over the detected ones.
+MODE_OVERRIDE = "mode_override"
+#: The user's choices, which survive a re-analysis or a re-profile.
+USER_KEYS = (OVERRIDE, MODE_OVERRIDE)
 
 
-def set_genre(track_id: str, genre: str | None) -> bool:
-    """Store (or with None, clear) the user's genre for an analysed track; False when it has no analysis."""
+def _keep_user(old: Any, extra: dict[str, Any]) -> dict[str, Any]:
+    """*extra* with the user's choices from the stored row *old* (None when there is none)."""
+    kept = json.loads(old["extra"]) if old else {}
+    return extra | {k: kept[k] for k in USER_KEYS if k in kept}
+
+
+def _set_user(track_id: str, key: str, value: Any) -> bool:
+    """Store (or with None, clear) one of the user's choices; False when the track has no analysis."""
     with library._lock:
         conn = library._connect()
         row = conn.execute(
@@ -50,10 +60,10 @@ def set_genre(track_id: str, genre: str | None) -> bool:
         if row is None:
             return False
         extra = json.loads(row["extra"])
-        if genre:
-            extra[OVERRIDE] = genre
+        if value:
+            extra[key] = value
         else:
-            extra.pop(OVERRIDE, None)
+            extra.pop(key, None)
         conn.execute(
             "UPDATE music_analysis SET extra = ? WHERE track_id = ?",
             (json.dumps(extra), track_id),
@@ -62,16 +72,25 @@ def set_genre(track_id: str, genre: str | None) -> bool:
     return True
 
 
+def set_genre(track_id: str, genre: str | None) -> bool:
+    """Store (or with None, clear) the user's genre for an analysed track; False when it has no analysis."""
+    return _set_user(track_id, OVERRIDE, genre)
+
+
+def set_mode(track_id: str, tonic: str | None, mode: str | None) -> bool:
+    """Store the tonic and mode the user settled (both None clears it); False when not analysed."""
+    choice = {"tonic": tonic, "mode": mode} if tonic and mode else None
+    return _set_user(track_id, MODE_OVERRIDE, choice)
+
+
 def save(track_id: str, mtime: float, size: int, a: RawAnalysis) -> None:
-    """Store a fresh analysis; the user's genre choice survives it."""
+    """Store a fresh analysis; the user's genre and mode choices survive it."""
     with library._lock:
         conn = library._connect()
         row = conn.execute(
             "SELECT extra FROM music_analysis WHERE track_id = ?", (track_id,)
         ).fetchone()
-        extra = a.extra
-        if row and (g := json.loads(row["extra"]).get(OVERRIDE)):
-            extra = {**extra, OVERRIDE: g}
+        extra = _keep_user(row, a.extra)
         conn.execute(
             "INSERT OR REPLACE INTO music_analysis (track_id, mtime, size, analysed_at,"
             " duration, zcr, bpm, beat0, bar0, bpm_conf, n, bands, loudness, extra)"
@@ -107,6 +126,17 @@ def pending_modes() -> list[str]:
             if (e := json.loads(r["extra"])).get("v2") == profile.VERSION
             and e.get("modesV") != modes.VERSION
         ]
+
+
+def unsure() -> list[str]:
+    """Ids of tracks whose detected mode is unsure and that the user has not settled."""
+    with library._lock:
+        rows = library._connect().execute(
+            "SELECT track_id FROM music_analysis"
+            " WHERE json_extract(extra, '$.harmony.track.unsure')"
+            " AND json_extract(extra, '$.mode_override') IS NULL"
+        )
+        return [r["track_id"] for r in rows]
 
 
 def merge_extra(track_id: str, fields: dict[str, Any]) -> None:
@@ -161,14 +191,13 @@ def load_raw(track_id: str) -> RawAnalysis | None:
 
 
 def set_extra(track_id: str, extra: dict[str, Any]) -> None:
-    """Replace a track's profile; the user's genre choice survives a re-profile."""
+    """Replace a track's profile; the user's genre and mode choices survive a re-profile."""
     with library._lock:
         conn = library._connect()
         row = conn.execute(
             "SELECT extra FROM music_analysis WHERE track_id = ?", (track_id,)
         ).fetchone()
-        if row and (g := json.loads(row["extra"]).get(OVERRIDE)):
-            extra = {**extra, OVERRIDE: g}
+        extra = _keep_user(row, extra)
         conn.execute(
             "UPDATE music_analysis SET extra = ? WHERE track_id = ?",
             (json.dumps(extra), track_id),
@@ -303,6 +332,11 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
             **(
                 {"genre": extra[OVERRIDE], "genreConf": 1.0, "genreSource": "user"}
                 if extra.get(OVERRIDE)
+                else {}
+            ),
+            **(
+                {"harmony": h}
+                if (h := modes.served(extra.get("harmony"), extra.get(MODE_OVERRIDE)))
                 else {}
             ),
             "balance": [
