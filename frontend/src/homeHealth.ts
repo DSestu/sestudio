@@ -55,3 +55,9 @@ export function issueFacts(h: Health, issue: HealthIssue): string {
       : h.checked_at
   return [...(since ? [`since ${hhmm(since)}`] : []), ...disk(h)].join(' · ')
 }
+
+/** The Settings category an issue is fixed in: the disk in Downloads, a site
+ *  in Sources & search; a watcher has none, so Settings opens on its list. */
+export function settingsFor(issue: HealthIssue | undefined): string | undefined {
+  return issue?.kind === 'disk' ? 'downloads' : issue?.kind === 'site' ? 'sources' : undefined
+}

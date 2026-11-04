@@ -33,7 +33,7 @@ import MusicHeaderSearch from './components/music/MusicHeaderSearch'
 import { type Kind, parseKind, rememberSearch } from './titleSearch'
 import LabMusicView from './views/LabMusicView'
 import MusicView from './views/MusicView'
-import SettingsView from './views/SettingsView'
+import SettingsView from './views/settings/SettingsView'
 import WatchView from './views/WatchView'
 import LanWarningModal from './components/LanWarningModal'
 import { isLoopback, useServerLan } from './serverLan'
@@ -354,7 +354,7 @@ export default function App() {
           />
         )}
         {route.view === 'settings' && (
-          <SettingsView settings={settings} onUpdate={updateSettings} />
+          <SettingsView section={route.params.get('s')} settings={settings} onUpdate={updateSettings} />
         )}
         {route.view === 'media' && (
           <MediaView

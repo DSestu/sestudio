@@ -3,6 +3,7 @@ import type { DownloadedFile, DownloadedTitle, DownloadJob, HealthIssue, Upcomin
 import { downloadedThumbUrl, getHealth, getUpcoming, pollWatcher, retryHealthSite, videoSeasonCard } from '../../api'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
 import { localDay, nowItems, type NowItem } from '../../homeNow'
+import { settingsFor } from '../../homeHealth'
 import { useLive } from '../../liveNow'
 import type { Navigate } from '../../nav'
 import { cardFor, type OpenTitle } from '../../rowItems'
@@ -87,7 +88,7 @@ export default function NowStrip({ lastVisit, jobs, lang, onOpen, onNavigate, on
       }
       case 'health': {
         const { issue } = item
-        const open = () => onNavigate('settings')
+        const open = () => onNavigate('settings', { s: settingsFor(issue) })
         return issue.retry && issue.id
           ? { thumb: alertIcon('text-warning'), open, action: 'Retry', act: () => retry(item, issue) }
           : { thumb: alertIcon('text-warning'), open, action: 'Settings', act: open }
