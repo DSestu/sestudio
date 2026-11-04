@@ -3,7 +3,9 @@ import { useDownloadedLibrary } from '../../downloadedLibrary'
 import { albumsOf } from '../../musicLibrary'
 import { metaLine, useSummary } from '../../musicMeta'
 import { resolveLink, type OnlineLink, type QueueState } from '../../musicQueue'
+import { hitPayload, saveHit, useMusicSearch, type OnlineHit } from '../../musicSearch'
 import { addTracks, nextIndex, type Ref } from './adding'
+import { toast } from './toast'
 import { fmtTime } from './format'
 import Meter from './Meter'
 import { armRowDrag, justDragged, type DragSource } from './rowDrag'
@@ -15,6 +17,8 @@ import { isPhone, isShort, shortCols } from './timeline/mapping'
 // rows (phone). In the expanded view the same list is a column beside the queue
 // (desktop) or the queue sheet's Library page (phone). Every row: tap adds last,
 // a swipe right plays next, a hold lifts it to drop in the queue or on a join.
+// A search also asks the online sources; a rail of stops (chips on phones and in
+// the crate) keeps this machine's files apart from each source's streams.
 
 interface Entry {
   key: string
@@ -27,7 +31,24 @@ interface Entry {
   ref: Ref
   library: string
   libraryLabel: string
+  /** An online source's hit: artwork and a source badge, no analysis. */
+  hit?: OnlineHit
 }
+
+const ONLINE = ['ytmusic', 'soundcloud', 'youtube'] as const
+type Source = (typeof ONLINE)[number]
+type Stop = 'local' | Source
+const SRC: Record<Source, { label: string; short: string; color: string }> = {
+  ytmusic: { label: 'YouTube Music', short: 'YTM', color: '#ff2d55' },
+  soundcloud: { label: 'SoundCloud', short: 'SC', color: '#ff6a00' },
+  youtube: { label: 'YouTube', short: 'YT', color: '#e62117' },
+}
+const isSource = (s: string): s is Source => (ONLINE as readonly string[]).includes(s)
+
+const onlineEntry = (h: OnlineHit): Entry => ({
+  key: `${h.source}/${h.track_id}`, title: h.title, artist: h.artist, duration: h.duration, analysisId: '',
+  ref: hitPayload(h), library: 'online', libraryLabel: isSource(h.source) ? SRC[h.source].label : h.source, hit: h,
+})
 
 /** Where an add goes: the picked join (then the one after it), else last; or next. */
 export interface Aim {
@@ -59,17 +80,41 @@ function useViewport() {
   return { W: innerWidth, H: innerHeight }
 }
 
-/** The list's state: which library, the search, and whether a pasted link is shown instead. */
+/** The list's state: which library, the search (here and online), the stop shown, and whether a pasted link is shown instead. */
 function useFinder(all: Entry[]) {
   const [query, setQuery] = useState('')
   const [lib, setLib] = useState('')
   const [paste, setPaste] = useState(false)
+  const [pick, setPick] = useState<Stop | null>(null)
   const libs = useMemo(() => [...new Map(all.map(e => [e.library, e.libraryLabel])).entries()], [all])
   const found = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean)
     return all.filter(e => (!lib || e.library === lib) && words.every(w => `${e.title} ${e.artist}`.toLowerCase().includes(w)))
   }, [all, query, lib])
-  return { query, setQuery, lib, setLib, libs, found, paste, setPaste, total: lib ? all.filter(e => e.library === lib).length : all.length }
+  const q = query.trim()
+  const search = useMusicSearch(q, 'all')
+  const online = useMemo(() => {
+    const by: Partial<Record<Source, Entry[]>> = {}
+    const seen = new Set<string>()
+    for (const h of search?.res.online ?? []) {
+      // Albums and playlists are not one track to queue.
+      if ((h.kind !== 'track' && h.kind !== 'video') || !isSource(h.source) || seen.has(h.track_id)) continue
+      seen.add(h.track_id)
+      ;(by[h.source] ??= []).push(onlineEntry(h))
+    }
+    return by
+  }, [search])
+  const pending: string[] = q ? (search?.pending ?? [...ONLINE]) : []
+  const errors = search?.res.errors ?? {}
+  // Your files first; when they have nothing, the first source that does.
+  const auto: Stop = !q || found.length ? 'local' : (ONLINE.find(s => online[s]?.length) ?? 'local')
+  const stop: Stop = q ? (pick ?? auto) : 'local'
+  const setQ = (v: string) => { setQuery(v); if (!v.trim()) setPick(null) }
+  return {
+    query, setQuery: setQ, q, lib, setLib, libs, found, paste, setPaste, online, pending, errors, stop, setStop: setPick,
+    shown: stop === 'local' ? found : (online[stop] ?? []),
+    total: lib ? all.filter(e => e.library === lib).length : all.length,
+  }
 }
 type Finder = ReturnType<typeof useFinder>
 
@@ -87,6 +132,26 @@ const dragOf = (q: QueueState, e: Entry): DragSource => ({
 })
 
 const nextIcon = <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h14M12 20V9M7 13l5-5 5 5" /></svg>
+const saveIcon = <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
+const cloudIcon = <svg aria-label="Streams" className="size-3.5 shrink-0 text-base-content/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.6 4.2 4.2 0 0 0 7 18z" /></svg>
+
+const save = (h: OnlineHit) => {
+  saveHit(h).then(() => toast(`Saving ${h.title} to the library`), () => toast(`Could not save ${h.title}`))
+}
+
+/** An online hit's artwork with its source's badge in the corner. */
+function Thumb({ h, size = 36 }: { h: OnlineHit; size?: number }) {
+  const src = isSource(h.source) ? SRC[h.source] : undefined
+  return (
+    <span className="relative shrink-0" style={{ width: size, height: size }}>
+      {h.thumb
+        ? <img src={h.thumb} alt="" loading="lazy" className="size-full rounded-lg object-cover" />
+        : <span className="block size-full rounded-lg bg-white/8" />}
+      {src && <i className="absolute -bottom-1 -right-1 rounded px-[3px] py-px text-[8.5px] font-extrabold not-italic leading-none text-white ring-2 ring-base-200" style={{ background: src.color }}>{src.short}</i>}
+    </span>
+  )
+}
+
 const plusIcon = <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 
 /** Next and last, for a pointer that hovers (touch has the swipe and the tap): a drawer
@@ -101,6 +166,11 @@ function HoverActions({ e, aim, size, bg, className }: { e: Entry; aim: Aim; siz
       <button aria-label={`Add ${e.title} to the queue`} title="Add last" className={`${cls} bg-primary text-primary-content hover:brightness-110`} style={{ width: size, height: size }} onClick={ev => { ev.stopPropagation(); put(e, 'last', aim) }}>
         {plusIcon}
       </button>
+      {e.hit && (
+        <button aria-label={`Save ${e.title} to the library`} title="Save to the library" className={`${cls} bg-white/8 hover:bg-white/14`} style={{ width: size, height: size }} onClick={ev => { ev.stopPropagation(); save(e.hit!) }}>
+          {saveIcon}
+        </button>
+      )}
     </span>
   )
 }
@@ -108,7 +178,7 @@ function HoverActions({ e, aim, size, bg, className }: { e: Entry; aim: Aim; siz
 const inQueue = <span title="In queue" className="relative shrink-0 text-[11px] font-semibold text-primary">✓<span className="hidden @sm:inline"> In queue</span></span>
 
 function AddRow({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolean; aim: Aim }) {
-  const meta = useSummary(e.analysisId)
+  const meta = useSummary(e.hit ? undefined : e.analysisId)
   const bpm = e.bpm ?? meta?.bpm
   const tap = () => { if (!justDragged() && !justSwiped()) put(e, 'last', aim) }
   return (
@@ -126,14 +196,17 @@ function AddRow({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolea
       }}
     >
       <div data-fg className="relative flex min-h-14 items-center gap-2.5 px-3 py-1.5 text-[13px] group-hover:bg-white/5" style={{ background: 'var(--rowbg)' }}>
+        {e.hit && <Thumb h={e.hit} />}
         <div className="flex-1 min-w-0">
           <b className="block truncate font-medium">{e.title}</b>
           <span className="block truncate text-[11px] text-base-content/52">
             {e.artist}
+            {e.hit?.kind === 'video' && <em className="not-italic ml-[7px] opacity-55">video</em>}
             {metaLine(meta, bpm) && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{metaLine(meta, bpm)}</em>}
           </span>
         </div>
         {meta?.balance && <Meter balance={meta.balance} />}
+        {e.hit && cloudIcon}
         <span className="w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{e.duration ? fmtTime(e.duration) : ''}</span>
         {queued && inQueue}
         <HoverActions e={e} aim={aim} size={40} bg="color-mix(in oklab, var(--rowbg), white 5%)" className="pl-[34px] pr-3" />
@@ -143,7 +216,7 @@ function AddRow({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolea
 }
 
 function AddCard({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolean; aim: Aim }) {
-  const meta = useSummary(e.analysisId)
+  const meta = useSummary(e.hit ? undefined : e.analysisId)
   const bpm = e.bpm ?? meta?.bpm
   const tap = () => { if (!justDragged()) put(e, 'last', aim) }
   return (
@@ -152,18 +225,21 @@ function AddCard({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boole
       role="button"
       tabIndex={0}
       aria-label={`Add ${e.title} to the queue`}
-      className="group relative flex h-full max-h-16 w-44 shrink-0 select-none cursor-pointer flex-col justify-center gap-0.5 rounded-xl border border-white/8 bg-[hsl(205_45%_15%)] px-3 text-[12.5px] hover:border-primary/60 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className={`group relative flex h-full max-h-16 shrink-0 select-none cursor-pointer items-center gap-2.5 rounded-xl border px-3 text-[12.5px] hover:border-primary/60 outline-none focus-visible:ring-2 focus-visible:ring-primary ${e.hit ? 'w-52 border-[rgb(120_170_255/.18)] bg-[hsl(215_40%_17%)]' : 'w-44 border-white/8 bg-[hsl(205_45%_15%)]'}`}
       onClick={tap}
       onKeyDown={ev => { if (ev.key === 'Enter') tap() }}
       onPointerDown={ev => armRowDrag(ev, dragOf(q, e))}
     >
-      <b className="block truncate pr-1 font-semibold">{e.title}</b>
-      <span className="flex items-center gap-1.5 text-[11px] text-base-content/52">
-        <span className="tabular-nums">{[bpm && `${Math.round(bpm)} BPM`, e.duration && fmtTime(e.duration)].filter(Boolean).join(' · ')}</span>
-        {meta?.balance && <Meter balance={meta.balance} />}
-        {queued && <span className="ml-auto text-primary font-semibold">✓</span>}
-      </span>
-      <HoverActions e={e} aim={aim} size={32} bg="hsl(205 45% 15%)" className="rounded-r-xl pl-[26px] pr-2" />
+      {e.hit && <Thumb h={e.hit} size={34} />}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <b className="block truncate pr-1 font-semibold">{e.title}</b>
+        <span className="flex items-center gap-1.5 text-[11px] text-base-content/52">
+          <span className="truncate tabular-nums">{[e.hit && e.artist, bpm && `${Math.round(bpm)} BPM`, e.duration && fmtTime(e.duration)].filter(Boolean).join(' · ')}</span>
+          {meta?.balance && <Meter balance={meta.balance} />}
+          {queued && <span className="ml-auto text-primary font-semibold">✓</span>}
+        </span>
+      </div>
+      <HoverActions e={e} aim={aim} size={32} bg={e.hit ? 'hsl(215 40% 17%)' : 'hsl(205 45% 15%)'} className="rounded-r-xl pl-[26px] pr-2" />
     </div>
   )
 }
@@ -214,6 +290,8 @@ function PasteLink({ q, queued, aim, cards }: { q: QueueState; queued: Set<strin
 }
 
 function LibraryPicker({ f }: { f: Finder }) {
+  // The picker filters this machine's files; an online stop just names its source.
+  if (f.stop !== 'local') return <span className="truncate text-xs font-semibold" style={{ color: SRC[f.stop].color }}>{SRC[f.stop].label}</span>
   if (f.libs.length < 2) return <span className="truncate text-xs text-base-content/52">{f.libs[0]?.[1] ?? ''}</span>
   return (
     <select
@@ -233,8 +311,8 @@ function Search({ f, className = '' }: { f: Finder; className?: string }) {
     <input
       value={f.query}
       onChange={ev => f.setQuery(ev.target.value)}
-      placeholder={`Search ${f.total} tracks`}
-      aria-label="Search the library"
+      placeholder={`Search ${f.total} tracks and online`}
+      aria-label="Search your files and online"
       className={`h-10 rounded-xl bg-white/8 px-3 text-[13px] outline-none placeholder:text-base-content/40 focus-visible:ring-2 focus-visible:ring-primary ${className}`}
     />
   )
@@ -266,22 +344,106 @@ function AimChip({ aim, title }: { aim: Aim; title?: string }) {
   )
 }
 
-/** The rows, under a search (or the pasted link's tracks). */
+/** What the list says when the stop shown has no rows. */
+function emptyNote(f: Finder): string {
+  if (f.stop === 'local') return 'No track matches.'
+  const name = SRC[f.stop].label
+  if (f.pending.includes(f.stop)) return `Searching ${name}…`
+  if (f.errors[f.stop]) return `${name} did not answer: ${f.errors[f.stop]}`
+  return `No match on ${name}.`
+}
+
+/** The rows of the stop shown (or the pasted link's tracks). */
 function Rows({ f, q, aim, queued }: { f: Finder; q: QueueState; aim: Aim; queued: Set<string> }) {
   if (f.paste) return <PasteLink q={q} queued={queued} aim={aim} cards={false} />
   return (
     <>
-      {f.found.slice(0, SHOWN).map(e => <AddRow key={e.key} e={e} q={q} queued={queued.has(e.ref.track_id)} aim={aim} />)}
-      {f.found.length > SHOWN && <p className="px-3 py-2 text-center text-[11px] text-base-content/42">Search to narrow {f.found.length - SHOWN} more.</p>}
-      {!f.found.length && <p className="px-3 py-6 text-center text-xs text-base-content/42">No track matches.</p>}
+      {f.shown.slice(0, SHOWN).map(e => <AddRow key={e.key} e={e} q={q} queued={queued.has(e.ref.track_id)} aim={aim} />)}
+      {f.shown.length > SHOWN && <p className="px-3 py-2 text-center text-[11px] text-base-content/42">Search to narrow {f.shown.length - SHOWN} more.</p>}
+      {!f.shown.length && <p className="px-3 py-6 text-center text-xs text-base-content/42">{emptyNote(f)}</p>}
     </>
   )
 }
 
-/** The library as a list: the phone's crate sheet, its Library page, and the desktop's column. */
-export function LibraryList({ q, aim, aimTitle, head, onClose }: { q: QueueState; aim: Aim; aimTitle?: string; head?: ReactNode; onClose?: () => void }) {
+/** One stop's state: a count, a spinner while it searches, a red dot when it failed, nothing before a search. */
+function useStops(f: Finder) {
+  return [
+    { id: 'local' as Stop, label: 'This PC', short: 'PC', color: '', count: f.found.length, busy: false, error: '' },
+    ...ONLINE.map(s => ({
+      id: s as Stop, ...SRC[s], count: f.online[s]?.length ?? 0, busy: f.pending.includes(s), error: f.errors[s] ?? '',
+    })),
+  ]
+}
+
+const Spin = ({ className = '' }: { className?: string }) => (
+  <i aria-label="Searching" className={`inline-block size-2.5 animate-spin rounded-full border-2 border-white/20 border-t-primary ${className}`} />
+)
+
+/** The sources, as a rail beside the list (desktop column) or a row of chips: this machine, a divider, then the online sources. */
+function Stops({ f, vertical }: { f: Finder; vertical: boolean }) {
+  const stops = useStops(f)
+  const off = !f.q
+  if (vertical) {
+    return (
+      <div role="tablist" aria-orientation="vertical" aria-label="Sources" className="flex w-[60px] shrink-0 flex-col items-center gap-1.5 border-r border-white/7 py-2.5">
+        {stops.map((s, i) => (
+          <div key={s.id} className="contents">
+            {i === 1 && <><span className="my-1 h-px w-8 bg-white/14" /><span className="text-[9px] font-semibold uppercase tracking-wider text-base-content/45">online</span></>}
+            <button
+              role="tab"
+              aria-selected={f.stop === s.id}
+              aria-label={`${s.label}${s.error ? `, did not answer` : off ? '' : `, ${s.count}`}`}
+              title={s.error ? `${s.label} did not answer: ${s.error}` : s.id !== 'local' && off ? `${s.label}: type to search` : s.label}
+              disabled={s.id !== 'local' && off}
+              onClick={() => f.setStop(s.id)}
+              className={`relative grid size-11 place-items-center rounded-xl text-[11px] font-extrabold disabled:opacity-35 aria-selected:ring-2 aria-selected:ring-primary ${s.id === 'local' ? 'bg-primary/18 text-primary' : 'text-white'}`}
+              style={s.color ? { background: s.color } : undefined}
+            >
+              {s.short}
+              {!(s.id !== 'local' && off) && (
+                <span className="absolute -right-1.5 -top-1.5 grid h-[17px] min-w-[17px] place-items-center rounded-full border border-white/18 bg-base-200 px-1 text-[10px] font-bold text-base-content/85">
+                  {s.busy ? <Spin className="size-2" /> : s.error ? <i className="size-2 rounded-full bg-error" /> : s.count}
+                </span>
+              )}
+            </button>
+            {i === 0 && <span className="text-[9px] font-semibold uppercase tracking-wider text-base-content/45">files</span>}
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div role="tablist" aria-label="Sources" className="flex shrink-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+      {stops.map((s, i) => (
+        <div key={s.id} className="contents">
+          {i === 1 && <span aria-hidden="true" className="mx-0.5 h-5 w-px shrink-0 bg-white/20" />}
+          <button
+            role="tab"
+            aria-selected={f.stop === s.id}
+            title={s.error ? `${s.label} did not answer: ${s.error}` : undefined}
+            disabled={s.id !== 'local' && off}
+            onClick={() => f.setStop(s.id)}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-white/7 px-3 text-xs font-semibold text-base-content/80 disabled:opacity-40 aria-selected:bg-primary/22 aria-selected:text-primary"
+          >
+            {s.color && <i className="size-[7px] rounded-full" style={{ background: s.color }} />}
+            {s.label}
+            {!(s.id !== 'local' && off) && (s.busy ? <Spin /> : s.error ? <i className="size-[7px] rounded-full bg-error" /> : <span className="opacity-70 tabular-nums">{s.count}</span>)}
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** The library as a list: the phone's crate sheet, its Library page, and the desktop's column (`rail`). */
+export function LibraryList({ q, aim, aimTitle, head, onClose, rail = false }: { q: QueueState; aim: Aim; aimTitle?: string; head?: ReactNode; onClose?: () => void; rail?: boolean }) {
   const f = useFinder(useEntries())
   const queued = useMemo(() => new Set(q.items.map(i => i.track_id)), [q.items])
+  const list = (
+    <div data-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <Rows f={f} q={q} aim={aim} queued={queued} />
+    </div>
+  )
   return (
     <div className="@container relative flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 px-3 pb-2 pt-1">
@@ -293,9 +455,8 @@ export function LibraryList({ q, aim, aimTitle, head, onClose }: { q: QueueState
       </div>
       {aim.at !== null && <div className="px-3 pb-2"><AimChip aim={aim} title={aimTitle} /></div>}
       {!f.paste && <div className="px-3 pb-2"><Search f={f} className="w-full" /></div>}
-      <div data-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <Rows f={f} q={q} aim={aim} queued={queued} />
-      </div>
+      {!f.paste && !rail && <div className="px-3 pb-2"><Stops f={f} vertical={false} /></div>}
+      {rail && !f.paste ? <div className="flex min-h-0 flex-1 border-t border-white/7"><Stops f={f} vertical />{list}</div> : list}
     </div>
   )
 }
@@ -318,7 +479,7 @@ export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; ai
 
   if (sheet) {
     return (
-      <aside data-addp aria-label="Add to queue" className="glass fixed inset-x-0 bottom-0 top-[52%] z-80 flex flex-col rounded-t-[22px] text-base-content" style={{ ['--rowbg' as string]: 'hsl(205 55% 11%)' }}>
+      <aside data-addp data-sheet aria-label="Add to queue" className="glass fixed inset-x-0 bottom-0 top-[52%] z-80 flex flex-col rounded-t-[22px] text-base-content transition-[translate,opacity] duration-300 ease-smooth" style={{ ['--rowbg' as string]: 'hsl(205 55% 11%)' }}>
         <div className="grid h-5 shrink-0 place-items-center"><i className="h-1 w-9 rounded-full bg-white/30" /></div>
         <LibraryList q={q} aim={aim} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[15px] font-semibold">Add to queue</h3>} onClose={onClose} />
       </aside>
@@ -335,8 +496,8 @@ export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; ai
         <h3 className="shrink-0 text-[13px] font-semibold">Add to queue</h3>
         <LibraryPicker f={f} />
         {!f.paste && <Search f={f} className="h-8 w-56 min-w-0 max-w-[30vw]" />}
+        {!f.paste && <div className="min-w-0"><Stops f={f} vertical={false} /></div>}
         <AimChip aim={aim} title={aimTitle} />
-        {!short && <span className="truncate text-[11.5px] text-base-content/42 max-lg:hidden">click = last · drag onto a join or the queue</span>}
         <span className="ml-auto" />
         <PasteToggle f={f} />
         {closeBtn(onClose)}
@@ -344,8 +505,8 @@ export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; ai
       <div data-scroll className="flex min-h-0 flex-1 items-stretch gap-2.5 overflow-x-auto overflow-y-hidden overscroll-contain pb-1">
         {f.paste
           ? <PasteLink q={q} queued={queued} aim={aim} cards />
-          : f.found.slice(0, SHOWN).map(e => <AddCard key={e.key} e={e} q={q} queued={queued.has(e.ref.track_id)} aim={aim} />)}
-        {!f.paste && !f.found.length && <p className="self-center px-3 text-xs text-base-content/42">No track matches.</p>}
+          : f.shown.slice(0, SHOWN).map(e => <AddCard key={e.key} e={e} q={q} queued={queued.has(e.ref.track_id)} aim={aim} />)}
+        {!f.paste && !f.shown.length && <p className="self-center px-3 text-xs text-base-content/42">{emptyNote(f)}</p>}
       </div>
     </aside>
   )

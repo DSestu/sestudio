@@ -196,6 +196,11 @@
 .music-layer [data-addp].glass {
   background: hsl(205 55% 11%);
 }
+/* A library row held on a phone: the crate sheet slides down out of the way (the row's ghost lives on body). */
+[data-libdrag] .music-layer [data-addp][data-sheet] {
+  translate: 0 100%;
+  opacity: 0;
+}
 
 /* A track's play-next / add-last buttons wipe open from its right edge on hover,
    like a drawer, and close faster than they open. */

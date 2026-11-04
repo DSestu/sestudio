@@ -135,6 +135,7 @@ function end(cancel: boolean) {
   showLine(null)
   joins.dragging = false
   joins.slot = null
+  delete document.documentElement.dataset.libdrag
   wake()
   const tabs = document.querySelector<HTMLElement>('[data-droptab]')?.parentElement
   if (tabs) tabs.dataset.over = '0'
@@ -173,6 +174,8 @@ function lift(row: HTMLElement, src: DragSource, x: number, y: number, pointer: 
   document.body.append(ghost)
   row.style.opacity = '.3'
   joins.dragging = src.from === null
+  // The phone's crate sheet steps aside so the queue and the timeline under it can take the drop.
+  if (src.from === null) document.documentElement.dataset.libdrag = '1'
   wake()
   active = { src, row, ghost, dx: x - r.left, dy: y - r.top, pointer, at: null, free: src.from === null || (mouse && !!src.onRemove), out: false }
   document.addEventListener('touchmove', stopScroll, { passive: false })
