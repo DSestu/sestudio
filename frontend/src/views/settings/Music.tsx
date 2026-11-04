@@ -54,7 +54,7 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
           <SettingRow
             key={l.id}
             label={<>{l.label} <span className="text-base-content/50 font-normal">· {KIND_NAME[l.kind]}</span></>}
-            help={<span className="block truncate">{l.path ?? l.url ?? ''}{(l.path ?? l.url) ? ' · ' : ''}{stateLine(l)} · {l.count} tracks</span>}
+            help={<span className="block truncate">{stateLine(l)} · {l.count} tracks{(l.path ?? l.url) ? ` · ${l.path ?? l.url}` : ''}</span>}
           >
             {analysed.includes(l) && <button onClick={() => reanalyse(l.id, l.label)} className="btn btn-ghost btn-sm">Reanalyse</button>}
             {l.kind !== 'local' && <button onClick={() => remove(l.id, l.label)} className="btn btn-ghost btn-sm">Remove</button>}
