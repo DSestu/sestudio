@@ -6,9 +6,12 @@ import { BLEND } from './engine'
 import { fmtTime } from './format'
 import { ENTER_MS, FLIP_MS, flipOffsets, LEAVE_MS } from './interact'
 import Meter from './Meter'
+import { useAnalyses } from './mix/analysis'
 import { playItem } from './player'
 import { armRowDrag, gripRowDrag, justDragged, lastDrop, type DragSource } from './rowDrag'
 import { armSwipe, justSwiped } from './swipe'
+import RowThread from './RowThread'
+import { rangeOf, type Range } from './thread'
 
 const EASE = 'cubic-bezier(.2,.7,.2,1)'
 /** More changes than this at once (a replaced queue, a playlist) just appear. */
@@ -22,9 +25,11 @@ interface RowProps {
   /** A row that has been removed and is sliding out. */
   leaving?: () => void
   tv: boolean
+  /** The queue's energy scale, for the row's thread. */
+  range: Range | null
 }
 
-function Row({ item, info, playing, source, leaving, tv }: RowProps) {
+function Row({ item, info, playing, source, leaving, tv, range }: RowProps) {
   const analysis = useSummary(item.library === 'online' ? undefined : item.track_id)
   const el = useRef<HTMLDivElement>(null)
 
@@ -89,6 +94,7 @@ function Row({ item, info, playing, source, leaving, tv }: RowProps) {
           </span>
         </div>
         {analysis?.balance && <Meter balance={analysis.balance} />}
+        {info?.duration ? <RowThread id={item.track_id} dur={info.duration} range={range} playing={playing} /> : null}
         <span className="relative w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{info?.duration ? fmtTime(info.duration) : ''}</span>
       </div>
     </div>
@@ -120,6 +126,9 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
   tv?: boolean
 }) {
   const list = useRef<HTMLDivElement>(null)
+  const ids = q.items.map(i => i.track_id)
+  useAnalyses(ids)
+  const range = rangeOf(ids)
   const seen = useRef<{ ids: string[]; tops: Map<string, number> }>({ ids: [], tops: new Map() })
 
   // Removed rows stay (sliding out) until their animation ends.
@@ -273,6 +282,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             playing={!gone && i === q.current}
             source={source(i, item)}
             tv={tv}
+            range={range}
             leaving={gone ? () => setLeaving(l => l.filter(x => x.item.item_id !== item.item_id)) : undefined}
           />
         ))}
