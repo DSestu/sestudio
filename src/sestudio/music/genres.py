@@ -94,15 +94,25 @@ def _key(text: str) -> str:
 
 def normalise(raw: str | None) -> str | None:
     """A genre tag in the app's spelling: known aliases are unified ("DnB",
-    "drum & bass" -> "Drum & Bass"), others are kept as written (capped),
+    "drum & bass" -> "Drum & Bass"), others title-cased by :func:`spell`,
     placeholders give None. A tag listing several takes the first."""
     for part in re.split(r"[;/,|]", raw or ""):
         part = re.sub(r"^\(\d+\)", "", part).strip()
         key = _key(part)
         if not key or key.isdigit() or key in _JUNK:
             continue
-        return _BY_KEY.get(key) or part[:60]
+        return spell(part)
     return None
+
+
+def spell(genre: str) -> str:
+    """One spelling per genre, so "METAL", "metal" and "Metal" group as one, and
+    "heavy-metal", "Heavy_Metal" and "heavy metal" as "Heavy Metal": the app's own
+    for a genre it knows, else words split by single spaces, each capitalised (capped)."""
+    if name := _BY_KEY.get(_key(genre)):
+        return name
+    words = re.split(r"[\s_.-]+", genre.strip(" _.-").lower())
+    return " ".join(w[:1].upper() + w[1:] for w in words)[:60]
 
 
 def source_genre(info: dict[str, Any]) -> str | None:
@@ -146,6 +156,9 @@ _PARENTS = {
     "Classical": "Classical", "Reggae": "Reggae", "Funk / Soul": "Funk / Soul",
     "Folk, World, & Country": "Folk", "Latin": "Latin", "Blues": "Blues",
 }  # fmt: skip
+# A tag naming one of the model's genres ("POP", "hip hop") takes its spelling.
+for _name in [*_ELECTRONIC, *_PARENTS.values()]:
+    _BY_KEY.setdefault(_key(_name), _name)
 _STYLE = {
     f"Electronic---{s}": genre
     for genre, ss in _ELECTRONIC.items()
