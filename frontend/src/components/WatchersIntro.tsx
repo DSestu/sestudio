@@ -89,7 +89,7 @@ export default function WatchersIntro({ navigate, hasWatchers }: Props) {
         catalogue you already had — only what turns up afterwards. Set{' '}
         <span className="font-medium">Download automatically</span> on a watcher to have it
         fetched as it lands, or{' '}
-        <button onClick={() => navigate('settings')} className="link link-primary">
+        <button onClick={() => navigate('settings', { s: 'notifications' })} className="link link-primary">
           set up WhatsApp
         </button>{' '}
         to hear about it off-device.

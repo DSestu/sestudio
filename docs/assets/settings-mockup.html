@@ -1,0 +1,277 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{
+  --b1:oklch(16% .015 240);--b2:oklch(20% .02 240);--b3:oklch(26% .025 240);--b4:oklch(34% .025 240);
+  --fg:oklch(92% .01 240);--p:oklch(72% .16 230);--pink:oklch(18% .05 230);
+  --ok:oklch(76% .17 155);--warn:oklch(83% .16 85);--err:oklch(68% .19 25);
+  --glass:hsl(205 62% 14% / .66);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;color:var(--fg)}
+.wrap{display:flex;flex-direction:column;gap:28px}
+.cap{font:600 13px/1.4 ui-sans-serif,system-ui;color:var(--muted-foreground,#9aa);margin:0 0 8px}
+.cap b{color:var(--foreground,#eee)}
+.row2{display:flex;gap:16px;flex-wrap:wrap}
+.phone{width:356px;height:760px;border-radius:28px;background:var(--b1);position:relative;overflow:hidden;
+  box-shadow:0 0 0 1px rgb(255 255 255/.08)}
+.glass{background:var(--glass);backdrop-filter:blur(24px) saturate(1.4);box-shadow:inset 0 0 0 1px rgb(255 255 255/.08),0 8px 24px rgb(0 0 0/.35)}
+.top{position:absolute;left:10px;right:10px;top:10px;height:56px;border-radius:16px;display:flex;align-items:center;gap:10px;padding:0 8px;z-index:2}
+.iconbtn{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgb(255 255 255/.06)}
+.iconbtn svg{width:20px;height:20px}
+.ttl{font-size:20px;font-weight:650;letter-spacing:-.02em;line-height:1.1}
+.sub{font-size:12px;opacity:.55;margin-top:2px}
+.scroll{position:absolute;inset:0;padding:78px 12px 110px;overflow:hidden;display:flex;flex-direction:column;gap:18px}
+.dock{position:absolute;left:10px;right:10px;bottom:10px;height:68px;border-radius:16px;display:flex;align-items:center;justify-content:space-around;z-index:2;font-size:11px;font-weight:500}
+.dock span{display:flex;flex-direction:column;align-items:center;gap:4px;opacity:.75}
+.dock svg{width:22px;height:22px}
+.dock .s{width:52px;height:52px;border-radius:16px;background:var(--p);color:var(--pink);display:grid;place-items:center;opacity:1}
+/* grouped lists */
+.gh{font-size:12px;font-weight:600;opacity:.5;padding:0 6px 6px;letter-spacing:.01em}
+.list{background:var(--b2);border-radius:14px;overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;padding:11px 12px;min-height:56px;position:relative}
+.item+.item::before{content:"";position:absolute;top:0;left:56px;right:0;height:1px;background:var(--b3)}
+.list.plain .item+.item::before{left:12px}
+.tile{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--b3);flex:none}
+.tile svg{width:18px;height:18px}
+.tile.on{background:color-mix(in oklch,var(--p) 22%,transparent);color:var(--p)}
+.grow{flex:1;min-width:0}
+.lbl{font-size:15px;font-weight:500;line-height:1.25}
+.val{font-size:12.5px;opacity:.5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chev{opacity:.35;width:16px;height:16px;flex:none}
+.right{font-size:14px;opacity:.6;white-space:nowrap}
+.help{font-size:12px;opacity:.5;padding:6px 8px 0;line-height:1.45}
+.tog{width:44px;height:26px;border-radius:99px;background:var(--b4);position:relative;flex:none}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--fg);opacity:.8}
+.tog.on{background:var(--p)}.tog.on::after{left:21px;background:var(--pink);opacity:1}
+.tog.red.on{background:var(--err)}
+.seg{display:flex;background:var(--b1);border-radius:10px;padding:3px;gap:2px}
+.seg i{font-style:normal;font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;opacity:.6}
+.seg i.a{background:color-mix(in oklch,var(--p) 22%,transparent);color:var(--p);opacity:1}
+.alert{display:flex;gap:10px;align-items:flex-start;background:color-mix(in oklch,var(--warn) 12%,var(--b2));border-radius:14px;padding:12px;font-size:13px;line-height:1.4}
+.alert b{color:var(--warn)}
+.status{display:flex;align-items:center;gap:10px;background:var(--b2);border-radius:14px;padding:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px color-mix(in oklch,var(--ok) 20%,transparent)}
+.chip{font-size:12.5px;font-weight:500;padding:5px 10px;border-radius:99px;background:var(--b3);display:inline-flex;gap:6px;align-items:center}
+.chip.n{background:color-mix(in oklch,var(--p) 22%,transparent);color:var(--p)}
+.chip.n b{width:16px;height:16px;border-radius:50%;background:var(--p);color:var(--pink);font-size:10px;display:grid;place-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.btn{font-size:13px;font-weight:500;padding:7px 12px;border-radius:8px;background:var(--b3);display:inline-block}
+.btn.p{background:var(--p);color:var(--pink)}
+.btn.g{background:transparent;color:var(--p);padding-left:0}
+.preview{height:120px;border-radius:14px;background:linear-gradient(160deg,#5b3a1e,#1d3550 55%,#0d1b2a);position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding-bottom:14px}
+.preview::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 30%,rgb(255 200 120/.5),transparent 40%),radial-gradient(circle at 20% 80%,rgb(80 160 255/.35),transparent 45%)}
+.preview span{position:relative;background:rgb(0 0 0/.6);backdrop-filter:blur(8px);padding:3px 8px;border-radius:4px;font-size:17px;letter-spacing:.02em}
+.slider{display:flex;align-items:center;gap:10px;width:100%}
+.track{flex:1;height:4px;border-radius:2px;background:var(--b4);position:relative}
+.track i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--p)}
+.track i::after{content:"";position:absolute;right:-8px;top:-6px;width:16px;height:16px;border-radius:50%;background:var(--fg)}
+.num{font-variant-numeric:tabular-nums;font-size:13px;opacity:.7;width:40px;text-align:right}
+/* desktop */
+.desk{width:1100px;height:760px;background:var(--b1);border-radius:14px;position:relative;overflow:hidden;zoom:.66;box-shadow:0 0 0 1px rgb(255 255 255/.08)}
+.rail{position:absolute;left:12px;top:12px;bottom:12px;width:84px;border-radius:16px;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:6px;font-size:11px}
+.rail .s{width:52px;height:52px;border-radius:16px;background:var(--p);color:var(--pink);display:grid;place-items:center;margin:14px 0 10px}
+.rail span{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0;width:72px;opacity:.75}
+.rail span.a{background:color-mix(in oklch,var(--p) 22%,transparent);color:var(--p);border-radius:10px;opacity:1}
+.rail svg{width:20px;height:20px}
+.dtop{position:absolute;left:120px;right:20px;top:20px;height:64px;border-radius:16px;display:flex;align-items:center;gap:14px;padding:0 12px}
+.search{flex:1;max-width:740px;height:44px;border-radius:10px;border:2px solid color-mix(in oklch,var(--p) 80%,transparent);display:flex;align-items:center;padding:0 14px;gap:10px;font-size:15px;opacity:.9}
+.search span{opacity:.5}
+.cat{position:absolute;left:128px;top:108px;width:236px;display:flex;flex-direction:column;gap:2px}
+.cat .h{font-size:12px;font-weight:600;opacity:.45;padding:14px 12px 6px}
+.cat a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;font-size:14px;font-weight:500;opacity:.75}
+.cat a svg{width:18px;height:18px;opacity:.8}
+.cat a.a{background:color-mix(in oklch,var(--p) 18%,transparent);color:var(--p);opacity:1}
+.cat a em{margin-left:auto;font-style:normal;width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.pane{position:absolute;left:396px;top:108px;width:640px;display:flex;flex-direction:column;gap:18px}
+.pane h2{margin:6px 0 0;font-size:24px;font-weight:600;letter-spacing:-.025em}
+.pane .lead{font-size:14px;opacity:.55;margin-top:-10px}
+.mini{position:absolute;left:430px;bottom:16px;width:520px;height:64px;border-radius:16px;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:14px}
+.notes{font-size:13px;line-height:1.55;color:var(--muted-foreground,#9aa);margin:0;padding-left:18px}
+.notes b{color:var(--foreground,#eee);font-weight:600}
+</style></head><body style="background:#0b0d10;padding:24px">
+<svg width="0" height="0" style="position:absolute">
+ <symbol id="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></symbol>
+ <symbol id="back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></symbol>
+ <symbol id="play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></symbol>
+ <symbol id="cc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 13h4M13 13h4M7 16h7"/></symbol>
+ <symbol id="globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></symbol>
+ <symbol id="dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+ <symbol id="music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+ <symbol id="bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15zM10 20.5h4"/></symbol>
+ <symbol id="server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/></symbol>
+ <symbol id="share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/></symbol>
+ <symbol id="srch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+ <symbol id="home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></symbol>
+ <symbol id="heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.5-7 10-7 10z"/></symbol>
+ <symbol id="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+ <symbol id="warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 4l9 16H3z" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01"/></symbol>
+ <symbol id="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 5h6v6M19 5l-8 8M10 5H5v14h14v-5"/></symbol>
+</svg>
+
+<div class="wrap">
+<div>
+<p class="cap"><b>Phone · Settings home.</b> 8 categories in 3 groups; each row shows its current state, so you often read the answer without opening anything. Problems float to the top.</p>
+<div class="row2">
+ <div class="phone">
+  <div class="top glass"><div class="iconbtn"><svg><use href="#back"/></svg></div><div><div class="ttl">Settings</div></div></div>
+  <div class="scroll">
+   <div class="alert"><svg style="width:18px;height:18px;flex:none;color:var(--warn)"><use href="#warn"/></svg><div><b>YouTube can't play.</b> The server needs Node.js or Deno. <span style="color:var(--p)">Server →</span></div></div>
+   <div>
+    <div class="gh">Watching</div>
+    <div class="list">
+     <div class="item"><div class="tile"><svg><use href="#play"/></svg></div><div class="grow"><div class="lbl">Playback</div><div class="val">VF · Source quality · AI frames on</div></div><svg class="chev"><use href="#chev"/></svg></div>
+     <div class="item"><div class="tile"><svg><use href="#cc"/></svg></div><div class="grow"><div class="lbl">Subtitles</div><div class="val">Sans-serif (wide) · 100% · blur</div></div><svg class="chev"><use href="#chev"/></svg></div>
+    </div>
+   </div>
+   <div>
+    <div class="gh">Finding &amp; keeping</div>
+    <div class="list">
+     <div class="item"><div class="tile"><svg><use href="#globe"/></svg></div><div class="grow"><div class="lbl">Sources &amp; search</div><div class="val">7 sites on · TMDB connected</div></div><svg class="chev"><use href="#chev"/></svg></div>
+     <div class="item"><div class="tile"><svg><use href="#dl"/></svg></div><div class="grow"><div class="lbl">Downloads</div><div class="val">Server · R:\Video\films-series</div></div><svg class="chev"><use href="#chev"/></svg></div>
+     <div class="item"><div class="tile"><svg><use href="#music"/></svg></div><div class="grow"><div class="lbl">Music</div><div class="val">2 libraries · 46 tracks</div></div><svg class="chev"><use href="#chev"/></svg></div>
+     <div class="item"><div class="tile"><svg><use href="#bell"/></svg></div><div class="grow"><div class="lbl">Notifications</div><div class="val">WhatsApp on</div></div><svg class="chev"><use href="#chev"/></svg></div>
+    </div>
+   </div>
+   <div>
+    <div class="gh">This server</div>
+    <div class="list">
+     <div class="item"><div class="tile"><svg><use href="#server"/></svg></div><div class="grow"><div class="lbl">Server</div><div class="val"><span style="color:var(--ok)">●</span> Running · 2 h 5 min</div></div><svg class="chev"><use href="#chev"/></svg></div>
+     <div class="item"><div class="tile"><svg><use href="#share"/></svg></div><div class="grow"><div class="lbl">Share sestudio</div><div class="val">Android app · Google Colab</div></div><svg class="chev"><use href="#chev"/></svg></div>
+    </div>
+   </div>
+  </div>
+  <div class="dock glass"><span><svg><use href="#home"/></svg>Home</span><span><svg><use href="#play"/></svg>Media</span><span class="s"><svg style="width:24px;height:24px"><use href="#srch"/></svg></span><span><svg><use href="#music"/></svg>Music</span><span><svg><use href="#heart"/></svg>Library</span></div>
+ </div>
+
+ <div class="phone">
+  <div class="top glass"><div class="iconbtn"><svg><use href="#back"/></svg></div><div><div class="ttl">Playback</div><div class="sub">Settings</div></div></div>
+  <div class="scroll">
+   <div>
+    <div class="list plain">
+     <div class="item"><div class="grow"><div class="lbl">Language</div></div><div class="seg"><i class="a">VF</i><i>VOSTFR</i><i>VO</i></div></div>
+     <div class="item"><div class="grow"><div class="lbl">Quality</div></div><div class="right">Source</div><svg class="chev" style="transform:rotate(90deg)"><use href="#chev"/></svg></div>
+     <div class="item"><div class="grow"><div class="lbl">Play on open</div></div><div class="tog on"></div></div>
+    </div>
+    <div class="help">A title without your language opens in what it has. Off for Play on open: opening a title only shows it, what's playing keeps going.</div>
+   </div>
+   <div>
+    <div class="gh">AI frame rates</div>
+    <div class="list plain">
+     <div class="item"><div class="grow"><div class="lbl">Offer AI frame rates</div><div class="val">Frames drawn on the server's GPU</div></div><div class="tog on"></div></div>
+     <div class="item"><div class="grow"><div class="lbl">Anime: smooth held drawings</div></div><div class="right">Up to 4</div><svg class="chev" style="transform:rotate(90deg)"><use href="#chev"/></svg></div>
+     <div class="item"><div class="grow"><div class="lbl">Engine</div><div class="val">RTX 4090 · onnxruntime 1.31.1</div></div><div class="chip" style="color:var(--warn)">Not set up</div></div>
+    </div>
+    <div class="help">Sets itself up the first time a video opens. <span style="color:var(--p)">Set up now</span></div>
+   </div>
+  </div>
+  <div class="dock glass"><span><svg><use href="#home"/></svg>Home</span><span><svg><use href="#play"/></svg>Media</span><span class="s"><svg style="width:24px;height:24px"><use href="#srch"/></svg></span><span><svg><use href="#music"/></svg>Music</span><span><svg><use href="#heart"/></svg>Library</span></div>
+ </div>
+</div>
+</div>
+
+<div>
+<p class="cap"><b>Phone · two more categories.</b> Subtitles keeps its live preview pinned on top while you drag; Downloads turns the long "how ranking works" paragraph into numbered chips plus one line.</p>
+<div class="row2">
+ <div class="phone">
+  <div class="top glass"><div class="iconbtn"><svg><use href="#back"/></svg></div><div><div class="ttl">Subtitles</div><div class="sub">Settings</div></div></div>
+  <div class="scroll">
+   <div class="preview"><span style="font-family:Verdana,sans-serif">Subtitles look like this</span></div>
+   <div>
+    <div class="list plain">
+     <div class="item"><div class="grow"><div class="lbl">Font</div></div><div class="right">Sans-serif (wide)</div><svg class="chev" style="transform:rotate(90deg)"><use href="#chev"/></svg></div>
+     <div class="item" style="flex-direction:column;align-items:stretch;gap:10px"><div class="lbl">Size</div><div class="slider"><div class="track"><i style="width:33%"></i></div><span class="num">100%</span></div></div>
+     <div class="item" style="flex-direction:column;align-items:stretch;gap:10px"><div class="lbl">Size in picture-in-picture</div><div class="slider"><div class="track"><i style="width:78%"></i></div><span class="num">245%</span></div></div>
+     <div class="item" style="flex-direction:column;align-items:stretch;gap:10px"><div class="lbl">Background</div><div class="slider"><div class="track"><i style="width:60%"></i></div><span class="num">60%</span></div></div>
+     <div class="item"><div class="grow"><div class="lbl">Blur behind text</div></div><div class="tog on"></div></div>
+     <div class="item"><div class="grow"><div class="lbl">Outline</div></div><div class="tog"></div></div>
+    </div>
+    <div class="help"><span class="btn g">Reset to defaults</span></div>
+   </div>
+  </div>
+  <div class="dock glass"><span><svg><use href="#home"/></svg>Home</span><span><svg><use href="#play"/></svg>Media</span><span class="s"><svg style="width:24px;height:24px"><use href="#srch"/></svg></span><span><svg><use href="#music"/></svg>Music</span><span><svg><use href="#heart"/></svg>Library</span></div>
+ </div>
+
+ <div class="phone">
+  <div class="top glass"><div class="iconbtn"><svg><use href="#back"/></svg></div><div><div class="ttl">Downloads</div><div class="sub">Settings</div></div></div>
+  <div class="scroll">
+   <div>
+    <div class="list plain">
+     <div class="item"><div class="grow"><div class="lbl">Download to</div></div><div class="seg"><i class="a">Server</i><i>This device</i></div></div>
+     <div class="item"><div class="grow"><div class="lbl">Folder</div><div class="val" style="font-family:ui-monospace,monospace;opacity:.7">R:\Video\films-series</div></div><svg class="chev"><use href="#chev"/></svg></div>
+    </div>
+   </div>
+   <div>
+    <div class="gh">Try first</div>
+    <div class="list plain">
+     <div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="val" style="opacity:.6">Sites</div>
+      <div class="chips"><span class="chip n"><b>1</b>KissKH</span><span class="chip n"><b>2</b>French-Manga</span><span class="chip n"><b>3</b>FStream</span><span class="chip">UniqueStream</span><span class="chip">BFlix</span></div></div>
+     <div class="item" style="flex-direction:column;align-items:stretch;gap:8px"><div class="val" style="opacity:.6">Hosts</div>
+      <div class="chips"><span class="chip n"><b>1</b>premium</span><span class="chip n"><b>2</b>uqload</span><span class="chip n"><b>3</b>netu</span><span class="chip n"><b>4</b>voe</span><span class="chip">vidzy</span><span class="chip">filmoon</span><span class="chip">+9</span></div></div>
+    </div>
+    <div class="help">Tap to number. A failure moves on to the next; the rest are still tried. <span style="color:var(--p)">Reset</span></div>
+   </div>
+   <div>
+    <div class="list plain">
+     <div class="item"><div class="grow"><div class="lbl">Allow deleting files</div><div class="val" style="color:var(--err);opacity:.85">Deleted from the server's disk, no undo</div></div><div class="tog red"></div></div>
+    </div>
+   </div>
+  </div>
+  <div class="dock glass"><span><svg><use href="#home"/></svg>Home</span><span><svg><use href="#play"/></svg>Media</span><span class="s"><svg style="width:24px;height:24px"><use href="#srch"/></svg></span><span><svg><use href="#music"/></svg>Music</span><span><svg><use href="#heart"/></svg>Library</span></div>
+ </div>
+</div>
+</div>
+
+<div>
+<p class="cap"><b>Desktop · category list beside the page.</b> Same 8 categories as a second column; the page opens on Playback, the amber dot flags the category with a problem. Each one has its own link (<code>#/settings?s=server</code>).</p>
+<div class="desk">
+ <div class="rail glass"><div style="font:800 26px/1 ui-sans-serif;color:var(--p)">s</div><div class="s"><svg style="width:24px;height:24px"><use href="#srch"/></svg></div>
+  <span><svg><use href="#home"/></svg>Home</span><span><svg><use href="#play"/></svg>Media</span><span><svg><use href="#globe"/></svg>Discover</span><span><svg><use href="#music"/></svg>Music</span><span><svg><use href="#heart"/></svg>Library</span>
+  <span class="a" style="margin-top:auto"><svg><use href="#gear"/></svg>Settings</span></div>
+ <div class="dtop glass"><div class="iconbtn"><svg><use href="#back"/></svg></div><div class="ttl" style="font-size:22px;width:120px">Settings</div><div class="search"><svg style="width:16px;height:16px;color:var(--p)"><use href="#srch"/></svg><span>Search titles, or paste a YouTube or Twitch link</span></div><div style="flex:1"></div><div class="iconbtn"><svg><use href="#bell"/></svg></div></div>
+ <nav class="cat">
+  <div class="h">Watching</div>
+  <a class="a"><svg><use href="#play"/></svg>Playback</a><a><svg><use href="#cc"/></svg>Subtitles</a>
+  <div class="h">Finding &amp; keeping</div>
+  <a><svg><use href="#globe"/></svg>Sources &amp; search</a><a><svg><use href="#dl"/></svg>Downloads</a><a><svg><use href="#music"/></svg>Music</a><a><svg><use href="#bell"/></svg>Notifications</a>
+  <div class="h">This server</div>
+  <a><svg><use href="#server"/></svg>Server<em></em></a><a><svg><use href="#share"/></svg>Share sestudio</a>
+ </nav>
+ <section class="pane">
+  <h2>Playback</h2>
+  <div class="lead">What plays when you open a title, and how it looks.</div>
+  <div>
+   <div class="list plain">
+    <div class="item"><div class="grow"><div class="lbl">Language</div><div class="val">A title without it opens in what it has</div></div><div class="seg"><i class="a">VF</i><i>VOSTFR</i><i>VO</i></div></div>
+    <div class="item"><div class="grow"><div class="lbl">Quality</div><div class="val">Where each video starts; the player's menu changes it too</div></div><div class="right" style="padding:7px 12px;border-radius:8px;background:var(--b1)">Source ▾</div></div>
+    <div class="item"><div class="grow"><div class="lbl">Play on open</div><div class="val">Off: opening a title only shows it, what's playing keeps going</div></div><div class="tog on"></div></div>
+   </div>
+  </div>
+  <div>
+   <div class="gh">AI frame rates</div>
+   <div class="list plain">
+    <div class="item"><div class="grow"><div class="lbl">Offer AI frame rates</div><div class="val">Smoother motion, frames drawn on the server's GPU</div></div><div class="tog on"></div></div>
+    <div class="item"><div class="grow"><div class="lbl">Anime: smooth held drawings</div><div class="val">No effect on live action</div></div><div class="right" style="padding:7px 12px;border-radius:8px;background:var(--b1)">Up to 4 frames ▾</div></div>
+    <div class="item"><div class="grow"><div class="lbl">Engine</div><div class="val">NVIDIA GeForce RTX 4090 · onnxruntime 1.31.1 · sets itself up on the first video</div></div><span class="chip" style="color:var(--warn)">Not set up</span><span class="btn">Set up now</span></div>
+   </div>
+  </div>
+ </section>
+ <div class="mini glass"><div class="tile" style="width:40px;height:40px"><svg><use href="#music"/></svg></div><div class="grow"><div class="lbl" style="font-size:15px">Sunder</div><div class="val">Emperor · 174 BPM</div></div><div class="iconbtn" style="background:var(--p);color:var(--pink)">▶</div></div>
+</div>
+</div>
+
+<div>
+<p class="cap"><b>Where everything goes</b></p>
+<ul class="notes">
+ <li><b>Playback:</b> language, quality, play on open, AI frame rates (toggle, anime hold, engine status + setup)</li>
+ <li><b>Subtitles:</b> unchanged controls, preview pinned while scrolling</li>
+ <li><b>Sources &amp; search:</b> sites on/off, preferred source, one card per show, TMDB key, link to YouTube &amp; Twitch</li>
+ <li><b>Downloads:</b> destination, folder, try-first order, delete toggle (moved out of Danger zone)</li>
+ <li><b>Music:</b> libraries, genre model, YouTube Music cookies, share tokens</li>
+ <li><b>Notifications:</b> WhatsApp toggle, number, CallMeBot key</li>
+ <li><b>Server:</b> status, log, restart / stop, Nightly, the Node.js warning. <b>Share:</b> the two QR codes</li>
+ <li>"Danger zone" goes away: each risky switch lives next to what it affects, in red.</li>
+</ul>
+</div>
+</div>
+</body></html>

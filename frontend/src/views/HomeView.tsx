@@ -15,7 +15,7 @@ import NowStrip from '../components/home/NowStrip'
 import PosterStrip from '../components/home/PosterStrip'
 import UpcomingWidget from '../components/home/UpcomingWidget'
 import Widget, { WidgetGrid } from '../components/home/Widget'
-import { useHealth } from '../homeHealth'
+import { settingsFor, useHealth } from '../homeHealth'
 import { summarizeChannels, useChannelsLatest } from '../homeChannels'
 import { orderWidgets, pinTiers, type WidgetDescriptor, type WidgetId, type WidgetTier } from '../homeOrder'
 import { useForYou } from '../forYou'
@@ -144,7 +144,7 @@ export default function HomeView({
             lone={lone}
             health={health}
             onReload={reloadHealth}
-            onOpenSettings={() => onNavigate('settings')}
+            onOpenSettings={() => onNavigate('settings', { s: settingsFor(health.issues[0]) })}
           />
         )
       case 'downloads':
