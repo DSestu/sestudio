@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import AddLibrary from '../../components/music/crates/AddLibrary'
 import { librariesApi, stateLine, useLibraries, type AnalysisStatus, type ShareToken } from '../../musicLibraries'
-import { SettingRow, SettingsGroup, ToggleRow } from './rows'
+import { Choice, RowSelect, SettingRow, SettingsGroup, ToggleRow } from './rows'
 import type { SettingsProps } from './SettingsView'
 
 const KIND_NAME = {
@@ -99,6 +99,47 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
           checked={settings.music_genre_model !== false}
           onChange={on => void onUpdate({ music_genre_model: on })}
         />
+      </SettingsGroup>
+
+      <SettingsGroup title="Harmony">
+        <SettingRow
+          label="How keys are shown"
+          help="Plain shows mood words. Theory shows key names. Plain, theory on tap shows words, and a tap opens the key card"
+          stacked
+        >
+          <Choice
+            label="How keys are shown"
+            value={settings.music_theory_level ?? 'plain'}
+            options={[{ value: 'plain', label: 'Plain' }, { value: 'tap', label: 'Plain, theory on tap' }, { value: 'theory', label: 'Theory' }]}
+            onChange={v => void onUpdate({ music_theory_level: v })}
+          />
+        </SettingRow>
+        <SettingRow label="Default harmony rule" help="Used by Fits next, the builder and Autopilot" stacked>
+          <Choice
+            label="Default harmony rule"
+            value={settings.music_harmony_rule ?? 'same'}
+            options={[{ value: 'same', label: 'Same notes' }, { value: 'close', label: 'Close' }, { value: 'any', label: 'Any' }]}
+            onChange={v => void onUpdate({ music_harmony_rule: v })}
+          />
+        </SettingRow>
+        <ToggleRow
+          label="Mood words"
+          help="Floating, Bright, Warm... from the brightest mode to the darkest"
+          checked={settings.music_mood_words !== false}
+          onChange={on => void onUpdate({ music_mood_words: on })}
+        />
+        <SettingRow label="Autopilot follows" htmlFor="set-autopilot-arc" help="The arc Autopilot uses when the queue runs out">
+          <RowSelect
+            id="set-autopilot-arc"
+            value={settings.music_autopilot_arc ?? 'warmup'}
+            onChange={e => void onUpdate({ music_autopilot_arc: e.target.value as NonNullable<SettingsProps['settings']['music_autopilot_arc']> })}
+          >
+            <option value="warmup">Warm-up, peak, cool-down</option>
+            <option value="slow-burn">Slow burn</option>
+            <option value="dubstep">Dubstep interlude</option>
+            <option value="flat-out">Flat out</option>
+          </RowSelect>
+        </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title="YouTube Music">

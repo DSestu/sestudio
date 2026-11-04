@@ -6,7 +6,7 @@ import os
 import subprocess
 import threading
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -45,6 +45,12 @@ class SettingsBody(BaseModel):
     station_fps: int | None = Field(default=None, ge=10, le=30)
     station_browser: str | None = None
     music_genre_model: bool | None = None
+    music_theory_level: Literal["plain", "tap", "theory"] | None = None
+    music_harmony_rule: Literal["same", "close", "any"] | None = None
+    music_mood_words: bool | None = None
+    music_autopilot_arc: (
+        Literal["warmup", "slow-burn", "dubstep", "flat-out"] | None
+    ) = None
 
 
 def _known_hosts(request: Request) -> list[str]:
@@ -152,6 +158,14 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.station_browser = body.station_browser.strip().strip('"')
     if body.music_genre_model is not None:
         cfg.music_genre_model = body.music_genre_model
+    if body.music_theory_level is not None:
+        cfg.music_theory_level = body.music_theory_level
+    if body.music_harmony_rule is not None:
+        cfg.music_harmony_rule = body.music_harmony_rule
+    if body.music_mood_words is not None:
+        cfg.music_mood_words = body.music_mood_words
+    if body.music_autopilot_arc is not None:
+        cfg.music_autopilot_arc = body.music_autopilot_arc
     if body.allow_file_deletion is not None:
         cfg.allow_file_deletion = body.allow_file_deletion
     if body.frame_interpolation is not None:

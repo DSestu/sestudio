@@ -136,3 +136,23 @@ def test_ai_max_hold_persists_and_drops_segments_drawn_with_the_old_one(
     assert resp.json()["ai_max_hold"] == 3
     assert "film.mkv" not in drawn.built
     assert client.put("/api/settings", json={"ai_max_hold": 9}).status_code == 422
+
+
+def test_harmony_settings_persist_and_reject_unknown_values(client):
+    data = client.get("/api/settings").json()
+    assert data["music_theory_level"] == "plain"
+    assert data["music_harmony_rule"] == "same"
+    assert data["music_mood_words"] is True
+    assert data["music_autopilot_arc"] == "warmup"
+
+    body = {
+        "music_theory_level": "tap",
+        "music_harmony_rule": "close",
+        "music_mood_words": False,
+        "music_autopilot_arc": "slow-burn",
+    }
+    assert client.put("/api/settings", json=body).status_code == 200
+    saved = client.get("/api/settings").json()
+    assert {k: saved[k] for k in body} == body
+    bad = {"music_theory_level": "x"}
+    assert client.put("/api/settings", json=bad).status_code == 422
