@@ -111,6 +111,7 @@ class AudioEngine {
   private volume!: GainNode
   analyser: AnalyserNode | null = null
   private delay: DelayNode | null = null
+  private leadWant: number | null = null
   private act = 0
   private cur: string | null = null
   private fade: Fade | null = null
@@ -192,10 +193,14 @@ class AudioEngine {
     return isSoundTab() ? this.lead : 0
   }
 
-  /** Moved only on a real change: gliding the delay bends the pitch for a moment. */
+  /** Moved only when the asked value changes: gliding the delay bends the pitch while it plays, so it jumps when nothing plays. */
   setLead(s: number) {
     const v = Math.max(0, Math.min(0.45, s))
-    if (this.delay && Math.abs(v - this.lead) > 0.005) this.delay.delayTime.setTargetAtTime(v, this.ctx!.currentTime, 0.05)
+    if (!this.delay || Math.abs(v - (this.leadWant ?? NaN)) < 0.001) return
+    const t = this.ctx!.currentTime
+    if (this.leadWant === null || this.els[this.act].paused) this.delay.delayTime.setValueAtTime(v, t)
+    else this.delay.delayTime.setTargetAtTime(v, t, 0.05)
+    this.leadWant = v
   }
 
   /** Seconds into the playing element. */
