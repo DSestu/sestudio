@@ -125,12 +125,11 @@ class ServerService : Service() {
     }
 
     /**
-     * The phone's shared storage (label, path) the server may read: the internal one and each
-     * mounted SD card. Empty without the audio permission, which the user may have refused.
+     * The phone's shared storage (label, path) the server may use: the internal one and each
+     * mounted SD card. Empty without [storageAccess], which the user may have refused.
      */
     private fun storageRoots(): List<Pair<String, String>> {
-        val permission = audioPermission()
-        if (permission != null && checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) return emptyList()
+        if (!storageAccess(this)) return emptyList()
         val cards = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             getSystemService(StorageManager::class.java).storageVolumes
                 .filter { !it.isPrimary && it.state == Environment.MEDIA_MOUNTED }
@@ -214,11 +213,14 @@ class ServerService : Service() {
         /** The standard folders that become libraries by themselves (not Ringtones, Notifications, Alarms). */
         private val MUSIC_FOLDERS = listOf("Music", "Download", "Podcasts", "Recordings")
 
-        /** The permission that lets the app read audio files by path on this Android, or null when none is needed. */
-        fun audioPermission(): String? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_AUDIO
+        /** The runtime permissions for the phone's storage before Android 11; from 11 it is all files access. */
+        val STORAGE_PERMISSIONS = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+
+        /** Whether the server, a Linux process, may read and write the phone's folders by path. */
+        fun storageAccess(context: Context): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
         } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
+            STORAGE_PERMISSIONS.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
         }
 
         fun logFile(context: Context) = File(context.filesDir, "server.log")

@@ -48,8 +48,11 @@
   <section id="welcome">
     <p class="first-only">First, sestudio sets itself up on this phone.</p>
     <p class="first-only">It downloads about <strong>200 MB</strong> — use Wi-Fi. This happens once and takes 2–4 minutes.</p>
-    <p><strong>sestudio needs to run in the background:</strong> its server keeps going while the
-      screen is off or another app is open, or playback and downloads stop. Android asks once.</p>
+    <p><strong>sestudio needs three things from Android:</strong></p>
+    <p><strong>Background use:</strong> its server keeps going while the screen is off or another
+      app is open, or playback and downloads stop.</p>
+    <p><strong>Notifications:</strong> one stays while the server runs; it is how you stop it.</p>
+    <p><strong>All files access:</strong> your music folders, and downloads where you choose.</p>
   </section>
 
   <section id="progress" hidden>
@@ -59,8 +62,12 @@
   </section>
 
   <div class="actions" id="welcome-actions">
-    <button id="background" class="primary" onclick="Setup.allowBackground()">Allow background use</button>
+    <button id="background" onclick="Setup.allowBackground()">Allow background use</button>
     <div class="done-note" id="background-done" hidden>✓ Background use allowed</div>
+    <button id="notifications" onclick="Setup.allowNotifications()">Allow notifications</button>
+    <div class="done-note" id="notifications-done" hidden>✓ Notifications allowed</div>
+    <button id="files" onclick="Setup.allowFiles()">Allow all files access</button>
+    <div class="done-note" id="files-done" hidden>✓ All files access allowed</div>
     <button id="setup" class="first-only" onclick="Setup.start()" disabled>Set up</button>
   </div>
   <div class="actions" id="failed-actions" hidden>
@@ -72,20 +79,26 @@
 <script>
   // Called by the app with the whole state each time it changes.
   function render(state) {
-    // 'background': a later launch where background use was revoked; nothing runs until allowed.
-    const welcome = state.screen === 'welcome' || state.screen === 'background';
-    document.querySelectorAll('.first-only').forEach(el => { el.hidden = state.screen === 'background'; });
+    // 'allow': a later launch where something was revoked; nothing runs until all is allowed again.
+    const welcome = state.screen === 'welcome' || state.screen === 'allow';
+    document.querySelectorAll('.first-only').forEach(el => { el.hidden = state.screen === 'allow'; });
+    const asks = ['background', 'notifications', 'files'];
+    const next = asks.find(id => !state[id]); // the one to do now stands out
+    asks.forEach(id => {
+      const button = document.getElementById(id);
+      button.hidden = state[id];
+      button.className = id === next ? 'primary' : '';
+      document.getElementById(id + '-done').hidden = !state[id];
+    });
     const setup = document.getElementById('setup');
-    setup.disabled = !state.background;
-    setup.className = state.background ? 'first-only primary' : 'first-only';
+    setup.disabled = !!next;
+    setup.className = next ? 'first-only' : 'first-only primary';
     const failed = state.screen === 'failed';
     document.getElementById('welcome').hidden = !welcome;
     document.getElementById('welcome-actions').hidden = !welcome;
     document.getElementById('progress').hidden = welcome;
     document.getElementById('failed-actions').hidden = !failed;
     document.getElementById('leave-note').hidden = welcome || failed || state.screen === 'ready';
-    document.getElementById('background').hidden = state.background;
-    document.getElementById('background-done').hidden = !state.background;
     document.getElementById('progress-title').textContent =
       state.screen === 'ready' ? 'Ready.' : failed ? 'Stopped.' : state.screen === 'starting' ? 'Starting…' : 'Setting up…';
     const error = document.getElementById('error');

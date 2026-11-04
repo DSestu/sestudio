@@ -8,6 +8,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.app.DownloadManager
+import android.app.NotificationManager
 import android.content.res.Configuration
 import android.content.Intent
 import android.graphics.Color
@@ -74,6 +75,20 @@ class MainActivity : Activity() {
         if (web != null && !ServerService.running) recreate()
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        // Refused for good, Android no longer shows its prompt: the setting is the only way left.
+        if (permissions.any { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED && !shouldShowRequestPermissionRationale(it) }) {
+            startActivity(
+                if (requestCode == ASK_NOTIFICATIONS) notificationSettings()
+                else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
+            )
+        }
+        refreshSetup?.invoke()
+    }
+
+    private fun notificationSettings() =
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+
     private class Step(val label: String) {
         var state = "wait"
         var detail = ""
@@ -92,11 +107,15 @@ class MainActivity : Activity() {
         } else {
             listOf(Step("Starting"))
         }
-        // Background use is required: without it Android stops the server minutes after the screen locks.
-        fun allowed() = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+        // All three are required. Background use: without it Android stops the server minutes after the
+        // screen locks. Notifications: the server's, with its Stop button. Files: the phone's folders.
+        fun background() = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+        fun notifications() = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+        fun files() = ServerService.storageAccess(this)
+        fun allowed() = background() && notifications() && files()
         var screen = when {
             firstRun -> "welcome"
-            !allowed() -> "background"
+            !allowed() -> "allow"
             else -> "starting"
         }
         var error = ""
@@ -106,7 +125,9 @@ class MainActivity : Activity() {
             val state = JSONObject()
                 .put("screen", screen)
                 .put("error", error)
-                .put("background", allowed())
+                .put("background", background())
+                .put("notifications", notifications())
+                .put("files", files())
                 .put("steps", JSONArray(steps.map {
                     JSONObject().put("label", it.label).put("state", it.state).put("detail", it.detail)
                         .put("fraction", it.fraction ?: JSONObject.NULL)
@@ -121,13 +142,6 @@ class MainActivity : Activity() {
             error = ""
             steps.forEach { it.state = "wait"; it.detail = ""; it.fraction = null }
             render()
-            // The server's notification (with its Stop button), and the phone's music folders as libraries.
-            // Refusing either is fine: the server starts without it.
-            val asking = listOfNotNull(
-                Manifest.permission.POST_NOTIFICATIONS.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU },
-                ServerService.audioPermission(),
-            ).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-            if (asking.isNotEmpty()) runOnUiThread { requestPermissions(asking.toTypedArray(), 0) }
             thread(name = "boot") {
                 try {
                     runtime.install { index, done, total ->
@@ -180,6 +194,26 @@ class MainActivity : Activity() {
                 )
             }
 
+            @JavascriptInterface fun allowNotifications() = runOnUiThread {
+                val permission = Manifest.permission.POST_NOTIFICATIONS
+                // Before Android 13, or granted but turned off: only the settings can turn them on.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(permission), ASK_NOTIFICATIONS)
+                } else {
+                    startActivity(notificationSettings())
+                }
+            }
+
+            @JavascriptInterface fun allowFiles() = runOnUiThread {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    startActivity(
+                        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")),
+                    )
+                } else {
+                    requestPermissions(ServerService.STORAGE_PERMISSIONS, ASK_FILES)
+                }
+            }
+
             @JavascriptInterface fun copyLog() {
                 val log = (steps.map { "${it.state} ${it.label} ${it.detail}" } + error).joinToString("\n")
                 getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("sestudio setup", log))
@@ -192,8 +226,8 @@ class MainActivity : Activity() {
             }
         }
         refreshSetup = {
-            // Back from Android's prompt: a later launch starts once background use is allowed.
-            if (screen == "background" && allowed()) {
+            // Back from Android's prompt: a later launch starts once everything is allowed.
+            if (screen == "allow" && allowed()) {
                 screen = "starting"
                 run()
             } else {
@@ -414,5 +448,7 @@ class MainActivity : Activity() {
 
     companion object {
         val SERVER_URL = "http://localhost:${BuildConfig.HTTP_PORT}"
+        private const val ASK_NOTIFICATIONS = 1
+        private const val ASK_FILES = 2
     }
 }
