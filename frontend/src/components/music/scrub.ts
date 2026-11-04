@@ -8,8 +8,10 @@ import { trackAt } from './timeline/sampling'
 
 // Scrubbing and jumping on the timeline (SPEC-music-player §6.10): a drag
 // inside the scrub band grabs the timeline and the sound follows live, a
-// release keeps gliding, a tap glides to the time pressed. Everything else
-// (title and row clicks, labels) glides too.
+// release keeps gliding, a double tap glides to the time pressed (or to the
+// label's track). Title and row clicks glide too.
+
+const DOUBLE_MS = 350
 
 /** What the scrubber needs of the drawn queue. */
 export interface ScrubModel {
@@ -75,6 +77,8 @@ export class Scrubber {
   private settle: { g: number; t0: number } | null = null
   private hover = -1
   private nowG = 0
+  /** The last tap without a drag, so the next one can make it a double tap. */
+  private tapped: { at: number; x: number; y: number } | null = null
 
   constructor(o: Scrubber['o']) {
     this.o = o
@@ -237,8 +241,13 @@ export class Scrubber {
     if (!d.moved) {
       const h = d.label >= 0 ? this.hit(e.clientX, e.clientY) : undefined
       this.view = null
-      // The label's second line opens the transition popover (Timeline); the upper part glides.
-      if (h) { if (!h.second) this.glideTo(m.TS[h.i]) }
+      // Only a double tap glides; a single one on a label opens its transition popover (Timeline).
+      const now = performance.now()
+      const t = this.tapped
+      const twice = !!t && now - t.at < DOUBLE_MS && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 24
+      this.tapped = twice ? null : { at: now, x: e.clientX, y: e.clientY }
+      if (!twice) return
+      if (h) this.glideTo(m.TS[h.i])
       else this.glideTo(this.nowG + this.map().s(e.clientX))
       return
     }
