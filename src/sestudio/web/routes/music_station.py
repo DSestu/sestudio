@@ -49,7 +49,7 @@ def make_station(request: Request, fps: int | None) -> Station:
 def _status(request: Request) -> dict[str, Any]:
     st = station.current()
     return {
-        **(st.status() if st else {"running": False}),
+        **(st.status() if st else {"running": False, "error": station.last_error()}),
         "path": STREAM_PATH,
         "hls_path": HLS_PATH,
         "url": f"{request.base_url}{STREAM_PATH.lstrip('/')}",
@@ -122,8 +122,9 @@ async def hls(name: str) -> FileResponse:
     st = station.current()
     path = st.hls_dir / name if st else None
     # Only the files ffmpeg writes: a bare name, no path.
-    if path is None or name != Path(name).name or not path.is_file():
+    if st is None or path is None or name != Path(name).name or not path.is_file():
         raise HTTPException(status_code=404, detail="No such part of the station")
+    st.touch()
     kind = "application/vnd.apple.mpegurl" if name.endswith(".m3u8") else "video/mp2t"
     return FileResponse(
         path,

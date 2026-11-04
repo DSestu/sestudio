@@ -115,10 +115,11 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     return () => window.clearInterval(id)
   }, [ids])
 
-  // Titles arrive later than the queue, so they count too.
+  // Titles arrive later than the queue, so they count too. The current track too: on the TV page it
+  // follows the station's clock, which reaches the next track after the queue's revision did.
   const titles = q.items.map(i => info(i.track_id)?.title ?? '').join('\n')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const model = useMemo(() => buildModel(q, info), [q.rev, ids, titles, version])
+  const model = useMemo(() => buildModel(q, info), [q.rev, q.current, ids, titles, version])
   const live = useRef({ model, progress, palette, onOutside })
   // Any render may carry a change the loop should draw (queue, mode, look).
   useEffect(() => {

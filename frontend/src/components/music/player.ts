@@ -73,6 +73,16 @@ export function useMusicHost() {
   })
 }
 
+/** The TV page's sound, for its light only: it follows the station and never moves the queue. Mount once. */
+export function useTvSound() {
+  const q = useMusicQueue()
+  const info = useTrackInfo(q)
+  useEffect(() => { engine.unlock() }, [])
+  useEffect(() => {
+    engine.follow(q, info)
+  })
+}
+
 /** Seconds into the current track, re-read while it plays. */
 export function usePosition(q: QueueState, duration: number): number {
   const [now, setNow] = useState(() => Date.now())

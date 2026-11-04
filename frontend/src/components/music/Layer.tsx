@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
 import { frameAt, getMode, titleWidth, MODE_MS, ModeMotion, pull, setMode, useMode } from './mode'
-import { closePlayer, usePosition } from './player'
+import { closePlayer, usePosition, useTvSound } from './player'
 import AddPanel from './AddPanel'
 import Background from './background/Background'
 import { useLook } from './background/settings'
@@ -24,6 +24,12 @@ function fade(el: HTMLElement | null, o: number, dy: number) {
   el.style.opacity = String(o)
   el.style.transform = `translateY(${dy}px)`
   el.style.visibility = o < 0.01 ? 'hidden' : 'visible'
+}
+
+/** The station's page: the TV's picture, with its unheard sound for the light. */
+export function TvLayer() {
+  useTvSound()
+  return <Layer tv />
 }
 
 /** The full-screen player, over the whole app (rail and dock included). `tv` is the station's picture: the default view, no controls, no sound, no cursor. */
