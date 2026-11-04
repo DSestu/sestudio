@@ -103,10 +103,11 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.rgb(0x13, 0x17, 0x20))
         }
         val firstRun = !runtime.isReady
-        val steps = if (firstRun) {
-            listOf(Step("Linux base"), Step("uv"), Step("Python and sestudio"), Step("Starting"))
-        } else {
-            listOf(Step("Starting"))
+        val steps = when {
+            firstRun -> listOf(Step("Linux base"), Step("uv"), Step("Python and sestudio"), Step("Starting"))
+            // An app update that wants more Debian packages (the browser for casting music).
+            runtime.needsPackages -> listOf(Step("Casting browser"), Step("Starting"))
+            else -> listOf(Step("Starting"))
         }
         // All three are required. Background use: without it Android stops the server minutes after the
         // screen locks. Notifications: the server's, with its Stop button. Files: the phone's folders.
@@ -145,7 +146,9 @@ class MainActivity : Activity() {
             render()
             thread(name = "boot") {
                 try {
-                    runtime.install { index, done, total ->
+                    runtime.install { step, done, total ->
+                        // An update only installs packages: its one step before Starting.
+                        val index = if (firstRun) step else 0
                         steps.take(index).forEach { it.state = "done"; it.fraction = null }
                         steps[index].apply {
                             state = "run"

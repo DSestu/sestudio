@@ -65,7 +65,7 @@ class BrowserCapture:
             from playwright.async_api import async_playwright
         except ImportError as exc:
             raise StationError(
-                "The station needs Playwright: install sestudio with the `station` extra"
+                "The station needs Playwright, which has no build for this machine"
             ) from exc
         self._pw = await async_playwright().start()
         # An explicit path or channel first, then what is installed, then the bundled build.

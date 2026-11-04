@@ -3,7 +3,7 @@ encode it with ffmpeg, to measure whether a machine can hold 720p30 / 1080p30.
 
 Not the station: no audio, no stream routes. Frames come from a source (a browser, or a fake one
 in tests), are resampled onto a constant-rate clock and piped into ffmpeg as JPEGs.
-Playwright is an optional dependency (`sestudio[station]`) and imported lazily.
+Playwright is imported lazily: 32-bit ARM installs go without it.
 """
 
 from __future__ import annotations
@@ -130,7 +130,7 @@ def _playwright():
         from playwright.async_api import async_playwright
     except ImportError as exc:
         raise SystemExit(
-            "The station spike needs Playwright: `uv sync --extra station` "
+            "The station spike needs Playwright, which has no build for this machine "
             "(then `playwright install chromium` unless a system Chrome/Edge is used with --channel)."
         ) from exc
     return async_playwright
