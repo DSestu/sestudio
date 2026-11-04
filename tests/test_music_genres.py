@@ -29,6 +29,16 @@ from sestudio.music import genres
         (None, None),
         ("Dubstep; Bass", "Dubstep"),
         ("Experimental Weirdness", "Experimental Weirdness"),
+        ("Metal", "Metal"),
+        ("METAL", "Metal"),
+        ("metal", "Metal"),
+        ("heavy metal", "Heavy Metal"),
+        ("Heavy-Metal", "Heavy Metal"),
+        ("HEAVY_METAL", "Heavy Metal"),
+        ("heavy  metal", "Heavy Metal"),
+        ("Synth-pop", "Synth Pop"),
+        ("POP", "Pop"),
+        ("80s", "80s"),
     ],
 )
 def test_tag_spellings_are_unified(raw, expected):

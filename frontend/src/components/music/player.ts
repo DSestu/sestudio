@@ -35,7 +35,23 @@ export function closeThen(f: () => void) {
 }
 export const useLayerOpen = () => useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => open)
 
+// The player bar's memory of this visit. The queue lives on the server, so a
+// paused track is still current on every load: the bar keeps a paused track
+// only once this visit has played or paused it, and Stop hides it until the next play.
+let bar = { heard: false, stopped: false }
+const barListeners = new Set<() => void>()
+const setBar = (b: typeof bar) => {
+  bar = b
+  barListeners.forEach(l => l())
+}
+export const useBarMemory = () => useSyncExternalStore(l => { barListeners.add(l); return () => barListeners.delete(l) }, () => bar)
+export function stopFromBar(playing: boolean, position: number) {
+  setBar({ heard: false, stopped: true })
+  if (playing) void queueActions.transport('pause', { position })
+}
+
 export function startPlayback(action: () => Promise<void>): Promise<void> {
+  setBar({ heard: true, stopped: false })
   claimSound()
   engine.unlock()
   return action()
@@ -51,8 +67,10 @@ export const playAll = (ts: MusicTrack[]) => startPlayback(() => post(addPayload
 export const playItem = (itemId: string) => startPlayback(async () => { if (!glideToItem(itemId)) await queueActions.play(itemId) })
 /** Play / pause from the transport or the bar. */
 export function togglePlay(playing: boolean, position: number) {
-  if (playing) void queueActions.transport('pause', { position })
-  else void startPlayback(() => queueActions.transport('play', { position }))
+  if (playing) {
+    setBar({ heard: true, stopped: false })
+    void queueActions.transport('pause', { position })
+  } else void startPlayback(() => queueActions.transport('play', { position }))
 }
 
 /** Keeps the sound following the queue. Mount once. */
@@ -67,6 +85,8 @@ export function useMusicHost() {
     // A next/prev (its event says whether it keeps playing) blends over 3 s, anything else .6 s.
     return onQueueEvent(ev => { engine.blend = ev.op === 'go' ? ('playing' in ev ? BLEND.skip : takeBlend() ?? BLEND.glide) : BLEND.glide })
   }, [])
+  // Playback started anywhere (another device too) brings a stopped bar back.
+  useEffect(() => onQueueEvent((_ev, before, after) => { if (after.playing && !before.playing) setBar({ heard: true, stopped: false }) }), [])
   useEffect(() => {
     engine.follow(q, info)
   })
