@@ -20,6 +20,8 @@ export const tlook = { klo: 0.7, kmi: 0.9, khi: 0.42, alo: 0.9, ami: 0.5, ahi: 0
 /** What the spectral background reads from the last frame: horizon, amplitude and the blurred glow layer. */
 export const probe = { y0: 0, amp: 0, W: 0, H: 0, glow: null as HTMLCanvasElement | null, /** Counts the frames drawn, so the background knows when the glow changed. */ frame: 0 }
 const SIGNAL = 'oklch(72% .16 230'
+/** Pixels of curve behind the analysis front that the rim light covers. */
+const RIM = 46
 
 export interface LabelItem extends DrawItem {
   title: string
@@ -240,6 +242,23 @@ export class TimelineRenderer {
     }
     g2.globalAlpha = 1
 
+    // The rest of a track being analysed: a dotted horizon from its front to its end.
+    g2.save()
+    g2.setLineDash([2, 5])
+    g2.strokeStyle = 'rgba(255,255,255,.25)'
+    g2.lineWidth = 1
+    for (const it of items) {
+      if (it.front === undefined) continue
+      const x0 = Math.max(px, X(it.a + it.front))
+      const x1 = Math.min(W, X(it.a + it.track.dur))
+      if (x1 <= x0) continue
+      g2.beginPath()
+      g2.moveTo(x0, y0)
+      g2.lineTo(x1, y0)
+      g2.stroke()
+    }
+    g2.restore()
+
     this.labels(f, y0, amp)
 
     // Axis ticks fade through the switch.
@@ -357,6 +376,29 @@ export class TimelineRenderer {
       top.x.strokeStyle = oklch(pal.edge)
       top.x.lineWidth = tlook.edge
       if (tlook.edge > 0) paint(top.x, sHi, 1, true)
+      // Rim light: where a track is still being analysed, the curves' outlines glow over the last
+      // RIM px behind the front, brightest at it; the wider stroke on the glow layer gets blurred.
+      const lit = f.items.filter(it => it.front !== undefined && it.front < it.track.dur)
+      if (lit.length) {
+        const outlines = [sHi, shape(1, tlook.kmi, false, true), shape(0, tlook.klo, true, true)]
+        for (const it of lit) {
+          const xf = M.X(it.a + it.front!)
+          if (xf < 0 || xf > W + RIM) continue
+          for (const [c, lw] of [[top.x, 1.6], [g1.x, 4]] as const) {
+            const gr = c.createLinearGradient(xf - RIM, 0, xf, 0)
+            gr.addColorStop(0, oklch(pal.edge, 0))
+            gr.addColorStop(1, oklch(pal.edge, 1))
+            c.save()
+            c.beginPath()
+            c.rect(xf - RIM, -1e4, RIM, 2e4)
+            c.clip()
+            c.strokeStyle = gr
+            c.lineWidth = lw
+            for (const P of outlines) c.stroke(P)
+            c.restore()
+          }
+        }
+      }
     }
     g1.x.globalCompositeOperation = 'source-over'
 
@@ -429,7 +471,11 @@ export class TimelineRenderer {
       g2.fillText(it.title, x0 + 6, ty)
       g2.font = '500 11px ui-sans-serif,system-ui'
       g2.fillStyle = `${SIGNAL})`
-      g2.fillText(`${a < 600 ? `in ${fmtTime(a)}` : 'later'} · ${mixLabel(it.plan)}`, x0 + 6, y0 - amp * 1.02 - 8)
+      const fr = it.track.front
+      const pct = Math.round((Math.min(fr ?? 0, it.track.dur) / it.track.dur) * 100)
+      // The bands come first; tempo and key are measured after them, over the whole track.
+      const second = fr === undefined ? mixLabel(it.plan) : pct >= 100 ? 'Finding tempo and key…' : fr > 0 ? `Analysing · ${pct} %` : 'Analysing…'
+      g2.fillText(`${a < 600 ? `in ${fmtTime(a)}` : 'later'} · ${second}`, x0 + 6, y0 - amp * 1.02 - 8)
     }
   }
 }

@@ -5,7 +5,7 @@ import { fmtTime } from '../format'
 import { frameLoop, wake } from '../idle'
 import { joins, type Join } from '../joins'
 import { bez, crossed, dipScale, flash, MORPH_MS, morphOffsets, stepHl } from '../interact'
-import { loadAnalyses, mixOf, rawOf, RETRY_MS, trackOf } from '../mix/analysis'
+import { analysing, loadAnalyses, mixOf, PARTIAL_MS, rawOf, RETRY_MS, trackOf } from '../mix/analysis'
 import { plan } from '../mix/plan'
 import MixPopover from '../mix/Popover'
 import { barPos, registerScrubber, Scrubber } from '../scrub'
@@ -96,6 +96,8 @@ function paintRows(queueEl: Element | null, m: Model, k: number) {
 }
 
 const MARKS = 7
+/** Seconds the drawn analysis front takes over a whole track, at the slowest. */
+const REVEAL = 2.5
 
 export default function Timeline({ q, info, progress = () => 0, palette = TIMELINE_PALETTE, onOutside, marks = false, aim = null, onAim }: {
   q: QueueState
@@ -121,10 +123,19 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   const ids = q.items.map(i => i.track_id).join(',')
 
   useEffect(() => {
-    const run = () => { void loadAnalyses(ids.split(',').filter(Boolean)).then(c => c && setVersion(v => v + 1)) }
+    const list = ids.split(',').filter(Boolean)
+    let id = 0
+    let live = true
+    // Asked again soon while the server is analysing one of them, so its bands draw as they come.
+    const run = () => {
+      void loadAnalyses(list).then(c => {
+        if (!live) return
+        if (c) setVersion(v => v + 1)
+        id = window.setTimeout(run, analysing(list) ? PARTIAL_MS : RETRY_MS)
+      })
+    }
     run()
-    const id = window.setInterval(run, RETRY_MS)
-    return () => window.clearInterval(id)
+    return () => { live = false; window.clearTimeout(id) }
   }, [ids])
 
   // Titles arrive later than the queue, so they count too. The current track too: on the TV page it
@@ -252,6 +263,21 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     let slow = 0
     let seen = 0
     let lastSig = ''
+    // The drawn analysis front of each track being analysed: it chases the bands measured so far,
+    // a whole track in REVEAL s at the slowest, then runs to the end once the analysis is done.
+    const fronts = new Map<string, number>()
+    const stepFront = (tr: Track, dt: number): number | undefined => {
+      const to = tr.front ?? (fronts.has(tr.id) ? tr.dur : undefined)
+      if (to === undefined) return undefined
+      const was = fronts.get(tr.id) ?? 0
+      const f = still.matches ? to : Math.min(to, was + Math.max(tr.dur / REVEAL, (to - was) * 3) * dt)
+      if (tr.front === undefined && f >= tr.dur) {
+        fronts.delete(tr.id)
+        return undefined
+      }
+      fronts.set(tr.id, f)
+      return f
+    }
     const step = (now: number): boolean => {
       const raw = now - last
       const dt = Math.min(0.1, raw / 1000)
@@ -309,6 +335,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         it.a = shown.ts[i] - G + (morph ? (morph.off.get(id) ?? 0) * (1 - me) : 0)
         it.sc = morph ? (morph.grow.has(id) ? me : id === morph.moved ? dipScale(me) : 1) : 1
         it.hl = stepHl(it.hl, i === k ? 1 : 0, dt)
+        it.front = stepFront(it.track, dt)
       })
       let items = m.items
       if (morph) {
@@ -334,7 +361,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       const show = placeJoins(m, G)
       // Nothing to draw next frame when this one matches the last (and nothing plays).
       let sum = 0
-      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol
+      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol + (it.front ?? 0)
       const sig = `${G.toFixed(3)}|${t.toFixed(3)}|${level.toFixed(3)}|${scrub.hovered}|${sum.toFixed(3)}|${items.length}|${show}|${joins.slot}|${live.current.aim}`
       const moved = sig !== lastSig || getQueue().playing
       lastSig = sig

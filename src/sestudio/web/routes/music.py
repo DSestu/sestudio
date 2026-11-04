@@ -40,9 +40,14 @@ async def renormalise() -> dict[str, Any]:
 
 @router.get("/music/tracks/analysis")
 async def tracks_analysis(ids: str = Query(...)) -> dict[str, Any]:
-    """Several analyses at once (``?ids=a,b,c``); unanalysed ids are left out."""
+    """Several analyses at once (``?ids=a,b,c``); unanalysed ids are left out.
+
+    A track being analysed comes as ``partial: true`` with its bands so far and a ``progress``.
+    """
     wanted = [i for i in ids.split(",") if i]
-    return await asyncio.to_thread(_analyses, wanted)
+    found = await asyncio.to_thread(_analyses, wanted)
+    rest = [i for i in wanted if i not in found]
+    return found | (await asyncio.to_thread(store.partial, rest) if rest else {})
 
 
 SUMMARY_KEYS = (

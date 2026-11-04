@@ -17,6 +17,7 @@ for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")
 
 import subprocess  # noqa: E402
+from collections.abc import Callable  # noqa: E402
 from dataclasses import dataclass, field  # noqa: E402
 from typing import Any  # noqa: E402
 
@@ -89,22 +90,44 @@ def _biquad_gain2(freqs: np.ndarray, rate: int) -> np.ndarray:
     return np.stack(rows)
 
 
-def _bands(path: str) -> np.ndarray:
-    """8 band RMS envelopes at 10 Hz from one decode: each 0.1 s frame's power spectrum weighted by the filters' |H|².
+#: Seconds of audio per step of the band decode: how often the bands so far are reported.
+BAND_STEP = 5
 
-    Was 8 ffmpeg decodes, one per filter (about 5x slower); same filters, so the values match within a few percent.
-    """
-    x = decode(path, 16000)
-    win = 1600
+
+def _band_frames(x: np.ndarray, gain2: np.ndarray, win: int) -> np.ndarray:
     n = -(-len(x) // win)
     frames = np.zeros((n, win), np.float32)
     frames.reshape(-1)[: len(x)] = x
     power = np.abs(np.fft.rfft(frames, axis=1)) ** 2
     power[:, 1:-1] *= 2  # one-sided spectrum
-    # shortcut: the filters ran at the source rate (usually 44.1 kHz) before the resample; this assumes 44.1 kHz.
-    gain2 = _biquad_gain2(np.fft.rfftfreq(win, 1 / 16000), 44100)
     counts = np.minimum(win, len(x) - np.arange(n) * win)
     return np.sqrt((power @ gain2.T).T / win / np.maximum(counts, 1))
+
+
+def _bands(
+    path: str, on_bands: Callable[[np.ndarray], None] | None = None
+) -> np.ndarray:
+    """8 band RMS envelopes at 10 Hz from one decode: each 0.1 s frame's power spectrum weighted by the filters' |H|².
+
+    Was 8 ffmpeg decodes, one per filter (about 5x slower); same filters, so the values match within a few percent.
+    Read from ffmpeg as it decodes, ``BAND_STEP`` seconds at a time, and *on_bands* gets the envelopes so far after each.
+    """
+    win = 1600
+    # shortcut: the filters ran at the source rate (usually 44.1 kHz) before the resample; this assumes 44.1 kHz.
+    gain2 = _biquad_gain2(np.fft.rfftfreq(win, 1 / 16000), 44100)
+    cmd = [ffmpeg_binary(), "-v", "error", "-i", path, "-ac", "1", "-ar", "16000"]
+    step = win * 10 * BAND_STEP * 2  # whole frames of s16le
+    parts: list[np.ndarray] = []
+    with subprocess.Popen(
+        [*cmd, "-f", "s16le", "-"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+    ) as proc:
+        assert proc.stdout is not None
+        while chunk := proc.stdout.read(step):
+            x = np.frombuffer(chunk[: len(chunk) // 2 * 2], np.int16)
+            parts.append(_band_frames(x.astype(np.float32) / 32768, gain2, win))
+            if on_bands:
+                on_bands(np.concatenate(parts, axis=1))
+    return np.concatenate(parts, axis=1) if parts else np.zeros((8, 0))
 
 
 def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
@@ -165,19 +188,26 @@ def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
     )
 
 
-def analyse_file(path: str) -> RawAnalysis:
-    """Decode *path* a few times and measure it. Slow (seconds): run off the request path."""
+def analyse_file(
+    path: str, on_bands: Callable[[np.ndarray, float], None] | None = None
+) -> RawAnalysis:
+    """Decode *path* a few times and measure it. Slow (seconds): run off the request path.
+
+    The band envelopes come first, so *on_bands* (envelopes so far, duration) can show them
+    while the tempo and the profile are still being measured.
+    """
     low = decode(path, 4000)
     duration = len(low) / 4000
     i = np.arange(1, len(low), 7)
     zcr = float(np.sum((low[i - 1] < 0) != (low[i] < 0)) / max(len(low) / 7, 1))
     if duration <= 0:
         raise ValueError("no audio decoded")
+    bands = _bands(path, on_bands and (lambda b: on_bands(b, duration)))
+    loud = _rms(low, 4, 400)
     bpm = beat0 = bar0 = conf = None
     x = decode(path, TEMPO_SR)
     if duration >= MIN_TEMPO_SECONDS:
         bpm, beat0, bar0, conf = tempo(x)
-    bands, loud = _bands(path), _rms(low, 4, 400)
     extra = profile.profile(keynet.key(x), bands, loud, bpm, bar0)
     return RawAnalysis(duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra)
 

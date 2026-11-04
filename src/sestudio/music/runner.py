@@ -153,10 +153,19 @@ def run_once(
     if not pending:
         _decide_genres(base, files, workers)
         return ok
+
+    # Waiting files show as being analysed too, so a track just queued is not drawn as unknown.
+    for f in pending:
+        store.set_partial(f.track_id)
+
+    def one(f) -> analysis.RawAnalysis:
+        return analysis.analyse_file(
+            str(base / f.path),
+            lambda bands, dur: store.set_partial(f.track_id, bands, dur),
+        )
+
     with ThreadPoolExecutor(workers, thread_name_prefix="analyse") as ex:
-        futures = {
-            ex.submit(analysis.analyse_file, str(base / f.path)): f for f in pending
-        }
+        futures = {ex.submit(one, f): f for f in pending}
         for future in as_completed(futures):
             f = futures[future]
             try:
@@ -165,6 +174,8 @@ def run_once(
             except Exception:
                 logger.warning("Could not analyse %s", f.path, exc_info=True)
                 _failed[f.track_id] = (f.mtime, f.size)
+            finally:
+                store.drop_partial(f.track_id)
             with _lock:
                 _done += 1
     store.renormalise_if_needed()

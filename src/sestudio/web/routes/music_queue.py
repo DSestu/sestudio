@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from sestudio import downloaded
-from sestudio.music import libraries, online, queue
+from sestudio.music import libraries, online, queue, runner, store
 from sestudio.sites import SiteError
 
 router = APIRouter(prefix="/music/queue")
@@ -128,6 +128,18 @@ def add_tracks(
         else {"library": t.library, "track_id": t.track_id}
         for t in body.tracks
     ]
+    # Analysed now rather than when first played, so the timeline draws them before they play.
+    # A local file the runner has not reached yet shows as being analysed until it does.
+    known = store.stamps()
+    for t in body.tracks:
+        if t.library == online.ONLINE_LIBRARY:
+            online.kick_analysis(t.track_id)
+        elif (
+            runner.enabled()
+            and t.track_id not in known
+            and not libraries.split_remote(t.track_id)
+        ):
+            store.set_partial(t.track_id)
     return _run(
         lambda: queue.add(
             refs,

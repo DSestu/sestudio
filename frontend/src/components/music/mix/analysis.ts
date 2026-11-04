@@ -9,18 +9,21 @@ import { plan } from './plan'
 const URL = '/api/music/tracks/analysis'
 /** Tracks the server had no analysis for are asked again after this long. */
 export const RETRY_MS = 15_000
+/** Tracks being analysed are asked again this often, so the timeline draws their bands as they come. */
+export const PARTIAL_MS = 400
 const CHUNK = 40
 
-const cache = new Map<string, { raw: RawAnalysis | null; at: number; track?: Track }>()
+/** `part`: the bands so far of a track the server is analysing; `raw` stays null until it is done. */
+const cache = new Map<string, { raw: RawAnalysis | null; part?: RawAnalysis; at: number; track?: Track }>()
 
 /** Fetch what is missing; true when something new arrived. */
 export async function loadAnalyses(ids: string[]): Promise<boolean> {
   const now = Date.now()
   const want = ids.filter(id => {
     const c = cache.get(id)
-    return !c || (!c.raw && now - c.at > RETRY_MS)
+    return !c || (!c.raw && now - c.at > (c.part ? PARTIAL_MS : RETRY_MS))
   })
-  for (const id of want) cache.set(id, { raw: cache.get(id)?.raw ?? null, at: now })
+  for (const id of want) cache.set(id, { ...cache.get(id), raw: cache.get(id)?.raw ?? null, at: now })
   let changed = false
   for (let i = 0; i < want.length; i += CHUNK) {
     const chunk = want.slice(i, i + CHUNK)
@@ -28,7 +31,17 @@ export async function loadAnalyses(ids: string[]): Promise<boolean> {
       const res = await fetch(`${URL}?ids=${encodeURIComponent(chunk.join(','))}`)
       if (!res.ok) continue
       const found: Record<string, RawAnalysis> = await res.json()
-      for (const id of chunk) if (found[id]) { cache.set(id, { raw: found[id], at: now }); changed = true }
+      for (const id of chunk) {
+        const a = found[id]
+        if (a?.partial) {
+          // Unchanged since the last ask: keep the prepared track.
+          if (a.bands?.[0]?.length === cache.get(id)?.part?.bands?.[0]?.length) continue
+          cache.set(id, { raw: null, part: a, at: now })
+        } else if (a) cache.set(id, { raw: a, at: now })
+        else if (cache.get(id)?.part) cache.set(id, { raw: null, at: now }) // the analysis failed
+        else continue
+        changed = true
+      }
     } catch {
       // Offline or restarting: the retry picks it up.
     }
@@ -68,10 +81,13 @@ export async function setGenre(id: string, genre: string | null): Promise<void> 
 export function trackOf(id: string, dur: number): Track {
   const c = cache.get(id)
   if (c?.track && c.track.dur === dur) return c.track
-  const t = prepTrack(id, dur, c?.raw)
+  const t = prepTrack(id, dur, c?.raw ?? c?.part)
   if (c) c.track = t
   return t
 }
+
+/** Whether the server is analysing one of these tracks right now. */
+export const analysing = (ids: string[]) => ids.some(id => cache.get(id)?.part)
 
 export const DEFAULT_MIX: MixSettings = { mode: 'sync', bars: 8, tempo: true, swap: true, nudge: 0 }
 

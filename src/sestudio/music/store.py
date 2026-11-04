@@ -8,6 +8,7 @@ so renormalising reads the table but never decodes audio again.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections import Counter
 from typing import Any
@@ -284,6 +285,46 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
         # Spellings of one genre ("synthpop", "Synth-Pop") show as one.
         if g := out[r["track_id"]].get("genre"):
             out[r["track_id"]]["genre"] = spelling.get(genres._key(g), genres.spell(g))
+    return out
+
+
+# --- analyses in progress -----------------------------------------------------
+
+#: Track id -> (raw band envelopes so far, duration), while it is being analysed.
+_partial: dict[str, tuple[np.ndarray, float]] = {}
+_partial_lock = threading.Lock()
+
+
+def set_partial(
+    track_id: str, bands: np.ndarray | None = None, duration: float = 0
+) -> None:
+    """Mark a track as being analysed, with the band envelopes measured so far."""
+    with _partial_lock:
+        _partial[track_id] = (np.zeros((8, 0)) if bands is None else bands, duration)
+
+
+def drop_partial(track_id: str) -> None:
+    with _partial_lock:
+        _partial.pop(track_id, None)
+
+
+def partial(ids: list[str]) -> dict[str, dict[str, Any]]:
+    """The tracks of *ids* being analysed: their bands so far, normalised like ``get``'s."""
+    with _partial_lock:
+        found = {i: _partial[i] for i in ids if i in _partial}
+    if not found:
+        return {}
+    norm = (_get_state() or renormalise())["norm"]
+    out: dict[str, dict[str, Any]] = {}
+    for tid, (bands, duration) in found.items():
+        n = bands.shape[1]
+        out[tid] = {
+            "id": tid,
+            "partial": True,
+            "duration": round(duration, 2),
+            "progress": round(min(1.0, n / 10 / duration), 3) if duration else 0.0,
+            "bands": [_percent(bands[i], norm[i]) for i in range(8)],
+        }
     return out
 
 
