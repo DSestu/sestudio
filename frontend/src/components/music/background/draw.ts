@@ -3,20 +3,22 @@ import type { Bands } from './bands'
 import { bandCss } from './color'
 import type { Params, Style } from './settings'
 
-// SPEC-music-player §5.8.4 to §5.8.6: one frame of the spectral background in the small canvas.
+// SPEC-music-player §5.8.4 to §5.8.7: one frame of the spectral background in the small canvas.
 
-export const CW = 96
-export const CH = 54
+/** The small canvas: `res` wide, 16:9 or the screen's shape (`asp`). */
+export const canvasSize = (p: Pick<Params, 'res' | 'asp'>, W: number, H: number) => {
+  const w = Math.round(p.res)
+  return { w, h: Math.max(8, Math.round(p.asp && W ? (w * H) / W : (w * 9) / 16)) }
+}
 
 /** Spectrogram history for the Fall style. */
 export class History {
   c = document.createElement('canvas')
   t = 0
-  constructor() {
-    this.c.width = CW
-    this.c.height = CH
-  }
 }
+
+/** The soft sides' copy of the frame. */
+const sideCv = document.createElement('canvas')
 
 export interface Scene {
   /** The timeline's horizon, 0..1 of the viewport height. */
@@ -31,20 +33,23 @@ export interface Scene {
 }
 
 export function paint(g: CanvasRenderingContext2D, hist: History, bands: Bands, p: Params, style: Style, pal: Palette, sc: Scene) {
-  const w = CW
-  const h = CH
+  const w = g.canvas.width
+  const h = g.canvas.height
   const nb = p.nb
   const SE = bands.SE
   const Y = sc.hy * h
-  const bw = w / nb
+  // Bass in the middle (xmap): each band drawn twice, mirrored, in half the width.
+  const bw = (p.xmap ? w / 2 : w) / nb
   g.globalCompositeOperation = 'source-over'
   g.clearRect(0, 0, w, h)
   g.globalCompositeOperation = p.add ? 'lighter' : 'source-over'
   const col = (i: number, a: number) => bandCss(SE[i], i, a, p, pal)
+  const tip = (i: number, a: number) => bandCss(SE[i], i, a, p, pal, p.hueTop)
 
   for (let i = 0; i < nb; i++) {
     const e = SE[i]
-    const x = (i + 0.5) * bw
+    const u = (i + 0.5) / nb
+    const x = p.xmap ? w / 2 - (u * w) / 2 : u * w
     const eg = p.rx ? p.rfix : e
     if (e < 0.01) continue
     if (style === 'wash') {
@@ -52,11 +57,23 @@ export function paint(g: CanvasRenderingContext2D, hist: History, bands: Bands, 
         // Centred on the timeline: each band grows up and down from the horizon.
         const r = Math.min(1, eg * 0.95 * p.ht) * sc.ha * h * 2.1
         const gr = g.createLinearGradient(0, Y - r, 0, Y + r)
-        gr.addColorStop(0, col(i, 0))
-        gr.addColorStop(0.5, col(i, 0.55 * e))
-        gr.addColorStop(1, col(i, 0))
+        if (p.ease) {
+          // An S-curve from each tip to the centre; the tips take the drifted hue, the lower half is scaled by `lower`.
+          for (let k = 0; k <= 8; k++) {
+            const t = k / 8, s = t * t * (3 - 2 * t), c = k < 5 ? tip : col
+            gr.addColorStop(t * 0.5, c(i, 0.55 * e * s))
+            gr.addColorStop(1 - t * 0.5, c(i, 0.55 * e * s * p.lower))
+          }
+        } else {
+          gr.addColorStop(0, tip(i, 0))
+          gr.addColorStop(0.25, tip(i, 0.275 * e))
+          gr.addColorStop(0.5, col(i, 0.55 * e))
+          gr.addColorStop(0.75, tip(i, 0.275 * e * p.lower))
+          gr.addColorStop(1, tip(i, 0))
+        }
         g.fillStyle = gr
         g.fillRect(x - bw * 0.9 * p.wd, Y - r, bw * 1.8 * p.wd, 2 * r)
+        if (p.xmap) g.fillRect(w - x - bw * 0.9 * p.wd, Y - r, bw * 1.8 * p.wd, 2 * r)
       } else {
         const top = h - Math.min(1, eg * 0.95 * p.ht) * h
         const gr = g.createLinearGradient(0, h, 0, top)
@@ -106,11 +123,35 @@ export function paint(g: CanvasRenderingContext2D, hist: History, bands: Bands, 
   }
   if (style === 'ridge') ridge(g, bands, p, bw, Y, col)
   if (style === 'fall') fall(g, hist, bands, p, bw, Y, col, sc.now)
+  if (p.side) side(g, w, h, bw)
   halo(g, p, sc.halo)
+}
+
+/** Soft sides: a sideways-only gaussian over ±2 columns, in half-column steps (whole-column steps would stack
+ *  columns on columns and keep vertical stripes). */
+function side(g: CanvasRenderingContext2D, w: number, h: number, bw: number) {
+  if (sideCv.width !== w || sideCv.height !== h) Object.assign(sideCv, { width: w, height: h })
+  const sg = sideCv.getContext('2d')!
+  const taps = [0, 1, 2, 3, 4].map(j => Math.exp(-((j * 0.5) ** 2) / (2 * 0.8 ** 2)))
+  const norm = taps[0] + 2 * (taps[1] + taps[2] + taps[3] + taps[4])
+  sg.clearRect(0, 0, w, h)
+  sg.drawImage(g.canvas, 0, 0)
+  g.save()
+  g.globalCompositeOperation = 'copy'
+  g.globalAlpha = taps[0] / norm
+  g.drawImage(sideCv, 0, 0)
+  g.globalCompositeOperation = 'lighter'
+  for (let j = 1; j < taps.length; j++) {
+    g.globalAlpha = taps[j] / norm
+    g.drawImage(sideCv, (-j * bw) / 2, 0)
+    g.drawImage(sideCv, (j * bw) / 2, 0)
+  }
+  g.restore()
 }
 
 /** One smooth spectrum curve on the horizon, filled down with the band colours. */
 function ridge(g: CanvasRenderingContext2D, bands: Bands, p: Params, bw: number, Y: number, col: (i: number, a: number) => string) {
+  const CW = g.canvas.width, CH = g.canvas.height
   const nb = p.nb
   const SE = bands.SE
   const yy = (i: number) => Y - Math.min(1.4, p.rx ? p.rfix : SE[i]) * CH * 0.45 * p.ht
@@ -139,6 +180,8 @@ function ridge(g: CanvasRenderingContext2D, bands: Bands, p: Params, bw: number,
 
 /** A spectrogram history: newest row at the horizon, older rows drift up and fade. */
 function fall(g: CanvasRenderingContext2D, hist: History, bands: Bands, p: Params, bw: number, Y: number, col: (i: number, a: number) => string, now: number) {
+  const CW = g.canvas.width, CH = g.canvas.height
+  if (hist.c.width !== CW || hist.c.height !== CH) Object.assign(hist.c, { width: CW, height: CH })
   const hc = hist.c.getContext('2d')!
   const step = 55 / Math.max(0.05, p.spd)
   const n = p.spd ? Math.min(6, Math.floor((now - hist.t) / step)) : 0
@@ -169,13 +212,15 @@ function fall(g: CanvasRenderingContext2D, hist: History, bands: Bands, p: Param
 /** The dark halo: the timeline's blurred glow knocks the background out around the curves (§5.8.5). */
 function halo(g: CanvasRenderingContext2D, p: Params, glow: HTMLCanvasElement | null) {
   if (!p.ko || !glow || !glow.width) return
+  const CW = g.canvas.width, CH = g.canvas.height
   // The viewport sits inside the zoomed canvas.
   const z = p.zoom
   const dx = CW * (0.5 - 0.5 / z)
   const dy = CH * (0.5 - 0.5 / z)
   g.save()
   g.globalCompositeOperation = 'destination-out'
-  g.filter = p.kb ? `blur(${p.kb}px)` : 'none'
+  // kb is in pixels of a 96 px wide canvas.
+  g.filter = p.kb ? `blur(${(p.kb * CW) / 96}px)` : 'none'
   g.globalAlpha = p.ko
   for (let j = 0; j < 4; j++) g.drawImage(glow, dx, dy, CW / z, CH / z)
   g.restore()

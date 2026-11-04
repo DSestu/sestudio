@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { PALETTES } from '../timeline/palette'
-import { Bands, tc } from './bands'
+import { Bands, softCeil, tc } from './bands'
 import { bandColour } from './color'
-import { BLUR_DEFAULT, DEFAULT_LOOK, DEFAULTS, PRESETS, SPD, STYLES } from './settings'
+import { bend, Energy, energyAt, grid } from './energy'
+import { applyPreset, BLUR_DEFAULT, DEFAULT_LOOK, DEFAULTS, PRESETS, SPD, STYLES } from './settings'
 
-const rollers = DEFAULT_LOOK.s
+const rollers = applyPreset(DEFAULT_LOOK, 'roll').s
+const drive = DEFAULT_LOOK.s
 
 describe('bands', () => {
   it('has a frame-rate independent time constant', () => {
@@ -70,16 +72,17 @@ describe('intensity colour', () => {
 })
 
 describe('settings', () => {
-  it('defaults to Rollers on the Abyss background', () => {
+  it('defaults to Drive on the Abyss background, Rollers still a preset', () => {
     expect(DEFAULT_LOOK.style).toBe('wash')
-    expect(DEFAULT_LOOK.preset).toBe('roll')
+    expect(DEFAULT_LOOK.preset).toBe('drive')
     expect(DEFAULT_LOOK.bgPal).toBe('abyss')
+    expect(drive).toMatchObject({ nb: 48, xmap: 1, en: 1, agc: 1, gate: 0.41, alpha: 1.5, res: 192, asp: 1, tilt: 0 })
+    expect(DEFAULT_LOOK.blur.wash).toBe(4)
     expect(rollers).toMatchObject({ nb: 64, lo: 49, hi: 18600, att: 30, rel: 420, anc: 1, ko: 0.85, kb: 3 })
-    expect(DEFAULT_LOOK.blur.wash).toBe(10)
   })
 
-  it('has the eight presets, each a known style with only known keys', () => {
-    expect(PRESETS.map(p => p.id).sort()).toEqual(['ambient', 'drop', 'eq', 'liquid', 'neon', 'roll', 'smoke', 'sub'])
+  it('has the nine presets, each a known style with only known keys', () => {
+    expect(PRESETS.map(p => p.id).sort()).toEqual(['ambient', 'drive', 'drop', 'eq', 'liquid', 'neon', 'roll', 'smoke', 'sub'])
     const keys = new Set<string>(Object.keys(DEFAULTS))
     for (const p of PRESETS) {
       expect(STYLES).toContain(p.style)
@@ -94,5 +97,80 @@ describe('settings', () => {
       expect(d[5]).toBeGreaterThanOrEqual(d[2])
       expect(d[5]).toBeLessThanOrEqual(d[3])
     }
+  })
+})
+
+describe('auto level', () => {
+  it('rounds off above the knee and never reaches past 1', () => {
+    expect(softCeil(0.5, 0.75)).toBe(0.5)
+    expect(softCeil(0.9, 0.75)).toBeGreaterThan(0.75)
+    expect(softCeil(0.9, 0.75)).toBeLessThan(0.9)
+    expect(softCeil(10, 0.75)).toBeLessThanOrEqual(1)
+  })
+
+  it('brings hot bands down and never past 1, where without it they run up to 1.5', () => {
+    const p = { ...drive, en: 0, gate: 0, nb: 16 }
+    const run = (agc: number) => {
+      const b = new Bands()
+      const fq = new Uint8Array(2048)
+      let sum = 0, max = 0
+      // Every band jumps between quiet and loud each 1/4 s, so the auto-gain stretches them to full.
+      for (let f = 0; f < 600; f++) {
+        fq.fill(Math.floor(f / 15) % 2 ? 250 : 120)
+        b.update(fq, 48000, 1 / 60, { ...p, agc })
+        if (f >= 300) for (const v of b.SE.subarray(0, 16)) { sum += v; max = Math.max(max, v) }
+      }
+      return { mean: sum / (300 * 16), max }
+    }
+    const off = run(0), on = run(1)
+    expect(off.max).toBeGreaterThan(1.2)
+    expect(on.max).toBeLessThanOrEqual(1)
+    expect(on.mean).toBeLessThan(off.mean * 0.8)
+  })
+})
+
+describe('energy', () => {
+  // 120 BPM from 0 s: 16 quiet bars, then 16 loud ones (10 values a second).
+  const n = 640
+  const raw = {
+    bpm: 120, beat0: 0, bar0: 0,
+    loudness: Array.from({ length: n }, (_, i) => (i < 320 ? 10 : 90)),
+    bands: Array.from({ length: 8 }, () => Array.from({ length: n }, (_, i) => (i < 320 ? 10 : 90))),
+  }
+  const g = grid(raw)!
+
+  it('needs a tempo, a downbeat and the envelopes', () => {
+    expect(grid({ ...raw, bpm: null })).toBeNull()
+    expect(grid({ ...raw, loudness: undefined })).toBeNull()
+  })
+
+  it('reads low in the quiet half, high in the loud half, and holds per bar', () => {
+    expect(energyAt(g, 10, 2)).toBe(0)
+    expect(energyAt(g, 50, 2)).toBe(1)
+    // A bar is 2 s: the same value anywhere inside it.
+    expect(energyAt(g, 40.1, 2)).toBe(energyAt(g, 41.9, 2))
+  })
+
+  it('lands on the downbeat of the loud section with no rise time, and stays at full without a grid', () => {
+    const p = { ...drive, esm: 0, dead: 0, erise: 0, efall: 0 }
+    const e = new Energy()
+    e.step(g, 30, true, 1 / 60, p)
+    expect(e.I).toBeCloseTo(p.efloor)
+    e.step(g, 32.01, true, 1 / 60, p)
+    expect(e.I).toBeCloseTo(1)
+    e.step(null, 0, true, 1 / 60, p)
+    expect(e.I).toBe(1)
+  })
+
+  it('changes nothing when not followed, and gives the full-energy knobs at full intensity', () => {
+    expect(bend({ ...drive, en: 0 }, 0.3, 0.5).p).toEqual({ ...drive, en: 0 })
+    const full = bend(drive, 1, 0.5)
+    expect(full.p.crv).toBeCloseTo(drive.crv)
+    expect(full.p.gate).toBeCloseTo(drive.gate)
+    expect(full.p.rel).toBeCloseTo(drive.relLo * 500)
+    expect(full.blurK).toBeCloseTo(drive.blurHi)
+    const quiet = bend(drive, 0, 0.5).p
+    expect(quiet.crv).toBeCloseTo(drive.crvQ)
+    expect(quiet.rel).toBeCloseTo(drive.relHi * 500)
   })
 })

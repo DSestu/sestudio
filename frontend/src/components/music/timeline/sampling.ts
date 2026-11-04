@@ -10,7 +10,11 @@ const SMR = 2 // smoothing radius, in points
 
 export interface RawAnalysis {
   bpm?: number | null
+  /** The first beat and the first downbeat, seconds. */
+  beat0?: number | null
   bar0?: number | null
+  /** Loudness envelope, whole percents at 10 Hz. */
+  loudness?: number[]
   /** 8 band envelopes, whole percents at 10 Hz. */
   bands?: number[][]
   /** Analysis v2: segments in bars from the first whole bar. */
