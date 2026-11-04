@@ -110,6 +110,7 @@ class AudioEngine {
   private master!: GainNode
   private volume!: GainNode
   analyser: AnalyserNode | null = null
+  private delay: DelayNode | null = null
   private act = 0
   private cur: string | null = null
   private fade: Fade | null = null
@@ -138,8 +139,11 @@ class AudioEngine {
       this.analyser.smoothingTimeConstant = 0.55
       this.volume = ctx.createGain()
       this.volume.gain.value = gainOf()
+      this.delay = ctx.createDelay(0.5)
+      this.delay.delayTime.value = 0.08
       this.master.connect(this.analyser)
-      this.analyser.connect(this.volume) // before the volume, so the visuals ignore it
+      this.analyser.connect(this.delay) // before the volume, so the visuals ignore it
+      this.delay.connect(this.volume)
       this.volume.connect(ctx.destination)
       for (let i = 0; i < 2; i++) {
         const el = new Audio()
@@ -176,6 +180,22 @@ class AudioEngine {
   /** Report the sound's real position to the server. */
   resync() {
     if (isSoundTab() && this.queue?.playing) this.onResync(this.landed)
+  }
+
+  /** How long the sound waits behind the analyser, seconds: the visuals' lookahead. */
+  get lead() {
+    return this.delay?.delayTime.value ?? 0
+  }
+
+  /** How far the sound heard on this tab trails the queue clock, seconds. */
+  get lag() {
+    return isSoundTab() ? this.lead : 0
+  }
+
+  /** Moved only on a real change: gliding the delay bends the pitch for a moment. */
+  setLead(s: number) {
+    const v = Math.max(0, Math.min(0.45, s))
+    if (this.delay && Math.abs(v - this.lead) > 0.005) this.delay.delayTime.setTargetAtTime(v, this.ctx!.currentTime, 0.05)
   }
 
   /** Seconds into the playing element. */

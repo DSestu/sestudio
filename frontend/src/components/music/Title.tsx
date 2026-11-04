@@ -15,7 +15,7 @@ function BeatDot({ bpm, bar0, duration }: { bpm: number; bar0: number; duration:
       // Paused: one frame to dim it, then nothing moves.
       if (playing) id = requestAnimationFrame(frame)
       const q = getQueue()
-      const ph = (positionNow(q, clockSkew(), Date.now(), duration || Infinity) - bar0) / (60 / bpm)
+      const ph = (positionNow(q, clockSkew(), Date.now(), duration || Infinity) - engine.lag - bar0) / (60 / bpm)
       const fr = ph - Math.floor(ph)
       const on = q.playing
       const flash = Math.pow(1 - fr, 3)
