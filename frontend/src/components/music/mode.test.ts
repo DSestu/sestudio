@@ -56,7 +56,7 @@ describe('frameAt', () => {
     const half = frameAt(1280, 800, 0.5)
     expect(half.queue.x).toBe(817.5)
     expect(half.title.scale).toBeCloseTo(0.865, 6)
-    expect(frameAt(390, 844, 1).title.scale).toBe(0.7)
+    expect(frameAt(390, 844, 1).title.scale).toBe(0.62)
   })
 
   it('stacks a phone on its side into a left column beside the queue, in both modes', () => {

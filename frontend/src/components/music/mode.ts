@@ -94,9 +94,13 @@ function mix<T extends Record<string, number>>(p: T, q: T, t: number): T {
 const queueW = (W: number) => Math.max(350, Math.min(525, W - 590))
 
 /** The title's box width, before its scale. */
+/** The phone's expanded one-row transport: three buttons. */
+export const PHONE_ROW = 156
+
 export function titleWidth(W: number, H: number, x: number, t: number): number {
   if (isShort(W, H)) return shortCols(W).l - x
-  if (isPhone(W)) return W - 44
+  // Expanded: beside the one-row transport, at scale .62.
+  if (isPhone(W)) return t ? lerp(W - 44, (W - 14 - PHONE_ROW - 8 - x) / 0.62, t) : W - 44
   // With the library column open the stage is narrower: the title (at scale .73) stays inside it.
   // It stops 14 px short of the queue: the wide one of the default view, the narrower one expanded.
   const free = lerp(W - 170 - queueW(W), W - 520, t)
@@ -132,9 +136,10 @@ export function frameAt(W: number, H: number, t: number): Frame {
           queue: { x: 12, y: H - 170, w: W - 24, h: 150, r: 16 },
         },
         {
-          title: { x: 32, y: 102, scale: 0.7 },
-          transport: { x: 14, y: sb + 12, w: W - 28 },
-          queue: { x: 14, y: sb + 120, w: W - 28, h: H - (sb + 132), r: 8 },
+          // Under the stage, the title and a one-row transport (previous, play, next) side by side.
+          title: { x: 18, y: sb + 8, scale: 0.62 },
+          transport: { x: W - 14 - PHONE_ROW, y: sb + 8, w: PHONE_ROW },
+          queue: { x: 14, y: sb + 72, w: W - 28, h: H - (sb + 84), r: 8 },
         },
       ]
     : [

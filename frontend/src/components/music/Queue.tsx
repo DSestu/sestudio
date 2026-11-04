@@ -219,7 +219,12 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
       <span aria-hidden="true" data-qglass className="glass absolute inset-0 rounded-[inherit]" />
       <span aria-hidden="true" data-qflat className="absolute inset-0 rounded-[inherit] bg-base-200 opacity-0" />
       {!tv && <button onClick={onPin} aria-label={expanded ? 'Back to the default view' : 'Open the expanded view'} data-handle className="relative md:hidden grid h-[22px] shrink-0 place-items-center">
-        <span data-bar className="h-1 w-9 rounded-full bg-white/30" />
+        {/* The sheet's three heights (player bar, this view, the list pulled up): the lit dot is where you are; a pull spreads them. */}
+        <span data-bar className="group flex h-1.5 w-9 items-center justify-between">
+          {[0, 1, 2].map(i => (
+            <i key={i} className={`h-1.5 rounded-full group-data-armed:bg-primary ${i === (expanded ? 2 : 1) ? 'w-3.5 bg-primary' : 'w-1.5 bg-white/30'}`} />
+          ))}
+        </span>
       </button>}
       <header className="relative flex items-center gap-2 px-3 pt-3 pb-2 text-[13px] font-semibold max-md:pt-0">
         {library ? (
@@ -289,6 +294,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
         {!q.items.length && <p className="px-3 py-6 text-center text-xs text-base-content/42">The queue is empty.</p>}
         {!tv && <div className={`sticky bottom-0 z-10 px-2.5 pb-2.5 pt-1.5 ${expanded ? '' : 'max-md:hidden'}`} style={{ background: 'linear-gradient(transparent, var(--rowbg) 10px)' }}>
           <button
+            data-add-row
             aria-pressed={adding}
             className={`flex h-12 w-full items-center gap-2.5 rounded-xl border-[1.5px] px-3 text-[13px] font-semibold text-primary ${adding ? 'border-primary bg-primary/14' : 'border-dashed border-primary/45 hover:bg-primary/8'}`}
             onClick={onAdd}
