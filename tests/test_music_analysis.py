@@ -231,6 +231,18 @@ def test_the_genre_is_the_file_tag_and_the_user_overrides_it(db, root, tmp_path)
     assert store.get([tid])[tid]["genreSource"] == "user"
 
 
+def test_spellings_of_one_genre_show_as_the_most_used_one(db, root, tmp_path):
+    for name, tag in [("A", "synthpop"), ("B", "Synth-Pop"), ("C", "SYNTH POP")]:
+        _tagged(root / f"Artist - {name}.flac", tag)
+    runner.run_once(root, workers=1)
+    downloaded.invalidate()
+    ids = [f.track_id for f in downloaded.scan(root) if f.kind == "audio"]
+    assert {g["genre"] for g in store.get(ids).values()} == {"Synth Pop"}
+    assert store.set_genre(ids[0], "synthpop")
+    assert store.set_genre(ids[1], "Synthpop")
+    assert {g["genre"] for g in store.get(ids).values()} == {"Synthpop"}
+
+
 def test_an_untagged_track_gets_the_models_genre_else_the_rules(
     db, root, tmp_path, monkeypatch
 ):
