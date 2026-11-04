@@ -5,12 +5,14 @@ import { DEFAULT_HUE, sky } from './format'
 import { frameAt, getMode, titleWidth, MODE_MS, ModeMotion, pull, setMode, useMode } from './mode'
 import { closePlayer, closeThen, usePosition, useTvSound } from './player'
 import PlayerSearch from './PlayerSearch'
-import AddPanel from './AddPanel'
+import Crate, { LibraryList } from './Crate'
+import { wake } from './idle'
+import ToastBar from './ToastBar'
 import Background from './background/Background'
 import { useLook } from './background/settings'
 import Queue from './Queue'
 import { scrubbing } from './scrub'
-import { isPhone, isShort, rects } from './timeline/mapping'
+import { isPhone, isShort, libRect, libShift, rects, setStageShift } from './timeline/mapping'
 import { tlook } from './timeline/render'
 import Timeline from './timeline/Timeline'
 import Title from './Title'
@@ -46,15 +48,31 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const look = useLook()
   useEffect(() => { Object.assign(tlook, look.tl) }, [look.tl])
 
+  const [aim, setAim] = useState<number | null>(null)
+  const [vw, setVw] = useState({ W: innerWidth, H: innerHeight })
   const expanded = useMode() === 'expanded' && !tv
-  // The phone's add panel is a sheet over the list, so it goes when the list does.
+  // Each mode has its own place to add from (the crate, the column, the Library page): a switch closes it.
   const [was, setWas] = useState(expanded)
   if (was !== expanded) {
     setWas(expanded)
-    if (!expanded && isPhone(innerWidth)) setAdding(false)
+    setAdding(false)
+    setAim(null)
   }
+  const small = isPhone(vw.W) || isShort(vw.W, vw.H)
+  // The desktop's expanded view opens the library as a column beside the queue; phones get a Library page.
+  const column = expanded && adding && !small
+  const tabs = expanded && small
+  const [colMounted, setColMounted] = useState(false)
+  if (column && !colMounted) setColMounted(true)
+  const closeAdding = useCallback(() => { setAdding(false); setAim(null) }, [])
+  const toggleAdding = useCallback(() => { setAdding(a => !a); setAim(null) }, [])
+  const aimObj = { at: aim, set: setAim }
+  const aimTitle = aim !== null && aim > 0 ? info(q.items[aim - 1]?.track_id ?? '')?.title : undefined
   const motion = useRef<ModeMotion>(null as unknown as ModeMotion)
   motion.current ??= new ModeMotion(expanded ? 1 : 0)
+  const lib = useRef<ModeMotion>(null as unknown as ModeMotion)
+  lib.current ??= Object.assign(new ModeMotion(0), { ms: 320 })
+  const libEl = useRef<HTMLDivElement>(null)
   const progress = useCallback(() => motion.current.value(performance.now()), [])
   const root = useRef<HTMLDivElement>(null)
   const skyEl = useRef<HTMLDivElement>(null)
@@ -71,6 +89,18 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     if (!r) return
     const W = r.clientWidth
     const H = r.clientHeight
+    // The library column takes its room from the stage as it opens.
+    const lv = lib.current.value(performance.now())
+    setStageShift(isPhone(W) || isShort(W, H) ? 0 : libShift(W) * lv * t)
+    const le = libEl.current
+    if (le) {
+      const c = libRect(W, H)
+      Object.assign(le.style, {
+        left: `${c.x}px`, top: `${c.y}px`, width: `${c.w}px`, height: `${c.h}px`,
+        opacity: String(lv), transform: `translateX(${(1 - lv) * 24}px)`, visibility: lv < 0.01 ? 'hidden' : 'visible',
+      })
+    }
+    wake()
     const f = frameAt(W, H, t)
     const { clip: c, title, transport, queue: b } = f
     skyEl.current!.style.clipPath = `inset(${c.y}px ${W - c.x - c.w}px ${H - c.y - c.h}px ${c.x}px round ${c.r}px)`
@@ -95,7 +125,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     const step = () => {
       const now = performance.now()
       apply(motion.current.value(now))
-      raf.current = motion.current.moving(now) ? requestAnimationFrame(step) : 0
+      raf.current = motion.current.moving(now) || lib.current.moving(now) ? requestAnimationFrame(step) : 0
     }
     step()
   }, [apply])
@@ -105,9 +135,21 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     return () => cancelAnimationFrame(raf.current)
   }, [apply])
   useEffect(() => {
-    window.addEventListener('resize', kick)
-    return () => window.removeEventListener('resize', kick)
+    const on = () => { setVw({ W: innerWidth, H: innerHeight }); kick() }
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
   }, [kick])
+
+  // The column slides in (and the stage narrows), or out, then unmounts.
+  useLayoutEffect(() => {
+    if (tv) return
+    lib.current.go(column ? 1 : 0, performance.now())
+    kick()
+    if (column) return
+    const id = window.setTimeout(() => setColMounted(false), 340)
+    return () => window.clearTimeout(id)
+  }, [column, colMounted, tv, kick])
+  useEffect(() => () => setStageShift(0), [])
 
   // A switch retargets from the current progress; reduced motion swaps with a short crossfade instead.
   const first = useRef(true)
@@ -304,15 +346,21 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   useEffect(() => {
     if (tv) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closePlayer()
-      else if (e.key === ' ' && !(e.target as HTMLElement).closest('button, [role=slider], [role=button], input')) {
+      const typing = e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')
+      if (e.key === 'Escape') {
+        if (adding) closeAdding()
+        else closePlayer()
+      } else if ((e.key === 'a' || e.key === 'A') && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        toggleAdding()
+      } else if (e.key === ' ' && !(e.target as HTMLElement).closest('button, [role=slider], [role=button], input')) {
         e.preventDefault()
         document.querySelector<HTMLButtonElement>('[data-play]')?.click()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tv])
+  }, [tv, adding, closeAdding, toggleAdding])
 
   const closeIcon = <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
 
@@ -357,15 +405,39 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       <div ref={titleEl} className="absolute left-0 top-0 min-w-0 origin-top-left">
         <Title info={track} analysis={analysis} />
       </div>
-      <Timeline q={q} info={info} palette={look.tlPal} progress={progress} onOutside={() => setAdding(false)} />
+      <Timeline
+        q={q}
+        info={info}
+        palette={look.tlPal}
+        progress={progress}
+        onOutside={closeAdding}
+        marks={adding && !tv}
+        aim={aim}
+        onAim={at => { setAim(at); setAdding(true) }}
+      />
       <div ref={transportEl} className="absolute left-0 top-0">
         <Transport q={q} position={position} duration={track?.duration ?? 0} tv={tv} />
       </div>
       <div ref={queueEl} className="absolute">
-        <Queue q={q} info={info} adding={adding} onAdd={() => setAdding(a => !a)} expanded={expanded} onPin={toggle} tv={tv} />
+        <Queue
+          q={q}
+          info={info}
+          adding={adding}
+          onAdd={toggleAdding}
+          expanded={expanded}
+          onPin={toggle}
+          tv={tv}
+          library={tabs ? <LibraryList q={q} aim={aimObj} aimTitle={aimTitle} /> : undefined}
+        />
       </div>
+      {!tv && colMounted && (
+        <div ref={libEl} data-addp aria-label="Add to queue" className="absolute flex flex-col overflow-hidden rounded-lg bg-base-200 pt-2 invisible" style={{ ['--rowbg' as string]: 'var(--color-base-200)' }}>
+          <LibraryList q={q} aim={aimObj} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[13px] font-semibold">Add from</h3>} onClose={closeAdding} />
+        </div>
+      )}
       {tv && <VolumePill />}
-      {adding && !tv && <AddPanel q={q} onClose={() => setAdding(false)} />}
+      {adding && !tv && !expanded && <Crate q={q} aim={aimObj} aimTitle={aimTitle} onClose={closeAdding} />}
+      {!tv && <ToastBar />}
     </div>
   )
 }

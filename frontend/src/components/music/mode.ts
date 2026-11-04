@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { bez } from './interact'
-import { isPhone, isShort, rects, shortCols, type Rect } from './timeline/mapping'
+import { isPhone, isShort, rects, shortCols, stageShift, type Rect } from './timeline/mapping'
 
 // The player's two modes and the motion between them (SPEC-music-player §7, §8).
 
@@ -93,7 +93,10 @@ function mix<T extends Record<string, number>>(p: T, q: T, t: number): T {
 /** The title's box width, before its scale. */
 export function titleWidth(W: number, H: number, x: number): number {
   if (isShort(W, H)) return shortCols(W).l - x
-  return isPhone(W) ? W - 44 : W - 520
+  if (isPhone(W)) return W - 44
+  // With the library column open the stage is narrower: the title (at scale .73) stays inside it.
+  const { e } = rects(W, H)
+  return stageShift() ? Math.min(W - 520, (e.x + e.w - 16 - x) / 0.73) : W - 520
 }
 
 /** Where every part sits at progress `t`, for a viewport of W by H. */
@@ -137,7 +140,7 @@ export function frameAt(W: number, H: number, t: number): Frame {
         },
         {
           title: { x: 154, y: 116, scale: 0.73 },
-          transport: { x: 128, y: sb + 14, w: 420 },
+          transport: { x: 128, y: sb + 14, w: Math.min(420, e.w) },
           queue: { x: W - 380, y: 92, w: 360, h: H - 112, r: 8 },
         },
       ]
