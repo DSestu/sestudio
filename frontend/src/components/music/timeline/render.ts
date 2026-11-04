@@ -330,11 +330,15 @@ export class TimelineRenderer {
       const { palette: pal } = f
       // One shape, painted once per brightness region.
       const paint = (c: CanvasRenderingContext2D, P: Path2D, alpha: number, stroke = false) => {
+        // Region edges on whole device pixels: at a fractional scale (1.5, 1.25) the anti-aliased clip
+        // paints the boundary pixel twice at partial cover, a dark vertical seam at each track change.
+        const k = c.getTransform().a
         for (let r = 0; r < pts.nregions; r++) {
           const g = pts.regions[r]
+          const x0 = Math.round(g.x0 * k) / k
           c.save()
           c.beginPath()
-          c.rect(g.x0, -1e4, g.x1 - g.x0, 2e4)
+          c.rect(x0, -1e4, Math.round(g.x1 * k) / k - x0, 2e4)
           c.clip()
           c.globalAlpha = alpha * g.hm
           if (stroke) c.stroke(P)
