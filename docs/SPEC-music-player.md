@@ -182,7 +182,7 @@ Redesigned 2026-11-04 (mockups `.impeccable/mocks/add-music/v2.html`): one way t
 
 **Header**: sticky at the top of the queue, `padding 12px 12px 8px`, gap 8 px, 13 px / 600: **"Queue"** · **"7 left · 21 min"**
 (12 px, 42 % text, pushed right: tracks after the one under the view, and the minutes they last with each transition counted as 4 s).
-Phones in default add a 44 px solid **"+ Add"** button (opens the crate); the desktop's expanded view adds a labelled **"⇤ Library"** toggle (opens the column).
+Phones in default add a 44 px solid **"+ Add"** button (opens the crate); the desktop's expanded view adds a labelled **"Library"** lock (padlock icon, closed while locked).
 Phones and short windows in expanded replace the title with two tabs, **Queue · N** | **Library**. Never on the TV.
 The queue scrolls inside (`overflow-y: auto`, thin scrollbar, no overscroll chaining); phones in default do not scroll it. Its last row is a sticky
 **"+ Add to queue"** (48 px, dashed Signal Blue border, solid while open, key hint **A**): the way in on desktop default, and a toggle everywhere else.
@@ -192,10 +192,21 @@ The mode switch is the pin on desktop (§7.1) and the handle on phones (§7.6); 
 - **Default view, desktop and short windows: the crate**, a glass shelf along the bottom (desktop: 20 px insets, 132 px high; short: left column,
   over the transport row so the horizon stays clear, 118 px). Header: "Add to queue", library picker (when there are several), search, the aim chip,
   **Paste a link**, ×. Then a row of cards (176 px, title, BPM · duration, balance meter, ✓ when queued).
-- **Default view, phones: the crate as a sheet** from 52 % of the height to the bottom (the timeline stays visible above it), with a list of rows.
+- **Default view, phones: the crate as a sheet** from 52 % of the height to the bottom (the timeline stays visible above it), with a list of rows; while a row is held it slides down out of the way (`data-libdrag`), so it drops straight into the queue sheet under it or on a join, then comes back.
 - **Expanded, desktop: the library column**, flat base-200, `libRect` = `left W − 760, top 92, 360 × (H − 112)`, titled "Add from ‹library›". It slides in
   (320 ms) and **pushes the stage narrower** (`libShift` = min(380, W − 828)); title and transport shrink with it. Not a floating panel.
+  **It opens on hover**: a mouse resting 250 ms on the queue (or the column) peeks it open; leaving both for 350 ms closes it (held open while a
+  track is being dragged). The **Library** button (or the "+ Add to queue" row, or **A**) **locks** it open; pressing it again unlocks (back to hover).
 - **Expanded, phones and short windows: the sheet's Library page** (the tabs above).
+
+**Search across sources** (2026-11-04, mockups `.impeccable/mocks/add-music/search.html`, direction C): the search field also asks the online
+sources through `useMusicSearch(query, 'all')` (YouTube Music, SoundCloud, YouTube; albums and playlists left out). A set of **stops** keeps this
+machine's files apart from the streams: in the desktop column a 60 px **rail** beside the list (**PC** on top, "files", a divider, "online", then one
+coloured tile per source), elsewhere a row of chips with a divider after **This PC**. Each stop shows its count, a spinner while it searches, or a red
+dot (with the reason in its tooltip) when the source failed; online stops are disabled until something is typed. The list shows one stop at a time:
+This PC while it has matches, else the first source that does, until you pick one (cleared with the search). Online rows and cards carry the artwork
+with the source's badge and a cloud mark, and no analysis; on hover they add a **save to the library** button (`saveHit`). An online add toasts
+"Adding from ‹source›…" at once, then "Added ‹title›" with Undo once the server has it. The "+" stop for new sources waits for that feature.
 
 **Rows and cards** (the same everywhere): **tap / click = add last** (or at the aimed join); **swipe right = play next** (touch: the row follows the
 finger over a Signal Blue "Play next" backing, commits past 30 % of its width with a 10 ms vibration, springs back otherwise; `swipe.ts`);

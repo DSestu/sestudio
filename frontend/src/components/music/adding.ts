@@ -1,4 +1,5 @@
 import { getQueue, post, queueActions, type AddPayload, type QueueItem } from '../../musicQueue'
+import { sourceLabel } from '../../musicSearch'
 import { toast } from './toast'
 
 // Adding to and removing from the queue, each with an Undo (SPEC-music-player §5.5).
@@ -14,6 +15,9 @@ export const nextIndex = () => {
 /** Queue `refs` at `index` (the end when undefined); Undo removes exactly what this added. */
 export async function addTracks(refs: Ref[], index: number | undefined, label: string) {
   const before = new Set(getQueue().items.map(i => i.item_id))
+  // A streamed track takes the server a moment to look up: say so at once.
+  const online = refs.find(r => r.library === 'online')
+  if (online) toast(`Adding from ${online.source ? sourceLabel(online.source) : 'online'}…`)
   try {
     await post({ tracks: refs, ...(index !== undefined && { index }) })
   } catch {

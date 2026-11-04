@@ -1,5 +1,5 @@
 import VolumePill from './VolumePill'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
 import { frameAt, getMode, titleWidth, MODE_MS, ModeMotion, pull, setMode, useMode } from './mode'
@@ -7,6 +7,7 @@ import { closePlayer, closeThen, usePosition, useTvSound } from './player'
 import PlayerSearch from './PlayerSearch'
 import Crate, { LibraryList } from './Crate'
 import { wake } from './idle'
+import { joins } from './joins'
 import ToastBar from './ToastBar'
 import Background from './background/Background'
 import { useLook } from './background/settings'
@@ -49,6 +50,8 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   useEffect(() => { Object.assign(tlook, look.tl) }, [look.tl])
 
   const [aim, setAim] = useState<number | null>(null)
+  // Desktop, expanded: hovering the queue peeks the library column open; the Library button (or A) locks it (`adding`).
+  const [peek, setPeek] = useState(false)
   const [vw, setVw] = useState({ W: innerWidth, H: innerHeight })
   const expanded = useMode() === 'expanded' && !tv
   // Each mode has its own place to add from (the crate, the column, the Library page): a switch closes it.
@@ -56,15 +59,33 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   if (was !== expanded) {
     setWas(expanded)
     setAdding(false)
+    setPeek(false)
     setAim(null)
   }
   const small = isPhone(vw.W) || isShort(vw.W, vw.H)
   // The desktop's expanded view opens the library as a column beside the queue; phones get a Library page.
-  const column = expanded && adding && !small
+  const column = expanded && !small && (adding || peek)
   const tabs = expanded && small
   const [colMounted, setColMounted] = useState(false)
   if (column && !colMounted) setColMounted(true)
-  const closeAdding = useCallback(() => { setAdding(false); setAim(null) }, [])
+  const closeAdding = useCallback(() => { setAdding(false); setPeek(false); setAim(null) }, [])
+  const peekTimer = useRef(0)
+  useEffect(() => () => window.clearTimeout(peekTimer.current), [])
+  // A mouse resting on the queue (or the column) for 250 ms opens it; leaving both for 350 ms closes it, unless locked or a drag is under way.
+  const hoverIn = (e: ReactPointerEvent) => {
+    if (e.pointerType !== 'mouse' || !expanded || small) return
+    window.clearTimeout(peekTimer.current)
+    if (!peek) peekTimer.current = window.setTimeout(() => setPeek(true), 250)
+  }
+  const hoverOut = (e: ReactPointerEvent) => {
+    if (e.pointerType !== 'mouse') return
+    window.clearTimeout(peekTimer.current)
+    const close = () => {
+      if (joins.dragging) peekTimer.current = window.setTimeout(close, 300)
+      else setPeek(false)
+    }
+    peekTimer.current = window.setTimeout(close, 350)
+  }
   const toggleAdding = useCallback(() => { setAdding(a => !a); setAim(null) }, [])
   const aimObj = { at: aim, set: setAim }
   const aimTitle = aim !== null && aim > 0 ? info(q.items[aim - 1]?.track_id ?? '')?.title : undefined
@@ -411,14 +432,14 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
         palette={look.tlPal}
         progress={progress}
         onOutside={closeAdding}
-        marks={adding && !tv}
+        marks={(adding || column) && !tv}
         aim={aim}
         onAim={at => { setAim(at); setAdding(true) }}
       />
       <div ref={transportEl} className="absolute left-0 top-0">
         <Transport q={q} position={position} duration={track?.duration ?? 0} tv={tv} />
       </div>
-      <div ref={queueEl} className="absolute">
+      <div ref={queueEl} className="absolute" onPointerEnter={hoverIn} onPointerLeave={hoverOut}>
         <Queue
           q={q}
           info={info}
@@ -431,8 +452,8 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
         />
       </div>
       {!tv && colMounted && (
-        <div ref={libEl} data-addp aria-label="Add to queue" className="absolute flex flex-col overflow-hidden rounded-lg bg-base-200 pt-2 invisible" style={{ ['--rowbg' as string]: 'var(--color-base-200)' }}>
-          <LibraryList q={q} aim={aimObj} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[13px] font-semibold">Add from</h3>} onClose={closeAdding} />
+        <div ref={libEl} data-addp aria-label="Add to queue" onPointerEnter={hoverIn} onPointerLeave={hoverOut} className="absolute flex flex-col overflow-hidden rounded-lg bg-base-200 pt-2 invisible" style={{ ['--rowbg' as string]: 'var(--color-base-200)' }}>
+          <LibraryList q={q} aim={aimObj} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[13px] font-semibold">Add from</h3>} onClose={closeAdding} rail />
         </div>
       )}
       {tv && <VolumePill />}

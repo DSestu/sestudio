@@ -196,6 +196,11 @@
 .music-layer [data-addp].glass {
   background: hsl(205 55% 11%);
 }
+/* A library row held on a phone: the crate sheet slides down out of the way (the row's ghost lives on body). */
+[data-libdrag] .music-layer [data-addp][data-sheet] {
+  translate: 0 100%;
+  opacity: 0;
+}
 
 /* "Cinematic dark"— near-black low-chroma base so poster art carries the color;
    electric cyan-blue primary for actions, warm coral secondary for accents. */

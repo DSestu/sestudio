@@ -249,10 +249,14 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
         </button>}
         {!tv && expanded && !library && <button
           aria-pressed={adding}
+          title={adding ? 'Unlock: the library opens on hover' : 'Keep the library open'}
           className={`flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] px-2.5 text-xs font-semibold ${adding ? 'bg-primary/22 text-primary' : 'bg-white/7 hover:bg-white/12'}`}
           onClick={onAdd}
         >
-          <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5v14M20 12H9M13 7l-5 5 5 5" /></svg>
+          <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="11" width="14" height="10" rx="2" />
+            <path d={adding ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.7-1.5'} />
+          </svg>
           Library
         </button>}
         {!tv && <button
