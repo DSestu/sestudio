@@ -11,9 +11,10 @@ import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
 // The blurs are made by drawing small and scaling up, not with a full-size Canvas `filter: blur`:
 // as soft, at a fraction of the work (measured 19 to 48 fps on the station's software renderer).
 const GQ = 0.125 // glow layer resolution
-/** The glow's blur radii follow its resolution; the bass is blurred by scaling it through a layer LQ times smaller. */
+/** The glow's blur radii follow its resolution; the bass is blurred on a layer LQ times smaller. */
 const GB = 0.5
-const LQ = 0.25
+// Scaling alone, at a quarter, left 4 px stair steps on the bass edge: the small layer is blurred too.
+const LQ = 0.5
 /** Shape and look numbers; the lab Look panel overwrites them (SPEC-music-player Appendix). */
 export const tlook = { klo: 0.7, kmi: 0.9, khi: 0.42, alo: 0.9, ami: 0.5, ahi: 0.82, edge: 1, glow: 0.75, bb: 3.5 }
 
@@ -367,7 +368,9 @@ export class TimelineRenderer {
     o2.globalCompositeOperation = 'source-over'
     const s = this.lo2
     s.x.clearRect(0, 0, s.c.width, s.c.height)
+    s.x.filter = tlook.bb > 0 ? `blur(${tlook.bb * LQ}px)` : 'none'
     s.x.drawImage(lo.c, bx, by, W, bh, bx * LQ, by * LQ, W * LQ, bh * LQ)
+    s.x.filter = 'none'
     o2.imageSmoothingEnabled = true
     o2.drawImage(s.c, bx * LQ, by * LQ, W * LQ, bh * LQ, bx, by, W, bh)
     o2.globalAlpha = 1
