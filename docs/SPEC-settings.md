@@ -25,8 +25,8 @@
 | Desktop (≥ `md`) | Two columns under the top card: the **category list** (236px, grouped like the phone list, active item in the app's active pill) and the **category page** (max 40rem). `#/settings` without `s` shows Playback. Picking a category replaces the URL's `s` (`replaceParams`), so Back leaves Settings instead of walking through categories. |
 | Summaries | Each home-list row shows the current state, e.g. "VF · Source quality · AI frames on", "Server · R:\Video\films-series", "● Running · 2 h 5 min". Desktop's list shows no summaries. |
 | Attention | Problems float to the top of the phone home list as an amber row that opens the category; on desktop the category gets an amber dot. Today's problems: no JS runtime (Server), no TMDB key (Sources & search), AI setup failed (Playback). |
-| Rows | Settings live in grouped lists: `bg-base-200`, 14px radius, rows ≥ 56px with a 1px base-300 separator; group titles in 12px semibold at 50%, sentence case (no more uppercase). Label left, control right; help is **one line** (under the label on desktop, under the group on phone). |
-| Controls | Choices of 2–3 short values (language, download destination) become the `Segmented` control from `PageHeader`. Longer lists stay native `<select>`s, shown as the current value + chevron. Toggles stay daisyUI `toggle-primary`. Sliders show their value in tabular numbers. |
+| Rows | Settings live in grouped lists: `bg-base-200`, 14px radius, rows ≥ 56px with a 1px base-300 separator; group titles in 12px semibold at 50%, sentence case (no more uppercase). Label left, control right; help is **one line** under the label. A group may carry a footnote under it for anything longer. |
+| Controls | Choices of 2–3 short values (language, download destination) become a segmented radio group (`Choice` in `views/settings/rows.tsx`; `PageHeader`'s `Segmented` is a tablist, wrong for a value). Longer lists stay native `<select>`s, shown as the current value + chevron. Toggles stay daisyUI `toggle-primary`. Sliders show their value in tabular numbers. |
 | Danger zone | Removed. "Allow deleting files" moves to Downloads; Nightly and Restart move to Server. They keep the red toggle / outline and their confirms. |
 | Copy | Each setting keeps its meaning but gets one line of help (see the mockup for the approved wording of Playback, Subtitles and Downloads). Long explanations that still matter (the CallMeBot steps, the Discogs model licence) stay, as the group's footnote. |
 | Out of scope | A search box for settings; any new setting; any change to what a setting does; the YouTube & Twitch page (Settings only links to it). |
@@ -49,7 +49,7 @@
 | Need | Where |
 |---|---|
 | Top card with back, title, status | `PageHeader` (`frontend/src/components/PageHeader.tsx`) |
-| Segmented control with the sliding pill | `Segmented` in the same file |
+| Rows, groups, toggles, choices | `views/settings/rows.tsx` (PR 2) |
 | Route params | `route.params`, `replaceParams`, `navigate` in `frontend/src/nav.ts` |
 | Back | `goBack` in `frontend/src/pageHeader.ts` |
 | Rank chips | `RankRow` (`frontend/src/components/RankRow.tsx`) |
@@ -88,14 +88,14 @@ frame), `categories.ts` (ids, names, icons, groups, summaries, attention) and `r
 
 ### PR 2: Rows, then Playback and Subtitles
 - `rows.tsx` primitives. Playback and Subtitles rebuilt on them, with the approved copy;
-  language as `Segmented`; the sticky subtitle preview.
+  language as `Choice`; the sticky subtitle preview.
 
 ### PR 3: Sources & search, Notifications
 - Sites as a toggle list with their host names; TMDB key and CallMeBot key as one row each
   (status + Replace / Remove); the YouTube & Twitch row.
 
 ### PR 4: Downloads and Music
-- Destination as `Segmented`, folder row, try-first chips with one line of help, delete toggle.
+- Destination as `Choice`, folder row, try-first chips with one line of help, delete toggle.
 - Music: libraries as rows, genre model, cookies, tokens, on the same primitives.
 
 ### PR 5: Server and Share

@@ -6,10 +6,40 @@ import {
   loadSubtitleStyle,
   saveSubtitleStyle,
 } from '../../subtitleStyle'
+import { RowSelect, SettingRow, SettingsGroup, ToggleRow } from './rows'
 
 /** Percent label for a 0–1 opacity, e.g. 0.6 → "60%". */
 function pct(value: number): string {
   return `${Math.round(value * 100)}%`
+}
+
+/** A slider row: the label, then the range with its value beside it. */
+function Slider({ id, label, help, value, min, max, onChange }: {
+  id: string
+  label: string
+  help?: string
+  value: number
+  min: number
+  max: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <SettingRow label={label} help={help} htmlFor={id} stacked>
+      <div className="flex items-center gap-3">
+        <input
+          id={id}
+          type="range"
+          className="range range-primary range-xs flex-1"
+          min={min}
+          max={max}
+          step={0.05}
+          value={value}
+          onChange={e => onChange(Number(e.target.value))}
+        />
+        <span className="w-11 text-right text-sm tabular-nums text-base-content/70">{pct(value)}</span>
+      </div>
+    </SettingRow>
+  )
 }
 
 /**
@@ -27,17 +57,14 @@ export default function Subtitles() {
   }
 
   return (
-    <section aria-labelledby="settings-subtitles" className="flex flex-col gap-4">
-      <h3
-        id="settings-subtitles"
-        className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
+    <>
+      {/* Live preview over a busy, colourful backdrop — a box that looks fine on
+          flat grey can still be unreadable on animation, which is the real use
+          case. Pinned, so it stays in view while the sliders below move. */}
+      <div
+        aria-hidden="true"
+        className="sticky top-3 md:top-28 z-10 h-30 rounded-[14px] overflow-hidden flex items-end justify-center pb-3.5 bg-[radial-gradient(circle_at_72%_28%,rgb(255_196_120/.55),transparent_42%),radial-gradient(circle_at_18%_82%,rgb(80_160_255/.4),transparent_46%),linear-gradient(160deg,#5b3a1e,#1d3550_55%,#0d1b2a)]"
       >
-        Subtitles
-      </h3>
-
-      {/* Live preview over a busy backdrop — a box that looks fine on flat grey
-          can still be unreadable on animation, which is the real use case. */}
-      <div className="rounded-lg p-4 flex items-end justify-center min-h-24 bg-[repeating-linear-gradient(45deg,#1f2937_0,#1f2937_10px,#4b5563_10px,#4b5563_20px)]">
         <span
           className="px-2 py-0.5 rounded leading-snug text-center"
           style={{
@@ -53,122 +80,50 @@ export default function Subtitles() {
         </span>
       </div>
 
-      <div>
-        <label htmlFor="set-sub-font" className="text-sm text-base-content/60 mb-1 block">
-          Font
-        </label>
-        <select
-          id="set-sub-font"
-          className="select select-bordered w-full"
-          value={style.fontFamily}
-          onChange={e => update({ fontFamily: e.target.value })}
-        >
-          {Object.keys(FONT_FAMILIES).map(name => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-        <p className="text-xs text-base-content/50 mt-1">
-          Sans-serif reads best at a distance; the wide variant helps on small
-          screens by keeping I, l and 1 distinct.
-        </p>
-      </div>
-
-      <div>
-        <label htmlFor="set-sub-size" className="text-sm text-base-content/60 mb-1 block">
-          Size — {pct(style.fontSize)}
-        </label>
-        <input
-          id="set-sub-size"
-          type="range"
-          className="range range-primary range-sm"
-          min={0.5}
-          max={2}
-          step={0.05}
-          value={style.fontSize}
-          onChange={e => update({ fontSize: Number(e.target.value) })}
-        />
-      </div>
-
-      <div>
-        <label htmlFor="set-sub-pip-size" className="text-sm text-base-content/60 mb-1 block">
-          Size in picture-in-picture — {pct(style.pipFontSize)}
-        </label>
-        <input
+      <SettingsGroup
+        footnote={
+          <button className="text-primary font-medium" onClick={() => setStyle(saveSubtitleStyle(DEFAULT_SUBTITLE_STYLE))}>
+            Reset to defaults
+          </button>
+        }
+      >
+        <SettingRow label="Font" htmlFor="set-sub-font" help="The wide one keeps I, l and 1 apart on small screens">
+          <RowSelect id="set-sub-font" value={style.fontFamily} onChange={e => update({ fontFamily: e.target.value })}>
+            {Object.keys(FONT_FAMILIES).map(name => <option key={name} value={name}>{name}</option>)}
+          </RowSelect>
+        </SettingRow>
+        <Slider id="set-sub-size" label="Size" value={style.fontSize} min={0.5} max={2} onChange={fontSize => update({ fontSize })} />
+        <Slider
           id="set-sub-pip-size"
-          type="range"
-          className="range range-primary range-sm"
+          label="Size in picture-in-picture"
+          help="Used while popped out; an open window follows it live"
+          value={style.pipFontSize}
           min={0.5}
           max={3}
-          step={0.05}
-          value={style.pipFontSize}
-          onChange={e => update({ pipFontSize: Number(e.target.value) })}
+          onChange={pipFontSize => update({ pipFontSize })}
         />
-        <p className="text-xs text-base-content/50 mt-1">
-          Used instead of the size above while popped out, where the window is a
-          fraction of the width. Adjusting this updates an open PiP window live.
-        </p>
-      </div>
-
-      <div>
-        <label htmlFor="set-sub-bg" className="text-sm text-base-content/60 mb-1 block">
-          Background opacity — {pct(style.bgOpacity)}
-        </label>
-        <input
+        <Slider
           id="set-sub-bg"
-          type="range"
-          className="range range-primary range-sm"
+          label="Background"
+          help="Around 60% stays readable over animation"
+          value={style.bgOpacity}
           min={0}
           max={1}
-          step={0.05}
-          value={style.bgOpacity}
-          onChange={e => update({ bgOpacity: Number(e.target.value) })}
+          onChange={bgOpacity => update({ bgOpacity })}
         />
-        <p className="text-xs text-base-content/50 mt-1">
-          The box behind the text. Around 60% stays readable over animation
-          without blocking much of the picture.
-        </p>
-      </div>
-
-      <div>
-        <label className="flex items-center gap-3 cursor-pointer text-sm">
-          <input
-            type="checkbox"
-            className="toggle toggle-primary toggle-sm"
-            checked={style.blur}
-            onChange={e => update({ blur: e.target.checked })}
-          />
-          <span>Blur behind text</span>
-        </label>
-        <p className="text-xs text-base-content/50 mt-1">
-          Frosts the picture behind each line. Independent of the background
-          opacity above, so it stays visible even at 0% — turn it off here.
-        </p>
-      </div>
-
-      <div>
-        <label className="flex items-center gap-3 cursor-pointer text-sm">
-          <input
-            type="checkbox"
-            className="toggle toggle-primary toggle-sm"
-            checked={style.shadow}
-            onChange={e => update({ shadow: e.target.checked })}
-          />
-          <span>Outline</span>
-        </label>
-        <p className="text-xs text-base-content/50 mt-1">
-          An outline on every side, as a fallback wherever the background box is
-          too faint.
-        </p>
-      </div>
-
-      <div>
-        <button
-          className="btn btn-sm btn-ghost"
-          onClick={() => setStyle(saveSubtitleStyle(DEFAULT_SUBTITLE_STYLE))}
-        >
-          Reset to defaults
-        </button>
-      </div>
-    </section>
+        <ToggleRow
+          label="Blur behind text"
+          help="Frosts the picture behind each line, even at 0% background"
+          checked={style.blur}
+          onChange={blur => update({ blur })}
+        />
+        <ToggleRow
+          label="Outline"
+          help="A fallback where the background is too faint"
+          checked={style.shadow}
+          onChange={shadow => update({ shadow })}
+        />
+      </SettingsGroup>
+    </>
   )
 }
