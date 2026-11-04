@@ -196,22 +196,6 @@ export class Points {
   tt = new Float64Array(2048)
   v: Float64Array[] = [0, 1, 2].map(() => new Float64Array(2048))
   s: Float64Array[] = [0, 1, 2].map(() => new Float64Array(2048))
-  /** Runs of tracks with the same brightness, as pixel ranges (§6.4 highlight). */
-  regions: { x0: number; x1: number; hm: number }[] = []
-  nregions = 0
-
-  region(x0: number, x1: number, hm: number) {
-    const last = this.nregions ? this.regions[this.nregions - 1] : null
-    if (last && Math.abs(last.hm - hm) < 0.02) {
-      last.x1 = x1
-      return
-    }
-    const r = (this.regions[this.nregions] ??= { x0: 0, x1: 0, hm: 0 })
-    r.x0 = last ? last.x1 : x0
-    r.x1 = x1
-    r.hm = hm
-    this.nregions++
-  }
 
   push(x: number, tt: number, a: number, b: number, c: number) {
     if (this.n === this.x.length) this.grow()
@@ -280,7 +264,6 @@ const visible: DrawItem[] = []
 export function sample(items: DrawItem[], M: Mapper, out: Points): void {
   const { X, W } = M
   out.n = 0
-  out.nregions = 0
   visible.length = 0
   for (const it of items) if (it.sc > 0.001) visible.push(it)
   // Items are already in queue order, which is also the order of their audible starts.
@@ -316,7 +299,6 @@ export function sample(items: DrawItem[], M: Mapper, out: Points): void {
       out.push(x, tt, acc[0], acc[1], acc[2])
     }
     if (hi === s1) out.push(X(a + s1), s1, 0, 0, 0)
-    out.region(Math.round(Math.max(-50, X(a + lo))), Math.round(Math.min(W + 50, X(a + hi))), 0.6 + 0.4 * it.hl)
   }
   out.finish()
 }
