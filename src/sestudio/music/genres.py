@@ -106,11 +106,13 @@ def normalise(raw: str | None) -> str | None:
 
 
 def spell(genre: str) -> str:
-    """One spelling per genre, so "METAL", "metal" and "Metal" group as one:
-    the app's own for a genre it knows, else each word capitalised (capped)."""
+    """One spelling per genre, so "METAL", "metal" and "Metal" group as one, and
+    "heavy-metal", "Heavy_Metal" and "heavy metal" as "Heavy Metal": the app's own
+    for a genre it knows, else words split by single spaces, each capitalised (capped)."""
     if name := _BY_KEY.get(_key(genre)):
         return name
-    return re.sub(r"(^|[\s-])(\w)", lambda m: m[1] + m[2].upper(), genre.lower())[:60]
+    words = re.split(r"[\s_.-]+", genre.strip(" _.-").lower())
+    return " ".join(w[:1].upper() + w[1:] for w in words)[:60]
 
 
 def source_genre(info: dict[str, Any]) -> str | None:
