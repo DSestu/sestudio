@@ -1,6 +1,9 @@
 import type { MixSettings } from '../../../musicQueue'
 import { fadePlan, type Plan, type Seg, type Track } from '../timeline/sampling'
 
+/** How many 4-bar phrases from the end the mix may start: 32 bars, under a minute at club tempos. */
+const TAIL = 8
+
 const overDrop = (segs: Seg[], from: number, to: number, slack: number) =>
   segs.some(g => g.label === 'drop' && g.a < to - slack && g.b > from + slack)
 
@@ -26,7 +29,9 @@ export function plan(a: Track, b: Track, s: MixSettings): Plan {
   if (n < 0) return { ...fade, why: 'short' }
   let k = n
   if (a.segs.length) {
-    const ks = Array.from({ length: n + 1 }, (_, i) => i).filter(i => !overDrop(a.segs, a.bar0 + i * 4 * bar, a.bar0 + i * 4 * bar + len, beat))
+    // Only the last TAIL phrases are candidates: dodging a drop or seeking an outro must not cut a track minutes short.
+    const k0 = Math.max(0, n - TAIL + 1)
+    const ks = Array.from({ length: n - k0 + 1 }, (_, i) => k0 + i).filter(i => !overDrop(a.segs, a.bar0 + i * 4 * bar, a.bar0 + i * 4 * bar + len, beat))
     const zone = exitZone(a.segs)
     k = (zone && ks.findLast(i => a.bar0 + i * 4 * bar >= zone.a - beat)) ?? ks.at(-1) ?? n
   }
