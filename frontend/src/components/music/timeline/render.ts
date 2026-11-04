@@ -4,7 +4,7 @@
 // then ticks, labels and the playhead.
 
 import { fmtTime } from '../format'
-import { isPhone, Mapper } from './mapping'
+import { isPhone, isShort, Mapper } from './mapping'
 import { oklch, type Palette } from './palette'
 import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
 
@@ -131,16 +131,18 @@ export class TimelineRenderer {
     o2.setTransform(dpr, 0, 0, dpr, 0, 0)
     o2.clearRect(0, 0, W, H)
 
-    // The light: the whole page, narrowing to the stage when expanded.
-    const { e: stage } = M
+    // The light: the whole page (only the left column when short), narrowing to the stage when expanded.
+    const { e: stage, d } = M
     const lx = stage.x * e
     const ly = stage.y * e
+    const r0 = isShort(W, H) ? W - d.x - d.w : 0
+    const rx = W - (r0 + (W - stage.x - stage.w - r0) * e)
     t2.setTransform(this.tdpr, 0, 0, this.tdpr, 0, 0)
     t2.clearRect(0, 0, W, H)
     for (const c of [g2, t2]) {
       c.save()
       c.beginPath()
-      c.rect(lx, ly, W - lx - (W - stage.x - stage.w) * e, H - ly - (H - stage.y - stage.h) * e)
+      c.rect(lx, ly, rx - lx, H - ly - (H - stage.y - stage.h) * e)
       c.clip()
     }
 
@@ -257,6 +259,16 @@ export class TimelineRenderer {
     g2.arc(px, y0, 5 + f.level * 9, 0, Math.PI * 2)
     g2.fillStyle = `rgba(255,255,255,${0.35 + f.level * 0.5})`
     g2.fill()
+    // A short strip ends at the queue: its last 28 px fade out (the stage's hard edge takes over when expanded).
+    if (r0 && e < 1) {
+      const fade = g2.createLinearGradient(rx - 28, 0, rx, 0)
+      fade.addColorStop(0, 'rgba(0,0,0,0)')
+      fade.addColorStop(1, `rgba(0,0,0,${1 - e})`)
+      g2.globalCompositeOperation = 'destination-out'
+      g2.fillStyle = fade
+      g2.fillRect(rx - 28, 0, 28, H)
+      g2.globalCompositeOperation = 'source-over'
+    }
     g2.restore()
   }
 
@@ -373,21 +385,24 @@ export class TimelineRenderer {
 
   private labels(f: Frame, y0: number, amp: number) {
     const { text: g2, M, W } = this
-    const { X, px } = M
+    const { X, px, R } = M
     const { avoid } = f
+    const right = Math.min(W, R.x + R.w)
     g2.textBaseline = 'alphabetic'
     let last = -1e9
     for (let i = 1; i < f.items.length; i++) {
       const it = f.items[i]
       if (!it.plan) continue
       const a = it.a + it.span.i0
-      const x0 = X(a)
-      if (x0 < px + 30 || x0 > W - 100 || x0 - last < 200) continue
+      if (X(a) > right - 40) continue
       g2.font = '600 12px ui-sans-serif,system-ui'
       const ty = y0 - amp * 1.02 - 22
       let tw = this.widths.get(it.title)
       if (tw === undefined) this.widths.set(it.title, (tw = g2.measureText(it.title).width))
       const box = Math.max(tw, 120) + 12
+      // Near the right edge the label slides left to fit rather than vanish.
+      const x0 = Math.min(X(a), right - box)
+      if (x0 < px + 30 || x0 - last < 200) continue
       if (avoid && x0 + box > avoid.left && x0 < avoid.right && ty - 14 < avoid.bottom && ty + 18 > avoid.top) continue
       last = x0
       this.hits.push({ i, x0, x1: x0 + box, ty })

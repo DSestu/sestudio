@@ -18,9 +18,23 @@ const PAST = 180
 export const PHONE_WIDTH = 760
 
 export const isPhone = (W: number) => W < PHONE_WIDTH
+/** A phone on its side (or any short, wide window): the queue becomes a right column and the rest stacks to its left. */
+export const isShort = (W: number, H: number) => H < 500 && W > H
+
+/** The short layout's columns: the queue's width and the left column's right edge. */
+export function shortCols(W: number) {
+  const q = Math.min(300, Math.round(W * 0.36))
+  return { q, l: W - q - 30 }
+}
 
 /** `d`: the default strip, `e`: the expanded stage. */
 export function rects(W: number, H: number): { d: Rect; e: Rect } {
+  if (isShort(W, H)) {
+    // Title on top, the timeline under it, the one-row transport (48 px) along the bottom.
+    const { l } = shortCols(W)
+    const tb = H - 74
+    return { d: { x: 0, y: 88, w: l, h: tb - 88 }, e: { x: 16, y: 80, w: l - 16, h: tb - 80 } }
+  }
   if (isPhone(W)) {
     return { d: { x: 0, y: H * 0.3, w: W, h: H * 0.26 }, e: { x: 14, y: 88, w: W - 28, h: Math.min(250, H * 0.3) } }
   }
@@ -78,7 +92,7 @@ export class Mapper {
     const r = rects(W, H)
     this.d = r.d
     this.e = r.e
-    const small = isPhone(W)
+    const small = isPhone(W) || isShort(W, H)
     this.F = fish(r.d, small ? 900 : 1500)
     this.L = life(r.e, small ? 40 : 70)
     this.at(0)

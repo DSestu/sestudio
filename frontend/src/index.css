@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
+/* A phone on its side (or any short, wide window); matches isShort() in the music timeline's mapping.ts. */
+@custom-variant short (@media (max-height: 499px) and (orientation: landscape));
+
 /* One easing for every UI motion: fast start, soft landing, no bounce. Used as
    `ease-smooth` (see docs/SPEC-search-page.md, motion). */
 @theme {

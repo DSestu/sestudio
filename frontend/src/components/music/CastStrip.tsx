@@ -15,7 +15,8 @@ function DeviceVolume() {
   const step = (d: 1 | -1) => setVolume({ level: stepVolume(shown, d), muted: false })
   return (
     <div
-      className="flex items-center gap-2.5 rounded-2xl glass px-3 h-11 text-xs"
+      // No room on a phone on its side; its own volume buttons do this.
+      className="flex short:hidden items-center gap-2.5 rounded-2xl glass px-3 h-11 text-xs"
       onWheel={e => { e.stopPropagation(); step(e.deltaY < 0 ? 1 : -1) }}
     >
       <button aria-label={v.muted ? 'Unmute' : 'Mute'} className="size-8 shrink-0 rounded-lg grid place-items-center hover:bg-white/8" onClick={() => setVolume({ muted: !v.muted })}>
