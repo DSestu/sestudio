@@ -4,6 +4,7 @@ import { dominantGenre, factsLine, metaLine } from './musicMeta'
 describe('track facts', () => {
   it('shows tempo, key and genre on one line, skipping what is missing', () => {
     expect(metaLine({ bpm: 174, camelot: '8A', genre: 'Liquid' })).toBe('174 · 8A · Liquid')
+    expect(metaLine({ bpm: 174, key: 'A minor', camelot: '8A' })).toBe('174 · A min (8A)')
     expect(metaLine(undefined, 150)).toBe('150')
     expect(metaLine(undefined)).toBe('')
   })

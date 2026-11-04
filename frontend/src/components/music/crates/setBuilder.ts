@@ -7,6 +7,8 @@ import type { Plan } from '../timeline/sampling'
 export interface SetTrack {
   id: string
   bpm?: number
+  /** "F minor". */
+  key?: string
   /** Camelot key, "8A". */
   camelot?: string
   /** Mean energy, 0..1. */

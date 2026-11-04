@@ -20,6 +20,7 @@ export interface RawAnalysis {
   /** Analysis v2: segments in bars from the first whole bar. */
   structure?: { label: string; start_bar: number; end_bar: number }[]
   energy?: number[]
+  key?: string
   camelot?: string
   genre?: string
   genreConf?: number

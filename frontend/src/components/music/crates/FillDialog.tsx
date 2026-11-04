@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { formatDuration, type MusicTrack } from '../../../musicLibrary'
 import { itemsOf, playlistApi, type PlaylistNode } from '../../../musicPlaylists'
 import ResponsiveModal from '../../ResponsiveModal'
+import { keyLabel } from '../../../musicMeta'
 import { useAnalyses } from '../mix/analysis'
 import { GENRES, rankFill, type SetTrack } from './setBuilder'
 
@@ -85,7 +86,7 @@ export default function FillDialog({ node, byId, toSet, onClose }: Props) {
                 <label className="flex h-10 cursor-pointer items-center gap-3 rounded-lg px-2 hover:bg-white/5">
                   <input type="checkbox" className="checkbox checkbox-xs" checked={!off.has(t.id)} onChange={() => setOff(s => { const n = new Set(s); if (!n.delete(t.id)) n.add(t.id); return n })} />
                   <span className="min-w-0 flex-1 truncate text-sm">{m.title} <span className="text-base-content/50">{m.artist}</span></span>
-                  <span className="text-[11px] tabular-nums text-base-content/50">{t.camelot ?? ''} {Math.round(t.bpm!)}</span>
+                  <span className="text-[11px] tabular-nums text-base-content/50">{keyLabel(t.key, t.camelot) ?? ''} {Math.round(t.bpm!)}</span>
                   <span className="w-10 text-right text-xs tabular-nums text-base-content/60">{formatDuration(t.duration)}</span>
                 </label>
               </li>

@@ -7,6 +7,8 @@ import { fmtBpm } from './components/music/format'
 
 export interface Summary {
   bpm?: number
+  /** "F minor". */
+  key?: string
   camelot?: string
   keyConf?: number
   genre?: string
@@ -73,9 +75,15 @@ export function useSummary(id: string | undefined): Summary | undefined {
   return id ? known.get(id) : undefined
 }
 
-/** "174 · 8A · Liquid": the one muted line phones show (and queue rows). */
+/** "F min (4A)": the key by name, then its Camelot code (A minor, B major) for mixing. */
+export const keyLabel = (key?: string, camelot?: string): string | undefined => {
+  const name = key?.replace(' minor', ' min').replace(' major', ' maj')
+  return name && camelot ? `${name} (${camelot})` : name || camelot
+}
+
+/** "174 · F min (4A) · Liquid": the one muted line phones show (and queue rows). */
 export const metaLine = (s: Summary | undefined, bpm?: number): string =>
-  [(s?.bpm || bpm) && fmtBpm((s?.bpm || bpm)!), s?.camelot, s?.genre].filter(Boolean).join(' · ')
+  [(s?.bpm || bpm) && fmtBpm((s?.bpm || bpm)!), keyLabel(s?.key, s?.camelot), s?.genre].filter(Boolean).join(' · ')
 
 /** Summaries of many tracks (a library view): the getter, and a number that changes as more arrive. */
 export function useSummaries(ids: string[]): { get: (id: string) => Summary | undefined; v: number } {

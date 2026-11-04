@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { clockSkew, getQueue, positionNow, useMusicQueue, type Analysis, type TrackInfo } from '../../musicQueue'
-import { useSummary } from '../../musicMeta'
+import { keyLabel, useSummary } from '../../musicMeta'
 import { engine, useSyncStatus } from './engine'
 import { fmtBpm } from './format'
 import { normBar0 } from './timeline/sampling'
@@ -35,7 +35,8 @@ function BeatDot({ bpm, bar0, duration }: { bpm: number; bar0: number; duration:
 export default function Title({ info, analysis }: { info?: TrackInfo; analysis: Analysis | null }) {
   const bpm = analysis?.bpm
   const sync = useSyncStatus()
-  const key = useSummary(info?.id)?.camelot
+  const summary = useSummary(info?.id)
+  const key = keyLabel(summary?.key, summary?.camelot)
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-2 text-[15px] text-base-content/60">
