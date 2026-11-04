@@ -20,7 +20,7 @@ from sestudio.music.analysis import RawAnalysis
 #: Renormalise when the analysed set has grown by more than this since the last time.
 GROWTH = 0.10
 
-#: What v2 adds to a track's analysis response (the raw chroma stays server-side).
+#: What v2 adds to a track's analysis response.
 V2_FIELDS = (
     "key",
     "camelot",
