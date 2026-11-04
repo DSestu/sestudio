@@ -179,6 +179,9 @@ export const librariesApi = {
   add: (lib: NewLibrary) => reloaded(call<LibraryStatus>('/libraries', 'POST', lib)),
   rename: (id: string, label: string) => reloaded(call<LibraryStatus>(`/libraries/${encodeURIComponent(id)}`, 'PATCH', { label })),
   remove: (id: string) => reloaded(call<{ ok: boolean }>(`/libraries/${encodeURIComponent(id)}`, 'DELETE')),
+  /** Analyse a library's files again (every library's without an id); its row then shows the progress. */
+  reanalyse: (id?: string) =>
+    reloaded(call<{ tracks: number }>(id ? `/libraries/${encodeURIComponent(id)}/reanalyse` : '/libraries/reanalyse', 'POST')),
   tokens: () => call<ShareToken[]>('/share-tokens'),
   createToken: (label: string) => call<ShareToken & { token: string }>('/share-tokens', 'POST', { label }),
   revokeToken: (id: string) => call<{ ok: boolean }>(`/share-tokens/${encodeURIComponent(id)}`, 'DELETE'),
