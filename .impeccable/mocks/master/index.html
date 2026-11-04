@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Harmony & mixes · master plan</title>
+<link rel="stylesheet" href="app.css">
+</head><body>
+<header id="phead"></header>
+<div id="proto" class="proto">
+ <aside id="rail"></aside>
+ <div>
+  <div id="stage">
+   <div class="devcol"><div class="devcap">Desktop · 1280 × 800</div><div class="dev" id="dDesk"><div class="scr" id="desk" style="width:1280px;height:800px"></div></div></div>
+   <div class="devcol"><div class="devcap">Phone · 390 × 844</div><div class="dev ph" id="dPh"><div class="scr" id="ph" style="width:390px;height:844px"></div></div></div>
+  </div>
+  <p class="hint">Both devices share one state: an action on one shows on the other. Keys and tempos are your library's; modes and energy are illustrative until the analysis epic (E0) ships. Sound plays through your speakers on "Play" buttons.</p>
+ </div>
+</div>
+<div id="pmap"></div><div id="pflows"></div><div id="pexport"></div>
+<!-- One file per epic, so each can be built (and reviewed) on its own. Order matters: data, core, epics, plan. -->
+<script src="js/data.js"></script>
+<script src="js/core.js"></script>
+<script src="js/epics/e1-tracks.js"></script>
+<script src="js/epics/e3-set.js"></script>
+<script src="js/epics/e5-builder.js"></script>
+<script src="js/epics/e6-wizard.js"></script>
+<script src="js/epics/e7-player.js"></script>
+<script src="js/epics/e8-explore.js"></script>
+<script src="js/epics/e9-learn.js"></script>
+<script src="js/stories.js"></script>
+<script src="js/plan.js"></script>
+<script>boot()</script>
+</body></html>
