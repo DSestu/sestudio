@@ -167,11 +167,24 @@ CREATE TABLE IF NOT EXISTS music_plays (
 );
 """
 
+# Mix-builder flows (sestudio.music.flows): drafts and branches, one row each.
+# `data` holds the fork point, the base set and the track refs.
+_MIGRATION_5_MUSIC_FLOWS = """
+CREATE TABLE IF NOT EXISTS music_flows (
+    id       TEXT    PRIMARY KEY,
+    name     TEXT    NOT NULL,
+    mode     TEXT    NOT NULL,
+    position INTEGER NOT NULL,
+    data     TEXT    NOT NULL DEFAULT '{}'
+);
+"""
+
 _MIGRATIONS: tuple[str, ...] = (
     _MIGRATION_1_WATCHERS,
     _MIGRATION_2_MUSIC_QUEUE,
     _MIGRATION_3_MUSIC_ANALYSIS,
     _MIGRATION_4_MUSIC_PLAYLISTS,
+    _MIGRATION_5_MUSIC_FLOWS,
 )
 
 _conn: sqlite3.Connection | None = None
