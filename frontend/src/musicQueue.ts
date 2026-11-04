@@ -136,11 +136,12 @@ export interface TvVolume {
   muted: boolean
 }
 
-/** What the station (the TV's stream) is playing now, on the server's clock. */
-export function withStation(s: QueueState, st: StationClock | null | undefined): QueueState {
+/** What the station (the TV's stream) is playing now, on the server's clock, *ahead* seconds early while it plays. */
+export function withStation(s: QueueState, st: StationClock | null | undefined, ahead = 0): QueueState {
   if (!st?.item_id) return s
   const i = s.items.findIndex(x => x.item_id === st.item_id)
-  return i < 0 ? s : { ...s, current: i, position: st.position, updated_at: st.at, playing: st.playing }
+  const position = st.position + (st.playing ? ahead : 0)
+  return i < 0 ? s : { ...s, current: i, position, updated_at: st.at, playing: st.playing }
 }
 
 // --- the store ---------------------------------------------------------------
@@ -151,6 +152,7 @@ let raw: QueueState = EMPTY_QUEUE
 let state: QueueState = EMPTY_QUEUE
 let station: StationClock | null = null
 let following = false
+let ahead = () => 0
 let volume: TvVolume | null = null
 let volumeEvents = 0
 let skew = 0
@@ -160,7 +162,7 @@ const eventListeners = new Set<(ev: QueueEvent, before: QueueState, after: Queue
 
 const emit = () => listeners.forEach(l => l())
 
-const show = () => { state = following ? withStation(raw, station) : raw }
+const show = () => { state = following ? withStation(raw, station, ahead()) : raw }
 
 function setState(s: QueueState) {
   raw = s
@@ -170,9 +172,10 @@ function setState(s: QueueState) {
   emit()
 }
 
-/** The TV page: show what the station plays, not the queue's own clock. */
-export function followStation() {
+/** The TV page: show what the station plays, not the queue's own clock; *lead* runs it that early. */
+export function followStation(lead: () => number = () => 0) {
   following = true
+  ahead = lead
   show()
   emit()
 }

@@ -79,7 +79,9 @@ class BrowserCapture:
         )
         last: Exception | None = None
         for choice in asked:
-            kw: dict[str, Any] = {"headless": True, "args": ["--mute-audio"]}
+            # The page plays the queue unheard, for its light: no press starts it.
+            args = ["--mute-audio", "--autoplay-policy=no-user-gesture-required"]
+            kw: dict[str, Any] = {"headless": True, "args": args}
             if choice and ("/" in choice or "\\" in choice):
                 kw["executable_path"] = choice
             elif choice:
@@ -98,7 +100,7 @@ class BrowserCapture:
             ignore_https_errors=True,
         )
         await page.goto(self.url, wait_until="load")
-        return screencast_frames(page, width, height, 75)
+        return screencast_frames(page, width, height, 90)
 
     async def close(self) -> None:
         for closer in (
@@ -148,7 +150,7 @@ class Station:
         capture: Capture,
         mixer: Mixer | None = None,
         fps: int = 20,
-        height: int = 720,
+        height: int = 1080,
         idle: float = IDLE_SECONDS,
     ) -> None:
         self.capture, self.fps, self.height, self.idle = capture, fps, height, idle
@@ -216,6 +218,11 @@ class Station:
     def unsubscribe(self, sub: Sub) -> None:
         with self._lock:
             self._subs.discard(sub)
+            self._last_client = time.monotonic()
+
+    def touch(self) -> None:
+        """A client fetched part of the HLS playlist: it is not subscribed, but it is pulling."""
+        with self._lock:
             self._last_client = time.monotonic()
 
     def _fan_out(self, data: bytes) -> None:
@@ -293,7 +300,12 @@ class Station:
                 ff.stdin.close()
             if ff.returncode is None:
                 ff.kill()
-            await ff.wait()
+            # A launcher shim (Chocolatey's ffmpeg.exe) dies to kill() but its ffmpeg
+            # does not, and holds stdout open; it ends on the EOF of both inputs.
+            try:
+                await asyncio.wait_for(ff.wait(), 10)
+            except TimeoutError:
+                log.warning("the encoder did not end")
 
     async def _read_out(self, ff: asyncio.subprocess.Process) -> None:
         """ffmpeg's MPEG-TS, handed on in whole 188-byte packets so a client may join anywhere."""
@@ -339,18 +351,21 @@ class Station:
                         "the encoder did not open its audio input"
                     ) from None
                 await asyncio.sleep(0.1)
-        while not self.live.is_set():
-            if time.monotonic() > deadline:
-                raise StationError("the browser drew no picture")
-            await asyncio.sleep(0.02)
-        start, n = time.monotonic(), 0
-        while True:
-            due = start + n * BLOCK / SR
-            if (wait := due - time.monotonic()) > 0:
-                await asyncio.sleep(wait)
-            writer.write(self.mixer.pull(BLOCK))
-            await writer.drain()
-            n += 1
+        try:
+            while not self.live.is_set():
+                if time.monotonic() > deadline:
+                    raise StationError("the browser drew no picture")
+                await asyncio.sleep(0.02)
+            start, n = time.monotonic(), 0
+            while True:
+                due = start + n * BLOCK / SR
+                if (wait := due - time.monotonic()) > 0:
+                    await asyncio.sleep(wait)
+                writer.write(self.mixer.pull(BLOCK))
+                await writer.drain()
+                n += 1
+        finally:
+            writer.close()  # the encoder's audio input ends: it can finish
 
     async def _watch(self) -> None:
         """The clock the TV follows, and the stop when nobody is pulling the stream."""
@@ -375,6 +390,11 @@ _guard = threading.Lock()
 
 def current() -> Station | None:
     return _current if _current and _current.running else None
+
+
+def last_error() -> str | None:
+    """Why the last station ended, when it failed: it is gone, its status with it."""
+    return _current.error if _current and not _current.running else None
 
 
 def start(make: Callable[[], Station]) -> Station:

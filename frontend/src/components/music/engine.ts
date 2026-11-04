@@ -3,6 +3,7 @@ import { clockSkew, positionNow, type QueueItem, type QueueState, type TrackInfo
 import { planBetween } from './mix/analysis'
 import { lockPhase } from './mix/lock'
 import type { Plan } from './timeline/sampling'
+import { TV } from './tv'
 
 // The audio graph and blend rules of SPEC-music-player §9. The queue on the
 // server is the source of truth: this engine only follows its state.
@@ -50,7 +51,8 @@ const TAB_ID = Math.random().toString(36).slice(2)
 export function claimSound() {
   localStorage.setItem(SOUND_KEY, TAB_ID)
 }
-export const isSoundTab = () => !onTv && localStorage.getItem(SOUND_KEY) === TAB_ID
+// The TV page plays too, unheard (its browser is muted): the light needs an analyser to read.
+export const isSoundTab = () => TV || (!onTv && localStorage.getItem(SOUND_KEY) === TAB_ID)
 
 // While the queue plays on a TV the sound is the TV's only.
 let onTv = false

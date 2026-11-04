@@ -6,6 +6,7 @@
 import { fmtTime } from '../format'
 import { isPhone, isShort, Mapper } from './mapping'
 import { oklch, type Palette } from './palette'
+import { TV } from '../tv'
 import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
 
 // The blurs are made by drawing small and scaling up, not with a full-size Canvas `filter: blur`:
@@ -241,9 +242,11 @@ export class TimelineRenderer {
         ? [[-60, '−1 min'], [60, '+1 min'], [300, '+5'], [600, '+10'], [1200, '+20 min']]
         : [[-20, '−20 s'], [-10, '−10 s'], [20, '+20 s'], [40, '+40 s'], [60, '+60 s']]
     t2.globalAlpha = Math.abs(e - 0.5) * 2
+    // A TV crops the picture's edges (overscan): there they sit inside the safe area.
+    const below = e < 0.5 ? (TV ? 0.06 * H : 8) : 16
     for (const [s, l] of ticks) {
       const x = X(s as number)
-      if (x > R.x + 16 && x < R.x + R.w - 40 && Math.abs(x - px) > 36) t2.fillText(l as string, x, e < 0.5 ? R.y + R.h - 8 : R.y + R.h - 16)
+      if (x > R.x + 16 && x < R.x + R.w - 40 && Math.abs(x - px) > 36) t2.fillText(l as string, x, R.y + R.h - below)
     }
     t2.globalAlpha = 1
     t2.restore()
