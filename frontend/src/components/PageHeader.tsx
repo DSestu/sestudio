@@ -208,7 +208,7 @@ export function Segmented<T extends string>({ tabs, tab, onTab }: { tabs: Header
           aria-selected={t.id === tab}
           tabIndex={t.id === tab ? 0 : -1}
           onClick={() => onTab(t.id)}
-          className={`relative h-8.5 px-3 rounded-[9px] flex items-center justify-center gap-1.5 text-[13px] transition-colors ${
+          className={`relative hit h-8.5 px-3 rounded-[9px] flex items-center justify-center gap-1.5 text-[13px] transition-colors ${
             t.id === tab ? 'text-base-content font-semibold' : 'text-base-content/70 font-medium hover:text-base-content'
           }`}
         >

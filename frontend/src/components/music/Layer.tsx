@@ -14,6 +14,7 @@ import { tlook } from './timeline/render'
 import Timeline from './timeline/Timeline'
 import Title from './Title'
 import Transport from './Transport'
+import { useModalBack } from '../../useModalBack'
 
 const toggle = () => setMode(getMode() === 'expanded' ? 'default' : 'expanded')
 
@@ -180,6 +181,28 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     }
   }, [kick])
 
+  // Back closes the player instead of navigating the page under it.
+  useModalBack(!tv, closePlayer)
+
+  // A modal: focus moves in, the app behind is out of reach, and on close focus
+  // goes to the player bar, which takes the layer's place.
+  useEffect(() => {
+    const el = root.current
+    if (tv || !el?.parentElement) return
+    const shut = [...el.parentElement.children].filter((c): c is HTMLElement => c !== el && c instanceof HTMLElement && !c.inert)
+    shut.forEach(c => { c.inert = true })
+    // After the first frame has placed the parts: the close button shown depends on the mode.
+    const f = requestAnimationFrame(() => {
+      const close = [...el.querySelectorAll<HTMLElement>('[aria-label="Close the player"]')].find(b => b.checkVisibility({ visibilityProperty: true }))
+      close?.focus({ preventScroll: true })
+    })
+    return () => {
+      cancelAnimationFrame(f)
+      shut.forEach(c => { c.inert = false })
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="Open the player"]')?.focus({ preventScroll: true }))
+    }
+  }, [tv])
+
   useEffect(() => {
     if (tv) return
     const onKey = (e: KeyboardEvent) => {
@@ -200,6 +223,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       ref={root}
       role="dialog"
       aria-label="Music player"
+      aria-modal={!tv || undefined}
       className={`music-layer fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content ${tv ? 'pointer-events-none cursor-none select-none' : ''}`}
       // Swipe down closes it on a phone, except from inside the queue (which scrolls).
       onTouchStart={e => { touch.current = (e.target as HTMLElement).closest('[data-queue], [data-addp]') ? null : e.touches[0].clientY }}

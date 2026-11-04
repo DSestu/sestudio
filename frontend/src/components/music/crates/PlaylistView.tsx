@@ -236,9 +236,9 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3 px-1">
+        {/* The name is the page header's title. */}
         <div className="flex-1 min-w-40 leading-tight">
-          <h2 className="truncate text-lg font-semibold">{node.name}</h2>
-          <p className="text-xs text-base-content/60">
+          <p className="text-sm text-base-content/60">
             {summary(total)}{isSet(node) && ` · ${parts.length} parts`}
             {smart && ' · fills itself from the rules'}
           </p>
