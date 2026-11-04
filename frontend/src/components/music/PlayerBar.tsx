@@ -17,6 +17,7 @@ export default function PlayerBar({ onMusicPage }: { onMusicPage: boolean }) {
   const track = item && info(item.track_id)
   const analysis = useAnalysis(item?.track_id)
   const position = usePosition(q, track?.duration ?? 0)
+  const dragFrom = useRef<number | null>(null)
   // Above the Now-Casting bar when a cast is up; the page's bottom padding clears both (AppShell reads --music-bar).
   const castUp = useCastState().connected
   const dlnaUp = useDlnaState().connected
@@ -50,6 +51,12 @@ export default function PlayerBar({ onMusicPage }: { onMusicPage: boolean }) {
         aria-label="Open the player"
         onClick={openPlayer}
         onKeyDown={e => { if (e.key === 'Enter') openPlayer() }}
+        // Phones: dragging the bar up opens the player too (the sheet's first height up, §7.6).
+        onTouchStart={e => { dragFrom.current = e.touches[0].clientY }}
+        onTouchEnd={e => {
+          if (dragFrom.current !== null && dragFrom.current - e.changedTouches[0].clientY > 40) openPlayer()
+          dragFrom.current = null
+        }}
         // Phone: sits on the dock's top edge as one glass object with it, under it in
         // stacking so it rises out from behind; drops into the dock's place while the dock is away.
         className={`fixed glass h-16 flex items-center gap-3 px-3 cursor-pointer select-none md:z-40 md:rounded-2xl md:left-1/2 md:-translate-x-1/2 md:w-[min(36rem,calc(100vw-9rem))] md:bottom-[calc(1rem+var(--lift))] max-md:z-[39] max-md:inset-x-3 max-md:bottom-(--dock-top) max-md:pl-2.5 max-md:transition-[translate,border-radius] max-md:duration-300 max-md:ease-out max-md:animate-dock-rise motion-reduce:transition-none motion-reduce:animate-none ${

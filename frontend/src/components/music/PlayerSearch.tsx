@@ -42,7 +42,7 @@ function Results({ query }: { query: string }) {
 }
 
 /** The expanded player's search: the Music page's field (same text), its results dropped over the stage. */
-export default function PlayerSearch({ active }: { active: boolean }) {
+export default function PlayerSearch({ active, autoFocus = false }: { active: boolean; autoFocus?: boolean }) {
   const query = useMusicQuery()
   const [open, setOpen] = useState(false)
   const q = query.trim()
@@ -51,6 +51,7 @@ export default function PlayerSearch({ active }: { active: boolean }) {
       <div className={SEARCH_FIELD}>
         <SearchIcon />
         <input
+          autoFocus={autoFocus}
           type="search"
           value={query}
           onChange={e => { setMusicQuery(e.target.value); setOpen(true) }}

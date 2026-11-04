@@ -10,10 +10,10 @@ import { fmtTime } from './format'
 import Meter from './Meter'
 import { armRowDrag, justDragged, type DragSource } from './rowDrag'
 import { armSwipe, justSwiped } from './swipe'
-import { isPhone, isShort, shortCols } from './timeline/mapping'
+import { crateHeight, isPhone, isShort, shortCols } from './timeline/mapping'
 
-// Adding to the queue (SPEC-music-player §5.5). In the default view the crate rises
-// under the timeline: a shelf of cards (desktop, phone on its side) or a sheet of
+// Adding to the queue (SPEC-music-player §5.5). In the default view the stage rises to uncover the crate
+// under it: a shelf of cards (desktop, phone on its side) or a sheet of
 // rows (phone). In the expanded view the same list is a column beside the queue
 // (desktop) or the queue sheet's Library page (phone). Every row: tap adds last,
 // a swipe right plays next, a hold lifts it to drop in the queue or on a join.
@@ -461,53 +461,64 @@ export function LibraryList({ q, aim, aimTitle, head, onClose, rail = false }: {
   )
 }
 
-/** The default view's crate. */
+/** The default view's crate: a floor under the stage, which rises to uncover it (Layer); on its side the phone keeps a box over the transport. */
 export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; aim: Aim; aimTitle?: string; onClose: () => void }) {
   const { W, H } = useViewport()
   const f = useFinder(useEntries())
   const queued = useMemo(() => new Set(q.items.map(i => i.track_id)), [q.items])
   const short = isShort(W, H)
-  const sheet = isPhone(W) && !short
 
   useEffect(() => {
+    if (!short) return
     const el = document.querySelector<HTMLElement>('[data-addp]')
     el?.animate(
       [{ opacity: 0, transform: 'translateY(24px)' }, { opacity: 1, transform: 'none' }],
       { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' },
     )
-  }, [])
+  }, [short])
 
-  if (sheet) {
+  const head = (
+    <div className="flex items-center gap-2.5">
+      <h3 className="shrink-0 text-[13px] font-semibold">Add to queue</h3>
+      <LibraryPicker f={f} />
+      {!f.paste && <Search f={f} className="h-8 w-56 min-w-0 max-w-[30vw]" />}
+      {!f.paste && <div className="min-w-0"><Stops f={f} vertical={false} /></div>}
+      <AimChip aim={aim} title={aimTitle} />
+      <span className="ml-auto" />
+      <PasteToggle f={f} />
+      {closeBtn(onClose)}
+    </div>
+  )
+  const cards = (cls: string) => (
+    <div data-scroll className={`min-h-0 flex-1 gap-2.5 overflow-x-auto overflow-y-hidden overscroll-contain pb-1 ${cls}`}>
+      {f.paste
+        ? <PasteLink q={q} queued={queued} aim={aim} cards />
+        : f.shown.slice(0, SHOWN).map(e => <AddCard key={e.key} e={e} q={q} queued={queued.has(e.ref.track_id)} aim={aim} />)}
+      {!f.paste && !f.shown.length && <p className="self-center px-3 text-xs text-base-content/42">{emptyNote(f)}</p>}
+    </div>
+  )
+
+  if (short) {
+    // On its side the phone keeps the horizon clear for drops: the crate covers the transport row instead, while open.
     return (
-      <aside data-addp data-sheet aria-label="Add to queue" className="glass fixed inset-x-0 bottom-0 top-[52%] z-80 flex flex-col rounded-t-[22px] text-base-content transition-[translate,opacity] duration-300 ease-smooth" style={{ ['--rowbg' as string]: 'hsl(205 55% 11%)' }}>
-        <div className="grid h-5 shrink-0 place-items-center"><i className="h-1 w-9 rounded-full bg-white/30" /></div>
-        <LibraryList q={q} aim={aim} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[15px] font-semibold">Add to queue</h3>} onClose={onClose} />
+      <aside data-addp aria-label="Add to queue" className="glass fixed z-80 flex flex-col gap-2 rounded-2xl px-3.5 py-2.5 text-base-content" style={{ left: 12, right: shortCols(W).q + 26, bottom: 8, height: 118 }}>
+        {head}
+        {cards('flex items-stretch')}
       </aside>
     )
   }
 
-  // On its side the phone keeps the horizon clear for drops: the crate covers the transport row instead, while open.
-  const box = short
-    ? { left: 12, right: shortCols(W).q + 26, bottom: 8, height: 118 }
-    : { left: 20, right: 20, bottom: 16, height: 132 }
+  // Under the sky (-z-30), so only the part the stage has uncovered shows; the edge's shadow falls on it.
   return (
-    <aside data-addp aria-label="Add to queue" className="glass fixed z-80 flex flex-col gap-2 rounded-2xl px-3.5 py-2.5 text-base-content" style={box}>
-      <div className="flex items-center gap-2.5">
-        <h3 className="shrink-0 text-[13px] font-semibold">Add to queue</h3>
-        <LibraryPicker f={f} />
-        {!f.paste && <Search f={f} className="h-8 w-56 min-w-0 max-w-[30vw]" />}
-        {!f.paste && <div className="min-w-0"><Stops f={f} vertical={false} /></div>}
-        <AimChip aim={aim} title={aimTitle} />
-        <span className="ml-auto" />
-        <PasteToggle f={f} />
-        {closeBtn(onClose)}
-      </div>
-      <div data-scroll className="flex min-h-0 flex-1 items-stretch gap-2.5 overflow-x-auto overflow-y-hidden overscroll-contain pb-1">
-        {f.paste
-          ? <PasteLink q={q} queued={queued} aim={aim} cards />
-          : f.shown.slice(0, SHOWN).map(e => <AddCard key={e.key} e={e} q={q} queued={queued.has(e.ref.track_id)} aim={aim} />)}
-        {!f.paste && !f.shown.length && <p className="self-center px-3 text-xs text-base-content/42">{emptyNote(f)}</p>}
-      </div>
+    <aside
+      data-addp
+      aria-label="Add to queue"
+      className="fixed inset-x-0 bottom-0 -z-40 flex flex-col border-t border-white/10 bg-[linear-gradient(hsl(205_48%_8%),hsl(205_45%_10.5%))] text-base-content shadow-[inset_0_20px_28px_-20px_rgba(0,0,0,.8)]"
+      style={{ height: crateHeight(W, H), ['--rowbg' as string]: 'hsl(205 47% 9%)' }}
+    >
+      {isPhone(W)
+        ? <div className="flex min-h-0 flex-1 flex-col pt-2"><LibraryList q={q} aim={aim} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[15px] font-semibold">Add to queue</h3>} onClose={onClose} /></div>
+        : <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-3.5 pt-3.5">{head}{cards(f.paste ? 'flex items-stretch' : 'grid grid-flow-col grid-rows-2 auto-cols-[11rem] [&>[data-row]]:max-h-none')}</div>}
     </aside>
   )
 }

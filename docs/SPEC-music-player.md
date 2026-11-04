@@ -190,10 +190,18 @@ The queue scrolls inside (`overflow-y: auto`, thin scrollbar, no overscroll chai
 The mode switch is the pin on desktop (§7.1) and the handle on phones (§7.6); see §11 for shuffle, repeat and the "ends 21:38" clock.
 
 **Where you add** (`Crate.tsx`; one `adding` state, read per layout; a mode switch closes it):
-- **Default view, desktop and short windows: the crate**, a glass shelf along the bottom (desktop: 20 px insets, 132 px high; short: left column,
-  over the transport row so the horizon stays clear, 118 px). Header: "Add to queue", library picker (when there are several), search, the aim chip,
-  **Paste a link**, ×. Then a row of cards (176 px, title, BPM · duration, balance meter, ✓ when queued).
-- **Default view, phones: the crate as a sheet** from 52 % of the height to the bottom (the timeline stays visible above it), with a list of rows; while a row is held it slides down out of the way (`data-libdrag`), so it drops straight into the queue sheet under it or on a join, then comes back.
+- **Default view: the crate is behind the stage, which rises in tiers to uncover it** ("Tiers", picked 2026-11-04; mock `.impeccable/mocks/add-music/reveal.html`).
+  The crate is a flat floor under the sky (`crateHeight`: desktop 236 px; phones from just under the lifted timeline to the bottom). Bottom first,
+  staggered on one 560 ms ease-smooth progress (close 420 ms): **desktop** lifts the timeline by the crate's height, the transport by 112 px, the title
+  70 px while it shrinks to 55 %, and shortens the queue by 196 px from the bottom (not while peeking, so the Add row stays under the pointer);
+  **phones** lift the timeline 64 px (`PHONE_LIFT`) while the title, transport and queue slide up under it and fade. Nothing leaves the screen and the
+  joins stay droppable. Desktop header: "Add to queue", library picker (when there are several), search, the aim chip, **Paste a link**, ×; then two
+  rows of cards (176 px, title, BPM · duration, balance meter, ✓ when queued). Phones: a list of rows; while a row is held (`data-libdrag`) the stage
+  falls back over the crate so the row drops straight into the queue sheet or on a join, then rises again.
+- **Hover deploys it (desktop, mouse):** the bottom 24 px of the screen, or 150 ms on "Add to queue", **peeks** (a quarter of the rise); the pointer on
+  the crate **opens** it; 400 ms away it falls back. A press in it, its search taking focus, a click on Add to queue, **A** or a join click **pins** it.
+  Touch has no hover: "+ Add" opens it pinned.
+- **Short windows (phone on its side): a glass box** over the transport row so the horizon stays clear (left column, 118 px), a row of cards.
 - **Expanded, desktop: the library column**, flat base-200, `libRect` = `left W − 760, top 92, 360 × (H − 112)`, titled "Add from ‹library›". It slides in
   (320 ms) and **pushes the stage narrower** (`libShift` = min(380, W − 828)); title and transport shrink with it. Not a floating panel.
   **It opens on hover**: a mouse resting 250 ms on the queue (or the column) peeks it open; leaving both for 350 ms closes it (held open while a
@@ -678,11 +686,18 @@ Stage and column share the top edge; the column is 360 px wide with a 20 px gap 
 
 ### 7.6 Phone gestures
 
+The player is **one sheet with three heights** (picked 2026-11-04, mock `.impeccable/mocks/mobile-nav.html` variant A): the player bar, the default
+view and the expanded view. Every gesture and **Back** move one height at a time; the queue handle is three dots, the lit one is where you are.
+- **Bar to default**: tap the player bar, or drag it up by more than 40 px.
+- **Default to bar**: swipe down anywhere outside the queue, ⌄, or Back.
+- **Expanded to default** also by Back or a swipe down on the stage (no longer closes the player).
+- **Expanded layout**: a 140 px stage, then the title (scale .62) beside a one-row transport (previous, play, next; the timeline is the seek bar),
+  then the list to the bottom. The top card's search is an icon until tapped.
 - **Default to expanded**: tap the handle, or swipe the sheet up by more than 40 px.
 - **Expanded to default**: with the list scrolled to its top, pull it down. The pull is **continuous**: for a pull of `d` px, `p = min(1, d/120)`, `ease = 1 − (1 − p)²`, and the mode progress is `t = 1 − .35 · ease` (the layout follows under the finger, CSS transitions off while pulling);
-  the handle bar widens from 36 to `36 + 30·p` px; at `d ≥ 120` it is **armed** (the bar turns Signal Blue with a 220 ms bump). On release: armed → default, else back to expanded, each with the normal 620 ms motion. Works with touch, the mouse wheel (`d −= deltaY · .6`, released after 180 ms of no wheel) and a mouse drag.
+  the handle dots spread from 36 to `36 + 30·p` px; at `d ≥ 120` it is **armed** (the dots turn Signal Blue with a 220 ms bump). On release: armed → default, else back to expanded, each with the normal 620 ms motion. Works with touch, the mouse wheel (`d −= deltaY · .6`, released after 180 ms of no wheel) and a mouse drag.
 - Not available while a row is being dragged or while the mode is switching.
-- Adding is the crate sheet in default and the Library page in expanded (§5.5); a mode switch closes either.
+- Adding is the crate (under the lifted stage) in default and the Library page in expanded (§5.5); a mode switch closes either.
 
 ### 7.7 Queue add / remove / reorder animations
 
