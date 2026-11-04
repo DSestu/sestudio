@@ -11,12 +11,10 @@ import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
 // The blurs are made by drawing small and scaling up, not with a full-size Canvas `filter: blur`:
 // as soft, at a fraction of the work (measured 19 to 48 fps on the station's software renderer).
 const GQ = 0.125 // glow layer resolution
-/** The glow's blur radii follow its resolution; the bass is blurred on a layer LQ times smaller. */
+/** The glow's blur radii follow its resolution. */
 const GB = 0.5
-// Scaling alone, at a quarter, left 4 px stair steps on the bass edge: the small layer is blurred too.
-const LQ = 0.5
 /** Shape and look numbers; the lab Look panel overwrites them (SPEC-music-player Appendix). */
-export const tlook = { klo: 0.7, kmi: 0.9, khi: 0.42, alo: 0.9, ami: 0.5, ahi: 0.82, edge: 1, glow: 0.75, bb: 3.5 }
+export const tlook = { klo: 0.7, kmi: 0.9, khi: 0.42, alo: 0.9, ami: 0.5, ahi: 0.82, edge: 1, glow: 0.75 }
 
 /** What the spectral background reads from the last frame: horizon, amplitude and the blurred glow layer. */
 export const probe = { y0: 0, amp: 0, W: 0, H: 0, glow: null as HTMLCanvasElement | null, /** Counts the frames drawn, so the background knows when the glow changed. */ frame: 0 }
@@ -57,9 +55,7 @@ const layer = (): { c: HTMLCanvasElement; x: CanvasRenderingContext2D } => {
 export class TimelineRenderer {
   private page: CanvasRenderingContext2D
   private off = layer()
-  private top = layer() // mids, highs, edge (device resolution)
-  private lo = layer() // bass (CSS resolution, blurred once)
-  private lo2 = layer() // bass, small: its blur
+  private top = layer() // bass, mids, highs, edge (device resolution)
   private g1 = layer() // curves for the glow (quarter resolution)
   private g2 = layer() // blurred glow (quarter resolution)
   private pts = new Points()
@@ -91,10 +87,6 @@ export class TimelineRenderer {
     const dh = Math.round(H * this.dpr)
     this.canvas.width = this.off.c.width = this.top.c.width = dw
     this.canvas.height = this.off.c.height = this.top.c.height = dh
-    this.lo.c.width = W
-    this.lo.c.height = H
-    this.lo2.c.width = Math.ceil(W * LQ)
-    this.lo2.c.height = Math.ceil(H * LQ)
     this.g1.c.width = this.g2.c.width = Math.ceil(W * GQ)
     this.g1.c.height = this.g2.c.height = Math.ceil(H * GQ)
     this.M = new Mapper(W, H)
@@ -267,11 +259,9 @@ export class TimelineRenderer {
     const ch = Math.min(H, by + bh + 64) - cy
     this.cy = cy
     this.ch = ch
-    const { top, lo, g1, g2 } = this
+    const { top, g1, g2 } = this
     top.x.setTransform(dpr, 0, 0, dpr, 0, 0)
     top.x.clearRect(bx, by, W, bh)
-    lo.x.setTransform(1, 0, 0, 1, 0, 0)
-    lo.x.clearRect(bx, by, W, bh)
     g1.x.setTransform(1, 0, 0, 1, 0, 0)
     g1.x.clearRect(0, 0, g1.c.width, g1.c.height)
     g1.x.setTransform(GQ, 0, 0, GQ, 0, 0)
@@ -331,8 +321,8 @@ export class TimelineRenderer {
       paint(g1.x, pMi, 0.8)
       g1.x.fillStyle = oklch(pal.hi)
       paint(g1.x, pHi, 0.7)
-      lo.x.fillStyle = oklch(pal.lo)
-      paint(lo.x, pLo, tlook.alo)
+      top.x.fillStyle = oklch(pal.lo)
+      paint(top.x, pLo, tlook.alo)
       top.x.fillStyle = oklch(pal.mi)
       paint(top.x, pMi, tlook.ami)
       top.x.fillStyle = oklch(pal.hi)
@@ -366,14 +356,6 @@ export class TimelineRenderer {
     }
     o2.restore()
     o2.globalCompositeOperation = 'source-over'
-    const s = this.lo2
-    s.x.clearRect(0, 0, s.c.width, s.c.height)
-    s.x.filter = tlook.bb > 0 ? `blur(${tlook.bb * LQ}px)` : 'none'
-    s.x.drawImage(lo.c, bx, by, W, bh, bx * LQ, by * LQ, W * LQ, bh * LQ)
-    s.x.filter = 'none'
-    o2.imageSmoothingEnabled = true
-    o2.drawImage(s.c, bx * LQ, by * LQ, W * LQ, bh * LQ, bx, by, W, bh)
-    o2.globalAlpha = 1
     o2.drawImage(top.c, bx * dpr, by * dpr, W * dpr, bh * dpr, bx, by, W, bh)
   }
 
