@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { clockSkew, positionNow, type QueueState } from '../../musicQueue'
-import { draw, perimeter, prep, bandAt, type Prepped, type Shape } from './barAura'
+import { draw, perimeter, prep, bandAt, type Prepped, type Shape } from './barAuraDraw'
 import { tc } from './background/bands'
 import { energyAt, grid, type Grid } from './background/energy'
 import { engine } from './engine'
