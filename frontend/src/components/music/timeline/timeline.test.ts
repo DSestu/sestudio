@@ -128,6 +128,18 @@ describe('sampling grid', () => {
     for (let k = 1; k < pts.n; k++) if (pts.x[k] - pts.x[k - 1] < 0.75) tight++
     expect(tight).toBeLessThan(pts.n * 0.02)
   })
+
+  it('keeps every point near the screen when the track started minutes ago (expanded)', () => {
+    const { items, lay } = scene()
+    const M = new Mapper(1280, 800).at(1)
+    const pts = new Points()
+    items.forEach((it, i) => { it.a = lay.TS[i] - 130 })
+    sample(items, M, pts)
+    for (let k = 0; k < pts.n; k++) {
+      expect(pts.x[k]).toBeGreaterThanOrEqual(-60)
+      expect(pts.x[k]).toBeLessThanOrEqual(1280 + 60)
+    }
+  })
 })
 
 describe('no popping', () => {

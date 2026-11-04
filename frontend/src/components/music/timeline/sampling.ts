@@ -295,7 +295,9 @@ export function sample(items: DrawItem[], M: Mapper, out: Points): void {
     const lo = pv && prevEnd > a + s0 ? Math.min(s1, (a + s0 + prevEnd) / 2 - a) : s0
     const hi = nx && a + s1 > nextStart ? Math.max(lo, (nextStart + a + s1) / 2 - a) : s1
     if (X(a + hi) < -40 || X(a + lo) > W + 40) continue
-    if (lo === s0) out.push(X(a + s0), s0, 0, 0, 0)
+    // The end points are clamped just past the culled margin: far off screen (a track started minutes ago,
+    // expanded view), the spline's control points reach a sixth of the gap back on screen and fold over the fill.
+    if (lo === s0) out.push(Math.max(-60, X(a + s0)), s0, 0, 0, 0)
 
     const base = track.bpm ? 15 / track.bpm : 0.1
     const anc = track.bpm ? track.bar0 : 0
@@ -314,7 +316,7 @@ export function sample(items: DrawItem[], M: Mapper, out: Points): void {
       cov(visible, a + tt - wt / 2, a + tt + wt / 2, acc)
       out.push(x, tt, acc[0], acc[1], acc[2])
     }
-    if (hi === s1) out.push(X(a + s1), s1, 0, 0, 0)
+    if (hi === s1) out.push(Math.min(W + 60, X(a + s1)), s1, 0, 0, 0)
   }
   out.finish()
 }
