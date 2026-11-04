@@ -1,16 +1,17 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react'
-import Music from './Music'
 import PageHeader from '../../components/PageHeader'
 import type { AppSettings } from '../../api'
 import { replaceParams } from '../../nav'
 import { goBack } from '../../pageHeader'
 import Downloads from './Downloads'
+import Music from './Music'
 import Notifications from './Notifications'
 import Playback from './Playback'
 import Server from './Server'
 import Share from './Share'
 import Sources from './Sources'
 import Subtitles from './Subtitles'
+import { useSettingsStatus } from './useSettingsStatus'
 
 export interface SettingsProps {
   settings: AppSettings
@@ -82,12 +83,27 @@ export default function SettingsView({ section, ...props }: SettingsProps & { se
   }
 
   const open = CATEGORIES.find(c => c.id === picked) ?? (desktop ? CATEGORIES[0] : undefined)
+  const { summary, problems } = useSettingsStatus(props.settings)
+  const flagged = new Set(problems.map(p => p.category))
 
   if (!desktop) {
     if (!open) {
       return (
         <div className="flex flex-col gap-5">
           <PageHeader title="Settings" onBack={goBack} />
+          {problems.map(p => (
+            <a
+              key={p.category}
+              href={`#/settings?s=${p.category}`}
+              className="flex items-start gap-2.5 rounded-[14px] bg-warning/12 p-3 text-[13px] leading-snug"
+            >
+              <Icon d="M12 4l9 16H3zM12 10v4M12 17h.01" className="size-[18px] shrink-0 text-warning" />
+              <span>
+                <span className="font-semibold text-warning">{p.title}</span> {p.text}{' '}
+                <span className="text-primary whitespace-nowrap">{CATEGORIES.find(c => c.id === p.category)!.name} →</span>
+              </span>
+            </a>
+          ))}
           {GROUPS.map(group => (
             <div key={group}>
               <h3 className="text-xs font-semibold text-base-content/50 px-1.5 pb-1.5">{group}</h3>
@@ -100,7 +116,12 @@ export default function SettingsView({ section, ...props }: SettingsProps & { se
                       </span>
                       {/* The separator starts after the icon, as in a native list. */}
                       <span className="flex-1 flex items-center gap-3 min-h-14 pr-3 border-base-300 group-not-first:border-t">
-                        <span className="flex-1 text-[15px] font-medium">{c.name}</span>
+                        <span className="flex-1 min-w-0 py-2.5">
+                          <span className="block text-[15px] font-medium leading-snug">{c.name}</span>
+                          {summary[c.id] && (
+                            <span className="block truncate text-[12.5px] text-base-content/50 mt-0.5">{summary[c.id]}</span>
+                          )}
+                        </span>
                         <Icon d="M9 6l6 6-6 6" className="size-4 text-base-content/35" />
                       </span>
                     </a>
@@ -148,7 +169,12 @@ export default function SettingsView({ section, ...props }: SettingsProps & { se
                 }`}
               >
                 <Icon d={c.icon} className="size-[18px] opacity-80" />
-                {c.name}
+                <span className="flex-1">{c.name}</span>
+                {flagged.has(c.id) && (
+                  <span className="size-2 rounded-full bg-warning" title={problems.find(p => p.category === c.id)!.title}>
+                    <span className="sr-only">Needs attention</span>
+                  </span>
+                )}
               </button>
             ))}
           </div>
