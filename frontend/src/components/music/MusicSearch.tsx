@@ -83,8 +83,9 @@ export default function MusicSearch({ query, byId, renderLibrary }: {
 }) {
   const [source, setSource] = useState<SearchSource>('all')
   const found = useMusicSearch(query, source)
-  const grouped = useMemo(() => found?.res && groupResults(found.res, byId), [found, byId])
-  const errors = Object.entries(found?.res?.errors ?? {})
+  const grouped = useMemo(() => found && groupResults(found.res, byId), [found, byId])
+  const errors = Object.entries(found?.res.errors ?? {})
+  const pending: string[] = found?.pending ?? []
   return (
     <div className="flex flex-col gap-4">
       <div role="group" aria-label="Search in" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -96,20 +97,23 @@ export default function MusicSearch({ query, byId, renderLibrary }: {
             className={`btn btn-sm rounded-full shrink-0 ${source === s.id ? 'btn-primary' : 'btn-ghost bg-white/5'}`}
           >
             {s.label}
-            {grouped && s.id !== 'all' && <span className="opacity-60 tabular-nums">{grouped.counts[s.id] ?? 0}</span>}
+            {grouped && s.id !== 'all' && (pending.includes(s.id)
+              ? <span className="loading loading-spinner loading-xs opacity-60" />
+              : <span className="opacity-60 tabular-nums">{grouped.counts[s.id] ?? 0}</span>)}
           </button>
         ))}
       </div>
-      {!found ? (
+      {!found || !grouped ? (
         <p className="text-sm text-base-content/60 px-1">Searching…</p>
-      ) : found.error || !found.res || !grouped ? (
-        <p className="text-sm text-error px-1">{found.error ?? 'Search failed'}</p>
       ) : (
         <>
           {found.res.top && <TopCard top={found.res.top} byId={byId} />}
           {errors.map(([s, why]) => (
             <p key={s} className="text-xs text-base-content/60 px-1">{sourceLabel(s)} did not answer: {why}</p>
           ))}
+          {pending.length > 0 && (
+            <p className="text-xs text-base-content/60 px-1">Still searching {pending.map(sourceLabel).join(', ')}…</p>
+          )}
           {grouped.library.length > 0 && (
             <section>
               <h3 className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-base-content/50">In your libraries</h3>
@@ -122,7 +126,7 @@ export default function MusicSearch({ query, byId, renderLibrary }: {
               <ul>{grouped.online.map(h => <OnlineRow key={h.track_id} hit={h} />)}</ul>
             </section>
           )}
-          {!grouped.library.length && !grouped.online.length && !errors.length && (
+          {!grouped.library.length && !grouped.online.length && !errors.length && !pending.length && (
             <p className="text-sm text-base-content/60 px-1">Nothing found for “{query.trim()}”.</p>
           )}
         </>

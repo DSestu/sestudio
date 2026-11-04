@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { postDownloads } from './api'
 import type { MusicTrack } from './musicLibrary'
 import type { AddPayload } from './musicQueue'
@@ -36,11 +36,12 @@ export interface OnlineHit {
 export interface LibraryHit {
   library: string
   track_id: string
+  artist?: string
 }
 
 export type TopMatch =
   | { kind: 'artist'; name: string; thumb: string; tracks: (OnlineHit | LibraryHit)[] }
-  | ({ kind: 'track' } & Partial<OnlineHit> & LibraryHit)
+  | ({ kind: 'track' } & Partial<Omit<OnlineHit, 'library'>> & LibraryHit)
 
 export interface SearchResponse {
   top: TopMatch | null
@@ -74,23 +75,71 @@ export function groupResults(res: SearchResponse, byId: Map<string, MusicTrack>)
   return { library, online, counts }
 }
 
-/** The results for a query once typing pauses; `undefined` while it is on its way. */
+/** What one source answered, or why its request failed. */
+export interface Part { res?: SearchResponse; error?: string }
+
+/** "Everywhere" asks each source on its own, so a fast one shows before a slow one. */
+export const partsOf = (source: SearchSource): SearchSource[] =>
+  source === 'all' ? ['library', 'ytmusic', 'youtube', 'soundcloud'] : [source]
+
+/** The best single answer: an artist whose name holds every word of the query and
+ *  who has at least two tracks in the results, else the first track (as search._top). */
+export function topMatch(query: string, library: LibraryHit[], online: OnlineHit[]): TopMatch | null {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  const byArtist = new Map<string, (OnlineHit | LibraryHit)[]>()
+  for (const t of [...library, ...online]) {
+    const name = (t.artist ?? '').trim()
+    if (name && words.every(w => name.toLowerCase().includes(w))) byArtist.set(name, [...(byArtist.get(name) ?? []), t])
+  }
+  let best: [string, (OnlineHit | LibraryHit)[]] | undefined
+  for (const e of byArtist) if (!best || e[1].length > best[1].length) best = e
+  if (best && best[1].length >= 2) {
+    const thumb = best[1].map(t => ('thumb' in t ? t.thumb : '')).find(Boolean) ?? ''
+    return { kind: 'artist', name: best[0], thumb, tracks: best[1] }
+  }
+  const first = library[0] ?? online[0]
+  return first ? { kind: 'track', ...first } : null
+}
+
+/** The answers so far as one response, online hits interleaved so no source buries another. */
+export function mergeResults(query: string, sources: SearchSource[], parts: Record<string, Part>): SearchResponse {
+  const library = parts.library?.res?.library ?? []
+  const lists = sources.map(s => parts[s]?.res?.online ?? [])
+  const longest = Math.max(0, ...lists.map(l => l.length))
+  const online = Array.from({ length: longest }, (_, i) => lists.flatMap(l => (i < l.length ? [l[i]] : []))).flat()
+  const errors: Record<string, string> = {}
+  for (const s of sources) {
+    Object.assign(errors, parts[s]?.res?.errors)
+    const failed = parts[s]?.error
+    if (failed) errors[s] = failed
+  }
+  return { top: topMatch(query, library, online), library, online, errors }
+}
+
+/** The results for a query once typing pauses, updated as each source answers;
+ *  `undefined` until the first one does. `pending` lists the sources still on their way. */
 export function useMusicSearch(query: string, source: SearchSource, delay = 350) {
-  const [state, setState] = useState<{ key: string; res?: SearchResponse; error?: string }>()
+  const [state, setState] = useState<{ key: string; parts: Record<string, Part> }>()
   const q = query.trim()
   const key = `${source}\0${q}`
   useEffect(() => {
     if (!q) return
     const ctl = new AbortController()
+    const settle = (s: string, part: Part) => {
+      if (!ctl.signal.aborted) setState(prev => ({ key, parts: { ...(prev?.key === key ? prev.parts : {}), [s]: part } }))
+    }
     const timer = window.setTimeout(() => {
-      searchMusic(q, source, ctl.signal).then(
-        res => setState({ key, res }),
-        (e: Error) => { if (!ctl.signal.aborted) setState({ key, error: e.message }) },
-      )
+      for (const s of partsOf(source)) {
+        searchMusic(q, s, ctl.signal).then(res => settle(s, { res }), (e: Error) => settle(s, { error: e.message }))
+      }
     }, delay)
     return () => { ctl.abort(); window.clearTimeout(timer) }
   }, [q, source, key, delay])
-  return state?.key === key ? state : undefined
+  return useMemo(() => {
+    if (state?.key !== key) return undefined
+    const sources = partsOf(source)
+    return { res: mergeResults(q, sources, state.parts), pending: sources.filter(s => !state.parts[s]) }
+  }, [state, key, q, source])
 }
 
 /** What the queue takes for an online hit. */
