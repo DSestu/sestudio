@@ -37,6 +37,7 @@ const SKIP = 'button, input, a, textarea, [role=slider], [data-queue], [data-add
 
 interface Drag {
   x0: number
+  y0: number
   g0: number
   sg: number
   moved: boolean
@@ -173,7 +174,7 @@ export class Scrubber {
     this.jump = this.glide = this.settle = null
     this.view = g0
     this.drag = {
-      x0: e.clientX, g0, sg: this.map().s(e.clientX), moved: false,
+      x0: e.clientX, y0: e.clientY, g0, sg: this.map().s(e.clientX), moved: false,
       last: [performance.now(), g0], vel: 0, label: this.hit(e.clientX, e.clientY)?.i ?? -1, seekAt: 0,
     }
     gesture.active = true
@@ -190,7 +191,16 @@ export class Scrubber {
     }
     const m = this.o.model()
     if (!m) return
-    if (Math.abs(e.clientX - d.x0) > SCRUB_SLOP) d.moved = true
+    const dx = Math.abs(e.clientX - d.x0)
+    const dy = Math.abs(e.clientY - d.y0)
+    // A vertical drag is the layer's (it switches the mode), not a scrub or a tap.
+    if (!d.moved && dy > SCRUB_SLOP * 2 && dy > dx) {
+      this.drag = this.view = null
+      gesture.active = false
+      this.o.root.style.cursor = ''
+      return
+    }
+    if (dx > SCRUB_SLOP) d.moved = true
     if (!d.moved) return
     this.o.root.style.cursor = 'grabbing'
     const now = performance.now()

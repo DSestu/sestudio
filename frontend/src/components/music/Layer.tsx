@@ -3,13 +3,14 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
 import { frameAt, getMode, MODE_MS, ModeMotion, pull, setMode, useMode } from './mode'
-import { closePlayer, usePosition } from './player'
+import { closePlayer, closeThen, usePosition } from './player'
+import PlayerSearch from './PlayerSearch'
 import AddPanel from './AddPanel'
 import Background from './background/Background'
 import { useLook } from './background/settings'
 import Queue from './Queue'
 import { scrubbing } from './scrub'
-import { isPhone } from './timeline/mapping'
+import { isPhone, rects } from './timeline/mapping'
 import { tlook } from './timeline/render'
 import Timeline from './timeline/Timeline'
 import Title from './Title'
@@ -181,16 +182,68 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     }
   }, [kick])
 
+  // Desktops: drag up anywhere to open the expanded view, drag the stage down to come back.
+  // The parts follow the pointer; a release past 30% of the way switches.
+  useEffect(() => {
+    if (tv) return
+    const el = root.current!
+    const m = motion.current
+    const SPAN = 240
+    let p: { x: number; y: number; from: number; on: boolean; t: number } | null = null
+    const down = (e: PointerEvent) => {
+      // shortcut: mouse and pen only, as a touch swipe down already closes the layer; give touch screens their own gesture if wanted.
+      if (isPhone(innerWidth) || e.pointerType === 'touch' || e.button !== 0 || m.moving(performance.now())) return
+      if ((e.target as Element).closest('button, input, a, textarea, [role=slider], [data-queue], [data-addp], [data-mix-popover]')) return
+      const from = getMode() === 'expanded' ? 1 : 0
+      if (from) {
+        const { e: s } = rects(el.clientWidth, el.clientHeight)
+        if (e.clientX < s.x || e.clientX > s.x + s.w || e.clientY < s.y || e.clientY > s.y + s.h) return
+      }
+      p = { x: e.clientX, y: e.clientY, from, on: false, t: from }
+    }
+    const move = (e: PointerEvent) => {
+      if (!p) return
+      const dx = Math.abs(e.clientX - p.x)
+      const dy = Math.abs(e.clientY - p.y)
+      if (!p.on) {
+        if (Math.max(dx, dy) < 8) return
+        // A sideways drag is a scrub.
+        if (dx >= dy) { p = null; return }
+        p.on = true
+        el.style.userSelect = 'none'
+        getSelection()?.removeAllRanges()
+      }
+      p.t = Math.min(1, Math.max(0, p.from + (p.y - e.clientY) / SPAN))
+      m.hold(p.t)
+      kick()
+    }
+    const up = () => {
+      const d = p
+      p = null
+      if (!d?.on) return
+      el.style.userSelect = ''
+      if (Math.abs(d.t - d.from) > 0.3) setMode(d.from ? 'default' : 'expanded')
+      else { m.go(d.from, performance.now()); kick() }
+    }
+    el.addEventListener('pointerdown', down)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return () => {
+      el.removeEventListener('pointerdown', down)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+  }, [tv, kick])
+
   // Back closes the player instead of navigating the page under it.
   useModalBack(!tv, closePlayer)
 
-  // A modal: focus moves in, the app behind is out of reach, and on close focus
-  // goes to the player bar, which takes the layer's place.
+  // A modal: focus moves in, and on close focus goes to the player bar, which takes the layer's place.
   useEffect(() => {
     const el = root.current
-    if (tv || !el?.parentElement) return
-    const shut = [...el.parentElement.children].filter((c): c is HTMLElement => c !== el && c instanceof HTMLElement && !c.inert)
-    shut.forEach(c => { c.inert = true })
+    if (tv || !el) return
     // After the first frame has placed the parts: the close button shown depends on the mode.
     const f = requestAnimationFrame(() => {
       const close = [...el.querySelectorAll<HTMLElement>('[aria-label="Close the player"]')].find(b => b.checkVisibility({ visibilityProperty: true }))
@@ -198,10 +251,47 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     })
     return () => {
       cancelAnimationFrame(f)
-      shut.forEach(c => { c.inert = false })
       requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="Open the player"]')?.focus({ preventScroll: true }))
     }
   }, [tv])
+
+  // The app behind is out of reach, except the desktop rail in the expanded view:
+  // it shows beside the stage, and a pick there closes the player onto the new page.
+  const withRail = expanded && !isPhone(innerWidth)
+  useEffect(() => {
+    const el = root.current
+    if (tv || !el?.parentElement) return
+    const rail = withRail ? document.querySelector<HTMLElement>('[data-rail]') : null
+    const shut: HTMLElement[] = []
+    const visit = (parent: Element) => {
+      for (const c of parent.children) {
+        if (c === el || c === rail || !(c instanceof HTMLElement) || c.inert) continue
+        if (rail && c.contains(rail)) visit(c)
+        else shut.push(c)
+      }
+    }
+    visit(el.parentElement)
+    shut.forEach(c => { c.inert = true })
+    // The pick is held until the player is closed, then replayed, so closing does not undo its navigation.
+    const pick = (e: MouseEvent) => {
+      const t = (e.target as Element).closest<HTMLElement>('button, a')
+      if (!t) return
+      e.preventDefault()
+      e.stopPropagation()
+      closeThen(() => t.click())
+    }
+    if (rail) {
+      rail.style.zIndex = '80'
+      rail.addEventListener('click', pick, true)
+    }
+    return () => {
+      shut.forEach(c => { c.inert = false })
+      if (rail) {
+        rail.style.zIndex = ''
+        rail.removeEventListener('click', pick, true)
+      }
+    }
+  }, [tv, withRail])
 
   useEffect(() => {
     if (tv) return
@@ -246,10 +336,15 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       </button>}
       {!tv && <div ref={card} className="absolute top-3 left-3.5 right-3.5 md:left-32 md:right-5 z-10 h-16 rounded-2xl glass flex items-center gap-3 px-3 invisible">
         <button aria-label="Close the player" onClick={closePlayer} className="size-10 shrink-0 rounded-xl hover:bg-white/10 grid place-items-center">{closeIcon}</button>
-        <div className="min-w-0 leading-tight">
-          <b className="block truncate text-[15px]">{track?.title ?? ''}</b>
-          <span className="block truncate text-xs text-primary">{track?.artist ?? ''}</span>
-        </div>
+        <h2 className="max-md:hidden shrink-0 pr-2 text-xl font-medium">Music</h2>
+        <PlayerSearch active={expanded} />
+        <button
+          aria-label="Activity"
+          onClick={() => closeThen(() => { window.location.hash = '#/notifications' })}
+          className="max-md:hidden ml-auto size-10 shrink-0 rounded-xl bg-white/6 hover:bg-white/10 grid place-items-center"
+        >
+          <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 16v-5a6 6 0 10-12 0v5l-2 2h16zM10 21h4" /></svg>
+        </button>
       </div>}
       <div ref={titleEl} className="absolute left-0 top-0 min-w-0 origin-top-left">
         <Title info={track} analysis={analysis} />
