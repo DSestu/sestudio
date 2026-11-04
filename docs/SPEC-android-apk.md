@@ -110,8 +110,9 @@ One version number for both halves.
 **Updating.** On launch, the app reads `api.github.com/repos/DSestu/sestudio/releases/latest`.
 When its `versionCode` is behind:
 
-1. A small banner: "sestudio 1.3.0 is available — Update".
-2. Download `sestudio.apk` from the release, check it is signed with the same key as the running app.
+1. A dialog: "sestudio 1.3.0 is available", Update or Later (Later: asked again a day later).
+2. Download `sestudio.apk` from the release. Android refuses an update signed with another key, so
+   the app does not check the signature itself.
 3. Install through Android's `PackageInstaller` (permission `REQUEST_INSTALL_PACKAGES`; Android asks
    once to allow installs from sestudio, then confirms each update with one tap).
 
