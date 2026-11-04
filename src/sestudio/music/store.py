@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 
 from sestudio import library
-from sestudio.music import profile
+from sestudio.music import genres, profile
 from sestudio.music.analysis import RawAnalysis
 
 #: Renormalise when the analysed set has grown by more than this since the last time.
@@ -91,8 +91,6 @@ def pending_genre(model: bool) -> dict[str, tuple[dict[str, Any], float]]:
     """(profile, duration) of the tracks whose genre was not decided yet, by
     id: those at an older version, and, once the *model* may run, those
     decided without it."""
-    from sestudio.music import genres
-
     with library._lock:
         rows = library._connect().execute(
             "SELECT track_id, duration, extra FROM music_analysis"
@@ -262,4 +260,7 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
                 round(sum(mean[5:8]) / 3, 3),
             ],
         }
+        # Genres stored before one spelling was enforced group with the rest.
+        if g := out[r["track_id"]].get("genre"):
+            out[r["track_id"]]["genre"] = genres.spell(g)
     return out
