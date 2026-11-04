@@ -60,8 +60,15 @@ def set_genre(track_id: str, genre: str | None) -> bool:
 
 
 def save(track_id: str, mtime: float, size: int, a: RawAnalysis) -> None:
+    """Store a fresh analysis; the user's genre choice survives it."""
     with library._lock:
         conn = library._connect()
+        row = conn.execute(
+            "SELECT extra FROM music_analysis WHERE track_id = ?", (track_id,)
+        ).fetchone()
+        extra = a.extra
+        if row and (g := json.loads(row["extra"]).get(OVERRIDE)):
+            extra = {**extra, OVERRIDE: g}
         conn.execute(
             "INSERT OR REPLACE INTO music_analysis (track_id, mtime, size, analysed_at,"
             " duration, zcr, bpm, beat0, bar0, bpm_conf, n, bands, loudness, extra)"
@@ -70,7 +77,7 @@ def save(track_id: str, mtime: float, size: int, a: RawAnalysis) -> None:
                 track_id, mtime, size, int(time.time()), a.duration, a.zcr, a.bpm,
                 a.beat0, a.bar0, a.bpm_conf, a.bands.shape[1],
                 a.bands.astype(np.float16).tobytes(),
-                a.loudness.astype(np.float16).tobytes(), json.dumps(a.extra),
+                a.loudness.astype(np.float16).tobytes(), json.dumps(extra),
             ),
         )  # fmt: skip
         conn.commit()
@@ -138,6 +145,18 @@ def set_extra(track_id: str, extra: dict[str, Any]) -> None:
             (json.dumps(extra), track_id),
         )
         conn.commit()
+
+
+def forget(ids: list[str]) -> int:
+    """Mark these tracks' analyses stale so the runner redoes them; they stay readable meanwhile."""
+    with library._lock:
+        conn = library._connect()
+        n = conn.executemany(
+            "UPDATE music_analysis SET mtime = -1 WHERE track_id = ?",
+            [(i,) for i in ids],
+        ).rowcount
+        conn.commit()
+    return n
 
 
 def stamps() -> dict[str, tuple[float, int]]:

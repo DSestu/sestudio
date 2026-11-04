@@ -39,6 +39,13 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
   const remove = (id: string, name: string) => {
     if (window.confirm(`Remove “${name}” from the libraries? Its files are not touched.`)) librariesApi.remove(id).catch(fail)
   }
+  const reanalyse = (id?: string, name?: string) => {
+    const what = name ? `every file in “${name}”` : 'every file in every library'
+    if (window.confirm(`Analyse ${what} again? Key, tempo, genre and structure are redone in the background; it can take a while.`)) {
+      librariesApi.reanalyse(id).catch(fail)
+    }
+  }
+  const analysed = libraries.filter(l => l.kind === 'local' || l.kind === 'local_folder')
 
   return (
     <>
@@ -49,12 +56,18 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
             label={<>{l.label} <span className="text-base-content/50 font-normal">· {KIND_NAME[l.kind]}</span></>}
             help={<span className="block truncate">{l.path ?? l.url ?? ''}{(l.path ?? l.url) ? ' · ' : ''}{stateLine(l)} · {l.count} tracks</span>}
           >
+            {analysed.includes(l) && <button onClick={() => reanalyse(l.id, l.label)} className="btn btn-ghost btn-sm">Reanalyse</button>}
             {l.kind !== 'local' && <button onClick={() => remove(l.id, l.label)} className="btn btn-ghost btn-sm">Remove</button>}
           </SettingRow>
         ))}
         <button onClick={() => setAdding(true)} className="mx-3 min-h-14 w-[calc(100%-1.5rem)] text-left text-[15px] font-medium text-primary border-base-300 not-first:border-t">
           Add a library
         </button>
+        {analysed.length > 1 && (
+          <button onClick={() => reanalyse()} className="mx-3 min-h-14 w-[calc(100%-1.5rem)] text-left text-[15px] font-medium text-primary border-base-300 border-t">
+            Reanalyse all libraries
+          </button>
+        )}
       </SettingsGroup>
 
       <SettingsGroup
