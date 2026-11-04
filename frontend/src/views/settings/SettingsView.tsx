@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react'
-import LibrariesSettings from '../../components/music/LibrariesSettings'
+import Music from './Music'
 import PageHeader from '../../components/PageHeader'
 import type { AppSettings } from '../../api'
 import { replaceParams } from '../../nav'
@@ -34,7 +34,7 @@ const CATEGORIES: Category[] = [
   { id: 'subtitles', name: 'Subtitles', group: 'Watching', icon: 'M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2zM7 13h4M13 13h4M7 16h7', page: () => <Subtitles /> },
   { id: 'sources', name: 'Sources & search', group: 'Finding & keeping', icon: 'M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18', page: p => <Sources {...p} /> },
   { id: 'downloads', name: 'Downloads', group: 'Finding & keeping', icon: 'M12 4v11M7 10l5 5 5-5M5 20h14', page: p => <Downloads {...p} /> },
-  { id: 'music', name: 'Music', group: 'Finding & keeping', icon: 'M9 18V6l11-2v12M6.5 15.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM17.5 13.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z', page: p => <LibrariesSettings {...p} /> },
+  { id: 'music', name: 'Music', group: 'Finding & keeping', icon: 'M9 18V6l11-2v12M6.5 15.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM17.5 13.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z', page: p => <Music {...p} /> },
   { id: 'notifications', name: 'Notifications', group: 'Finding & keeping', icon: 'M6 16v-5a6 6 0 1112 0v5l1.5 2h-15zM10 20.5h4', page: p => <Notifications {...p} /> },
   { id: 'server', name: 'Server', group: 'This server', icon: 'M6 4h12a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2zM6 13h12a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2v-3a2 2 0 012-2zM8 7.5h.01M8 16.5h.01', page: p => <Server {...p} /> },
   { id: 'share', name: 'Share sestudio', group: 'This server', icon: 'M12 15V4M8 8l4-4 4 4M5 13v6h14v-6', page: () => <Share /> },

@@ -3,7 +3,13 @@ import RankRow from '../../components/RankRow'
 import type { AppSettings, SiteInfo } from '../../api'
 import { getSites } from '../../api'
 import { DEFAULT_HOST_ORDER } from '../../downloadPrefs'
+import { Choice, SettingRow, SettingsGroup, ToggleRow } from './rows'
 import type { SettingsProps } from './SettingsView'
+
+const DESTINATIONS: { value: AppSettings['download_destination']; label: string }[] = [
+  { value: 'server', label: 'Server' },
+  { value: 'device', label: 'This device' },
+]
 
 /** Settings › Downloads: where files go, which sites and hosts are tried first, and deleting. */
 export default function Downloads({ settings, onUpdate }: SettingsProps) {
@@ -11,104 +17,81 @@ export default function Downloads({ settings, onUpdate }: SettingsProps) {
 
   useEffect(() => { void getSites().then(setSites) }, [])
 
+  const toServer = settings.download_destination === 'server'
+
   return (
-    <section aria-labelledby="settings-downloads" className="flex flex-col gap-4">
-      <h3
-        id="settings-downloads"
-        className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
-      >
-        Downloads
-      </h3>
-
-      <div>
-        <label htmlFor="set-dest" className="text-sm text-base-content/60 mb-1 block">
-          Download to
-        </label>
-        <select
-          id="set-dest"
-          className="select select-bordered w-full"
-          value={settings.download_destination}
-          onChange={e =>
-            onUpdate({ download_destination: e.target.value as AppSettings['download_destination'] })
-          }
+    <>
+      <SettingsGroup>
+        <SettingRow
+          label="Download to"
+          help={toServer ? 'Saved on the server, in the folder below' : 'Streamed through the server to this browser'}
         >
-          <option value="server">Server</option>
-          <option value="device">This device</option>
-        </select>
-        <p className="text-xs text-base-content/50 mt-1">
-          “This device” streams the file through the server to your browser.
-        </p>
-      </div>
+          <Choice
+            label="Download to"
+            value={settings.download_destination}
+            options={DESTINATIONS}
+            onChange={download_destination => onUpdate({ download_destination })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Folder on the server"
+          htmlFor="set-output"
+          help={toServer ? undefined : 'Only used when downloading to the server'}
+          stacked
+        >
+          <input
+            id="set-output"
+            className="input input-sm h-9 w-full bg-base-100 border-0 font-mono"
+            value={settings.output_root}
+            onChange={e => onUpdate({ output_root: e.target.value })}
+          />
+        </SettingRow>
+      </SettingsGroup>
 
-      <div>
-        <span className="text-sm text-base-content/60 mb-1 block">Download order</span>
-        <p className="text-xs text-base-content/50 mb-2 leading-snug">
-          Click a chip to add it to the order — the first click is choice 1,
-          the next is choice 2, and so on; click a numbered chip to take it
-          out. A download tries your order from the top and moves to the next
-          one whenever a site or host fails, so the order decides what is used
-          first, never what is possible. Unnumbered entries are still tried,
-          after the numbered ones.
-        </p>
-        <div className="flex flex-col gap-2">
+      <SettingsGroup
+        title="Try first"
+        footnote={
+          <>
+            Tap to number. If one fails the next is tried, and unnumbered ones are still tried after.{' '}
+            <button
+              onClick={() =>
+                void onUpdate({
+                  preferred_sites: ['fstream'],
+                  preferred_hosts: settings.default_hosts ?? DEFAULT_HOST_ORDER,
+                })
+              }
+              className="text-primary font-medium"
+            >
+              Reset
+            </button>
+          </>
+        }
+      >
+        <SettingRow label="Sites" stacked>
           <RankRow
-            label="Site"
             options={sites.map(site => ({ value: site.id, label: site.display_name }))}
             order={settings.preferred_sites ?? []}
             onChange={order => void onUpdate({ preferred_sites: order })}
           />
+        </SettingRow>
+        <SettingRow label="Hosts" stacked>
           <RankRow
-            label="Host"
             options={(settings.known_hosts ?? []).map(h => ({ value: h, label: h }))}
             order={settings.preferred_hosts ?? []}
             onChange={order => void onUpdate({ preferred_hosts: order })}
           />
-        </div>
-        <button
-          onClick={() =>
-            void onUpdate({
-              preferred_sites: ['fstream'],
-              preferred_hosts: settings.default_hosts ?? DEFAULT_HOST_ORDER,
-            })
-          }
-          className="btn btn-ghost btn-xs mt-2"
-        >
-          Reset order
-        </button>
-      </div>
+        </SettingRow>
+      </SettingsGroup>
 
-      <div>
-        <label htmlFor="set-output" className="text-sm text-base-content/60 mb-1 block">
-          Download folder (server)
-        </label>
-        <input
-          id="set-output"
-          className="input input-bordered w-full"
-          value={settings.output_root}
-          onChange={e => onUpdate({ output_root: e.target.value })}
+      <SettingsGroup>
+        <ToggleRow
+          label="Allow deleting files"
+          help="A delete button on downloaded files. Gone from the server's disk, no undo"
+          danger
+          checked={settings.allow_file_deletion === true}
+          onChange={on => onUpdate({ allow_file_deletion: on })}
         />
-        <p className="text-xs text-base-content/50 mt-1">
-          {settings.download_destination === 'server'
-            ? 'Where completed downloads are written on the server.'
-            : 'Only used when downloading to the server.'}
-        </p>
-      </div>
-
-      <div>
-        <label className="flex items-center gap-3 cursor-pointer text-sm">
-          <input
-            type="checkbox"
-            className="toggle toggle-error toggle-sm"
-            checked={settings.allow_file_deletion === true}
-            onChange={e => onUpdate({ allow_file_deletion: e.target.checked })}
-          />
-          <span>Allow deleting downloaded files</span>
-        </label>
-        <p className="text-xs text-base-content/50 mt-1">
-          Shows a delete button on files in the downloaded browser. Deleted files
-          are removed from the server's disk for good — there is no undo.
-        </p>
-      </div>
-    </section>
+      </SettingsGroup>
+    </>
   )
 }
