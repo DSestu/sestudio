@@ -13,14 +13,16 @@ import Background from './background/Background'
 import { useLook } from './background/settings'
 import Queue from './Queue'
 import { scrubbing } from './scrub'
-import { isPhone, isShort, libRect, libShift, rects, setStageShift } from './timeline/mapping'
+import { crateHeight, isPhone, isShort, libRect, libShift, PHONE_LIFT, rects, setStageLift, setStageShift } from './timeline/mapping'
 import { tlook } from './timeline/render'
 import Timeline from './timeline/Timeline'
 import Title from './Title'
+import { SearchIcon } from '../search/SearchParts'
 import Transport from './Transport'
 import { useModalBack } from '../../useModalBack'
 
 const toggle = () => setMode(getMode() === 'expanded' ? 'default' : 'expanded')
+const toDefault = () => setMode('default')
 
 /** Fades a part in or out and keeps a hidden one out of reach. */
 function fade(el: HTMLElement | null, o: number, dy: number) {
@@ -29,6 +31,20 @@ function fade(el: HTMLElement | null, o: number, dy: number) {
   el.style.transform = `translateY(${dy}px)`
   el.style.visibility = o < 0.01 ? 'hidden' : 'visible'
 }
+
+/** Fades a part without moving it. */
+function dim(el: HTMLElement | null, o: number) {
+  if (!el) return
+  el.style.opacity = String(o)
+  el.style.visibility = o < 0.01 ? 'hidden' : ''
+}
+
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x))
+
+/** The default view's crate: closed, peeking (a pointer at the bottom edge or on Add to queue), open (the pointer on it), or pinned (a click, a key, a tap). */
+type Reveal = 'off' | 'peek' | 'open' | 'pinned'
+const RISE = { off: 0, peek: 0.25, open: 1, pinned: 1 }
+const RISE_MS = { off: 420, peek: 300, open: 560, pinned: 560 }
 
 /** The station's page: the TV's picture, with its unheard sound for the light. */
 export function TvLayer() {
@@ -45,21 +61,24 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const analysis = useAnalysis(item?.track_id)
   const position = usePosition(q, track?.duration ?? 0)
   const touch = useRef<number | null>(null)
-  const [adding, setAdding] = useState(false)
+  const [reveal, setReveal] = useState<Reveal>('off')
+  const adding = reveal !== 'off'
   const look = useLook()
   useEffect(() => { Object.assign(tlook, look.tl) }, [look.tl])
 
   const [aim, setAim] = useState<number | null>(null)
   // Desktop, expanded: hovering the queue peeks the library column open; the Library button (or A) locks it (`adding`).
   const [peek, setPeek] = useState(false)
+  const [finding, setFinding] = useState(false)
   const [vw, setVw] = useState({ W: innerWidth, H: innerHeight })
   const expanded = useMode() === 'expanded' && !tv
   // Each mode has its own place to add from (the crate, the column, the Library page): a switch closes it.
   const [was, setWas] = useState(expanded)
   if (was !== expanded) {
     setWas(expanded)
-    setAdding(false)
+    setReveal('off')
     setPeek(false)
+    setFinding(false)
     setAim(null)
   }
   const small = isPhone(vw.W) || isShort(vw.W, vw.H)
@@ -68,7 +87,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const tabs = expanded && small
   const [colMounted, setColMounted] = useState(false)
   if (column && !colMounted) setColMounted(true)
-  const closeAdding = useCallback(() => { setAdding(false); setPeek(false); setAim(null) }, [])
+  const closeAdding = useCallback(() => { setReveal('off'); setPeek(false); setAim(null) }, [])
   const peekTimer = useRef(0)
   useEffect(() => () => window.clearTimeout(peekTimer.current), [])
   // A mouse resting on the queue (or the column) for 250 ms opens it; leaving both for 350 ms closes it, unless locked or a drag is under way.
@@ -86,13 +105,19 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     }
     peekTimer.current = window.setTimeout(close, 350)
   }
-  const toggleAdding = useCallback(() => { setAdding(a => !a); setAim(null) }, [])
+  // The crate stays mounted while the stage falls back over it.
+  const [crateMounted, setCrateMounted] = useState(false)
+  if (adding && !expanded && !crateMounted) setCrateMounted(true)
+  // A peeking crate is pinned rather than closed.
+  const toggleAdding = useCallback(() => { setReveal(r => (r === 'pinned' ? 'off' : 'pinned')); setAim(null) }, [])
   const aimObj = { at: aim, set: setAim }
   const aimTitle = aim !== null && aim > 0 ? info(q.items[aim - 1]?.track_id ?? '')?.title : undefined
   const motion = useRef<ModeMotion>(null as unknown as ModeMotion)
   motion.current ??= new ModeMotion(expanded ? 1 : 0)
   const lib = useRef<ModeMotion>(null as unknown as ModeMotion)
   lib.current ??= Object.assign(new ModeMotion(0), { ms: 320 })
+  const rise = useRef<ModeMotion>(null as unknown as ModeMotion)
+  rise.current ??= new ModeMotion(0)
   const libEl = useRef<HTMLDivElement>(null)
   const progress = useCallback(() => motion.current.value(performance.now()), [])
   const root = useRef<HTMLDivElement>(null)
@@ -124,7 +149,30 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     wake()
     const f = frameAt(W, H, t)
     const { clip: c, title, transport, queue: b } = f
-    skyEl.current!.style.clipPath = `inset(${c.y}px ${W - c.x - c.w}px ${H - c.y - c.h}px ${c.x}px round ${c.r}px)`
+    // The crate (default view): the stage rises in tiers to uncover it, bottom first, and nothing leaves the screen.
+    // A desktop lifts the timeline by the crate's height, the transport after it, the title shrinking to a headline,
+    // and shortens the queue; a phone lifts the timeline a little and its controls slide up under it, fading.
+    const R = crateHeight(W, H)
+    const k = R ? rise.current.value(performance.now()) * (1 - t) : 0
+    const k1 = clamp01((k - 0.08) / 0.92)
+    const k2 = clamp01((k - 0.16) / 0.84)
+    const phone = isPhone(W)
+    setStageLift(phone ? PHONE_LIFT * k1 : R * k)
+    if (phone) {
+      title.y -= 130 * k2
+      transport.y -= 230 * k1
+      b.y -= 360 * k
+    } else {
+      title.y -= 70 * k2
+      title.scale *= 1 - 0.45 * k2
+      transport.y -= 112 * k1
+      // Not while peeking: the Add to queue row stays under the pointer that is resting on it.
+      b.h -= 196 * clamp01((k - RISE.peek) / (1 - RISE.peek))
+    }
+    dim(titleEl.current, phone ? clamp01(1 - 1.2 * k2) : 1)
+    dim(transportEl.current, phone ? clamp01(1 - 1.3 * k1) : 1)
+    dim(queueEl.current, phone ? clamp01(1 - 1.4 * k) : 1)
+    skyEl.current!.style.clipPath = `inset(${c.y}px ${W - c.x - c.w}px ${H - c.y - c.h + R * k}px ${c.x}px round ${c.r}px)`
     const te = titleEl.current!.style
     te.width = `${titleWidth(W, H, title.x, t)}px`
     te.transform = `translate(${title.x}px, ${title.y}px) scale(${title.scale})`
@@ -146,7 +194,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     const step = () => {
       const now = performance.now()
       apply(motion.current.value(now))
-      raf.current = motion.current.moving(now) || lib.current.moving(now) ? requestAnimationFrame(step) : 0
+      raf.current = motion.current.moving(now) || lib.current.moving(now) || rise.current.moving(now) ? requestAnimationFrame(step) : 0
     }
     step()
   }, [apply])
@@ -171,6 +219,75 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     return () => window.clearTimeout(id)
   }, [column, colMounted, tv, kick])
   useEffect(() => () => setStageShift(0), [])
+
+  // The stage rises over the crate, or falls back, then the crate unmounts.
+  useLayoutEffect(() => {
+    if (tv) return
+    const r = rise.current
+    r.go(expanded ? 0 : RISE[reveal], performance.now())
+    r.ms = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : RISE_MS[reveal]
+    kick()
+    if (reveal !== 'off' && !expanded) return
+    const id = window.setTimeout(() => setCrateMounted(false), RISE_MS.off + 20)
+    return () => window.clearTimeout(id)
+  }, [reveal, expanded, tv, kick])
+  useEffect(() => () => setStageLift(0), [])
+
+  // Desktops: the crate deploys on hover. The bottom edge (or a rest on Add to queue) peeks, the pointer on the crate
+  // opens it, and 400 ms away it falls back; a press in it, or its search taking focus, pins it.
+  const revealNow = useRef(reveal)
+  revealNow.current = reveal
+  // Phones: while a library row is held (rowDrag's data-libdrag), the stage falls back over the crate so the row drops into the queue sheet or on a join.
+  useEffect(() => {
+    if (tv) return
+    const html = document.documentElement
+    const obs = new MutationObserver(() => {
+      if (!isPhone(innerWidth) || getMode() === 'expanded' || revealNow.current === 'off') return
+      rise.current.go(html.dataset.libdrag ? 0 : RISE[revealNow.current], performance.now())
+      kick()
+    })
+    obs.observe(html, { attributes: true, attributeFilter: ['data-libdrag'] })
+    return () => obs.disconnect()
+  }, [tv, kick])
+  useEffect(() => {
+    if (tv || expanded || small || !window.matchMedia('(hover: hover)').matches) return
+    let leave = 0
+    let rest = 0
+    const stay = () => { clearTimeout(leave); leave = 0 }
+    const away = () => { if (!leave) leave = window.setTimeout(() => { leave = 0; setReveal(r => (r === 'pinned' ? r : 'off')) }, 400) }
+    const move = (e: PointerEvent) => {
+      const cur = revealNow.current
+      if (e.pointerType !== 'mouse' || e.buttons || cur === 'pinned') return
+      const el = e.target as Element
+      const lip = e.clientY > innerHeight - 24
+      const row = !!el.closest?.('[data-add-row]')
+      const top = innerHeight - crateHeight(innerWidth, innerHeight) * RISE[cur]
+      const onCrate = cur !== 'off' && (!!el.closest?.('[data-addp]') || e.clientY > top - 8)
+      if (!row) { clearTimeout(rest); rest = 0 }
+      if (lip || row || onCrate) stay()
+      if (cur === 'off') {
+        if (lip) setReveal('peek')
+        else if (row && !rest) rest = window.setTimeout(() => { rest = 0; setReveal(r => (r === 'off' ? 'peek' : r)) }, 150)
+      } else if (onCrate && cur === 'peek') setReveal('open')
+      else if (!lip && !row && !onCrate) away()
+    }
+    const out = (e: PointerEvent) => { if (!e.relatedTarget && revealNow.current !== 'pinned' && revealNow.current !== 'off') away() }
+    const pin = (e: Event) => {
+      if (revealNow.current !== 'off' && (e.target as Element).closest?.('[data-addp]')) setReveal('pinned')
+    }
+    window.addEventListener('pointermove', move)
+    document.addEventListener('pointerout', out)
+    window.addEventListener('pointerdown', pin, true)
+    window.addEventListener('focusin', pin)
+    return () => {
+      stay()
+      clearTimeout(rest)
+      window.removeEventListener('pointermove', move)
+      document.removeEventListener('pointerout', out)
+      window.removeEventListener('pointerdown', pin, true)
+      window.removeEventListener('focusin', pin)
+    }
+  }, [tv, expanded, small])
 
   // A switch retargets from the current progress; reduced motion swaps with a short crossfade instead.
   const first = useRef(true)
@@ -204,7 +321,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       m.hold(p.t)
       const b = bar()
       b.style.width = `${p.bar}px`
-      b.classList.toggle('bg-primary', p.armed)
+      b.toggleAttribute('data-armed', p.armed)
       if (p.armed && !armed) b.animate([{ transform: 'scaleY(1)' }, { transform: 'scaleY(2.2)' }, { transform: 'scaleY(1)' }], { duration: 220 })
       armed = p.armed
       kick()
@@ -214,7 +331,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       pulling = false
       const b = bar()
       b.style.width = ''
-      b.classList.remove('bg-primary')
+      b.removeAttribute('data-armed')
       const go = armed
       d = 0
       armed = false
@@ -308,8 +425,9 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     }
   }, [tv, kick])
 
-  // Back closes the player instead of navigating the page under it.
+  // Back closes the player instead of navigating the page under it; on a phone, the expanded view first goes back down to the default one.
   useModalBack(!tv, closePlayer)
+  useModalBack(!tv && expanded && isPhone(vw.W) && !isShort(vw.W, vw.H), toDefault)
 
   // A modal: focus moves in, and on close focus goes to the player bar, which takes the layer's place.
   useEffect(() => {
@@ -395,7 +513,8 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       // Swipe down closes it on a phone, except from inside the queue (which scrolls).
       onTouchStart={e => { touch.current = (e.target as HTMLElement).closest('[data-queue], [data-addp]') ? null : e.touches[0].clientY }}
       onTouchEnd={e => {
-        if (touch.current !== null && !scrubbing() && e.changedTouches[0].clientY - touch.current > 90) closePlayer()
+        // One height at a time: from the expanded view a swipe down goes back to the default one.
+        if (touch.current !== null && !scrubbing() && e.changedTouches[0].clientY - touch.current > 90) (getMode() === 'expanded' ? toDefault() : closePlayer())
         touch.current = null
       }}
     >
@@ -414,7 +533,10 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       {!tv && <div ref={card} className="absolute top-3 left-3.5 right-3.5 md:left-32 md:right-5 z-10 h-16 rounded-2xl glass flex items-center gap-3 px-3 invisible">
         <button aria-label="Close the player" onClick={closePlayer} className="size-10 shrink-0 rounded-xl hover:bg-white/10 grid place-items-center">{closeIcon}</button>
         <h2 className="max-md:hidden shrink-0 pr-2 text-xl font-medium">Music</h2>
-        <PlayerSearch active={expanded} />
+        {/* A phone keeps the list's room: the search is an icon until tapped. */}
+        {isPhone(vw.W) && !finding
+          ? <button aria-label="Search" onClick={() => setFinding(true)} className="ml-auto size-10 shrink-0 rounded-xl bg-white/6 hover:bg-white/10 grid place-items-center"><SearchIcon /></button>
+          : <PlayerSearch active={expanded} autoFocus={finding} />}
         <button
           aria-label="Activity"
           onClick={() => closeThen(() => { window.location.hash = '#/notifications' })}
@@ -434,10 +556,10 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
         onOutside={closeAdding}
         marks={(adding || column) && !tv}
         aim={aim}
-        onAim={at => { setAim(at); setAdding(true) }}
+        onAim={at => { setAim(at); setReveal('pinned') }}
       />
       <div ref={transportEl} className="absolute left-0 top-0">
-        <Transport q={q} position={position} duration={track?.duration ?? 0} tv={tv} />
+        <Transport q={q} position={position} duration={track?.duration ?? 0} tv={tv} compact={expanded && isPhone(vw.W) && !isShort(vw.W, vw.H)} />
       </div>
       <div ref={queueEl} className="absolute" onPointerEnter={hoverIn} onPointerLeave={hoverOut}>
         <Queue
@@ -457,7 +579,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
         </div>
       )}
       {tv && <VolumePill />}
-      {adding && !tv && !expanded && <Crate q={q} aim={aimObj} aimTitle={aimTitle} onClose={closeAdding} />}
+      {crateMounted && (adding || crateHeight(vw.W, vw.H) > 0) && !tv && !expanded && <Crate q={q} aim={aimObj} aimTitle={aimTitle} onClose={closeAdding} />}
       {!tv && <ToastBar />}
     </div>
   )

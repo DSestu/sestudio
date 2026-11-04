@@ -31,7 +31,7 @@ describe('mapping', () => {
     const pd = new Mapper(390, 844).at(0)
     expect([pd.y0, pd.amp].map(Math.round)).toEqual([251, 151])
     const pe = new Mapper(390, 844).at(1)
-    expect([pe.y0, pe.amp].map(Math.round)).toEqual([258, 100])
+    expect([pe.y0, pe.amp].map(Math.round)).toEqual([179, 56])
   })
 
   it('interpolates between the two modes', () => {

@@ -33,6 +33,19 @@ export const stageShift = () => shift
 export const setStageShift = (px: number) => { shift = px }
 /** How much the library column takes from the stage when fully open: its 360 px and a 20 px gap, leaving the stage at least 300 px. */
 export const libShift = (W: number) => Math.min(380, Math.max(0, W - 528 - 300))
+let lift = 0
+/** Pixels the default view's timeline rises to uncover the crate under it (0 when it is closed). */
+export const setStageLift = (px: number) => { lift = px }
+/** How far a phone's timeline rises for the crate: the rest of the room comes from the parts under it, which leave. */
+export const PHONE_LIFT = 64
+/** The crate's height in the default view, under the lifted stage (0 on a phone on its side, which keeps its own crate). */
+export function crateHeight(W: number, H: number) {
+  if (isShort(W, H)) return 0
+  if (!isPhone(W)) return 236
+  const { d } = rects(W, H)
+  return Math.round(H - (d.y + d.h - PHONE_LIFT) - 6)
+}
+
 /** The library column of the desktop's expanded view: left of the queue column, as tall. */
 export const libRect = (W: number, H: number): Rect => ({ x: W - 760, y: 92, w: 360, h: H - 112 })
 
@@ -46,7 +59,8 @@ export function rects(W: number, H: number): { d: Rect; e: Rect } {
   }
   if (isPhone(W)) {
     // The strip starts under the close button and leaves 84 px under it for the title, above the transport.
-    return { d: { x: 0, y: 60, w: W, h: H * 0.56 - 144 }, e: { x: 14, y: 88, w: W - 28, h: Math.min(250, H * 0.3) } }
+    // Expanded keeps a short stage, so the list under it gets the room (one sheet, three heights: §7.6).
+    return { d: { x: 0, y: 60, w: W, h: H * 0.56 - 144 }, e: { x: 14, y: 84, w: W - 28, h: 140 } }
   }
   const dh = Math.min(420, H * 0.47)
   return { d: { x: 0, y: H - dh, w: W, h: dh }, e: { x: 128, y: 92, w: W - 128 - 400 - shift, h: Math.min(520, H * 0.62) } }
@@ -97,6 +111,7 @@ export class Mapper {
   readonly H: number
   private win: number
   private sh = 0
+  private lf = 0
 
   constructor(W: number, H: number) {
     this.W = W
@@ -109,6 +124,8 @@ export class Mapper {
     this.F = fish(r.d, small ? 900 : 1500)
     this.L = life(r.e, this.win)
     this.sh = shift
+    this.lf = lift
+    this.d = { ...r.d, y: r.d.y - lift }
     this.at(0)
   }
 
@@ -118,6 +135,12 @@ export class Mapper {
       this.sh = shift
       this.e = rects(this.W, this.H).e
       this.L = life(this.e, this.win)
+    }
+    if (this.lf !== lift) {
+      // The crate opened or closed under the default strip: it rises or falls.
+      this.lf = lift
+      const d = rects(this.W, this.H).d
+      this.d = { ...d, y: d.y - lift }
     }
     const { d, e, R } = this
     this.t = t
