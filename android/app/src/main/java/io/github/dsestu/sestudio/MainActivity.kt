@@ -66,6 +66,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         boot(Runtime(this))
+        Updater.checkDaily(this)
     }
 
     override fun onResume() {
