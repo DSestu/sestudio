@@ -52,7 +52,7 @@ export const PRESETS: Preset[] = [
 export const TLD = [
   ['klo', 'Bass depth', 0.2, 1.4, 0.05, 0.7, ''], ['kmi', 'Mids height', 0.2, 1.4, 0.05, 0.9, ''], ['khi', 'Highs height', 0.1, 1, 0.02, 0.42, ''],
   ['alo', 'Bass opacity', 0, 1, 0.05, 0.9, ''], ['ami', 'Mids opacity', 0, 1, 0.05, 0.5, ''], ['ahi', 'Highs opacity', 0, 1, 0.05, 0.82, ''],
-  ['edge', 'Edge line', 0, 3, 0.25, 1, ' px'], ['glow', 'Glow', 0, 3, 0.05, 0.75, ''], ['bb', 'Bass blur', 0, 8, 0.5, 3.5, ' px'],
+  ['edge', 'Edge line', 0, 3, 0.25, 1, ' px'], ['glow', 'Glow', 0, 3, 0.05, 0.75, ''],
 ] as const
 export type TKey = (typeof TLD)[number][0]
 export type TimelineLook = Record<TKey, number>
