@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from sestudio.config import load_config
-from sestudio.music import libraries, online, runner, search, store
+from sestudio.music import libraries, modes, online, runner, search, store
 from sestudio.sites import SiteError
 from sestudio.web.routes.stream import _proxy_url
 
@@ -102,6 +102,30 @@ async def track_genre(track_id: str, body: GenreBody) -> dict[str, bool]:
     if not await asyncio.to_thread(store.set_genre, track_id, genre):
         raise HTTPException(status_code=404, detail="Not analysed (yet)")
     return {"ok": True}
+
+
+class ModeBody(BaseModel):
+    tonic: str | None = None
+    mode: str | None = None
+
+
+@router.put("/music/tracks/{track_id}/mode")
+async def track_mode(track_id: str, body: ModeBody) -> dict[str, bool]:
+    """Settle a track's tonic and mode by ear (both None clears the choice)."""
+    if (body.tonic or body.mode) and not (
+        body.tonic and body.mode and modes.valid(body.tonic, body.mode)
+    ):
+        raise HTTPException(status_code=400, detail="Unknown tonic or mode")
+    if not await asyncio.to_thread(store.set_mode, track_id, body.tonic, body.mode):
+        raise HTTPException(status_code=404, detail="Not analysed (yet)")
+    return {"ok": True}
+
+
+@router.get("/music/analysis/unsure")
+async def unsure_modes() -> dict[str, Any]:
+    """Tracks whose mode the analysis is unsure of and the user has not settled yet."""
+    ids = await asyncio.to_thread(store.unsure)
+    return {"count": len(ids), "ids": ids}
 
 
 @router.get("/music/online/link")

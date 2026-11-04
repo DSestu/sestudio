@@ -224,6 +224,39 @@ def analyse(x: np.ndarray, skey: np.ndarray | None = None) -> dict[str, Any] | N
     return out or None
 
 
+def valid(tonic: str, mode: str) -> bool:
+    return tonic in NAMES and mode in SCALES
+
+
+def served(
+    harmony: dict[str, Any] | None, choice: dict[str, str] | None
+) -> dict[str, Any] | None:
+    """The stored readings with the user's settled tonic and mode on the whole track.
+
+    The track's reading gets ``source`` (``detected`` or ``user``); a settled one
+    is sure and keeps what was detected in ``detected``.
+    """
+    out = dict(harmony or {})
+    track = {**out.get("track", {}), "source": "detected"} if "track" in out else None
+    if choice and valid(choice["tonic"], choice["mode"]):
+        tonic, mode = choice["tonic"], choice["mode"]
+        was = f"{track['tonic']} {track['mode']}" if track else None
+        track = {
+            **(track or {}),
+            "tonic": tonic,
+            "mode": mode,
+            "notes": [NAMES[p] for p in pcs(NAMES.index(tonic), mode)],
+            "brightness": BRIGHTNESS.get(mode),
+            "unsure": False,
+            "reason": "",
+            "source": "user",
+            "detected": was,
+        }
+    if track is not None:
+        out["track"] = track
+    return out or None
+
+
 def fields(x: np.ndarray, skey: np.ndarray | None = None) -> dict[str, Any]:
     """What a track's stored analysis gets: ``harmony`` (track, intro, outro) and ``modesV``.
 
