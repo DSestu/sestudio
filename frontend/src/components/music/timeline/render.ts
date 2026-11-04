@@ -1,7 +1,7 @@
 // Paints one timeline frame (SPEC-music-player §6.5 to §6.9). Layers back to
-// front: joins, minute grid, beat ticks, then the curves on an offscreen canvas
+// front: minute grid, beat ticks, then the curves on an offscreen canvas
 // (glow, bass, mids, highs, edge) composited twice (left of the playhead at 42 %),
-// then ticks, labels and the playhead.
+// then joins, ticks, labels and the playhead.
 
 import { fmtTime } from '../format'
 import { isPhone, isShort, Mapper } from './mapping'
@@ -147,21 +147,6 @@ export class TimelineRenderer {
       c.clip()
     }
 
-    // Joins.
-    for (const it of items) {
-      if (!it.plan) continue
-      const a = it.a + it.span.i0
-      const x0 = X(a)
-      const x1 = X(a + it.span.il)
-      if (x1 < 0 || x0 > W) continue
-      const gr = g2.createLinearGradient(x0, 0, x1, 0)
-      gr.addColorStop(0, `${SIGNAL} / 0)`)
-      gr.addColorStop(0.5, `${SIGNAL} / .22)`)
-      gr.addColorStop(1, `${SIGNAL} / 0)`)
-      g2.fillStyle = gr
-      g2.fillRect(x0, y0 - amp * 1.2, x1 - x0, amp * 2.1)
-    }
-
     // Minute grid, on whole minutes of the timeline's own clock.
     {
       const gy = y0 - amp * 1.1
@@ -231,6 +216,29 @@ export class TimelineRenderer {
     g2.clip()
     g2.drawImage(off.c, 0, this.cy * dpr, W * dpr, this.ch * dpr, 0, this.cy, W, this.ch)
     g2.restore()
+
+    // Joins: a hairline at the middle of each overlap, from under the label, with a small diamond on the horizon.
+    const sg = g2.createLinearGradient(0, y0 - amp * 0.98, 0, y0 + amp * 0.9)
+    sg.addColorStop(0, `${SIGNAL} / 0)`)
+    sg.addColorStop(0.35, `${SIGNAL} / .85)`)
+    sg.addColorStop(0.62, `${SIGNAL} / .85)`)
+    sg.addColorStop(1, `${SIGNAL} / 0)`)
+    for (const it of items) {
+      if (!it.plan) continue
+      const x = X(it.a + it.span.i0 + it.span.il / 2)
+      if (x < R.x || x > R.x + R.w) continue
+      g2.globalAlpha = x < px ? 0.6 : 1
+      g2.fillStyle = sg
+      g2.fillRect(x - 0.5, y0 - amp * 0.98, 1, amp * 1.88)
+      g2.fillStyle = `${SIGNAL} / .95)`
+      g2.beginPath()
+      g2.moveTo(x, y0 - 4)
+      g2.lineTo(x + 4, y0)
+      g2.lineTo(x, y0 + 4)
+      g2.lineTo(x - 4, y0)
+      g2.fill()
+    }
+    g2.globalAlpha = 1
 
     this.labels(f, y0, amp)
 
@@ -328,23 +336,11 @@ export class TimelineRenderer {
       const pHi = shape(2, tlook.khi, false)
       const sHi = shape(2, tlook.khi, false, true)
       const { palette: pal } = f
-      // One shape, painted once per brightness region.
       const paint = (c: CanvasRenderingContext2D, P: Path2D, alpha: number, stroke = false) => {
-        // Region edges on whole device pixels: at a fractional scale (1.5, 1.25) the anti-aliased clip
-        // paints the boundary pixel twice at partial cover, a dark vertical seam at each track change.
-        const k = c.getTransform().a
-        for (let r = 0; r < pts.nregions; r++) {
-          const g = pts.regions[r]
-          const x0 = Math.round(g.x0 * k) / k
-          c.save()
-          c.beginPath()
-          c.rect(x0, -1e4, Math.round(g.x1 * k) / k - x0, 2e4)
-          c.clip()
-          c.globalAlpha = alpha * g.hm
-          if (stroke) c.stroke(P)
-          else c.fill(P)
-          c.restore()
-        }
+        c.globalAlpha = alpha
+        if (stroke) c.stroke(P)
+        else c.fill(P)
+        c.globalAlpha = 1
       }
       g1.x.fillStyle = oklch(pal.lo)
       paint(g1.x, pLo, 1)
@@ -388,6 +384,16 @@ export class TimelineRenderer {
     o2.restore()
     o2.globalCompositeOperation = 'source-over'
     o2.drawImage(top.c, bx * dpr, by * dpr, W * dpr, bh * dpr, bx, by, W, bh)
+
+    // The light falls off ahead of the playhead, not by track: 100 % there, 62 % from about 3/4 of the strip on.
+    const { px, R } = M
+    const sp = R.w * 0.25
+    const fo = o2.createLinearGradient(px, 0, px + sp * 3, 0)
+    for (let k = 0; k <= 6; k++) fo.addColorStop(k / 6, `rgba(0,0,0,${0.38 * (1 - Math.exp(-((k / 2) ** 2)))})`)
+    o2.globalCompositeOperation = 'destination-out'
+    o2.fillStyle = fo
+    o2.fillRect(px, cy, W - px, ch)
+    o2.globalCompositeOperation = 'source-over'
   }
 
   private labels(f: Frame, y0: number, amp: number) {
