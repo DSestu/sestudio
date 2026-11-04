@@ -17,7 +17,7 @@ export default function Share() {
   return (
     <>
       <p className="text-sm text-base-content/60 -mt-2">For someone else to get their own sestudio.</p>
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <ShareLink
           title="Android app"
           text="Scan on an Android phone to install the latest version. It runs on the phone itself."
