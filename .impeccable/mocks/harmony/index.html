@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Harmony: building playlists</title>
+<style>
+:root{--p:oklch(72% .16 230);--pi:oklch(18% .05 230);--tx:#e3eaf0;--mut:rgba(227,234,240,.55);--mut2:rgba(227,234,240,.4);--glass:rgba(16,28,40,.8);--line:rgba(255,255,255,.08);--warn:oklch(80% .15 75)}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{display:flex;flex-direction:column;gap:46px;padding-bottom:16px}
+h2{font-size:20px;margin:0 0 4px;letter-spacing:-.02em;font-weight:600}
+h2 .k{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--p);color:var(--pi);font-size:15px;margin-right:10px;vertical-align:2px}
+h3{font-size:14px;margin:18px 0 8px;font-weight:600;letter-spacing:-.01em}
+.lede{margin:0 0 10px;font-size:14px;line-height:1.5;max-width:68ch}
+.row{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+ol.notes{margin:0;padding:0;list-style:none;display:grid;gap:7px;counter-reset:n;flex:1;min-width:200px}
+ol.notes li{counter-increment:n;font-size:13px;line-height:1.45;position:relative;padding-left:30px}
+ol.notes li::before{content:counter(n);position:absolute;left:0;top:0;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--p);color:var(--pi);font-size:11px;font-weight:700}
+.illu{font-size:12px;color:var(--muted-foreground);margin:4px 0 0}
+svg.i{width:1em;height:1em;vertical-align:-.13em;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* devices */
+.dev{position:relative;overflow:hidden;border-radius:12px;box-shadow:0 0 0 1px rgba(255,255,255,.1);flex:none}
+.dev.ph{border-radius:22px}
+.scr{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;color:var(--tx);font-size:13px;background:#060c13}
+.scr *{line-height:1.25}
+.abs{position:absolute}
+.glass{background:var(--glass);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px}
+.panel{background:rgba(255,255,255,.035);border-radius:14px}
+.mut{color:var(--mut)}
+.tab{font-variant-numeric:tabular-nums}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;font-weight:600;font-size:12.5px;white-space:nowrap}
+.btn.solid{background:var(--p);color:var(--pi)}
+.btn.gh{background:rgba(255,255,255,.07);color:var(--tx)}
+.btn.pri{background:rgba(0,170,230,.18);color:var(--p)}
+.chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:500;background:rgba(255,255,255,.06);color:var(--mut);white-space:nowrap}
+.chip.on{background:rgba(0,170,230,.2);color:var(--p)}
+.cap{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--mut2);font-weight:600}
+/* track rows */
+.tr{display:flex;align-items:center;gap:10px;height:48px;padding:0 10px;border-radius:12px}
+.tr .g{width:14px;color:rgba(255,255,255,.25)}
+.tr .tt{flex:1;min-width:0}
+.tr .tt b{display:block;font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr .tt span{display:block;font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr .bpm{font-size:11px;color:var(--mut2);width:28px;text-align:right}
+.tr .d{font-size:12px;color:var(--mut);width:34px;text-align:right}
+.tr.sel{background:rgba(0,170,230,.13);box-shadow:inset 0 0 0 1px rgba(0,170,230,.35)}
+.tr.new{background:rgba(255,255,255,.05);border:1px dashed rgba(0,170,230,.5)}
+.mood{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.mood i{width:8px;height:8px;border-radius:50%;flex:none}
+.th{font-size:11.5px;color:var(--mut);white-space:nowrap}
+/* join line between two rows */
+.jn{display:flex;align-items:center;gap:8px;height:24px;padding-left:34px;font-size:11.5px;color:var(--mut)}
+.jn.bad{color:var(--warn)}
+.dots{display:inline-flex;gap:2.5px;align-items:center}
+.dots i{width:5px;height:5px;border-radius:50%;background:var(--p)}
+.dots i.o{background:transparent;box-shadow:inset 0 0 0 1px rgba(227,234,240,.35)}
+.jn.bad .dots i{background:var(--warn)}
+.jn.bad .dots i.o{background:transparent}
+.bridge{margin:2px 0 6px 28px;padding:10px;border-radius:12px;background:rgba(242,193,78,.06);box-shadow:inset 0 0 0 1px rgba(242,193,78,.25)}
+.dir{display:inline-flex;align-items:center;gap:3px;font-weight:500}
+/* phone */
+.dock{position:absolute;left:12px;right:12px;bottom:14px;height:62px;display:flex;align-items:center;justify-content:space-around;padding:0 8px}
+.dock span{display:grid;justify-items:center;gap:3px;font-size:10px;color:var(--mut)}
+.dock span i{width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.12)}
+.dock span.on{color:var(--p)}.dock span.on i{background:rgba(0,170,230,.4)}
+.dock .srch{width:52px;height:52px;border-radius:16px;background:var(--p)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#0d1822;border-radius:22px 22px 0 0;box-shadow:0 -20px 50px rgba(0,0,0,.6)}
+.grab{width:40px;height:4px;border-radius:2px;background:rgba(255,255,255,.25);margin:8px auto 4px}
+.seg{display:flex;padding:3px;border-radius:10px;background:rgba(255,255,255,.07);gap:2px}
+.seg span{flex:1;text-align:center;padding:7px 8px;border-radius:8px;font-weight:600;font-size:12px;color:var(--mut);white-space:nowrap}
+.seg span.on{background:rgba(0,170,230,.22);color:var(--p)}
+.fld{display:flex;align-items:center;gap:8px;height:40px;border-radius:10px;background:rgba(255,255,255,.07);padding:0 12px;font-size:13px}
+/* theory specimen */
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.card{padding:16px;border-radius:var(--radius);background:#0b141d;color:var(--tx);font-size:13px}
+.card h4{margin:0 0 10px;font-size:13px;font-weight:600}
+.card .chip{background:rgba(255,255,255,.06)}
+.kb{display:block;margin-top:10px}
+/* beginner explainer */
+.basics{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.basic{font-size:13.5px;color:var(--tx)}
+.basic h4{margin:0 0 8px;font-size:15px;font-weight:600;letter-spacing:-.01em;display:flex;gap:10px;align-items:center}
+.basic h4 i{font-style:normal;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:rgba(0,170,230,.2);color:var(--p);font-size:12px;flex:none}
+.basic p{margin:0 0 10px;line-height:1.5;max-width:60ch}
+.basic .mut{font-size:12.5px}
+.pl{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:999px;border:0;background:rgba(0,170,230,.18);color:var(--p);font:600 12px system-ui,sans-serif;cursor:pointer;margin-top:8px}
+.pl:hover{background:rgba(0,170,230,.28)}
+.pl:focus-visible,.hm:focus-visible,.lr:focus-visible{outline:2px solid var(--p);outline-offset:2px}
+.legend .jn{padding-left:0;height:22px}
+.homes{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:10px 0}
+.hm{display:grid;justify-items:center;gap:2px;padding:7px 2px;border-radius:10px;border:0;background:rgba(255,255,255,.05);color:var(--tx);font:12px system-ui,sans-serif;cursor:pointer}
+.hm:hover{background:rgba(255,255,255,.1)}
+.hm b{font-size:14px}.hm span{font-size:10.5px;font-weight:600}.hm small{font-size:9.5px;color:var(--mut)}
+.ladder{display:grid;gap:4px;margin-top:6px}
+.lr{display:grid;grid-template-columns:96px 1fr 62px;align-items:center;gap:10px;padding:4px 8px;border-radius:10px;border:0;background:transparent;color:var(--tx);font:12px system-ui,sans-serif;cursor:pointer;text-align:left}
+.lr:hover{background:rgba(255,255,255,.06)}
+.lr .kb{margin:0}
+.lw{display:grid;font-weight:600;font-size:12.5px}.lw small{font-weight:400;font-size:10.5px;color:var(--mut)}
+.ln{font-size:11px;color:var(--warn);text-align:right}
+.tip{font-size:12.5px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05);color:var(--mut);margin:8px 0 0}
+.dots i.q{background:transparent;box-shadow:inset 0 0 0 1px var(--p);outline:1px dashed rgba(0,170,230,.6);outline-offset:1px}
+.mood.uns i{background:transparent!important;box-shadow:inset 0 0 0 1.5px currentColor}
+.spin{width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,255,255,.15);border-top-color:var(--p);display:inline-block}
+.pop{position:absolute;border-radius:14px;background:#15222e;box-shadow:0 18px 44px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.08);padding:14px}
+.radio{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:12px;background:rgba(255,255,255,.04)}
+.radio.on{background:rgba(0,170,230,.1);box-shadow:inset 0 0 0 1px rgba(0,170,230,.45)}
+.radio>i{width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(227,234,240,.4);flex:none;margin-top:2px}
+.radio.on>i{box-shadow:inset 0 0 0 5px var(--p)}
+.tog{width:38px;height:22px;border-radius:999px;background:var(--p);position:relative;flex:none}
+.tog::after{content:"";position:absolute;right:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--pi)}
+.setrow{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--line)}
+</style></head><body>
+<div class="wrap" id="app"></div>
+<script>
+// ---------- theory (illustrative modes on the real test tracks; tonics are S-KEY's) ----------
+const NOTE=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+const MAJ=[0,2,4,5,7,9,11];
+const MODES={lydian:[3,3],ionian:[0,2],mixolydian:[4,1],dorian:[1,0],aeolian:[5,-1],phrygian:[2,-2],locrian:[6,-3]};
+const WORD={3:'Floating',2:'Bright',1:'Warm',0:'Smooth','-1':'Dark','-2':'Menacing','-3':'Unstable'};
+const COL={3:'oklch(88% .12 95)',2:'oklch(83% .13 75)',1:'oklch(77% .13 45)',0:'oklch(72% .13 10)','-1':'oklch(66% .15 340)','-2':'oklch(62% .17 310)','-3':'oklch(56% .18 290)'};
+const scale=(t,m)=>m==='harmonic minor'?[0,2,3,5,7,8,11].map(x=>(t+x)%12):MAJ.map(x=>(t+x-MAJ[MODES[m][0]]+12)%12);
+function T(title,artist,bpm,dur,t,mode){const hm=mode==='harmonic minor';const br=hm?-1:MODES[mode][1];
+ const parent=hm?null:(t-MAJ[MODES[mode][0]]+12)%12;
+ return {title,artist,bpm,dur,t,mode,pcs:scale(t,mode),br,set:hm?null:((parent*7)%12+7)%12+1,word:hm?'Exotic':WORD[br],col:hm?'oklch(70% .14 200)':COL[br]}}
+const LIB=[
+ T('Farewell','neuro soundcloud',172,239,7,'dorian'),T('These Days','Emperor',172,268,7,'aeolian'),T('Wanna','Kumarion',172,220,7,'aeolian'),
+ T('All I Ever Wanted','Emperor',172,297,7,'aeolian'),T('No Way Out','feat. Mira Lu Kovacs',175,245,7,'dorian'),T('Noir','Teddy Killerz',174,226,7,'phrygian'),
+ T('Suicide Bassline VIP','Mefjus',172,174,7,'phrygian'),T('Stargazer','Skylark',172,201,0,'aeolian'),T('Pray For Me','feat. Joe Killington',175,245,0,'dorian'),
+ T('Sinkhole','neuro soundcloud',172,313,5,'aeolian'),T('You left me','Eluun',174,213,5,'aeolian'),T('Dune','neuro soundcloud',174,127,5,'harmonic minor'),
+ T('Hear The Lies','Eluun',172,235,5,'dorian'),T('If I Could','neuro soundcloud',172,253,5,'aeolian'),T('Concussion (Mefjus Remix)','Noisia',172,226,5,'phrygian'),
+ T('Elysium','Fade Black',175,247,2,'aeolian'),T('Mesmer','Sota, Circadian, Mila Falls',174,281,10,'aeolian'),T('Supersonic','Skrillex, Noisia',172,165,9,'aeolian'),
+ T('Physically','Mefjus',172,112,4,'phrygian'),T('Nonplus','neuro soundcloud',172,233,4,'dorian'),T('Pure Action','Kumarion',174,203,4,'aeolian'),
+ T('Twerp','Waeys, Bensley & Hoax',175,220,3,'aeolian'),T('Perseverance','neuro soundcloud',172,232,3,'dorian'),T('Dopamine Hits','Mefjus & Maksim MC',172,190,3,'phrygian'),
+ T('Left','Maysev',172,192,3,'aeolian'),T('Sunder','Emperor',174,276,3,'aeolian'),T('The Hole','neuro soundcloud',172,315,5,'lydian'),
+ T('The First Time','Virtual Riot, Tokyo Machine',145,190,7,'mixolydian'),T('Before You','Maysev & The Caracal Project',165,224,1,'aeolian'),
+ T('Black Bloc','neuro soundcloud',172,251,1,'phrygian'),T('Hear Me','neuro soundcloud',172,249,11,'aeolian'),T('Aurora (Justin Hawkes Remix)','feat. Metrik',175,231,5,'aeolian'),
+ T('A Taste Of Hope','Emperor',172,314,5,'aeolian'),T('Systematic V4','D_Minds & Mefjus',172,271,5,'phrygian'),T('Pure Hope','neuro soundcloud',172,240,0,'mixolydian')];
+const by=n=>LIB.find(x=>x.title===n);
+const shared=(a,b)=>a.pcs.filter(x=>b.pcs.includes(x)).length;
+const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+const name=t=>`${NOTE[t.t]} ${t.mode}`;
+function kind(a,b){const n=shared(a,b),same=a.t===b.t;
+ if(n===7&&same)return['Same key','same key'];
+ if(n===7)return['Same notes','pivot'];
+ if(n===6&&same)return['One note changes','modal shift'];
+ if(n===6)return['Next door','neighbour'];
+ return['Clash','clash']}
+// ---------- glyphs ----------
+const ic={
+ up:'<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+ dn:'<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+ eq:'<svg class="i" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg>',
+ grip:'<svg class="i" viewBox="0 0 24 24" style="stroke:none;fill:currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
+ plus:'<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+ play:'<svg class="i" viewBox="0 0 24 24" style="stroke:none;fill:currentColor"><path d="M8 5l11 7-11 7z"/></svg>',
+ back:'<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+ wand:'<svg class="i" viewBox="0 0 24 24"><path d="M4 20 15 9M14 4v3M19 9h-3M17.5 5.5l-2 2"/></svg>',
+ shuf:'<svg class="i" viewBox="0 0 24 24"><path d="M4 7h3l10 10h3M4 17h3l10-10h3M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>',
+ x:'<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+ srch:'<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>',
+ pause:'<svg class="i" viewBox="0 0 24 24" style="stroke:none;fill:currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+};
+const dots=n=>`<span class="dots" title="${n} of 7 notes shared">${[0,1,2,3,4,5,6].map(i=>`<i class="${i<n?'':'o'}"></i>`).join('')}</span>`;
+const dirOf=(a,b)=>{const d=b.br-a.br;return d>0?`<span class="dir">${ic.up}brighter</span>`:d<0?`<span class="dir">${ic.dn}darker</span>`:`<span class="dir">${ic.eq}same light</span>`};
+const mood=t=>`<span class="mood" style="color:${t.col}"><i style="background:${t.col}"></i>${t.word}</span>`;
+// level: 'plain' | 'theory'
+function join(a,b,level='plain',extra=''){const n=shared(a,b),[k,kt]=kind(a,b),bad=n<6;
+ const txt=level==='theory'?`${name(a)} → ${name(b)} · ${kt}`:`${k.toLowerCase()} · ${dirOf(a,b)}`;
+ return `<div class="jn${bad?' bad':''}">${dots(n)}<span>${txt}</span>${extra}</div>`}
+function trow(t,{sel='',level='plain',grip=true,bpm=true,right=''}={}){
+ return `<div class="tr ${sel}">${grip?`<span class="g">${ic.grip}</span>`:''}<div class="tt"><b>${t.title}</b><span>${t.artist}</span></div>
+ ${level==='theory'?`<span class="th">${name(t)}</span>`:mood(t)}${bpm?`<span class="bpm tab">${t.bpm}</span>`:''}<span class="d tab">${fmt(t.dur)}</span>${right}</div>`}
+function dev(w,h,s,inner,ph){return `<div class="dev${ph?' ph':''}" style="width:${w*s}px;height:${h*s}px"><div class="scr" style="width:${w}px;height:${h}px;transform:scale(${s})">${inner}</div></div>`}
+// one-octave keyboard comparing two scales: blue = in both, top tick = only in A, bottom tick = only in B
+function keyboard(a,b,w=260){const kw=w/7,wh=[0,2,4,5,7,9,11],bl=[1,3,6,8,10],h=58;
+ const cls=pc=>{const ia=a.pcs.includes(pc),ib=b.pcs.includes(pc);return ia&&ib?'both':ia?'a':ib?'b':''};
+ let s=`<svg class="kb" width="100%" viewBox="0 0 ${w} ${h+30}" style="max-width:${w}px">`;
+ wh.forEach((pc,i)=>{const c=cls(pc);s+=`<rect x="${i*kw+.5}" y="0.5" width="${kw-1}" height="${h}" rx="3" fill="${c==='both'?'oklch(72% .16 230)':'#d9e2e8'}" fill-opacity="${c==='both'?.9:c?.55:.12}"/>`;
+  s+=`<text x="${i*kw+kw/2}" y="${h+14}" fill="rgba(227,234,240,.6)" font-size="10" text-anchor="middle">${NOTE[pc]}</text>`;
+  if(c==='a')s+=`<text x="${i*kw+kw/2}" y="${h-8}" fill="${a.col}" font-size="10" font-weight="700" text-anchor="middle">A</text>`;
+  if(c==='b')s+=`<text x="${i*kw+kw/2}" y="${h-8}" fill="${b.col}" font-size="10" font-weight="700" text-anchor="middle">B</text>`});
+ bl.forEach(pc=>{const i=wh.indexOf(pc-1),c=cls(pc),x=(i+1)*kw-kw*.3;s+=`<rect x="${x}" y="0" width="${kw*.6}" height="${h*.6}" rx="2" fill="${c==='both'?'oklch(60% .16 230)':'#2a333b'}" stroke="#0b141d"/>`;
+  if(c==='a'||c==='b')s+=`<text x="${x+kw*.3}" y="${h*.6-6}" fill="${c==='a'?a.col:b.col}" font-size="9" font-weight="700" text-anchor="middle">${c.toUpperCase()}</text>`});
+ return s+`<text x="0" y="${h+28}" fill="rgba(227,234,240,.45)" font-size="10">blue: in both · A/B: only in one</text></svg>`}
+
+// ---------- shared chrome ----------
+const W=1280,H=800,PW=390,PH=844;
+const rail=`<div class="abs glass" style="left:12px;top:12px;bottom:12px;width:84px;display:flex;flex-direction:column;align-items:center;gap:22px;padding-top:24px">
+ <i style="width:22px;height:30px;border-radius:6px;background:rgba(0,170,230,.6)"></i><i style="width:52px;height:52px;border-radius:14px;background:var(--p)"></i>
+ ${['Home','Media','Discover','Music','Library'].map(n=>`<span style="display:grid;justify-items:center;gap:5px;font-size:11px;color:${n==='Music'?'var(--p)':'var(--mut)'}"><i style="width:${n==='Music'?52:22}px;height:${n==='Music'?32:22}px;border-radius:8px;background:${n==='Music'?'rgba(0,170,230,.25)':'rgba(255,255,255,.12)'}"></i>${n}</span>`).join('')}</div>`;
+const topCard=`<div class="abs glass" style="left:127px;top:20px;width:1134px;height:98px">
+ <div class="abs" style="left:20px;top:8px"><div style="font-size:20px;font-weight:600;letter-spacing:-.02em">Music</div><div class="mut" style="font-size:12px;margin-top:3px"><i>46</i> tracks</div></div>
+ <div class="abs fld" style="left:100px;top:2px;width:860px;height:42px;box-shadow:0 0 0 2px oklch(72% .16 230 / .8);background:#060c13;color:var(--mut)">${ic.srch}<span>Search your libraries and online, or paste a link</span></div>
+ <div class="abs seg" style="left:20px;top:46px;width:384px"><span>Albums</span><span>Artists</span><span>Tracks</span></div></div>`;
+const libCol=`<div class="abs" style="left:127px;top:138px;width:250px">
+ <div class="cap" style="padding:6px 12px">Libraries</div>
+ <div style="display:flex;justify-content:space-between;padding:11px 12px;font-size:14px"><span>All</span><span class="mut">46</span></div>
+ <div style="display:flex;justify-content:space-between;padding:6px 12px;font-size:14px"><span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#3fd18a;margin-right:10px"></i>This PC</span><span class="mut">46</span></div>
+ <div class="cap" style="padding:22px 12px 8px">Playlists</div>
+ <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;background:rgba(0,170,230,.18);color:var(--p);font-size:14px"><span>Night drive</span><span style="font-size:11px">set · 2 parts</span></div>
+ <div style="padding:10px 12px;font-size:14px" class="mut">Sunday warm-up</div>
+ <div class="cap" style="padding:20px 12px 8px">Smart lists</div>
+ <div style="padding:8px 12px;font-size:14px" class="mut">Dark &amp; fast</div></div>`;
+const playerBar=`<div class="abs glass" style="left:352px;top:720px;width:576px;height:64px;display:flex;align-items:center;gap:12px;padding:0 12px">
+ <i style="width:40px;height:40px;border-radius:10px;background:rgba(160,110,220,.2)"></i><div style="flex:1"><div style="font-size:14px">Noir</div><div class="mut" style="font-size:12px">Teddy Killerz · 174 BPM</div></div>
+ <span class="btn solid" style="width:40px;height:40px;justify-content:center;padding:0">${ic.pause}</span></div>`;
+const dock=`<div class="dock glass">${['Home','Media'].map(n=>`<span><i></i>${n}</span>`).join('')}<i class="srch"></i>${['Music','Library'].map(n=>`<span class="${n==='Music'?'on':''}"><i></i>${n}</span>`).join('')}</div>`;
+
+const SET={warm:['Farewell','These Days','Wanna','Noir'].map(by),peak:['Mesmer','Twerp','Dopamine Hits','Left'].map(by)};
+const ALL=[...SET.warm,...SET.peak];
+// set curve with a mood lane: energy (blue) + each track's mood at its brightness, coloured on the twilight ramp
+function setCurve(w,h,tracks,{drawn=null,labels=true,energy=true}={}){const tot=tracks.reduce((s,t)=>s+t.dur,0);let x=0;
+ const y=br=>h-14-((br+3)/6)*(h-28);
+ let s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">`;
+ if(labels)[2,0,-2].forEach(b=>{s+=`<line x1="0" x2="${w}" y1="${y(b)}" y2="${y(b)}" stroke="rgba(255,255,255,.05)"/><text x="6" y="${y(b)-3}" font-size="9.5" fill="rgba(227,234,240,.38)">${WORD[b]}</text>`});
+ let en='M';tracks.forEach((t,i)=>{const x0=x/tot*w,x1=(x+t.dur)/tot*w;
+  s+=`<rect x="${x0+1}" y="${y(t.br)-3}" width="${x1-x0-2}" height="6" rx="3" fill="${t.col}"/>`;
+  for(let k=0;k<3;k++){const xx=x0+(k+.5)/3*(x1-x0);const e=.5+.18*Math.sin(i*.9+k*.6)+.15*i/tracks.length;en+=`${xx.toFixed(1)},${(h-8-e*(h-24)).toFixed(1)} L`}
+  x+=t.dur});
+ if(energy)s+=`<path d="${en.slice(0,-2)}" fill="none" stroke="oklch(72% .16 230)" stroke-opacity=".55" stroke-width="1.4"/>`;
+ if(drawn)s+=drawn;
+ return s+'</svg>'}
+
+// ---------- A: the harmony language ----------
+function secA(){const a=by('Noir'),b=by('Stargazer'),c=by('These Days'),d=by('Mesmer');
+ return `<section><h2><span class="k">A</span>How a transition reads</h2>
+ <p class="lede">Every pair of tracks gets three facts: how many of the 7 notes they share (the dots), what kind of move it is, and whether the mood goes brighter or darker. Here is one join shown at three levels of theory.</p>
+ <div class="spec">
+  <div class="card"><h4>1 · Plain</h4>${trow(a,{grip:false,bpm:false})}${join(a,b)}${trow(b,{grip:false,bpm:false})}
+   <p class="mut" style="font-size:12px;margin:10px 0 0">Mood words instead of modes. Nothing to learn.</p></div>
+  <div class="card"><h4>2 · Theory</h4>${trow(a,{grip:false,bpm:false,level:'theory'})}${join(a,b,'theory')}${trow(b,{grip:false,bpm:false,level:'theory'})}
+   <p class="mut" style="font-size:12px;margin:10px 0 0">Modes and the name of the move, on every row.</p></div>
+  <div class="card"><h4>3 · Plain, theory on tap</h4>${trow(a,{grip:false,bpm:false})}${join(a,b)}
+   <div style="margin:4px 0 0 28px;padding:12px;border-radius:12px;background:#15222e;box-shadow:0 14px 30px rgba(0,0,0,.5)">
+    <div style="font-size:12.5px;font-weight:600">${name(a)} → ${name(b)}</div>
+    <div class="mut" style="font-size:12px;margin-top:3px">Pivot: the same 7 notes, a new home note. One step brighter.</div>${keyboard(a,b,230)}</div>
+   <p class="mut" style="font-size:12px;margin:10px 0 0">The popover comes from tapping the join. The keyboard shows exactly which notes match.</p></div>
+ </div>
+ <h3>The three moves, plus a clash</h3>
+ <div class="card" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 18px">
+  <div>${join(a,b)}<div class="mut" style="font-size:12px;padding:0 0 8px 34px">Noir → Stargazer: same notes, new home note</div></div>
+  <div>${join(a,c)}<div class="mut" style="font-size:12px;padding:0 0 8px 34px">Noir → These Days: same home note G, one note raised</div></div>
+  <div>${join(by('Sinkhole'),d)}<div class="mut" style="font-size:12px;padding:0 0 8px 34px">Sinkhole → Mesmer: the next set of notes over, same mood</div></div>
+  <div>${join(a,d)}<div class="mut" style="font-size:12px;padding:0 0 8px 34px">Noir → Mesmer: only 5 of 7 notes match, amber</div></div>
+ </div>
+ <p class="illu">The modes on these tracks are made up for the mockup; the tonics are S-KEY's. Dots, moves and brighter/darker are computed from the real note sets.</p></section>`}
+
+// ---------- B: by hand, "What fits next" list ----------
+function fits(after,pool,limit=3){const out={};pool.filter(t=>t!==after&&!ALL.includes(t)).forEach(t=>{const n=shared(after,t);if(n<6)return;const k=kind(after,t)[0];(out[k]=out[k]||[]).push(t)});
+ for(const k in out)out[k].sort((x,y)=>Math.abs(x.bpm-after.bpm)-Math.abs(y.bpm-after.bpm)).splice(limit);return out}
+function fitsList(after,{w,limit=3,compact=false}){const g=fits(after,LIB,limit);const order=['Same key','Same notes','One note changes','Next door'];
+ return order.filter(k=>g[k]).map(k=>`<div class="cap" style="padding:12px 10px 4px;display:flex;align-items:center;gap:8px">${dots(shared(after,g[k][0]))}${k}</div>`+
+  g[k].map(t=>`<div class="tr" style="height:${compact?44:46}px"><div class="tt"><b>${t.title}</b><span>${t.artist} · <em class="tab" style="font-style:normal">${t.bpm}</em></span></div>
+   <span class="mood" style="color:${t.col}">${t.br>after.br?ic.up:t.br<after.br?ic.dn:ic.eq}${t.word}</span>
+   <span class="btn gh" style="height:30px;width:30px;padding:0;justify-content:center;margin-left:4px">${ic.plus}</span></div>`).join('')).join('')}
+function editorRows(level,{bridge=true,x=0}={}){const w=SET.warm,p=SET.peak,br=by('Sinkhole');
+ let s=`<div class="cap" style="padding:4px 10px 6px">Warm-up · 15 min</div>`;
+ w.forEach((t,i)=>{s+=trow(t,{level,sel:t.title==='Noir'?'sel':''});if(i<w.length-1)s+=join(t,w[i+1],level)});
+ s+=join(w[3],p[0],level,bridge?`<span class="btn pri" style="height:22px;padding:0 8px;font-size:11px;margin-left:4px">${ic.wand}Bridge it</span>`:'');
+ if(bridge)s+=`<div class="bridge"><div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--warn)">Insert one track between them</div>
+  ${trow(br,{grip:false,level,sel:'new',right:`<span class="btn solid" style="height:28px;margin-left:6px">Insert</span>`})}
+  <div class="jn" style="padding-left:10px;white-space:nowrap">${dots(shared(w[3],br))}<span>in</span><span style="width:8px"></span>${dots(shared(br,p[0]))}<span>out · both next door</span></div>
+  <div class="mut" style="font-size:11.5px;padding:4px 10px 0">2 more options · <u>Show</u></div></div>`;
+ s+=`<div class="cap" style="padding:10px 10px 6px">Peak · 15 min</div>`;
+ p.forEach((t,i)=>{s+=trow(t,{level});if(i<p.length-1)s+=join(t,p[i+1],level)});return s}
+function desktopEditor(panel,{panelW=304,level='plain',bridge=true}={}){const listW=860-panelW-16;
+ return `${rail}${topCard}${libCol}
+ <div class="abs" style="left:401px;top:138px;width:860px">
+  <div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div style="font-size:22px;font-weight:600;letter-spacing:-.02em">Night drive</div><div class="mut" style="font-size:12.5px;margin-top:2px">Set · 2 parts · 8 tracks · 32 min · Drum &amp; Bass</div></div>
+   <span class="btn solid">${ic.play}Play set</span><span class="btn gh">Auto-order ▾</span><span class="btn gh">${ic.wand}Build a set</span></div>
+  <div class="panel" style="margin-top:12px;padding:6px 8px">${setCurve(844,78,ALL,{labels:false})}</div></div>
+ <div class="abs" style="left:401px;top:262px;width:${listW}px;height:440px;overflow:hidden">${editorRows(level,{bridge})}</div>
+ <div class="abs panel" style="left:${401+listW+16}px;top:262px;width:${panelW}px;height:440px;overflow:hidden">${panel}</div>${playerBar}`}
+function fitsPanel(after){return `<div style="padding:12px 12px 4px"><div style="font-size:14px;font-weight:600">Fits after Noir</div>
+ <div class="mut" style="font-size:12px;margin-top:2px">${mood(after)} · 174 BPM · tempo within 6%</div>
+ <div style="display:flex;gap:6px;margin-top:10px"><span class="chip on">All</span><span class="chip">${ic.up}Brighter</span><span class="chip">${ic.eq}Same</span><span class="chip">${ic.dn}Darker</span></div></div>
+ ${fitsList(after,{limit:2})}`}
+function phoneEditor(level='plain'){return `<div class="abs glass" style="left:10px;top:10px;right:10px;height:78px;padding:12px 14px">
+  <div style="display:flex;align-items:center;gap:10px">${ic.back}<div style="flex:1"><div style="font-size:18px;font-weight:600;letter-spacing:-.02em">Night drive</div><div class="mut" style="font-size:12px">Set · 8 tracks · 32 min</div></div><span class="btn solid" style="width:40px;padding:0;justify-content:center">${ic.play}</span></div></div>
+ <div class="abs panel" style="left:10px;right:10px;top:98px;padding:4px 6px">${setCurve(358,64,ALL,{labels:false})}</div>
+ <div class="abs" style="left:4px;right:4px;top:178px;bottom:0;overflow:hidden">${editorRows(level)}</div>${dock}`}
+function phoneFits(){const n=by('Noir');return phoneEditor()+`<div class="abs" style="inset:0;background:rgba(0,0,0,.5)"></div>
+ <div class="sheet" style="height:610px"><div class="grab"></div>
+  <div style="padding:6px 16px 0"><div style="display:flex;align-items:center"><div style="flex:1;font-size:16px;font-weight:600">Fits after Noir</div>${ic.x}</div>
+  <div class="mut" style="font-size:12px;margin-top:3px">${mood(n)} · 174 BPM</div>
+  <div style="display:flex;gap:6px;margin-top:10px;overflow:hidden"><span class="chip on">All</span><span class="chip">${ic.up}Brighter</span><span class="chip">${ic.eq}Same</span><span class="chip">${ic.dn}Darker</span></div></div>
+  <div style="padding:0 6px">${fitsList(n,{limit:2,compact:true})}</div>
+  <div class="mut" style="font-size:11.5px;padding:8px 16px">Tap to insert after Noir · swipe right to play next</div></div>`}
+function crate(){const n=by('Noir');const g=fits(n,LIB,3);const cards=['Same notes','One note changes','Next door'].flatMap(k=>(g[k]||[]).slice(0,k==='Next door'?2:2).map(t=>[k,t]));
+ const wave=(w,h,y0)=>{let up='',dn='';for(let i=0;i<=80;i++){const x=i/80*w,v=.5+.3*Math.sin(i*.4)+.2*Math.sin(i*1.3);up+=`${x},${y0-v*h*.4} `;dn+=`${x},${y0+v*h*.3} `}
+  return `<svg class="abs" style="left:0;top:0" width="${w}" height="${h}"><polygon points="0,${y0} ${up}${w},${y0}" fill="oklch(55% .15 300 / .55)"/><polygon points="0,${y0} ${dn}${w},${y0}" fill="oklch(40% .15 290 / .5)"/><line x1="${w*.14}" x2="${w*.14}" y1="0" y2="${h}" stroke="#fff" stroke-opacity=".7" stroke-width="2"/></svg>`};
+ return `<div class="abs" style="left:120px;top:40px"><div class="mut" style="font-size:15px">Teddy Killerz · 174 BPM</div><div style="font-size:54px;font-weight:600;letter-spacing:-.035em">Noir</div></div>
+ <div class="abs" style="left:0;top:150px;width:${W}px;height:170px">${wave(W,170,95)}</div>
+ <div class="abs glass" style="left:110px;top:330px;width:1060px;height:300px;border-radius:18px;padding:14px 16px">
+  <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:600">Add to queue</span><span class="seg" style="width:300px"><span>Library</span><span class="on">Fits next</span><span>Online</span></span><span class="mut" style="font-size:12px;margin-left:auto">After Noir · ${mood(n)}</span></div>
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px">${cards.map(([k,t])=>`<div style="border-radius:12px;background:rgba(255,255,255,.05);padding:10px;height:200px;display:flex;flex-direction:column;gap:6px">
+   <div style="height:96px;border-radius:9px;background:linear-gradient(160deg,${t.col},transparent 140%);opacity:.55"></div>
+   <b style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title}</b><span class="mut" style="font-size:11.5px">${t.bpm} BPM</span>
+   <span style="display:flex;align-items:center;gap:6px;font-size:11px" class="mut">${dots(shared(n,t))}${k.toLowerCase()}</span>${mood(t)}</div>`).join('')}</div></div>`}
+function secB(){return `<section><h2><span class="k">B</span>By hand: what fits next</h2>
+ <p class="lede">Select a track and the panel lists what can follow it, grouped by the kind of move. The filter picks the mood direction. A clashing join (amber) offers <b>Bridge it</b>, which finds 1 to 3 tracks that make the gap smooth.</p>
+ ${dev(W,H,.569,desktopEditor(fitsPanel(by('Noir'))))}
+ <div class="row" style="margin-top:16px">${dev(PW,PH,.46,phoneEditor(),1)}${dev(PW,PH,.46,phoneFits(),1)}
+ <ol class="notes"><li>Desktop: the panel follows the selected row (Noir here). <b>+</b> inserts after it, or drag a row into the list.</li>
+ <li>The set curve gets a mood lane: each track sits at its brightness, coloured on the music timeline's twilight ramp. Energy stays as the thin blue line.</li>
+ <li>Phone: tap a join (or a row's ⋯ → <i>What fits next</i>) to open the sheet. Tap inserts; swipe right plays next, like the queue.</li>
+ <li>Every join shows its dots and direction, so you can read the set's harmony at a glance.</li></ol></div>
+ <h3>The same ranking in the player's crate</h3>
+ ${dev(W,640,.569,crate())}
+ <p class="illu">The crate under the timeline gets a third tab, <b>Fits next</b>: cards ranked against the playing track, each showing its dots, move and mood.</p></section>`}
+
+// ---------- C: by hand, the harmony wheel ----------
+function wheel(size,{path=ALL,cur=by('Noir'),showAll=true}={}){const c=size/2,R0=size*.12,R1=size*.40;
+ const ang=set=>((set-1)/12)*Math.PI*2-Math.PI/2;const rad=br=>R0+((br+3)/6)*(R1-R0);
+ const pos=(t,j=0)=>{const set=t.set??(((t.t+3)%12*7)%12+7)%12+1;const a=ang(set)+j;return [c+Math.cos(a)*rad(t.br),c+Math.sin(a)*rad(t.br)]};
+ const jit=new Map();LIB.forEach(t=>{const k=`${t.set}|${t.br}`;const n=jit.get(k)||0;jit.set(k,n+1);t._j=(n%2?1:-1)*Math.ceil(n/2)*.075});
+ let s=`<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="display:block">`;
+ [-3,-2,-1,0,1,2,3].forEach(b=>s+=`<circle cx="${c}" cy="${c}" r="${rad(b)}" fill="none" stroke="rgba(255,255,255,${b===0?.1:.05})"/>`);
+ const cs=cur.set;[cs-1,cs,cs+1].forEach((st,i)=>{const s1=((st-1+12)%12)+1;const a0=ang(s1)-Math.PI/12,a1=ang(s1)+Math.PI/12;
+  const p=(r,a)=>`${c+Math.cos(a)*r},${c+Math.sin(a)*r}`;s+=`<path d="M${p(R0-6,a0)} L${p(R1+8,a0)} A${R1+8} ${R1+8} 0 0 1 ${p(R1+8,a1)} L${p(R0-6,a1)} A${R0-6} ${R0-6} 0 0 0 ${p(R0-6,a0)}" fill="oklch(72% .16 230 / ${i===1?.14:.07})"/>`});
+ for(let st=1;st<=12;st++){const a=ang(st);const majRoot=((st-8)*7%12+12)%12;s+=`<text x="${c+Math.cos(a)*(R1+16)}" y="${c+Math.sin(a)*(R1+16)+4}" font-size="${size*.03}" fill="rgba(227,234,240,${Math.abs(st-cs)<=1?.85:.35})" text-anchor="middle">${NOTE[majRoot]}</text>`}
+ if(path){const pts=path.filter(t=>t.set).map(t=>pos(t,t._j));s+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.5" stroke-dasharray="4 4"/>`}
+ if(showAll)LIB.filter(t=>t.set).forEach(t=>{const [x,y]=pos(t,t._j);const near=Math.min(Math.abs(t.set-cs),12-Math.abs(t.set-cs))<=1;const inSet=path&&path.includes(t);
+  s+=`<circle cx="${x}" cy="${y}" r="${inSet?size*.014:size*.011}" fill="${t.col}" fill-opacity="${near||inSet?1:.25}" ${inSet?'stroke="#fff" stroke-width="1.2"':''}/>`});
+ const [x,y]=pos(cur,cur._j);s+=`<circle cx="${x}" cy="${y}" r="${size*.026}" fill="none" stroke="oklch(72% .16 230)" stroke-width="2.5"/>`;
+ const hov=by('Stargazer'),[hx,hy]=pos(hov,hov._j);
+ s+=`<g><rect x="${hx-size*.47}" y="${hy-size*.02}" width="${size*.4}" height="${size*.085}" rx="8" fill="#15222e" stroke="rgba(255,255,255,.12)"/><text x="${hx-size*.27}" y="${hy+size*.015}" font-size="${size*.03}" fill="#e3eaf0" text-anchor="middle">Stargazer · same notes</text><text x="${hx-size*.27}" y="${hy+size*.045}" font-size="${size*.025}" fill="${hov.col}" text-anchor="middle">brighter · Dark</text></g>`;
+ return s+'</svg>'}
+function secC(){const wpanel=`<div style="padding:12px 14px 0;display:flex;align-items:center"><div style="flex:1"><div style="font-size:14px;font-weight:600">Harmony map</div><div class="mut" style="font-size:12px;margin-top:2px">Around: the notes · in and out: the mood</div></div><span class="seg" style="width:150px"><span>List</span><span class="on">Map</span></span></div>
+ <div style="display:grid;place-items:center;margin-top:-4px">${wheel(390)}</div>`;
+ const phone=phoneEditor()+`<div class="abs" style="inset:0;background:rgba(0,0,0,.5)"></div><div class="sheet" style="height:640px"><div class="grab"></div>
+  <div style="padding:6px 16px 0;display:flex;align-items:center"><div style="flex:1"><div style="font-size:16px;font-weight:600">After Noir</div><div class="mut" style="font-size:12px">Tap a dot to hear it · tap again to insert</div></div><span class="seg" style="width:130px"><span>List</span><span class="on">Map</span></span></div>
+  <div style="display:grid;place-items:center">${wheel(370)}</div>
+  <div style="margin:0 12px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);display:flex;align-items:center;gap:10px">
+   <div style="flex:1"><div style="font-size:13.5px;font-weight:500">Stargazer</div><div class="mut" style="font-size:11.5px;display:flex;gap:6px;align-items:center">${dots(7)} same notes · brighter</div></div><span class="btn solid">Insert</span></div></div>`;
+ return `<section><h2><span class="k">C</span>By hand: the harmony map</h2>
+ <p class="lede">The same suggestions, drawn as a map. Going around the circle changes the notes: neighbours share 6 of 7. Going in and out changes the mood: brighter towards the edge. The set is the dashed path; the blue wedge is what fits after the selected track.</p>
+ ${dev(W,H,.569,desktopEditor(wpanel,{panelW:420}))}
+ <div class="row" style="margin-top:16px">${dev(PW,PH,.46,phone,1)}
+ <ol class="notes"><li>A toggle sits next to B's list (<b>List | Map</b>), so this is a second view of the same data rather than a replacement.</li>
+ <li>The labels around the circle are each note set's major key. A track's dot sits on its set's spoke, at its brightness.</li>
+ <li>Phone: tapping a dot previews it (the crate's preview), and the card below inserts it.</li>
+ <li>Good for seeing where a set wanders, and for spotting a far jump at a glance.</li></ol></div></section>`}
+
+// ---------- D: automatic ----------
+function greedy(seed,n,want){const out=[seed];const used=new Set([seed]);let cur=seed;
+ for(let i=1;i<n;i++){const tgt=want(i);const c=LIB.filter(t=>!used.has(t)&&t.set&&shared(cur,t)>=6&&Math.abs(t.bpm-seed.bpm)<=8)
+  .sort((a,b)=>(Math.abs(a.br-tgt)-Math.abs(b.br-tgt))||(shared(cur,b)-shared(cur,a)))[0];if(!c)break;out.push(c);used.add(c);cur=c}return out}
+function drawMood(){const pts=[[0,-1],[.25,-2],[.55,-1],[.8,1],[1,0]];const f=x=>{for(let i=1;i<pts.length;i++)if(x<=pts[i][0]){const [x0,y0]=pts[i-1],[x1,y1]=pts[i];return y0+(y1-y0)*(x-x0)/(x1-x0)}return 0};
+ const seq=greedy(by('You left me'),12,i=>Math.round(f(i/11)));const w=716,h=210,y=br=>h-14-((br+3)/6)*(h-28);
+ const path=pts.map(([x,b],i)=>`${i?'L':'M'}${x*w},${y(b)}`).join(' ');
+ const drawn=`<path d="${path}" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="2" stroke-dasharray="6 5"/>${pts.map(([x,b])=>`<circle cx="${x*w}" cy="${y(b)}" r="6" fill="#060c13" stroke="#fff" stroke-width="2"/>`).join('')}`;
+ const tot=seq.reduce((s,t)=>s+t.dur,0);
+ const modal=`<div class="abs" style="inset:0;background:rgba(0,0,0,.55)"></div>
+ <div class="abs" style="left:250px;top:90px;width:780px;height:610px;border-radius:16px;background:#0d1822;box-shadow:0 30px 80px rgba(0,0,0,.6);padding:20px 24px">
+  <div style="display:flex;align-items:center"><div style="flex:1;font-size:18px;font-weight:600;letter-spacing:-.02em">Build a set</div>${ic.x}</div>
+  <div class="seg" style="margin-top:14px"><span>From a track</span><span class="on">Draw the mood</span><span>Bridge two tracks</span></div>
+  <div class="mut" style="font-size:12.5px;margin:14px 0 8px">Drag the line: up is brighter, down is darker. Each track is placed where its mood matches the line.</div>
+  <div class="panel" style="padding:6px">${setCurve(716,h,seq,{drawn,energy:false})}</div>
+  <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px" class="mut tab"><span>0 min</span><span>15</span><span>30</span><span>45</span><span>${Math.round(tot/60)} min</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:12px;margin-top:16px">
+   <label style="font-size:12px" class="mut">Length<div class="fld" style="margin-top:5px;color:var(--tx)">45 min</div></label>
+   <label style="font-size:12px" class="mut">Tempo<div class="fld" style="margin-top:5px;color:var(--tx)">170–176</div></label>
+   <label style="font-size:12px" class="mut">Every join at least<div class="seg" style="margin-top:5px"><span>5/7</span><span class="on">6/7</span><span>7/7</span></div></label></div>
+  <div style="margin-top:14px;font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px 14px">${seq.slice(0,7).map((t,i)=>`<span style="display:inline-flex;gap:6px;align-items:center"><i style="width:8px;height:8px;border-radius:50%;background:${t.col}"></i>${t.title}</span>`).join('')}<span class="mut">+${seq.length-7} more</span></div>
+  <div class="abs" style="left:24px;right:24px;bottom:20px;display:flex;align-items:center;gap:10px"><span class="mut" style="font-size:12.5px;flex:1">${seq.length} tracks · ${Math.round(tot/60)} min · every join 6/7 or 7/7</span>
+   <span class="btn gh">${ic.shuf}Try another</span><span class="btn solid">Add to Night drive</span></div></div>`;
+ return desktopEditor(fitsPanel(by('Noir')),{bridge:false})+modal}
+function phoneSeed(){const seq=greedy(by('Stargazer'),9,i=>Math.min(1,-1+Math.floor(i/3)));
+ return `<div class="abs" style="inset:0;background:#0d1822"></div><div class="abs" style="left:0;right:0;top:0;padding:16px">
+  <div style="display:flex;align-items:center"><div style="flex:1;font-size:17px;font-weight:600">Build a set</div>${ic.x}</div>
+  <div class="seg" style="margin-top:12px"><span class="on">From a track</span><span>Mood</span><span>Bridge</span></div>
+  <div class="cap" style="margin:16px 0 6px">Start from</div>
+  <div class="tr" style="background:rgba(255,255,255,.06);padding:0 12px"><div class="tt"><b>Stargazer</b><span>Skylark · 172 BPM</span></div>${mood(seq[0])}</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+   <div><div class="cap" style="margin-bottom:6px">Length</div><div class="seg"><span>30</span><span class="on">45</span><span>60</span></div></div>
+   <div><div class="cap" style="margin-bottom:6px">Mood</div><div class="seg"><span>Stay</span><span class="on">Lift</span><span>Sink</span></div></div></div>
+  <div class="cap" style="margin:16px 0 4px">Proposal · ${seq.length} tracks</div>
+  <div>${seq.slice(0,6).map((t,i)=>(i?join(seq[i-1],t):'')+trow(t,{grip:false,bpm:false})).join('')}</div></div>
+  <div class="abs" style="left:16px;right:16px;bottom:22px;display:flex;gap:8px"><span class="btn gh" style="height:44px">${ic.shuf}</span><span class="btn solid" style="height:44px;flex:1;justify-content:center">Add 9 tracks</span></div>`}
+function phoneBridge(){const p=['Noir','These Days','Farewell','The First Time'].map(by);
+ return `<div class="abs" style="inset:0;background:#0d1822"></div><div class="abs" style="left:0;right:0;top:0;padding:16px">
+  <div style="display:flex;align-items:center"><div style="flex:1;font-size:17px;font-weight:600">Build a set</div>${ic.x}</div>
+  <div class="seg" style="margin-top:12px"><span>From a track</span><span>Mood</span><span class="on">Bridge</span></div>
+  <div class="mut" style="font-size:12.5px;margin:14px 0 10px">The smoothest way from one track to the other, one note at a time.</div>
+  <div class="cap" style="margin-bottom:6px">From</div>${trow(p[0],{grip:false,bpm:false,sel:'sel'})}
+  <div style="margin:8px 0 8px 22px;border-left:2px dashed rgba(255,255,255,.18);padding:4px 0 4px 6px">
+   ${p.slice(1,3).map((t,i)=>join(p[i],t)+trow(t,{grip:false,bpm:false,sel:'new'})).join('')}${join(p[2],p[3])}</div>
+  <div class="cap" style="margin-bottom:6px">To</div>${trow(p[3],{grip:false,bpm:false,sel:'sel'})}
+  <div class="mut" style="font-size:12px;margin-top:12px">Same home note G all the way; each step raises one note: Menacing → Dark → Smooth → Warm.</div>
+  <div class="chip" style="margin-top:10px;color:var(--warn);background:rgba(242,193,78,.1)">Tempo jump at the end: 174 → 145</div></div>
+  <div class="abs" style="left:16px;right:16px;bottom:22px;display:flex;gap:8px"><span class="btn gh" style="height:44px">Longer</span><span class="btn solid" style="height:44px;flex:1;justify-content:center">Insert 2 tracks</span></div>`}
+function secD(){return `<section><h2><span class="k">D</span>Automatic: Build a set</h2>
+ <p class="lede">One <b>Build a set</b> dialog with three ways in: <b>from a track</b> (a seed, a length and a direction), <b>draw the mood</b> (a line over time), and <b>bridge two tracks</b>. The fourth way, <b>Bridge it</b> on a clashing join, lives in the editor (B). Every proposal keeps each join at or above the chosen number of shared notes.</p>
+ ${dev(W,H,.569,drawMood())}
+ <div class="row" style="margin-top:16px">${dev(PW,PH,.46,phoneSeed(),1)}${dev(PW,PH,.46,phoneBridge(),1)}
+ <ol class="notes"><li>Draw the mood: the line has handles you drag. The coloured bars are the proposed tracks, each at its own mood, so you can see how closely the result follows the line.</li>
+ <li><b>Every join at least 6/7</b> is the strictness: 7/7 means only same-note moves (smoothest, fewest choices).</li>
+ <li>From a track: <i>Stay</i> holds the mood, <i>Lift</i> climbs a step every few tracks, <i>Sink</i> goes darker.</li>
+ <li>Bridge: the path between two tracks, shown as stepping stones with each join's dots. Tempo is checked as well, and a big jump is flagged.</li>
+ <li><b>Try another</b> reshuffles among equally good choices; nothing is added until you confirm.</li></ol></div></section>`}
+
+// ---------- E: harmony basics, for people new to theory ----------
+// one octave: lit = the scale, white dot = home note, amber ring = the note that just moved
+function kb(pcs,{home=null,changed=null,w=280,h=70,names=true}={}){const kw=w/7,wh=[0,2,4,5,7,9,11],bl=[1,3,6,8,10];
+ let s=`<svg class="kb" width="100%" viewBox="0 0 ${w} ${h+(names?16:2)}" style="max-width:${w}px">`;
+ const ring=(x,y,ww,hh)=>`<rect x="${x}" y="${y}" width="${ww}" height="${hh}" rx="3" fill="none" stroke="oklch(80% .15 75)" stroke-width="2.5"/>`;
+ wh.forEach((pc,i)=>{const on=pcs.includes(pc);
+  s+=`<rect x="${i*kw+.5}" y=".5" width="${kw-1}" height="${h}" rx="3" fill="${on?'oklch(72% .16 230)':'#d9e2e8'}" fill-opacity="${on?.9:.12}"/>`;
+  if(changed===pc)s+=ring(i*kw+1.5,1.5,kw-3,h-2);
+  if(home===pc)s+=`<circle cx="${i*kw+kw/2}" cy="${h-11}" r="6" fill="#060c13"/><circle cx="${i*kw+kw/2}" cy="${h-11}" r="3" fill="#fff"/>`;
+  if(names)s+=`<text x="${i*kw+kw/2}" y="${h+13}" fill="rgba(227,234,240,.55)" font-size="10" text-anchor="middle">${NOTE[pc]}</text>`});
+ bl.forEach(pc=>{const i=wh.indexOf(pc-1),x=(i+1)*kw-kw*.3,on=pcs.includes(pc);
+  s+=`<rect x="${x}" y="0" width="${kw*.6}" height="${h*.6}" rx="2" fill="${on?'oklch(58% .16 230)':'#2a333b'}" stroke="#0b141d"/>`;
+  if(changed===pc)s+=ring(x+1,1,kw*.6-2,h*.6-2);
+  if(home===pc)s+=`<circle cx="${x+kw*.3}" cy="${h*.6-9}" r="4.5" fill="#fff"/>`});
+ return s+'</svg>'}
+// the mockup really plays: a scale from its home note, up one octave
+let AC;function play(pcs,home){AC=AC||new (window.AudioContext||window.webkitAudioContext)();const t0=AC.currentTime+.05;
+ const seq=pcs.map(p=>(p-home+12)%12).sort((a,b)=>a-b);seq.push(12);
+ seq.forEach((iv,i)=>{const o=AC.createOscillator(),g=AC.createGain(),t=t0+i*.22;o.type='triangle';o.frequency.value=261.63*Math.pow(2,(home+iv)/12);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.16,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+.42);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+.45)})}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-play]');if(!b)return;const [p,h,p2,h2]=JSON.parse(b.dataset.play);play(p,h);if(p2)setTimeout(()=>play(p2,h2),8*220+300)});
+const playBtn=(label,pcs,home,b)=>`<button class="pl" data-play='${JSON.stringify(b?[pcs,home,b.pcs,b.t]:[pcs,home])}'>${ic.play}${label}</button>`;
+const CMAJ=scale(0,'ionian');
+const FLAT=['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'];
+const LADDER=['lydian','ionian','mixolydian','dorian','aeolian','phrygian','locrian'];
+const HOMES=[[0,'ionian'],[2,'dorian'],[4,'phrygian'],[5,'lydian'],[7,'mixolydian'],[9,'aeolian'],[11,'locrian']];
+const STEPS=[
+ ['Twelve notes, seven at a time',()=>`<p>Music uses <b>12 notes</b>: the white and black keys of one octave. Most tracks lean on just <b>7</b> of them. Those 7 are the track's <b>scale</b>.</p>
+  ${kb(CMAJ,{home:0})}<p class="mut" style="margin-top:8px">Lit: the 7 notes of C major. The white dot marks the <b>home note</b>, where a melody feels finished.</p>${playBtn('Hear C major',CMAJ,0)}`],
+ ['Shared notes make smooth mixes',()=>{const a=by('Noir'),b=by('These Days'),c=by('Mesmer');return `<p>During a mix both tracks play at once, so their notes overlap. The more notes they <b>share</b>, the cleaner the blend. The dots count them.</p>
+  ${keyboard(a,b,280)}
+  <div class="legend" style="margin-top:8px">${join(a,a).replace(/<span>.*<\/span>/,'<span>7 of 7: seamless</span>')}${join(a,b).replace(/<span>.*<\/span>/,'<span>6 of 7: smooth</span>')}${join(a,c).replace(/<span>.*<\/span>/,'<span>5 or fewer: notes rub, shown in amber</span>')}</div>
+  ${playBtn('Hear Noir, then These Days',a.pcs,a.t,b)}`}],
+ ['Same notes, a different home',()=>`<p>Keep the same 7 notes but move the <b>home note</b>, and the mood changes. Each home has a name: its <b>mode</b>. Tap one to hear it.</p>
+  ${kb(CMAJ)}
+  <div class="homes">${HOMES.map(([h,m])=>{const br=MODES[m][1];return `<button class="hm" data-play='${JSON.stringify([CMAJ,h])}' aria-label="Play ${NOTE[h]} ${m}"><b>${NOTE[h]}</b><span style="color:${COL[br]}">${WORD[br]}</span><small>${m}</small></button>`}).join('')}</div>
+  <p class="mut">Mixing between two of these is a <b>pivot</b>: no note clashes, only the mood moves.</p>
+  <p class="tip">Know Camelot? 8A and 8B share their notes: those are the aeolian (A) and ionian (C) homes. Modes add the other five.</p>`],
+ ['One note brighter or darker',()=>`<p>Now keep the home note and change <b>one</b> note. Lower it and the mood darkens; raise it and it lifts. Seven steps, all with G as home:</p>
+  <div class="ladder">${LADDER.map((m,i)=>{const pcs=scale(7,m),prev=i?scale(7,LADDER[i-1]):null,ch=prev?pcs.find(p=>!prev.includes(p)):null,br=MODES[m][1];
+   return `<button class="lr" data-play='${JSON.stringify([pcs,7])}' aria-label="Play G ${m}"><span class="lw" style="color:${COL[br]}">${WORD[br]}<small>G ${m}</small></span>${kb(pcs,{home:7,changed:ch,w:196,h:40,names:false})}<span class="ln">${prev?`${NOTE[prev.find(p=>!pcs.includes(p))]} → ${FLAT[ch]}`:''}</span></button>`}).join('')}</div>
+  <p class="mut" style="margin-top:8px">The amber ring is the note that moved down. Tap a row to hear it.</p>`],
+ ['Reading a join',()=>{const a=by('Noir'),b=by('Stargazer');return `<p>Between two tracks of a playlist there's one line that says three things:</p>
+  ${trow(a,{grip:false})}${join(a,b)}${trow(b,{grip:false})}
+  <ol class="notes" style="margin:10px 0"><li><b>The dots</b>: notes shared, out of 7.</li><li><b>The move</b>: same notes, one note changes, next door, or clash.</li><li><b>The arrow</b>: the mood gets brighter, darker, or stays.</li></ol>
+  <p class="mut">Tap a join to see both scales on a keyboard. A mood with a hollow dot and a <b>?</b> means the analysis isn't sure.</p>`}]];
+const stepHTML=(i,n=true)=>`<div class="basic"><h4>${n?`<i>${i+1}</i>`:''}${STEPS[i][0]}</h4>${STEPS[i][1]()}</div>`;
+function basicsDesktop(){return desktopEditor(fitsPanel(by('Noir')),{bridge:false})+`<div class="abs" style="inset:0;background:rgba(0,0,0,.55)"></div>
+ <div class="abs" style="left:190px;top:50px;width:900px;height:700px;border-radius:16px;background:#0d1822;box-shadow:0 30px 80px rgba(0,0,0,.6);display:grid;grid-template-columns:230px 1fr;overflow:hidden">
+  <div style="background:rgba(255,255,255,.03);padding:22px 14px">
+   <div style="font-size:18px;font-weight:600;letter-spacing:-.02em;padding:0 8px 14px">Harmony basics</div>
+   ${STEPS.map((s,i)=>`<div style="display:flex;gap:10px;align-items:center;padding:10px 8px;border-radius:10px;font-size:13px;${i===2?'background:rgba(0,170,230,.16);color:var(--p)':i<2?'color:var(--tx)':'color:var(--mut)'}"><i style="font-style:normal;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:11px;background:${i<2?'var(--p)':'rgba(255,255,255,.08)'};color:${i<2?'var(--pi)':'inherit'}">${i<2?'✓':i+1}</i>${s[0]}</div>`).join('')}
+   <div class="mut" style="font-size:12px;padding:16px 8px 0;line-height:1.5">About 3 minutes. Open it again any time from a join's popover or Settings → Music.</div></div>
+  <div style="padding:26px 30px;position:relative">${ic.x.replace('class="i"','class="i" style="position:absolute;right:20px;top:22px"')}
+   ${stepHTML(2,false).replace('<h4>','<h4 style="font-size:20px">')}
+   <div class="abs" style="left:30px;right:30px;bottom:22px;display:flex;align-items:center;gap:10px"><span class="mut" style="flex:1;font-size:12.5px">Step 3 of 5</span><span class="btn gh">Back</span><span class="btn solid">Next: brighter or darker</span></div></div></div>`}
+function basicsPhone(){return `<div class="abs" style="inset:0;background:#0d1822"></div><div class="abs" style="left:0;right:0;top:0;padding:18px 18px 0">
+  <div style="display:flex;align-items:center"><div style="flex:1;font-size:17px;font-weight:600">Harmony basics</div>${ic.x}</div>
+  <div style="display:flex;gap:6px;margin:12px 0 18px">${[0,1,2,3,4].map(i=>`<i style="flex:1;height:4px;border-radius:2px;background:${i<=1?'var(--p)':'rgba(255,255,255,.12)'}"></i>`).join('')}</div>
+  ${stepHTML(1)}</div>
+  <div class="abs" style="left:16px;right:16px;bottom:22px;display:flex;gap:8px"><span class="btn gh" style="height:44px">Back</span><span class="btn solid" style="height:44px;flex:1;justify-content:center">Next</span></div>`}
+function secE(){return `<section><h2><span class="k">E</span>Harmony basics, for beginners</h2>
+ <p class="lede">A five-step explainer for anyone who has never heard of a scale. It uses no notation and no jargon until the idea is already on screen, and every example uses tracks from your library. The keyboards and buttons below <b>actually play</b>: tap them to hear each idea.</p>
+ <div class="basics">${STEPS.map((s,i)=>`<div class="card">${stepHTML(i)}</div>`).join('')}</div>
+ <h3 style="margin-top:22px">Where it lives</h3>
+ ${dev(W,H,.569,basicsDesktop())}
+ <div class="row" style="margin-top:16px">${dev(PW,PH,.46,basicsPhone(),1)}
+ <ol class="notes"><li>Desktop: a dialog with the steps listed on the left, so you can jump straight to one. Ticks mark the steps already read.</li>
+ <li>Phone: one step per screen with a progress bar. Swipe or tap <b>Next</b>.</li>
+ <li>It opens from a join's popover (<b>Learn the basics</b>), from the first-time tip, and from Settings → Music.</li>
+ <li>Step 3 is the key idea behind "same notes, different mode", which Camelot can't express.</li></ol></div></section>`}
+
+// ---------- F: teaching in context + Settings ----------
+function clashPopover(){const a=by('Noir'),b=by('Mesmer');return `<div class="pop" style="left:440px;top:262px;width:400px">
+ <div style="display:flex;align-items:center;gap:8px"><span class="jn bad" style="padding:0;height:auto">${dots(shared(a,b))}</span><b style="font-size:13.5px">Noir → Mesmer · 5 of 7 notes</b></div>
+ <p class="mut" style="font-size:12.5px;margin:6px 0 0;line-height:1.45">Two notes differ, so they can rub while both tracks play at once.</p>
+ ${keyboard(a,b,300)}
+ <p style="font-size:12.5px;margin:8px 0 0;line-height:1.45">What helps: <b>Bridge it</b> adds a track in between, or mix over a part with no melody (drums only).</p>
+ <div class="mut" style="font-size:11.5px;margin-top:6px">In theory: ${name(a)} → ${name(b)}, two sets apart.</div>
+ <div style="display:flex;gap:8px;margin-top:12px"><span class="btn solid">${ic.wand}Bridge it</span><span class="btn gh">Learn the basics</span></div></div>
+ <svg class="abs" style="left:520px;top:${262+302}px" width="20" height="10"><path d="M0 0 L10 10 L20 0z" fill="#15222e"/></svg>`}
+const coach=`<div class="pop" style="left:905px;top:335px;width:260px;padding:12px 14px;background:#1c3346">
+ <div style="font-size:11px;font-weight:700;color:var(--p);letter-spacing:.05em">NEW</div>
+ <div style="font-size:13px;margin-top:4px;line-height:1.45">The dots count the notes two tracks share. More dots, smoother mix.</div>
+ <div style="display:flex;gap:8px;margin-top:10px"><span class="btn solid" style="height:28px">Learn the basics</span><span class="btn gh" style="height:28px">Got it</span></div></div>`;
+function phoneJoinSheet(){const a=by('Noir'),b=by('Stargazer');return phoneEditor()+`<div class="abs" style="inset:0;background:rgba(0,0,0,.5)"></div>
+ <div class="sheet" style="height:520px;padding:0 18px"><div class="grab"></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-top:8px">${dots(7)}<b style="font-size:15px;flex:1">Noir → Stargazer</b>${ic.x}</div>
+  <div style="font-size:13px;margin-top:6px">Same notes · ${dirOf(a,b)}</div>
+  ${keyboard(a,b,330)}
+  <p style="font-size:13px;line-height:1.5;margin:10px 0 0">The same 7 notes, so nothing clashes. Stargazer's home note is C instead of G, which sounds a little less menacing.</p>
+  <div class="mut" style="font-size:12px;margin-top:8px">In theory: ${name(a)} → ${name(b)}, a pivot.</div>
+  <div style="display:flex;gap:8px;margin-top:16px"><span class="btn solid" style="height:44px;flex:1;justify-content:center">${ic.play}Hear the join</span><span class="btn gh" style="height:44px">Learn the basics</span></div></div>`}
+const LEVELS=[['Plain','Mood words and dots. No theory names.',join(by('Noir'),by('Stargazer'))],
+ ['Plain, theory on tap','Plain by default; tap a join for modes and the keyboard.',join(by('Noir'),by('Stargazer'))+'<div class="mut" style="font-size:11px;padding-left:34px">tap → G phrygian → C aeolian · pivot</div>'],
+ ['Theory','Modes and move names on every row and join.',join(by('Noir'),by('Stargazer'),'theory')]];
+const harmonySettings=w=>`<div style="font-size:15px;font-weight:600;margin:4px 0 4px">Harmony</div>
+ <div class="mut" style="font-size:12.5px;margin-bottom:12px">How playlists and the crate talk about keys and moods.</div>
+ <div class="cap" style="margin-bottom:8px">How much theory</div>
+ <div style="display:grid;gap:8px">${LEVELS.map(([t,d,ex],i)=>`<div class="radio ${i===1?'on':''}"><i></i><div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600">${t}</div><div class="mut" style="font-size:12px;margin:2px 0 4px">${d}</div><div style="margin-left:-34px">${ex}</div></div></div>`).join('')}</div>
+ <div style="margin-top:14px">
+  <div class="setrow"><div style="flex:1"><div style="font-size:13.5px">Mood lane on set curves</div><div class="mut" style="font-size:12px">Each track drawn at its brightness</div></div><span class="tog"></span></div>
+  <div class="setrow"><div style="flex:1"><div style="font-size:13.5px">Tips for beginners</div><div class="mut" style="font-size:12px">First-time hints on dots and clashes</div></div><span class="tog"></span></div>
+  <div class="setrow" style="border:0"><div style="flex:1"><div style="font-size:13.5px">Harmony basics</div><div class="mut" style="font-size:12px">The 5-step explainer, about 3 minutes</div></div><span class="btn gh">Open</span></div></div>`;
+function settingsDesktop(){const cats=[['Watching',['Playback','Sources','Downloads']],['Listening',['Music','Casting']],['App',['Appearance','Notifications','Server']]];
+ return `${rail}<div class="abs glass" style="left:127px;top:20px;width:1134px;height:64px;padding:18px 20px"><div style="font-size:20px;font-weight:600;letter-spacing:-.02em">Settings</div></div>
+ <div class="abs" style="left:127px;top:104px;width:250px">${cats.map(([g,items])=>`<div class="cap" style="padding:14px 12px 6px">${g}</div>${items.map(n=>`<div style="padding:10px 12px;border-radius:10px;font-size:14px;${n==='Music'?'background:rgba(0,170,230,.18);color:var(--p)':'color:var(--mut)'}">${n}</div>`).join('')}`).join('')}</div>
+ <div class="abs" style="left:401px;top:104px;width:420px"><div style="font-size:15px;font-weight:600;margin:4px 0 12px">Libraries</div>
+  <div class="setrow"><i style="width:8px;height:8px;border-radius:50%;background:#3fd18a"></i><div style="flex:1;font-size:13.5px">This PC <span class="mut" style="font-size:12px">· 46 tracks</span></div><span class="btn gh">Manage</span></div>
+  <div style="font-size:15px;font-weight:600;margin:24px 0 8px">Analysis</div>
+  <div class="setrow"><div style="flex:1"><div style="font-size:13.5px">Analyse new tracks</div><div class="mut" style="font-size:12px">Tempo, key, mode, energy, structure</div></div><span class="tog"></span></div>
+  <div class="setrow"><div style="flex:1"><div style="font-size:13.5px">Re-analyse library</div><div class="mut" style="font-size:12px">Needed once for modes · about 6 min</div></div><span class="btn gh">Run</span></div></div>
+ <div class="abs" style="left:845px;top:104px;width:416px">${harmonySettings()}</div>`}
+function settingsPhone(){return `<div class="abs glass" style="left:10px;top:10px;right:10px;height:56px;padding:0 14px;display:flex;align-items:center;gap:10px">${ic.back}<span style="font-size:17px;font-weight:600">Music</span></div>
+ <div class="abs" style="left:18px;right:18px;top:76px">${harmonySettings()}</div>${dock}`}
+function secF(){return `<section><h2><span class="k">F</span>Teaching in context, and Settings</h2>
+ <p class="lede">Beginners learn where the question comes up. The first time dots appear, a one-line tip explains them. Tapping any join explains that specific join in plain words, with the theory one line below. Settings holds the theory level picked in A.</p>
+ ${dev(W,H,.569,desktopEditor(fitsPanel(by('Noir')),{bridge:false})+clashPopover()+coach)}
+ <div class="row" style="margin-top:16px">${dev(PW,PH,.46,phoneJoinSheet(),1)}${dev(PW,PH,.46,settingsPhone(),1)}
+ <ol class="notes"><li>A clash says <b>why</b> it's amber, and what to do about it: Bridge it, or mix over drums.</li>
+ <li>The first-time tip appears once, next to the first dots you see, and goes away after <b>Got it</b>. Tips can be turned off in Settings.</li>
+ <li>Phone: a join's sheet lets you <b>hear the join</b>: a 20-second preview of the overlap.</li>
+ <li>Settings → Music → Harmony: the theory level, with a live preview of a join at each level.</li></ol></div>
+ <h3>Settings on desktop</h3>${dev(W,H,.569,settingsDesktop())}</section>`}
+
+// ---------- G: edge states ----------
+function edgeDesktop(){const a=by('Farewell'),b=by('These Days'),u=by('All I Ever Wanted'),ft=by('The First Time');
+ const any=LIB.filter(t=>t!==ft&&shared(ft,t)>=6).length;
+ const rows=`<div class="cap" style="padding:4px 10px 6px">Sunday warm-up</div>${trow(a)}${join(a,b)}${trow(b)}
+  <div class="jn">${dots(6).replace('<i class="o"></i></span>','<i class="q"></i></span>')}<span>same key, or one note changes · not sure</span></div>
+  <div class="tr"><span class="g">${ic.grip}</span><div class="tt"><b>${u.title}</b><span>${u.artist}</span></div><span class="mood uns" style="color:${u.col}"><i></i>Dark?</span><span class="bpm tab">172</span><span class="d tab">4:57</span></div>
+  <div class="jn"><span class="spin"></span><span>waiting for the next track's analysis</span></div>
+  <div class="tr"><span class="g">${ic.grip}</span><div class="tt"><b>Halcyon</b><span>YouTube Music · just added</span></div><span class="mood mut"><span class="spin"></span>Analysing…</span><span class="d tab">3:58</span></div>
+  <div class="jn"><span class="spin"></span><span>waiting for analysis</span></div>${trow(ft,{sel:'sel'})}`;
+ const panel=`<div style="padding:12px"><div style="font-size:14px;font-weight:600">Fits after The First Time</div><div class="mut" style="font-size:12px;margin-top:2px">${mood(ft)} · 145 BPM</div>
+  <div style="margin-top:18px;padding:14px;border-radius:12px;background:rgba(255,255,255,.04)"><div style="font-size:13.5px;font-weight:600">Nothing close enough</div>
+   <p class="mut" style="font-size:12.5px;line-height:1.45;margin:6px 0 12px">No track within 6% of 145 BPM shares 6 notes with it.</p>
+   <div style="display:grid;gap:8px"><span class="btn gh" style="justify-content:space-between">Any tempo<span class="mut">${any} tracks</span></span><span class="btn gh" style="justify-content:space-between">Allow 5 of 7<span class="mut">amber joins</span></span><span class="btn gh">${ic.wand}Bridge to a track you pick</span></div></div></div>`;
+ const unsure=`<div class="pop" style="left:620px;top:470px;width:330px">
+  <div style="font-size:13.5px;font-weight:600">Not sure: Dark or Smooth?</div>
+  <p class="mut" style="font-size:12.5px;line-height:1.45;margin:6px 0 0">All I Ever Wanted sounds like G aeolian or G dorian. They differ by one note (E♭ or E), so mixes stay safe either way.</p>
+  <div style="display:flex;gap:8px;margin-top:12px"><span class="btn solid" style="height:30px">It's Dark</span><span class="btn gh" style="height:30px">It's Smooth</span>${playBtn('Hear both',scale(7,'aeolian'),7,{pcs:scale(7,'dorian'),t:7}).replace('class="pl"','class="pl" style="margin:0"')}</div></div>`;
+ return `${rail}${topCard}${libCol}<div class="abs" style="left:401px;top:138px;width:860px"><div style="font-size:22px;font-weight:600;letter-spacing:-.02em">Sunday warm-up</div><div class="mut" style="font-size:12.5px;margin-top:2px">5 tracks · 1 still analysing</div></div>
+ <div class="abs" style="left:401px;top:200px;width:540px;height:500px;overflow:hidden">${rows}</div>
+ <div class="abs panel" style="left:957px;top:200px;width:304px;height:500px;overflow:hidden">${panel}</div>${unsure}${playerBar}`}
+function phoneMood(){const pts=[[0,-1],[.3,-2],[.6,0],[1,1]];const w=358,h=230,y=br=>h-14-((br+3)/6)*(h-28);
+ const f=x=>{for(let i=1;i<pts.length;i++)if(x<=pts[i][0]){const [x0,y0]=pts[i-1],[x1,y1]=pts[i];return y0+(y1-y0)*(x-x0)/(x1-x0)}return 1};
+ const seq=greedy(by('Sinkhole'),9,i=>Math.round(f(i/8)));
+ const drawn=`<path d="${pts.map(([x,b],i)=>`${i?'L':'M'}${x*w},${y(b)}`).join(' ')}" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="2.5" stroke-dasharray="6 5"/>${pts.map(([x,b])=>`<circle cx="${x*w}" cy="${y(b)}" r="8" fill="#060c13" stroke="#fff" stroke-width="2.5"/>`).join('')}<circle cx="${.6*w}" cy="${y(0)}" r="22" fill="#fff" fill-opacity=".12"/>`;
+ return `<div class="abs" style="inset:0;background:#0d1822"></div><div class="abs" style="left:0;right:0;top:0;padding:16px">
+  <div style="display:flex;align-items:center"><div style="flex:1;font-size:17px;font-weight:600">Build a set</div>${ic.x}</div>
+  <div class="seg" style="margin-top:12px"><span>From a track</span><span class="on">Mood</span><span>Bridge</span></div>
+  <div class="mut" style="font-size:12.5px;margin:12px 0 8px">Drag the dots with your finger. Up is brighter.</div>
+  <div class="panel" style="padding:4px 0">${setCurve(w,h,seq,{drawn,energy:false})}</div>
+  <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px" class="mut tab"><span>0</span><span>15</span><span>30 min</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+   <div><div class="cap" style="margin-bottom:6px">Length</div><div class="seg"><span>30</span><span class="on">45</span><span>60</span></div></div>
+   <div><div class="cap" style="margin-bottom:6px">Every join</div><div class="seg"><span>5/7</span><span class="on">6/7</span><span>7/7</span></div></div></div>
+  <div style="margin-top:14px;font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px 12px">${seq.slice(0,5).map(t=>`<span style="display:inline-flex;gap:6px;align-items:center"><i style="width:8px;height:8px;border-radius:50%;background:${t.col}"></i>${t.title}</span>`).join('')}<span class="mut">+${seq.length-5}</span></div></div>
+  <div class="abs" style="left:16px;right:16px;bottom:22px;display:flex;gap:8px"><span class="btn gh" style="height:44px">${ic.shuf}</span><span class="btn solid" style="height:44px;flex:1;justify-content:center">Add ${seq.length} tracks</span></div>`}
+function phoneAnalysing(){const n=by('Noir');return phoneEditor()+`<div class="abs" style="inset:0;background:rgba(0,0,0,.5)"></div>
+ <div class="sheet" style="height:560px"><div class="grab"></div>
+  <div style="padding:6px 16px 0"><div style="display:flex;align-items:center"><div style="flex:1;font-size:16px;font-weight:600">Fits after Noir</div>${ic.x}</div>
+  <div style="margin-top:12px;padding:12px;border-radius:12px;background:rgba(255,255,255,.05)"><div style="display:flex;align-items:center;gap:8px;font-size:13px"><span class="spin"></span><b>Analysing your library</b><span class="mut tab" style="margin-left:auto">31 of 46</span></div>
+   <div style="height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:10px"><div style="width:67%;height:4px;border-radius:2px;background:var(--p)"></div></div>
+   <div class="mut" style="font-size:12px;margin-top:8px;line-height:1.45">Suggestions fill in as tracks finish. About 4 minutes left.</div></div></div>
+  <div style="padding:0 6px">${fitsList(n,{limit:1,compact:true})}</div></div>`}
+function secG(){return `<section><h2><span class="k">G</span>When the analysis is unsure, busy, or finds nothing</h2>
+ <p class="lede">Real libraries are messy, so the mockups need these states too. An unsure mode is shown and can be fixed in one tap (like the genre confirm). A track still being analysed says so. When nothing fits, the panel offers ways to relax the search instead of showing an empty list.</p>
+ ${dev(W,H,.569,edgeDesktop())}
+ <div class="row" style="margin-top:16px">${dev(PW,PH,.46,phoneMood(),1)}${dev(PW,PH,.46,phoneAnalysing(),1)}
+ <ol class="notes"><li><b>Not sure</b>: a hollow dot and a <b>?</b> on the mood, a dashed dot on the join. The popover names both candidates, plays them, and your answer is kept.</li>
+ <li><b>Analysing</b>: the row and its join say so; suggestions appear as tracks finish, with a progress bar.</li>
+ <li><b>Nothing fits</b>: relax the tempo, allow amber joins, or bridge towards a track you choose.</li>
+ <li>Phone, <b>Draw the mood</b> (missing from D): drag the dots with a finger, big touch targets, the same strictness setting.</li></ol></div></section>`}
+
+// ---------- H/I: energy, the second axis ----------
+// illustrative library-wide energy levels; curves follow intro / build / drop / break / build / drop / outro
+const EN={Farewell:.32,'These Days':.62,Wanna:.7,'All I Ever Wanted':.66,'No Way Out':.58,Noir:.88,'Suicide Bassline VIP':.92,Stargazer:.6,'Pray For Me':.72,Sinkhole:.8,'You left me':.55,Dune:.75,'Hear The Lies':.6,'If I Could':.7,'Concussion (Mefjus Remix)':.9,Elysium:.68,Mesmer:.64,Supersonic:.95,Physically:.9,Nonplus:.78,'Pure Action':.85,Twerp:.9,Perseverance:.74,'Dopamine Hits':.86,Left:.7,Sunder:.8,'The Hole':.66,'The First Time':.72,'Before You':.5,'Black Bloc':.84,'Hear Me':.6,'Aurora (Justin Hawkes Remix)':.7,'A Taste Of Hope':.67,'Systematic V4':.88,'Pure Hope':.55};
+const ESHAPE=[[4,.35],[4,'up'],[8,1],[4,.45],[2,'up'],[6,1],[4,.35]];
+LIB.forEach((t,j)=>{t.e=EN[t.title]??.6;const c=[];let last=.35;
+ ESHAPE.forEach(([n,v])=>{for(let i=0;i<n;i++){const lv=v==='up'?last+(1-last)*(i+1)/n:v;c.push(Math.min(1,t.e*lv*(1+.06*Math.sin(j*3+c.length*1.7))))}last=v==='up'?1:v});t.curve=c});
+const ELVL=e=>e<.45?'Calm':e<.65?'Steady':e<.8?'Driving':'Intense';
+const eStep=(a,b)=>{const d=b.e-a.e;return d>.08?'lifts':d<-.08?'eases off':'holds'};
+const eGlyph=(a,b)=>`<svg width="14" height="12" viewBox="0 0 14 12" style="flex:none"><rect x="1" y="${12-a.e*11}" width="5" height="${a.e*11}" rx="1" fill="rgba(227,234,240,.4)"/><rect x="8" y="${12-b.e*11}" width="5" height="${b.e*11}" rx="1" fill="#e3eaf0"/></svg>`;
+const enTxt=(a,b)=>`<span class="dir" style="color:var(--tx)">${eGlyph(a,b)}&nbsp;energy ${eStep(a,b)}</span>`;
+function joinE(a,b,extra=''){const n=shared(a,b),[k]=kind(a,b);return `<div class="jn${n<6?' bad':''}">${dots(n)}<span>${k.toLowerCase()} · ${dirOf(a,b)}</span><span class="mut">·</span>${enTxt(a,b)}${extra}</div>`}
+function strip(t,w=64,h=16){const c=t.curve,n=c.length;let d=`M0,${h}`;c.forEach((v,i)=>d+=` L${(i/(n-1)*w).toFixed(1)},${(h-v*h).toFixed(1)}`);
+ return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex:none" aria-label="Energy shape"><path d="${d} L${w},${h}Z" fill="rgba(227,234,240,.22)"/><path d="${d.slice(d.indexOf('L'))}" fill="none" stroke="rgba(227,234,240,.7)" stroke-width="1"/></svg>`}
+function trowE(t,{sel='',grip=true}={}){return `<div class="tr ${sel}">${grip?`<span class="g">${ic.grip}</span>`:''}<div class="tt"><b>${t.title}</b><span>${t.artist}</span></div>${mood(t)}${strip(t)}<span class="bpm tab">${t.bpm}</span><span class="d tab">${fmt(t.dur)}</span></div>`}
+// set curve, two lanes: energy (bar by bar) above, mood below; `drawn(yE,yM,w)` adds target lines
+function setCurve2(w,h,tracks,{drawn=null,labels=true}={}){const tot=tracks.reduce((s,t)=>s+t.dur,0),eh=h*.56;
+ const yE=e=>eh-2-e*(eh-8),yM=br=>h-6-((br+3)/6)*(h-eh-12);
+ let s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">`,x=0,d='';
+ tracks.forEach((t,i)=>{const x0=x/tot*w,x1=(x+t.dur)/tot*w;t.curve.forEach((v,k)=>d+=`${d?' L':'M'}${(x0+k/(t.curve.length-1)*(x1-x0)).toFixed(1)},${yE(v).toFixed(1)}`);
+  s+=`<rect x="${x0+1}" y="${yM(t.br)-3}" width="${x1-x0-2}" height="6" rx="3" fill="${t.col}"/>`;if(i)s+=`<line x1="${x0}" x2="${x0}" y1="2" y2="${h-2}" stroke="rgba(255,255,255,.05)"/>`;x+=t.dur});
+ s+=`<path d="${d} L${w},${yE(0)} L0,${yE(0)}Z" fill="rgba(227,234,240,.12)"/><path d="${d}" fill="none" stroke="rgba(227,234,240,.65)" stroke-width="1.2"/>`;
+ s+=`<line x1="0" x2="${w}" y1="${eh+3}" y2="${eh+3}" stroke="rgba(255,255,255,.06)"/>`;
+ if(labels)s+=`<text x="6" y="12" font-size="9.5" fill="rgba(227,234,240,.45)">ENERGY</text><text x="6" y="${eh+15}" font-size="9.5" fill="rgba(227,234,240,.45)">MOOD</text>`;
+ if(drawn)s+=drawn(yE,yM,w);return s+'</svg>'}
+function fitsE(after,{limit=2,compact=false}={}){const g=fits(after,LIB,9);const order=['Same key','Same notes','One note changes','Next door'];
+ return order.filter(k=>g[k]).map(k=>{const list=[...g[k]].sort((x,y)=>Math.abs(x.e-after.e)-Math.abs(y.e-after.e)).slice(0,limit);
+  return `<div class="cap" style="padding:12px 10px 4px;display:flex;align-items:center;gap:8px">${dots(shared(after,list[0]))}${k}</div>`+list.map(t=>`<div class="tr" style="height:${compact?46:48}px"><div class="tt"><b>${t.title}</b><span>${t.artist} · <em class="tab" style="font-style:normal">${t.bpm}</em></span></div>
+   <div style="display:grid;justify-items:end;gap:3px"><span class="mood" style="color:${t.col}">${t.br>after.br?ic.up:t.br<after.br?ic.dn:ic.eq}${t.word}</span><span style="display:flex;align-items:center;gap:4px;font-size:11px">${eGlyph(after,t)}${ELVL(t.e)}</span></div>
+   ${compact?'':strip(t,48,16)}<span class="btn gh" style="height:30px;width:30px;padding:0;justify-content:center;margin-left:2px">${ic.plus}</span></div>`).join('')}).join('')}
+const filt=`<div style="display:grid;grid-template-columns:52px 1fr;gap:6px;align-items:center;margin-top:10px;font-size:11px" class="mut">
+ <span>Mood</span><span style="display:flex;gap:5px"><span class="chip on">Any</span><span class="chip">${ic.up}Brighter</span><span class="chip">${ic.dn}Darker</span></span>
+ <span>Energy</span><span style="display:flex;gap:5px"><span class="chip on">Any</span><span class="chip">Lift</span><span class="chip">Hold</span><span class="chip">Ease off</span></span></div>`;
+function editorRowsE(){const w=SET.warm,p=SET.peak;let s=`<div class="cap" style="padding:4px 10px 6px">Warm-up · 15 min</div>`;
+ w.forEach((t,i)=>{s+=trowE(t,{sel:t.title==='Noir'?'sel':''});if(i<w.length-1)s+=joinE(t,w[i+1])});
+ s+=joinE(w[3],p[0])+`<div class="cap" style="padding:10px 10px 6px">Peak · 15 min</div>`;
+ p.forEach((t,i)=>{s+=trowE(t);if(i<p.length-1)s+=joinE(t,p[i+1])});return s}
+function desktopE(panel,{panelW=330}={}){const listW=860-panelW-16;
+ return `${rail}${topCard}${libCol}<div class="abs" style="left:401px;top:138px;width:860px">
+  <div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div style="font-size:22px;font-weight:600;letter-spacing:-.02em">Night drive</div><div class="mut" style="font-size:12.5px;margin-top:2px">Set · 2 parts · 8 tracks · 32 min · Drum &amp; Bass</div></div>
+   <span class="btn solid">${ic.play}Play set</span><span class="btn gh">Auto-order ▾</span><span class="btn gh">${ic.wand}Build a set</span></div>
+  <div class="panel" style="margin-top:12px;padding:6px 8px">${setCurve2(844,104,ALL)}</div></div>
+ <div class="abs" style="left:401px;top:292px;width:${listW}px;height:415px;overflow:hidden">${editorRowsE()}</div>
+ <div class="abs panel" style="left:${401+listW+16}px;top:292px;width:${panelW}px;height:415px;overflow:hidden">${panel}</div>${playerBar}`}
+const fitsPanelE=n=>`<div style="padding:12px 12px 2px"><div style="font-size:14px;font-weight:600">Fits after Noir</div><div class="mut" style="font-size:12px;margin-top:2px">${mood(n)} · ${ELVL(n.e)} · 174 BPM</div>${filt}</div>${fitsE(n)}`;
+// mood × energy plane: across = mood (dark → bright), up = energy
+function plane(w,h,{cur=by('Noir'),path=ALL,tip=by('Stargazer'),labels=false}={}){const px=t=>18+((t.br+3)/6)*(w-36)+((LIB.indexOf(t)%5)-2)*4,py=t=>h-18-t.e*(h-36);
+ let s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">`;
+ s+=`<rect x="10" y="10" width="${w-20}" height="${h-20}" rx="10" fill="none" stroke="rgba(255,255,255,.06)"/><line x1="${w/2}" x2="${w/2}" y1="12" y2="${h-12}" stroke="rgba(255,255,255,.06)"/><line x1="12" x2="${w-12}" y1="${h/2}" y2="${h/2}" stroke="rgba(255,255,255,.06)"/>`;
+ const q=(x,y,t,a)=>`<text x="${x}" y="${y}" font-size="${Math.max(10,w*.028)}" fill="rgba(227,234,240,.38)" text-anchor="${a}">${t}</text>`;
+ s+=(labels?q(18,h-22,'','start'):q(18,28,'Dark & intense','start')+q(w-18,28,'Bright & intense','end'))+q(18,h-22,'Dark & calm','start')+q(w-18,h-22,'Bright & calm','end');
+ if(!labels)s+=`<polyline points="${path.map(t=>`${px(t)},${py(t)}`).join(' ')}" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+ else path.forEach(t=>{const r=px(t)>w*.7;s+=`<text x="${px(t)+(r?-10:10)}" y="${py(t)+4}" font-size="11" fill="${t.col}" text-anchor="${r?'end':'start'}">${t.title} · ${t.word}, ${ELVL(t.e).toLowerCase()}</text>`});
+ (labels?path:LIB).forEach(t=>{const ok=shared(cur,t)>=6,inS=path.includes(t);s+=`<circle cx="${px(t)}" cy="${py(t)}" r="${inS?6:5}" fill="${t.col}" fill-opacity="${ok||inS?1:.22}" ${inS?'stroke="#fff" stroke-width="1.2"':''}/>`});
+ if(!labels)s+=`<circle cx="${px(cur)}" cy="${py(cur)}" r="11" fill="none" stroke="oklch(72% .16 230)" stroke-width="2.5"/>`;
+ if(tip){const x=px(tip),y=py(tip);s+=`<rect x="${x+10}" y="${y-14}" width="150" height="38" rx="8" fill="#15222e" stroke="rgba(255,255,255,.12)"/><text x="${x+20}" y="${y+1}" font-size="12" fill="#e3eaf0">Stargazer · same notes</text><text x="${x+20}" y="${y+16}" font-size="11" fill="${tip.col}">brighter · energy ${eStep(cur,tip)}</text>`}
+ return s+'</svg>'}
+// automatic: follow an energy line and a mood line at once
+function greedy2(seed,n,want){const out=[seed],used=new Set([seed]);let cur=seed;
+ for(let i=1;i<n;i++){const {m,e}=want(i);const c=LIB.filter(t=>!used.has(t)&&t.set&&shared(cur,t)>=6&&Math.abs(t.bpm-seed.bpm)<=8)
+  .sort((a,b)=>(Math.abs(a.br-m)/3+2*Math.abs(a.e-e))-(Math.abs(b.br-m)/3+2*Math.abs(b.e-e)))[0];if(!c)break;out.push(c);used.add(c);cur=c}return out}
+const lerp=(pts,x)=>{for(let i=1;i<pts.length;i++)if(x<=pts[i][0]){const [x0,y0]=pts[i-1],[x1,y1]=pts[i];return y0+(y1-y0)*(x-x0)/(x1-x0)}return pts[pts.length-1][1]};
+const EPTS=[[0,.4],[.35,.7],[.7,.95],[.86,.9],[1,.5]],MPTS=[[0,0],[.4,-1],[.7,-2],[1,0]];
+const arcLines=(editing='e')=>(yE,yM,w)=>{const line=(pts,y,dash,on)=>`<path d="${pts.map(([x,v],i)=>`${i?'L':'M'}${x*w},${y(v)}`).join(' ')}" fill="none" stroke="#fff" stroke-opacity="${on?.95:.45}" stroke-width="${on?2.5:1.5}" ${dash?'stroke-dasharray="6 5"':''}/>`+(on?pts.map(([x,v])=>`<circle cx="${x*w}" cy="${y(v)}" r="7" fill="#060c13" stroke="#fff" stroke-width="2.5"/>`).join(''):'');
+ return line(EPTS,yE,false,editing==='e')+line(MPTS,yM,true,editing==='m')};
+const arcSeq=n=>greedy2(by('Farewell'),n,i=>({e:lerp(EPTS,i/(n-1)),m:Math.round(lerp(MPTS,i/(n-1)))}));
+function arcDesktop(){const seq=arcSeq(12),tot=seq.reduce((s,t)=>s+t.dur,0);
+ return desktopE(fitsPanelE(by('Noir')))+`<div class="abs" style="inset:0;background:rgba(0,0,0,.55)"></div>
+ <div class="abs" style="left:230px;top:60px;width:820px;height:680px;border-radius:16px;background:#0d1822;box-shadow:0 30px 80px rgba(0,0,0,.6);padding:20px 24px">
+  <div style="display:flex;align-items:center"><div style="flex:1;font-size:18px;font-weight:600;letter-spacing:-.02em">Build a set</div>${ic.x}</div>
+  <div class="seg" style="margin-top:14px"><span>From a track</span><span class="on">Draw the arc</span><span>Bridge two tracks</span></div>
+  <div style="display:flex;gap:6px;margin:14px 0 10px;align-items:center"><span class="mut" style="font-size:12px;margin-right:4px">Start from</span><span class="chip on">Warm-up → peak → cool-down</span><span class="chip">Slow burn</span><span class="chip">Two peaks</span><span class="chip">Flat out</span></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mut" style="font-size:12.5px;flex:1">Drag the solid line for energy, the dashed one for mood. Tracks are picked to follow both.</span><span class="seg" style="width:190px"><span class="on">Energy</span><span>Mood</span></span></div>
+  <div class="panel" style="padding:6px">${setCurve2(756,250,seq,{drawn:arcLines('e')})}</div>
+  <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px" class="mut tab"><span>0 min</span><span>15</span><span>30</span><span>45</span><span>${Math.round(tot/60)} min</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:12px;margin-top:14px">
+   <label style="font-size:12px" class="mut">Length<div class="fld" style="margin-top:5px;color:var(--tx)">45 min</div></label>
+   <label style="font-size:12px" class="mut">Tempo<div class="fld" style="margin-top:5px;color:var(--tx)">170–176</div></label>
+   <label style="font-size:12px" class="mut">Every join at least<div class="seg" style="margin-top:5px"><span>5/7</span><span class="on">6/7</span><span>7/7</span></div></label></div>
+  <div class="abs" style="left:24px;right:24px;bottom:20px;display:flex;align-items:center;gap:10px"><span class="mut" style="font-size:12.5px;flex:1">${seq.length} tracks · ${Math.round(tot/60)} min · joins 6/7 or better · energy follows the line within 10%</span>
+   <span class="btn gh">${ic.shuf}Try another</span><span class="btn solid">Add to Night drive</span></div></div>`}
+function arcPhone(){const seq=arcSeq(9);return `<div class="abs" style="inset:0;background:#0d1822"></div><div class="abs" style="left:0;right:0;top:0;padding:16px">
+  <div style="display:flex;align-items:center"><div style="flex:1;font-size:17px;font-weight:600">Build a set</div>${ic.x}</div>
+  <div class="seg" style="margin-top:12px"><span>From a track</span><span class="on">Arc</span><span>Bridge</span></div>
+  <div style="display:flex;gap:6px;margin:12px 0 0;overflow:hidden"><span class="chip on">Warm-up → peak → cool-down</span><span class="chip">Slow burn</span><span class="chip">Two peaks</span></div>
+  <div style="display:flex;align-items:center;gap:8px;margin:12px 0 8px"><span class="mut" style="font-size:12px;flex:1">Now editing</span><span class="seg" style="width:170px"><span class="on">Energy</span><span>Mood</span></span></div>
+  <div class="panel" style="padding:4px 0">${setCurve2(358,250,seq,{drawn:arcLines('e')})}</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+   <div><div class="cap" style="margin-bottom:6px">Length</div><div class="seg"><span>30</span><span class="on">45</span><span>60</span></div></div>
+   <div><div class="cap" style="margin-bottom:6px">Every join</div><div class="seg"><span>5/7</span><span class="on">6/7</span><span>7/7</span></div></div></div>
+  <div class="mut" style="font-size:12px;margin-top:12px">${seq.length} tracks · energy follows the line within 10%</div></div>
+  <div class="abs" style="left:16px;right:16px;bottom:22px;display:flex;gap:8px"><span class="btn gh" style="height:44px">${ic.shuf}</span><span class="btn solid" style="height:44px;flex:1;justify-content:center">Add ${seq.length} tracks</span></div>`}
+function phoneEditorE(){return `<div class="abs glass" style="left:10px;top:10px;right:10px;height:78px;padding:12px 14px">
+  <div style="display:flex;align-items:center;gap:10px">${ic.back}<div style="flex:1"><div style="font-size:18px;font-weight:600;letter-spacing:-.02em">Night drive</div><div class="mut" style="font-size:12px">Set · 8 tracks · 32 min</div></div><span class="btn solid" style="width:40px;padding:0;justify-content:center">${ic.play}</span></div></div>
+ <div class="abs panel" style="left:10px;right:10px;top:98px;padding:4px 6px">${setCurve2(358,96,ALL)}</div>
+ <div class="abs" style="left:4px;right:4px;top:210px;bottom:0;overflow:hidden">${(()=>{const w=SET.warm;let s=`<div class="cap" style="padding:4px 10px 6px">Warm-up</div>`;
+  w.forEach((t,i)=>{s+=`<div class="tr ${t.title==='Noir'?'sel':''}"><span class="g">${ic.grip}</span><div class="tt"><b>${t.title}</b><span>${t.artist}</span></div>${mood(t)}<span class="d tab">${fmt(t.dur)}</span></div>`;
+   if(i<w.length-1)s+=`<div class="jn" style="height:auto;padding:2px 0 4px 34px;flex-wrap:wrap;row-gap:2px">${dots(shared(t,w[i+1]))}<span>${kind(t,w[i+1])[0].toLowerCase()} · ${dirOf(t,w[i+1])}</span>${enTxt(t,w[i+1])}</div>`});return s})()}</div>${dock}`}
+function phonePlane(){return phoneEditorE()+`<div class="abs" style="inset:0;background:rgba(0,0,0,.5)"></div><div class="sheet" style="height:600px"><div class="grab"></div>
+  <div style="padding:6px 16px 0;display:flex;align-items:center"><div style="flex:1"><div style="font-size:16px;font-weight:600">After Noir</div><div class="mut" style="font-size:12px">Across: mood · up: energy</div></div><span class="seg" style="width:170px"><span>List</span><span>Notes</span><span class="on">Vibe</span></span></div>
+  <div style="padding:6px 6px 0">${plane(378,380)}</div>
+  <div style="margin:0 12px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);display:flex;align-items:center;gap:10px">
+   <div style="flex:1"><div style="font-size:13.5px;font-weight:500">Stargazer</div><div class="mut" style="font-size:11.5px;display:flex;gap:6px;align-items:center">${dots(7)} same notes · brighter · ${eGlyph(by('Noir'),by('Stargazer'))} eases off</div></div><span class="btn solid">Insert</span></div></div>`}
+// beginner steps 6 and 7, and a synth that plays the same notes calm or intense
+function playStyle(pcs,home,hot){AC=AC||new (window.AudioContext||window.webkitAudioContext)();const t0=AC.currentTime+.05,step=hot?.12:.42;
+ const seq=pcs.map(p=>(p-home+12)%12).sort((a,b)=>a-b);seq.push(12);const notes=hot?[...seq,...[...seq].reverse()]:seq;
+ notes.forEach((iv,i)=>{const t=t0+i*step,o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();o.type=hot?'sawtooth':'sine';o.frequency.value=261.63*Math.pow(2,(home+iv)/12);
+  f.type='lowpass';f.frequency.value=hot?2400:900;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(hot?.09:.13,t+.01);g.gain.exponentialRampToValueAtTime(.001,t+(hot?.16:.7));
+  o.connect(f).connect(g).connect(AC.destination);o.start(t);o.stop(t+.75);
+  if(hot&&i%2===0){const k=AC.createOscillator(),kg=AC.createGain();k.frequency.setValueAtTime(130,t);k.frequency.exponentialRampToValueAtTime(42,t+.12);kg.gain.setValueAtTime(.5,t);kg.gain.exponentialRampToValueAtTime(.001,t+.16);k.connect(kg).connect(AC.destination);k.start(t);k.stop(t+.18)}})}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-style]');if(!b)return;const [p,h,hot]=JSON.parse(b.dataset.style);playStyle(p,h,hot)});
+function overlap(a,b,w=320,h=110){const n=a.curve.length,bw=w/(n+n-6),ya=v=>h*.5-v*(h*.5-8),yb=v=>h-6-v*(h*.5-10),off=n-6;
+ const pa=a.curve.map((v,i)=>`${(i*bw).toFixed(1)},${ya(v).toFixed(1)}`).join(' '),pb=b.curve.map((v,i)=>`${((i+off)*bw).toFixed(1)},${yb(v).toFixed(1)}`).join(' ');
+ return `<svg class="kb" width="100%" viewBox="0 0 ${w} ${h+14}" style="max-width:${w}px"><rect x="${off*bw}" y="0" width="${6*bw}" height="${h}" rx="4" fill="oklch(72% .16 230 / .14)"/>
+  <polyline points="0,${ya(0)} ${pa} ${(n-1)*bw},${ya(0)}" fill="${a.col}" fill-opacity=".35" stroke="${a.col}"/><polyline points="${off*bw},${yb(0)} ${pb} ${(n-1+off)*bw},${yb(0)}" fill="${b.col}" fill-opacity=".35" stroke="${b.col}"/>
+  <text x="4" y="12" font-size="10" fill="${a.col}">${a.title}</text><text x="${off*bw+6}" y="${h*.5+14}" font-size="10" fill="${b.col}">${b.title}</text>
+  <text x="${off*bw+3*bw}" y="${h+12}" font-size="10" fill="oklch(72% .16 230)" text-anchor="middle">mix here</text></svg>`}
+const STEPS2=[
+ ['Mood isn\'t energy',()=>{const pts=['Farewell','Noir','The Hole','Supersonic'].map(by);return `<p><b>Mood</b> comes from the notes. <b>Energy</b> is how hard the track hits: how loud it is and how much high end it carries, measured bar by bar. They're separate: a track can be dark and calm, or dark and intense.</p>
+  ${plane(320,200,{cur:by('Noir'),path:pts,tip:null,labels:true})}
+  <p class="mut" style="margin-top:8px">Hear the difference: the same 7 notes, played calm and then intense.</p>
+  <button class="pl" data-style='${JSON.stringify([scale(7,'phrygian'),7,0])}'>${ic.play}Same notes, calm</button> <button class="pl" data-style='${JSON.stringify([scale(7,'phrygian'),7,1])}'>${ic.play}Same notes, intense</button>`}],
+ ['Mix in the calm parts',()=>{const a=by('Noir'),b=by('Stargazer');return `<p>Tracks rise and fall: a calm intro, a build, a <b>drop</b>, a break, another drop, a calm outro. The smoothest mixes overlap one track's <b>outro</b> with the next one's <b>intro</b>, while both are calm.</p>
+  ${overlap(a,b)}
+  <p class="mut" style="margin-top:8px">That's why a join's energy compares the two drops: the change you feel lands when the next track drops, not while they overlap.</p>`}]];
+const stepHTML2=(i,n=true)=>`<div class="basic"><h4>${n?`<i>${i+6}</i>`:''}${STEPS2[i][0]}</h4>${STEPS2[i][1]()}</div>`;
+function secH(){const a=by('Noir'),b=by('Stargazer'),c=by('Suicide Bassline VIP'),d=by('Sinkhole');
+ return `<section><h2><span class="k">H</span>Energy, the second axis</h2>
+ <p class="lede">Harmony says whether two tracks <b>fit</b>; energy says where the set is <b>going</b>. Every track now carries both: its mood (from the notes) and its energy (how hard it hits, bar by bar). A join gains a fourth fact: whether the energy lifts, holds or eases off.</p>
+ <div class="card" style="display:grid;gap:2px">
+  ${trowE(a,{grip:false})}${joinE(a,b)}${trowE(b,{grip:false})}
+  <div class="mut" style="font-size:12px;margin:10px 0 2px">The little bars compare the two tracks' drops, faint then solid. The strip on each row is the track's energy shape, so you can see its drops at a glance.</div></div>
+ <h3>The four moves, with energy</h3>
+ <div class="card" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:4px 18px">
+  <div>${joinE(a,c)}<div class="mut" style="font-size:12px;padding:0 0 8px 34px">Noir → Suicide Bassline VIP: same key, energy holds. Seamless.</div></div>
+  <div>${joinE(a,b)}<div class="mut" style="font-size:12px;padding:0 0 8px 34px">Noir → Stargazer: pivot, lighter and calmer. A breather.</div></div>
+  <div>${joinE(by('Farewell'),by('These Days'))}<div class="mut" style="font-size:12px;padding:0 0 8px 34px">Farewell → These Days: darker and harder. Building up.</div></div>
+  <div>${joinE(d,by('Mesmer'))}<div class="mut" style="font-size:12px;padding:0 0 8px 34px">Sinkhole → Mesmer: next door, energy eases off.</div></div></div>
+ <h3>For beginners: two more steps</h3>
+ <div class="basics">${STEPS2.map((s,i)=>`<div class="card">${stepHTML2(i)}</div>`).join('')}</div>
+ <p class="illu">Energy levels here are made up, like the modes. Today's analysis measures each bar against the track's own loudest bars, so every track peaks near 100% and tracks can't be compared. This needs a library-wide energy scale, normalised across the library the way the 8 bands already are.</p></section>`}
+function secI(){return `<section><h2><span class="k">I</span>The screens, with energy</h2>
+ <p class="lede">The set curve gets two lanes: energy on top (every bar of every track, so the drops show), mood below. Fits next filters on both. The map gets a third view, <b>Vibe</b>: mood across, energy up. Build a set's <b>Draw the mood</b> becomes <b>Draw the arc</b>, with one line for each.</p>
+ ${dev(W,H,.569,desktopE(fitsPanelE(by('Noir'))))}
+ <div class="row" style="margin-top:16px">${dev(PW,PH,.46,phoneEditorE(),1)}${dev(PW,PH,.46,phonePlane(),1)}
+ <ol class="notes"><li>Desktop: each row shows its energy shape; each join says lifts, holds or eases off.</li>
+ <li><b>Fits after Noir</b> filters on mood and energy separately. Each candidate shows its energy level and shape; <i>Hold</i> would keep only tracks near Noir's level.</li>
+ <li>Phone: joins wrap to two lines so the energy fits; the set curve keeps both lanes.</li>
+ <li><b>Vibe</b> view: the set's path through mood and energy. Lit dots share 6+ notes with Noir; corners name the four vibes.</li></ol></div>
+ <h3>Draw the arc</h3>
+ ${dev(W,H,.569,arcDesktop())}
+ <div class="row" style="margin-top:16px">${dev(PW,PH,.46,arcPhone(),1)}
+ <ol class="notes"><li>Two lines on one chart: solid for energy, dashed for mood. A toggle picks which one your drag moves, so they never fight on a phone.</li>
+ <li>Presets give a starting shape: <i>warm-up → peak → cool-down</i>, <i>slow burn</i>, <i>two peaks</i>, <i>flat out</i>.</li>
+ <li>Harmony is still a hard rule (every join 6/7 or better); energy and mood are targets the picker gets as close to as it can.</li>
+ <li>From a track gains an energy direction too (<i>Build</i>, <i>Hold</i>, <i>Cool down</i>), next to the mood one.</li></ol></div></section>`}
+
+document.getElementById('app').innerHTML=secA()+secB()+secC()+secD()+secE()+secF()+secG()+secH()+secI();
+</script></body></html>

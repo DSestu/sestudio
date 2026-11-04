@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Harmony + energy: navigation prototype</title>
+<style>
+:root{--p:oklch(72% .16 230);--pi:oklch(18% .05 230);--tx:#e3eaf0;--mut:rgba(227,234,240,.55);--mut2:rgba(227,234,240,.4);--glass:rgba(16,28,40,.82);--line:rgba(255,255,255,.08);--warn:oklch(80% .15 75)}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+button{font:inherit;color:inherit}
+.bar{display:grid;gap:10px;margin-bottom:14px}
+.alts{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.alt{all:unset;cursor:pointer;padding:10px 12px;border-radius:var(--radius,12px);background:var(--card,#0b141d);border:1px solid var(--border,rgba(255,255,255,.08));display:grid;gap:3px}
+.alt b{font-size:13.5px;font-weight:600;display:flex;gap:8px;align-items:center}
+.alt b i{font-style:normal;display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:rgba(0,170,230,.18);color:var(--p);font-size:11px}
+.alt span{font-size:12px;color:var(--muted-foreground,#8b95a1);line-height:1.35}
+.alt.on{border-color:var(--p);box-shadow:0 0 0 1px var(--p)}
+.alt.on b i{background:var(--p);color:var(--pi)}
+.alt:focus-visible{outline:2px solid var(--p);outline-offset:2px}
+.opts{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:12px;color:var(--muted-foreground,#8b95a1)}
+.sg{display:inline-flex;padding:3px;border-radius:10px;background:var(--secondary,rgba(255,255,255,.07));gap:2px;margin-left:6px}
+.sg button{all:unset;cursor:pointer;padding:5px 10px;border-radius:7px;font-weight:600;font-size:12px;color:var(--muted-foreground,#8b95a1)}
+.sg button.on{background:rgba(0,170,230,.22);color:var(--p)}
+.sg button:focus-visible{outline:2px solid var(--p)}
+.reset{all:unset;cursor:pointer;font-weight:600;color:var(--p)}
+.devs{display:grid;gap:18px}
+.devrow{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.notes{flex:1;min-width:220px;font-size:13px;line-height:1.5}
+.notes h4{margin:0 0 6px;font-size:14px}
+.path{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:6px 0 10px}
+.path span{padding:2px 8px;border-radius:999px;background:var(--secondary,rgba(255,255,255,.07));font-size:11.5px}
+.path em{font-style:normal;color:var(--muted-foreground,#8b95a1);font-size:11px}
+.pc{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:12.5px}
+.pc .y{color:oklch(76% .17 155)}.pc .n{color:oklch(80% .15 75)}
+.hint{font-size:12px;color:var(--muted-foreground,#8b95a1);margin:8px 0 0}
+/* device */
+.dev{position:relative;overflow:hidden;border-radius:12px;box-shadow:0 0 0 1px rgba(255,255,255,.12);flex:none}
+.dev.ph{border-radius:24px}
+.scr{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;color:var(--tx);font-size:13px;background:#060c13}
+.scr *{line-height:1.25}
+.scr ::selection{background:rgba(0,170,230,.35)}
+.abs{position:absolute}
+.glass{background:var(--glass);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px}
+.panel{background:rgba(255,255,255,.035);border-radius:14px}
+.mut{color:var(--mut)}.sm{font-size:12px}
+.tab{font-variant-numeric:tabular-nums}
+.scroll{overflow:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}
+svg.i{width:1em;height:1em;vertical-align:-.13em;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+[data-a]{cursor:pointer}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;font-weight:600;font-size:12.5px;white-space:nowrap;border:0}
+.btn.solid{background:var(--p);color:var(--pi)}
+.btn.gh{background:rgba(255,255,255,.07);color:var(--tx)}
+.btn.gh:hover{background:rgba(255,255,255,.12)}
+.btn.sq{width:30px;height:30px;padding:0;justify-content:center;flex:none}
+.chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:500;background:rgba(255,255,255,.06);color:var(--mut);white-space:nowrap}
+.chip:hover{background:rgba(255,255,255,.1)}
+.chip.on{background:rgba(0,170,230,.2);color:var(--p)}
+.cap{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--mut2);font-weight:600}
+.cap.gh{display:flex;align-items:center;gap:8px;padding:12px 10px 4px}
+.lnk{color:var(--p);font-weight:600;display:inline-flex;align-items:center;gap:4px}
+.tr2{display:flex;align-items:center;gap:9px;min-height:46px;padding:0 10px;border-radius:12px}
+.tr2:hover{background:rgba(255,255,255,.04)}
+.tr2 .g{width:14px;color:rgba(255,255,255,.22)}
+.tr2 .tt{flex:1;min-width:0}
+.tr2 .tt b{display:block;font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr2 .tt span{display:block;font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr2 .bpm{font-size:11px;color:var(--mut2);width:26px;text-align:right}
+.tr2 .d{font-size:12px;color:var(--mut);width:32px;text-align:right}
+.tr2 .x{opacity:0;color:var(--mut);padding:4px}
+.tr2:hover .x{opacity:1}
+.tr2.sel{background:rgba(0,170,230,.13);box-shadow:inset 0 0 0 1px rgba(0,170,230,.35)}
+.tr2 .pl8{color:var(--p)}
+.tr2.c{min-height:48px}
+.mini{display:grid;justify-items:end;gap:3px;font-size:11px}
+.en{display:flex;align-items:center;gap:4px}
+.mood{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.mood i{width:8px;height:8px;border-radius:50%;flex:none}
+.th{font-size:11.5px;color:var(--mut);white-space:nowrap}
+.jn2{display:flex;align-items:center;gap:7px;min-height:24px;padding:2px 8px 2px 34px;margin:1px 0;font-size:11.5px;color:var(--mut);border-radius:8px;flex-wrap:wrap}
+.jn2:hover{background:rgba(255,255,255,.04);color:var(--tx)}
+.jn2.on{background:rgba(0,170,230,.1);color:var(--tx)}
+.jn2.bad{color:var(--warn)}
+.jn2 .fix{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border-radius:999px;background:rgba(0,170,230,.18);color:var(--p);font-weight:600;font-size:11px}
+.dots{display:inline-flex;gap:2.5px;align-items:center}
+.dots i{width:5px;height:5px;border-radius:50%;background:var(--p)}
+.dots i.o{background:transparent;box-shadow:inset 0 0 0 1px rgba(227,234,240,.35)}
+.bad .dots i,.dots.bad i{background:var(--warn)}
+.bad .dots i.o,.dots.bad i.o{background:transparent}
+.dir{display:inline-flex;align-items:center;gap:3px;font-weight:500}
+.tabs{display:flex;gap:2px;padding:3px;margin:10px 10px 0;border-radius:10px;background:rgba(255,255,255,.06)}
+.tabs span{flex:1;text-align:center;padding:6px 6px;border-radius:8px;font-weight:600;font-size:12px;color:var(--mut)}
+.tabs span.on{background:rgba(0,170,230,.22);color:var(--p)}
+.ph{display:grid;gap:3px;padding:10px 12px 2px}
+.filt{display:grid;grid-template-columns:46px 1fr;gap:6px;align-items:center;padding:6px 12px 2px;font-size:11px;color:var(--mut)}
+.filt div{display:flex;gap:4px;flex-wrap:wrap}
+.filt .chip{height:24px;padding:0 8px;font-size:11.5px}
+.empty{padding:24px 14px;text-align:center;color:var(--mut);font-size:12.5px;line-height:1.6}
+.jd{padding:10px 14px 14px;display:grid;gap:8px}
+.jd p{margin:0;font-size:13px;line-height:1.5}
+.jdh{display:flex;gap:8px;align-items:center;font-size:14px}
+.enrow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.enrow>div{display:grid;gap:3px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.pl{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;border:0;background:rgba(0,170,230,.18);color:var(--p);font-weight:600;font-size:12.5px;cursor:pointer}
+.kb{display:block}
+.dock{position:absolute;left:12px;right:12px;bottom:14px;height:62px;display:flex;align-items:center;justify-content:space-around;padding:0 8px}
+.dock span{display:grid;justify-items:center;gap:3px;font-size:10px;color:var(--mut)}
+.dock span i{width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.12)}
+.dock span.on{color:var(--p)}.dock span.on i{background:rgba(0,170,230,.4)}
+.dock .srch{width:52px;height:52px;border-radius:16px;background:var(--p)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#0d1822;border-radius:22px 22px 0 0;box-shadow:0 -20px 50px rgba(0,0,0,.6);display:flex;flex-direction:column;z-index:20}
+.grab{width:40px;height:4px;border-radius:2px;background:rgba(255,255,255,.25);margin:8px auto 4px;flex:none}
+.shd{display:flex;align-items:center;gap:8px;padding:4px 16px 0}
+.shd b{flex:1;font-size:16px;font-weight:600}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:19}
+.modal{position:absolute;z-index:30;background:#0d1822;box-shadow:0 30px 80px rgba(0,0,0,.6);border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+.seg{display:flex;padding:3px;border-radius:10px;background:rgba(255,255,255,.07);gap:2px}
+.seg span{flex:1;text-align:center;padding:7px 8px;border-radius:8px;font-weight:600;font-size:12px;color:var(--mut);white-space:nowrap}
+.seg span.on{background:rgba(0,170,230,.22);color:var(--p)}
+.toast{position:absolute;z-index:40;display:flex;align-items:center;gap:12px;background:rgba(0,0,0,.85);border-radius:10px;padding:9px 14px;font-size:12.5px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.toast b{color:var(--p)}
+.blk{position:absolute;border-radius:12px;background:rgba(255,255,255,.05);overflow:hidden}
+.blk.sel{box-shadow:inset 0 0 0 2px var(--p);background:rgba(0,170,230,.1)}
+.blk .mb{height:4px}
+.blk .bt{padding:6px 8px 0;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk .bs{padding:0 8px;font-size:10.5px;color:var(--mut);white-space:nowrap;overflow:hidden}
+.con{position:absolute;display:grid;place-items:center;border-radius:999px;font-size:11px;font-weight:700}
+.stone{border-radius:14px;background:rgba(255,255,255,.05);padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.stone.sel{box-shadow:inset 0 0 0 2px var(--p);background:rgba(0,170,230,.1)}
+.card2{border-radius:12px;background:rgba(255,255,255,.05);padding:10px;display:flex;flex-direction:column;gap:6px}
+.sw{width:38px;height:22px;border-radius:999px;background:rgba(255,255,255,.15);position:relative;flex:none}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#cfd8de;transition:left .2s}
+.sw.on{background:var(--p)}.sw.on::after{left:19px;background:var(--pi)}
+.ghost{opacity:.55;border:1px dashed rgba(0,170,230,.45)}
+.basic p{margin:0 0 10px;line-height:1.5;font-size:13.5px}
+.gchip{display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;font-size:10.5px;font-weight:600;color:var(--gc);box-shadow:inset 0 0 0 1px color-mix(in oklch,var(--gc) 55%,transparent);white-space:nowrap;flex:none}
+.gch{display:inline-flex;align-items:center;gap:4px;color:var(--tx);font-weight:500}
+.tj{color:var(--warn);font-weight:500}
+.arcw svg{touch-action:none;user-select:none}
+.arcw [data-h]{cursor:grab}
+.arcw [data-lane]{cursor:crosshair}
+.arcw [data-a="gcycle"]{cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--mut)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+</style></head><body>
+<div id="root"></div>
+<script>
+// ---------- music data: real test tracks; modes and energy levels are illustrative ----------
+const NOTE=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+const MAJ=[0,2,4,5,7,9,11];
+const MODES={lydian:[3,3],ionian:[0,2],mixolydian:[4,1],dorian:[1,0],aeolian:[5,-1],phrygian:[2,-2],locrian:[6,-3]};
+const WORD={3:'Floating',2:'Bright',1:'Warm',0:'Smooth','-1':'Dark','-2':'Menacing','-3':'Unstable'};
+const COL={3:'oklch(88% .12 95)',2:'oklch(83% .13 75)',1:'oklch(77% .13 45)',0:'oklch(72% .13 10)','-1':'oklch(66% .15 340)','-2':'oklch(62% .17 310)','-3':'oklch(56% .18 290)'};
+const scale=(t,m)=>m==='harmonic minor'?[0,2,3,5,7,8,11].map(x=>(t+x)%12):MAJ.map(x=>(t+x-MAJ[MODES[m][0]]+12)%12);
+function T(title,artist,bpm,dur,t,mode,e){const hm=mode==='harmonic minor';const br=hm?-1:MODES[mode][1];
+ const parent=hm?null:(t-MAJ[MODES[mode][0]]+12)%12;
+ return {title,artist,bpm,dur,t,mode,e,pcs:scale(t,mode),br,set:hm?null:((parent*7)%12+7)%12+1,word:hm?'Exotic':WORD[br],col:hm?'oklch(70% .14 200)':COL[br]}}
+const LIB=[
+ T('Farewell','neuro soundcloud',172,239,7,'dorian',.32),T('These Days','Emperor',172,268,7,'aeolian',.62),T('Wanna','Kumarion',172,220,7,'aeolian',.7),
+ T('All I Ever Wanted','Emperor',172,297,7,'aeolian',.66),T('No Way Out','feat. Mira Lu Kovacs',175,245,7,'dorian',.58),T('Noir','Teddy Killerz',174,226,7,'phrygian',.88),
+ T('Suicide Bassline VIP','Mefjus',172,174,7,'phrygian',.92),T('Stargazer','Skylark',172,201,0,'aeolian',.6),T('Pray For Me','feat. Joe Killington',175,245,0,'dorian',.72),
+ T('Sinkhole','neuro soundcloud',172,313,5,'aeolian',.8),T('You left me','Eluun',174,213,5,'aeolian',.55),T('Dune','neuro soundcloud',174,127,5,'harmonic minor',.75),
+ T('Hear The Lies','Eluun',172,235,5,'dorian',.6),T('If I Could','neuro soundcloud',172,253,5,'aeolian',.7),T('Concussion (Mefjus Remix)','Noisia',172,226,5,'phrygian',.9),
+ T('Elysium','Fade Black',175,247,2,'aeolian',.68),T('Mesmer','Sota, Circadian, Mila Falls',174,281,10,'aeolian',.64),T('Supersonic','Skrillex, Noisia',172,165,9,'aeolian',.95),
+ T('Physically','Mefjus',172,112,4,'phrygian',.9),T('Nonplus','neuro soundcloud',172,233,4,'dorian',.78),T('Pure Action','Kumarion',174,203,4,'aeolian',.85),
+ T('Twerp','Waeys, Bensley & Hoax',175,220,3,'aeolian',.9),T('Perseverance','neuro soundcloud',172,232,3,'dorian',.74),T('Dopamine Hits','Mefjus & Maksim MC',172,190,3,'phrygian',.86),
+ T('Left','Maysev',172,192,3,'aeolian',.7),T('Sunder','Emperor',174,276,3,'aeolian',.8),T('The Hole','neuro soundcloud',172,315,5,'lydian',.66),
+ T('The First Time','Virtual Riot, Tokyo Machine',145,190,7,'mixolydian',.72),T('Before You','Maysev & The Caracal Project',165,224,1,'aeolian',.5),
+ T('Black Bloc','neuro soundcloud',172,251,1,'phrygian',.84),T('Hear Me','neuro soundcloud',172,249,11,'aeolian',.6),T('Aurora (Justin Hawkes Remix)','feat. Metrik',175,231,5,'aeolian',.7),
+ T('A Taste Of Hope','Emperor',172,314,5,'aeolian',.67),T('Systematic V4','D_Minds & Mefjus',172,271,5,'phrygian',.88),T('Pure Hope','neuro soundcloud',172,240,0,'mixolydian',.55)];
+// dubstep tracks from the test library (keys and tempos are real; modes and energy illustrative)
+LIB.push(T('Statues','Virtual Riot',150,243,2,'phrygian',.85),T('Found You','Virtual Riot, Dodge & Fuski',150,247,4,'aeolian',.8),T('Nightmare','Virtual Riot & Autodrive',145,254,4,'phrygian',.9),
+ T("I'm Back",'Dodge & Fuski',150,200,3,'aeolian',.88),T("Sh*t's On F*re",'neuro soundcloud',150,245,2,'aeolian',.92),T('So Sorry (RANKZ Remix)','Virtual Riot',145,159,3,'dorian',.78),T('Scorched Earth','Virtual Riot',135,281,3,'phrygian',.9));
+const DUB=new Set(['The First Time','Statues','Found You','Nightmare',"I'm Back","Sh*t's On F*re",'So Sorry (RANKZ Remix)','Scorched Earth']);
+LIB.forEach(t=>t.genre=t.title==='Farewell'?'Ambient':DUB.has(t.title)?'Dubstep':'Drum & Bass');
+const GENRES=['Drum & Bass','Dubstep','Ambient'];
+const GCOL={'Drum & Bass':'oklch(74% .11 185)','Dubstep':'oklch(80% .15 128)','Ambient':'oklch(78% .06 265)'};
+const GS={'Drum & Bass':'DnB','Dubstep':'Dubstep','Ambient':'Ambient'};
+const gchip=g=>`<span class="gchip" style="--gc:${GCOL[g]}">${GS[g]}</span>`;
+const tempoJump=(a,b)=>Math.abs(a.bpm-b.bpm)>a.bpm*.06;
+// energy per bar: intro / build / drop / break / build / drop / outro
+const ESHAPE=[[4,.35],[4,'up'],[8,1],[4,.45],[2,'up'],[6,1],[4,.35]];
+LIB.forEach((t,j)=>{const c=[];let last=.35;ESHAPE.forEach(([n,v])=>{for(let i=0;i<n;i++){const lv=v==='up'?last+(1-last)*(i+1)/n:v;c.push(Math.min(1,t.e*lv*(1+.06*Math.sin(j*3+c.length*1.7))))}last=v==='up'?1:v});t.curve=c});
+const by=n=>LIB.find(x=>x.title===n);
+const shared=(a,b)=>a.pcs.filter(x=>b.pcs.includes(x)).length;
+const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+const name=t=>`${NOTE[t.t]} ${t.mode}`;
+function kind(a,b){const n=shared(a,b),same=a.t===b.t;
+ if(n===7&&same)return['Same key','same key'];if(n===7)return['Same notes','pivot'];
+ if(n===6&&same)return['One note changes','modal shift'];if(n===6)return['Next door','neighbour'];return['Clash','clash']}
+const ELVL=e=>e<.45?'Calm':e<.65?'Steady':e<.8?'Driving':'Intense';
+const eStep=(a,b)=>{const d=b.e-a.e;return d>.08?'lifts':d<-.08?'eases off':'holds'};
+
+// ---------- glyphs ----------
+const ic={
+ up:'<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+ dn:'<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+ eq:'<svg class="i" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg>',
+ grip:'<svg class="i" viewBox="0 0 24 24" style="stroke:none;fill:currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
+ plus:'<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+ play:'<svg class="i" viewBox="0 0 24 24" style="stroke:none;fill:currentColor"><path d="M8 5l11 7-11 7z"/></svg>',
+ pause:'<svg class="i" viewBox="0 0 24 24" style="stroke:none;fill:currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+ back:'<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+ wand:'<svg class="i" viewBox="0 0 24 24"><path d="M4 20 15 9M14 4v3M19 9h-3M17.5 5.5l-2 2"/></svg>',
+ shuf:'<svg class="i" viewBox="0 0 24 24"><path d="M4 7h3l10 10h3M4 17h3l10-10h3M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>',
+ x:'<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+ q:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17h.01"/></svg>',
+ srch:'<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>',
+ next:'<svg class="i" viewBox="0 0 24 24" style="stroke:none;fill:currentColor"><path d="M6 5l9 7-9 7zM16 5h2v14h-2z"/></svg>',
+ prev:'<svg class="i" viewBox="0 0 24 24" style="stroke:none;fill:currentColor"><path d="M18 5l-9 7 9 7zM6 5h2v14H6z"/></svg>',
+ up2:'<svg class="i" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
+ save:'<svg class="i" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6"/></svg>',
+};
+const dots=n=>`<span class="dots${n<6?' bad':''}" title="${n} of 7 notes shared">${[0,1,2,3,4,5,6].map(i=>`<i class="${i<n?'':'o'}"></i>`).join('')}</span>`;
+const arrowM=(a,b)=>b.br>a.br?ic.up:b.br<a.br?ic.dn:ic.eq;
+const dirOf=(a,b)=>{const d=b.br-a.br;return `<span class="dir">${arrowM(a,b)}${d>0?'brighter':d<0?'darker':'same light'}</span>`};
+const mood=t=>`<span class="mood" style="color:${t.col}"><i style="background:${t.col}"></i>${t.word}</span>`;
+const moodL=t=>S.theory==='theory'?`<span class="th">${name(t)}</span>`:mood(t);
+const eGlyph=(a,b)=>`<svg width="14" height="12" viewBox="0 0 14 12" style="flex:none"><rect x="1" y="${12-a.e*11}" width="5" height="${a.e*11}" rx="1" fill="rgba(227,234,240,.4)"/><rect x="8" y="${12-b.e*11}" width="5" height="${b.e*11}" rx="1" fill="#e3eaf0"/></svg>`;
+const enTxt=(a,b)=>`<span class="dir" style="color:var(--tx)">${eGlyph(a,b)}&nbsp;energy ${eStep(a,b)}</span>`;
+function strip(t,w=56,h=14){const c=t.curve,n=c.length;let d=`M0,${h}`;c.forEach((v,i)=>d+=` L${(i/(n-1)*w).toFixed(1)},${(h-v*h).toFixed(1)}`);
+ return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex:none;display:block" aria-label="Energy shape"><path d="${d} L${w},${h}Z" fill="rgba(227,234,240,.2)"/><path d="${d.slice(d.indexOf('L'))}" fill="none" stroke="rgba(227,234,240,.7)" stroke-width="1"/></svg>`}
+function keyboard(a,b,w=280){const kw=w/7,wh=[0,2,4,5,7,9,11],bl=[1,3,6,8,10],h=50;
+ const cls=pc=>{const ia=a.pcs.includes(pc),ib=b.pcs.includes(pc);return ia&&ib?'both':ia?'a':ib?'b':''};
+ let s=`<svg class="kb" width="100%" viewBox="0 0 ${w} ${h+28}" style="max-width:${w}px">`;
+ wh.forEach((pc,i)=>{const c=cls(pc);s+=`<rect x="${i*kw+.5}" y=".5" width="${kw-1}" height="${h}" rx="3" fill="${c==='both'?'oklch(72% .16 230)':'#d9e2e8'}" fill-opacity="${c==='both'?.9:c?.55:.12}"/><text x="${i*kw+kw/2}" y="${h+13}" fill="rgba(227,234,240,.6)" font-size="10" text-anchor="middle">${NOTE[pc]}</text>`;
+  if(c==='a'||c==='b')s+=`<text x="${i*kw+kw/2}" y="${h-8}" fill="${c==='a'?a.col:b.col}" font-size="10" font-weight="700" text-anchor="middle">${c.toUpperCase()}</text>`});
+ bl.forEach(pc=>{const i=wh.indexOf(pc-1),c=cls(pc),x=(i+1)*kw-kw*.3;s+=`<rect x="${x}" y="0" width="${kw*.6}" height="${h*.6}" rx="2" fill="${c==='both'?'oklch(60% .16 230)':'#2a333b'}" stroke="#0b141d"/>`;
+  if(c==='a'||c==='b')s+=`<text x="${x+kw*.3}" y="${h*.6-6}" fill="${c==='a'?a.col:b.col}" font-size="9" font-weight="700" text-anchor="middle">${c.toUpperCase()}</text>`});
+ return s+`<text x="0" y="${h+26}" fill="rgba(227,234,240,.45)" font-size="10">blue: in both · A: only ${a.title} · B: only ${b.title}</text></svg>`}
+let AC;function playScale(pcs,home,at=0){AC=AC||new (window.AudioContext||window.webkitAudioContext)();const t0=AC.currentTime+.05+at;
+ const seq=pcs.map(p=>(p-home+12)%12).sort((a,b)=>a-b);seq.push(12);
+ seq.forEach((iv,i)=>{const o=AC.createOscillator(),g=AC.createGain(),t=t0+i*.2;o.type='triangle';o.frequency.value=261.63*Math.pow(2,(home+iv)/12);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.15,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+.4);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+.42)})}
+
+// ---------- state ----------
+const START=['Farewell','These Days','Wanna','Noir','Mesmer','Twerp','Dopamine Hits','Left'];
+// arcs: energy and mood are lines of [x 0..1, value]; genre is a list of [start x, genre]
+const PRESETS=[['Warm-up → peak → cool-down',[[0,.4],[.35,.7],[.7,.95],[.86,.9],[1,.5]],[[0,0],[.4,-1],[.7,-2],[1,0]],[[0,'Ambient'],[.1,'Drum & Bass']]],
+ ['Slow burn',[[0,.35],[1,.95]],[[0,0],[1,-2]],[[0,'Drum & Bass']]],
+ ['Dubstep interlude',[[0,.55],[.3,.9],[.5,.7],[.75,.95],[1,.6]],[[0,-1],[.5,-2],[1,-1]],[[0,'Drum & Bass'],[.4,'Dubstep'],[.68,'Drum & Bass']]],
+ ['Flat out',[[0,.88],[1,.92]],[[0,-2],[1,-1]],[[0,'Dubstep'],[.5,'Drum & Bass']]]];
+const presetArc=i=>({E:PRESETS[i][1].map(p=>[...p]),M:PRESETS[i][2].map(p=>[...p]),G:PRESETS[i][3].map(p=>[...p])});
+const S0={alt:'A',dev:'both',theory:'tap',set:[...START],sel:3,join:null,tab:'next',fm:'any',fe:'any',fg:'same',sheet:null,modal:null,bmode:'arc',preset:2,arc:presetArc(2),len:45,dir:'hold',seed:0,toast:null,prev:null,playing:3,auto:false,cview:'vibe',focus:null,arcB:false,step:0};
+let S=JSON.parse(JSON.stringify(S0));
+const tracks=()=>S.set.map(by);
+const A=(a,v='')=>`data-a="${a}" data-v="${encodeURIComponent(v)}"`;
+const anchor=()=>tracks()[Math.min(S.sel,S.set.length-1)];
+function remember(){S.prev=[...S.set]}
+function toast(msg,undo=true){S.toast={msg,undo}}
+function insertAt(i,title,msg){remember();S.set.splice(i,0,title);S.sel=i;S.join=null;toast(msg)}
+
+// candidates that fit after `a` (and before `b` when given), filtered by the mood/energy chips
+// same genre: tempo within 6%; a genre change may change tempo (the join flags it)
+function cands(a,b){return LIB.filter(t=>!S.set.includes(t.title)&&shared(a,t)>=6&&(!b||shared(t,b)>=6)&&(t.genre!==a.genre||!tempoJump(a,t)))
+ .filter(t=>S.fg==='any'||(S.fg==='same'?t.genre===a.genre:t.genre===S.fg))
+ .filter(t=>S.fm==='any'||(S.fm==='up'?t.br>a.br:S.fm==='down'?t.br<a.br:t.br===a.br))
+ .filter(t=>S.fe==='any'||eStep(a,t)===({lift:'lifts',hold:'holds',ease:'eases off'})[S.fe])}
+function bridgeFor(i){const t=tracks(),a=t[i],b=t[i+1];
+ const one=LIB.filter(x=>!S.set.includes(x.title)&&shared(a,x)>=6&&shared(x,b)>=6&&Math.abs(x.bpm-a.bpm)<=10).sort((x,y)=>Math.abs(x.e-(a.e+b.e)/2)-Math.abs(y.e-(a.e+b.e)/2))[0];
+ if(one)return[one];
+ for(const x of LIB)if(!S.set.includes(x.title)&&shared(a,x)>=6)for(const y of LIB)if(y!==x&&!S.set.includes(y.title)&&shared(x,y)>=6&&shared(y,b)>=6)return[x,y];
+ return[]}
+// build: follow an energy line and a mood line; harmony (6/7) stays a hard rule
+const lerp=(pts,x)=>{for(let i=1;i<pts.length;i++)if(x<=pts[i][0]){const [x0,y0]=pts[i-1],[x1,y1]=pts[i];return y0+(y1-y0)*(x-x0)/(x1-x0)}return pts[pts.length-1][1]};
+const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return ((h>>>0)%1000)/1000};
+function greedy(seed,n,want){const out=[seed],used=new Set([seed]);let cur=seed;
+ for(let i=1;i<n;i++){const {m,e}=want(i);const c=LIB.filter(t=>!used.has(t)&&t.set&&shared(cur,t)>=6&&Math.abs(t.bpm-seed.bpm)<=9)
+  .map(t=>[t,Math.abs(t.br-m)/3+2*Math.abs(t.e-e)+hash(t.title+S.seed)*.35]).sort((x,y)=>x[1]-y[1])[0];if(!c)break;out.push(c[0]);used.add(c[0]);cur=c[0]}return out}
+const genreAt=(G,x)=>{let g=G[0][1];G.forEach(([gx,gg])=>{if(x>=gx)g=gg});return g};
+// follow the three arcs by time: genre is strong, energy and mood are targets; harmony 6/7 between neighbours is near-hard
+function buildArc(){const {E,M,G}=S.arc,L=S.len*60,used=new Set(),out=[];let t=0,cur=null;
+ while(t<L&&out.length<24){const x=Math.min(1,(t+90)/L),te=lerp(E,x),tm=lerp(M,x),tg=genreAt(G,x);
+  const score=c=>(c.genre===tg?0:6)+2*Math.abs(c.e-te)+Math.abs(c.br-tm)/3+hash(c.title+S.seed)*.3
+   +(cur?(shared(cur,c)>=6?0:shared(cur,c)===5?1.6:9)+(c.genre===cur.genre&&tempoJump(cur,c)?6:0):0);
+  const c=LIB.filter(c=>!used.has(c)&&c.set).sort((a,b)=>score(a)-score(b))[0];if(!c)break;out.push(c);used.add(c);cur=c;t+=c.dur}
+ return out}
+function buildSeq(n=10){if(S.bmode==='arc')return buildArc();
+ const s=anchor(),d={build:1,hold:0,cool:-1}[S.dir];return greedy(s,n,i=>({e:Math.max(.3,Math.min(1,s.e+d*i*.05)),m:s.br}))}
+
+// ---------- shared pieces ----------
+function setCurve(w,h,ts,{drawn=null,labels=true,hit=true}={}){const tot=ts.reduce((s,t)=>s+t.dur,0),eh=h*.58;
+ const yE=e=>eh-2-e*(eh-8),yM=br=>h-14-((br+3)/6)*(h-eh-19);
+ let s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">`,x=0,d='',hits='';
+ ts.forEach((t,i)=>{const x0=x/tot*w,x1=(x+t.dur)/tot*w;if(hit&&S.sel===i)s+=`<rect x="${x0}" y="0" width="${x1-x0}" height="${h}" fill="oklch(72% .16 230 / .12)"/>`;
+  t.curve.forEach((v,k)=>d+=`${d?' L':'M'}${(x0+k/(t.curve.length-1)*(x1-x0)).toFixed(1)},${yE(v).toFixed(1)}`);
+  s+=`<rect x="${x0+1}" y="${yM(t.br)-3}" width="${Math.max(2,x1-x0-2)}" height="6" rx="3" fill="${t.col}"/>`;s+=`<rect x="${x0+1}" y="${h-6}" width="${Math.max(2,x1-x0-2)}" height="5" rx="1.5" fill="${GCOL[t.genre]}" fill-opacity=".8"/>`;if(i)s+=`<line x1="${x0}" x2="${x0}" y1="2" y2="${h-2}" stroke="rgba(255,255,255,.05)"/>`;
+  if(hit)hits+=`<rect x="${x0}" y="0" width="${x1-x0}" height="${h}" fill="transparent" ${A('sel',i)}><title>${t.title}</title></rect>`;x+=t.dur});
+ s+=`<path d="${d} L${w},${yE(0)} L0,${yE(0)}Z" fill="rgba(227,234,240,.1)"/><path d="${d}" fill="none" stroke="rgba(227,234,240,.6)" stroke-width="1.1"/>`;
+ if(labels)s+=`<text x="5" y="11" font-size="9" fill="rgba(227,234,240,.42)">ENERGY</text><text x="5" y="${eh+13}" font-size="9" fill="rgba(227,234,240,.42)">MOOD</text>`;
+ if(drawn)s+=drawn(yE,yM,w);return s+hits+'</svg>'}
+// three draggable arcs (energy line, mood dashed line, genre ribbon); the picked tracks show under each target
+const LANES={E:[20,92],M:[132,66],G:[220,30]},AH=258,APAD=12;
+function arcSVG(w){const X=x=>APAD+x*(w-2*APAD),{E,M,G}=S.arc,seq=buildArc(),Lx=Math.max(seq.reduce((s,t)=>s+t.dur,0),S.len*60);
+ const yE=v=>LANES.E[0]+LANES.E[1]-v*LANES.E[1],yM=b=>LANES.M[0]+LANES.M[1]-((b+3)/6)*LANES.M[1];
+ let s=`<svg width="${w}" height="${AH}" viewBox="0 0 ${w} ${AH}" style="display:block">`;
+ [['E','ENERGY'],['M','MOOD'],['G','GENRE']].forEach(([k,l])=>{const [y,h]=LANES[k];s+=`<rect x="${APAD}" y="${y}" width="${w-2*APAD}" height="${h}" rx="6" fill="rgba(255,255,255,.035)" ${k==='G'?'':`data-lane="${k}"`}/><text x="${APAD+2}" y="${y-6}" font-size="9.5" fill="rgba(227,234,240,.45)" pointer-events="none">${l}</text>`});
+ [2,0,-2].forEach(b=>s+=`<text x="${w-APAD-4}" y="${yM(b)+3}" font-size="8.5" fill="rgba(227,234,240,.3)" text-anchor="end" pointer-events="none">${WORD[b]}</text>`);
+ let x=0,d='';seq.forEach(t=>{const x0=X(x/Lx),x1=X((x+t.dur)/Lx);
+  s+=`<rect x="${x0+1}" y="${yE(t.e)}" width="${Math.max(2,x1-x0-2)}" height="${LANES.E[0]+LANES.E[1]-yE(t.e)}" rx="3" fill="rgba(227,234,240,.13)" pointer-events="none"/><rect x="${x0+1}" y="${yE(t.e)-1}" width="${Math.max(2,x1-x0-2)}" height="2.5" rx="1" fill="rgba(227,234,240,.6)" pointer-events="none"/><rect x="${x0+1}" y="${yM(t.br)-3}" width="${Math.max(2,x1-x0-2)}" height="6" rx="3" fill="${t.col}" opacity=".85" pointer-events="none"/><rect x="${x0+1}" y="${LANES.G[0]+LANES.G[1]-7}" width="${Math.max(2,x1-x0-2)}" height="5" rx="1.5" fill="${GCOL[t.genre]}" pointer-events="none"/>`;x+=t.dur});
+ G.forEach(([gx,g],i)=>{const x1=i<G.length-1?G[i+1][0]:1;s+=`<rect x="${X(gx)+1}" y="${LANES.G[0]+2}" width="${Math.max(2,X(x1)-X(gx)-2)}" height="${LANES.G[1]-12}" rx="4" fill="${GCOL[g]}" fill-opacity=".25" stroke="${GCOL[g]}" ${A('gcycle',i)}><title>Click to change the genre</title></rect><text x="${(X(gx)+X(x1))/2}" y="${LANES.G[0]+14}" font-size="10.5" font-weight="600" fill="${GCOL[g]}" text-anchor="middle" pointer-events="none">${GS[g]}</text>`;
+  if(i)s+=`<rect x="${X(gx)-4}" y="${LANES.G[0]-3}" width="8" height="${LANES.G[1]+6}" rx="3" fill="#fff" data-h="G:${i}"><title>Drag to move · double-click to remove</title></rect>`});
+ const line=(pts,y,dash,k)=>`<path d="${pts.map(([px,v],i)=>`${i?'L':'M'}${X(px)},${y(v)}`).join(' ')}" fill="none" stroke="#fff" stroke-width="2.2" ${dash?'stroke-dasharray="6 5"':''} pointer-events="none"/>`+pts.map(([px,v],i)=>`<circle cx="${X(px)}" cy="${y(v)}" r="7" fill="#060c13" stroke="#fff" stroke-width="2.2" data-h="${k}:${i}"><title>Drag · double-click to remove</title></circle>`).join('');
+ return s+line(E,yE,false,'E')+line(M,yM,true,'M')+'</svg>'}
+const arcBox=w=>`<div class="arcw" data-arcw="${w}">${arcSVG(w)}</div>`;
+const arcTools=()=>`<div style="display:flex;gap:8px;align-items:center;margin:8px 0 2px;flex-wrap:wrap"><span class="legend">${GENRES.map(g=>`<span><i style="background:${GCOL[g]}"></i>${g}</span>`).join('')}</span><span style="flex:1"></span><span class="btn gh" style="height:26px" ${A('gsplit')}>${ic.plus}Genre change</span><span class="sm mut">Length</span>${[30,45,60].map(l=>`<span class="chip${S.len===l?' on':''}" ${A('len',l)}>${l} min</span>`).join('')}</div>
+ <div class="sm mut" style="margin:4px 0 0">Drag the dots; click an empty spot in a lane to add one; double-click a dot to remove it. Click a genre block to change it; drag the white bars to move a genre change.</div>`;
+const presetChips=()=>PRESETS.map((p,i)=>`<span class="chip${S.preset===i?' on':''}" ${A('preset',i)}>${p[0]}</span>`).join('')+(S.preset<0?'<span class="chip on">Custom</span>':'');
+function joinLine(i,{phone=false}={}){const t=tracks(),a=t[i],b=t[i+1];const n=shared(a,b),[k,kt]=kind(a,b);
+ const txt=S.theory==='theory'?`${name(a)} → ${name(b)} · ${kt}`:`${k.toLowerCase()} · ${dirOf(a,b)}`;
+ return `<div class="jn2${n<6?' bad':''}${S.join===i?' on':''}" ${A('join',i)} role="button" tabindex="0" title="What happens at this join">${dots(n)}<span>${txt}</span>${phone?'':'<span class="mut">·</span>'}${enTxt(a,b)}${gjTxt(a,b)}${n<6?`<span class="fix" ${A('bridge',i)}>${ic.wand}Bridge it</span>`:''}</div>`}
+function row(i,{phone=false,remove=true}={}){const t=tracks()[i];
+ return `<div class="tr2${S.sel===i?' sel':''}" ${A('sel',i)} role="button" tabindex="0"><span class="g">${S.playing===i?`<span class="pl8">${ic.play}</span>`:ic.grip}</span><div class="tt"><b>${t.title}</b><span>${t.artist}</span></div>${phone?'':gchip(t.genre)}${moodL(t)}${phone?'':strip(t)}${phone?'':`<span class="bpm tab">${t.bpm}</span>`}<span class="d tab">${fmt(t.dur)}</span>${remove&&!phone?`<span class="x" ${A('remove',i)} title="Remove from set">${ic.x}</span>`:''}</div>`}
+function setList(o={}){const t=tracks();let s='';t.forEach((_,i)=>{s+=row(i,o);if(i<t.length-1)s+=joinLine(i,o)});return s}
+const gjTxt=(a,b)=>(a.genre!==b.genre?`<span class="gch">${gchip(a.genre)}→${gchip(b.genre)}</span>`:'')+(tempoJump(a,b)?`<span class="tj">tempo ${a.bpm} → ${b.bpm}</span>`:'');
+const filters=()=>`<div class="filt"><span>Genre</span><div>${[['same','Same'],['any','Any'],...GENRES.map(g=>[g,GS[g]])].map(([k,l])=>`<span class="chip${S.fg===k?' on':''}" ${A('fg',k)}>${l}</span>`).join('')}</div><span>Mood</span><div>${[['any','Any'],['up','Brighter'],['same','Same'],['down','Darker']].map(([k,l])=>`<span class="chip${S.fm===k?' on':''}" ${A('fm',k)}>${l}</span>`).join('')}</div>
+ <span>Energy</span><div>${[['any','Any'],['lift','Lift'],['hold','Hold'],['ease','Ease off']].map(([k,l])=>`<span class="chip${S.fe===k?' on':''}" ${A('fe',k)}>${l}</span>`).join('')}</div></div>`;
+function cand(a,t,{at,compact=false}={}){return `<div class="tr2 c"><div class="tt"><b>${t.title}</b><span>${t.artist} · ${t.bpm}${t.genre!==a.genre?` · ${GS[t.genre]}`:''}</span></div>
+ <div class="mini"><span class="mood" style="color:${t.col}">${arrowM(a,t)}${S.theory==='theory'?name(t):t.word}</span><span class="en">${eGlyph(a,t)}${ELVL(t.e)}</span></div>${compact?'':strip(t,44,14)}
+ <span class="btn gh sq" ${A('add',`${at}|${t.title}`)} title="Insert">${ic.plus}</span></div>`}
+function fitsList(a,{b=null,at,compact=false}={}){const c=cands(a,b);
+ if(!c.length)return `<div class="empty">Nothing ${b?'fits between them':'fits'} with these filters.<br><span class="lnk" ${A('clearf')}>Clear filters</span>${b?` · <span class="lnk" ${A('bridge',S.join)}>Find a 2-track bridge</span>`:''}</div>`;
+ const g={};c.forEach(t=>{const k=kind(a,t)[0];(g[k]=g[k]||[]).push(t)});
+ return ['Same key','Same notes','One note changes','Next door'].filter(k=>g[k]).map(k=>`<div class="cap gh">${dots(shared(a,g[k][0]))}${k}</div>`+
+  g[k].sort((x,y)=>Math.abs(x.e-a.e)-Math.abs(y.e-a.e)).map(t=>cand(a,t,{at,compact})).join('')).join('')}
+const WHY={'Same key':'Same notes, same home note. Seamless.','Same notes':'The same 7 notes with a different home note: nothing clashes, only the mood moves.',
+ 'One note changes':'Same home note, one note moved: the mood shifts one step.','Next door':'Six notes shared: the neighbouring scale. Smooth.',
+ 'Clash':'Two or more notes differ, so they can rub while both tracks play. Bridge it, or mix over a part with no melody.'};
+function joinDetail(i){const t=tracks(),a=t[i],b=t[i+1];if(!a||!b)return '';const n=shared(a,b),[k,kt]=kind(a,b);
+ return `<div class="jd"><div class="jdh">${dots(n)}<b>${a.title} → ${b.title}</b></div>
+ <div class="mut sm" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${n} of 7 notes · ${k.toLowerCase()} · ${dirOf(a,b)} · ${enTxt(a,b)}</div>
+ ${a.genre!==b.genre||tempoJump(a,b)?`<div class="sm" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${gjTxt(a,b)}<span class="mut">${a.genre!==b.genre?'A genre change: mix over a breakdown, or let the outro finish and drop straight into the next intro.':'Tempo jump within a genre: ride the pitch slowly over the outro.'}</span></div>`:''}<p>${WHY[k]}</p>${keyboard(a,b,300)}
+ <div class="enrow"><div><span class="cap">${a.title}</span>${strip(a,140,26)}<span class="sm mut">${ELVL(a.e)} · ${a.word}</span></div><div><span class="cap">${b.title}</span>${strip(b,140,26)}<span class="sm mut">${ELVL(b.e)} · ${b.word}</span></div></div>
+ ${S.theory!=='plain'?`<div class="sm mut">In theory: ${name(a)} → ${name(b)}, ${kt}.</div>`:''}
+ <div class="btns"><button class="pl" data-play='${JSON.stringify([a.pcs,a.t,b.pcs,b.t])}'>${ic.play}Hear both scales</button>${n<6?`<span class="btn solid" ${A('bridge',i)}>${ic.wand}Bridge it</span>`:''}<span class="btn gh" ${A('modal','basics')}>${ic.q}Basics</span></div></div>`}
+// notes map (circle of note sets) and vibe plane (mood × energy); dots are clickable
+function wheel(size,cur){const c=size/2,R0=size*.13,R1=size*.38;const ang=s=>((s-1)/12)*Math.PI*2-Math.PI/2,rad=br=>R0+((br+3)/6)*(R1-R0);
+ const pos=(t,j)=>{const a=ang(t.set||cur.set)+j;return [c+Math.cos(a)*rad(t.br),c+Math.sin(a)*rad(t.br)]};
+ const jit=new Map();let s=`<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="display:block;margin:auto">`;
+ [-3,-1,1,3].forEach(b=>s+=`<circle cx="${c}" cy="${c}" r="${rad(b)}" fill="none" stroke="rgba(255,255,255,.06)"/>`);
+ for(let st=1;st<=12;st++){const a=ang(st),near=Math.min(Math.abs(st-cur.set),12-Math.abs(st-cur.set))<=1;s+=`<text x="${c+Math.cos(a)*(R1+14)}" y="${c+Math.sin(a)*(R1+14)+4}" font-size="10.5" fill="rgba(227,234,240,${near?.85:.3})" text-anchor="middle">${NOTE[((st-8)*7%12+12)%12]}</text>`}
+ const ts=tracks().filter(t=>t.set);s+=`<polyline points="${ts.map(t=>{const k=`${t.set}|${t.br}`;return pos(t,0).join(',')}).join(' ')}" fill="none" stroke="rgba(255,255,255,.3)" stroke-dasharray="4 4"/>`;
+ LIB.filter(t=>t.set).forEach(t=>{const k=`${t.set}|${t.br}`,n=jit.get(k)||0;jit.set(k,n+1);const [x,y]=pos(t,(n%2?1:-1)*Math.ceil(n/2)*.08);
+  const inS=S.set.includes(t.title),ok=shared(cur,t)>=6;s+=`<circle cx="${x}" cy="${y}" r="${S.focus===t.title?8:inS?6:5}" fill="${t.col}" fill-opacity="${ok||inS?1:.2}" ${inS?'stroke="#fff" stroke-width="1.2"':''} ${S.focus===t.title?'stroke="oklch(72% .16 230)" stroke-width="3"':''} ${A('focus',t.title)}><title>${t.title}</title></circle>`;
+  if(t===cur)s+=`<circle cx="${x}" cy="${y}" r="11" fill="none" stroke="oklch(72% .16 230)" stroke-width="2.5" pointer-events="none"/>`});
+ return s+'</svg>'}
+function plane(w,h,cur,{path=true}={}){const px=t=>22+((t.br+3)/6)*(w-44)+((LIB.indexOf(t)%5)-2)*4,py=t=>h-20-t.e*(h-40);
+ let s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;margin:auto"><rect x="8" y="8" width="${w-16}" height="${h-16}" rx="10" fill="none" stroke="rgba(255,255,255,.06)"/><line x1="${w/2}" x2="${w/2}" y1="10" y2="${h-10}" stroke="rgba(255,255,255,.05)"/><line x1="10" x2="${w-10}" y1="${h/2}" y2="${h/2}" stroke="rgba(255,255,255,.05)"/>`;
+ const q=(x,y,t,a)=>`<text x="${x}" y="${y}" font-size="10.5" fill="rgba(227,234,240,.36)" text-anchor="${a}">${t}</text>`;
+ s+=q(16,24,'Dark & intense','start')+q(w-16,24,'Bright & intense','end')+q(16,h-16,'Dark & calm','start')+q(w-16,h-16,'Bright & calm','end');
+ if(path)s+=`<polyline points="${tracks().map(t=>`${px(t)},${py(t)}`).join(' ')}" fill="none" stroke="rgba(255,255,255,.32)" stroke-width="1.4" stroke-dasharray="4 4"/>`;
+ LIB.forEach(t=>{const inS=S.set.includes(t.title),ok=shared(cur,t)>=6;s+=`<circle cx="${px(t)}" cy="${py(t)}" r="${S.focus===t.title?8:inS?6:5}" fill="${t.col}" fill-opacity="${ok||inS?1:.2}" ${S.focus===t.title?'stroke="oklch(72% .16 230)" stroke-width="3"':inS?'stroke="#fff" stroke-width="1.2"':''} ${A('focus',t.title)}><title>${t.title}</title></circle>`});
+ s+=`<circle cx="${px(cur)}" cy="${py(cur)}" r="12" fill="none" stroke="oklch(72% .16 230)" stroke-width="2.5" pointer-events="none"/>`;return s+'</svg>'}
+function focusCard(a,at){const f=S.focus&&by(S.focus);if(!f)return `<div class="sm mut" style="padding:8px 12px">Lit dots share 6 or more notes with ${a.title}. Tap one to see how it would follow.</div>`;
+ const inS=S.set.includes(f.title),n=shared(a,f);
+ return `<div style="margin:8px 10px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);display:flex;align-items:center;gap:10px">
+ <div style="flex:1;min-width:0"><div style="font-weight:500;font-size:13.5px">${f.title}</div><div class="sm mut" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${dots(n)} ${kind(a,f)[0].toLowerCase()} · ${dirOf(a,f)} · ${enTxt(a,f)}</div></div>
+ ${inS?'<span class="sm mut">In the set</span>':`<span class="btn solid" ${A('add',`${at}|${f.title}`)}>${ic.plus}Insert</span>`}</div>`}
+function views(a,w,at){return S.tab==='map'?wheel(Math.min(w,320),a)+focusCard(a,at):S.tab==='vibe'?plane(w-10,Math.round(w*.85),a)+focusCard(a,at):filters()+fitsList(a,{at})}
+const tabsH=(list=[['next','Fits next'],['map','Notes'],['vibe','Vibe']])=>`<div class="tabs">${list.map(([k,l])=>`<span class="${S.tab===k?'on':''}" ${A('tab',k)}>${l}</span>`).join('')}</div>`;
+// modals: Build a set + Harmony basics
+function buildBody(w){const seq=buildSeq(),tot=seq.reduce((s,t)=>s+t.dur,0);
+ const clash=seq.filter((t,i)=>i&&shared(seq[i-1],t)<6).length,gch=seq.filter((t,i)=>i&&seq[i-1].genre!==t.genre).length;
+ return `<div class="seg" style="margin:0 0 10px">${[['seed','From the selected track'],['arc','Draw the arcs']].map(([k,l])=>`<span class="${S.bmode===k?'on':''}" ${A('bmode',k)}>${l}</span>`).join('')}</div>
+ ${S.bmode==='arc'?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${presetChips()}</div><div class="panel" style="padding:2px 0">${arcBox(w)}</div>${arcTools()}`
+  :`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap"><span class="sm mut">Start: <b style="color:var(--tx)">${anchor().title}</b> · energy</span>${[['build','Build'],['hold','Hold'],['cool','Cool down']].map(([k,l])=>`<span class="chip${S.dir===k?' on':''}" ${A('dir',k)}>${l}</span>`).join('')}</div>
+   <div class="panel" style="padding:5px">${setCurve(w,120,seq,{hit:false})}</div>`}
+ <div class="sm mut" style="margin:8px 0 6px">${seq.length} tracks · ${Math.round(tot/60)} min · ${clash?`${clash} amber join${clash>1?'s':''}`:'every join 6/7 or better'} · ${gch} genre change${gch===1?'':'s'}</div>
+ <div class="scroll" style="flex:1;min-height:60px" data-scroll="build">${seq.map((t,i)=>(i?`<div class="jn2${shared(seq[i-1],t)<6?' bad':''}" style="cursor:default">${dots(shared(seq[i-1],t))}<span>${kind(seq[i-1],t)[0].toLowerCase()} · ${dirOf(seq[i-1],t)}</span>${enTxt(seq[i-1],t)}${gjTxt(seq[i-1],t)}</div>`:'')+`<div class="tr2" style="min-height:40px"><div class="tt"><b>${t.title}</b><span>${t.artist} · ${t.bpm}</span></div>${gchip(t.genre)}${moodL(t)}${strip(t)}<span class="d tab">${fmt(t.dur)}</span></div>`).join('')}</div>`}
+function buildModal(phone){const w=phone?358:740;return `<div class="dim" ${A('close')}></div><div class="modal" style="${phone?'left:0;right:0;bottom:0;top:30px;border-radius:22px 22px 0 0;padding:14px 16px':'left:230px;top:16px;width:820px;height:768px;padding:18px 24px'}">
+ <div style="display:flex;align-items:center;margin-bottom:12px"><b style="flex:1;font-size:18px;letter-spacing:-.02em">Build a set</b><span ${A('close')} title="Close">${ic.x}</span></div>
+ ${buildBody(w)}
+ <div style="display:flex;gap:8px;margin-top:12px"><span class="btn gh${phone?' sq':''}" ${A('shuffle')} title="Try another">${ic.shuf}${phone?'':'Try another'}</span><span style="flex:1"></span><span class="btn gh" ${A('apply','append')}>${phone?'Append':'Add after the set'}</span><span class="btn solid" ${A('apply','replace')}>${phone?'Replace set':'Replace the set'}</span></div></div>`}
+const CMAJ=scale(0,'ionian');
+const BASICS=[['Twelve notes, seven at a time',()=>`<p>Music uses 12 notes, the keys of one octave. Most tracks lean on just 7 of them: the <b>scale</b>.</p>${keyboard(by('Stargazer'),by('Stargazer'),300).replace(/blue: in both.*?<\/text>/,'</text>')}<button class="pl" data-play='${JSON.stringify([by('Stargazer').pcs,0])}'>${ic.play}Hear it</button>`],
+ ['Shared notes make smooth mixes',()=>`<p>During a mix both tracks play at once. The more notes they share, the cleaner the blend. The dots count them: 7 seamless, 6 smooth, 5 or fewer rub (amber).</p>${keyboard(by('Noir'),by('These Days'),300)}`],
+ ['Same notes, a different home',()=>`<p>Keep the same 7 notes but move the <b>home note</b> and the mood changes. Each home is a <b>mode</b>; moving between them is a pivot.</p><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${[[0,'ionian'],[2,'dorian'],[4,'phrygian'],[5,'lydian'],[7,'mixolydian'],[9,'aeolian'],[11,'locrian']].map(([h,m])=>`<button class="pl" style="height:auto;padding:6px 2px;display:grid;justify-items:center;gap:2px" data-play='${JSON.stringify([CMAJ,h])}'><b>${NOTE[h]}</b><span style="font-size:10px;color:${COL[MODES[m][1]]}">${WORD[MODES[m][1]]}</span></button>`).join('')}</div>`],
+ ['One note brighter or darker',()=>`<p>Keep the home note, move one note: lower darkens, higher lifts. Lydian → ionian → mixolydian → dorian → aeolian → phrygian → locrian, one note at a time.</p>${['lydian','dorian','phrygian'].map(m=>`<button class="pl" data-play='${JSON.stringify([scale(7,m),7])}'>${ic.play}G ${m} · ${WORD[MODES[m][1]]}</button>`).join(' ')}`],
+ ['Mood isn\'t energy',()=>`<p>Mood comes from the notes. <b>Energy</b> is how hard the track hits: loudness and high end, bar by bar. A track can be dark and calm, or dark and intense.</p>${strip(by('Farewell'),300,40)}<div class="sm mut" style="margin:4px 0 8px">Farewell · calm</div>${strip(by('Noir'),300,40)}<div class="sm mut">Noir · intense</div>`],
+ ['Mix in the calm parts',()=>`<p>Overlap one track's calm <b>outro</b> with the next one's calm <b>intro</b>. The energy change lands at the next drop, which is what a join's energy compares.</p>`],
+ ['Genres and tempo',()=>`<p>Genres come with their own tempo: drum &amp; bass runs around 172–175 BPM, dubstep around 140–150. Changing genre usually changes tempo too, so joins flag it, and Build a set puts genre changes where your genre arc says.</p><div class="legend">${GENRES.map(g=>`<span><i style="background:${GCOL[g]}"></i>${g}</span>`).join('')}</div><p class="sm mut" style="margin-top:10px">Smoothest way across: let the outro finish, or mix over a breakdown, then start the next intro at its own tempo.</p>`],
+ ['Reading a join',()=>{const a=by('Noir'),b=by('Stargazer');return `<p>Between two tracks, one line: the dots (shared notes), the move, the mood arrow, and the energy.</p><div class="jn2" style="padding-left:0;cursor:default">${dots(7)}<span>same notes · ${dirOf(a,b)}</span>${enTxt(a,b)}</div><p class="sm mut" style="margin-top:8px">Tap any join for the keyboard and both energy shapes.</p>`}]];
+function basicsModal(phone){const [t,f]=BASICS[S.step];return `<div class="dim" ${A('close')}></div><div class="modal" style="${phone?'left:0;right:0;bottom:0;top:40px;border-radius:22px 22px 0 0;padding:16px 18px':'left:340px;top:90px;width:600px;height:560px;padding:22px 26px'}">
+ <div style="display:flex;align-items:center"><b style="flex:1;font-size:17px">Harmony basics</b><span ${A('close')}>${ic.x}</span></div>
+ <div style="display:flex;gap:5px;margin:12px 0 18px">${BASICS.map((_,i)=>`<i style="flex:1;height:4px;border-radius:2px;background:${i<=S.step?'var(--p)':'rgba(255,255,255,.12)'}" ${A('stepTo',i)}></i>`).join('')}</div>
+ <div class="basic" style="flex:1"><h3 style="margin:0 0 10px;font-size:18px;letter-spacing:-.01em">${S.step+1}. ${t}</h3>${f()}</div>
+ <div style="display:flex;gap:8px;align-items:center"><span class="sm mut" style="flex:1">${S.step+1} of ${BASICS.length}</span><span class="btn gh" ${A('step',-1)}>Back</span><span class="btn solid" ${A('step',1)}>${S.step===BASICS.length-1?'Done':'Next'}</span></div></div>`}
+const modals=phone=>S.modal==='build'?buildModal(phone):S.modal==='basics'?basicsModal(phone):'';
+const toastH=phone=>S.toast?`<div class="toast" style="${phone?'left:16px;right:16px;bottom:150px':'left:50%;transform:translateX(-50%);bottom:96px'}"><span>${S.toast.msg}</span>${S.toast.undo&&S.prev?`<b ${A('undo')}>Undo</b>`:''}</div>`:'';
+// chrome
+const rail=`<div class="abs glass" style="left:12px;top:12px;bottom:12px;width:84px;display:flex;flex-direction:column;align-items:center;gap:22px;padding-top:24px">
+ <i style="width:22px;height:30px;border-radius:6px;background:rgba(0,170,230,.6)"></i><i style="width:52px;height:52px;border-radius:14px;background:var(--p)"></i>
+ ${['Home','Media','Discover','Music','Library'].map(n=>`<span style="display:grid;justify-items:center;gap:5px;font-size:11px;color:${n==='Music'?'var(--p)':'var(--mut)'}"><i style="width:${n==='Music'?52:22}px;height:${n==='Music'?32:22}px;border-radius:8px;background:${n==='Music'?'rgba(0,170,230,.25)':'rgba(255,255,255,.12)'}"></i>${n}</span>`).join('')}</div>`;
+const topCard=(tabs,on)=>`<div class="abs glass" style="left:127px;top:20px;width:1134px;height:98px">
+ <div class="abs" style="left:20px;top:8px"><div style="font-size:20px;font-weight:600;letter-spacing:-.02em">Music</div><div class="mut" style="font-size:12px;margin-top:3px"><i>46</i> tracks</div></div>
+ <div class="abs" style="left:100px;top:2px;width:860px;height:42px;border-radius:10px;box-shadow:0 0 0 2px oklch(72% .16 230 / .8);background:#060c13;color:var(--mut);display:flex;align-items:center;gap:8px;padding:0 12px">${ic.srch}<span>Search your libraries and online, or paste a link</span></div>
+ <div class="abs seg" style="left:20px;top:48px;width:${tabs.length*128}px">${tabs.map(t=>`<span class="${t===on?'on':''}">${t}</span>`).join('')}</div></div>`;
+const playerBar=()=>{const t=tracks()[S.playing]||tracks()[0];return `<div class="abs glass" style="left:352px;top:720px;width:576px;height:64px;display:flex;align-items:center;gap:12px;padding:0 12px;z-index:5">
+ <i style="width:40px;height:40px;border-radius:10px;background:${t.col};opacity:.35"></i><div style="flex:1;min-width:0"><div style="font-size:14px">${t.title}</div><div class="mut" style="font-size:12px">${t.artist} · ${t.bpm} BPM</div></div>
+ <span class="btn solid sq" style="width:40px;height:40px">${ic.pause}</span></div>`};
+const dock=`<div class="dock glass" style="z-index:6">${['Home','Media'].map(n=>`<span><i></i>${n}</span>`).join('')}<i class="srch"></i>${['Music','Library'].map(n=>`<span class="${n==='Music'?'on':''}"><i></i>${n}</span>`).join('')}</div>`;
+const miniPlayer=()=>{const t=tracks()[S.playing]||tracks()[0];return `<div class="abs glass" style="left:10px;right:10px;bottom:86px;height:54px;display:flex;align-items:center;gap:10px;padding:0 10px;z-index:6"><i style="width:34px;height:34px;border-radius:9px;background:${t.col};opacity:.35"></i><div style="flex:1;min-width:0;font-size:13px">${t.title}<div class="mut" style="font-size:11px">${t.artist}</div></div><span class="btn solid sq" style="width:36px;height:36px">${ic.pause}</span></div>`};
+const setHead=(extra='')=>{const ts=tracks();const tot=ts.reduce((s,t)=>s+t.dur,0);return `<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:22px;font-weight:600;letter-spacing:-.02em">Night drive</div><div class="mut" style="font-size:12.5px;margin-top:2px">Set · ${ts.length} tracks · ${Math.round(tot/60)} min · ${ts.filter((t,i)=>i&&shared(ts[i-1],t)<6).length} clash${ts.filter((t,i)=>i&&shared(ts[i-1],t)<6).length===1?'':'es'}</div></div>
+ ${extra}<span class="btn solid">${ic.play}Play set</span><span class="btn gh" ${A('modal','build')}>${ic.wand}Build a set</span><span class="btn gh sq" ${A('modal','basics')} title="Harmony basics">${ic.q}</span></div>`};
+
+// ---------- A · panel in the playlist ----------
+function libColA(){return `<div class="abs" style="left:127px;top:138px;width:250px">
+ <div class="cap" style="padding:6px 12px">Libraries</div><div style="display:flex;justify-content:space-between;padding:10px 12px;font-size:14px"><span>All</span><span class="mut">46</span></div>
+ <div class="cap" style="padding:18px 12px 8px">Playlists</div>
+ <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;background:rgba(0,170,230,.18);color:var(--p);font-size:14px"><span>Night drive</span><span style="font-size:11px">set</span></div>
+ <div style="padding:10px 12px;font-size:14px" class="mut">Sunday warm-up</div><div class="cap" style="padding:18px 12px 8px">Smart lists</div><div style="padding:8px 12px;font-size:14px" class="mut">Dark &amp; fast</div></div>`}
+function inspectorA(w){const a=anchor();if(S.join!=null)return `<div class="ph"><span class="lnk" ${A('join','')}>${ic.back} Back to fits next</span></div>${joinDetail(S.join)}`;
+ return `${tabsH()}<div class="ph"><b>After ${a.title}</b><span class="sm mut" style="display:flex;gap:6px;align-items:center">${moodL(a)} · ${ELVL(a.e)} · ${a.bpm} BPM</span></div>${views(a,w,S.sel+1)}`}
+function A_desk(){return rail+topCard(['Albums','Artists','Tracks'],null)+libColA()+`
+ <div class="abs" style="left:401px;top:136px;width:860px">${setHead()}<div class="panel" style="margin-top:10px;padding:5px 8px">${setCurve(844,90,tracks())}</div></div>
+ <div class="abs scroll" data-scroll="A-list" style="left:401px;top:282px;width:514px;height:428px;padding-bottom:20px">${setList()}</div>
+ <div class="abs panel scroll" data-scroll="A-insp" style="left:931px;top:282px;width:330px;height:428px">${inspectorA(330)}</div>${playerBar()}${modals(false)}${toastH(false)}`}
+function sheetA(){if(!S.sheet)return '';const a=anchor();
+ const body=S.sheet==='join'?joinDetail(S.join):`${tabsH()}<div class="ph"><b>After ${a.title}</b></div>${views(a,370,S.sel+1)}`;
+ return `<div class="dim" ${A('sheet','')}></div><div class="sheet" style="height:${S.sheet==='join'?560:640}px"><div class="grab" ${A('sheet','')}></div><div class="shd"><b>${S.sheet==='join'?'This join':'What fits next'}</b><span ${A('sheet','')}>${ic.x}</span></div><div class="scroll" data-scroll="A-sheet" style="flex:1">${body}</div></div>`}
+function A_phone(){return `<div class="abs glass" style="left:10px;top:10px;right:10px;height:72px;padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:4">${ic.back}<div style="flex:1;min-width:0"><div style="font-size:18px;font-weight:600;letter-spacing:-.02em">Night drive</div><div class="mut sm">Set · ${S.set.length} tracks</div></div>
+ <span class="btn gh sq" ${A('modal','basics')}>${ic.q}</span><span class="btn gh" ${A('modal','build')}>${ic.wand}Build</span></div>
+ <div class="abs panel" style="left:10px;right:10px;top:90px;padding:4px 6px">${setCurve(358,80,tracks(),{labels:false})}</div>
+ <div class="abs scroll" data-scroll="A-plist" style="left:2px;right:2px;top:184px;bottom:146px">${setList({phone:true})}<div class="sm mut" style="padding:10px 16px 20px">Tap a track for what fits next · tap a join to see why it works</div></div>
+ ${miniPlayer()}${dock}${sheetA()}${modals(true)}${toastH(true)}`}
+
+// ---------- B · set workspace ----------
+function timeline(x,y,w,h){const ts=tracks(),gap=26,bw=w-gap*(ts.length-1),tot=ts.reduce((s,t)=>s+t.dur,0);let cx=x,s='';
+ ts.forEach((t,i)=>{const ww=t.dur/tot*bw;
+  s+=`<div class="blk${S.sel===i&&S.join==null?' sel':''}" style="left:${cx}px;top:${y}px;width:${ww}px;height:${h}px" ${A('sel',i)}><div class="mb" style="background:${t.col}"></div><div class="bt">${t.title}</div><div class="bs">${S.theory==='theory'?name(t):t.word} · ${ELVL(t.e)} · ${GS[t.genre]}</div><div style="position:absolute;left:0;right:0;bottom:6px">${strip(t,ww,h*.45)}</div></div>`;
+  if(i<ts.length-1){const n=shared(t,ts[i+1]);s+=`<div class="con" style="left:${cx+ww+3}px;top:${y+h/2-16}px;width:20px;height:32px;background:${S.join===i?'var(--p)':n<6?'rgba(242,193,78,.2)':'rgba(0,170,230,.16)'};color:${S.join===i?'var(--pi)':n<6?'var(--warn)':'var(--p)'}" ${A('join',i)} title="${kind(t,ts[i+1])[0]}">${n}</div>`}
+  cx+=ww+gap});
+ if(S.arcB){s+=`<div class="abs" style="left:${x}px;top:${y+h+8}px;width:${w}px;pointer-events:none"></div>`}
+ return s}
+function B_desk(){const ts=tracks(),a=anchor();const j=S.join;const lib=j!=null?`<div class="ph"><b>Fits between ${ts[j].title} and ${ts[j+1].title}</b><span class="sm mut">Shares 6+ notes with both</span></div>${filters()}${fitsList(ts[j],{b:ts[j+1],at:j+1})}`
+  :`<div class="ph"><b>Library · fits after ${a.title}</b><span class="sm mut">Sorted by how well each follows the selection</span></div>${filters()}${fitsList(a,{at:S.sel+1})}`;
+ const insp=j!=null?joinDetail(j):`<div class="ph"><b>${a.title}</b><span class="sm mut">${a.artist} · ${a.bpm} BPM · ${fmt(a.dur)}</span></div><div style="padding:6px 14px;display:grid;gap:10px">
+  <div style="display:flex;gap:16px;align-items:center">${moodL(a)}<span class="sm">${ELVL(a.e)}</span>${S.theory!=='plain'?`<span class="sm mut">${name(a)}</span>`:''}</div>${strip(a,520,60)}
+  <div class="sm mut">Click a numbered connector between two tracks to inspect that join.</div>
+  <div class="btns"><span class="btn gh" ${A('remove',S.sel)}>${ic.x}Remove</span><span class="btn gh" ${A('modal','basics')}>${ic.q}Basics</span></div></div>`;
+ return rail+topCard(['Albums','Artists','Tracks','Sets'],'Sets')+`
+ <div class="abs" style="left:127px;top:132px;width:1134px;display:flex;align-items:center;gap:8px"><span class="btn gh">Night drive ▾</span><span class="sm mut" style="flex:1">${ts.length} tracks · ${Math.round(ts.reduce((s,t)=>s+t.dur,0)/60)} min</span>
+  <span class="btn ${S.arcB?'solid':'gh'}" ${A('arcB')}>${ic.wand}Draw the arc</span><span class="btn solid">${ic.play}Play</span><span class="btn gh sq" ${A('modal','basics')}>${ic.q}</span></div>
+ ${S.arcB?`<div class="abs panel" style="left:127px;top:176px;width:1134px;height:366px;padding:8px 10px"><div style="display:flex;gap:6px;margin:0 0 4px;align-items:center;flex-wrap:wrap">${presetChips()}<span style="flex:1"></span><span class="btn gh" ${A('shuffle')}>${ic.shuf}Try another</span><span class="btn solid" ${A('apply','replace')}>Fill the set to match</span></div>${arcBox(1114)}${arcTools()}</div>`
+ :`<div class="abs panel" style="left:127px;top:176px;width:1134px;height:56px;padding:4px 6px">${setCurve(1120,48,tracks(),{labels:false})}</div>`}
+ ${S.arcB?'':timeline(127,244,1134,112)}
+ <div class="abs panel scroll" data-scroll="B-lib" style="left:127px;top:${S.arcB?552:368}px;width:560px;height:${S.arcB?158:342}px">${lib}</div>
+ <div class="abs panel scroll" data-scroll="B-insp" style="left:703px;top:${S.arcB?552:368}px;width:558px;height:${S.arcB?158:342}px">${insp}</div>${playerBar()}${modals(false)}${toastH(false)}`}
+function B_phone(){const ts=tracks();let s='';ts.forEach((t,i)=>{s+=`<div class="stone${S.sel===i?' sel':''}" ${A('sel',i)}><div style="min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title}</div><div class="sm mut">${t.artist}</div></div><span class="d tab sm mut">${fmt(t.dur)}</span><div style="display:flex;gap:8px;align-items:center">${moodL(t)}<span class="sm">${ELVL(t.e)}</span></div>${strip(t,90,18)}</div>`;
+  if(i<ts.length-1){const n=shared(t,ts[i+1]);s+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0 6px 18px"><div style="width:2px;align-self:stretch;background:${n<6?'var(--warn)':'rgba(0,170,230,.4)'}"></div><div class="jn2${n<6?' bad':''}" style="padding-left:6px;flex:1" ${A('join',i)}>${dots(n)}<span>${kind(t,ts[i+1])[0].toLowerCase()}</span>${enTxt(t,ts[i+1])}</div><span class="btn gh sq" ${A('ins',i)} title="Insert here">${ic.plus}</span></div>`}});
+ const sh=S.sheet==='join'?['This join',joinDetail(S.join)]:S.sheet==='between'?[`Between ${ts[S.join]?.title} and ${ts[S.join+1]?.title}`,filters()+fitsList(ts[S.join],{b:ts[S.join+1],at:S.join+1})]:null;
+ return `<div class="abs glass" style="left:10px;top:10px;right:10px;height:72px;padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:4">${ic.back}<div style="flex:1"><div style="font-size:18px;font-weight:600">Night drive</div><div class="mut sm">Sets · ${ts.length} tracks</div></div><span class="btn gh sq" ${A('modal','basics')}>${ic.q}</span><span class="btn gh" ${A('modal','build')}>${ic.wand}Arc</span></div>
+ <div class="abs scroll" data-scroll="B-p" style="left:12px;right:12px;top:92px;bottom:146px;padding-bottom:16px">${s}</div>${miniPlayer()}${dock}
+ ${sh?`<div class="dim" ${A('sheet','')}></div><div class="sheet" style="height:600px"><div class="grab" ${A('sheet','')}></div><div class="shd"><b>${sh[0]}</b><span ${A('sheet','')}>${ic.x}</span></div><div class="scroll" data-scroll="B-sheet" style="flex:1">${sh[1]}</div></div>`:''}${modals(true)}${toastH(true)}`}
+
+// ---------- C · build while listening ----------
+function autoGhosts(){if(!S.auto)return '';const ts=tracks(),last=ts[ts.length-1];const E=S.arc.E;
+ const g=greedy(last,4,i=>({e:lerp(E,Math.min(1,(ts.length+i)/(ts.length+6))),m:last.br})).slice(1);
+ return `<div class="cap" style="padding:10px 10px 4px">Autopilot will add · ${S.preset>=0?PRESETS[S.preset][0]:'your arc'}</div>`+g.map((t,i)=>`<div class="jn2" style="cursor:default">${dots(shared(i?g[i-1]:last,t))}${enTxt(i?g[i-1]:last,t)}</div><div class="tr2 ghost"><div class="tt"><b>${t.title}</b><span>${t.artist}</span></div>${moodL(t)}<span class="d tab">${fmt(t.dur)}</span></div>`).join('')}
+function C_queue(phone){return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px 6px"><b style="flex:1;font-size:14px">Queue</b><span class="sm mut">Autopilot</span><span class="sw${S.auto?' on':''}" ${A('auto')} role="switch" aria-checked="${S.auto}"></span>${phone?'':`<span class="btn gh" style="height:28px" ${A('saved')}>${ic.save}Save as set</span>`}</div>
+ ${S.auto?`<div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 12px 6px">${PRESETS.map((p,i)=>`<span class="chip${S.preset===i?' on':''}" ${A('preset',i)}>${p[0]}</span>`).join('')}</div>`:''}
+ ${setList({phone})}${autoGhosts()}`}
+function C_stage(w,h,big){const t=tracks()[S.playing];const c=t.curve,n=c.length;let d='';c.forEach((v,i)=>d+=`${i?' L':'M'}${(i/(n-1)*w).toFixed(1)},${(h-8-v*(h-20)).toFixed(1)}`);
+ return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block"><path d="${d} L${w},${h-8} L0,${h-8}Z" fill="${t.col}" fill-opacity=".28"/><path d="${d}" fill="none" stroke="${t.col}" stroke-width="2"/><line x1="${w*.38}" x2="${w*.38}" y1="0" y2="${h}" stroke="#fff" stroke-width="2"/></svg>`}
+function C_desk(){const t=tracks()[S.playing],nx=tracks()[S.playing+1];const crate=cands(t).slice(0,6);
+ const pop=S.join!=null?`<div class="abs panel" style="left:470px;top:60px;width:400px;background:#15222e;box-shadow:0 18px 44px rgba(0,0,0,.6);z-index:8;border-radius:14px"><div style="display:flex;padding:8px 12px 0"><span style="flex:1"></span><span ${A('join','')}>${ic.x}</span></div>${joinDetail(S.join)}</div>`:'';
+ return `<div class="abs" style="inset:0;background:radial-gradient(90% 70% at 30% 30%, ${t.col.replace(')',' / .18)')}, transparent 60%)"></div>
+ <div class="abs" style="left:24px;top:22px;display:flex;gap:10px;align-items:center"><span class="btn gh sq">${ic.up2}</span><span class="sm mut">Night drive · playing as a queue</span><span class="btn gh sq" ${A('modal','basics')}>${ic.q}</span></div>
+ <div class="abs" style="left:40px;top:80px"><div class="mut" style="font-size:15px">${t.artist} · ${t.bpm} BPM · ${moodL(t)} · ${ELVL(t.e)}</div><div style="font-size:52px;font-weight:600;letter-spacing:-.035em">${t.title}</div></div>
+ <div class="abs" style="left:40px;top:180px;width:820px">${C_stage(820,120)}</div>
+ ${nx?`<div class="abs" style="left:40px;top:312px;width:820px;display:flex;align-items:center;gap:10px"><span class="mut sm">Next:</span><b style="font-size:13px">${nx.title}</b><div style="flex:1">${joinLine(S.playing)}</div></div>`:''}
+ <div class="abs" style="left:40px;top:360px;display:flex;gap:14px"><span class="btn gh sq" style="width:48px;height:48px" ${A('playPrev')}>${ic.prev}</span><span class="btn solid sq" style="width:60px;height:48px">${ic.pause}</span><span class="btn gh sq" style="width:48px;height:48px" ${A('playNext')}>${ic.next}</span></div>
+ <div class="abs glass" style="left:24px;top:432px;width:850px;height:350px;padding:12px 14px">
+  <div style="display:flex;align-items:center;gap:10px"><b style="font-size:14px">Add to queue</b><span class="seg" style="width:320px"><span>Library</span><span class="on">Fits next</span><span>Online</span></span><span class="sm mut" style="margin-left:auto">After ${t.title}</span></div>
+  ${filters().replace('class="filt"','class="filt" style="padding:8px 0 0"')}
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:10px">${crate.length?crate.map(c=>`<div class="card2"><div style="height:58px;border-radius:8px;background:linear-gradient(160deg,${c.col},transparent 140%);opacity:.5"></div><b style="font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.title}</b>
+   <span class="sm mut" style="display:flex;gap:5px;align-items:center">${dots(shared(t,c))}</span><span class="mood" style="color:${c.col}">${arrowM(t,c)}${c.word}</span><span class="en sm">${eGlyph(t,c)}${ELVL(c.e)}</span><span class="btn gh" style="height:26px;justify-content:center" ${A('add',`${S.playing+1}|${c.title}`)}>Play next</span></div>`).join(''):`<div class="empty" style="grid-column:1/-1">Nothing fits with these filters. <span class="lnk" ${A('clearf')}>Clear filters</span></div>`}</div></div>
+ <div class="abs glass scroll" data-scroll="C-q" style="left:890px;top:16px;width:374px;height:768px">${C_queue(false)}</div>${pop}${modals(false)}${toastH(false)}`}
+function C_phone(){const t=tracks()[S.playing],nx=tracks()[S.playing+1];
+ const sh=S.sheet==='queue'?['Queue',C_queue(true)]:S.sheet==='crate'?[`Fits after ${t.title}`,filters()+fitsList(t,{at:S.playing+1,compact:true})]:S.sheet==='join'?['This join',joinDetail(S.join)]:null;
+ return `<div class="abs" style="inset:0;background:radial-gradient(90% 60% at 40% 30%, ${t.col.replace(')',' / .22)')}, transparent 65%)"></div>
+ <div class="abs" style="left:16px;right:16px;top:20px;display:flex;align-items:center;gap:10px"><span class="btn gh sq">${ic.dn}</span><span class="sm mut" style="flex:1">Night drive</span><span class="btn gh sq" ${A('modal','basics')}>${ic.q}</span></div>
+ <div class="abs" style="left:20px;right:20px;top:90px"><div class="mut sm">${t.artist} · ${t.bpm} BPM</div><div style="font-size:36px;font-weight:600;letter-spacing:-.03em">${t.title}</div><div style="display:flex;gap:10px;margin-top:6px;align-items:center">${moodL(t)}<span class="sm">${ELVL(t.e)}</span></div></div>
+ <div class="abs" style="left:0;top:220px">${C_stage(390,120)}</div>
+ <div class="abs" style="left:0;right:0;top:370px;display:flex;justify-content:center;gap:16px"><span class="btn gh sq" style="width:52px;height:52px" ${A('playPrev')}>${ic.prev}</span><span class="btn solid sq" style="width:68px;height:52px">${ic.pause}</span><span class="btn gh sq" style="width:52px;height:52px" ${A('playNext')}>${ic.next}</span></div>
+ <div class="abs glass" style="left:8px;right:8px;bottom:12px;padding:8px 12px 12px;border-radius:20px">
+  <div class="grab" ${A('sheet','queue')}></div>
+  ${nx?`<div class="sm mut" style="margin-bottom:4px">Up next</div><div class="jn2" style="padding-left:0" ${A('join',S.playing)}>${dots(shared(t,nx))}<span>${kind(t,nx)[0].toLowerCase()}</span>${enTxt(t,nx)}</div><div class="tr2" style="padding:0" ${A('sheet','queue')}><div class="tt"><b>${nx.title}</b><span>${nx.artist}</span></div>${moodL(nx)}</div>`:''}
+  <div style="display:flex;gap:8px;margin-top:8px"><span class="btn gh" style="flex:1;justify-content:center;height:40px" ${A('sheet','queue')}>Queue · ${S.set.length}</span><span class="btn solid" style="flex:1;justify-content:center;height:40px" ${A('sheet','crate')}>${ic.plus}Add what fits</span></div></div>
+ ${sh?`<div class="dim" ${A('sheet','')}></div><div class="sheet" style="height:660px"><div class="grab" ${A('sheet','')}></div><div class="shd"><b>${sh[0]}</b><span ${A('sheet','')}>${ic.x}</span></div><div class="scroll" data-scroll="C-sheet" style="flex:1">${sh[1]}</div></div>`:''}${modals(true)}${toastH(true)}`}
+
+// ---------- D · vibe canvas ----------
+function strip2(){const ts=tracks();return ts.map((t,i)=>`<span class="chip${S.sel===i?' on':''}" style="gap:6px" ${A('sel',i)}><i style="width:8px;height:8px;border-radius:50%;background:${t.col}"></i>${t.title}</span>${i<ts.length-1?`<span ${A('join',i)} title="${kind(t,ts[i+1])[0]}">${dots(shared(t,ts[i+1]))}</span>`:''}`).join('')}
+function D_desk(){const a=anchor();const f=S.focus&&by(S.focus);
+ const side=S.join!=null?joinDetail(S.join):`<div class="ph"><b>${f?f.title:'Anchor: '+a.title}</b><span class="sm mut">${f?f.artist+' · '+f.bpm+' BPM':'The ring marks the track you build from. Lit dots share 6+ notes with it.'}</span></div>
+  ${f?`<div style="padding:4px 14px;display:grid;gap:10px"><div style="display:flex;gap:12px;align-items:center">${moodL(f)}<span class="sm">${ELVL(f.e)}</span></div>${strip(f,300,50)}
+   <div class="sm" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">After ${a.title}: ${dots(shared(a,f))} ${kind(a,f)[0].toLowerCase()} · ${dirOf(a,f)} · ${enTxt(a,f)}</div>
+   <div class="btns">${S.set.includes(f.title)?'<span class="sm mut">Already in the set</span>':`<span class="btn solid" ${A('add',`${S.sel+1}|${f.title}`)}>${ic.plus}Insert after ${a.title}</span>`}<button class="pl" data-play='${JSON.stringify([f.pcs,f.t])}'>${ic.play}Hear its scale</button></div></div>`:`<div style="padding:4px 14px" class="sm mut">Hover the dots to see titles; click one to inspect it. Click a track in the strip below to move the anchor.</div>`}`;
+ return rail+topCard(['Albums','Artists','Tracks','Explore'],'Explore')+`
+ <div class="abs panel" style="left:127px;top:136px;width:770px;height:500px"><div style="display:flex;align-items:center;gap:10px;padding:10px 12px 0"><b style="flex:1">${S.cview==='vibe'?'Across: mood · up: energy':'Around: the notes · in and out: the mood'}</b><span class="seg" style="width:180px">${[['vibe','Vibe'],['notes','Notes']].map(([k,l])=>`<span class="${S.cview===k?'on':''}" ${A('cview',k)}>${l}</span>`).join('')}</span><span class="btn gh sq" ${A('modal','basics')}>${ic.q}</span></div>
+  ${S.cview==='vibe'?plane(750,440,a):wheel(440,a)}</div>
+ <div class="abs panel scroll" data-scroll="D-side" style="left:913px;top:136px;width:348px;height:500px">${side}<div style="padding:0 14px 14px"><span class="btn gh" ${A('modal','build')}>${ic.wand}Build a set from here</span></div></div>
+ <div class="abs panel" style="left:127px;top:648px;width:1134px;height:64px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;overflow:hidden"><b class="sm" style="margin-right:6px">Night drive</b>${strip2()}</div>${modals(false)}${toastH(false)}`}
+function D_phone(){const a=anchor(),f=S.focus&&by(S.focus);
+ const sh=S.sheet==='set'?['Night drive',setList({phone:true})]:S.sheet==='join'?['This join',joinDetail(S.join)]:null;
+ return `<div class="abs glass" style="left:10px;top:10px;right:10px;height:62px;padding:8px 14px;display:flex;align-items:center;gap:8px;z-index:4"><b style="flex:1;font-size:17px">Explore</b><span class="seg" style="width:140px">${[['vibe','Vibe'],['notes','Notes']].map(([k,l])=>`<span class="${S.cview===k?'on':''}" ${A('cview',k)}>${l}</span>`).join('')}</span><span class="btn gh sq" ${A('modal','basics')}>${ic.q}</span></div>
+ <div class="abs" style="left:4px;top:80px">${S.cview==='vibe'?plane(382,430,a):`<div style="width:382px">${wheel(370,a)}</div>`}</div>
+ <div class="abs" style="left:0;right:0;top:520px">${focusCard(a,S.sel+1)}</div>
+ <div class="abs glass" style="left:10px;right:10px;bottom:86px;padding:8px 12px;border-radius:16px;display:flex;align-items:center;gap:8px;z-index:6" ${A('sheet','set')}><b class="sm" style="flex:1">Night drive · ${S.set.length} tracks · anchor ${a.title}</b>${ic.up2}</div>${dock}
+ ${sh?`<div class="dim" ${A('sheet','')}></div><div class="sheet" style="height:620px"><div class="grab" ${A('sheet','')}></div><div class="shd"><b>${sh[0]}</b><span ${A('sheet','')}>${ic.x}</span></div><div class="scroll" data-scroll="D-sheet" style="flex:1">${sh[1]}</div></div>`:''}${modals(true)}${toastH(true)}`}
+
+// ---------- page ----------
+const ALTS={A:['Panel in the playlist','The playlist page gains an inspector: fits next, notes, vibe, and join details.',
+  ['Music','Playlists','Night drive','Inspector: Fits next · Notes · Vibe','Join → details'],
+  [['y','Smallest change from today; everything in one place'],['y','Phone: one sheet pattern for tracks and joins'],['n','The panel competes with the list for width']]],
+ B:['Set workspace','A Sets tab with a DJ-style timeline: blocks, numbered connectors, a library and an inspector.',
+  ['Music','Sets tab','Night drive','Timeline','Connector → between / details'],
+  [['y','Best overview of a long set; energy and mood read left to right'],['y','"Fits between" is natural: click a connector'],['n','A new place to learn; heavier on phones (stepping stones)']]],
+ C:['Build while listening','The queue is the set. The crate suggests what fits the playing track; Autopilot follows an arc.',
+  ['Player bar','Expanded player','Queue (= set)','Crate: Fits next','Autopilot'],
+  [['y','Zero navigation: build while it plays'],['y','Autopilot makes "automatic" feel live'],['n','Planning a whole set ahead is harder']]],
+ D:['Vibe canvas','An Explore tab: the library as a map of mood and energy (or notes). Click dots to grow the set.',
+  ['Music','Explore tab','Vibe | Notes map','Dot → card → Insert','Set strip'],
+  [['y','Most visual; great for discovering what is near'],['y','Teaches mood and energy by itself'],['n','Lists are better for precise ordering; dense libraries clutter']]]};
+function render(){const keep={};document.querySelectorAll('[data-scroll]').forEach(e=>keep[e.dataset.scroll]=e.scrollTop);
+ const root=document.getElementById('root'),cw=root.clientWidth||728;const [ttl,desc,path,pc]=ALTS[S.alt];
+ const desk=window[S.alt+'_desk'](),ph=window[S.alt+'_phone']();const ds=Math.min(1,cw/1280),ps=Math.min(1,(S.dev==='phone'?cw:cw*.55)/390);
+ const devD=`<div class="dev" style="width:${1280*ds}px;height:${800*ds}px" data-dev="desk"><div class="scr" style="width:1280px;height:800px;transform:scale(${ds})">${desk}</div></div>`;
+ const devP=`<div class="dev ph" style="width:${390*Math.min(ps,1)}px;height:${844*Math.min(ps,1)}px" data-dev="phone"><div class="scr" style="width:390px;height:844px;transform:scale(${Math.min(ps,1)})">${ph}</div></div>`;
+ const notes=`<div class="notes"><h4>${S.alt} · ${ttl}</h4><div>${desc}</div><div class="path">${path.map((p,i)=>`${i?'<em>›</em>':''}<span>${p}</span>`).join('')}</div><div class="pc">${pc.map(([k,t])=>`<span class="${k}">${k==='y'?'+':'−'}</span><span>${t}</span>`).join('')}</div>
+  <p class="hint">Everything is clickable and shares one set: select tracks, insert from the lists, click joins (Bridge it on amber ones), open Build a set (drag the energy, mood and genre arcs) and the ? basics. Undo in the toast. Desktop and phone stay in sync.</p></div>`;
+ root.innerHTML=`<div class="bar"><div class="alts">${Object.entries(ALTS).map(([k,v])=>`<button class="alt${S.alt===k?' on':''}" ${A('alt',k)}><b><i>${k}</i>${v[0]}</b><span>${v[1]}</span></button>`).join('')}</div>
+ <div class="opts"><span>Show<span class="sg">${[['both','Both'],['desk','Desktop'],['phone','Phone']].map(([k,l])=>`<button class="${S.dev===k?'on':''}" ${A('dev',k)}>${l}</button>`).join('')}</span></span>
+ <span>Theory<span class="sg">${[['plain','Plain'],['tap','On tap'],['theory','Theory']].map(([k,l])=>`<button class="${S.theory===k?'on':''}" ${A('theory',k)}>${l}</button>`).join('')}</span></span><button class="reset" ${A('reset')}>Reset the set</button></div></div>
+ <div class="devs">${S.dev!=='phone'?devD:''}<div class="devrow">${S.dev!=='desk'?devP:''}${notes}</div></div>`;
+ document.querySelectorAll('[data-scroll]').forEach(e=>{if(keep[e.dataset.scroll])e.scrollTop=keep[e.dataset.scroll]})}
+function act(a,v,dev){const ph=dev==='phone';const keepToast=['undo'].includes(a);if(!keepToast)S.toast=null;const n=v===''?null:+v;
+ switch(a){
+  case 'alt':S.alt=v;S.join=null;S.sheet=null;S.modal=null;S.focus=null;S.tab='next';if(v==='C')S.sel=S.playing;break;
+  case 'dev':S.dev=v;break;case 'theory':S.theory=v;break;
+  case 'reset':S={...JSON.parse(JSON.stringify(S0)),alt:S.alt,dev:S.dev,theory:S.theory};break;
+  case 'sel':S.sel=n;S.join=null;S.focus=null;if(S.alt==='C')S.playing=n;if(ph&&(S.alt==='A'))S.sheet='next';break;
+  case 'join':S.join=n;if(ph&&n!=null)S.sheet='join';break;
+  case 'ins':S.join=n;S.sheet='between';break;
+  case 'tab':S.tab=v;S.focus=null;break;
+  case 'fm':S.fm=v;break;case 'fe':S.fe=v;break;case 'clearf':S.fm='any';S.fe='any';S.fg='any';break;
+  case 'focus':S.focus=S.focus===v?null:v;S.join=null;break;
+  case 'add':{const [at,t]=v.split('|');const i=+at;insertAt(i,t,`Added ${t} after ${tracks()[i-1]?.title||'the start'}`);if(S.alt==='C')S.sel=i;S.focus=null;if(ph&&S.sheet==='between')S.sheet=null;break}
+  case 'remove':{remember();const t=S.set[n];S.set.splice(n,1);S.sel=Math.max(0,Math.min(S.sel,S.set.length-1));S.playing=Math.min(S.playing,S.set.length-1);S.join=null;toast(`Removed ${t}`);break}
+  case 'bridge':{const b=bridgeFor(n);if(!b.length){toast('No bridge found within the tempo range',false);break}remember();S.set.splice(n+1,0,...b.map(x=>x.title));S.join=null;S.sel=n+1;if(ph)S.sheet=null;toast(`Bridged with ${b.map(x=>x.title).join(' and ')}`);break}
+  case 'undo':if(S.prev){S.set=S.prev;S.prev=null;S.sel=Math.min(S.sel,S.set.length-1);S.playing=Math.min(S.playing,S.set.length-1)}S.toast=null;break;
+  case 'modal':S.modal=v;S.step=0;S.sheet=null;break;case 'close':S.modal=null;break;
+  case 'step':S.step+=n;if(S.step>=BASICS.length){S.modal=null;S.step=0}S.step=Math.max(0,S.step);break;case 'stepTo':S.step=n;break;
+  case 'bmode':S.bmode=v;break;case 'preset':S.preset=n;S.arc=presetArc(n);break;case 'len':S.len=n;break;case 'fg':S.fg=v;break;
+  case 'gcycle':{const g=S.arc.G[n];g[1]=GENRES[(GENRES.indexOf(g[1])+1)%GENRES.length];S.preset=-1;break}
+  case 'gsplit':{const G=S.arc.G;let best=0,bw=0;G.forEach(([x],i)=>{const w=(i<G.length-1?G[i+1][0]:1)-x;if(w>bw){bw=w;best=i}});if(bw<.1)break;const cur=G[best][1];G.splice(best+1,0,[G[best][0]+bw/2,GENRES.find(g=>g!==cur)]);S.preset=-1;break}case 'dir':S.dir=v;break;case 'shuffle':S.seed++;break;
+  case 'apply':{const seq=buildSeq().map(t=>t.title);remember();if(v==='replace'){S.set=seq}else S.set=[...S.set,...seq.filter(t=>!S.set.includes(t))];S.modal=null;S.sel=0;S.join=null;S.arcB=false;toast(v==='replace'?`Set rebuilt: ${seq.length} tracks`:`Added ${seq.length} tracks`);break}
+  case 'sheet':S.sheet=v||null;if(!v)S.join=S.alt==='B'||S.alt==='A'||S.alt==='C'||S.alt==='D'?null:S.join;break;
+  case 'auto':S.auto=!S.auto;break;case 'saved':toast('Saved as the set "Night drive"',false);break;
+  case 'playNext':S.playing=Math.min(S.set.length-1,S.playing+1);S.sel=S.playing;break;case 'playPrev':S.playing=Math.max(0,S.playing-1);S.sel=S.playing;break;
+  case 'cview':S.cview=v;S.tab=v==='vibe'?'vibe':'map';break;case 'arcB':S.arcB=!S.arcB;break}
+ render()}
+document.addEventListener('click',e=>{const p=e.target.closest('[data-play]');if(p){const [a,b,c,d]=JSON.parse(p.dataset.play);playScale(a,b);if(c)playScale(c,d,8*.2+.3);return}
+ const el=e.target.closest('[data-a]');if(!el)return;e.stopPropagation();const dv=el.closest('[data-dev]');act(el.dataset.a,decodeURIComponent(el.dataset.v||''),dv&&dv.dataset.dev)});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-a][tabindex]')){e.preventDefault();e.target.click()}if(e.key==='Escape'&&(S.modal||S.sheet||S.join!=null)){S.modal=null;S.sheet=null;S.join=null;render()}});
+// dragging the arcs: handles move, a click in an empty lane adds a point, double-click removes one
+let drag=null;
+const svgPt=(svg,e)=>{const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())};
+const arcX=(wrap,p)=>Math.max(0,Math.min(1,(p.x-APAD)/(+wrap.dataset.arcw-2*APAD)));
+function arcVal(k,y){const [t,h]=LANES[k];const f=Math.max(0,Math.min(1,(t+h-y)/h));return k==='E'?f:f*6-3}
+const drawArcs=()=>document.querySelectorAll('.arcw').forEach(el=>el.innerHTML=arcSVG(+el.dataset.arcw));
+document.addEventListener('pointerdown',e=>{const wrap=e.target.closest('.arcw');if(!wrap)return;const h=e.target.closest('[data-h]'),lane=e.target.closest('[data-lane]');
+ if(h)drag={key:h.dataset.h,wrap};
+ else if(lane){const k=lane.dataset.lane,arr=S.arc[k],p=svgPt(wrap.querySelector('svg'),e),x=arcX(wrap,p),i=arr.findIndex(q=>q[0]>x);if(i<=0)return;arr.splice(i,0,[x,arcVal(k,p.y)]);drag={key:k+':'+i,wrap};S.preset=-1;drawArcs()}
+ if(drag)e.preventDefault()});
+document.addEventListener('pointermove',e=>{if(!drag)return;e.preventDefault();const p=svgPt(drag.wrap.querySelector('svg'),e),x=arcX(drag.wrap,p),[k,is]=drag.key.split(':'),i=+is,arr=S.arc[k];
+ if(k==='G')arr[i][0]=Math.max(arr[i-1][0]+.04,Math.min(i<arr.length-1?arr[i+1][0]-.04:.96,x));
+ else{if(i>0&&i<arr.length-1)arr[i][0]=Math.max(arr[i-1][0]+.02,Math.min(arr[i+1][0]-.02,x));arr[i][1]=arcVal(k,p.y)}
+ S.preset=-1;drawArcs()});
+document.addEventListener('pointerup',()=>{if(drag){drag=null;render()}});
+document.addEventListener('dblclick',e=>{const h=e.target.closest('.arcw [data-h]');if(!h)return;const [k,is]=h.dataset.h.split(':'),i=+is,arr=S.arc[k];if(k==='G'?i>0:(i>0&&i<arr.length-1)){arr.splice(i,1);S.preset=-1;render()}});
+let lastW=0;new ResizeObserver(([e])=>{const w=Math.round(e.contentRect.width);if(w!==lastW){lastW=w;render()}}).observe(document.getElementById('root'));
+render();
+</script></body></html>
