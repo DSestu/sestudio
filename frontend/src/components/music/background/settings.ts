@@ -6,7 +6,7 @@ import { PALETTES, TIMELINE_PALETTE, type Palette, type PaletteName } from '../t
 export type Style = 'wash' | 'bloom' | 'field' | 'mirror' | 'aurora' | 'ridge' | 'fall' | 'pulse'
 export const STYLES: Style[] = ['wash', 'bloom', 'field', 'mirror', 'aurora', 'ridge', 'fall', 'pulse']
 
-/** key, label, min, max, step, default, group (a = audio, v = look), unit */
+/** key, label, min, max, step, default, group (a = audio, e = energy, v = look, f = finish), unit. A new key's default changes nothing. */
 export const SPD = [
   ['nb', 'Bands', 6, 64, 1, 24, 'a', ''], ['lo', 'Lowest band', 20, 200, 1, 30, 'a', ' Hz'], ['hi', 'Highest band', 2000, 20000, 100, 16000, 'a', ' Hz'],
   ['att', 'Attack', 5, 400, 5, 35, 'a', ' ms'], ['rel', 'Release', 30, 3000, 10, 230, 'a', ' ms'], ['sm', 'Analyser smoothing', 0, 0.95, 0.05, 0.55, 'a', ''],
@@ -18,6 +18,26 @@ export const SPD = [
   ['add', 'Additive blend', 0, 1, 1, 1, 'v', ''], ['anc', 'Wash anchor  bottom ↔ timeline', 0, 1, 1, 0, 'v', ''], ['cmap', 'Colour from  frequency ↔ intensity', 0, 1, 1, 1, 'v', ''],
   ['rx', 'React by  size ↔ intensity', 0, 1, 1, 1, 'v', ''], ['rfix', 'Fixed size', 0.2, 1.2, 0.05, 0.75, 'v', '×'], ['swing', 'Brightness swing', 0, 50, 1, 8, 'v', ''],
   ['ipow', 'Intensity contrast', 0.5, 4, 0.1, 1.8, 'v', ''], ['ko', 'Timeline halo', 0, 1, 0.05, 0.85, 'v', ''], ['kb', 'Halo size', 0, 10, 0.25, 3, 'v', ' px'],
+  // §5.8.7: the Drive look.
+  ['warp', 'Band spacing  log ↔ mel', 0, 1, 0.05, 0, 'a', ''], ['abLo', 'Loudness from', 0, 200, 5, 110, 'a', ''], ['abHi', 'Loudness to', 120, 255, 5, 230, 'a', ''],
+  ['gate', 'Gate', 0, 0.5, 0.01, 0, 'a', ''], ['agc', 'Auto level', 0, 1, 0.05, 0, 'a', ''], ['agcT', 'Auto level target', 0.3, 1.5, 0.05, 0.85, 'a', ''],
+  ['agcSp', 'Auto level follow', 0.3, 8, 0.1, 2, 'a', ' s'], ['knee', 'Soft ceiling from', 0.4, 1, 0.05, 0.75, 'a', ''],
+  ['en', 'Follow energy', 0, 1, 0.05, 0, 'e', ''], ['eq', 'Changes land on  beat ↔ bar ↔ 4 bars', 0, 3, 1, 2, 'e', ''],
+  ['esm', 'Energy smoothing', 0, 16, 0.25, 2, 'e', ' beats'], ['dead', 'Ignore changes under', 0, 0.3, 0.01, 0.06, 'e', ''],
+  ['efloor', 'Quietest intensity', 0, 1, 0.05, 0.3, 'e', ''], ['ecrv', 'Energy contrast', 0.3, 3, 0.05, 1, 'e', ''],
+  ['erise', 'Rise time', 0, 16, 0.25, 0, 'e', ' beats'], ['efall', 'Fall time', 0, 32, 0.5, 4, 'e', ' beats'],
+  ['eSh', 'Dynamics follow energy', 0, 1, 0.05, 1, 'e', ''], ['relLo', 'Release at full energy', 0.0625, 2, 0.0625, 0.25, 'e', ' beat'],
+  ['relHi', 'Release when quiet', 0.25, 8, 0.25, 2, 'e', ' beats'], ['crvQ', 'Curve when quiet', 0.3, 3, 0.05, 1.1, 'e', ''],
+  ['smQ', 'Smoothing when quiet', 0, 0.95, 0.05, 0.55, 'e', ''], ['pkQ', 'Peak fall when quiet', 0.5, 40, 0.5, 5, 'e', '/s'],
+  ['lwQ', 'Loudness weight when quiet', 0, 1, 0.05, 0.15, 'e', ''], ['gateQ', 'Gate when quiet', 0, 0.5, 0.01, 0.1, 'e', ''],
+  ['abLoQ', 'Loudness from, quiet', 0, 200, 5, 70, 'e', ''], ['abHiQ', 'Loudness to, quiet', 120, 255, 5, 190, 'e', ''],
+  ['eCol', 'Colour reach follows energy', 0, 1, 0.05, 0, 'e', ''], ['eOp', 'Brightness follows energy', 0, 1, 0.05, 0, 'e', ''],
+  ['eHt', 'Size follows energy', 0, 1, 0.05, 0, 'e', ''], ['blurHi', 'Blur at full energy', 0.2, 1, 0.05, 1, 'e', '×'],
+  ['wdHi', 'Width at full energy', 0.4, 1, 0.05, 1, 'e', '×'], ['acc', 'Beat accent', 0, 1, 0.05, 0, 'e', ''], ['accDb', 'Downbeat extra', 0, 1, 0.05, 0.5, 'e', ''],
+  ['xmap', 'Bass  left ↔ centre', 0, 1, 1, 0, 'v', ''], ['t1', 'Palette to', 0, 1, 0.05, 1, 'v', ''], ['hot', 'White-hot peaks', 0, 1, 0.05, 0, 'v', ''],
+  ['res', 'Canvas detail', 48, 256, 8, 96, 'v', ' px'], ['asp', 'Canvas  16:9 ↔ screen shape', 0, 1, 1, 0, 'v', ''],
+  ['ease', 'Column ends  linear ↔ eased', 0, 1, 1, 0, 'f', ''], ['side', 'Soft sides', 0, 1, 1, 0, 'f', ''], ['lower', 'Below the timeline', 0.3, 1, 0.05, 1, 'f', '×'],
+  ['hueTop', 'Tip hue drift', -40, 40, 1, 0, 'f', '°'], ['bloom', 'Bloom', 0, 0.4, 0.01, 0, 'f', ''], ['grain', 'Grain', 0, 0.4, 0.01, 0, 'f', ''],
 ] as const
 
 export type SKey = (typeof SPD)[number][0]
@@ -38,6 +58,16 @@ export interface Preset {
 }
 
 export const PRESETS: Preset[] = [
+  {
+    id: 'drive', name: 'Drive', style: 'wash', blur: 4,
+    desc: 'Bass in the middle; the track’s energy, bar by bar, sets how hard and fast the bands move. Sharp and crisp in drops, soft and slow in intros.',
+    s: {
+      nb: 48, lo: 49, hi: 12400, warp: 0.45, att: 20, rel: 250, sm: 0.1, pk: 20.5, fl: 4, rng: 6, gain: 0.85, crv: 1.4, tilt: 0, lw: 1, abLo: 130, abHi: 255, gate: 0.41,
+      agc: 1, en: 1, relLo: 0.125, relHi: 8, crvQ: 0.3, smQ: 0.95, pkQ: 34.5, lwQ: 1, gateQ: 0.12, abLoQ: 75, abHiQ: 195, eCol: 1, blurHi: 0.5, wdHi: 0.8, acc: 0.2, accDb: 0.3,
+      op: 0.58, alpha: 1.5, sat: 1.05, ht: 2.85, wd: 1.2, xmap: 1, hot: 0.3, res: 192, asp: 1, anc: 1, cmap: 1, rx: 1, rfix: 0.9, swing: 34, ipow: 1.8, ko: 1, kb: 3,
+      ease: 1, side: 1, lower: 0.7, hueTop: 14, bloom: 0.12, grain: 0.12,
+    },
+  },
   { id: 'drop', name: 'Drop', desc: 'Hard, instant hits. Made for dubstep drops.', style: 'bloom', blur: 40, s: { nb: 20, att: 5, rel: 140, sm: 0.3, pk: 14, fl: 8, rng: 6, gain: 1.1, crv: 1.8, op: 0.75, alpha: 1.3, sat: 1.4, ht: 1.15 } },
   { id: 'sub', name: 'Sub pulse', desc: 'The left side breathes with the kick and sub, on the beat.', style: 'pulse', blur: 60, s: { nb: 16, lo: 30, hi: 8000, att: 8, rel: 220, sm: 0.35, pk: 10, fl: 6, rng: 5, gain: 0.85, crv: 2, tilt: -0.3, op: 0.7, beat: 1.5, sat: 1.3 } },
   { id: 'roll', name: 'Rollers', desc: 'Even, steady motion for long d&b mixes.', style: 'wash', blur: 10, s: { nb: 64, lo: 49, hi: 18600, att: 30, rel: 420, sm: 0.6, pk: 6, fl: 4, rng: 6, gain: 0.85, crv: 1.9, tilt: 0, lw: 1, op: 0.55, alpha: 0.7, sat: 1.05, ht: 1.65, anc: 1, cmap: 1, rx: 1, rfix: 0.75, swing: 34, ipow: 1.8 } },
@@ -75,10 +105,10 @@ export function applyPreset(l: Look, id: string): Look {
   return { ...l, style: p.style, preset: id, s: { ...DEFAULTS, ...p.s }, blur: { ...BLUR_DEFAULT, [p.style]: p.blur } }
 }
 
-/** Rollers on the Abyss background, Reef timeline. */
+/** Drive on the Abyss background, Reef timeline. */
 export const DEFAULT_LOOK: Look = applyPreset(
   { style: 'wash', blur: BLUR_DEFAULT, s: DEFAULTS, preset: null, bgPal: 'abyss', tlPal: TIMELINE_PALETTE, tl: TL_DEFAULTS },
-  'roll',
+  'drive',
 )
 
 /** The background palette; "same" follows the timeline's. */
@@ -86,7 +116,8 @@ export const bgPalette = (l: Look): Palette => PALETTES[l.bgPal === 'same' ? l.t
 
 // --- store: the lab overrides, persisted ------------------------------------
 
-const KEY = 'music.look'
+// v2: the Drive default (2026-11-04); older lab overrides were tuned on Rollers.
+const KEY = 'music.look2'
 
 function load(): Look {
   try {

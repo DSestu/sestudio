@@ -103,9 +103,13 @@ function Background({ look }: { look: Look }) {
       </Chips>
       <Head>Audio reactivity</Head>
       {SPD.filter(d => d[6] === 'a').map(row)}
+      <Head>Energy (the track's analysis)</Head>
+      {SPD.filter(d => d[6] === 'e').map(row)}
       <Head>Look · {look.style}</Head>
       <Slider label="Blur" v={look.blur[look.style]} min={0} max={120} step={1} unit=" px" def={BLUR_DEFAULT[look.style]} on={v => setLook(custom({ ...look, blur: { ...look.blur, [look.style]: v } }))} />
       {SPD.filter(d => d[6] === 'v').map(row)}
+      <Head>Finish</Head>
+      {SPD.filter(d => d[6] === 'f').map(row)}
     </>
   )
 }
@@ -153,7 +157,7 @@ export default function LookPanel() {
   }
   const reset = () => {
     liveBands.reset()
-    setLook(tab === 'tl' ? { ...look, tl: TL_DEFAULTS, tlPal: 'reef' } : applyPreset({ ...look, bgPal: 'abyss' }, 'roll'))
+    setLook(tab === 'tl' ? { ...look, tl: TL_DEFAULTS, tlPal: 'reef' } : applyPreset({ ...look, bgPal: 'abyss' }, 'drive'))
   }
 
   return (
