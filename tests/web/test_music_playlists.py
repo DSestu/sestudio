@@ -211,6 +211,7 @@ def test_smart_rules(client):
 
     assert got() == {A, B, C, D}
     assert got(genres=["house"]) == {A}
+    assert got(genres=["H-O-U-S-E"]) == {A}
     assert got(bpm_min=120, bpm_max=140) == {A}
     assert got(bpm_min=150) == {B}
     assert got(added_days=7) == {A, B, C}  # d.m4a is 40 days old

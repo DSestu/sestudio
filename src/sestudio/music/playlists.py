@@ -16,6 +16,7 @@ import uuid
 from typing import Any
 
 from sestudio import library
+from sestudio.music import genres
 
 KINDS = ("folder", "playlist", "smart")
 DAY = 86400
@@ -393,8 +394,9 @@ def matches(
     now: float,
 ) -> bool:
     """Whether a track (``mtime``, ``bpm``, ``genre``, ``played``) fits the rules."""
-    genres = {g.lower() for g in rules.get("genres") or []}
-    if genres and (track.get("genre") or "").lower() not in genres:
+    # By grouping key, so "Synth Pop" matches a track tagged "synthpop".
+    wanted = {genres._key(g) for g in rules.get("genres") or []}
+    if wanted and genres._key(track.get("genre") or "") not in wanted:
         return False
     bpm = track.get("bpm")
     if rules.get("bpm_min") is not None or rules.get("bpm_max") is not None:

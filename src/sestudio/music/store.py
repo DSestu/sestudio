@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections import Counter
 from typing import Any
 
 import numpy as np
@@ -248,6 +249,7 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
             .fetchall()
         )
     out: dict[str, dict[str, Any]] = {}
+    spelling = _spellings()
     for r in rows:
         bands = np.frombuffer(r["bands"], dtype=np.float16).reshape(8, r["n"])
         bands = bands.astype(np.float32)
@@ -279,7 +281,28 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
                 round(sum(mean[5:8]) / 3, 3),
             ],
         }
-        # Genres stored before one spelling was enforced group with the rest.
+        # Spellings of one genre ("synthpop", "Synth-Pop") show as one.
         if g := out[r["track_id"]].get("genre"):
-            out[r["track_id"]]["genre"] = genres.spell(g)
+            out[r["track_id"]]["genre"] = spelling.get(genres._key(g), genres.spell(g))
     return out
+
+
+def _spellings() -> dict[str, str]:
+    """The genre spelling to show for each grouping key: the one most tracks
+    use, then the one with more words ("Synth Pop" over "Synthpop")."""
+    with library._lock:
+        rows = (
+            library._connect()
+            .execute(
+                "SELECT coalesce(json_extract(extra, '$.genre_override'),"
+                " json_extract(extra, '$.genre')) AS g FROM music_analysis"
+            )
+            .fetchall()
+        )
+    count = Counter(genres.spell(r["g"]) for r in rows if isinstance(r["g"], str))
+    best: dict[str, str] = {}
+    for name, _ in sorted(
+        count.items(), key=lambda kv: (-kv[1], -kv[0].count(" "), kv[0])
+    ):
+        best.setdefault(genres._key(name), name)
+    return best
