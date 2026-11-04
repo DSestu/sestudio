@@ -47,6 +47,7 @@ async def tracks_analysis(ids: str = Query(...)) -> dict[str, Any]:
 
 SUMMARY_KEYS = (
     "bpm",
+    "key",
     "camelot",
     "keyConf",
     "genre",
