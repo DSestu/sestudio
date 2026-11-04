@@ -50,7 +50,7 @@ export default function Title({ info, analysis }: { info?: TrackInfo; analysis: 
         )}
         {key && <span className="shrink-0 tabular-nums">{key}</span>}
       </div>
-      <h2 className="mt-1 truncate font-bold leading-[.95] tracking-[-.04em] text-[clamp(2.25rem,8vw,6rem)] pb-1">
+      <h2 className="mt-1 truncate font-bold leading-[.95] tracking-[-.04em] text-[clamp(2.25rem,8vw,6rem)] short:text-[32px] pb-1">
         {info?.title ?? ''}
       </h2>
     </div>
