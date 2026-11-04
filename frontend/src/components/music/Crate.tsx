@@ -89,11 +89,12 @@ const dragOf = (q: QueueState, e: Entry): DragSource => ({
 const nextIcon = <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h14M12 20V9M7 13l5-5 5 5" /></svg>
 const plusIcon = <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 
-/** Next and last, for a pointer that hovers (touch has the swipe and the tap). */
-function HoverActions({ e, aim, size }: { e: Entry; aim: Aim; size: number }) {
+/** Next and last, for a pointer that hovers (touch has the swipe and the tap): a drawer
+ *  that opens over the row's right end, `bg` being the hovered row's colour it fades from. */
+function HoverActions({ e, aim, size, bg, className }: { e: Entry; aim: Aim; size: number; bg: string; className: string }) {
   const cls = 'grid place-items-center rounded-[10px] shrink-0'
   return (
-    <span className="relative flex max-w-0 gap-1 overflow-hidden group-hover:max-w-none focus-within:max-w-none [@media(hover:none)]:hidden">
+    <span data-drawer className={`absolute inset-y-0 right-0 flex items-center gap-1 [@media(hover:none)]:hidden ${className}`} style={{ background: `linear-gradient(to right, transparent, ${bg} 28px)` }}>
       <button aria-label={`Play ${e.title} next`} title="Play next" className={`${cls} bg-white/8 hover:bg-white/14`} style={{ width: size, height: size }} onClick={ev => { ev.stopPropagation(); put(e, 'next', aim) }}>
         {nextIcon}
       </button>
@@ -135,7 +136,7 @@ function AddRow({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolea
         {meta?.balance && <Meter balance={meta.balance} />}
         <span className="w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{e.duration ? fmtTime(e.duration) : ''}</span>
         {queued && inQueue}
-        <HoverActions e={e} aim={aim} size={40} />
+        <HoverActions e={e} aim={aim} size={40} bg="color-mix(in oklab, var(--rowbg), white 5%)" className="pl-[34px] pr-3" />
       </div>
     </div>
   )
@@ -156,13 +157,13 @@ function AddCard({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boole
       onKeyDown={ev => { if (ev.key === 'Enter') tap() }}
       onPointerDown={ev => armRowDrag(ev, dragOf(q, e))}
     >
-      <b className="block truncate pr-1 font-semibold group-hover:pr-[76px] [@media(hover:none)]:group-hover:pr-1">{e.title}</b>
+      <b className="block truncate pr-1 font-semibold">{e.title}</b>
       <span className="flex items-center gap-1.5 text-[11px] text-base-content/52">
         <span className="tabular-nums">{[bpm && `${Math.round(bpm)} BPM`, e.duration && fmtTime(e.duration)].filter(Boolean).join(' · ')}</span>
         {meta?.balance && <Meter balance={meta.balance} />}
         {queued && <span className="ml-auto text-primary font-semibold">✓</span>}
       </span>
-      <span className="absolute right-2 top-1/2 -translate-y-1/2"><HoverActions e={e} aim={aim} size={32} /></span>
+      <HoverActions e={e} aim={aim} size={32} bg="hsl(205 45% 15%)" className="rounded-r-xl pl-[26px] pr-2" />
     </div>
   )
 }
