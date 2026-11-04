@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { bez } from './interact'
-import { isPhone, rects, type Rect } from './timeline/mapping'
+import { isPhone, isShort, rects, shortCols, type Rect } from './timeline/mapping'
 
 // The player's two modes and the motion between them (SPEC-music-player §7, §8).
 
@@ -90,15 +90,37 @@ function mix<T extends Record<string, number>>(p: T, q: T, t: number): T {
   return Object.fromEntries(Object.keys(p).map(k => [k, lerp(p[k], q[k], t)])) as T
 }
 
+/** The title's box width, before its scale. */
+export function titleWidth(W: number, H: number, x: number): number {
+  if (isShort(W, H)) return shortCols(W).l - x
+  return isPhone(W) ? W - 44 : W - 520
+}
+
 /** Where every part sits at progress `t`, for a viewport of W by H. */
 export function frameAt(W: number, H: number, t: number): Frame {
   const { d, e } = rects(W, H)
   const sb = e.y + e.h
-  const [a, b] = isPhone(W)
+  const short = isShort(W, H) && shortCols(W)
+  const [a, b] = short
+    ? [
+        // The title clears the 40 px close button at 16 px; the transport is one 48 px row.
+        {
+          title: { x: 68, y: 12, scale: 1 },
+          transport: { x: 16, y: H - 64, w: short.l - 16 },
+          queue: { x: W - short.q - 16, y: 16, w: short.q, h: H - 32, r: 16 },
+        },
+        {
+          title: { x: 68, y: 12, scale: 1 },
+          transport: { x: 16, y: H - 64, w: short.l - 16 },
+          queue: { x: W - short.q - 16, y: 16, w: short.q, h: H - 32, r: 10 },
+        },
+      ]
+    : isPhone(W)
     ? [
         {
-          title: { x: 22, y: 76, scale: 1 },
-          transport: { x: 14, y: d.y + d.h + 14, w: W - 28 },
+          title: { x: 22, y: d.y + d.h + 6, scale: 1 },
+          // Under the title, which sits in the 84 px under the strip.
+          transport: { x: 14, y: d.y + d.h + 98, w: W - 28 },
           queue: { x: 12, y: H - 170, w: W - 24, h: 150, r: 16 },
         },
         {

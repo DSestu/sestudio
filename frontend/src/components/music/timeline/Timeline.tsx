@@ -6,7 +6,7 @@ import { bez, crossed, dipScale, flash, MORPH_MS, morphOffsets, stepHl } from '.
 import { loadAnalyses, mixOf, rawOf, RETRY_MS, trackOf } from '../mix/analysis'
 import { plan } from '../mix/plan'
 import MixPopover from '../mix/Popover'
-import { registerScrubber, Scrubber } from '../scrub'
+import { barPos, registerScrubber, Scrubber } from '../scrub'
 import { PALETTES, TIMELINE_PALETTE, type PaletteName } from './palette'
 import { TimelineRenderer, type LabelItem } from './render'
 import { layoutQueue, trackAt, type Span, type Track } from './sampling'
@@ -28,9 +28,6 @@ interface Model {
   /** Layout index of the playing track, -1 when none. */
   cur: number
 }
-
-/** The layout settles over this long when a plan changes (a time constant). */
-const MORPH = 0.1
 
 function buildModel(q: QueueState, info: (id: string) => TrackInfo | undefined): Model {
   const tracks: Track[] = []
@@ -106,6 +103,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   palette?: PaletteName
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const text = useRef<HTMLCanvasElement>(null)
   const [version, setVersion] = useState(0)
   const [open, setOpen] = useState<{ a: string; b: string; x: number; above: number } | null>(null)
   const ids = q.items.map(i => i.track_id).join(',')
@@ -117,10 +115,11 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     return () => window.clearInterval(id)
   }, [ids])
 
-  // Titles arrive later than the queue, so they count too.
+  // Titles arrive later than the queue, so they count too. The current track too: on the TV page it
+  // follows the station's clock, which reaches the next track after the queue's revision did.
   const titles = q.items.map(i => info(i.track_id)?.title ?? '').join('\n')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const model = useMemo(() => buildModel(q, info), [q.rev, ids, titles, version])
+  const model = useMemo(() => buildModel(q, info), [q.rev, q.current, ids, titles, version])
   const live = useRef({ model, progress, palette, onOutside })
   // Any render may carry a change the loop should draw (queue, mode, look).
   useEffect(() => {
@@ -130,7 +129,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
 
   useEffect(() => {
     const cv = canvas.current!
-    const r = new TimelineRenderer(cv)
+    const r = new TimelineRenderer(cv, text.current!)
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
     let bins = new Uint8Array(0)
     let level = 0
@@ -142,6 +141,8 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     let morph: Morph | null = null
     let movedId: string | undefined
     let lastG: number | null = null
+    /** A changed plan glides the drawn layout from where it was to the new one. */
+    let tween: { t0: number; ts: number[]; spans: Span[] } | null = null
     const scrub = new Scrubber({
       root: (cv.closest('[role="dialog"]') as HTMLElement | null) ?? document.body,
       r,
@@ -197,7 +198,8 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       if (m !== seenModel) {
         if (seenModel && seenModel.items.length && m.items.length && differs(seenModel.ids, m.ids)) {
           morph = makeMorph(seenModel, m, movedId, now)
-        }
+          tween = null
+        } else tween = { t0: now, ts: [...shown.ts], spans: shown.spans.map(s => ({ ...s })) }
         if (seenModel) {
           // The highlight survives a rebuild of the layout.
           const old = new Map(seenModel.ids.map((id, i) => [id, seenModel!.items[i].hl]))
@@ -208,25 +210,26 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         seenModel = m
       }
       if (m.cur < 0) { r.draw({ items: [], G: 0, t, level: 0, palette: PALETTES[pal], avoid: null }); return false }
-      // The drawn layout eases toward the planned one, so a changed plan moves the joins.
+      // The drawn layout glides to the planned one, so a changed plan moves the joins and resizes the blends.
       const n = m.items.length
-      const snap = shown.ts.length !== n || still.matches
-      const em = snap ? 1 : 1 - Math.exp(-dt / MORPH)
+      const tw = tween && tween.ts.length === n && !still.matches ? tween : null
+      const em = tw ? bez(Math.min(1, (now - tw.t0) / MORPH_MS)) : 1
+      if (em >= 1) tween = null
       shown.ts.length = n
       for (let i = 0; i < n; i++) {
         const to = m.spans[i]
         const sp = (shown.spans[i] ??= { ...to })
-        if (snap) {
+        if (tw) {
+          shown.ts[i] = tw.ts[i] + (m.TS[i] - tw.ts[i]) * em
+          for (const f of ['i0', 'il', 'o0', 'ol'] as const) sp[f] = tw.spans[i][f] + (to[f] - tw.spans[i][f]) * em
+        } else {
           shown.ts[i] = m.TS[i]
           Object.assign(sp, to)
-        } else {
-          shown.ts[i] += (m.TS[i] - shown.ts[i]) * em
-          for (const f of ['i0', 'il', 'o0', 'ol'] as const) sp[f] += (to[f] - sp[f]) * em
         }
         m.items[i].span = sp
       }
       const cur = m.items[m.cur]
-      const nowG = shown.ts[m.cur] + positionNow(m.q, clockSkew(), Date.now(), cur.track.dur)
+      const nowG = shown.ts[m.cur] + (barPos(now) ?? positionNow(m.q, clockSkew(), Date.now(), cur.track.dur) - engine.lag)
       const G = scrub.frame(now, nowG)
       const k = trackAt(shown.ts, G)
       if (lastG !== null) flash(m.items, crossed(shown.ts, lastG, G))
@@ -300,6 +303,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   return (
     <>
       <canvas ref={canvas} aria-hidden="true" className="fixed inset-0 -z-10 size-full pointer-events-none" />
+      <canvas ref={text} aria-hidden="true" className="fixed inset-0 -z-10 size-full pointer-events-none" />
       {open && at > 0 && (
         <MixPopover
           a={{ track: model.items[at - 1].track, title: model.items[at - 1].title }}

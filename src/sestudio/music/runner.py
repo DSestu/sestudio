@@ -54,6 +54,23 @@ def kick(root: str | Path) -> None:
     ).start()
 
 
+def reanalyse(library_id: str | None, root: str | Path) -> int:
+    """Analyse every file of one library of files on this machine (all of them with
+    None) again, in the background; returns how many files that is."""
+    ids = [
+        f.track_id
+        for lib, folder in libraries.folder_roots()
+        if library_id in (None, lib) and folder.is_dir()
+        for f in downloaded.audio_files(folder, lib)
+    ]
+    with _lock:
+        for i in ids:
+            _failed.pop(i, None)
+    store.forget(ids)
+    kick(root)
+    return len(ids)
+
+
 def _loop(root: str) -> None:
     global _running, _again
     try:

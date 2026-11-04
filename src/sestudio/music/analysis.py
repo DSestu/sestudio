@@ -23,7 +23,7 @@ from typing import Any  # noqa: E402
 import numpy as np  # noqa: E402
 
 from sestudio.media import ffmpeg_binary  # noqa: E402
-from sestudio.music import profile  # noqa: E402
+from sestudio.music import keynet, profile  # noqa: E402
 
 CENTERS = (60, 120, 250, 500, 1000, 2000, 4000)
 
@@ -178,11 +178,11 @@ def analyse_file(path: str) -> RawAnalysis:
     if duration >= MIN_TEMPO_SECONDS:
         bpm, beat0, bar0, conf = tempo(x)
     bands, loud = _bands(path), _rms(low, 4, 400)
-    extra = profile.profile(profile.chroma(x, TEMPO_SR), bands, loud, bpm, bar0)
+    extra = profile.profile(keynet.key(x), bands, loud, bpm, bar0)
     return RawAnalysis(duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra)
 
 
 def upgrade(path: str, a: RawAnalysis) -> dict[str, Any]:
-    """v2 profile of an already analysed file from its stored v1 row: one decode, for the chroma."""
-    chroma = profile.chroma(decode(path, TEMPO_SR), TEMPO_SR)
-    return profile.profile(chroma, a.bands, a.loudness, a.bpm, a.bar0)
+    """v2 profile of an already analysed file from its stored v1 row: one decode, for the key."""
+    key = keynet.key(decode(path, TEMPO_SR))
+    return profile.profile(key, a.bands, a.loudness, a.bpm, a.bar0)

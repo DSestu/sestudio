@@ -103,6 +103,11 @@ describe('withStation', () => {
     expect(withStation(s, { item_id: null, position: 0, playing: false, at: 0 })).toBe(s)
     expect(withStation(s, { item_id: 'gone', position: 1, playing: true, at: 1 })).toBe(s)
   })
+  it('runs ahead by the lead while it plays, not while paused', () => {
+    const s = base()
+    expect(withStation(s, { item_id: 'q3', position: 12, playing: true, at: 1 }, 0.2).position).toBeCloseTo(12.2)
+    expect(withStation(s, { item_id: 'q3', position: 12, playing: false, at: 1 }, 0.2).position).toBe(12)
+  })
 })
 
 describe('set with a start', () => {

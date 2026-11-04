@@ -58,6 +58,21 @@ describe('frameAt', () => {
     expect(half.title.scale).toBeCloseTo(0.865, 6)
     expect(frameAt(390, 844, 1).title.scale).toBe(0.7)
   })
+
+  it('stacks a phone on its side into a left column beside the queue, in both modes', () => {
+    const W = 800
+    const H = 360
+    const { d, e } = rects(W, H)
+    for (const t of [0, 1]) {
+      const f = frameAt(W, H, t)
+      const strip = t ? e : d
+      expect(f.queue.y + f.queue.h).toBeLessThanOrEqual(H)
+      expect(strip.x + strip.w).toBeLessThan(f.queue.x)
+      expect(f.transport.x + f.transport.w).toBeLessThan(f.queue.x)
+      expect(strip.y + strip.h).toBeLessThan(f.transport.y)
+      expect(f.transport.y + 48).toBeLessThanOrEqual(H - 16)
+    }
+  })
 })
 
 describe('pull', () => {

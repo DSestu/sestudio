@@ -2,15 +2,15 @@ import VolumePill from './VolumePill'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
-import { frameAt, getMode, MODE_MS, ModeMotion, pull, setMode, useMode } from './mode'
-import { closePlayer, closeThen, usePosition } from './player'
+import { frameAt, getMode, titleWidth, MODE_MS, ModeMotion, pull, setMode, useMode } from './mode'
+import { closePlayer, closeThen, usePosition, useTvSound } from './player'
 import PlayerSearch from './PlayerSearch'
 import AddPanel from './AddPanel'
 import Background from './background/Background'
 import { useLook } from './background/settings'
 import Queue from './Queue'
 import { scrubbing } from './scrub'
-import { isPhone, rects } from './timeline/mapping'
+import { isPhone, isShort, rects } from './timeline/mapping'
 import { tlook } from './timeline/render'
 import Timeline from './timeline/Timeline'
 import Title from './Title'
@@ -25,6 +25,12 @@ function fade(el: HTMLElement | null, o: number, dy: number) {
   el.style.opacity = String(o)
   el.style.transform = `translateY(${dy}px)`
   el.style.visibility = o < 0.01 ? 'hidden' : 'visible'
+}
+
+/** The station's page: the TV's picture, with its unheard sound for the light. */
+export function TvLayer() {
+  useTvSound()
+  return <Layer tv />
 }
 
 /** The full-screen player, over the whole app (rail and dock included). `tv` is the station's picture: the default view, no controls, no sound, no cursor. */
@@ -69,7 +75,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     const { clip: c, title, transport, queue: b } = f
     skyEl.current!.style.clipPath = `inset(${c.y}px ${W - c.x - c.w}px ${H - c.y - c.h}px ${c.x}px round ${c.r}px)`
     const te = titleEl.current!.style
-    te.width = `${isPhone(W) ? W - 44 : W - 520}px`
+    te.width = `${titleWidth(W, H, title.x)}px`
     te.transform = `translate(${title.x}px, ${title.y}px) scale(${title.scale})`
     const tr = transportEl.current!.style
     tr.width = `${transport.w}px`
@@ -78,8 +84,10 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     Object.assign(qs.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px`, borderRadius: `${b.r}px` })
     qs.querySelector<HTMLElement>('[data-qglass]')!.style.opacity = String(1 - t)
     qs.querySelector<HTMLElement>('[data-qflat]')!.style.opacity = String(t)
-    fade(topRow.current, 1 - t, -14 * t)
-    fade(card.current, t, -20 * (1 - t))
+    // Too short for the top card: the title stays put and so does the close button.
+    const short = isShort(W, H)
+    fade(topRow.current, short ? 1 : 1 - t, short ? 0 : -14 * t)
+    fade(card.current, short ? 0 : t, -20 * (1 - t))
   }, [])
 
   const kick = useCallback(() => {
@@ -330,7 +338,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
         ref={topRow}
         aria-label="Close the player"
         onClick={closePlayer}
-        className="absolute left-3.5 top-3.5 md:left-8 md:top-4.5 z-10 size-10 rounded-xl glass grid place-items-center"
+        className="absolute left-3.5 top-3.5 md:left-8 md:top-4.5 short:left-4 short:top-3.5 z-10 size-10 rounded-xl glass grid place-items-center"
       >
         {closeIcon}
       </button>}

@@ -4,8 +4,9 @@
 // then ticks, labels and the playhead.
 
 import { fmtTime } from '../format'
-import { isPhone, Mapper } from './mapping'
+import { isPhone, isShort, Mapper } from './mapping'
 import { oklch, type Palette } from './palette'
+import { TV } from '../tv'
 import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
 
 // The blurs are made by drawing small and scaling up, not with a full-size Canvas `filter: blur`:
@@ -69,10 +70,14 @@ export class TimelineRenderer {
   M = new Mapper(1, 1)
 
   private canvas: HTMLCanvasElement
+  /** Labels and ticks, on their own canvas at the full device density: text upscaled from the capped one blurs. */
+  private text: CanvasRenderingContext2D
+  private tdpr = 1
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, text: HTMLCanvasElement) {
     this.canvas = canvas
     this.page = canvas.getContext('2d')!
+    this.text = text.getContext('2d')!
   }
 
   /** Lowered by the caller when frames run long. */
@@ -89,6 +94,9 @@ export class TimelineRenderer {
     this.canvas.height = this.off.c.height = this.top.c.height = dh
     this.g1.c.width = this.g2.c.width = Math.ceil(W * GQ)
     this.g1.c.height = this.g2.c.height = Math.ceil(H * GQ)
+    this.tdpr = Math.min(deviceRatio || 1, 3)
+    this.text.canvas.width = Math.round(W * this.tdpr)
+    this.text.canvas.height = Math.round(H * this.tdpr)
     this.M = new Mapper(W, H)
   }
 
@@ -104,7 +112,7 @@ export class TimelineRenderer {
   }
 
   draw(f: Frame) {
-    const { W, H, dpr, page: g2, off, M } = this
+    const { W, H, dpr, page: g2, off, M, text: t2 } = this
     this.hits.length = 0
     if (!W) return
     const o2 = off.x
@@ -124,14 +132,20 @@ export class TimelineRenderer {
     o2.setTransform(dpr, 0, 0, dpr, 0, 0)
     o2.clearRect(0, 0, W, H)
 
-    // The light: the whole page, narrowing to the stage when expanded.
-    const { e: stage } = M
+    // The light: the whole page (only the left column when short), narrowing to the stage when expanded.
+    const { e: stage, d } = M
     const lx = stage.x * e
     const ly = stage.y * e
-    g2.save()
-    g2.beginPath()
-    g2.rect(lx, ly, W - lx - (W - stage.x - stage.w) * e, H - ly - (H - stage.y - stage.h) * e)
-    g2.clip()
+    const r0 = isShort(W, H) ? W - d.x - d.w : 0
+    const rx = W - (r0 + (W - stage.x - stage.w - r0) * e)
+    t2.setTransform(this.tdpr, 0, 0, this.tdpr, 0, 0)
+    t2.clearRect(0, 0, W, H)
+    for (const c of [g2, t2]) {
+      c.save()
+      c.beginPath()
+      c.rect(lx, ly, rx - lx, H - ly - (H - stage.y - stage.h) * e)
+      c.clip()
+    }
 
     // Joins.
     for (const it of items) {
@@ -221,18 +235,21 @@ export class TimelineRenderer {
     this.labels(f, y0, amp)
 
     // Axis ticks fade through the switch.
-    g2.font = '10.5px ui-sans-serif,system-ui'
-    g2.fillStyle = 'oklch(92% .01 240 / .42)'
+    t2.font = '500 11px ui-sans-serif,system-ui'
+    t2.fillStyle = 'oklch(92% .01 240 / .5)'
     const ticks =
       e < 0.5
         ? [[-60, '−1 min'], [60, '+1 min'], [300, '+5'], [600, '+10'], [1200, '+20 min']]
         : [[-20, '−20 s'], [-10, '−10 s'], [20, '+20 s'], [40, '+40 s'], [60, '+60 s']]
-    g2.globalAlpha = Math.abs(e - 0.5) * 2
+    t2.globalAlpha = Math.abs(e - 0.5) * 2
+    // A TV crops the picture's edges (overscan): there they sit inside the safe area.
+    const below = e < 0.5 ? (TV ? 0.06 * H : 8) : 16
     for (const [s, l] of ticks) {
       const x = X(s as number)
-      if (x > R.x + 16 && x < R.x + R.w - 40 && Math.abs(x - px) > 36) g2.fillText(l as string, x, e < 0.5 ? R.y + R.h - 8 : R.y + R.h - 16)
+      if (x > R.x + 16 && x < R.x + R.w - 40 && Math.abs(x - px) > 36) t2.fillText(l as string, x, R.y + R.h - below)
     }
-    g2.globalAlpha = 1
+    t2.globalAlpha = 1
+    t2.restore()
 
     // Playhead and its dot.
     const ph = g2.createLinearGradient(0, y0 - amp * 1.35, 0, y0 + amp * 0.85)
@@ -245,6 +262,16 @@ export class TimelineRenderer {
     g2.arc(px, y0, 5 + f.level * 9, 0, Math.PI * 2)
     g2.fillStyle = `rgba(255,255,255,${0.35 + f.level * 0.5})`
     g2.fill()
+    // A short strip ends at the queue: its last 28 px fade out (the stage's hard edge takes over when expanded).
+    if (r0 && e < 1) {
+      const fade = g2.createLinearGradient(rx - 28, 0, rx, 0)
+      fade.addColorStop(0, 'rgba(0,0,0,0)')
+      fade.addColorStop(1, `rgba(0,0,0,${1 - e})`)
+      g2.globalCompositeOperation = 'destination-out'
+      g2.fillStyle = fade
+      g2.fillRect(rx - 28, 0, 28, H)
+      g2.globalCompositeOperation = 'source-over'
+    }
     g2.restore()
   }
 
@@ -360,22 +387,25 @@ export class TimelineRenderer {
   }
 
   private labels(f: Frame, y0: number, amp: number) {
-    const { page: g2, M, W } = this
-    const { X, px } = M
+    const { text: g2, M, W } = this
+    const { X, px, R } = M
     const { avoid } = f
+    const right = Math.min(W, R.x + R.w)
     g2.textBaseline = 'alphabetic'
     let last = -1e9
     for (let i = 1; i < f.items.length; i++) {
       const it = f.items[i]
       if (!it.plan) continue
       const a = it.a + it.span.i0
-      const x0 = X(a)
-      if (x0 < px + 30 || x0 > W - 100 || x0 - last < 200) continue
+      if (X(a) > right - 40) continue
       g2.font = '600 12px ui-sans-serif,system-ui'
       const ty = y0 - amp * 1.02 - 22
       let tw = this.widths.get(it.title)
       if (tw === undefined) this.widths.set(it.title, (tw = g2.measureText(it.title).width))
       const box = Math.max(tw, 120) + 12
+      // Near the right edge the label slides left to fit rather than vanish.
+      const x0 = Math.min(X(a), right - box)
+      if (x0 < px + 30 || x0 - last < 200) continue
       if (avoid && x0 + box > avoid.left && x0 < avoid.right && ty - 14 < avoid.bottom && ty + 18 > avoid.top) continue
       last = x0
       this.hits.push({ i, x0, x1: x0 + box, ty })

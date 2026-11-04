@@ -413,7 +413,7 @@ Queue and library balance meters use the timeline palette's `lo` / `mi` / `hi`.
 
 ### 6.2 Fisheye mapping (default)
 
-Rect `d` (the flow strip): desktop `x 0, y = H − min(420, .47 H), w = W, h = min(420, .47 H)`; phones (width < 760 px) `x 0, y .30 H, w W, h .26 H`. With `px = d.x + d.w · PH` (**PH = .08**, the playhead), `B = 14` s,
+Rect `d` (the flow strip): desktop `x 0, y = H − min(420, .47 H), w = W, h = min(420, .47 H)`; phones (width < 760 px) `x 0, y 60, w W, h .56 H − 144` (under the close button; the title sits in the 84 px below it, above the transport). With `px = d.x + d.w · PH` (**PH = .08**, the playhead), `B = 14` s,
 `H0 = 1500` s on desktop (900 s on phones) and a past horizon of 180 s:
 
 ```

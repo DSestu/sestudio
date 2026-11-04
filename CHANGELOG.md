@@ -1,5 +1,93 @@
 # Changelog
 
+## [1.10.0](https://github.com/DSestu/sestudio/compare/v1.9.0...v1.10.0) (2026-11-04)
+
+
+### New features
+
+* **android:** the app updates itself from GitHub Releases ([#293](https://github.com/DSestu/sestudio/issues/293)) ([3805a25](https://github.com/DSestu/sestudio/commit/3805a25865a2b684a73ddb7dcc03ee1906b21eb6))
+
+
+### Bug fixes
+
+* music key detection uses Deezer's S-KEY network (64 % exact on GiantSteps, was 13 %) ([#291](https://github.com/DSestu/sestudio/issues/291)) ([9680dee](https://github.com/DSestu/sestudio/commit/9680dee1aaece802339795817bac0d06374b8db1))
+* the music light leads the sound by 200 ms by default (220 was too early) ([#296](https://github.com/DSestu/sestudio/issues/296)) ([035a98c](https://github.com/DSestu/sestudio/commit/035a98ca4c702dabcaed29e97c2ea191888d41c1))
+* the music light peaks on the hit instead of trailing it ([#294](https://github.com/DSestu/sestudio/issues/294)) ([06f2362](https://github.com/DSestu/sestudio/commit/06f23627d27da32158da66eeeaeadf2fb52e677d))
+* the music sound delay holds still while it plays, so no more warbles or replays ([#295](https://github.com/DSestu/sestudio/issues/295)) ([6e3d3d8](https://github.com/DSestu/sestudio/commit/6e3d3d88517d77ed87df0880d0bbcaf0cb2d3014))
+
+## [1.9.0](https://github.com/DSestu/sestudio/compare/v1.8.0...v1.9.0) (2026-11-04)
+
+
+### New features
+
+* a lab flag and an empty music lab page for building the music player ([#249](https://github.com/DSestu/sestudio/issues/249)) ([dffe971](https://github.com/DSestu/sestudio/commit/dffe971431c5bd569b741af11c5e4179c4aac967))
+* a station spike renders the music player headless at 1080p and encodes it, with measured CPU and frame rate ([#267](https://github.com/DSestu/sestudio/issues/267)) ([2309f51](https://github.com/DSestu/sestudio/commit/2309f51671785140d99240d7315daf594f1b1d2b))
+* audio files in the downloads folder show up as music tracks with titles, artists and stable ids ([#250](https://github.com/DSestu/sestudio/issues/250)) ([0225782](https://github.com/DSestu/sestudio/commit/02257826b849bcb4c470d94cbc18aeb7ef4a853f))
+* behind the music timeline, a blurred live spectrum glows in the Abyss palette, brighter on the drops (lab) ([#260](https://github.com/DSestu/sestudio/issues/260)) ([2b9bb4e](https://github.com/DSestu/sestudio/commit/2b9bb4ee21ba0a8f6b49123ee449d6e00ffdefda))
+* casting music sends one continuous stream mixed on the server, with the player's picture rendered for the TV ([#269](https://github.com/DSestu/sestudio/issues/269)) ([cd727b2](https://github.com/DSestu/sestudio/commit/cd727b2e05cd5f1b6f20e7d71894ee72bcb48817))
+* Downloads and Music settings become grouped rows; ranked chips are numbered pills ([#282](https://github.com/DSestu/sestudio/issues/282)) ([2becf38](https://github.com/DSestu/sestudio/commit/2becf38f1906fb8a14756d6cf410fcbbeeb26ba9))
+* every music track is analysed once in the background for its bands, loudness, colour and tempo ([#253](https://github.com/DSestu/sestudio/issues/253)) ([092daa7](https://github.com/DSestu/sestudio/commit/092daa72789c016cfdd4d1d9815220201dc717ff))
+* music analysis also finds each track's key, genre, energy and structure (intro, buildup, drop, breakdown, outro) ([#258](https://github.com/DSestu/sestudio/issues/258)) ([177634a](https://github.com/DSestu/sestudio/commit/177634a839e130d5eeb10c11db2c50b3e2f2e8ec))
+* music can come from several libraries, including other folders, another sestudio server and a YouTube Music account ([#262](https://github.com/DSestu/sestudio/issues/262)) ([832a688](https://github.com/DSestu/sestudio/commit/832a6884173fe9fe6395e993daeb56a0c225f64b))
+* music casts to Chromecast and DLNA as one continuous stream, with TV volume control from the player ([#270](https://github.com/DSestu/sestudio/issues/270)) ([74fbe02](https://github.com/DSestu/sestudio/commit/74fbe02230cedba5f892cf1ba36f58d1d35c2b91))
+* music genres come from file tags and source metadata, then an offline Discogs model, before the old rules ([#274](https://github.com/DSestu/sestudio/issues/274)) ([d2254e7](https://github.com/DSestu/sestudio/commit/d2254e78ae7e69c75d5a9eb89b0acfd680f12828))
+* music libraries are picked from a folder browser, and the Android app adds the phone's Music and Download folders by itself ([#268](https://github.com/DSestu/sestudio/issues/268)) ([15cf9ab](https://github.com/DSestu/sestudio/commit/15cf9ab4eb0a64ce5c127827d5b0d7c05726cb41))
+* music playlists live in folders, can be split into parts as DJ sets, and smart lists fill themselves by genre and tempo ([#259](https://github.com/DSestu/sestudio/issues/259)) ([86fbd9d](https://github.com/DSestu/sestudio/commit/86fbd9d5da6aa5bdc42d1797227c579cdc620a55))
+* music plays in a full-screen player layer with a player bar on every page (lab) ([#255](https://github.com/DSestu/sestudio/issues/255)) ([3631590](https://github.com/DSestu/sestudio/commit/3631590383676121ba0885c9a7ddfa3e34598a88))
+* music search shows each source's results as soon as it answers ([#285](https://github.com/DSestu/sestudio/issues/285)) ([37e4d11](https://github.com/DSestu/sestudio/commit/37e4d1184036c2c21eaedaa102e9e5656b552e80))
+* music transitions can mix on the beat with tempo match and bass swap, and the Music tab is out of the lab ([#261](https://github.com/DSestu/sestudio/issues/261)) ([cb5c55a](https://github.com/DSestu/sestudio/commit/cb5c55a4227fef53674e4c2c40f4fda17a9f604b))
+* Playback and Subtitles settings become grouped rows with one line of help each ([#280](https://github.com/DSestu/sestudio/issues/280)) ([8cdff17](https://github.com/DSestu/sestudio/commit/8cdff178c1f0ad98d05a3bff7a42565df685d23f))
+* playlists open as DJ sets with a tempo and energy curve, auto-ordering, filling from the library, and mixes that avoid drops ([#265](https://github.com/DSestu/sestudio/issues/265)) ([4e25d3f](https://github.com/DSestu/sestudio/commit/4e25d3fd6d723942e00d636f7edc948187183041))
+* Server and Share settings become grouped rows ([#283](https://github.com/DSestu/sestudio/issues/283)) ([ffb672a](https://github.com/DSestu/sestudio/commit/ffb672a0fb28401861d62ee8ebcad4407d360dad))
+* Settings opens on a list of categories, each its own page; desktop lists them beside the page ([#279](https://github.com/DSestu/sestudio/issues/279)) ([320afc6](https://github.com/DSestu/sestudio/commit/320afc68ece8f4d7709cae37752e462a519fd868))
+* Settings' list says what each category is set to, and flags what needs fixing ([#284](https://github.com/DSestu/sestudio/issues/284)) ([4ab765b](https://github.com/DSestu/sestudio/commit/4ab765b5c2b823943d305bba3731856cdad62fa4))
+* Sources & search and Notifications settings become grouped rows ([#281](https://github.com/DSestu/sestudio/issues/281)) ([82d7fde](https://github.com/DSestu/sestudio/commit/82d7fde92fcb88fbe8e8e0384a1ce56873e73cbe))
+* the lab Music tab lists albums, artists and tracks from the library and plays them into the queue ([#254](https://github.com/DSestu/sestudio/issues/254)) ([4ed51fa](https://github.com/DSestu/sestudio/commit/4ed51faa91ef4d77e0dec84eb781723c95e16e3e))
+* the music background follows the track's energy (the Drive look, now the default) ([#287](https://github.com/DSestu/sestudio/issues/287)) ([0762ac2](https://github.com/DSestu/sestudio/commit/0762ac29a9431e7150d34831e986903d3c1ec957))
+* the music player draws the whole queue as one continuous bass, mids and highs timeline (lab) ([#257](https://github.com/DSestu/sestudio/issues/257)) ([337a0c1](https://github.com/DSestu/sestudio/commit/337a0c1c70e283d914134ed347e58262e85f1cc3))
+* the music player pins its queue into an expanded stage view with one continuous 620 ms motion ([#266](https://github.com/DSestu/sestudio/issues/266)) ([8a2d95d](https://github.com/DSestu/sestudio/commit/8a2d95d75099755bd1067f485f2f9e30febcbab5))
+* the music queue lives on the server and pushes every change to all screens ([#252](https://github.com/DSestu/sestudio/issues/252)) ([90598e2](https://github.com/DSestu/sestudio/commit/90598e2997266e4fe77688757d10727d54f08c1d))
+* the music search looks through your library, YouTube Music, YouTube and SoundCloud at once, or one source at a time ([#264](https://github.com/DSestu/sestudio/issues/264)) ([1c9e1f3](https://github.com/DSestu/sestudio/commit/1c9e1f301eb2d4fda08f0b70abe2b874eb97f022))
+* the music timeline glides when a transition changes and follows the seek bar, and the player gets a volume slider ([#290](https://github.com/DSestu/sestudio/issues/290)) ([91463c8](https://github.com/DSestu/sestudio/commit/91463c8f348124449e52b5c2309145943422f859))
+* the music timeline scrubs and glides, the queue animates every add, remove and reorder, and an add panel finds tracks ([#263](https://github.com/DSestu/sestudio/issues/263)) ([b43d744](https://github.com/DSestu/sestudio/commit/b43d744928eec9a67a4899641a0329e0796ac3c5))
+* with the lab flag on, the nav gains a Music tab and Activity moves to a bell in the top card ([#251](https://github.com/DSestu/sestudio/issues/251)) ([a45a423](https://github.com/DSestu/sestudio/commit/a45a423059f3c7c0d56ab839e62459f8c2394b13))
+* YouTube and YouTube Music links play as music, download as audio only, and playlists fill the queue ([#256](https://github.com/DSestu/sestudio/issues/256)) ([c57194a](https://github.com/DSestu/sestudio/commit/c57194a2c82bc82a7cb6fd82498da60ea5f96312))
+
+
+### Bug fixes
+
+* a video that cannot be looked up is asked for once, not on every route and retry ([#242](https://github.com/DSestu/sestudio/issues/242)) ([8c612d6](https://github.com/DSestu/sestudio/commit/8c612d670f3227c21e80640048ce8e545c3d42bf))
+* **android:** setup requires notifications and all files access, so the server sees the phone's real folders ([#289](https://github.com/DSestu/sestudio/issues/289)) ([423830e](https://github.com/DSestu/sestudio/commit/423830eb28adbee37846036d215fe00d87a3cd43))
+* on phones the search header leaves with the top card when scrolling down, instead of leaving a gap above it ([#244](https://github.com/DSestu/sestudio/issues/244)) ([db2aa42](https://github.com/DSestu/sestudio/commit/db2aa4233cfb7130b098af8237d41e56b5e00551))
+* the bass under the timeline is a sharp spline like the mids and highs, with no blur pass ([#277](https://github.com/DSestu/sestudio/issues/277)) ([635ff39](https://github.com/DSestu/sestudio/commit/635ff397c27ea1d36868acb4ad7a4208572bd120))
+* the bass under the timeline is blurred smooth again instead of drawn in 4 px steps ([#276](https://github.com/DSestu/sestudio/issues/276)) ([4d7162b](https://github.com/DSestu/sestudio/commit/4d7162b8ce98b0d67f8fc27e4649dac535978f9e))
+* the built app carries the genre tooltips and the Settings toggle of the genre model ([#275](https://github.com/DSestu/sestudio/issues/275)) ([f124a70](https://github.com/DSestu/sestudio/commit/f124a709e6dfa5c2d72acf636da5ff6179e33401))
+* the music background follows every display frame again, so hits land with the punch it was tuned for ([#273](https://github.com/DSestu/sestudio/issues/273)) ([3d558ae](https://github.com/DSestu/sestudio/commit/3d558ae36c917076f40f2d0c2570f9fa48ff5a3e))
+* the music page keeps you where you are: Back closes the player, a tap plays without taking over, albums and artists get their own pages ([#286](https://github.com/DSestu/sestudio/issues/286)) ([bab2142](https://github.com/DSestu/sestudio/commit/bab21429fdc32d3ee34606bacb8712d2f0fdf83c))
+* the music player matches the prototype again and draws with far less CPU ([#272](https://github.com/DSestu/sestudio/issues/272)) ([c3be89f](https://github.com/DSestu/sestudio/commit/c3be89f5513fe15b01649b2bbe0071c67b5441cd))
+
+
+### Miscellaneous Chores
+
+* the start scripts rebuild the frontend before serving ([#278](https://github.com/DSestu/sestudio/issues/278)) ([6df1fa5](https://github.com/DSestu/sestudio/commit/6df1fa5dfcddbbd1c523cffab0b3a0e072a3054f))
+
+
+### Documentation
+
+* spec for music as a media kind, with the stage, the queue and a TV station that crossfades tracks in one stream ([#245](https://github.com/DSestu/sestudio/issues/245)) ([5726532](https://github.com/DSestu/sestudio/commit/5726532549dbaabea7e5ead9efca1762742f5b50))
+* the music audio prototype and its data scripts live in docs/proto/music ([#248](https://github.com/DSestu/sestudio/issues/248)) ([fe8b11f](https://github.com/DSestu/sestudio/commit/fe8b11f1249ff9dc1dfeff9a5e18c3d36f88e34c))
+* the music player spec now matches the audio prototype, with a 22-PR implementation plan ([#247](https://github.com/DSestu/sestudio/issues/247)) ([8db4453](https://github.com/DSestu/sestudio/commit/8db4453be806a7d967a732436d22fabaa8671c79))
+
+
+### Performance improvements
+
+* music analysis decodes each file once for its 8 bands (about 5x faster) ([#288](https://github.com/DSestu/sestudio/issues/288)) ([4278878](https://github.com/DSestu/sestudio/commit/427887801dd96e863170e265701a78cb90e9320b))
+
+
+### Test improvements
+
+* the station test probes its captured stream from a file and says why when ffmpeg finds no streams ([#271](https://github.com/DSestu/sestudio/issues/271)) ([6d58b77](https://github.com/DSestu/sestudio/commit/6d58b772207dd7cbda0f6e1ac567cc377902957f))
+
 ## [1.8.0](https://github.com/DSestu/sestudio/compare/v1.7.0...v1.8.0) (2026-11-02)
 
 

@@ -15,7 +15,7 @@ function BeatDot({ bpm, bar0, duration }: { bpm: number; bar0: number; duration:
       // Paused: one frame to dim it, then nothing moves.
       if (playing) id = requestAnimationFrame(frame)
       const q = getQueue()
-      const ph = (positionNow(q, clockSkew(), Date.now(), duration || Infinity) - bar0) / (60 / bpm)
+      const ph = (positionNow(q, clockSkew(), Date.now(), duration || Infinity) - engine.lag - bar0) / (60 / bpm)
       const fr = ph - Math.floor(ph)
       const on = q.playing
       const flash = Math.pow(1 - fr, 3)
@@ -50,7 +50,7 @@ export default function Title({ info, analysis }: { info?: TrackInfo; analysis: 
         )}
         {key && <span className="shrink-0 tabular-nums">{key}</span>}
       </div>
-      <h2 className="mt-1 truncate font-bold leading-[.95] tracking-[-.04em] text-[clamp(2.25rem,8vw,6rem)] pb-1">
+      <h2 className="mt-1 truncate font-bold leading-[.95] tracking-[-.04em] text-[clamp(2.25rem,8vw,6rem)] short:text-[32px] pb-1">
         {info?.title ?? ''}
       </h2>
     </div>

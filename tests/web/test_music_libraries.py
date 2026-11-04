@@ -332,3 +332,38 @@ def test_ytmusic_lists_likes_as_online_items(env, tmp_path, monkeypatch):
     assert track["library"] == "online" and track["crate"] == yt["id"]
     assert track["source"] == "ytmusic" and track["id"] == "yt:dQw4w9WgXcQ"
     assert "--cookies" in seen[0] and str(cookies) in seen[0]
+
+
+def test_reanalyse_one_library_or_all(env, monkeypatch):
+    """Stamps go stale so the runner redoes the files; a genre the user set survives."""
+    import numpy as np
+
+    from sestudio.music import analysis, runner, store
+
+    c, nas = env
+    kicks = []
+    monkeypatch.setattr(runner, "kick", kicks.append)
+    folder = add_folder(c, nas)
+    files = {
+        lib: downloaded.audio_files(root, lib) for lib, root in libraries.folder_roots()
+    }
+    raw = analysis.RawAnalysis(
+        1.0, np.zeros((8, 10)), np.zeros(10), 0.1, None, None, None, None
+    )
+    for f in [*files["local"], *files[folder["id"]]]:
+        store.save(f.track_id, f.mtime, f.size, raw)
+    mine = files[folder["id"]][0].track_id
+    store.set_genre(mine, "Neurofunk")
+
+    kicks.clear()
+    r = c.post(f"/api/music/libraries/{folder['id']}/reanalyse")
+    assert r.json() == {"tracks": 2} and len(kicks) == 1
+    stale = {t for t, (mtime, _) in store.stamps().items() if mtime == -1}
+    assert stale == {f.track_id for f in files[folder["id"]]}
+    store.save(mine, 1.0, 1, raw)  # the runner's fresh analysis
+    assert store.get([mine])[mine]["genre"] == "Neurofunk"
+
+    assert c.post("/api/music/libraries/reanalyse").json() == {"tracks": 3}
+    assert all(mtime == -1 for t, (mtime, _) in store.stamps().items() if t != mine)
+    remote = add_remote(c)
+    assert c.post(f"/api/music/libraries/{remote['id']}/reanalyse").status_code == 400

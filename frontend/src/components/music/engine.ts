@@ -3,6 +3,7 @@ import { clockSkew, positionNow, type QueueItem, type QueueState, type TrackInfo
 import { planBetween } from './mix/analysis'
 import { lockPhase } from './mix/lock'
 import type { Plan } from './timeline/sampling'
+import { TV } from './tv'
 
 // The audio graph and blend rules of SPEC-music-player §9. The queue on the
 // server is the source of truth: this engine only follows its state.
@@ -50,11 +51,27 @@ const TAB_ID = Math.random().toString(36).slice(2)
 export function claimSound() {
   localStorage.setItem(SOUND_KEY, TAB_ID)
 }
-export const isSoundTab = () => !onTv && localStorage.getItem(SOUND_KEY) === TAB_ID
+// The TV page plays too, unheard (its browser is muted): the light needs an analyser to read.
+export const isSoundTab = () => TV || (!onTv && localStorage.getItem(SOUND_KEY) === TAB_ID)
 
 // While the queue plays on a TV the sound is the TV's only.
 let onTv = false
 export const setSoundOnTv = (v: boolean) => { onTv = v }
+
+// --- this device's volume ------------------------------------------------------
+
+const VOL_KEY = 'music.volume'
+/** 0..100 and mute, kept per device; the gain is (level / 100)², a perceptual curve (as the TV's). */
+let vol = { level: Math.max(0, Math.min(100, Number(localStorage.getItem(VOL_KEY) ?? 100) || 0)), muted: false }
+const volListeners = new Set<() => void>()
+const gainOf = () => (vol.muted ? 0 : (vol.level / 100) ** 2)
+export const useVolume = () => useSyncExternalStore(l => { volListeners.add(l); return () => volListeners.delete(l) }, () => vol)
+export function setVolume(next: Partial<typeof vol>) {
+  vol = { ...vol, ...next }
+  localStorage.setItem(VOL_KEY, String(vol.level))
+  engine.applyVolume()
+  volListeners.forEach(l => l())
+}
 
 // --- the engine --------------------------------------------------------------
 
@@ -95,6 +112,8 @@ class AudioEngine {
   private master!: GainNode
   private volume!: GainNode
   analyser: AnalyserNode | null = null
+  private delay: DelayNode | null = null
+  private leadWant: number | null = null
   private act = 0
   private cur: string | null = null
   private fade: Fade | null = null
@@ -108,6 +127,11 @@ class AudioEngine {
   /** Tells the server where the sound really is, after tempo changes moved it off the clock. */
   onResync: (position: number) => void = () => {}
 
+  /** Follow `setVolume`, smoothed over ~30 ms so a drag does not crackle. */
+  applyVolume() {
+    if (this.ctx) this.volume.gain.setTargetAtTime(gainOf(), this.ctx.currentTime, 0.01)
+  }
+
   /** Create the graph. Call it from the user's press: browsers start audio only then. */
   unlock() {
     if (!this.ctx) {
@@ -117,8 +141,12 @@ class AudioEngine {
       this.analyser.fftSize = 4096
       this.analyser.smoothingTimeConstant = 0.55
       this.volume = ctx.createGain()
+      this.volume.gain.value = gainOf()
+      this.delay = ctx.createDelay(0.5)
+      this.delay.delayTime.value = 0.08
       this.master.connect(this.analyser)
-      this.analyser.connect(this.volume) // before the volume, so the visuals ignore it
+      this.analyser.connect(this.delay) // before the volume, so the visuals ignore it
+      this.delay.connect(this.volume)
       this.volume.connect(ctx.destination)
       for (let i = 0; i < 2; i++) {
         const el = new Audio()
@@ -155,6 +183,26 @@ class AudioEngine {
   /** Report the sound's real position to the server. */
   resync() {
     if (isSoundTab() && this.queue?.playing) this.onResync(this.landed)
+  }
+
+  /** How long the sound waits behind the analyser, seconds: the visuals' lookahead. */
+  get lead() {
+    return this.delay?.delayTime.value ?? 0
+  }
+
+  /** How far the sound heard on this tab trails the queue clock, seconds. */
+  get lag() {
+    return isSoundTab() ? this.lead : 0
+  }
+
+  /** Moved only when the asked value changes: gliding the delay bends the pitch while it plays, so it jumps when nothing plays. */
+  setLead(s: number) {
+    const v = Math.max(0, Math.min(0.45, s))
+    if (!this.delay || Math.abs(v - (this.leadWant ?? NaN)) < 0.001) return
+    const t = this.ctx!.currentTime
+    if (this.leadWant === null || this.els[this.act].paused) this.delay.delayTime.setValueAtTime(v, t)
+    else this.delay.delayTime.setTargetAtTime(v, t, 0.05)
+    this.leadWant = v
   }
 
   /** Seconds into the playing element. */

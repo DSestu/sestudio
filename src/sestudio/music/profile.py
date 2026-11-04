@@ -1,8 +1,9 @@
 """Analysis v2 (SPEC-music §11, PR 20): key, energy, structure and genre.
 
-DSP heuristics only, numpy only. Key comes from a chroma of the 11 kHz signal;
-energy, structure and genre are derived from the v1 envelopes and tempo, so they
-can be redone from the stored row without decoding. Known limits: SPEC-music §9.
+numpy only. The key comes from the S-KEY network (:mod:`sestudio.music.keynet`)
+on the 11 kHz signal; energy, structure and genre are derived from the v1
+envelopes and tempo, so they can be redone from the stored row without decoding.
+Known limits: SPEC-music §9.
 """
 
 from __future__ import annotations
@@ -12,39 +13,13 @@ from typing import Any
 import numpy as np
 
 #: Bump to have every stored track re-profiled.
-VERSION = 1
+VERSION = 2
 
 NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
-# Krumhansl-Kessler key profiles (tonic first).
-MAJOR = np.array(
-    [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
-)
-MINOR = np.array(
-    [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
-)
-
-CHROMA_N = 8192  # 1.35 Hz bins at 11025 Hz: a semitone is ~3.5 Hz at 60 Hz
 MIN_BARS = 8
 GRID = 4  # boundaries sit on multiples of this many bars
 MIN_SEGMENT = 8
 NOVELTY = 0.15
-
-
-def chroma(x: np.ndarray, rate: int) -> np.ndarray:
-    """Mean 12-bin pitch-class profile: spectral peaks 60 Hz-5 kHz, log-weighted."""
-    freqs = np.fft.rfftfreq(CHROMA_N, 1 / rate)
-    keep = np.flatnonzero((freqs >= 60) & (freqs <= 5000))
-    pc = (np.rint(12 * np.log2(freqs[keep] / 440)).astype(int) + 9) % 12
-    win = np.hanning(CHROMA_N)
-    total = np.zeros(12)
-    for s in range(0, len(x) - CHROMA_N, CHROMA_N // 2):
-        mag = np.abs(np.fft.rfft(x[s : s + CHROMA_N] * win))[keep]
-        peak = (mag[1:-1] > mag[:-2]) & (mag[1:-1] >= mag[2:])
-        w = np.zeros_like(mag)
-        w[1:-1] = np.log1p(100 * mag[1:-1]) * peak
-        c = np.bincount(pc, w, 12)
-        total += c / (c.sum() or 1)
-    return total / max(total.sum(), 1e-9)
 
 
 def camelot(pc: int, minor: bool) -> str:
@@ -52,20 +27,15 @@ def camelot(pc: int, minor: bool) -> str:
     return f"{num}{'A' if minor else 'B'}"
 
 
-def key_of(prof: np.ndarray) -> dict[str, Any] | None:
-    """Best of the 24 rotations of the K-K profiles; confidence = margin to the runner-up."""
-    if prof.sum() <= 0:
-        return None
-    scores = sorted(
-        (float(np.corrcoef(prof, np.roll(ref, pc))[0, 1]), pc, minor)
-        for minor, ref in ((False, MAJOR), (True, MINOR))
-        for pc in range(12)
-    )[::-1]
-    (best, pc, minor), second = scores[0], scores[1][0]
+def key_fields(pc: int, minor: bool, p: float) -> dict[str, Any]:
+    """Key name, Camelot code, and S-KEY's top probability as the confidence.
+
+    On GiantSteps it reads as is: under .32 the key is right 26 % of the time, .48-.73 64 %, over .83 80 %.
+    """
     return {
         "key": f"{NAMES[pc]} {'minor' if minor else 'major'}",
         "camelot": camelot(pc, minor),
-        "keyConf": round(float(np.clip((best - second) / 0.15, 0, 1)), 2),
+        "keyConf": round(p, 2),
     }
 
 
@@ -177,16 +147,16 @@ def genre(
 
 
 def profile(
-    prof: np.ndarray | None,
+    key: tuple[int, bool, float] | None,
     bands: np.ndarray,
     loud: np.ndarray,
     bpm: float | None,
     bar0: float | None,
 ) -> dict[str, Any]:
-    """Everything v2 puts in ``extra``; the chroma is kept so the key can be redone without decoding."""
+    """Everything v2 puts in ``extra``; *key* is :func:`sestudio.music.keynet.key`'s answer."""
     out: dict[str, Any] = {"v2": VERSION}
-    if prof is not None and (k := key_of(prof)):
-        out |= k | {"chroma": [round(float(v), 4) for v in prof]}
+    if key is not None:
+        out |= key_fields(*key)
     en: np.ndarray = np.zeros(0)
     groups = np.zeros((3, 0))
     if bpm and bar0 is not None:

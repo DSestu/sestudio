@@ -47,6 +47,17 @@ interface Drag {
   seekAt: number
 }
 
+/** The seek bar's drag, in the playing track's seconds; t0 is the release time (0 while dragging). */
+export const bar = { pos: null as number | null, t0: 0 }
+/** Where the seek bar holds the playing track, so the timeline follows a drag; null when it does not. */
+export function barPos(now: number): number | null {
+  if (bar.pos === null) return null
+  if (!bar.t0) return bar.pos
+  // Held after the release until the server's own position has caught up.
+  if (now - bar.t0 > 400) { bar.pos = null; return null }
+  return bar.pos + (getQueue().playing ? (now - bar.t0) / 1000 : 0)
+}
+
 let current: Scrubber | null = null
 /** The timeline that is up, so a row click can glide it. */
 export const registerScrubber = (s: Scrubber | null) => { current = s }

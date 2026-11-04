@@ -77,6 +77,20 @@ def remove_library(library_id: str) -> dict[str, bool]:
     return {"ok": True}
 
 
+@router.post("/libraries/reanalyse")
+def reanalyse_all() -> dict[str, int]:
+    """Analyse every file of every library on this machine again (key, tempo, genre…)."""
+    return {"tracks": runner.reanalyse(None, load_config().output_root)}
+
+
+@router.post("/libraries/{library_id}/reanalyse")
+def reanalyse_library(library_id: str) -> dict[str, int]:
+    lib = _run(libraries.get, library_id)
+    if lib["kind"] not in (libraries.LOCAL, libraries.FOLDER):
+        raise HTTPException(400, "Only folders on this server are analysed here")
+    return {"tracks": runner.reanalyse(library_id, load_config().output_root)}
+
+
 @router.get("/folders")
 def browse_folders(path: str = "") -> dict:
     """Subfolders of *path* for the library picker; with no path, the suggested starting points."""
