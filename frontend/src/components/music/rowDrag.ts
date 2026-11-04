@@ -16,6 +16,8 @@ export interface DragSource {
   cur: () => number
   /** Where the row was dropped (0..n, a queue boundary). */
   onDrop: (at: number) => void
+  /** A queue row that can leave: a mouse dropping it outside the queue removes it. */
+  onRemove?: () => void
 }
 
 interface Active {
@@ -26,6 +28,10 @@ interface Active {
   dy: number
   pointer: number
   at: number | null
+  /** The ghost follows the pointer sideways too: a library row, or a removable row under a mouse. */
+  free: boolean
+  /** Out of the queue with a removable row: a release removes it. */
+  out: boolean
 }
 interface Pending {
   src: DragSource
@@ -61,11 +67,31 @@ function showLine(at: number | null) {
   line.style.top = `${ref - 1}px`
 }
 
+/** Out of the queue, the ghost and the queue edge turn red and say a release removes the row. */
+function setOut(a: Active, out: boolean) {
+  if (a.out === out) return
+  a.out = out
+  document.querySelectorAll('[data-removering], [data-removechip]').forEach(el => el.remove())
+  // A played row's ghost is dimmed like the row; the chip sits above the ghost's edge.
+  Object.assign(a.ghost.style, { opacity: out ? '1' : '', overflow: out ? 'visible' : '', outline: out ? '1.5px solid var(--color-error)' : '' })
+  a.ghost.style.setProperty('--rowbg', out ? 'color-mix(in oklch, var(--color-error) 28%, hsl(205 42% 12%))' : '')
+  if (!out) return
+  const ring = document.createElement('span')
+  ring.dataset.removering = ''
+  ring.className = 'pointer-events-none absolute inset-0 z-20 rounded-[inherit] ring-2 ring-inset ring-error'
+  queueEl()?.append(ring)
+  const chip = document.createElement('span')
+  chip.dataset.removechip = ''
+  chip.className = 'absolute -top-3 left-3 z-10 rounded-full bg-error px-2.5 py-0.5 text-[11px] font-bold text-error-content shadow'
+  chip.textContent = 'Release to remove'
+  a.ghost.append(chip)
+}
+
 function moveTo(e: PointerEvent) {
   const a = active
   if (!a) return
   a.ghost.style.top = `${e.clientY - a.dy}px`
-  if (a.src.from === null) a.ghost.style.left = `${e.clientX - a.dx}px`
+  if (a.free) a.ghost.style.left = `${e.clientX - a.dx}px`
   // The phone's Library page: dropped on the Queue tab, a track goes last.
   const tab = document.querySelector<HTMLElement>('[data-droptab]')
   const tr = a.src.from === null ? tab?.parentElement?.getBoundingClientRect() : undefined
@@ -79,12 +105,14 @@ function moveTo(e: PointerEvent) {
   const q = queueEl()?.getBoundingClientRect()
   const list = listEl()
   if (!q || !list || e.clientX < q.left || e.clientX > q.right || e.clientY < q.top - 20 || e.clientY > q.bottom + 20) {
+    setOut(a, a.free && !!a.src.onRemove)
     showLine(null)
     const j = a.src.from === null ? joinNear(joins.list, joins.band, e.clientX, e.clientY) : null
     a.at = j?.at ?? null
     if (joins.slot !== a.at) { joins.slot = a.at; wake() }
     return
   }
+  setOut(a, false)
   if (joins.slot !== null) { joins.slot = null; wake() }
   if (e.clientY < q.top + 50) list.scrollTop -= 8
   else if (e.clientY > q.bottom - 40) list.scrollTop += 8
@@ -98,7 +126,9 @@ function end(cancel: boolean) {
   if (!a) return
   active = null
   endedAt = performance.now()
-  lastDrop.top = cancel ? null : a.ghost.getBoundingClientRect().top
+  const out = a.out
+  setOut(a, false)
+  lastDrop.top = cancel || out ? null : a.ghost.getBoundingClientRect().top
   lastDrop.at = endedAt
   a.ghost.remove()
   a.row.style.opacity = ''
@@ -115,6 +145,7 @@ function end(cancel: boolean) {
   window.removeEventListener('pointercancel', onCancel)
   window.removeEventListener('keydown', onKey, true)
   window.removeEventListener('contextmenu', stopMenu)
+  if (!cancel && out) return a.src.onRemove?.()
   if (cancel || a.at === null) return
   if (a.src.from !== null && !isMove(a.src.from, a.at)) return
   a.src.onDrop(a.at)
@@ -131,7 +162,7 @@ const onKey = (e: KeyboardEvent) => {
   end(true)
 }
 
-function lift(row: HTMLElement, src: DragSource, x: number, y: number, pointer: number) {
+function lift(row: HTMLElement, src: DragSource, x: number, y: number, pointer: number, mouse: boolean) {
   const r = row.getBoundingClientRect()
   const ghost = row.cloneNode(true) as HTMLElement
   ghost.removeAttribute('data-item')
@@ -146,7 +177,7 @@ function lift(row: HTMLElement, src: DragSource, x: number, y: number, pointer: 
   // The phone's crate sheet steps aside so the queue and the timeline under it can take the drop.
   if (src.from === null) document.documentElement.dataset.libdrag = '1'
   wake()
-  active = { src, row, ghost, dx: x - r.left, dy: y - r.top, pointer, at: null }
+  active = { src, row, ghost, dx: x - r.left, dy: y - r.top, pointer, at: null, free: src.from === null || (mouse && !!src.onRemove), out: false }
   document.addEventListener('touchmove', stopScroll, { passive: false })
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -161,7 +192,7 @@ export function gripRowDrag(e: ReactPointerEvent, src: DragSource) {
   if (!row || active) return
   e.preventDefault()
   e.stopPropagation()
-  lift(row, src, e.clientX, e.clientY, e.pointerId)
+  lift(row, src, e.clientX, e.clientY, e.pointerId, e.pointerType === 'mouse')
 }
 
 /** A swipe took the touch: it is not a hold any more. */
@@ -180,7 +211,7 @@ function liftPending(e?: PointerEvent) {
   const p = pending
   if (!p) return
   unarm()
-  lift(p.row, p.src, p.x, p.y, p.pointer)
+  lift(p.row, p.src, p.x, p.y, p.pointer, !p.touch)
   if (e) moveTo(e)
 }
 

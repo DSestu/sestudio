@@ -48,6 +48,8 @@ function Row({ item, info, playing, source, leaving, tv }: RowProps) {
 
   const go = () => { if (!playing && !justDragged() && !justSwiped()) playItem(item.item_id) }
   const title = info?.title ?? 'the track'
+  const remove = tv || playing ? undefined : () => removeItem(item, title)
+  const src = remove ? { ...source, onRemove: remove } : source
   return (
     <div
       ref={el}
@@ -58,10 +60,10 @@ function Row({ item, info, playing, source, leaving, tv }: RowProps) {
       aria-current={playing || undefined}
       className={`group relative overflow-hidden cursor-pointer select-none touch-pan-y transition-opacity duration-[350ms] data-[played=1]:opacity-[.42] ${leaving ? 'pointer-events-none' : ''}`}
       onClick={go}
-      onKeyDown={e => { if (e.key === 'Enter') go() }}
+      onKeyDown={e => { if (e.key === 'Enter') go(); else if (e.key === 'Delete' || e.key === 'Backspace') remove?.() }}
       onPointerDown={leaving ? undefined : e => {
-        armRowDrag(e, source)
-        if (!tv && !playing) armSwipe(e, { left: { label: 'Remove', tone: 'error', act: () => removeItem(item, title) } })
+        armRowDrag(e, src)
+        if (remove) armSwipe(e, { left: { label: 'Remove', tone: 'error', act: remove } })
       }}
     >
       <div data-fg className="relative flex items-center gap-2.5 px-3 py-[7px] text-[13px] group-hover:bg-white/5" style={{ background: 'var(--rowbg)' }}>
@@ -72,7 +74,7 @@ function Row({ item, info, playing, source, leaving, tv }: RowProps) {
           aria-label="Drag to reorder"
           data-grip
           className="relative flex shrink-0 px-0.5 py-1 text-base-content/30 hover:text-base-content cursor-grab touch-none"
-          onPointerDown={e => gripRowDrag(e, source)}
+          onPointerDown={e => gripRowDrag(e, src)}
           onClick={e => e.stopPropagation()}
         >
           <svg className="size-3.5" viewBox="0 0 14 14" fill="currentColor">
@@ -83,22 +85,11 @@ function Row({ item, info, playing, source, leaving, tv }: RowProps) {
           <b className="block truncate font-medium" style={{ color: 'color-mix(in oklch, white calc(var(--hl, 0) * 100%), currentColor)' }}>{info?.title ?? '…'}</b>
           <span className="block truncate text-[11px] text-base-content/52">
             {info?.artist}
-            {metaLine(analysis) && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{metaLine(analysis)}</em>}
+            {metaLine(analysis) && <em className={`not-italic ${info?.artist ? 'ml-[7px]' : ''} opacity-55 tabular-nums`}>{metaLine(analysis)}</em>}
           </span>
         </div>
         {analysis?.balance && <Meter balance={analysis.balance} />}
         <span className="relative w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{info?.duration ? fmtTime(info.duration) : ''}</span>
-        {tv ? null : playing ? (
-          <span className="size-8" />
-        ) : (
-          <button
-            aria-label="Remove from the queue"
-            className="relative size-8 rounded-[9px] grid place-items-center text-lg text-base-content/40 hover:bg-white/8 hover:text-base-content opacity-60 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
-            onClick={e => { e.stopPropagation(); removeItem(item, title) }}
-          >
-            ×
-          </button>
-        )}
       </div>
     </div>
   )

@@ -86,8 +86,9 @@ export default function MixPopover({ a, b, plan, settings, defaultMix, sync, x, 
       data-mix-popover
       role="dialog"
       aria-label="Transition"
-      className="fixed z-10 w-74 p-3 rounded-[14px] glass text-xs flex flex-col gap-2.5 overflow-y-auto"
-      style={{ left: Math.max(8, Math.min(window.innerWidth - 312, x)), bottom: window.innerHeight - above + 8, maxHeight: above - 16 }}
+      className="fixed z-30 w-74 p-3 rounded-[14px] glass text-xs flex flex-col gap-2.5 overflow-y-auto"
+      // Above the queue sheet and the drop marks (z-20), opaque enough that queue rows don't read through.
+      style={{ background: 'hsl(205 62% 12% / 0.97)', left:Math.max(8, Math.min(window.innerWidth - 312, x)), bottom: window.innerHeight - above + 8, maxHeight: above - 16 }}
     >
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 truncate text-[13px] font-semibold">{a.title} → {b.title}</div>

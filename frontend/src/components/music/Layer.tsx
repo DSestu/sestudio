@@ -126,7 +126,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     const { clip: c, title, transport, queue: b } = f
     skyEl.current!.style.clipPath = `inset(${c.y}px ${W - c.x - c.w}px ${H - c.y - c.h}px ${c.x}px round ${c.r}px)`
     const te = titleEl.current!.style
-    te.width = `${titleWidth(W, H, title.x)}px`
+    te.width = `${titleWidth(W, H, title.x, t)}px`
     te.transform = `translate(${title.x}px, ${title.y}px) scale(${title.scale})`
     const tr = transportEl.current!.style
     tr.width = `${transport.w}px`
@@ -391,7 +391,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       role="dialog"
       aria-label="Music player"
       aria-modal={!tv || undefined}
-      className={`music-layer fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content ${tv ? 'pointer-events-none cursor-none select-none' : ''}`}
+      className={`music-layer fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content select-none ${tv ? 'pointer-events-none cursor-none' : ''}`}
       // Swipe down closes it on a phone, except from inside the queue (which scrolls).
       onTouchStart={e => { touch.current = (e.target as HTMLElement).closest('[data-queue], [data-addp]') ? null : e.touches[0].clientY }}
       onTouchEnd={e => {

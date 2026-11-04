@@ -90,13 +90,18 @@ function mix<T extends Record<string, number>>(p: T, q: T, t: number): T {
   return Object.fromEntries(Object.keys(p).map(k => [k, lerp(p[k], q[k], t)])) as T
 }
 
+/** The default view's queue width on desktop: 1.5 × 350, narrower when the window leaves less room beside the transport (136 + 420). */
+const queueW = (W: number) => Math.max(350, Math.min(525, W - 590))
+
 /** The title's box width, before its scale. */
-export function titleWidth(W: number, H: number, x: number): number {
+export function titleWidth(W: number, H: number, x: number, t: number): number {
   if (isShort(W, H)) return shortCols(W).l - x
   if (isPhone(W)) return W - 44
   // With the library column open the stage is narrower: the title (at scale .73) stays inside it.
+  // It stops 14 px short of the queue: the wide one of the default view, the narrower one expanded.
+  const free = lerp(W - 170 - queueW(W), W - 520, t)
   const { e } = rects(W, H)
-  return stageShift() ? Math.min(W - 520, (e.x + e.w - 16 - x) / 0.73) : W - 520
+  return stageShift() ? Math.min(free, (e.x + e.w - 16 - x) / 0.73) : free
 }
 
 /** Where every part sits at progress `t`, for a viewport of W by H. */
@@ -136,7 +141,7 @@ export function frameAt(W: number, H: number, t: number): Frame {
         {
           title: { x: 136, y: 118, scale: 1 },
           transport: { x: 136, y: 250, w: 420 },
-          queue: { x: W - 370, y: 72, w: 350, h: 430, r: 16 },
+          queue: { x: W - 20 - queueW(W), y: 72, w: queueW(W), h: 430, r: 16 },
         },
         {
           title: { x: 154, y: 116, scale: 0.73 },

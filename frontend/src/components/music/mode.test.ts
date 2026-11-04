@@ -44,7 +44,7 @@ describe('frameAt', () => {
     const { e } = rects(W, H)
     const f0 = frameAt(W, H, 0)
     expect(f0.clip).toEqual({ x: 0, y: 0, w: W, h: H, r: 0 })
-    expect(f0.queue).toEqual({ x: 910, y: 72, w: 350, h: 430, r: 16 })
+    expect(f0.queue).toEqual({ x: 735, y: 72, w: 525, h: 430, r: 16 })
     const f1 = frameAt(W, H, 1)
     expect(f1.clip).toEqual({ x: e.x, y: e.y, w: e.w, h: e.h, r: 12 })
     expect(f1.title).toEqual({ x: 154, y: 116, scale: 0.73 })
@@ -54,7 +54,7 @@ describe('frameAt', () => {
 
   it('interpolates halfway, and uses the phone numbers on a phone', () => {
     const half = frameAt(1280, 800, 0.5)
-    expect(half.queue.x).toBe(905)
+    expect(half.queue.x).toBe(817.5)
     expect(half.title.scale).toBeCloseTo(0.865, 6)
     expect(frameAt(390, 844, 1).title.scale).toBe(0.7)
   })

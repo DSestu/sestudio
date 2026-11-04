@@ -157,13 +157,14 @@ Padding 7 px 12 px; gap 10 px; font 13 px; no radius on the row. Left to right:
    `max(3, value × 30)` px for the track's mean **bass, mids, highs** (§6.1); colours the **timeline palette's**
    `lo`, `mi`, `hi` (§5.9), each with `box-shadow: 0 0 6px <colour at .8>`. Tooltip "Bass, mids, highs". Shown on every row.
 4. **Duration** `m:ss`, 11 px, 42 % text, 30 px wide, right-aligned.
-5. **Remove ×** (22 px, radius 7, 16 px glyph, 40 % text): invisible until the row is hovered (touch: always, 60 %); the
-   playing row has none. Removing the playing track from the sender is not allowed.
+5. **No remove button.** A row leaves the queue by gesture: a finger swipes it left (§5.4); a mouse drags it out of
+   the queue panel, where the ghost and the panel edge turn red with "Release to remove"; Delete or Backspace on a
+   focused row. Every removal toasts with Undo. The playing row cannot be removed.
 
 States are driven by one number per row, `--hl` (0…1), animated (§6.11): background `color-mix(in oklch, Signal Blue hl × 22 %, transparent)`,
 title colour `color-mix(in oklch, Signal Blue hl × 100 %, text)`. Rows before the track under the view are **played**: 42 %
 opacity (`transition: opacity .35s`). Hover adds `rgb(255 255 255 / .05)`. Click / tap / Enter on a row (not on the
-grip or ×, not within 350 ms after a drag ended, nothing for the playing row) **glides to that track** (§6.10). Rows
+grip, not within 350 ms after a drag ended, nothing for the playing row) **glides to that track** (§6.10). Rows
 are `user-select: none` and have no context menu while dragging.
 
 **Drag to reorder** (from the grip at once, from anywhere else on the row after 5 px with a mouse or a 300 ms hold with touch, with a 12 ms
@@ -632,7 +633,7 @@ Reference frame below: desktop 1280 × 800, phone 390 × 844 (`small` = viewport
 | Top row | x 128, y 18, full content width | glass back button (40) · "Music · neuro soundcloud" (13 px, 60 % text) · right: **Send to TV** glass chip · ⋯ glass button. **No header card** in this mode. (Not in `scrub.html`, kept from the earlier rounds.) |
 | Title | x 136, y 118 | artist line + 96 px title (§5.7) |
 | Seek + transport | x 136, y 250, 420 px wide | §5.6 |
-| Queue sheet | left `W − 370`, top 72, 350 × 430 | **glass**, radius 16, header §5.5, rows §5.4 from the first track of the queue (played ones dimmed), scrolling |
+| Queue sheet | left `W − 20 − w`, top 72, `w` × 430 with `w = clamp(W − 590, 350, 525)` (1.5 × 350 on a wide screen) | **glass**, radius 16, header §5.5, rows §5.4 from the first track of the queue (played ones dimmed), scrolling |
 | Timeline | full page width, the bottom strip `d` (§6.2) | fisheye; `y0` at 58 % of the strip, `amp` 46 % of it; playhead at 8 % of the width; labels and ticks |
 
 The sheet floats over the sky and over the top of the timeline; nothing else covers the timeline.
@@ -798,7 +799,7 @@ Every change updates the plan at once: the timeline morphs (650 ms), queue rows 
 
 ## 10. Accessibility and states
 
-- Every control is a real button with a label (Previous, Play or pause, Next, Send to TV / Stop sending to TV, Remove from the queue, Drag to reorder, Add music, Play next, Add to the queue, Mute / Unmute the TV, TV volume).
+- Every control is a real button with a label (Previous, Play or pause, Next, Send to TV / Stop sending to TV, Drag to reorder, Add music, Play next, Add to the queue, Mute / Unmute the TV, TV volume).
   Space toggles play. (The earlier N shortcut for "next" is not in the prototype.)
 - The queue is a list; the playing row has `aria-current="true"` (**not in the prototype**). Reorder also works with the keyboard (move up / move down in the row's menu) (**not in the prototype**; required in the product).
 - The timeline is decorative (`aria-hidden`) in the product (the prototype's canvas has an `aria-label`); the seek row carries the position as a slider (`aria-valuenow`, `aria-valuetext`).

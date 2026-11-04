@@ -202,6 +202,32 @@
   opacity: 0;
 }
 
+/* A track's play-next / add-last buttons wipe open from its right edge on hover,
+   like a drawer, and close faster than they open. */
+[data-drawer] {
+  clip-path: inset(0 0 0 100%);
+  transition: clip-path 120ms var(--ease-smooth);
+}
+[data-drawer] > * {
+  translate: 14px 0;
+  transition: translate 120ms var(--ease-smooth);
+}
+[data-row]:is(:hover, :focus-visible) [data-drawer],
+[data-drawer]:focus-within {
+  clip-path: inset(0);
+  transition-duration: 230ms;
+}
+[data-row]:is(:hover, :focus-visible) [data-drawer] > *,
+[data-drawer]:focus-within > * {
+  translate: 0 0;
+  transition-duration: 230ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-drawer], [data-drawer] > * { clip-path: none; translate: none; }
+  [data-drawer] { opacity: 0; pointer-events: none; transition: opacity 100ms; }
+  [data-row]:is(:hover, :focus-visible) [data-drawer], [data-drawer]:focus-within { opacity: 1; pointer-events: auto; }
+}
+
 /* "Cinematic dark"— near-black low-chroma base so poster art carries the color;
    electric cyan-blue primary for actions, warm coral secondary for accents. */
 @plugin "daisyui/theme" {
