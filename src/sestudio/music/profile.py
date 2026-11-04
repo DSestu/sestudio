@@ -69,6 +69,62 @@ def energy(groups: np.ndarray, loud: np.ndarray) -> np.ndarray:
     return np.clip(0.7 * _norm(loud) + 0.3 * _norm(share), 0, 1)
 
 
+#: A track's energy against the whole library, by quartile (harmony master plan E0.4).
+LEVELS = ("Calm", "Steady", "Driving", "Intense")
+#: Intro and outro: this share of the track, at most this many 0.1 s frames.
+EDGE_SHARE, EDGE_MAX = 0.2, 600
+
+
+def energy_raw(bands: np.ndarray, loud: np.ndarray) -> dict[str, tuple[float, float]]:
+    """(loudness, highs share) of the whole track, its intro and its outro, from the raw 0.1 s envelopes.
+
+    Loudness is the 75th percentile of the RMS, so a quiet break does not pull a
+    loud track down; the highs share is the 2 kHz+ bands' part of the power.
+    """
+    out = {}
+    n = min(bands.shape[1], len(loud))
+    edge = max(1, min(int(n * EDGE_SHARE), EDGE_MAX))
+    for name, cut in (
+        ("track", slice(None)),
+        ("intro", slice(0, edge)),
+        ("outro", slice(n - edge, n)),
+    ):
+        b, lo = bands[:, :n][:, cut].astype(np.float64), loud[:n][cut]
+        if not len(lo):
+            continue
+        power = (b**2).sum(1)
+        out[name] = (
+            float(np.percentile(lo, 75)),
+            float(power[5:].sum() / max(power.sum(), 1e-12)),
+        )
+    return out
+
+
+def _rank(v: float, ordered: list[float]) -> float:
+    return float(np.searchsorted(ordered, v) / max(len(ordered) - 1, 1))
+
+
+def energy_score(
+    raw: tuple[float, float], loud: list[float], highs: list[float]
+) -> float:
+    """0..1: rank of the loudness (70 %) and of the highs share (30 %) among the library's tracks."""
+    return min(1.0, 0.7 * _rank(raw[0], loud) + 0.3 * _rank(raw[1], highs))
+
+
+def energy_scale(
+    raw: dict[str, tuple[float, float]], scale: dict[str, list[float]]
+) -> dict[str, Any]:
+    """``energyLevel`` and ``energyScale`` (track, intro, outro, 0..100) on the library's scale."""
+    if "track" not in raw or not scale.get("score"):
+        return {}
+    score = {k: energy_score(v, scale["loud"], scale["highs"]) for k, v in raw.items()}
+    below = np.searchsorted(scale["score"], score["track"]) / len(scale["score"])
+    return {
+        "energyLevel": LEVELS[min(int(below * len(LEVELS)), len(LEVELS) - 1)],
+        "energyScale": {k: round(100 * v) for k, v in score.items()},
+    }
+
+
 def structure(groups: np.ndarray, en: np.ndarray) -> list[dict[str, Any]]:
     """Segments on the 4/8/16-bar grid, cut where band balance and energy change most, then labelled."""
     nb = len(en)

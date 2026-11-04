@@ -246,16 +246,23 @@ def _get_state() -> dict[str, Any] | None:
 
 
 def renormalise() -> dict[str, Any]:
-    """Recompute the per-band 98th percentile and the sorted brightness list."""
+    """Recompute the per-band 98th percentile, the sorted brightness list and the energy scale."""
     with library._lock:
         rows = (
             library._connect()
-            .execute("SELECT zcr, n, bands FROM music_analysis")
+            .execute("SELECT zcr, n, bands, loudness FROM music_analysis")
             .fetchall()
         )
     shaped = [
         np.frombuffer(r["bands"], dtype=np.float16).reshape(8, r["n"]) for r in rows
     ]
+    raws = [
+        e["track"]
+        for b, r in zip(shaped, rows)
+        if "track" in (e := profile.energy_raw(b, _loudness(r)))
+    ]
+    loud, highs = sorted(v[0] for v in raws), sorted(v[1] for v in raws)
+    scores = sorted(profile.energy_score(v, loud, highs) for v in raws)
     norm = []
     for i in range(8):
         if not shaped:
@@ -267,6 +274,7 @@ def renormalise() -> dict[str, Any]:
         "norm": norm,
         "zcr": sorted(r["zcr"] for r in rows),
         "n": len(rows),
+        "energy": {"loud": loud, "highs": highs, "score": scores},
     }
     with library._lock:
         conn = library._connect()
@@ -286,6 +294,10 @@ def renormalise_if_needed() -> bool:
     return True
 
 
+def _loudness(r: Any) -> np.ndarray:
+    return np.frombuffer(r["loudness"], dtype=np.float16).astype(np.float32)
+
+
 def _percent(values: np.ndarray, norm: float) -> list[int]:
     return np.rint(np.minimum(values / norm, 1) * 100).astype(int).tolist()
 
@@ -298,7 +310,11 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
     """
     if not ids:
         return {}
-    state = _get_state() or renormalise()
+    state = _get_state()
+    if (
+        state is None or "energy" not in state
+    ):  # none yet, or from before the energy scale
+        state = renormalise()
     norm, zcr = state["norm"], np.asarray(state["zcr"])
     marks = ",".join("?" * len(ids))
     with library._lock:
@@ -311,8 +327,9 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
     spelling = _spellings()
     for r in rows:
         bands = np.frombuffer(r["bands"], dtype=np.float16).reshape(8, r["n"])
+        loud = _loudness(r)
+        energy = profile.energy_scale(profile.energy_raw(bands, loud), state["energy"])
         bands = bands.astype(np.float32)
-        loud = np.frombuffer(r["loudness"], dtype=np.float16).astype(np.float32)
         p = np.searchsorted(zcr, r["zcr"]) / (len(zcr) - 1) if len(zcr) > 1 else 0.5
         extra = json.loads(r["extra"])
         mean = [float(np.mean(np.minimum(bands[i] / norm[i], 1))) for i in range(8)]
@@ -339,6 +356,7 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
                 if (h := modes.served(extra.get("harmony"), extra.get(MODE_OVERRIDE)))
                 else {}
             ),
+            **energy,
             "balance": [
                 round(sum(mean[0:2]) / 2, 3),
                 round(sum(mean[2:5]) / 3, 3),
