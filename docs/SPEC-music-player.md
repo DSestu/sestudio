@@ -39,8 +39,8 @@ ways): nothing crossfades, every element travels from where it is to where it go
 **spectral balance of the whole queue as one continuous curve per band**: bass hanging below the horizon
 (solid, slightly blurred), mids as a veil above it, highs in front with a fine edge line, in the **Reef**
 palette, with a soft glow, a minute grid and beat ticks on the horizon. The timeline is the controller: you drag
-it to scrub, tap it to jump, tap a track label to jump to it, tap a label's second line to edit that
-transition. Each queue row carries a small bass / mids / highs **balance meter**. Transitions between tracks
+it to scrub, double tap it to jump, tap a track label to edit that transition, double tap the label to jump
+to its track. Each queue row carries a small bass / mids / highs **balance meter**. Transitions between tracks
 are either a 4 s fade or a **beat sync** (tempo-matched, phrase-aligned, with a bass swap), edited per pair.
 
 ## 2. Decisions log (this page)
@@ -584,7 +584,7 @@ The curves **never change height** with the live sound. The only live element is
 Above each visible join: the incoming title (12 px / 600, `oklch(92% .01 240 / .92)`) at `y0 − 1.02·amp − 22`, and under it (11 px / 500, Signal Blue) at `y0 − 1.02·amp − 8`:
 **"in 0:26 · 8 bars · +0.4 %"** (sync with a tempo change), **"in 0:26 · 8 bars · synced"** (sync, tempos equal) or **"in 0:26 · 4 s blend"** (fade), where the time is `a + i0` seconds from now, and the text reads **"later"** instead of "in m:ss" at 10 minutes or more.
 The label's left edge is the join's start + 6 px. **Thinning**: walk the joins left to right and show a label only if its x is between `px + 30` and `W − 100` and at least **200 px** after the last shown one, and skip it if its box would overlap the floating queue sheet.
-The hit box is `x … x + max(titleWidth, 120) + 12`, `y − 14 … +32`: **a press on the upper part (above `titleY + 3`) glides to that track; on the second line it opens the transition popover** (§9.4). The label under the pointer gets a
+The hit box is `x … x + max(titleWidth, 120) + 12`, `y − 14 … +32`: **a press anywhere on it opens the transition popover** (§9.4); **a double tap (two taps within 350 ms and 24 px) glides to that track**. The label under the pointer gets a
 `oklch(72% .16 230 / .16)` rounded (8 px) background and a brighter title. Labels appear on phones too in the prototype (the earlier "no labels on phones" rule is open, §11).
 
 ### 6.10 Scrubbing and jumping
@@ -595,7 +595,7 @@ All of it on the timeline canvas, ignored while the mode is switching (`0 < t < 
   is `g = clamp(g0 + sg − s(x))`: the point you grabbed stays under the pointer. While dragging the sound **follows live**: a seek every **90 ms** to `g` (crossfade .12 s, §9.2). Esc cancels and returns to `g0` (crossfade .2 s).
 - **Release with inertia (on)**: velocity `vel` (seconds of timeline per ms, from the last two moves); if `|vel| > .002`, the view keeps gliding with `v = vel · 16` per frame, multiplied by **.9** each frame (≈ 158 ms time constant; the prototype's step is per frame, production
   should use the time constant) until `|v| < .01`, clamped to `[0, end]`, then the final seek (crossfade .4 s). Without inertia the final seek happens at once.
-- **Tap (no drag)**: on a label see §6.9; elsewhere (tap to jump, on) **glide** to the time under the pointer.
+- **Tap (no drag)**: on a label see §6.9; elsewhere a single tap does nothing and a **double tap** (within 350 ms and 24 px) **glides** to the time under the pointer.
 - **Glide** (title click, queue row, timeline tap, label, "Hear it", TV mirror): the view position eases to the target over **700 ms** (`cubic-bezier(.2, .8, .2, 1)`, the target advancing with real time while playing), and the sound crossfades to it over **.6 s**
   (§9.2). A transition in progress that is not the target's is ended at once.
 - **Clamp**: `[0, TS[last] + dur[last] − .5]`.

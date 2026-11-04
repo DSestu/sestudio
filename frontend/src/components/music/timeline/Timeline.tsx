@@ -184,13 +184,13 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
 
     const shown = { ts: [] as number[], spans: [] as Span[] }
 
-    // A press on a label's second line opens its transition.
+    // A press on a label opens its transition (a double tap jumps to the track, scrub.ts).
     const root = cv.closest<HTMLElement>('[role=dialog]') ?? document.body
     const labelAt = (e: PointerEvent) => {
       if ((e.target as HTMLElement).closest('button, input, [role=slider], [data-queue], [data-mix-popover]')) return null
       const b = cv.getBoundingClientRect()
       const h = r.labelAt(e.clientX - b.left, e.clientY - b.top)
-      return h?.second ? { ...h, left: b.left, top: b.top } : null
+      return h ? { ...h, left: b.left, top: b.top } : null
     }
     const down = (e: PointerEvent) => {
       if ((e.target as HTMLElement).closest('[data-mix-popover]')) return
