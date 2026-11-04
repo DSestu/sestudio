@@ -108,3 +108,31 @@ export function Choice<T extends string>({ label, value, options, onChange }: {
 export function RowSelect(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className="select select-sm w-auto max-w-[55%] shrink-0 bg-base-100 border-0 text-sm" />
 }
+
+/** A row that opens another page: the whole row is the link, with a chevron. */
+export function LinkRow({ href, label, help }: { href: string; label: ReactNode; help?: ReactNode }) {
+  return (
+    <a href={href} className={`${ROW} flex items-center gap-3 group`}>
+      <div className="flex-1 min-w-0">
+        <div className="text-[15px] font-medium leading-snug group-hover:text-primary transition-colors">{label}</div>
+        {help && <div className="text-xs text-base-content/50 mt-0.5 leading-snug">{help}</div>}
+      </div>
+      <svg className="size-4 text-base-content/35" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </a>
+  )
+}
+
+/** A link that leaves the app, marked by an icon and for screen readers, not colour alone. */
+export function ExternalLink({ href, children, className = '' }: { href: string; children: ReactNode; className?: string }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer noopener" className={`link link-hover inline-flex items-center gap-1 ${className}`}>
+      {children}
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 5h6v6M19 5l-8 8M10 5H5v14h14v-5" />
+      </svg>
+      <span className="sr-only">(opens in a new tab)</span>
+    </a>
+  )
+}
