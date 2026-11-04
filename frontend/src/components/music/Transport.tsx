@@ -101,21 +101,24 @@ function Seek({ position, duration, readOnly = false }: { position: number; dura
   )
 }
 
-const stepBtn = 'size-12 rounded-xl bg-white/6 grid place-items-center hover:bg-white/10 disabled:opacity-40'
+const stepBtn = 'size-12 short:size-10 rounded-xl bg-white/6 grid place-items-center hover:bg-white/10 disabled:opacity-40'
 
-/** Seek row and transport (SPEC-music-player §5.6). The cast button and the "Playing on" strip sit with it. */
+/** Seek row and transport (SPEC-music-player §5.6). The cast button and the "Playing on" strip sit with it.
+ * On a phone on its side it is one row: previous, play, next, the seek bar, cast; the "Playing on" strip floats above it. */
 export default function Transport({ q, position, duration, tv = false }: { q: QueueState; position: number; duration: number; tv?: boolean }) {
   const idle = q.current < 0
   if (tv) return <div className="w-105"><Seek position={position} duration={duration} readOnly /></div>
   return (
-    <div className="flex flex-col gap-3 w-full md:w-105">
-      <Seek position={position} duration={duration} />
-      <div className="flex items-center justify-center gap-3.5">
+    <div className="relative flex flex-col gap-3 w-full md:w-105 short:w-full! short:flex-row short:items-center short:gap-2.5">
+      <div className="short:order-1 short:flex-1 short:min-w-0 short:mx-1.5">
+        <Seek position={position} duration={duration} />
+      </div>
+      <div className="flex items-center justify-center gap-3.5 short:contents">
         <button className={stepBtn} aria-label="Previous" disabled={idle} onClick={() => void queueActions.transport('prev')}>
           <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6v12l-9-6zM6 6v12" /></svg>
         </button>
         <button
-          className="size-16 rounded-[22px] bg-primary text-primary-content grid place-items-center disabled:opacity-40"
+          className="size-16 short:size-12 rounded-[22px] short:rounded-2xl bg-primary text-primary-content grid place-items-center disabled:opacity-40"
           aria-label={q.playing ? 'Pause' : 'Play'}
           data-play
           disabled={idle}
@@ -130,9 +133,13 @@ export default function Transport({ q, position, duration, tv = false }: { q: Qu
         <button className={stepBtn} aria-label="Next" disabled={idle} onClick={() => void queueActions.transport('next')}>
           <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 6v12l9-6zM18 6v12" /></svg>
         </button>
-        <SendToTv />
+        <div className="short:order-2">
+          <SendToTv className="size-12 short:size-10 rounded-xl bg-white/6 hover:bg-white/10" />
+        </div>
       </div>
-      <CastStrip />
+      <div className="short:absolute short:bottom-full short:inset-x-0 short:mb-2">
+        <CastStrip />
+      </div>
     </div>
   )
 }

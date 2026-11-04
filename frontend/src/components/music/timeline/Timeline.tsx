@@ -103,6 +103,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   palette?: PaletteName
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const text = useRef<HTMLCanvasElement>(null)
   const [version, setVersion] = useState(0)
   const [open, setOpen] = useState<{ a: string; b: string; x: number; above: number } | null>(null)
   const ids = q.items.map(i => i.track_id).join(',')
@@ -127,7 +128,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
 
   useEffect(() => {
     const cv = canvas.current!
-    const r = new TimelineRenderer(cv)
+    const r = new TimelineRenderer(cv, text.current!)
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
     let bins = new Uint8Array(0)
     let level = 0
@@ -301,6 +302,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   return (
     <>
       <canvas ref={canvas} aria-hidden="true" className="fixed inset-0 -z-10 size-full pointer-events-none" />
+      <canvas ref={text} aria-hidden="true" className="fixed inset-0 -z-10 size-full pointer-events-none" />
       {open && at > 0 && (
         <MixPopover
           a={{ track: model.items[at - 1].track, title: model.items[at - 1].title }}
