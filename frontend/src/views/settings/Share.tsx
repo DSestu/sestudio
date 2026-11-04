@@ -15,14 +15,9 @@ const APK_URL = 'https://github.com/DSestu/sestudio/releases/latest/download/ses
  */
 export default function Share() {
   return (
-    <section aria-labelledby="settings-share" className="flex flex-col gap-3">
-      <h3
-        id="settings-share"
-        className="text-xs font-semibold uppercase tracking-wide text-base-content/50"
-      >
-        Share sestudio
-      </h3>
-      <div className="flex flex-wrap gap-x-8 gap-y-6">
+    <>
+      <p className="text-sm text-base-content/60 -mt-2">For someone else to get their own sestudio.</p>
+      <div className="grid sm:grid-cols-2 gap-4">
         <ShareLink
           title="Android app"
           text="Scan on an Android phone to install the latest version. It runs on the phone itself."
@@ -36,7 +31,7 @@ export default function Share() {
           qr={colabQr}
         />
       </div>
-    </section>
+    </>
   )
 }
 
@@ -48,17 +43,20 @@ function ShareLink({ title, text, url, qr }: { title: string; text: string; url:
   }
 
   return (
-    <div className="flex flex-col gap-2 w-60">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="text-xs text-base-content/50">{text}</p>
-      <img src={qr} alt={`QR code: ${title}`} className="w-44 h-44 rounded-lg bg-white p-2" />
+    <section aria-label={title} className="flex flex-col gap-3 rounded-[14px] bg-base-200 p-4">
+      <div>
+        <h3 className="text-[15px] font-medium">{title}</h3>
+        <p className="text-xs leading-snug text-base-content/50 mt-0.5">{text}</p>
+      </div>
+      <img src={qr} alt={`QR code: ${title}`} className="size-40 rounded-lg bg-white p-2" />
       <a
         href={url}
         target="_blank"
         rel="noreferrer noopener"
-        className="link link-primary text-xs break-all"
+        className="link link-hover link-primary text-xs truncate"
+        title={url}
       >
-        {url}
+        {url.replace(/^https:\/\//, '')}
       </a>
       <div className="flex gap-2">
         {/* Both need a secure context: absent on a plain-HTTP LAN address. */}
@@ -76,6 +74,6 @@ function ShareLink({ title, text, url, qr }: { title: string; text: string; url:
           </button>
         )}
       </div>
-    </div>
+    </section>
   )
 }
