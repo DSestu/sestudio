@@ -76,7 +76,7 @@
 ## 5. Build plan (PRs)
 
 Files: `frontend/src/views/settings/`, one file per category plus `SettingsView.tsx` (the
-frame), `categories.ts` (ids, names, icons, groups, summaries, attention) and `rows.tsx`
+frame, which also lists the categories), `useSettingsStatus.ts` (summaries, attention) and `rows.tsx`
 (`SettingsGroup`, `SettingRow`, `ToggleRow`). `views/SettingsView.tsx` goes away.
 
 ### PR 1: The frame and routing

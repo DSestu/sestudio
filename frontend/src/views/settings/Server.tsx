@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { LogLine, RestartWay } from '../../api'
 import { getServerLog, restartServer, serverRestartWay } from '../../api'
 import { SettingRow, SettingsGroup, ToggleRow } from './rows'
+import { uptime } from './useSettingsStatus'
 import type { SettingsProps } from './SettingsView'
 
 /** Settings › Server: whether it runs, its log, restarting it, and Nightly in the Android app. */
@@ -128,12 +129,6 @@ const LEVEL_TAG: Record<string, [string, string]> = {
   WARNING: ['WARN', 'text-warning'],
   ERROR: ['ERR', 'text-error'],
   CRITICAL: ['ERR', 'text-error'],
-}
-
-/** How long the server has been up: "4 min", "2 h 5 min". */
-function uptime(started: number): string {
-  const minutes = Math.max(0, Math.floor((Date.now() / 1000 - started) / 60))
-  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`
 }
 
 /** The Android app's own bridge, when the page runs inside it. */
