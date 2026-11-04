@@ -10,6 +10,7 @@ import { canvasSize, History, paint } from './draw'
 import { bend, Energy, grid, type Grid } from './energy'
 import { bgPalette, getLook, useLook } from './settings'
 import { frameLoop, wake } from '../idle'
+import { Light } from './light'
 
 // The blurred, live spectrum behind the timeline (SPEC-music-player §5.8).
 
@@ -46,11 +47,16 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
 
   useEffect(() => {
     const cv = canvas.current!
-    // Painted on a scratch canvas and blurred into the visible one while it is still small: the page scales
-    // it up smoothly, so no CSS blur re-blurs a viewport-sized layer every frame.
+    // Painted on a scratch canvas and blurred (in WebGL) into the visible one while it is still small: the
+    // page scales it up smoothly, so nothing re-blurs a viewport-sized layer every frame.
     const scratch = document.createElement('canvas')
     const g = scratch.getContext('2d')!
-    const v = cv.getContext('2d')!
+    let light: Light | null = null
+    try {
+      light = new Light(cv, wake)
+    } catch (err) {
+      console.warn('The background needs WebGL2:', err)
+    }
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
     const hist = new History()
     const beat = { fr: 1, db: false }
@@ -123,19 +129,7 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
         beat,
         now,
       })
-      v.clearRect(0, 0, w, h)
-      if (p.bloom) {
-        // A very wide, dim copy behind: the light spills a little into the sky.
-        v.save()
-        v.globalAlpha = p.bloom
-        v.filter = `blur(${w / 22}px) saturate(${p.sat})`
-        v.drawImage(scratch, -w * 0.075, -h * 0.075, w * 1.15, h * 1.15)
-        v.restore()
-      }
-      v.filter = `blur(${(look.blur[look.style] * blurK * w) / (W || w)}px) saturate(${p.sat})`
-      v.globalCompositeOperation = p.bloom ? 'lighter' : 'source-over'
-      v.drawImage(scratch, 0, 0)
-      v.globalCompositeOperation = 'source-over'
+      light?.frame(scratch, (look.blur[look.style] * blurK * w) / (W || w), p.sat, p.bloom)
       grain.style.opacity = String(Math.min(1, p.grain * 4))
       if (p.grain && !still.matches) grain.style.backgroundPosition = `${(Math.random() * 256) | 0}px ${(Math.random() * 256) | 0}px`
       // Still when the bands, the timeline and the settings are.

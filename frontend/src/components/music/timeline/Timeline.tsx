@@ -151,8 +151,9 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   })
 
   useEffect(() => {
-    const cv = canvas.current!
-    const r = new TimelineRenderer(cv, text.current!)
+    // The text canvas spans the viewport; the WebGL one only the curves' band, which it follows.
+    const cv = text.current!
+    const r = new TimelineRenderer(canvas.current!, cv)
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
     let bins = new Uint8Array(0)
     let level = 0
@@ -399,7 +400,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
 
   return (
     <>
-      <canvas ref={canvas} aria-hidden="true" className="fixed inset-0 -z-10 size-full pointer-events-none" />
+      <canvas ref={canvas} aria-hidden="true" className="fixed left-0 top-0 -z-10 w-full pointer-events-none" />
       <canvas ref={text} aria-hidden="true" className="fixed inset-0 -z-10 size-full pointer-events-none" />
       {/* Above the queue sheet: a drop's slot and its label may sit under it. */}
       <div className="fixed left-0 top-0 z-20 pointer-events-none">

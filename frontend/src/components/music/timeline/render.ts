@@ -1,13 +1,15 @@
-// Paints one timeline frame (SPEC-music-player §6.5 to §6.9). Layers back to
-// front: minute grid, beat ticks, then the curves on an offscreen canvas
-// (glow, bass, mids, highs, edge) composited twice (left of the playhead at 42 %),
-// then joins, ticks, labels and the playhead.
+// Paints one timeline frame (SPEC-music-player §6.5 to §6.9), in WebGL. Layers back
+// to front: minute grid, beat ticks, then the curves as one group (glow, bass, mids,
+// highs, edge; left of the playhead at 42 %), then joins and the playhead; ticks and
+// labels go on their own 2D canvas.
 
 import { fmtTime } from '../format'
 import { isPhone, isShort, Mapper } from './mapping'
 import { oklch, type Palette } from './palette'
 import { TV } from '../tv'
 import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
+import { Gl, pm, rgb, Tris, type Curves, type RGBA } from './gl'
+import { wake } from '../idle'
 
 // The blurs are made by drawing small and scaling up, not with a full-size Canvas `filter: blur`:
 // as soft, at a fraction of the work (measured 19 to 48 fps on the station's software renderer).
@@ -20,8 +22,72 @@ export const tlook = { klo: 0.7, kmi: 0.9, khi: 0.42, alo: 0.9, ami: 0.5, ahi: 0
 /** What the spectral background reads from the last frame: horizon, amplitude and the blurred glow layer. */
 export const probe = { y0: 0, amp: 0, W: 0, H: 0, glow: null as HTMLCanvasElement | null, /** Counts the frames drawn, so the background knows when the glow changed. */ frame: 0 }
 const SIGNAL = 'oklch(72% .16 230'
+const WHITE = [1, 1, 1] as const
+const NONE: RGBA = [0, 0, 0, 0]
 /** Pixels of curve behind the analysis front that the rim light covers. */
 const RIM = 46
+
+/** The curve through the points: a cubic per gap, its handles a sixth of the neighbours' span (Catmull-Rom). */
+function spline(c: Path2D, xs: Float64Array, ys: Float64Array, N: number) {
+  c.lineTo(xs[0], ys[0])
+  for (let j = 0; j < N - 1; j++) {
+    const p = Math.max(0, j - 1)
+    const q = Math.min(N - 1, j + 2)
+    c.bezierCurveTo(xs[j] + (xs[j + 1] - xs[p]) / 6, ys[j] + (ys[j + 1] - ys[p]) / 6, xs[j + 1] - (xs[q] - xs[j]) / 6, ys[j + 1] - (ys[q] - ys[j]) / 6, xs[j + 1], ys[j + 1])
+  }
+}
+
+/** A polyline, growable. */
+class Line {
+  x = new Float64Array(8192)
+  y = new Float64Array(8192)
+  n = 0
+  push(x: number, y: number) {
+    if (this.n === this.x.length) {
+      const g = (a: Float64Array) => { const b = new Float64Array(a.length * 2); b.set(a); return b }
+      this.x = g(this.x)
+      this.y = g(this.y)
+    }
+    this.x[this.n] = x
+    this.y[this.n++] = y
+  }
+}
+
+/** The same curve as `spline`, flattened: each cubic cut into steps of about 3 px. */
+function tess(out: Line, xs: Float64Array, ys: Float64Array, N: number) {
+  out.n = 0
+  out.push(xs[0], ys[0])
+  for (let j = 0; j < N - 1; j++) {
+    const p = Math.max(0, j - 1)
+    const q = Math.min(N - 1, j + 2)
+    const ax = xs[j], ay = ys[j], dx = xs[j + 1], dy = ys[j + 1]
+    const bx = ax + (dx - xs[p]) / 6, by = ay + (dy - ys[p]) / 6
+    const cx = dx - (xs[q] - ax) / 6, cy = dy - (ys[q] - ay) / 6
+    const S = Math.max(1, Math.min(32, Math.ceil((Math.abs(dx - ax) + Math.abs(dy - ay)) / 3)))
+    for (let k = 1; k <= S; k++) {
+      const t = k / S, u = 1 - t
+      const w0 = u * u * u, w1 = 3 * u * u * t, w2 = 3 * u * t * t, w3 = t * t * t
+      out.push(w0 * ax + w1 * bx + w2 * cx + w3 * dx, w0 * ay + w1 * by + w2 * cy + w3 * dy)
+    }
+  }
+}
+
+/** The line's height at each device column's centre (device px) into channel `ch` of `cols`; where it
+ *  folds back over a column, the point farthest from the horizon wins (the 2D fill covered them all). */
+function columns(l: Line, cols: Float32Array, ch: number, Y: number, dpr: number) {
+  const n = cols.length / 4
+  for (let i = 0; i < l.n - 1; i++) {
+    let xa = l.x[i], ya = l.y[i], xb = l.x[i + 1], yb = l.y[i + 1]
+    if (xb < xa) [xa, xb, ya, yb] = [xb, xa, yb, ya]
+    const c0 = Math.max(0, Math.ceil(xa * dpr - 0.5)), c1 = Math.min(n - 1, Math.ceil(xb * dpr - 0.5) - 1)
+    for (let c = c0; c <= c1; c++) {
+      const y = (ya + ((yb - ya) * ((c + 0.5) / dpr - xa)) / (xb - xa)) * dpr
+      const j = c * 4 + ch
+      if (Math.abs(y - Y) > Math.abs(cols[j] - Y)) cols[j] = y
+      if (cols[c * 4 + 3] < 0) cols[c * 4 + 3] = 0
+    }
+  }
+}
 
 export interface LabelItem extends DrawItem {
   title: string
@@ -56,9 +122,14 @@ const layer = (): { c: HTMLCanvasElement; x: CanvasRenderingContext2D } => {
 }
 
 export class TimelineRenderer {
-  private page: CanvasRenderingContext2D
-  private off = layer()
-  private top = layer() // bass, mids, highs, edge (device resolution)
+  /** Null where WebGL2 is missing: the timeline then shows its labels only. */
+  private gl: Gl | null
+  private tris = new Tris()
+  private line = new Line()
+  private cols = new Float32Array(0)
+  /** The WebGL canvas covers only the curves' band: its CSS height, and the page y of its top. */
+  private bandH = 0
+  private oy = -1
   private g1 = layer() // curves for the glow (quarter resolution)
   private g2 = layer() // blurred glow (quarter resolution)
   private pts = new Points()
@@ -78,8 +149,14 @@ export class TimelineRenderer {
 
   constructor(canvas: HTMLCanvasElement, text: HTMLCanvasElement) {
     this.canvas = canvas
-    this.page = canvas.getContext('2d')!
     this.text = text.getContext('2d')!
+    let gl: Gl | null = null
+    try {
+      gl = new Gl(canvas, wake)
+    } catch (err) {
+      console.warn('The timeline needs WebGL2:', err)
+    }
+    this.gl = gl
   }
 
   /** Lowered by the caller when frames run long. */
@@ -91,15 +168,28 @@ export class TimelineRenderer {
     this.H = H
     this.dpr = Math.min(deviceRatio || 1, isPhone(W) ? 1.5 : 2, this.maxDpr)
     const dw = Math.round(W * this.dpr)
-    const dh = Math.round(H * this.dpr)
-    this.canvas.width = this.off.c.width = this.top.c.width = dw
-    this.canvas.height = this.off.c.height = this.top.c.height = dh
+    // The tallest the band gets through the switch between the modes.
+    this.M = new Mapper(W, H)
+    let tall = 0
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const { y0, amp } = this.M.at(t)
+      const by = Math.max(0, y0 - amp * 1.5)
+      tall = Math.max(tall, Math.min(H, Math.min(H, y0 + amp * 1.05) + 64) - Math.max(0, by - 64))
+    }
+    this.M.at(0)
+    this.bandH = Math.min(H, Math.ceil(tall) + 2)
+    const bd = Math.round(this.bandH * this.dpr)
+    this.canvas.width = dw
+    this.canvas.height = bd
+    this.canvas.style.height = `${this.bandH}px`
+    this.oy = -1
+    this.cols = new Float32Array(dw * 4)
+    this.gl?.size(dw, bd, W, this.dpr)
     this.g1.c.width = this.g2.c.width = Math.ceil(W * GQ)
     this.g1.c.height = this.g2.c.height = Math.ceil(H * GQ)
     this.tdpr = Math.min(deviceRatio || 1, 3)
     this.text.canvas.width = Math.round(W * this.tdpr)
     this.text.canvas.height = Math.round(H * this.tdpr)
-    this.M = new Mapper(W, H)
   }
 
   /** The labels drawn last frame, for hit tests: the join they open (index of the incoming item) and their box. */
@@ -114,10 +204,9 @@ export class TimelineRenderer {
   }
 
   draw(f: Frame) {
-    const { W, H, dpr, page: g2, off, M, text: t2 } = this
+    const { W, H, M, text: t2, gl } = this
     this.hits.length = 0
     if (!W) return
-    const o2 = off.x
     const { X } = M.at(f.t)
     const { R, px, y0, amp } = M
     probe.y0 = y0
@@ -129,35 +218,31 @@ export class TimelineRenderer {
     const e = f.t
     const items = f.items
 
-    g2.setTransform(dpr, 0, 0, dpr, 0, 0)
-    g2.clearRect(0, 0, W, H)
-    o2.setTransform(dpr, 0, 0, dpr, 0, 0)
-    o2.clearRect(0, 0, W, H)
-
     // The light: the whole page (only the left column when short), narrowing to the stage when expanded.
     const { e: stage, d } = M
     const lx = stage.x * e
     const ly = stage.y * e
     const r0 = isShort(W, H) ? W - d.x - d.w : 0
     const rx = W - (r0 + (W - stage.x - stage.w - r0) * e)
+    const lh = H - ly - (H - stage.y - stage.h) * e
+    // Everything is drawn in the curves' band and the halo around it (see curves()): of the text canvas,
+    // only that band and last frame's are cleared, with a margin.
+    const c0 = Math.max(0, Math.min(y0 - amp * 1.5 - 80, this.cy - 16))
+    const c1 = Math.min(H, Math.max(y0 + amp * 1.05 + 80, this.cy + this.ch + 16))
     t2.setTransform(this.tdpr, 0, 0, this.tdpr, 0, 0)
-    t2.clearRect(0, 0, W, H)
-    for (const c of [g2, t2]) {
-      c.save()
-      c.beginPath()
-      c.rect(lx, ly, rx - lx, H - ly - (H - stage.y - stage.h) * e)
-      c.clip()
-    }
+    t2.clearRect(0, c0, W, c1 - c0)
+    t2.save()
+    t2.beginPath()
+    t2.rect(lx, ly, rx - lx, lh)
+    t2.clip()
 
+    const T = this.tris
+    T.clear()
+    const sig = rgb(`${SIGNAL})`)
     // Minute grid, on whole minutes of the timeline's own clock.
     {
       const gy = y0 - amp * 1.1
       const gh = amp * 2.05
-      const vg = g2.createLinearGradient(0, gy, 0, gy + gh)
-      vg.addColorStop(0, 'rgba(255,255,255,0)')
-      vg.addColorStop(0.5, 'rgba(255,255,255,1)')
-      vg.addColorStop(1, 'rgba(255,255,255,0)')
-      g2.fillStyle = vg
       for (let m = Math.ceil((f.G - 200) / 60); m * 60 <= f.G + 1600; m++) {
         const sm = m * 60 - f.G
         const x = X(sm)
@@ -165,16 +250,12 @@ export class TimelineRenderer {
         const sp = Math.abs(X(sm + 60) - x)
         const a = 0.09 * Math.max(0, Math.min(1, (sp - 8) / 30)) * (x < px ? 0.6 : 1)
         if (a <= 0.003) continue
-        g2.globalAlpha = a * 0.4
-        g2.fillRect(x - 1.5, gy, 3, gh)
-        g2.globalAlpha = a
-        g2.fillRect(x - 0.5, gy, 1, gh)
+        T.vgrad(x - 1.5, gy, 3, gh, [[0, NONE], [0.5, pm(WHITE, a * 0.4)], [1, NONE]])
+        T.vgrad(x - 0.5, gy, 1, gh, [[0, NONE], [0.5, pm(WHITE, a)], [1, NONE]])
       }
-      g2.globalAlpha = 1
     }
 
     // Beat ticks, on the horizon, where beats are at least 5 px apart (downbeats alone where tighter).
-    g2.fillStyle = '#fff'
     for (const it of items) {
       const { track, span: S, a } = it
       if (!track.bpm) continue
@@ -195,69 +276,58 @@ export class TimelineRenderer {
           const x = X(a + o)
           if (x < R.x || x > R.x + R.w) continue
           const h = isBar ? 9 : 4
-          g2.globalAlpha = (isBar ? 0.42 : 0.22) * (x < px ? 0.6 : 1)
-          g2.fillRect(x - 0.5, y0 - h, 1, h * 2)
+          T.rect(x - 0.5, y0 - h, 1, h * 2, pm(WHITE, (isBar ? 0.42 : 0.22) * (x < px ? 0.6 : 1)))
         }
       }
     }
-    g2.globalAlpha = 1
-
-    this.curves(f, y0, amp)
-
-    // The played part at 42 %.
-    g2.save()
-    g2.beginPath()
-    g2.rect(0, 0, px, H)
-    g2.clip()
-    g2.globalAlpha = 0.42
-    g2.drawImage(off.c, 0, this.cy * dpr, W * dpr, this.ch * dpr, 0, this.cy, W, this.ch)
-    g2.restore()
-    g2.save()
-    g2.beginPath()
-    g2.rect(px, 0, W, H)
-    g2.clip()
-    g2.drawImage(off.c, 0, this.cy * dpr, W * dpr, this.ch * dpr, 0, this.cy, W, this.ch)
-    g2.restore()
+    const under = T.n
 
     // Joins: a hairline at the middle of each overlap, from under the label, with a small diamond on the horizon.
-    const sg = g2.createLinearGradient(0, y0 - amp * 0.98, 0, y0 + amp * 0.9)
-    sg.addColorStop(0, `${SIGNAL} / 0)`)
-    sg.addColorStop(0.35, `${SIGNAL} / .85)`)
-    sg.addColorStop(0.62, `${SIGNAL} / .85)`)
-    sg.addColorStop(1, `${SIGNAL} / 0)`)
     for (const it of items) {
       if (!it.plan) continue
       const x = X(it.a + it.span.i0 + it.span.il / 2)
       if (x < R.x || x > R.x + R.w) continue
-      g2.globalAlpha = x < px ? 0.6 : 1
-      g2.fillStyle = sg
-      g2.fillRect(x - 0.5, y0 - amp * 0.98, 1, amp * 1.88)
-      g2.fillStyle = `${SIGNAL} / .95)`
-      g2.beginPath()
-      g2.moveTo(x, y0 - 4)
-      g2.lineTo(x + 4, y0)
-      g2.lineTo(x, y0 + 4)
-      g2.lineTo(x - 4, y0)
-      g2.fill()
+      const k = x < px ? 0.6 : 1
+      T.vgrad(x - 0.5, y0 - amp * 0.98, 1, amp * 1.88, [[0, NONE], [0.35, pm(sig, 0.85 * k)], [0.62, pm(sig, 0.85 * k)], [1, NONE]])
+      T.diamond(x, y0, 4, pm(sig, 0.95 * k))
     }
-    g2.globalAlpha = 1
 
-    // The rest of a track being analysed: a dotted horizon from its front to its end.
-    g2.save()
-    g2.setLineDash([2, 5])
-    g2.strokeStyle = 'rgba(255,255,255,.25)'
-    g2.lineWidth = 1
+    // The rest of a track being analysed: a dotted horizon from its front to its end (2 px on, 5 off).
     for (const it of items) {
       if (it.front === undefined) continue
       const x0 = Math.max(px, X(it.a + it.front))
       const x1 = Math.min(W, X(it.a + it.track.dur))
-      if (x1 <= x0) continue
-      g2.beginPath()
-      g2.moveTo(x0, y0)
-      g2.lineTo(x1, y0)
-      g2.stroke()
+      for (let x = x0; x < x1; x += 7) T.rect(x, y0 - 0.5, Math.min(2, x1 - x), 1, pm(WHITE, 0.25))
     }
-    g2.restore()
+
+    // Playhead and its dot.
+    T.vgrad(px - 1, y0 - amp * 1.35, 2, amp * 2.2, [[0, NONE], [0.65, pm(WHITE, 0.9)], [1, NONE]])
+    T.disc(px, y0, 5 + f.level * 9, pm(WHITE, 0.35 + f.level * 0.5))
+    const over = T.n
+    // A short strip ends at the queue: its last 28 px fade out (the stage's hard edge takes over when expanded).
+    if (r0 && e < 1) T.hgrad(rx - 28, 0, 28, H, [[0, NONE], [1, [0, 0, 0, 1 - e]]])
+    const fade = T.n
+
+    // Under the curves, the curves (left of the playhead at 42 %), over them.
+    const cv = this.curves(f, y0, amp, px)
+    if (gl && !gl.gl.isContextLost()) {
+      // The canvas follows the band, on whole device pixels.
+      const oy = Math.max(0, Math.min(H - this.bandH, Math.floor(this.cy * this.dpr) / this.dpr))
+      if (oy !== this.oy) {
+        this.oy = oy
+        this.canvas.style.transform = `translateY(${oy}px)`
+      }
+      gl.oy = oy
+      gl.begin(lx, ly, rx - lx, lh)
+      gl.blend('over')
+      gl.load(T)
+      gl.draw(0, under)
+      if (cv) gl.curves(cv)
+      gl.load(T)
+      gl.draw(under, over)
+      gl.blend('erase')
+      gl.draw(over, fade)
+    }
 
     this.labels(f, y0, amp)
 
@@ -277,35 +347,11 @@ export class TimelineRenderer {
     }
     t2.globalAlpha = 1
     t2.restore()
-
-    // Playhead and its dot.
-    const ph = g2.createLinearGradient(0, y0 - amp * 1.35, 0, y0 + amp * 0.85)
-    ph.addColorStop(0, 'rgba(255,255,255,0)')
-    ph.addColorStop(0.65, 'rgba(255,255,255,.9)')
-    ph.addColorStop(1, 'rgba(255,255,255,0)')
-    g2.fillStyle = ph
-    g2.fillRect(px - 1, y0 - amp * 1.35, 2, amp * 2.2)
-    g2.beginPath()
-    g2.arc(px, y0, 5 + f.level * 9, 0, Math.PI * 2)
-    g2.fillStyle = `rgba(255,255,255,${0.35 + f.level * 0.5})`
-    g2.fill()
-    // A short strip ends at the queue: its last 28 px fade out (the stage's hard edge takes over when expanded).
-    if (r0 && e < 1) {
-      const fade = g2.createLinearGradient(rx - 28, 0, rx, 0)
-      fade.addColorStop(0, 'rgba(0,0,0,0)')
-      fade.addColorStop(1, `rgba(0,0,0,${1 - e})`)
-      g2.globalCompositeOperation = 'destination-out'
-      g2.fillStyle = fade
-      g2.fillRect(rx - 28, 0, 28, H)
-      g2.globalCompositeOperation = 'source-over'
-    }
-    g2.restore()
   }
 
-  private curves(f: Frame, y0: number, amp: number) {
-    const { W, H, dpr, off, M, pts } = this
-    const o2 = off.x
-    const bx = 0
+  /** The glow (2D, small: the background reads it) and the curves' heights per device column, for WebGL. */
+  private curves(f: Frame, y0: number, amp: number, px: number): Curves | null {
+    const { W, H, M, pts, dpr, cols } = this
     const by = Math.max(0, y0 - amp * 1.5)
     const bh = Math.min(H, y0 + amp * 1.05) - by
     // The halo reaches about 60 px past the curves; nothing is composited beyond that.
@@ -313,90 +359,72 @@ export class TimelineRenderer {
     const ch = Math.min(H, by + bh + 64) - cy
     this.cy = cy
     this.ch = ch
-    const { top, g1, g2 } = this
-    top.x.setTransform(dpr, 0, 0, dpr, 0, 0)
-    top.x.clearRect(bx, by, W, bh)
+    const { g1, g2 } = this
     g1.x.setTransform(1, 0, 0, 1, 0, 0)
     g1.x.clearRect(0, 0, g1.c.width, g1.c.height)
     g1.x.setTransform(GQ, 0, 0, GQ, 0, 0)
     g1.x.globalCompositeOperation = 'lighter'
 
+    const Y = y0 * dpr
+    for (let j = 0; j < cols.length; j += 4) {
+      cols[j] = cols[j + 1] = cols[j + 2] = Y
+      cols[j + 3] = -1
+    }
     sample(f.items, M, pts)
     const N = pts.n
     if (N > 1) {
       if (this.ys.length < N) this.ys = new Float64Array(N * 2)
       const xs = pts.x
       const ys = this.ys
-      const spline = (c: Path2D, cont: boolean) => {
-        if (cont) c.lineTo(xs[0], ys[0])
-        else c.moveTo(xs[0], ys[0])
-        for (let j = 0; j < N - 1; j++) {
-          const p = Math.max(0, j - 1)
-          const q = Math.min(N - 1, j + 2)
-          c.bezierCurveTo(xs[j] + (xs[j + 1] - xs[p]) / 6, ys[j] + (ys[j + 1] - ys[p]) / 6, xs[j + 1] - (xs[q] - xs[j]) / 6, ys[j + 1] - (ys[q] - ys[j]) / 6, xs[j + 1], ys[j + 1])
-        }
-      }
-      const shape = (g: number, k: number, down: boolean, stroke = false) => {
+      const { palette: pal } = f
+      // Where a track is still being analysed, the curves' outlines get a rim light behind its front.
+      const lit = f.items.filter(it => it.front !== undefined && it.front < it.track.dur)
+      const outlines: Path2D[] = []
+      const shapes = [
+        [0, tlook.klo, true, pal.lo, 1, tlook.alo],
+        [1, tlook.kmi, false, pal.mi, 0.8, tlook.ami],
+        [2, tlook.khi, false, pal.hi, 0.7, tlook.ahi],
+      ] as const
+      for (const [g, k, down, col, glowA] of shapes) {
         const v = pts.s[g]
         for (let j = 0; j < N; j++) ys[j] = down ? y0 + v[j] * k * amp : y0 - v[j] * k * amp
         const P = new Path2D()
-        if (stroke) {
-          spline(P, false)
-          return P
-        }
         P.moveTo(xs[0], y0)
-        spline(P, true)
+        spline(P, xs, ys, N)
         P.lineTo(xs[N - 1], y0)
         P.closePath()
-        return P
+        g1.x.fillStyle = oklch(col)
+        g1.x.globalAlpha = glowA
+        g1.x.fill(P)
+        g1.x.globalAlpha = 1
+        if (lit.length) {
+          const O = new Path2D()
+          spline(O, xs, ys, N)
+          outlines.unshift(O)
+        }
+        tess(this.line, xs, ys, N)
+        columns(this.line, cols, g, Y, dpr)
       }
-      const pLo = shape(0, tlook.klo, true)
-      const pMi = shape(1, tlook.kmi, false)
-      const pHi = shape(2, tlook.khi, false)
-      const sHi = shape(2, tlook.khi, false, true)
-      const { palette: pal } = f
-      const paint = (c: CanvasRenderingContext2D, P: Path2D, alpha: number, stroke = false) => {
-        c.globalAlpha = alpha
-        if (stroke) c.stroke(P)
-        else c.fill(P)
-        c.globalAlpha = 1
-      }
-      g1.x.fillStyle = oklch(pal.lo)
-      paint(g1.x, pLo, 1)
-      g1.x.fillStyle = oklch(pal.mi)
-      paint(g1.x, pMi, 0.8)
-      g1.x.fillStyle = oklch(pal.hi)
-      paint(g1.x, pHi, 0.7)
-      top.x.fillStyle = oklch(pal.lo)
-      paint(top.x, pLo, tlook.alo)
-      top.x.fillStyle = oklch(pal.mi)
-      paint(top.x, pMi, tlook.ami)
-      top.x.fillStyle = oklch(pal.hi)
-      paint(top.x, pHi, tlook.ahi)
-      top.x.strokeStyle = oklch(pal.edge)
-      top.x.lineWidth = tlook.edge
-      if (tlook.edge > 0) paint(top.x, sHi, 1, true)
-      // Rim light: where a track is still being analysed, the curves' outlines glow over the last
-      // RIM px behind the front, brightest at it; the wider stroke on the glow layer gets blurred.
-      const lit = f.items.filter(it => it.front !== undefined && it.front < it.track.dur)
-      if (lit.length) {
-        const outlines = [sHi, shape(1, tlook.kmi, false, true), shape(0, tlook.klo, true, true)]
-        for (const it of lit) {
-          const xf = M.X(it.a + it.front!)
-          if (xf < 0 || xf > W + RIM) continue
-          for (const [c, lw] of [[top.x, 1.6], [g1.x, 4]] as const) {
-            const gr = c.createLinearGradient(xf - RIM, 0, xf, 0)
-            gr.addColorStop(0, oklch(pal.edge, 0))
-            gr.addColorStop(1, oklch(pal.edge, 1))
-            c.save()
-            c.beginPath()
-            c.rect(xf - RIM, -1e4, RIM, 2e4)
-            c.clip()
-            c.strokeStyle = gr
-            c.lineWidth = lw
-            for (const P of outlines) c.stroke(P)
-            c.restore()
-          }
+      // The rim, brightest at the front: on the glow layer a wider outline (it gets blurred), in the
+      // columns its strength for the WebGL pass.
+      const n = cols.length / 4
+      for (const it of lit) {
+        const xf = M.X(it.a + it.front!)
+        if (xf < 0 || xf > W + RIM) continue
+        const gr = g1.x.createLinearGradient(xf - RIM, 0, xf, 0)
+        gr.addColorStop(0, oklch(pal.edge, 0))
+        gr.addColorStop(1, oklch(pal.edge, 1))
+        g1.x.save()
+        g1.x.beginPath()
+        g1.x.rect(xf - RIM, -1e4, RIM, 2e4)
+        g1.x.clip()
+        g1.x.strokeStyle = gr
+        g1.x.lineWidth = 4
+        for (const O of outlines) g1.x.stroke(O)
+        g1.x.restore()
+        for (let c = Math.max(0, Math.ceil((xf - RIM) * dpr - 0.5)), c1 = Math.min(n - 1, Math.ceil(xf * dpr - 0.5) - 1); c <= c1; c++) {
+          const j = c * 4 + 3
+          if (cols[j] >= 0) cols[j] = Math.max(cols[j], ((c + 0.5) / dpr - (xf - RIM)) / RIM)
         }
       }
     }
@@ -414,28 +442,21 @@ export class TimelineRenderer {
     q.filter = `blur(${7 * GB}px)`
     q.drawImage(g1.c, 0, 0)
     q.filter = 'none'
-    o2.save()
-    o2.globalCompositeOperation = 'lighter'
-    o2.globalAlpha = Math.min(1, tlook.glow * 0.5)
-    o2.imageSmoothingEnabled = true
-    o2.drawImage(g2.c, 0, cy * GQ, g2.c.width, ch * GQ, 0, cy, W, ch)
-    if (tlook.glow * 0.5 > 1) {
-      o2.globalAlpha = tlook.glow * 0.5 - 1
-      o2.drawImage(g2.c, 0, cy * GQ, g2.c.width, ch * GQ, 0, cy, W, ch)
-    }
-    o2.restore()
-    o2.globalCompositeOperation = 'source-over'
-    o2.drawImage(top.c, bx * dpr, by * dpr, W * dpr, bh * dpr, bx, by, W, bh)
 
-    // The light falls off ahead of the playhead, not by track: 100 % there, 62 % from about 3/4 of the strip on.
-    const { px, R } = M
-    const sp = R.w * 0.25
-    const fo = o2.createLinearGradient(px, 0, px + sp * 3, 0)
-    for (let k = 0; k <= 6; k++) fo.addColorStop(k / 6, `rgba(0,0,0,${0.38 * (1 - Math.exp(-((k / 2) ** 2)))})`)
-    o2.globalCompositeOperation = 'destination-out'
-    o2.fillStyle = fo
-    o2.fillRect(px, cy, W - px, ch)
-    o2.globalCompositeOperation = 'source-over'
+    const { palette: pal } = f
+    return {
+      cols, by, bh, cy, ch, y0, px, hw: tlook.edge / 2,
+      lo: pm(rgb(oklch(pal.lo)), tlook.alo),
+      mi: pm(rgb(oklch(pal.mi)), tlook.ami),
+      hi: pm(rgb(oklch(pal.hi)), tlook.ahi),
+      edge: tlook.edge > 0 ? pm(rgb(oklch(pal.edge)), 1) : NONE,
+      rim: pm(rgb(oklch(pal.edge)), 1),
+      // The light falls off ahead of the playhead, not by track, over three quarters of the strip.
+      fall: M.R.w * 0.25,
+      glow: g2.c,
+      ga: tlook.glow * 0.5,
+      gscale: [(W * GQ) / g2.c.width / W, GQ / g2.c.height],
+    }
   }
 
   private labels(f: Frame, y0: number, amp: number) {
