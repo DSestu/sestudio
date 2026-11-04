@@ -1,11 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
 import { albumsOf } from '../../musicLibrary'
+import { useLibraryTracks } from '../../musicLibraries'
 import { metaLine, useSummary } from '../../musicMeta'
-import { post, resolveLink, type AddPayload, type OnlineLink, type QueueState } from '../../musicQueue'
+import { addPayload, post, resolveLink, type AddPayload, type OnlineLink, type QueueState } from '../../musicQueue'
 import { fmtTime } from './format'
 import { fitHeight } from './interact'
 import Meter from './Meter'
+import { isShort } from './timeline/mapping'
 import { armRowDrag, gripRowDrag, type DragSource } from './rowDrag'
 
 type Ref = AddPayload['tracks'][number]
@@ -22,8 +24,6 @@ interface Entry {
 
 const TABS = [
   { id: 'server', label: 'On this server' },
-  { id: 'ytm', label: 'YouTube Music' },
-  { id: 'sc', label: 'SoundCloud' },
   { id: 'link', label: 'Paste a link' },
 ] as const
 type Tab = (typeof TABS)[number]['id']
@@ -135,6 +135,7 @@ function PasteLink({ q, queued, toast }: { q: QueueState; queued: Set<string>; t
 /** The panel that finds tracks to queue (SPEC-music-player §5.5). Tracks on this server and pasted links work; the other sources arrive with the search PR. */
 export default function AddPanel({ q, onClose }: { q: QueueState; onClose: () => void }) {
   const titles = useDownloadedLibrary()
+  const others = useLibraryTracks()
   const [tab, setTab] = useState<Tab>('server')
   const [query, setQuery] = useState('')
   const [note, setNote] = useState<string | null>(null)
@@ -143,11 +144,11 @@ export default function AddPanel({ q, onClose }: { q: QueueState; onClose: () =>
   const timer = useRef(0)
 
   const all = useMemo<Entry[]>(
-    () => albumsOf(titles).flatMap(a => a.tracks).map(t => ({
+    () => [...albumsOf(titles).flatMap(a => a.tracks), ...others].map(t => ({
       key: `${t.library}/${t.id}`, title: t.title, artist: t.artist, duration: t.duration, bpm: t.bpm, analysisId: t.id,
-      ref: { library: t.library, track_id: t.id },
+      ref: addPayload([t], 'append').tracks[0],
     })),
-    [titles],
+    [titles, others],
   )
   const found = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -171,7 +172,8 @@ export default function AddPanel({ q, onClose }: { q: QueueState; onClose: () =>
         const h = c as HTMLElement
         return Math.max(m, h.offsetTop + (h.dataset.scroll !== undefined ? h.scrollHeight : h.offsetHeight))
       }, 0)
-      const max = window.innerHeight - (window.matchMedia('(min-width: 768px)').matches ? 112 : 48)
+      // A phone on its side: from 16 px under the top to 80 px over the bottom, clear of the transport row.
+      const max = window.innerHeight - (isShort(innerWidth, innerHeight) ? 96 : window.matchMedia('(min-width: 768px)').matches ? 112 : 48)
       const next = fitHeight(end, max)
       setHeight(h => (h === next ? h : next))
     }
@@ -197,31 +199,26 @@ export default function AddPanel({ q, onClose }: { q: QueueState; onClose: () =>
       data-addp
       aria-label="Add music"
       style={{ height }}
-      className="fixed z-80 glass flex flex-col overflow-hidden transition-[height] duration-320 ease-smooth text-base-content inset-x-0 bottom-0 rounded-t-2xl md:inset-x-auto md:bottom-auto md:left-[calc(100vw-772px)] md:top-23 md:w-95 md:rounded-2xl"
+      className="fixed z-80 glass flex flex-col overflow-hidden transition-[height] duration-320 ease-smooth text-base-content inset-x-0 bottom-0 rounded-t-2xl md:inset-x-auto md:bottom-auto md:left-[calc(100vw-772px)] md:top-23 md:w-95 md:rounded-2xl short:inset-x-auto short:bottom-auto short:left-4 short:top-4 short:right-[calc(min(300px,36vw)+30px)] short:w-auto short:rounded-2xl"
     >
       <header className="flex items-center px-3 pt-3 pb-2">
         <h3 className="flex-1 text-sm font-semibold">Add music</h3>
         <button aria-label="Close" className="size-[30px] rounded-lg grid place-items-center text-lg hover:bg-white/8" onClick={onClose}>×</button>
       </header>
-      <div role="tablist" className="flex gap-1.5 overflow-x-auto px-3 pb-2">
-        {TABS.map(t => {
-          const real = t.id === 'server' || t.id === 'link'
-          return (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={tab === t.id}
-              disabled={!real}
-              title={real ? undefined : 'Coming soon'}
-              className={`h-[26px] shrink-0 rounded-[9px] px-2.5 text-xs font-semibold disabled:opacity-35 ${
-                tab === t.id ? 'bg-primary/20 text-primary' : 'bg-white/6 text-base-content/70 hover:bg-white/10'
-              }`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          )
-        })}
+      <div role="tablist" className="flex shrink-0 gap-1.5 overflow-x-auto px-3 pb-2">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`h-[26px] shrink-0 rounded-[9px] px-2.5 text-xs font-semibold ${
+              tab === t.id ? 'bg-primary/20 text-primary' : 'bg-white/6 text-base-content/70 hover:bg-white/10'
+            }`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
       {tab === 'server' ? (
         <>
@@ -229,18 +226,24 @@ export default function AddPanel({ q, onClose }: { q: QueueState; onClose: () =>
             <input
               value={query}
               onChange={ev => setQuery(ev.target.value)}
-              placeholder={`Search ${all.length} tracks on this server`}
+              placeholder={all.length ? `Search ${all.length} tracks on this server` : 'Search tracks on this server'}
               aria-label="Search this server's tracks"
               className="h-9 w-full rounded-[10px] bg-white/8 px-3 text-[13px] outline-none placeholder:text-base-content/40 focus-visible:ring-2 focus-visible:ring-primary"
             />
           </div>
-          <p className="px-3 pb-1.5 text-[11px] text-base-content/42">
-            {found.length} of {all.length} · drag a track into the queue, or use + / Play next
-          </p>
+          {all.length > 0 && (
+            <p className="px-3 pb-1.5 text-[11px] text-base-content/42">
+              {found.length} of {all.length} · drag a track into the queue, or use + / Play next
+            </p>
+          )}
           <div data-scroll className="min-h-0 overflow-y-auto overscroll-contain">
             {found.slice(0, SHOWN).map(e => <EntryRow key={e.key} e={e} q={q} queued={queued.has(e.ref.track_id)} toast={toast} />)}
             {found.length > SHOWN && <p className="px-3 py-2 text-center text-[11px] text-base-content/42">Search to narrow {found.length - SHOWN} more.</p>}
-            {!found.length && <p className="px-3 py-4 text-center text-xs text-base-content/42">No track matches.</p>}
+            {!found.length && (
+              <p className="px-3 py-4 text-center text-xs text-base-content/42">
+                {all.length ? 'No track matches.' : 'No music on this server yet. Add a folder in Settings › Music.'}
+              </p>
+            )}
           </div>
         </>
       ) : (
