@@ -24,6 +24,8 @@ export interface RawAnalysis {
   camelot?: string
   genre?: string
   genreConf?: number
+  /** Still being analysed: `bands` are the part measured so far. */
+  partial?: boolean
 }
 
 /** A structure segment (intro, buildup, drop, breakdown, outro) in the track's own seconds. */
@@ -44,6 +46,8 @@ export interface Track {
   segs: Seg[]
   /** Cumulative band means per group (bass, mids, highs): cum[g][i + 1] = cum[g][i] + mean at i. */
   cum: [Float64Array, Float64Array, Float64Array]
+  /** While the track is being analysed: how many seconds of it are measured so far. */
+  front?: number
 }
 
 const GROUPS = [[0, 1], [2, 3, 4], [5, 6, 7]]
@@ -66,7 +70,7 @@ export function prepTrack(id: string, dur: number, raw?: RawAnalysis | null): Tr
   const bar0 = normBar0(bpm, raw?.bar0)
   const bar = bpm ? 240 / bpm : 0
   const segs = bpm && raw?.structure ? raw.structure.map(g => ({ label: g.label, a: bar0 + g.start_bar * bar, b: bar0 + g.end_bar * bar })) : []
-  return { id, dur, bpm, bar0, segs, cum }
+  return { id, dur, bpm, bar0, segs, cum, ...(raw?.partial ? { front: n / 10 } : {}) }
 }
 
 /** The first bar line, folded into the first bar (a hair before the next one counts as 0). */
@@ -157,6 +161,18 @@ export interface DrawItem {
   sc: number
   /** Highlight, 0..1 (§6.11). */
   hl: number
+  /** While analysed: the drawn front, in the track's time; nothing is drawn past it. */
+  front?: number
+}
+
+/** Seconds of music behind the analysis front over which the curves rise from the horizon. */
+export const RISE = 7
+
+/** How much of a track's curve shows at time o, given the drawn analysis front. */
+export function rise(o: number, front?: number): number {
+  if (front === undefined) return 1
+  const u = (front - o) / RISE
+  return u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u)
 }
 
 /** Mean of a band group over [a, b] of a track, from the interpolated cumulative array. */
@@ -181,7 +197,7 @@ function cov(items: DrawItem[], s0: number, s1: number, out: Float64Array): void
     if (o1 <= o0) continue
     const w = weight((o0 + o1) / 2, j.span)
     if (w === 0) continue
-    const k = w * w * j.sc
+    const k = w * w * j.sc * rise((o0 + o1) / 2, j.front)
     const cum = j.track.cum
     out[0] += k * meanF(cum[0], o0, o1)
     out[1] += k * meanF(cum[1], o0, o1)

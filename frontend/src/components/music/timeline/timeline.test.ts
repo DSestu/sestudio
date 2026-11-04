@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fish, life, Mapper, PH, PHE } from './mapping'
-import { layoutQueue, meanF, Points, prepTrack, sample, trackAt, weight, type DrawItem, type Track } from './sampling'
+import { layoutQueue, meanF, Points, prepTrack, rise, RISE, sample, trackAt, weight, type DrawItem, type Track } from './sampling'
 
 describe('mapping', () => {
   it('puts the playhead at 8 % and the horizon at the right edge, the past at the left', () => {
@@ -167,5 +167,22 @@ describe('no popping', () => {
     const r = run(390, 844, 60, 2.5)
     console.log('phone worst frame-to-frame change', (r * 100).toFixed(2), '%')
     expect(r).toBeLessThan(0.02)
+  })
+})
+
+describe('a track being analysed', () => {
+  it('knows how far its bands reach, and a finished one has no front', () => {
+    const bands = Array.from({ length: 8 }, () => Array(40).fill(50))
+    expect(prepTrack('a', 200, { bands, partial: true }).front).toBe(4)
+    expect(prepTrack('a', 200, { partial: true }).front).toBe(0)
+    expect(prepTrack('a', 4, { bands }).front).toBeUndefined()
+  })
+
+  it('rises from the horizon behind the front and shows nothing past it', () => {
+    expect(rise(50)).toBe(1)
+    expect(rise(50, 50)).toBe(0)
+    expect(rise(60, 50)).toBe(0)
+    expect(rise(50 - RISE / 2, 50)).toBeCloseTo(0.5)
+    expect(rise(50 - RISE, 50)).toBe(1)
   })
 })

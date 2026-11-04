@@ -198,6 +198,41 @@ def test_analysis_api(db, root, tmp_path, monkeypatch):
     assert c.post("/api/music/analysis/renormalise").json() == {"tracks": 2}
 
 
+def test_the_bands_are_reported_as_they_are_decoded(tmp_path):
+    f = tmp_path / "long.flac"
+    _write_wav(f, sine(60, 13))
+    seen: list[tuple[int, float]] = []
+    a = analysis.analyse_file(str(f), lambda b, d: seen.append((b.shape[1], d)))
+    # 13 s in 5 s steps: 50, 100, then the rest.
+    assert [n for n, _ in seen] == [50, 100, a.bands.shape[1]]
+    assert all(d == pytest.approx(a.duration) for _, d in seen)
+
+
+def test_a_track_being_analysed_is_served_as_partial(db, root, tmp_path, monkeypatch):
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    c = TestClient(create_app())
+    _write_wav(root / "Artist - Bass.flac", sine(60))
+    runner.run_once(root, workers=1)
+    done = [f.track_id for f in downloaded.scan(root)][0]
+    store.set_partial("yt:abc")
+    got = c.get("/api/music/tracks/analysis", params={"ids": f"{done},yt:abc"}).json()
+    assert got["yt:abc"] == {
+        "id": "yt:abc",
+        "partial": True,
+        "duration": 0,
+        "progress": 0.0,
+        "bands": [[]] * 8,
+    }
+    assert "partial" not in got[done]
+    store.set_partial("yt:abc", np.full((8, 40), 1.0), 8.0)
+    got = c.get("/api/music/tracks/analysis", params={"ids": "yt:abc"}).json()["yt:abc"]
+    assert got["progress"] == 0.5 and len(got["bands"][0]) == 40
+    # The summary (track rows) leaves it out until it is done.
+    assert c.get("/api/music/tracks/summary", params={"ids": "yt:abc"}).json() == {}
+    store.drop_partial("yt:abc")
+    assert c.get("/api/music/tracks/analysis", params={"ids": "yt:abc"}).json() == {}
+
+
 @pytest.mark.exclude_ci
 def test_real_library_bpms():
     folder = Path("/mnt/r/Musique/Android/neuro soundcloud")

@@ -190,6 +190,7 @@ def kick_analysis(tid: str) -> None:
         if tid in _busy or tid in store.stamps():
             return
         _busy.add(tid)
+    store.set_partial(tid)
     threading.Thread(
         target=_analyse, args=(tid, vid), daemon=True, name="music-online"
     ).start()
@@ -207,7 +208,9 @@ def _analyse(tid: str, vid: str) -> None:
         with yt_dlp.YoutubeDL(parsed.ydl_opts) as ydl:
             ydl.download([url])
         file = next(p for p in work.iterdir() if p.suffix != ".part")
-        a = analysis.analyse_file(str(file))
+        a = analysis.analyse_file(
+            str(file), lambda bands, dur: store.set_partial(tid, bands, dur)
+        )
         with _lock:
             info = (_resolved.get(vid) or (0, {}))[1].get("info") or {}
         a.extra = genres.decide(
@@ -219,5 +222,6 @@ def _analyse(tid: str, vid: str) -> None:
         logger.warning("Could not analyse %s", tid, exc_info=True)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+        store.drop_partial(tid)
         with _lock:
             _busy.discard(tid)
