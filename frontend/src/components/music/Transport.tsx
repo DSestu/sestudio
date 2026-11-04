@@ -2,6 +2,8 @@ import { useRef, useState } from 'react'
 import { queueActions, type QueueState } from '../../musicQueue'
 import { engine } from './engine'
 import { fmtTime } from './format'
+import { wake } from './idle'
+import { bar as hold } from './scrub'
 import { togglePlay } from './player'
 import CastStrip from './CastStrip'
 import SendToTv from './SendToTv'
@@ -17,8 +19,16 @@ function Seek({ position, duration, readOnly = false }: { position: number; dura
     const r = bar.current!.getBoundingClientRect()
     return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * duration
   }
+  // The timeline follows the drag too (scrub.ts `bar`, held here).
+  const follow = (s: number) => {
+    hold.pos = s
+    hold.t0 = 0
+    wake()
+  }
   const seekTo = (s: number) => {
     const t = Math.max(0, Math.min(duration, s))
+    hold.pos = t
+    hold.t0 = performance.now()
     engine.seek(t)
     void queueActions.transport('seek', { position: t })
   }
@@ -45,17 +55,23 @@ function Seek({ position, duration, readOnly = false }: { position: number; dura
           e.currentTarget.setPointerCapture(e.pointerId)
           setScrub(at(e))
           engine.seek(at(e))
+          follow(at(e))
         }}
         onPointerMove={e => {
           if (scrub === null) return
           setScrub(at(e))
           engine.seek(at(e))
+          follow(at(e))
         }}
         onPointerUp={e => {
           if (scrub !== null) seekTo(at(e))
           setScrub(null)
         }}
-        onPointerCancel={() => setScrub(null)}
+        onPointerCancel={() => {
+          hold.pos = null
+          wake()
+          setScrub(null)
+        }}
         onKeyDown={e => {
           const d = SEEK_KEYS[e.key]
           if (d === undefined) return
