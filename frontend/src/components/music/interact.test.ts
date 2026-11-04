@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  bez, clampView, crossed, dropIndex, fitHeight, flash, flipOffsets, glidePos, grabbed, inertiaStep, isMove,
+  bez, clampView, crossed, dropIndex, flash, flipOffsets, glidePos, grabbed, inertiaStep, isMove,
   morphOffsets, rowDragIntent, stepHl, velocity,
 } from './interact'
 
@@ -117,13 +117,5 @@ describe('queue animations', () => {
     const off = morphOffsets(new Map([['a', 0], ['b', 100]]), new Map([['a', 0], ['x', 100], ['b', 250]]))
     expect(off.get('b')).toBe(-150)
     expect(off.has('x')).toBe(false)
-  })
-})
-
-describe('add panel', () => {
-  it('fits its content, within 140 px and the room', () => {
-    expect(fitHeight(60, 800)).toBe(140)
-    expect(fitHeight(300, 800)).toBe(310)
-    expect(fitHeight(900, 650)).toBe(650)
   })
 })

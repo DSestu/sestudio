@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clockSkew, getQueue, onQueueEvent, positionNow, queueActions, type QueueState, type TrackInfo } from '../../../musicQueue'
 import { claimSound, engine, useSyncStatus } from '../engine'
+import { fmtTime } from '../format'
 import { frameLoop, wake } from '../idle'
+import { joins, type Join } from '../joins'
 import { bez, crossed, dipScale, flash, MORPH_MS, morphOffsets, stepHl } from '../interact'
 import { loadAnalyses, mixOf, rawOf, RETRY_MS, trackOf } from '../mix/analysis'
 import { plan } from '../mix/plan'
@@ -93,17 +95,27 @@ function paintRows(queueEl: Element | null, m: Model, k: number) {
   })
 }
 
-export default function Timeline({ q, info, progress = () => 0, palette = TIMELINE_PALETTE, onOutside }: {
+const MARKS = 7
+
+export default function Timeline({ q, info, progress = () => 0, palette = TIMELINE_PALETTE, onOutside, marks = false, aim = null, onAim }: {
   q: QueueState
   info: (id: string) => TrackInfo | undefined
   /** A press on the timeline outside the scrub band. */
   onOutside?: () => void
+  /** Adding: the joins after the playing track show as targets ("Next", then +). */
+  marks?: boolean
+  /** The queue index the next add goes to, when one was picked. */
+  aim?: number | null
+  onAim?: (at: number) => void
   /** Mode progress, 0 default, 1 expanded. */
   progress?: () => number
   palette?: PaletteName
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const text = useRef<HTMLCanvasElement>(null)
+  const markEls = useRef<(HTMLButtonElement | null)[]>([])
+  const slotEl = useRef<HTMLDivElement>(null)
+  const slotLabel = useRef<HTMLDivElement>(null)
   const [version, setVersion] = useState(0)
   const [open, setOpen] = useState<{ a: string; b: string; x: number; above: number } | null>(null)
   const ids = q.items.map(i => i.track_id).join(',')
@@ -120,10 +132,10 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   const titles = q.items.map(i => info(i.track_id)?.title ?? '').join('\n')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const model = useMemo(() => buildModel(q, info), [q.rev, q.current, ids, titles, version])
-  const live = useRef({ model, progress, palette, onOutside })
+  const live = useRef({ model, progress, palette, onOutside, marks, aim })
   // Any render may carry a change the loop should draw (queue, mode, look).
   useEffect(() => {
-    live.current = { model, progress, palette, onOutside }
+    live.current = { model, progress, palette, onOutside, marks, aim }
     wake()
   })
 
@@ -179,6 +191,63 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     root.addEventListener('pointerdown', down)
     const poke = ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'touchstart']
     for (const ev of poke) root.addEventListener(ev, wake, { passive: true })
+
+    // The joins after the playing track: drop targets for the row drag, and the marks while adding.
+    const times: number[] = []
+    const placeJoins = (m: Model, G: number): boolean => {
+      const M = r.M
+      const list: Join[] = []
+      times.length = 0
+      const n = m.items.length
+      for (let i = m.cur + 1; i <= n; i++) {
+        const s = i < n ? m.items[i].a : m.items[n - 1].a + m.items[n - 1].track.dur
+        const x = M.X(s)
+        if (x < M.R.x - 1 || x > M.R.x + M.R.w + 1) continue
+        list.push({ at: i < n ? m.rows[i] : m.q.items.length, x })
+        times.push(i)
+      }
+      joins.list = list
+      joins.band = M.band()
+      const { marks: on, aim } = live.current
+      const show = on || joins.dragging
+      // Marks closer than 40 px to the last one shown are skipped (the fisheye packs the far joins); every join still takes a drop.
+      const marks: Join[] = []
+      if (show) for (const j of list) if (!marks.length || j.x - marks[marks.length - 1].x >= 40) marks.push(j)
+      markEls.current.forEach((b, k) => {
+        const j = marks[k]
+        if (!b) return
+        if (!j) { b.style.display = 'none'; return }
+        const next = j.at === m.q.current + 1
+        b.style.display = ''
+        // On the horizon, like the others; the pill stays on screen when the join sits at the playhead, near the edge.
+        const x = next ? Math.min(M.W - 34, Math.max(34, j.x)) : j.x
+        b.style.transform = `translate(${x}px, ${M.y0}px) translate(-50%, -50%)`
+        b.dataset.at = String(j.at)
+        const label = next ? 'Next' : '+'
+        if (b.textContent !== label) b.textContent = label
+        b.setAttribute('aria-label', next ? 'Add next' : 'Add here')
+        b.dataset.next = next ? '1' : '0'
+        b.dataset.aimed = j.at === aim ? '1' : '0'
+      })
+      const slot = slotEl.current
+      const k = joins.slot === null ? -1 : list.findIndex(j => j.at === joins.slot)
+      if (slot) {
+        slot.style.display = k < 0 ? 'none' : ''
+        if (k >= 0) {
+          const j = list[k]
+          const i = times[k]
+          slot.style.transform = `translate(${j.x - 18}px, ${M.y0 - M.amp}px)`
+          slot.style.height = `${M.amp * 1.8}px`
+          const after = i < n ? m.items[i - 1] : m.items[n - 1]
+          const startS = i < n ? shown.ts[i] : shown.ts[n - 1] + m.items[n - 1].track.dur
+          const when = Math.max(0, startS - G)
+          // The label goes left of the slot near the right edge.
+          slotLabel.current!.style.transform = j.x > M.W - 300 ? 'translateX(calc(-100% - 60px))' : ''
+          slotLabel.current!.textContent = `${j.at === m.q.current + 1 ? 'Plays next' : `After ${after.title || 'the track before'}`} · in ${fmtTime(when)}`
+        }
+      }
+      return show
+    }
 
     let slow = 0
     let seen = 0
@@ -262,10 +331,11 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       }
       paintRows(queueEl, m, k)
       r.draw({ items, G, t, level, palette: PALETTES[pal], avoid, hover: scrub.hovered })
+      const show = placeJoins(m, G)
       // Nothing to draw next frame when this one matches the last (and nothing plays).
       let sum = 0
       for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol
-      const sig = `${G.toFixed(3)}|${t.toFixed(3)}|${level.toFixed(3)}|${scrub.hovered}|${sum.toFixed(3)}|${items.length}`
+      const sig = `${G.toFixed(3)}|${t.toFixed(3)}|${level.toFixed(3)}|${scrub.hovered}|${sum.toFixed(3)}|${items.length}|${show}|${joins.slot}|${live.current.aim}`
       const moved = sig !== lastSig || getQueue().playing
       lastSig = sig
       return moved
@@ -304,6 +374,21 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     <>
       <canvas ref={canvas} aria-hidden="true" className="fixed inset-0 -z-10 size-full pointer-events-none" />
       <canvas ref={text} aria-hidden="true" className="fixed inset-0 -z-10 size-full pointer-events-none" />
+      {/* Above the queue sheet: a drop's slot and its label may sit under it. */}
+      <div className="fixed left-0 top-0 z-20 pointer-events-none">
+        {Array.from({ length: MARKS }, (_, k) => (
+          <button
+            key={k}
+            ref={el => { markEls.current[k] = el }}
+            style={{ display: 'none' }}
+            className="absolute left-0 top-0 pointer-events-auto grid place-items-center h-8 min-w-8 rounded-full border border-primary/60 bg-black/55 text-[15px] font-bold leading-none text-primary after:absolute after:-inset-1.5 after:content-[''] hover:bg-black/75 data-[next=1]:h-7 data-[next=1]:px-3 data-[next=1]:text-xs data-[next=1]:border-primary data-[next=1]:bg-primary data-[next=1]:text-primary-content data-[aimed=1]:bg-primary data-[aimed=1]:text-primary-content data-[aimed=1]:ring-2 data-[aimed=1]:ring-white/70"
+            onClick={e => onAim?.(Number(e.currentTarget.dataset.at))}
+          />
+        ))}
+        <div ref={slotEl} style={{ display: 'none' }} className="absolute left-0 top-0 w-9 rounded-xl border-2 border-dashed border-primary bg-primary/12">
+          <div ref={slotLabel} className="absolute left-12 top-0 w-max max-w-64 rounded-xl glass px-3 py-2 text-xs font-semibold text-primary" />
+        </div>
+      </div>
       {open && at > 0 && (
         <MixPopover
           a={{ track: model.items[at - 1].track, title: model.items[at - 1].title }}

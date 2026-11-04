@@ -1,7 +1,11 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import { getQueue } from '../../musicQueue'
+import { wake } from './idle'
 import { dropIndex, HOLD_MS, isMove, rowDragIntent } from './interact'
+import { joinNear, joins } from './joins'
 
-// Drag a row of the queue, or of the add panel, into the queue (SPEC-music-player §5.4).
+// Drag a row of the queue, or of the library, into the queue (SPEC-music-player §5.4);
+// a library row can also land on a join of the timeline.
 // A ghost follows the pointer, a drop line (the `[data-dropline]` in the queue) shows the
 // place; nothing re-renders while it runs.
 
@@ -62,13 +66,26 @@ function moveTo(e: PointerEvent) {
   if (!a) return
   a.ghost.style.top = `${e.clientY - a.dy}px`
   if (a.src.from === null) a.ghost.style.left = `${e.clientX - a.dx}px`
-  const q = queueEl()?.getBoundingClientRect()
-  const list = listEl()
-  if (!q || !list || e.clientX < q.left || e.clientX > q.right || e.clientY < q.top - 20 || e.clientY > q.bottom + 20) {
-    a.at = null
+  // The phone's Library page: dropped on the Queue tab, a track goes last.
+  const tab = document.querySelector<HTMLElement>('[data-droptab]')
+  const tr = a.src.from === null ? tab?.parentElement?.getBoundingClientRect() : undefined
+  const overTab = !!tr && e.clientX >= tr.left && e.clientX <= tr.right && e.clientY >= tr.top - 12 && e.clientY <= tr.bottom + 12
+  if (tab) tab.parentElement!.dataset.over = overTab ? '1' : '0'
+  if (overTab) {
+    a.at = getQueue().items.length
     showLine(null)
     return
   }
+  const q = queueEl()?.getBoundingClientRect()
+  const list = listEl()
+  if (!q || !list || e.clientX < q.left || e.clientX > q.right || e.clientY < q.top - 20 || e.clientY > q.bottom + 20) {
+    showLine(null)
+    const j = a.src.from === null ? joinNear(joins.list, joins.band, e.clientX, e.clientY) : null
+    a.at = j?.at ?? null
+    if (joins.slot !== a.at) { joins.slot = a.at; wake() }
+    return
+  }
+  if (joins.slot !== null) { joins.slot = null; wake() }
   if (e.clientY < q.top + 50) list.scrollTop -= 8
   else if (e.clientY > q.bottom - 40) list.scrollTop += 8
   const mids = rowsEl().map(r => r.getBoundingClientRect().top + r.offsetHeight / 2)
@@ -86,6 +103,11 @@ function end(cancel: boolean) {
   a.ghost.remove()
   a.row.style.opacity = ''
   showLine(null)
+  joins.dragging = false
+  joins.slot = null
+  wake()
+  const tabs = document.querySelector<HTMLElement>('[data-droptab]')?.parentElement
+  if (tabs) tabs.dataset.over = '0'
   document.removeEventListener('touchmove', stopScroll)
   window.removeEventListener('pointermove', onMove)
   window.removeEventListener('pointerup', onUp)
@@ -119,6 +141,8 @@ function lift(row: HTMLElement, src: DragSource, x: number, y: number, pointer: 
   })
   document.body.append(ghost)
   row.style.opacity = '.3'
+  joins.dragging = src.from === null
+  wake()
   active = { src, row, ghost, dx: x - r.left, dy: y - r.top, pointer, at: null }
   document.addEventListener('touchmove', stopScroll, { passive: false })
   window.addEventListener('pointermove', onMove)
@@ -136,6 +160,9 @@ export function gripRowDrag(e: ReactPointerEvent, src: DragSource) {
   e.stopPropagation()
   lift(row, src, e.clientX, e.clientY, e.pointerId)
 }
+
+/** A swipe took the touch: it is not a hold any more. */
+export const cancelArm = () => unarm()
 
 function unarm() {
   if (!pending) return

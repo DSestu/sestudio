@@ -27,6 +27,15 @@ export function shortCols(W: number) {
   return { q, l: W - q - 30 }
 }
 
+let shift = 0
+/** Pixels the desktop's expanded stage gives up to the library column beside it (0 when it is closed). */
+export const stageShift = () => shift
+export const setStageShift = (px: number) => { shift = px }
+/** How much the library column takes from the stage when fully open: its 360 px and a 20 px gap, leaving the stage at least 300 px. */
+export const libShift = (W: number) => Math.min(380, Math.max(0, W - 528 - 300))
+/** The library column of the desktop's expanded view: left of the queue column, as tall. */
+export const libRect = (W: number, H: number): Rect => ({ x: W - 760, y: 92, w: 360, h: H - 112 })
+
 /** `d`: the default strip, `e`: the expanded stage. */
 export function rects(W: number, H: number): { d: Rect; e: Rect } {
   if (isShort(W, H)) {
@@ -40,7 +49,7 @@ export function rects(W: number, H: number): { d: Rect; e: Rect } {
     return { d: { x: 0, y: 60, w: W, h: H * 0.56 - 144 }, e: { x: 14, y: 88, w: W - 28, h: Math.min(250, H * 0.3) } }
   }
   const dh = Math.min(420, H * 0.47)
-  return { d: { x: 0, y: H - dh, w: W, h: dh }, e: { x: 128, y: 92, w: W - 128 - 400, h: Math.min(520, H * 0.62) } }
+  return { d: { x: 0, y: H - dh, w: W, h: dh }, e: { x: 128, y: 92, w: W - 128 - 400 - shift, h: Math.min(520, H * 0.62) } }
 }
 
 export interface Lens {
@@ -86,6 +95,8 @@ export class Mapper {
 
   readonly W: number
   readonly H: number
+  private win: number
+  private sh = 0
 
   constructor(W: number, H: number) {
     this.W = W
@@ -94,12 +105,20 @@ export class Mapper {
     this.d = r.d
     this.e = r.e
     const small = isPhone(W) || isShort(W, H)
+    this.win = small ? 40 : 70
     this.F = fish(r.d, small ? 900 : 1500)
-    this.L = life(r.e, small ? 40 : 70)
+    this.L = life(r.e, this.win)
+    this.sh = shift
     this.at(0)
   }
 
   at(t: number): this {
+    if (this.sh !== shift) {
+      // The library column opened or closed: the stage narrows or widens.
+      this.sh = shift
+      this.e = rects(this.W, this.H).e
+      this.L = life(this.e, this.win)
+    }
     const { d, e, R } = this
     this.t = t
     R.x = lerp(d.x, e.x, t)

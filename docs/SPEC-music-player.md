@@ -68,7 +68,7 @@ are either a 4 s fade or a **beat sync** (tempo-matched, phrase-aligned, with a 
 | — | **Highlight animates.** The playing track's queue row and timeline region brighten and fade with a 120 ms time constant when the playing track changes. While the view glides or scrubs, **every track it crosses flashes** (§6.11). |
 | — | **Scrub only inside the timeline band**: the strip from `y0 − 1.02·amp − 40` to `y0 + .95·amp`; a press elsewhere on the canvas does nothing (except close the add panel). **Clicking the timeline glides** exactly like clicking a title or a row (700 ms view, 0.6 s sound crossfade). |
 | — | **Drag and drop from anywhere on a row** except its buttons: mouse after 5 px, touch after a 300 ms hold (a swipe still scrolls). The grip still starts a drag at once. Library rows drag into the queue the same way. |
-| — | **Add panel** ("+ Add" in the queue header: expanded mode, and desktop default; phones only in expanded; never on the TV): its height fits its content, animates, and never exceeds the old full height; on phones it is a bottom sheet (§5.5, §7.6). |
+| — | **Adding** (redesigned 2026-11-04): the crate in the default view, the library column (desktop) or Library page (phones) in expanded, row gestures everywhere (§5.5). |
 | — | **Queue animations**: adding opens a gap, then the row slides in; removing slides the row out, then closes the gap; reordering is a 420 ms FLIP and the dropped row settles from where it was released, lifted by a shadow (§7.7). The timeline morphs in step (650 ms). |
 | — | **The TV picture is the desktop immersive (default) view**, drawn at 1920 × 1080, with every control removed: no options, no **+ Add** or add panel, no grips or ×, no transport buttons, no progress-bar thumb, no cursor, no transition popover. The progress line and times stay, read-only; the floating queue stays, read-only, and keeps the playing row in view by itself. Preview: `scrub.html?tv` in a 1920 × 1080 window. |
 | — | **TV volume while casting.** The sender's cast button turns the player into "Playing on ‹TV›": a glass strip under the transport with a mute button and a 0–100 volume slider (wheel and ↑/↓ step 5). It sets the TV's volume (in the product: the Cast session volume, not the stream's gain). The TV shows a short volume overlay, a glass pill top-centre with icon, bar and value, held 1.6 s, whenever it changes. The visuals do not shrink with the volume. |
@@ -176,25 +176,38 @@ including right before the playing row but never to its own place or the place r
 the playing one. Reordering and adding/removing are refused while a transition is running (toast "Wait for the blend to finish"). The same row
 drag works from the add panel (library rows have no grip dependency, the ghost also follows horizontally).
 
-### 5.5 Queue header and the add panel
+### 5.5 Queue header and adding to the queue
+
+Redesigned 2026-11-04 (mockups `.impeccable/mocks/add-music/v2.html`): one way to add per mode, the same row gestures everywhere.
 
 **Header**: sticky at the top of the queue, `padding 12px 12px 8px`, gap 8 px, 13 px / 600: **"Queue"** · **"7 left · 21 min"**
-(12 px, 42 % text, pushed right: tracks after the one under the view, and the minutes they last with each transition counted as 4 s) · **"+ Add"**
-(26 px high chip, radius 9, Signal Blue at 20 % with Signal Blue text, 12 px / 600; shown on desktop in both modes and on phones in expanded only; never on the TV).
-The queue scrolls inside (`overflow-y: auto`, thin scrollbar, no overscroll chaining); phones in default do not scroll it. The earlier design's
-shuffle / repeat / pin buttons are **not in the prototype**; the mode switch is the pin on desktop (§7.1) and the handle on phones (§7.6);
-see §11 for shuffle, repeat and the "ends 21:38" clock.
+(12 px, 42 % text, pushed right: tracks after the one under the view, and the minutes they last with each transition counted as 4 s).
+Phones in default add a 44 px solid **"+ Add"** button (opens the crate); the desktop's expanded view adds a labelled **"⇤ Library"** toggle (opens the column).
+Phones and short windows in expanded replace the title with two tabs, **Queue · N** | **Library**. Never on the TV.
+The queue scrolls inside (`overflow-y: auto`, thin scrollbar, no overscroll chaining); phones in default do not scroll it. Its last row is a sticky
+**"+ Add to queue"** (48 px, dashed Signal Blue border, solid while open, key hint **A**): the way in on desktop default, and a toggle everywhere else.
+The mode switch is the pin on desktop (§7.1) and the handle on phones (§7.6); see §11 for shuffle, repeat and the "ends 21:38" clock.
 
-**Add panel** (`aside.addp`, glass, radius 16, z above the queue): desktop `left = viewport width − 772 px; top 92 px; width 380 px`, so it
-sits just left of the queue and over the right part of the stage; phones: a bottom sheet, full width, radius 16 16 0 0, anchored at the bottom.
-Opening: opacity 0 → 1, `translate 16px 0 → 0` (phones: `0 24px → 0`) and blur 6 px → 0, 260 ms `--ease`. **Height fits the content**:
-`height = min(max, max(140, bottom of the last child + 10))`, `max = viewport height − 112` (phones: `− 48`); it is recomputed after every render and on
-resize and animates over 320 ms `--ease`. Content: header ("Add music" 14 px, × button 30 px), tabs (**On this server**, YouTube Music, SoundCloud,
-Paste a link; the last three are **mock sources**, a notice "Mock source · ‹name› is not connected yet" and disabled controls; real sources are
-`SPEC-music.md` §13), a search field (36 px, filters the server tab by title + artist, keeps the caret), a folder line ("neuro soundcloud · 12 of 46 · drag a
-track into the queue, or use + / Play next"), then one row per track: grip, title / artist / tempo, balance meter, duration, "In queue" (10.5 px, when its
-id is already queued), **Play next** (inserts after the playing track), **+** (appends). Both toast "Added ‹title›". Adding a track twice is allowed
-(a copy is queued). It closes with ×, with "+ Add" again, with a press on the timeline outside its band, and on phones when leaving expanded.
+**Where you add** (`Crate.tsx`; one `adding` state, read per layout; a mode switch closes it):
+- **Default view, desktop and short windows: the crate**, a glass shelf along the bottom (desktop: 20 px insets, 132 px high; short: left column,
+  over the transport row so the horizon stays clear, 118 px). Header: "Add to queue", library picker (when there are several), search, the aim chip,
+  **Paste a link**, ×. Then a row of cards (176 px, title, BPM · duration, balance meter, ✓ when queued).
+- **Default view, phones: the crate as a sheet** from 52 % of the height to the bottom (the timeline stays visible above it), with a list of rows.
+- **Expanded, desktop: the library column**, flat base-200, `libRect` = `left W − 760, top 92, 360 × (H − 112)`, titled "Add from ‹library›". It slides in
+  (320 ms) and **pushes the stage narrower** (`libShift` = min(380, W − 828)); title and transport shrink with it. Not a floating panel.
+- **Expanded, phones and short windows: the sheet's Library page** (the tabs above).
+
+**Rows and cards** (the same everywhere): **tap / click = add last** (or at the aimed join); **swipe right = play next** (touch: the row follows the
+finger over a Signal Blue "Play next" backing, commits past 30 % of its width with a 10 ms vibration, springs back otherwise; `swipe.ts`);
+**hold 300 ms (touch) or drag 5 px (mouse) = lift**, drop into the queue at the drop line, on a timeline join, or on the **Queue** tab (= last).
+Pointers that hover get two 40 px buttons (32 px on cards): **⤒** play next (ghost) and **+** add last (solid). Cards have no swipe (a sideways move scrolls the shelf).
+**Queue rows: swipe left = remove** (red "Remove" backing); × stays on hover. Every add and remove toasts with **Undo** for 4 s (`adding.ts`, `toast.ts`).
+
+**Timeline joins** (`joins.ts`): while adding or dragging a library row, the join right after the playing track shows a solid **Next** pill and the later
+ones a 32 px **+** mark on the horizon (marks closer than 40 px are skipped; every join still takes a drop). Clicking one **aims** the next adds there
+(chip "Adding after ‹title›", ×; it moves on after each add). Dragging over the band opens a dashed slot at the nearest join (within 90 px) with
+"Plays next · in m:ss" or "After ‹title› · in m:ss". Adding a track twice is allowed (a copy is queued).
+The crate closes with ×, the "+ Add" controls again, **Esc** (before Esc closes the player), a press on the timeline outside its band, or a mode switch.
 
 ### 5.6 Transport and seek
 
@@ -623,7 +636,7 @@ The sheet floats over the sky and over the top of the timeline; nothing else cov
 | Seek + transport | x 128, y = stage bottom + 14, 420 px wide | same block |
 | Queue column | left `W − 380`, top 92, 360 × (`H − 112`) | **flat**: background `--b2`, no blur, no shadow, radius 8 px; more rows visible because it is taller |
 | Timeline | inside the stage | life size §6.3; `y0` at 68 % of the stage, `amp` 40 % of it; playhead at 13.6 % of the stage width; ticks |
-| Add panel (when open) | left `W − 772`, top 92, 380 wide | §5.5 |
+| Library column (when open) | left `W − 760`, top 92, 360 × (`H − 112`); the stage gives up to 380 px | §5.5 |
 
 Stage and column share the top edge; the column is 360 px wide with a 20 px gap to the stage; the seek/transport block sits 14 px under the stage.
 
@@ -657,7 +670,7 @@ Stage and column share the top edge; the column is 360 px wide with a 20 px gap 
 - **Expanded to default**: with the list scrolled to its top, pull it down. The pull is **continuous**: for a pull of `d` px, `p = min(1, d/120)`, `ease = 1 − (1 − p)²`, and the mode progress is `t = 1 − .35 · ease` (the layout follows under the finger, CSS transitions off while pulling);
   the handle bar widens from 36 to `36 + 30·p` px; at `d ≥ 120` it is **armed** (the bar turns Signal Blue with a 220 ms bump). On release: armed → default, else back to expanded, each with the normal 620 ms motion. Works with touch, the mouse wheel (`d −= deltaY · .6`, released after 180 ms of no wheel) and a mouse drag.
 - Not available while a row is being dragged or while the mode is switching.
-- The add panel is a bottom sheet (§5.5) and closes when leaving expanded.
+- Adding is the crate sheet in default and the Library page in expanded (§5.5); a mode switch closes either.
 
 ### 7.7 Queue add / remove / reorder animations
 

@@ -1,6 +1,6 @@
 // The numbers of the music player's interactions: scrub, glide and inertia
-// (SPEC-music-player §6.10), the highlight (§6.11), the row drag (§5.4), the
-// queue animations (§7.7) and the add panel's height (§5.5). Pure functions.
+// (SPEC-music-player §6.10), the highlight (§6.11), the row drag (§5.4)
+// and the queue animations (§7.7). Pure functions.
 
 import { trackAt } from './timeline/sampling'
 
@@ -143,8 +143,3 @@ export function morphOffsets(before: Map<string, number>, after: Map<string, num
 }
 
 export const dipScale = (me: number) => 1 - 0.45 * Math.sin(Math.PI * me)
-
-// --- add panel ------------------------------------------------------------------
-
-/** The add panel is as tall as its content (bottom of the last child + 10), within 140 px and the room there is. */
-export const fitHeight = (end: number, max: number) => Math.min(max, Math.max(140, end + 10))

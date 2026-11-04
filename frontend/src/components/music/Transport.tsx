@@ -109,7 +109,7 @@ export default function Transport({ q, position, duration, tv = false }: { q: Qu
   const idle = q.current < 0
   if (tv) return <div className="w-105"><Seek position={position} duration={duration} readOnly /></div>
   return (
-    <div className="relative flex flex-col gap-3 w-full md:w-105 short:w-full! short:flex-row short:items-center short:gap-2.5">
+    <div className="relative flex flex-col gap-3 w-full short:flex-row short:items-center short:gap-2.5">
       <div className="short:order-1 short:flex-1 short:min-w-0 short:mx-1.5">
         <Seek position={position} duration={duration} />
       </div>
