@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.10.0](https://github.com/DSestu/sestudio/compare/v1.9.0...v1.10.0) (2026-11-04)
+
+
+### New features
+
+* **android:** the app updates itself from GitHub Releases ([#293](https://github.com/DSestu/sestudio/issues/293)) ([3805a25](https://github.com/DSestu/sestudio/commit/3805a25865a2b684a73ddb7dcc03ee1906b21eb6))
+
+
+### Bug fixes
+
+* music key detection uses Deezer's S-KEY network (64 % exact on GiantSteps, was 13 %) ([#291](https://github.com/DSestu/sestudio/issues/291)) ([9680dee](https://github.com/DSestu/sestudio/commit/9680dee1aaece802339795817bac0d06374b8db1))
+* the music light leads the sound by 200 ms by default (220 was too early) ([#296](https://github.com/DSestu/sestudio/issues/296)) ([035a98c](https://github.com/DSestu/sestudio/commit/035a98ca4c702dabcaed29e97c2ea191888d41c1))
+* the music light peaks on the hit instead of trailing it ([#294](https://github.com/DSestu/sestudio/issues/294)) ([06f2362](https://github.com/DSestu/sestudio/commit/06f23627d27da32158da66eeeaeadf2fb52e677d))
+* the music sound delay holds still while it plays, so no more warbles or replays ([#295](https://github.com/DSestu/sestudio/issues/295)) ([6e3d3d8](https://github.com/DSestu/sestudio/commit/6e3d3d88517d77ed87df0880d0bbcaf0cb2d3014))
+
 ## [1.9.0](https://github.com/DSestu/sestudio/compare/v1.8.0...v1.9.0) (2026-11-04)
 
 
