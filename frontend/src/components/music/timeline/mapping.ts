@@ -36,7 +36,8 @@ export function rects(W: number, H: number): { d: Rect; e: Rect } {
     return { d: { x: 0, y: 88, w: l, h: tb - 88 }, e: { x: 16, y: 80, w: l - 16, h: tb - 80 } }
   }
   if (isPhone(W)) {
-    return { d: { x: 0, y: H * 0.3, w: W, h: H * 0.26 }, e: { x: 14, y: 88, w: W - 28, h: Math.min(250, H * 0.3) } }
+    // The strip starts under the close button and leaves 84 px under it for the title, above the transport.
+    return { d: { x: 0, y: 60, w: W, h: H * 0.56 - 144 }, e: { x: 14, y: 88, w: W - 28, h: Math.min(250, H * 0.3) } }
   }
   const dh = Math.min(420, H * 0.47)
   return { d: { x: 0, y: H - dh, w: W, h: dh }, e: { x: 128, y: 92, w: W - 128 - 400, h: Math.min(520, H * 0.62) } }

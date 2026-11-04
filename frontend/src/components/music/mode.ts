@@ -118,8 +118,9 @@ export function frameAt(W: number, H: number, t: number): Frame {
     : isPhone(W)
     ? [
         {
-          title: { x: 22, y: 76, scale: 1 },
-          transport: { x: 14, y: d.y + d.h + 14, w: W - 28 },
+          title: { x: 22, y: d.y + d.h + 6, scale: 1 },
+          // Under the title, which sits in the 84 px under the strip.
+          transport: { x: 14, y: d.y + d.h + 98, w: W - 28 },
           queue: { x: 12, y: H - 170, w: W - 24, h: 150, r: 16 },
         },
         {

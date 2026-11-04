@@ -29,7 +29,7 @@ describe('mapping', () => {
     const e = new Mapper(1280, 800).at(1)
     expect([e.y0, e.amp].map(Math.round)).toEqual([429, 198])
     const pd = new Mapper(390, 844).at(0)
-    expect([pd.y0, pd.amp].map(Math.round)).toEqual([380, 101])
+    expect([pd.y0, pd.amp].map(Math.round)).toEqual([251, 151])
     const pe = new Mapper(390, 844).at(1)
     expect([pe.y0, pe.amp].map(Math.round)).toEqual([258, 100])
   })
