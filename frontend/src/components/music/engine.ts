@@ -56,6 +56,21 @@ export const isSoundTab = () => !onTv && localStorage.getItem(SOUND_KEY) === TAB
 let onTv = false
 export const setSoundOnTv = (v: boolean) => { onTv = v }
 
+// --- this device's volume ------------------------------------------------------
+
+const VOL_KEY = 'music.volume'
+/** 0..100 and mute, kept per device; the gain is (level / 100)², a perceptual curve (as the TV's). */
+let vol = { level: Math.max(0, Math.min(100, Number(localStorage.getItem(VOL_KEY) ?? 100) || 0)), muted: false }
+const volListeners = new Set<() => void>()
+const gainOf = () => (vol.muted ? 0 : (vol.level / 100) ** 2)
+export const useVolume = () => useSyncExternalStore(l => { volListeners.add(l); return () => volListeners.delete(l) }, () => vol)
+export function setVolume(next: Partial<typeof vol>) {
+  vol = { ...vol, ...next }
+  localStorage.setItem(VOL_KEY, String(vol.level))
+  engine.applyVolume()
+  volListeners.forEach(l => l())
+}
+
 // --- the engine --------------------------------------------------------------
 
 interface Fade {
@@ -108,6 +123,11 @@ class AudioEngine {
   /** Tells the server where the sound really is, after tempo changes moved it off the clock. */
   onResync: (position: number) => void = () => {}
 
+  /** Follow `setVolume`, smoothed over ~30 ms so a drag does not crackle. */
+  applyVolume() {
+    if (this.ctx) this.volume.gain.setTargetAtTime(gainOf(), this.ctx.currentTime, 0.01)
+  }
+
   /** Create the graph. Call it from the user's press: browsers start audio only then. */
   unlock() {
     if (!this.ctx) {
@@ -117,6 +137,7 @@ class AudioEngine {
       this.analyser.fftSize = 4096
       this.analyser.smoothingTimeConstant = 0.55
       this.volume = ctx.createGain()
+      this.volume.gain.value = gainOf()
       this.master.connect(this.analyser)
       this.analyser.connect(this.volume) // before the volume, so the visuals ignore it
       this.volume.connect(ctx.destination)
