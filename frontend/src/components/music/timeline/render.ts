@@ -69,10 +69,14 @@ export class TimelineRenderer {
   M = new Mapper(1, 1)
 
   private canvas: HTMLCanvasElement
+  /** Labels and ticks, on their own canvas at the full device density: text upscaled from the capped one blurs. */
+  private text: CanvasRenderingContext2D
+  private tdpr = 1
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, text: HTMLCanvasElement) {
     this.canvas = canvas
     this.page = canvas.getContext('2d')!
+    this.text = text.getContext('2d')!
   }
 
   /** Lowered by the caller when frames run long. */
@@ -89,6 +93,9 @@ export class TimelineRenderer {
     this.canvas.height = this.off.c.height = this.top.c.height = dh
     this.g1.c.width = this.g2.c.width = Math.ceil(W * GQ)
     this.g1.c.height = this.g2.c.height = Math.ceil(H * GQ)
+    this.tdpr = Math.min(deviceRatio || 1, 3)
+    this.text.canvas.width = Math.round(W * this.tdpr)
+    this.text.canvas.height = Math.round(H * this.tdpr)
     this.M = new Mapper(W, H)
   }
 
@@ -104,7 +111,7 @@ export class TimelineRenderer {
   }
 
   draw(f: Frame) {
-    const { W, H, dpr, page: g2, off, M } = this
+    const { W, H, dpr, page: g2, off, M, text: t2 } = this
     this.hits.length = 0
     if (!W) return
     const o2 = off.x
@@ -128,10 +135,14 @@ export class TimelineRenderer {
     const { e: stage } = M
     const lx = stage.x * e
     const ly = stage.y * e
-    g2.save()
-    g2.beginPath()
-    g2.rect(lx, ly, W - lx - (W - stage.x - stage.w) * e, H - ly - (H - stage.y - stage.h) * e)
-    g2.clip()
+    t2.setTransform(this.tdpr, 0, 0, this.tdpr, 0, 0)
+    t2.clearRect(0, 0, W, H)
+    for (const c of [g2, t2]) {
+      c.save()
+      c.beginPath()
+      c.rect(lx, ly, W - lx - (W - stage.x - stage.w) * e, H - ly - (H - stage.y - stage.h) * e)
+      c.clip()
+    }
 
     // Joins.
     for (const it of items) {
@@ -221,18 +232,19 @@ export class TimelineRenderer {
     this.labels(f, y0, amp)
 
     // Axis ticks fade through the switch.
-    g2.font = '10.5px ui-sans-serif,system-ui'
-    g2.fillStyle = 'oklch(92% .01 240 / .42)'
+    t2.font = '500 11px ui-sans-serif,system-ui'
+    t2.fillStyle = 'oklch(92% .01 240 / .5)'
     const ticks =
       e < 0.5
         ? [[-60, '−1 min'], [60, '+1 min'], [300, '+5'], [600, '+10'], [1200, '+20 min']]
         : [[-20, '−20 s'], [-10, '−10 s'], [20, '+20 s'], [40, '+40 s'], [60, '+60 s']]
-    g2.globalAlpha = Math.abs(e - 0.5) * 2
+    t2.globalAlpha = Math.abs(e - 0.5) * 2
     for (const [s, l] of ticks) {
       const x = X(s as number)
-      if (x > R.x + 16 && x < R.x + R.w - 40 && Math.abs(x - px) > 36) g2.fillText(l as string, x, e < 0.5 ? R.y + R.h - 8 : R.y + R.h - 16)
+      if (x > R.x + 16 && x < R.x + R.w - 40 && Math.abs(x - px) > 36) t2.fillText(l as string, x, e < 0.5 ? R.y + R.h - 8 : R.y + R.h - 16)
     }
-    g2.globalAlpha = 1
+    t2.globalAlpha = 1
+    t2.restore()
 
     // Playhead and its dot.
     const ph = g2.createLinearGradient(0, y0 - amp * 1.35, 0, y0 + amp * 0.85)
@@ -360,7 +372,7 @@ export class TimelineRenderer {
   }
 
   private labels(f: Frame, y0: number, amp: number) {
-    const { page: g2, M, W } = this
+    const { text: g2, M, W } = this
     const { X, px } = M
     const { avoid } = f
     g2.textBaseline = 'alphabetic'
