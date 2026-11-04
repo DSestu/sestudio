@@ -438,7 +438,7 @@ export default function App() {
           unless a cast (Chromecast or DLNA) is active. */}
       <NowCastingBar navigate={navigate} />
 
-      <MusicPlayer />
+      <MusicPlayer onMusicPage={route.view === 'music'} />
 
       {/* Minimised browser player — shown whenever the playing title is not the
           one on screen, which includes browsing a *different* title in the
