@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mode detection · lab gate</title>
+<style>
+:root{--bg:#0b1020;--panel:#121a2e;--line:#22304d;--text:#dfe6f3;--mut:#8b98b3;--acc:#3d8bff;--ok:#38c172;--bad:#ef5b5b;--warn:#f0b23a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}
+header{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+h1{font-size:16px;margin:0}
+.mut{color:var(--mut)}
+.tally b{font-size:18px}
+.gate{padding:2px 8px;border-radius:4px;font-weight:600}
+.gate.go{background:#163b28;color:var(--ok)}.gate.no{background:#3b1818;color:var(--bad)}.gate.wait{background:#2a2f40;color:var(--mut)}
+button{background:#1a2440;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+button.j-right.on{background:var(--ok);border-color:var(--ok)}
+button.j-wrong.on{background:var(--bad);border-color:var(--bad)}
+button.j-alt.on{background:var(--warn);border-color:var(--warn);color:#111}
+main{padding:16px 20px;display:grid;gap:10px;max-width:1100px}
+.t{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px}
+.t.unsure{border-color:#5a4a1e}
+.t>div{min-width:0}
+.name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.read{font-size:18px;font-weight:600}
+.read small{font-size:13px;font-weight:400;color:var(--mut)}
+.notes{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0}
+.notes span{font-size:12px;padding:1px 6px;border-radius:4px;background:#1d2945;color:var(--mut)}
+.notes span.tonic{background:var(--acc);color:#fff}
+.why{color:var(--warn);font-size:13px}
+.ctl{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+audio{width:100%;height:32px;margin-top:4px}
+.judge{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-content:start}
+.filters{display:flex;gap:6px}
+label.vol{display:flex;gap:6px;align-items:center}
+@media (max-width:700px){.t{grid-template-columns:minmax(0,1fr)}.judge{justify-content:flex-start}header{padding:10px 12px}main{padding:12px}}
+</style>
+</head>
+<body>
+<header>
+ <h1>Mode detection · lab gate</h1>
+ <span class="tally" id="tally"></span>
+ <span class="filters" id="filters"></span>
+ <label class="vol mut">Drone <input type="range" id="vol" min="0" max="0.4" step="0.01" value="0.12"></label>
+ <button id="copy">Copy results</button>
+</header>
+<main id="list"></main>
+<script>
+const DATA = /*DATA*/[];
+const NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const SCALES = /*SCALES*/{};
+const STORE = "modes-lab";
+const marks = JSON.parse(localStorage.getItem(STORE) || "{}");
+let filter = "all", ctx = null, drone = null, droneFor = null;
+
+const pc = n => NAMES.indexOf(n);
+const hz = (p, oct) => 440 * 2 ** ((p - 9) / 12 + (oct - 4));
+const audio = () => (ctx ||= new AudioContext());
+
+function tone(f, t0, dur, gain = 0.15, type = "triangle") {
+  const c = audio(), o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+
+function scale(label) {
+  const [tonic, ...rest] = label.split(" "), root = pc(tonic), steps = SCALES[rest.join(" ")];
+  const c = audio(), t0 = c.currentTime + 0.05;
+  [...steps, 12].forEach((s, i) => tone(hz(root + s, 4), t0 + i * 0.28, 0.5));
+  tone(hz(root, 3), t0 + 8 * 0.28, 1.2, 0.2);
+}
+
+function stopDrone() {
+  if (drone) { drone.forEach(n => { try { n.stop(); } catch {} }); drone = null; }
+  droneFor = null; refresh();
+}
+
+function startDrone(i, tonicName) {
+  stopDrone();
+  const c = audio(), g = c.createGain(), root = pc(tonicName);
+  g.gain.value = +document.getElementById("vol").value;
+  g.connect(c.destination);
+  drone = [hz(root, 2), hz(root, 3), hz(root + 7, 3)].map((f, k) => {
+    const o = c.createOscillator(); o.type = k ? "sine" : "triangle"; o.frequency.value = f;
+    o.connect(g); o.start(); return o;
+  });
+  drone.gain = g; droneFor = `${i}:${tonicName}`; refresh();
+}
+
+document.getElementById("vol").oninput = e => { if (drone) drone.gain.gain.value = +e.target.value; };
+
+function mark(file, v) {
+  marks[file] = marks[file] === v ? undefined : v;
+  localStorage.setItem(STORE, JSON.stringify(marks)); refresh();
+}
+
+function tally() {
+  const v = Object.values(marks).filter(Boolean);
+  const right = v.filter(x => x === "right").length, alt = v.filter(x => x === "alt").length;
+  const judged = v.filter(x => x !== "skip").length;
+  const pct = judged ? right / judged : 0;
+  const gate = judged < 5 ? ["wait", `judge ${5 - judged} more`] : pct >= 0.8 ? ["go", "go: 80 % or more right"] : ["no", "no-go: under 80 % right"];
+  return `<b>${right}</b> right · ${alt} alternative right · ${judged - right - alt} wrong · ${judged}/${DATA.length} judged
+    <span class="gate ${gate[0]}">${gate[1]}</span>`;
+}
+
+function card(r, i) {
+  const t = r.track;
+  if (!t) return `<div class="t"><div class="name">${r.file}</div><div class="mut">Too short to read</div></div>`;
+  const edge = ["intro", "outro"].filter(e => r[e] && r[e].label !== t.label).map(e => `${e} ${r[e].label}`).join(" · ");
+  const m = marks[r.file], altTonic = t.alt.split(" ")[0];
+  const dr = (name, lbl) => `<button class="${droneFor === `${i}:${name}` ? "on" : ""}" data-drone="${i}:${name}">${lbl}</button>`;
+  return `<div class="t${t.unsure ? " unsure" : ""}">
+   <div>
+    <div class="name" title="${r.file}">${r.file}</div>
+    <div class="read">${t.label} <small>S-KEY says ${t.skey}</small></div>
+    <div class="notes">${t.notes.map(n => `<span class="${n === t.tonic ? "tonic" : ""}">${n}</span>`).join("")}</div>
+    ${t.unsure ? `<div class="why">Unsure: ${t.reason}. Alternative: ${t.alt}</div>` : `<div class="mut">Runner-up: ${t.alt}</div>`}
+    ${edge ? `<div class="mut">${edge}</div>` : ""}
+    <audio controls preload="none" src="${r.url}"></audio>
+   </div>
+   <div class="judge">
+    <div class="ctl">
+     <button data-scale="${t.label}">Play scale</button>
+     <button data-scale="${t.alt}">Play alt scale</button>
+     ${dr(t.tonic, `Drone ${t.tonic}`)}
+     ${altTonic !== t.tonic ? dr(altTonic, `Drone ${altTonic} (alt)`) : ""}
+    </div>
+    <div class="ctl">
+     <button class="j-right ${m === "right" ? "on" : ""}" data-mark="${i}:right">Right</button>
+     <button class="j-alt ${m === "alt" ? "on" : ""}" data-mark="${i}:alt">Alternative is right</button>
+     <button class="j-wrong ${m === "wrong" ? "on" : ""}" data-mark="${i}:wrong">Wrong</button>
+     <button class="${m === "skip" ? "on" : ""}" data-mark="${i}:skip">Can't tell</button>
+    </div>
+   </div>
+  </div>`;
+}
+
+function refresh() {
+  document.getElementById("tally").innerHTML = tally();
+  document.querySelectorAll("[data-mark]").forEach(b => {
+    const [i, v] = b.dataset.mark.split(":");
+    b.classList.toggle("on", marks[DATA[+i].file] === v);
+  });
+  document.querySelectorAll("[data-drone]").forEach(b => b.classList.toggle("on", b.dataset.drone === droneFor));
+}
+
+function render() {
+  document.getElementById("tally").innerHTML = tally();
+  document.getElementById("filters").innerHTML = [["all", "All"], ["todo", "To judge"], ["unsure", "Unsure"]]
+    .map(([k, l]) => `<button class="${filter === k ? "on" : ""}" data-filter="${k}">${l}</button>`).join("");
+  const keep = (r) => filter === "all" || (filter === "todo" ? !marks[r.file] : r.track?.unsure);
+  const scrollY = window.scrollY;
+  document.getElementById("list").innerHTML = DATA.map((r, i) => keep(r) ? card(r, i) : "").join("");
+  window.scrollTo(0, scrollY);
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.scale) scale(b.dataset.scale);
+  if (b.dataset.drone) b.classList.contains("on") ? stopDrone() : startDrone(...b.dataset.drone.split(":"));
+  if (b.dataset.mark) { const [i, v] = b.dataset.mark.split(":"); mark(DATA[+i].file, v); }
+  if (b.dataset.filter) { filter = b.dataset.filter; render(); }
+  if (b.id === "copy") {
+    const out = DATA.map(r => ({ file: r.file, read: r.track?.label, alt: r.track?.alt, unsure: r.track?.unsure, mark: marks[r.file] || null }));
+    navigator.clipboard.writeText(JSON.stringify(out, null, 1)).then(() => { b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy results", 1500); });
+  }
+});
+document.addEventListener("play", e => {
+  document.querySelectorAll("audio").forEach(a => a !== e.target && a.pause());
+}, true);
+render();
+</script>
+</body>
+</html>
