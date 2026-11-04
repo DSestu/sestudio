@@ -73,6 +73,7 @@ are either a 4 s fade or a **beat sync** (tempo-matched, phrase-aligned, with a 
 | — | **TV volume while casting.** The sender's cast button turns the player into "Playing on ‹TV›": a glass strip under the transport with a mute button and a 0–100 volume slider (wheel and ↑/↓ step 5). It sets the TV's volume (in the product: the Cast session volume, not the stream's gain). The TV shows a short volume overlay, a glass pill top-centre with icon, bar and value, held 1.6 s, whenever it changes. The visuals do not shrink with the volume. |
 | — | **The TV plays every change with the same motion as the app.** Glides, add, remove, reorder, mix edits and the timeline morph all run on the TV picture too. While casting, the sound is on the TV only. |
 | — | **Tempo and beat sync.** Each track gets its BPM, beat grid and first downbeat from offline analysis (§6.12). Shown lightly: "174 BPM" with a beat dot after the artist line; the tempo, small and muted, in queue and library rows. A transition is a **4 s fade** or a **beat sync** (§9.3): n bars (4 / 8 / 16 / 32, default 8) starting on a 4-bar phrase of the outgoing track, incoming track on its downbeat, **tempo match** (refused beyond ±8 %, then a 4 s fade) with a glide back to its own tempo over 32 beats, **bass swap** at the midpoint, a **nudge** in 5 ms steps (1 ms with Shift), and a phase lock. Each transition's second label line opens a small glass popover (§9.4) with these controls, a **Hear it** button and a live lock status. Settings are stored per pair of tracks; "Default mix" holds Fade / Beat sync (default Beat sync). |
+| — | **2026-11-04, after the UX critique:** playing a track, album, artist, playlist or search result **no longer opens the layer**; the player bar shows and the user keeps browsing. The bar (or its expand button) opens the layer. The layer is a modal: Back closes it (history entry), focus moves to its close button, the app behind is inert, focus returns to the bar on close. |
 | — | **Placement.** Music is a nav tab (Home · Media · Discover · Music · Library); Activity becomes a bell in the top card; the player is a full-screen layer with a player bar on every page (§4). Chosen over a 6-tab dock (Search off-centre) and over Music inside Media. |
 | — | Not chosen and not to be built: the queue **rail** with hover peek, the **Now and next** card, staged or camera-led transitions, the **comb bars**, stacked-band bars, spectrogram, lanes, **reflections**; the sampling methods Steps, Blend levels, Continuous and Continuous-soft; the scrub modes "sound on release" and "preview, then jump"; the background alternatives to Rollers as defaults (A Wash with defaults, B Bloom, C Field, D Mirror EQ, E Aurora, F Ridge, G Waterfall, H Pulse stay only as optional presets, §5.8.6). |
 
@@ -102,9 +103,10 @@ are either a 4 s fade or a **beat sync** (tempo-matched, phrase-aligned, with a 
   Settings; desktop: right end of the header card), on every page. Music icon: two beamed notes
   (lucide-style `music`, 1.8 stroke). Active state as every nav item (Signal Blue pill).
 - **The Music tab** is where music is browsed (Albums / Tracks / Playlists). **The player is a layer**, not
-  a page: playing anything opens it full screen over the app (the same picture as the TV), and a **player
+  a page: it opens full screen over the app (the same picture as the TV) from the player bar, and a **player
   bar** stays on every page while music plays (desktop: floating at the bottom of the content; phone: a pill
-  above the dock). Clicking the bar reopens the player; Esc / the collapse button / swipe down closes it.
+  above the dock). Playing from a list does not open the layer (2026-11-04), so the user keeps browsing;
+  clicking the bar opens the player; Esc / the collapse button / swipe down / Back closes it.
 - The player page is what plays an audio item (a track from the library, a YouTube Music link). Route and
   component placement are the implementer's call; it reuses the app shell (rail, dock, `PageHeader`
   header card) and the glass utility (`@utility glass` in `frontend/src/index.css`).

@@ -148,6 +148,16 @@
   }
 }
 
+/* A 44px touch target around a smaller control, without changing how it looks.
+   The control must be positioned (relative or absolute). */
+@utility hit {
+  &::after {
+    content: '';
+    position: absolute;
+    inset: min(0px, calc((100% - 44px) / 2));
+  }
+}
+
 /* Phones: where the floating dock's top edge is (12px margin + 66px dock),
    and just above it with a 6px gap. The playing strip sits on --dock-top, so
    it and the dock read as one object; bars and sheets that float over the

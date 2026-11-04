@@ -7,8 +7,9 @@ import { useMusicCastSync } from '../../musicCast'
 import { loadAnalyses, RETRY_MS } from './mix/analysis'
 
 // Whether the full-screen player layer is up, and the entry points that start
-// playback: they claim the sound for this tab, wake the audio engine (browsers
-// allow it only inside a press) and open the layer.
+// playback: they claim the sound for this tab and wake the audio engine
+// (browsers allow it only inside a press). They leave the layer as it is, so
+// playing from a list keeps you browsing; the player bar opens it.
 
 let open = false
 const listeners = new Set<() => void>()
@@ -24,11 +25,10 @@ export const useLayerOpen = () => useSyncExternalStore(l => { listeners.add(l); 
 export function startPlayback(action: () => Promise<void>): Promise<void> {
   claimSound()
   engine.unlock()
-  openPlayer()
   return action()
 }
 
-/** A track of a list (album, artist, playlist, search): the list replaces the queue and plays from that track, and the layer opens. */
+/** A track of a list (album, artist, playlist, search): the list replaces the queue and plays from that track. */
 export const playFrom = (list: MusicTrack[], t: MusicTrack) =>
   startPlayback(() => post(addPayload(list, 'replace', list.findIndex(x => x.id === t.id))))
 /** Streamed tracks (a pasted link): they replace the queue and play from the first. */

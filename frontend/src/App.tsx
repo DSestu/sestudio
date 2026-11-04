@@ -316,7 +316,7 @@ export default function App() {
           />
         )}
         {route.view === 'lab/music' && <LabMusicView />}
-        {route.view === 'music' && <MusicView />}
+        {route.view === 'music' && <MusicView params={route.params} navigate={navigate} />}
         {route.view === 'creators' && (
           <CreatorsView
             source={route.params.get('src') ?? ''}
