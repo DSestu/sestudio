@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 
 from sestudio import library
-from sestudio.music import genres, profile
+from sestudio.music import genres, modes, profile
 from sestudio.music.analysis import RawAnalysis
 
 #: Renormalise when the analysed set has grown by more than this since the last time.
@@ -32,6 +32,7 @@ V2_FIELDS = (
     "genre",
     "genreConf",
     "genreSource",
+    "harmony",
 )
 
 
@@ -94,6 +95,34 @@ def pending_v2() -> list[str]:
             for r in rows
             if json.loads(r["extra"]).get("v2") != profile.VERSION
         ]
+
+
+def pending_modes() -> list[str]:
+    """Ids of v2-profiled tracks whose tonic and mode were not read at the current version."""
+    with library._lock:
+        rows = library._connect().execute("SELECT track_id, extra FROM music_analysis")
+        return [
+            r["track_id"]
+            for r in rows
+            if (e := json.loads(r["extra"])).get("v2") == profile.VERSION
+            and e.get("modesV") != modes.VERSION
+        ]
+
+
+def merge_extra(track_id: str, fields: dict[str, Any]) -> None:
+    """Add or replace some keys of a track's profile, keeping the rest."""
+    with library._lock:
+        conn = library._connect()
+        row = conn.execute(
+            "SELECT extra FROM music_analysis WHERE track_id = ?", (track_id,)
+        ).fetchone()
+        if row is None:
+            return
+        conn.execute(
+            "UPDATE music_analysis SET extra = ? WHERE track_id = ?",
+            (json.dumps(json.loads(row["extra"]) | fields), track_id),
+        )
+        conn.commit()
 
 
 def pending_genre(model: bool) -> dict[str, tuple[dict[str, Any], float]]:

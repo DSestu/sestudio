@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import AddLibrary from '../../components/music/crates/AddLibrary'
-import { librariesApi, stateLine, useLibraries, type ShareToken } from '../../musicLibraries'
+import { librariesApi, stateLine, useLibraries, type AnalysisStatus, type ShareToken } from '../../musicLibraries'
 import { SettingRow, SettingsGroup, ToggleRow } from './rows'
 import type { SettingsProps } from './SettingsView'
 
@@ -15,6 +15,19 @@ const FIELD = 'input input-sm h-9 flex-1 min-w-0 bg-base-100 border-0'
 
 const fail = (e: Error) => window.alert(e.message)
 
+/** The tonic-and-mode pass while it runs, polled; undefined when it is idle or done. */
+function useModesProgress(): AnalysisStatus['modes'] | undefined {
+  const [modes, setModes] = useState<AnalysisStatus['modes']>()
+  useEffect(() => {
+    let alive = true
+    const poll = () => librariesApi.analysisStatus().then(s => { if (alive) setModes(s.modes) }, () => {})
+    void poll()
+    const id = window.setInterval(poll, 3000)
+    return () => { alive = false; window.clearInterval(id) }
+  }, [])
+  return modes && modes.total > 0 && modes.done < modes.total ? modes : undefined
+}
+
 /** Settings › Music: the libraries, the genre model, the YouTube Music cookies file, and the tokens other sestudio servers read this one with. */
 export default function Music({ settings, onUpdate }: SettingsProps) {
   const libraries = useLibraries()
@@ -25,6 +38,7 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
   const [fresh, setFresh] = useState<{ label: string; token: string }>()
 
   useEffect(() => { librariesApi.tokens().then(setTokens, () => {}) }, [])
+  const modes = useModesProgress()
 
   const create = () =>
     librariesApi.createToken(label).then(t => {
@@ -41,7 +55,7 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
   }
   const reanalyse = (id?: string, name?: string) => {
     const what = name ? `every file in “${name}”` : 'every file in every library'
-    if (window.confirm(`Analyse ${what} again? Key, tempo, genre and structure are redone in the background; it can take a while.`)) {
+    if (window.confirm(`Analyse ${what} again? Key, mode, tempo, genre and structure are redone in the background; it can take a while.`)) {
       librariesApi.reanalyse(id).catch(fail)
     }
   }
@@ -60,6 +74,11 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
             {l.kind !== 'local' && <button onClick={() => remove(l.id, l.label)} className="btn btn-ghost btn-sm">Remove</button>}
           </SettingRow>
         ))}
+        {modes && (
+          <SettingRow label="Reading tonic and mode" help={`${modes.done} of ${modes.total} tracks`}>
+            <progress className="progress progress-primary w-24" value={modes.done} max={modes.total} aria-label="Tonic and mode progress" />
+          </SettingRow>
+        )}
         <button onClick={() => setAdding(true)} className="mx-3 min-h-14 w-[calc(100%-1.5rem)] text-left text-[15px] font-medium text-primary border-base-300 not-first:border-t">
           Add a library
         </button>

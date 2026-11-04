@@ -24,7 +24,7 @@ from typing import Any  # noqa: E402
 import numpy as np  # noqa: E402
 
 from sestudio.media import ffmpeg_binary  # noqa: E402
-from sestudio.music import keynet, profile  # noqa: E402
+from sestudio.music import keynet, modes, profile  # noqa: E402
 
 CENTERS = (60, 120, 250, 500, 1000, 2000, 4000)
 
@@ -208,11 +208,28 @@ def analyse_file(
     x = decode(path, TEMPO_SR)
     if duration >= MIN_TEMPO_SECONDS:
         bpm, beat0, bar0, conf = tempo(x)
-    extra = profile.profile(keynet.key(x), bands, loud, bpm, bar0)
+    extra = _profile(x, bands, loud, bpm, bar0)
     return RawAnalysis(duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra)
+
+
+def _profile(
+    x: np.ndarray,
+    bands: np.ndarray,
+    loud: np.ndarray,
+    bpm: float | None,
+    bar0: float | None,
+) -> dict[str, Any]:
+    """Key, energy, structure and genre, then tonic and mode, sharing S-KEY's pass."""
+    p = keynet.probs(x)
+    key = None if p is None else keynet.top(p)
+    return profile.profile(key, bands, loud, bpm, bar0) | modes.fields(x, p)
 
 
 def upgrade(path: str, a: RawAnalysis) -> dict[str, Any]:
     """v2 profile of an already analysed file from its stored v1 row: one decode, for the key."""
-    key = keynet.key(decode(path, TEMPO_SR))
-    return profile.profile(key, a.bands, a.loudness, a.bpm, a.bar0)
+    return _profile(decode(path, TEMPO_SR), a.bands, a.loudness, a.bpm, a.bar0)
+
+
+def harmony(path: str) -> dict[str, Any]:
+    """Tonic and mode of an already profiled file (:func:`sestudio.music.modes.fields`)."""
+    return modes.fields(decode(path, keynet.RATE))

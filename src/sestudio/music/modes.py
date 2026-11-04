@@ -26,6 +26,8 @@ import numpy as np
 
 from sestudio.music import keynet
 
+#: Bump to have every stored track's harmony read again.
+VERSION: Final = 1
 NAMES: Final = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 #: Steps from the tonic, brightest to darkest, then the two harmonic-minor modes.
 SCALES: Final[dict[str, tuple[int, ...]]] = {
@@ -205,13 +207,34 @@ def edges(samples: int) -> dict[str, slice]:
     }
 
 
-def analyse(x: np.ndarray) -> dict[str, Any] | None:
-    """Readings of an 11025 Hz signal for the whole track, intro and outro; None when too short."""
+def analyse(x: np.ndarray, skey: np.ndarray | None = None) -> dict[str, Any] | None:
+    """Readings of an 11025 Hz signal for the whole track, intro and outro; None when too short.
+
+    *skey* is S-KEY's answer for the whole of *x* when the caller already has it.
+    """
     out: dict[str, Any] = {}
     for name, cut in edges(len(x)).items():
         part = x[cut]
-        if len(part) >= MIN_SAMPLES:
-            p = keynet.chromanet(keynet.vqt(part))
+        if len(part) < MIN_SAMPLES:
+            continue
+        p = skey if name == "track" and skey is not None else keynet.probs(part)
+        if p is not None:
             m = read(part, p)
             out[name] = {**asdict(m), "label": m.label, "skey": skey_label(p)}
     return out or None
+
+
+def fields(x: np.ndarray, skey: np.ndarray | None = None) -> dict[str, Any]:
+    """What a track's stored analysis gets: ``harmony`` (track, intro, outro) and ``modesV``.
+
+    Each passage keeps tonic, mode, notes, brightness, contrast, tonic share,
+    unsure, alt and reason; S-KEY's label is already the track's ``key``.
+    """
+    found = analyse(x, skey)
+    out: dict[str, Any] = {"modesV": VERSION}
+    if found:
+        out["harmony"] = {
+            k: {f: v for f, v in r.items() if f not in ("label", "skey")}
+            for k, r in found.items()
+        }
+    return out
