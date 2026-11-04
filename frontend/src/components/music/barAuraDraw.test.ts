@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bandAt, ENV, envAt, perimeter, prep } from './barAura'
+import { bandAt, ENV, envAt, perimeter, prep } from './barAuraDraw'
 
 // 20 s at 10 Hz: quiet for 10 s, then loud.
 const raw = { bands: Array.from({ length: 8 }, () => Array.from({ length: 200 }, (_, i) => (i < 100 ? 10 : 90))) }
