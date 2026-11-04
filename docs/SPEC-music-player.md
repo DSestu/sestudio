@@ -88,7 +88,7 @@ are either a 4 s fade or a **beat sync** (tempo-matched, phrase-aligned, with a 
 | **Balance meter** | The tiny three-bar glyph in a queue or library row showing a track's average bass / mids / highs (§5.4). |
 | **Fisheye** | The timeline's time axis in default mode: linear-ish near the playhead, logarithmic further out (§6.2). |
 | **Life size** | The timeline's time axis in expanded mode: linear, a fixed number of seconds across the stage (§6.3). |
-| **Transition** (blend, mix) | How one track hands over to the next: a 4 s equal-power **fade**, or a **beat sync** (§9.3). Drawn as a **join** (a soft Signal Blue band) and a label with the next title. |
+| **Transition** (blend, mix) | How one track hands over to the next: a 4 s equal-power **fade**, or a **beat sync** (§9.3). Drawn as a **join** (a Signal Blue hairline at the middle of the overlap) and a label with the next title. |
 | **Sky** | The full-bleed dark background tinted by the current track's hue (§5.2). In expanded mode it is clipped to the **stage**. |
 | **Spectral background** | The blurred, live spectrum behind the timeline, above the sky (§5.8). |
 | **Halo** | The darkening of the spectral background around the timeline's curves (§5.8.5). |
@@ -524,8 +524,8 @@ highs : y = y0 − v · khi · amp      khi = .42
 
 Each is a filled area closed on `y0` (`moveTo(x0, y0)`, the spline, `lineTo(xN, y0)`); the highs also have an open stroke path along the top for the edge line.
 
-**Per-track brightness (highlight).** The one shape is painted once per **region** (a run of tracks with equal brightness), clipped to `[X(a+lo), X(a+hi)]` rounded, with `globalAlpha = alpha · hm`,
-`hm = .6 + .4 · HL(track)` (§6.11): the playing track is full brightness, the others 60 %. Adjacent regions with `|Δhm| < .02` are merged.
+**Brightness (spotlight).** The light follows the playhead, not the tracks: after the curves are composited on the offscreen canvas, a `destination-out` gradient from `px` to `px + .75·R.w` takes away `.38·(1 − exp(−(d/σ)²))`, `σ = .25·R.w`,
+so the curves are at full light at the playhead and 62 % from three quarters of the strip on, with no step at track changes.
 
 ### 6.5 Layers and treatment
 
@@ -533,14 +533,14 @@ Everything is in screen pixels of the page (`W × H`, device pixel ratio capped 
 
 | # | Layer | Drawn on | Colour | Alpha | Blur | Blend |
 |---|---|---|---|---|---|---|
-| 1 | Joins (§6.7) | page canvas | Signal Blue | gradient 0 → .22 → 0 | none | normal |
+| 1 | Joins (§6.7), drawn over the curves | page canvas | Signal Blue | vertical gradient 0 → .85 → .85 → 0; × .6 left of the playhead | none | normal |
 | 2 | Minute grid (§6.7) | page canvas | white | ≤ .09 | none | normal |
 | 3 | Beat ticks (§6.7) | page canvas | white | .22 / .42 | none | normal |
 | 4 | Glow (§6.6) | offscreen | the three colours | `min(1, glow · .5)` (+ a second pass if `glow · .5 > 1`) | quarter-res 14 px + 7 px | `lighter` |
-| 5 | Bass | offscreen | `lo` | `alo = .9` × `hm` | **3.5 px** | normal |
-| 6 | Mids | offscreen | `mi` | `ami = .5` × `hm` | none | normal |
-| 7 | Highs | offscreen | `hi` | `ahi = .82` × `hm` | none | normal |
-| 8 | Highs edge | offscreen | `edge` | 1 × `hm`, stroke **1 px** (`edge = 1`) | none | normal |
+| 5 | Bass | offscreen | `lo` | `alo = .9` × spotlight | **3.5 px** | normal |
+| 6 | Mids | offscreen | `mi` | `ami = .5` × spotlight | none | normal |
+| 7 | Highs | offscreen | `hi` | `ahi = .82` × spotlight | none | normal |
+| 8 | Highs edge | offscreen | `edge` | 1 × spotlight, stroke **1 px** (`edge = 1`) | none | normal |
 | 9 | Playhead and dot (§6.7, §6.8) | page canvas | white | | | |
 
 The offscreen canvas is composited onto the page twice: the part **left of the playhead** at **42 %** opacity, the part right of it at 100 %. The page canvas is clipped to the light (the stage in expanded). To keep the cost down, the veil
@@ -549,7 +549,7 @@ edge share one layer. Two blurs per frame in total (bass and glow).
 
 ### 6.6 Glow and halo source
 
-A quarter-resolution layer (`GQ = .25`) is painted with the **same curve shapes** (bass `lo` at alpha 1, mids `mi` at .8, highs `hi` at .7, each × `hm`, additive). That layer then feeds:
+A quarter-resolution layer (`GQ = .25`) is painted with the **same curve shapes** (bass `lo` at alpha 1, mids `mi` at .8, highs `hi` at .7, additive; the spotlight applies after). That layer then feeds:
 
 1. **The glow**: onto a second quarter-res canvas with `lighter`, `blur(14px)` at alpha 1 plus `blur(7px)` at alpha .45 (14 px at a quarter ≈ a 56 px halo on screen); that canvas is scaled up to the page
    and drawn first onto the offscreen canvas with `globalAlpha = min(1, glow·.5)`. **Default `glow = .75`** (so alpha .375). The glow sits under the curves.
@@ -557,7 +557,7 @@ A quarter-resolution layer (`GQ = .25`) is painted with the **same curve shapes*
 
 ### 6.7 Minute grid, beat ticks, joins, playhead
 
-- **Joins**: for each item `i ≥ 1`, from `X(a + i0)` to `X(a + i0 + il)`, a rectangle `y0 − 1.2·amp` tall `2.1·amp`, horizontal gradient `oklch(72% .16 230)` at 0 → **.22** → 0.
+- **Joins**: for each item `i ≥ 1`, at `x = X(a + i0 + il/2)` (the middle of the overlap), over the curves: a 1 px line from `y0 − .98·amp` (under the label), `1.88·amp` tall, vertical gradient `oklch(72% .16 230)` at 0 → .85 (35 %) → .85 (62 %) → 0, and a 4 px diamond on the horizon at .95; both × .6 left of the playhead.
 - **Minute grid**: vertical lines on whole minutes of the timeline's own clock (`m·60 − G`, `m` from `ceil((G − 200)/60)` while `m·60 ≤ G + 1600`), over `[y0 − 1.1·amp, +2.05·amp]` with a
   vertical white gradient 0 → 1 → 0. Per line: `sp = |X(sm + 60) − X(sm)|` (pixels per minute), `alpha = .09 · clamp((sp − 8)/30, 0, 1)`, × .6 left of the playhead; skipped under .003 or outside the rect. Drawn
   twice: a 3 px line at `.4·alpha` (soft) and a 1 px line at `alpha`.
@@ -597,7 +597,7 @@ All of it on the timeline canvas, ignored while the mode is switching (`0 < t < 
 
 `HL[track]` (0…1) is the playing track's highlight; the playing track is the one **under the view position** `G` (`trackAt(G)`: the last track whose `TS ≤ G`). Every frame, with `ez = 1 − exp(−dt / .12)` (**120 ms time constant**):
 `HL += (target − HL) · ez`, target 1 for the track under the view, else 0. **Flash**: if the view moved more than 1 s inside one frame, every track whose span lies between the previous and the new view position is lifted to
-at least **.75** first, so a glide or a jump flashes everything it crosses and then fades. `HL` drives the queue row's `--hl` (§5.4) and the timeline's `hm = .6 + .4·HL` (§6.4). Rows before the playing track get the "played" 42 % opacity.
+at least **.75** first, so a glide or a jump flashes everything it crosses and then fades. `HL` drives the queue row's `--hl` (§5.4); the timeline's brightness follows the playhead instead (§6.4). Rows before the playing track get the "played" 42 % opacity.
 On the TV the queue also scrolls itself so the playing row sits `56 px` below the header (`scrollTop += (want − scrollTop) · min(1, 1.5·ez)` per frame).
 
 ### 6.12 Tempo analysis (offline, `prep_bpm.py`)
