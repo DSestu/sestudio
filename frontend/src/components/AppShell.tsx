@@ -150,7 +150,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
       {/* Desktop rail: a slim glass column floating beside the page (docs/
           SPEC-nav-redesign.md §5). The Discover flyout is a sibling of the
           column, not inside it, so its own blur sees the page under it. */}
-      <aside className="hidden md:block md:shrink-0 md:w-27 md:h-dvh md:sticky md:top-0 p-3 pr-0 z-40">
+      <aside data-rail className="hidden md:block md:shrink-0 md:w-27 md:h-dvh md:sticky md:top-0 p-3 pr-0 z-40">
         <div className="relative h-full w-21 glass rounded-2xl flex flex-col items-center gap-1 py-4">
           <img src="/sestudio-mark.svg" alt="sestudio" className="w-8 h-8 mb-3" />
           <button

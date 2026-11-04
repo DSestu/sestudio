@@ -18,7 +18,7 @@ import { playAll, playFrom, playPayload } from '../components/music/player'
 import { factsLine, useSummaries, type Summary } from '../musicMeta'
 import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
-import { setMusicQuery, useMusicQuery } from '../musicQuery'
+import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, type Navigate } from '../nav'
 
@@ -156,7 +156,6 @@ function DetailActions({ tracks, shuffled }: { tracks: MusicTrack[]; shuffled: (
   )
 }
 
-const LINK_RE =/^https?:\/\/(\S+\.)?(youtube\.com|youtu\.be)\//i
 
 /** A pasted YouTube / YouTube Music link: play it as music or queue it. */
 function LinkCard({ url }: { url: string }) {

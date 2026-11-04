@@ -20,6 +20,19 @@ const set = (v: boolean) => {
 
 export const openPlayer = () => set(true)
 export const closePlayer = () => set(false)
+/** Closes the player, then runs `f` once the layer's Back entry is gone, so a navigation in `f` is not undone by it. */
+export function closeThen(f: () => void) {
+  let done = false
+  const go = () => {
+    if (done) return
+    done = true
+    window.removeEventListener('popstate', go)
+    setTimeout(f)
+  }
+  window.addEventListener('popstate', go)
+  setTimeout(go, 400)
+  closePlayer()
+}
 export const useLayerOpen = () => useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => open)
 
 // The player bar's memory of this visit. The queue lives on the server, so a
