@@ -96,6 +96,8 @@ class ServerService : Service() {
 
     private fun launch() {
         val runtime = Runtime(this)
+        // Failing (offline, say) only leaves music casting without a picture; the next start tries again.
+        thread(name = "chromium") { runCatching { runtime.addChromium() } }
         writeFirstConfig(runtime)
         val downloads = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!.apply { mkdirs() }
         // Nightly builds main afresh on every start (same URL, new code: hence the refresh);

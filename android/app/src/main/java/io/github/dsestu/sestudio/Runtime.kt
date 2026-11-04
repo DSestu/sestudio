@@ -55,16 +55,28 @@ class Runtime(private val context: Context) {
         uv.deleteRecursively()
         if (arch.packages.isNotEmpty()) {
             progress(STEP_PACKAGES, -1, -1)
-            // proot's fake root can't drop to apt's sandbox user.
-            val apt = command(
-                "sh", "-c",
-                "export DEBIAN_FRONTEND=noninteractive; apt-get -o APT::Sandbox::User=root update && " +
-                    "apt-get -o APT::Sandbox::User=root install -y --no-install-recommends ${arch.packages.joinToString(" ")}",
-            ).start()
-            val log = apt.inputStream.bufferedReader().readText()
-            check(apt.waitFor() == 0) { "Installing ${arch.packages.joinToString()} failed:\n" + log.takeLast(1500) }
+            aptInstall(arch.packages)
         }
         readyMark.writeText("1")
+    }
+
+    /**
+     * Installs Chromium, which the music station draws the TV picture with, when it is
+     * missing: a large download, so off the main thread, and not in [install] to keep setup quick.
+     */
+    fun addChromium() = synchronized(Runtime::class.java) {
+        if (isReady && !File(rootfs, "usr/bin/chromium").exists()) aptInstall(listOf("chromium"))
+    }
+
+    private fun aptInstall(packages: List<String>) {
+        // proot's fake root can't drop to apt's sandbox user.
+        val apt = command(
+            "sh", "-c",
+            "export DEBIAN_FRONTEND=noninteractive; apt-get -o APT::Sandbox::User=root update && " +
+                "apt-get -o APT::Sandbox::User=root install -y --no-install-recommends ${packages.joinToString(" ")}",
+        ).start()
+        val log = apt.inputStream.bufferedReader().readText()
+        check(apt.waitFor() == 0) { "Installing ${packages.joinToString()} failed:\n" + log.takeLast(1500) }
     }
 
     /**
