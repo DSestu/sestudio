@@ -58,11 +58,18 @@ describe('plan with structure', () => {
   })
   it('never blends over a drop: a track that ends on one is left before it, on a phrase', () => {
     const a = track('a', 172)
-    const p = plan(withSegs(a, seg('breakdown', 120, 150), seg('drop', 150, 240)), track('b', 172), SYNC)
+    const p = plan(withSegs(a, seg('breakdown', 190, 220), seg('drop', 220, 240)), track('b', 172), SYNC)
     expect(p.mode).toBe('sync')
-    expect(p.mixOut + p.len).toBeLessThanOrEqual(150 + 60 / 172)
-    expect(p.mixOut).toBeGreaterThanOrEqual(120 - 60 / 172)
+    expect(p.mixOut + p.len).toBeLessThanOrEqual(220 + 60 / 172)
+    expect(p.mixOut).toBeGreaterThanOrEqual(190 - 60 / 172)
     expect(phrase(p, a)).toBeCloseTo(0, 6)
+  })
+  it('plays a track almost to its end even when its only breakdown is early and drops run to the end', () => {
+    const a = track('a', 172, 330)
+    const plain = plan(a, track('b', 172), SYNC)
+    const p = plan(withSegs(a, seg('intro', 0, 30), seg('drop', 30, 60), seg('breakdown', 60, 90), seg('drop', 90, 330)), track('b', 172), SYNC)
+    expect(p.mixOut).toBeGreaterThan(330 - 60)
+    expect(p.mixOut).toBeCloseTo(plain.mixOut)
   })
   it('enters the incoming track within its intro, so the blend stops before its drop', () => {
     const b = withSegs(track('b', 172), seg('intro', 0, 6), seg('drop', 6, 100))

@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 FADE = 4.0
+#: How many 4-bar phrases from the end the mix may start: 32 bars, under a minute at club tempos.
+TAIL = 8
 
 
 @dataclass
@@ -102,9 +104,10 @@ def plan(a: Track, b: Track, s: dict[str, Any]) -> Plan:
         return fade
     k = n
     if a.segs:
+        # Only the last TAIL phrases are candidates: dodging a drop or seeking an outro must not cut a track minutes short.
         ks = [
             i
-            for i in range(n + 1)
+            for i in range(max(0, n - TAIL + 1), n + 1)
             if not _over_drop(
                 a.segs, a.bar0 + i * 4 * bar, a.bar0 + i * 4 * bar + ln, beat
             )
