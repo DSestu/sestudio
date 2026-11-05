@@ -37,7 +37,7 @@ function JoinLine({ from, to }: { from?: Row; to: Row }) {
 const Line = () => <li aria-hidden="true" className="h-0.5 mx-2 -my-px rounded-full bg-(--lc)" />
 
 /** One flow: its colour and name, a summary line and its tracks in order; a place to drop tracks on desktop. */
-export default function FlowColumn({ flow, color, rows, active, over, fork, onKeep, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
+export default function FlowColumn({ flow, color, rows, active, over, fork, best, onAddBest, onKeep, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
   flow: Flow
   color: string
   rows: Row[]
@@ -46,6 +46,9 @@ export default function FlowColumn({ flow, color, rows, active, over, fork, onKe
   over: number | null
   /** A branch: the track the set so far ends on, which the first join is checked against. */
   fork?: Row
+  /** The track that would follow best, and the tap that adds it. */
+  best?: { title: string }
+  onAddBest: () => void
   /** A branch: add it to the set; the fork moves to its last track. */
   onKeep?: () => void
   onActive: () => void
@@ -150,6 +153,17 @@ export default function FlowColumn({ flow, color, rows, active, over, fork, onKe
           </li>
         ))}
         {over === rows.length && <Line />}
+        {best && (
+          <li>
+            <button onClick={onAddBest} className="w-full flex items-center gap-2 rounded-xl border border-dashed border-white/20 px-2 min-h-12 py-1 mt-1 text-left hover:bg-white/5">
+              <svg className="w-4 h-4 shrink-0 text-(--lc)" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+              <span className="min-w-0 flex-1 leading-tight">
+                <span className="block text-[11px] text-base-content/50">Best next</span>
+                <span className="block truncate text-sm font-medium">{best.title}</span>
+              </span>
+            </button>
+          </li>
+        )}
       </ol>
     </section>
   )
