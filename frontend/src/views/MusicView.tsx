@@ -25,7 +25,7 @@ import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
 import Seg from '../components/music/crates/build/Seg'
 import type { Join } from '../components/music/crates/proximity'
-import { proxOf, rankFits, setFitsFilter, setFitsRef, useFitsFilters, useFitsRef, type FitsFilters } from '../musicFits'
+import { clearFitsFilters, proxOf, rankFits, relaxations, setFitsFilter, setFitsRef, useFitsFilters, useFitsRef, type FitsFilters } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, type Navigate } from '../nav'
 
@@ -346,7 +346,10 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     ranked.length ? (
       <ul>{ranked.map(r => <TrackRow key={r.track.id} track={r.track} list={rankedTracks} onPlaylist={setPickFor} why={r.join} />)}</ul>
     ) : (
-      <EmptyState title={`Nothing fits after ${fitsTrack?.title}`} message="No track here follows it safely. Try another library or clear the search." />
+      <EmptyState title={`Nothing fits after ${fitsTrack?.title}`} message="No track here follows it under these filters. Loosen one:">
+        {relaxations(fitsFilters).map(r => <button key={r.label} className="btn btn-sm" onClick={() => setFitsFilter(r.key, r.to as never)}>{r.label}</button>)}
+        <button className="btn btn-ghost btn-sm" onClick={clearFitsFilters}>Clear filters</button>
+      </EmptyState>
     )
   ) : searching ? (
     <MusicSearch

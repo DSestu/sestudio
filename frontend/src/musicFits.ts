@@ -56,3 +56,17 @@ export function rankFits(ref: ProxTrack, pool: ProxTrack[], f: FitsFilters): { i
   const out = fitsAfter(ref, pool, filters, Infinity)
   return f.harmony === 'same' ? out.filter(r => r.join.shared === 7) : out
 }
+
+export const clearFitsFilters = () => set({ ...state, filters: { harmony: 'any', mood: 'any', energy: 'any', genre: 'any', tempo: 'any' } })
+
+/** One way out per active filter, each loosening just that filter. */
+export function relaxations(f: FitsFilters): { label: string; key: keyof FitsFilters; to: string }[] {
+  const out: { label: string; key: keyof FitsFilters; to: string }[] = []
+  if (f.harmony === 'same') out.push({ label: 'Allow close notes', key: 'harmony', to: 'close' })
+  else if (f.harmony === 'close') out.push({ label: 'Any harmony', key: 'harmony', to: 'any' })
+  if (f.mood !== 'any') out.push({ label: 'Any mood', key: 'mood', to: 'any' })
+  if (f.energy !== 'any') out.push({ label: 'Any energy', key: 'energy', to: 'any' })
+  if (f.genre !== 'any') out.push({ label: 'Any genre', key: 'genre', to: 'any' })
+  if (f.tempo !== 'any') out.push({ label: 'Any tempo', key: 'tempo', to: 'any' })
+  return out
+}
