@@ -85,9 +85,25 @@ export const keyLabel = (key?: string, camelot?: string): string | undefined => 
   return name && camelot ? `${name} (${camelot})` : name || camelot
 }
 
+/** The short name of a genre for a chip, and its colour (a neutral grey for the genres with none). */
+const GENRE_SHORT: Record<string, string> = { 'Drum & Bass': 'DnB', Neurofunk: 'Neuro', 'Liquid Drum & Bass': 'Liquid', Electronic: 'Electro' }
+const GENRE_COLOR: Record<string, string> = {
+  'Drum & Bass': 'oklch(74% .11 185)',
+  Neurofunk: 'oklch(74% .11 185)',
+  'Liquid Drum & Bass': 'oklch(74% .11 185)',
+  Dubstep: 'oklch(80% .15 128)',
+  Ambient: 'oklch(78% .06 265)',
+  Trance: 'oklch(76% .12 310)',
+  Techno: 'oklch(72% .1 20)',
+  House: 'oklch(80% .12 75)',
+  'Hip-hop': 'oklch(76% .1 50)',
+}
+export const genreShort = (g: string): string => GENRE_SHORT[g] ?? g
+export const genreColor = (g: string): string => GENRE_COLOR[g] ?? 'oklch(75% .02 265)'
+
 /** "174 · F min (4A) · Liquid": the one muted line phones show (and queue rows). */
 export const metaLine = (s: Summary | undefined, bpm?: number): string =>
-  [(s?.bpm || bpm) && fmtBpm((s?.bpm || bpm)!), keyLabel(s?.key, s?.camelot), s?.genre].filter(Boolean).join(' · ')
+  [(s?.bpm || bpm) && fmtBpm((s?.bpm || bpm)!), keyLabel(s?.key, s?.camelot), s?.genre && genreShort(s.genre)].filter(Boolean).join(' · ')
 
 /** Summaries of many tracks (a library view): the getter, and a number that changes as more arrive. */
 export function useSummaries(ids: string[]): { get: (id: string) => Summary | undefined; v: number } {
