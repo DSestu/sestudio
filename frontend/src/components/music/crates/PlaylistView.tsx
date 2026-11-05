@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { formatDuration, type MusicTrack } from '../../../musicLibrary'
 import {
   isSet, itemsOf, locate, playlistApi, statsOf,
@@ -10,6 +10,9 @@ import { post, useMusicQueue } from '../../../musicQueue'
 import { useSettings } from '../../../useSettings'
 import ClashTip from './ClashTip'
 import FixDialog from './FixDialog'
+import Inspector from './Inspector'
+import ResponsiveModal from '../../ResponsiveModal'
+import { useModalBack } from '../../../useModalBack'
 import JoinDialog from './JoinDialog'
 import JoinLine from './JoinLine'
 import { toast } from '../toast'
@@ -25,6 +28,12 @@ import { autoOrder, bestReorders, countJoins, keptKey, placement, transitionChip
 import { useKeptJoins } from './useKeptJoins'
 
 const ORDERS: [OrderMode, string][] = [['tempo', 'Smooth tempo'], ['harmonic', 'Harmonic (Camelot walk)'], ['energy', 'Energy arc']]
+
+const WIDE = '(min-width: 64rem)'
+const useWide = () => useSyncExternalStore(
+  cb => { const m = matchMedia(WIDE); m.addEventListener('change', cb); return () => m.removeEventListener('change', cb) },
+  () => matchMedia(WIDE).matches,
+)
 
 const run = (p: Promise<unknown>) => { p.catch(e => window.alert((e as Error).message)) }
 const blur = () => (document.activeElement as HTMLElement | null)?.blur()
@@ -91,6 +100,9 @@ interface RowProps {
   onDown?: () => void
   onRemove?: () => void
   onToPart?: (part: string) => void
+  /** The row is the inspector's target. */
+  selected?: boolean
+  onSelect?: () => void
 }
 
 function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, last, index, ...ev }: RowProps) {
@@ -104,7 +116,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
       onDragOver={ev.onDropHere && (e => e.preventDefault())}
       onDrop={ev.onDropHere && (e => { e.preventDefault(); ev.onDropHere!() })}
     >
-      <div className="flex items-center gap-1 rounded-xl hover:bg-white/5">
+      <div className={`flex items-center gap-1 rounded-xl hover:bg-white/5 ${ev.selected ? 'bg-primary/10' : ''}`}>
       {ev.onDragStart && (
         <svg className="ml-1 w-4 h-4 shrink-0 cursor-grab text-base-content/30" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
       )}
@@ -125,6 +137,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
           </button>
           <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 w-52 rounded-xl bg-base-200 p-1 shadow-lg">
+            {ev.onSelect && <li><button onClick={() => { blur(); ev.onSelect!() }}>Fits after this</button></li>}
             {index > 0 && <li><button onClick={() => { blur(); ev.onUp!() }}>Move up</button></li>}
             {!last && <li><button onClick={() => { blur(); ev.onDown!() }}>Move down</button></li>}
             {parts.filter(p => p.id !== here).map(p => <li key={p.id}><button onClick={() => { blur(); ev.onToPart!(p.id) }}>Move to {p.name}</button></li>)}
@@ -171,6 +184,12 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   /** Same, for the fix dialog. */
   const [fixAt, setFixAt] = useState<number>()
   const [kept, keep] = useKeptJoins(node.id)
+  const wide = useWide()
+  /** The inspector: open or not, the row picked, and whether the target is the join after it. */
+  const [insp, setInsp] = useState(false)
+  const [sel, setSel] = useState<string>()
+  const [between, setBetween] = useState(false)
+  useModalBack(insp && !wide, () => setInsp(false))
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   /** A track with its analysis (the set builder's view of it); `id` defaults to the track's. */
   const setTrack = (trackId: string, duration: number, bpm?: number, id = trackId): SetTrack => {
@@ -232,10 +251,20 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     return (
       <JoinLine
         a={a} b={b} theory={settings.music_theory_level === 'theory'} kept={kept.has(keptKey(a, b))}
-        onOpen={() => setJoinAt(i)} onFix={() => setFixAt(i)} onInsert={() => setFixAt(i)}
+        onOpen={() => setJoinAt(i)} onFix={() => setFixAt(i)} onInsert={() => insp ? pick(item, true) : setFixAt(i)}
       />
     )
   }
+  /** The inspector's target: the picked row, else the last track. */
+  const target = Math.max(0, sel && flatIndex(sel) >= 0 ? flatIndex(sel) : items.length - 1)
+  const pick = (item: PlaylistItem, join = false) => { setSel(item.item_id); setBetween(join); setInsp(true) }
+  const insertAfterTarget = (t: MusicTrack) => {
+    const at = locate(node, items[target].item_id)!
+    run(playlistApi.add(node.id, [{ library: t.library, track_id: t.id }], at.part ?? undefined, at.index + 1).then(() => { toast(`Added ${t.title}`); setBetween(false); setSel(undefined) }))
+  }
+  const inspector = insp && !smart && (
+    <Inspector items={items} byId={byId} at={target} between={between && target < items.length - 1} onInsert={insertAfterTarget} onUnjoin={() => setBetween(false)} />
+  )
   const titleAt = (i: number) => byId.get(items[i].track_id)?.title ?? items[i].title ?? 'Track'
   const insertBetween = (i: number, id: string) => {
     const at = locate(node, items[i].item_id)!
@@ -282,7 +311,8 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const playPart = (part?: string) => run(startPlayback(() => playlistApi.play(node.id, part).then(() => undefined)))
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex items-start gap-4">
+    <div className="flex min-w-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3 px-1">
         {/* The name is the page header's title. */}
         <div className="flex-1 min-w-40 leading-tight">
@@ -296,6 +326,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
         </div>
         {items.length > 0 && <button onClick={() => playPart()} className="btn btn-primary btn-sm">{isSet(node) ? 'Play set' : 'Play'}</button>}
         {!smart && items.length > 1 && orderMenu(isSet(node) ? 'Auto-order whole set' : 'Auto-order')}
+        {!smart && <button onClick={() => setInsp(o => !o)} aria-pressed={insp} className={`btn btn-sm ${insp ? 'btn-primary btn-soft' : 'btn-ghost'}`}>Fits next</button>}
         {!smart && <button onClick={() => openBuildSet({ node: node.id })} className="btn btn-ghost btn-sm">Build a set</button>}
         {!smart && items.length > 0 && <button onClick={() => run(openInBuilder(node.name, items))} className="btn btn-ghost btn-sm">Open in mix builder</button>}
         {smart ? (
@@ -365,9 +396,11 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
                     last={i === g.items.length - 1}
                     parts={partRefs}
                     here={g.id}
+                    selected={insp && !smart && flatIndex(item.item_id) === target}
                     {...(!smart && {
                       onDragStart: () => setDrag(item.item_id),
                       onDropHere: () => drop({ part: g.id, index: i }),
+                      onSelect: () => pick(item),
                       onUp: () => shift(item, g.id, i, -1),
                       onDown: () => shift(item, g.id, i, 1),
                       onRemove: () => run(playlistApi.removeItem(node.id, item.item_id)),
@@ -404,6 +437,14 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
         )
       })()}
       {editing && <SmartForm node={node} onClose={() => setEditing(false)} />}
+    </div>
+    {inspector && wide && <aside className="sticky top-4 max-h-[calc(100vh-8rem)] w-80 shrink-0 overflow-y-auto rounded-2xl bg-white/5">{inspector}</aside>}
+    {inspector && !wide && (
+      <ResponsiveModal onClose={() => setInsp(false)} boxClassName="max-h-[80vh] p-0">
+        <div className="flex items-center px-3 pt-3"><h2 className="flex-1 text-base font-semibold">Fits next</h2><button onClick={() => setInsp(false)} aria-label="Close" className="btn btn-ghost btn-sm btn-circle">✕</button></div>
+        {inspector}
+      </ResponsiveModal>
+    )}
     </div>
   )
 }
