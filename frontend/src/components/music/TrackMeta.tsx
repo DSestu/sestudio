@@ -1,4 +1,4 @@
-import { moodOf } from '../../harmony'
+import { energySteps, moodOf } from '../../harmony'
 import { genreColor, genreShort, keyLabel, metaLine, refreshSummary, useAnalysing, useSummary } from '../../musicMeta'
 import GenreTag from './crates/GenreTag'
 import { openUnsure } from './harmony/unsure'
@@ -19,6 +19,17 @@ const MoodDot = ({ mode }: { mode?: string }) => {
   return m ? <i title={m.word} className="inline-block size-2 shrink-0 rounded-full align-middle" style={{ background: m.color }} /> : null
 }
 
+/** Four rising steps, as many lit as the track's energy level; its name on hover. Nothing while it has no level. */
+export function EnergyMeter({ level }: { level?: string }) {
+  const n = energySteps(level)
+  if (!n) return null
+  return (
+    <span role="img" aria-label={`Energy: ${level}`} title={`Energy: ${level}`} className="inline-flex items-end gap-px h-3 shrink-0 align-middle">
+      {[1, 2, 3, 4].map(k => <i key={k} className={`w-[3px] rounded-[1px] ${k <= n ? 'bg-primary' : 'bg-white/15'}`} style={{ height: 3 + k * 2 }} />)}
+    </span>
+  )
+}
+
 /** A track's analysis on a list row, wide screens: tempo, key chip (muted when unsure), genre tag. */
 export default function TrackMeta({ id, bpm, title }: { id: string; bpm?: number; title: string }) {
   const s = useSummary(id)
@@ -36,6 +47,7 @@ export default function TrackMeta({ id, bpm, title }: { id: string; bpm?: number
       {!analysing && unsure && (
         <button onClick={() => openUnsure(id, title)} aria-label={`Settle the mode of ${title} by ear`} title="Unsure of the mode: listen to both" className="btn btn-ghost btn-xs h-5 min-h-0 px-1.5 text-[11px] text-warning">?</button>
       )}
+      {!analysing && <EnergyMeter level={s?.energyLevel} />}
       {tempo ? <span className="text-[11px] text-base-content/40 tabular-nums">{Math.round(tempo)} bpm</span> : null}
     </span>
   )
@@ -50,6 +62,7 @@ export function MetaLine({ id, bpm, title }: { id: string; bpm?: number; title: 
   return line || s?.genre ? (
     <span className="sm:hidden text-base-content/40 tabular-nums">
       {s?.harmony?.track?.mode && <> · <MoodDot mode={s.harmony.track.mode} /></>}
+      {s?.energyLevel && <> · <EnergyMeter level={s.energyLevel} /></>}
       {line && ` · ${line}`}
       {s?.harmony?.track?.unsure && (
         // Not a button: the row around it is one.
