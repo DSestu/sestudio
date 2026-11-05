@@ -1,5 +1,5 @@
 import type { Plan } from '../timeline/sampling'
-import { harmonyOf, join, keyDistance, type Join, type ProxTrack } from './proximity'
+import { cost as joinCost, join, keyDistance, type Join, type ProxTrack } from './proximity'
 
 export { keyDistance }
 
@@ -21,15 +21,10 @@ export interface SetTrack extends ProxTrack {
 /** The genres the tag menu offers (the detector's own names). */
 export const GENRES = ['Drum & Bass', 'Neurofunk', 'Liquid Drum & Bass', 'Dubstep', 'Trance', 'Techno', 'House', 'Hip-hop', 'Ambient', 'Electronic']
 
-/** Note-set distance for ordering and ranking: 0 for 7 shared notes, up to 6; unknown keys count as the worst. */
-const keyGap = (a: SetTrack, b: SetTrack) => 7 - (harmonyOf(a, b).shared ?? 1)
-
 /** Same number, one step round the wheel, or A to B on the same number. */
 export const harmonic = (a?: string, b?: string) => keyDistance(a, b) <= 1
 
 export type OrderMode = 'tempo' | 'harmonic' | 'energy'
-
-const bpmGap = (a: SetTrack, b: SetTrack) => (a.bpm && b.bpm ? Math.abs(a.bpm - b.bpm) : 20)
 
 /** The ids in the order a mode wants them; stable, and tracks without the needed fact keep their place at the end. */
 export function autoOrder(tracks: SetTrack[], mode: OrderMode): string[] {
@@ -43,16 +38,16 @@ export function autoOrder(tracks: SetTrack[], mode: OrderMode): string[] {
     // Alternate up the sorted list: the loudest lands in the middle, a rise then a fall.
     return [...sorted.filter((_, i) => i % 2 === 0), ...sorted.filter((_, i) => i % 2 === 1).reverse()].map(t => t.id)
   }
-  // Harmonic: from the slowest track, always on to the nearest key (then the nearest tempo).
-  const left = tracks.filter(t => t.bpm).sort((a, b) => a.bpm! - b.bpm!).concat(tracks.filter(t => !t.bpm))
-  const out = left.splice(0, 1)
+  // Harmonic path: keep the first track, then always on to the best next join (shared notes, then tempo and energy).
+  const left = tracks.slice(1)
+  const out = tracks.slice(0, 1)
   while (left.length) {
     const from = out[out.length - 1]
     let best = 0
     let bestCost = Infinity
     left.forEach((t, i) => {
-      const cost = keyGap(from, t) * 100 + bpmGap(from, t)
-      if (cost < bestCost) { bestCost = cost; best = i }
+      const c = joinCost(join(from, t))
+      if (c < bestCost) { bestCost = c; best = i }
     })
     out.push(...left.splice(best, 1))
   }
