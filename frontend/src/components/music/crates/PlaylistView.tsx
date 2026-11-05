@@ -136,7 +136,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
           </button>
           <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 w-52 rounded-xl bg-base-200 p-1 shadow-lg">
-            {ev.onSelect && <li><button onClick={() => { blur(); ev.onSelect!() }}>Fits after this</button></li>}
+            {ev.onSelect && <li><button onClick={() => { blur(); ev.onSelect!() }}>Fits next</button></li>}
             {index > 0 && <li><button onClick={() => { blur(); ev.onUp!() }}>Move up</button></li>}
             {!last && <li><button onClick={() => { blur(); ev.onDown!() }}>Move down</button></li>}
             {parts.filter(p => p.id !== here).map(p => <li key={p.id}><button onClick={() => { blur(); ev.onToPart!(p.id) }}>Move to {p.name}</button></li>)}
@@ -310,6 +310,13 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
           <span>Keep this join</span>
           <span className="text-xs text-base-content/60">stops being flagged</span>
         </button>
+        {/* On phones the sheet covers the header's clash count, so the next clash is reachable here too. */}
+        {clashes.length > 1 && (
+          <button onClick={nextClash} className={btn}>
+            <span>Next clash</span>
+            <span className="text-xs text-base-content/60">{clashes.indexOf(target) + 1} of {clashes.length}</span>
+          </button>
+        )}
       </div>
     )
   }

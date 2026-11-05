@@ -412,9 +412,10 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           {!page && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {body}
         </div>
-        {fitsPanel && wide && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{fitsPanel}</aside>}
+        {/* A playlist page has its own Fits next aside: a second one opens as a dialog instead. */}
+        {fitsPanel && wide && !node && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{fitsPanel}</aside>}
       </div>
-      {fitsPanel && !wide && (
+      {fitsPanel && (!wide || node) && (
         <ResponsiveModal onClose={closeFits} boxClassName="flex h-[60vh] flex-col p-0">{fitsPanel}</ResponsiveModal>
       )}
       {sheet && (
