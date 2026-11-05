@@ -110,6 +110,12 @@ export function applyEvent(s: QueueState, ev: QueueEvent, serverNow: number): Qu
       items.splice(ev.to as number, 0, ...items.splice(ev.from as number, 1))
       return Object.assign(next, { items, current: keep(items) })
     }
+    case 'ord': {
+      const at = new Map(s.items.map(i => [i.item_id, i]))
+      const items = (ev.order as string[]).map(id => at.get(id)!)
+      if (items.some(i => !i)) return null
+      return Object.assign(next, { items, current: keep(items) })
+    }
     case 'go':
       // `keep`: a jump on the timeline lands at a position and leaves play / pause as it was.
       if (ev.keep) return Object.assign(next, restart(ev.index as number, s.playing), { position: ev.position as number })
@@ -185,7 +191,7 @@ async function refetch() {
   if (res.ok) setState(await res.json())
 }
 
-const OPS = ['ins', 'rm', 'mv', 'go', 'set', 'mix', 'mixd', 'transport']
+const OPS = ['ins', 'rm', 'mv', 'ord', 'go', 'set', 'mix', 'mixd', 'transport']
 
 function connect() {
   if (source) return
@@ -263,6 +269,8 @@ export const queueActions = {
   play: (itemId: string, position?: number) => send('POST', '/play', { item_id: itemId, position }),
   remove: (itemId: string) => send('DELETE', `/${itemId}`),
   move: (itemId: string, to: number) => send('POST', '/move', { item_id: itemId, to }),
+  /** The whole queue in this order, as one change. */
+  order: (itemIds: string[]) => send('POST', '/order', { item_ids: itemIds }),
   transport: (
     action: 'play' | 'pause' | 'seek' | 'next' | 'prev' | 'repeat',
     extra: { position?: number; repeat?: boolean } = {},

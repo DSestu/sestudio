@@ -23,6 +23,7 @@ import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
 import FitsNext from '../components/music/FitsNext'
+import SaveAsPlaylist from '../components/music/SaveAsPlaylist'
 import { closeFits, openFitsFor, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, replaceParams, type Navigate } from '../nav'
@@ -143,17 +144,17 @@ function Detail({ name, round, tracks, get, onPlaylist }: {
             {facts && <span className="block text-xs text-base-content/60">{facts}</span>}
           </p>
           <div className="hidden md:flex gap-2">
-            <DetailActions tracks={tracks} shuffled={shuffled} />
+            <DetailActions name={name} tracks={tracks} shuffled={shuffled} />
           </div>
         </div>
       </div>
-      <div className="flex gap-2 md:hidden"><DetailActions tracks={tracks} shuffled={shuffled} /></div>
+      <div className="flex gap-2 md:hidden"><DetailActions name={name} tracks={tracks} shuffled={shuffled} /></div>
       <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={onPlaylist} />)}</ul>
     </div>
   )
 }
 
-function DetailActions({ tracks, shuffled }: { tracks: MusicTrack[]; shuffled: () => MusicTrack[] }) {
+function DetailActions({ name, tracks, shuffled }: { name: string; tracks: MusicTrack[]; shuffled: () => MusicTrack[] }) {
   return (
     <>
       <button onClick={() => run(playAll(tracks))} className="btn btn-primary rounded-xl gap-2">
@@ -161,10 +162,21 @@ function DetailActions({ tracks, shuffled }: { tracks: MusicTrack[]; shuffled: (
       </button>
       <button onClick={() => run(playAll(shuffled()))} className="btn rounded-xl">Shuffle</button>
       <button onClick={() => run(post(addPayload(tracks, 'append')))} className="btn rounded-xl">Add to queue</button>
+      <SaveAsPlaylist name={name} tracks={addPayload(tracks, 'append').tracks} />
     </>
   )
 }
 
+
+/** The count of a shown list and the button that saves it as a playlist. */
+function ListSave({ count, name, tracks }: { count: number; name: string; tracks: MusicTrack[] }) {
+  return (
+    <div className="flex items-center gap-2 px-3">
+      <span className="flex-1 text-xs text-base-content/60">{count} {count === 1 ? 'track' : 'tracks'}</span>
+      <SaveAsPlaylist name={name} tracks={addPayload(tracks, 'append').tracks} className="btn btn-ghost btn-sm h-11 sm:h-8" />
+    </div>
+  )
+}
 
 /** A pasted YouTube / YouTube Music link: play it as music or queue it. */
 function LinkCard({ url }: { url: string }) {
@@ -325,7 +337,10 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     <MusicSearch
       query={query}
       byId={byId}
-      renderLibrary={ts => <ul>{ts.map(t => <TrackRow key={t.id} track={t} list={ts} onPlaylist={setPickFor} />)}</ul>}
+      renderLibrary={ts => <>
+        <ListSave count={ts.length} name={query.trim()} tracks={ts} />
+        <ul>{ts.map(t => <TrackRow key={t.id} track={t} list={ts} onPlaylist={setPickFor} />)}</ul>
+      </>}
     />
   ) : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
@@ -351,7 +366,10 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       ))}
     </ul>
   ) : (
-    <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={setPickFor} />)}</ul>
+    <>
+      <ListSave count={tracks.length} name={[activeLabel === 'All' ? 'All tracks' : activeLabel, genre].filter(Boolean).join(' · ')} tracks={tracks} />
+      <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={setPickFor} />)}</ul>
+    </>
   )
 
   return (

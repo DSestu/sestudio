@@ -9,6 +9,7 @@ import { BLEND } from './engine'
 import { fmtTime } from './format'
 import { ENTER_MS, FLIP_MS, flipOffsets, LEAVE_MS } from './interact'
 import Meter from './Meter'
+import QueueActions from './QueueActions'
 import { useAnalyses } from './mix/analysis'
 import { playItem } from './player'
 import { armRowDrag, gripRowDrag, justDragged, lastDrop, type DragSource } from './rowDrag'
@@ -275,6 +276,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
           </svg>
           Library
         </button>}
+        {!tv && <QueueActions info={info} />}
         {!tv && <button
           aria-label={expanded ? 'Unpin the queue' : 'Pin the queue'}
           aria-pressed={expanded}

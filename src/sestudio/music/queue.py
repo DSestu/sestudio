@@ -293,6 +293,20 @@ def move(item_id: str, to: int, if_rev: int | None = None) -> dict[str, Any]:
     return _mutate("mv", if_rev, change)
 
 
+def order(item_ids: list[str], if_rev: int | None = None) -> dict[str, Any]:
+    """Put the whole queue in *item_ids* order at once (an auto-order of what is
+    next): one change and one event, instead of a move per row."""
+
+    def change(doc: dict[str, Any]) -> dict[str, Any]:
+        by_id = {i["item_id"]: i for i in doc["items"]}
+        if sorted(item_ids) != sorted(by_id):
+            raise Invalid("the order must list every queue item once")
+        doc["items"] = [by_id[i] for i in item_ids]
+        return {"order": item_ids}
+
+    return _mutate("ord", if_rev, change)
+
+
 def play(
     item_id: str, position: float | None = None, if_rev: int | None = None
 ) -> dict[str, Any]:
