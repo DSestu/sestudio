@@ -11,6 +11,7 @@ import { fetchBridges } from './harmonyApi'
 import JoinLine from './JoinLine'
 import { toast } from '../toast'
 import { mixOf, rawOf, trackOf, useAnalyses } from '../mix/analysis'
+import { flowApi } from '../builder/flows'
 import { plan } from '../mix/plan'
 import { startPlayback, usePosition } from '../player'
 import { openBuildSet } from './build/store'
@@ -36,6 +37,12 @@ function summary(s: PartStats, genre?: string): string {
   const dur = s.duration ? ` · ${formatDuration(s.duration)}` : ''
   return `${s.count} ${s.count === 1 ? 'track' : 'tracks'}${dur}${bpm}${genre ? ` · ${genre}` : ''}`
 }
+
+/** The set's tracks as a new mix in the builder. */
+const openInBuilder = (name: string, items: PlaylistItem[]) =>
+  flowApi
+    .create(name, 'mix', { items: items.map(({ library, track_id, source, title, artist, duration }) => ({ library, track_id, source, title, artist, duration })) })
+    .then(f => { window.location.hash = `#/mixes?f=${f.id}` })
 
 interface Drop { part: string | null; index: number }
 
@@ -275,6 +282,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
         {items.length > 0 && <button onClick={() => playPart()} className="btn btn-primary btn-sm">{isSet(node) ? 'Play set' : 'Play'}</button>}
         {!smart && items.length > 1 && orderMenu(isSet(node) ? 'Auto-order whole set' : 'Auto-order')}
         {!smart && <button onClick={() => openBuildSet({ node: node.id })} className="btn btn-ghost btn-sm">Build a set</button>}
+        {!smart && items.length > 0 && <button onClick={() => run(openInBuilder(node.name, items))} className="btn btn-ghost btn-sm">Open in mix builder</button>}
         {smart ? (
           <button onClick={() => setEditing(true)} className="btn btn-ghost btn-sm">Edit rules</button>
         ) : (

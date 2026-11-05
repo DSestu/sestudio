@@ -33,6 +33,7 @@ import MusicHeaderSearch from './components/music/MusicHeaderSearch'
 import { type Kind, parseKind, rememberSearch } from './titleSearch'
 import LabMusicView from './views/LabMusicView'
 import MusicView from './views/MusicView'
+import MixBuilder from './components/music/builder/MixBuilder'
 import HarmonyBasics from './components/music/harmony/HarmonyBasics'
 import UnsureMode from './components/music/harmony/UnsureMode'
 import SettingsView from './views/settings/SettingsView'
@@ -319,6 +320,7 @@ export default function App() {
         )}
         {route.view === 'lab/music' && <LabMusicView />}
         {route.view === 'music' && <MusicView params={route.params} navigate={navigate} />}
+        {route.view === 'mixes' && <MixBuilder params={route.params} navigate={navigate} />}
         {route.view === 'creators' && (
           <CreatorsView
             source={route.params.get('src') ?? ''}
