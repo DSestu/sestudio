@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { formatDuration, type MusicTrack } from '../../../musicLibrary'
 import {
   isSet, itemsOf, locate, playlistApi, statsOf,
@@ -6,6 +6,10 @@ import {
 } from '../../../musicPlaylists'
 import { keyLabel } from '../../../musicMeta'
 import { post, useMusicQueue } from '../../../musicQueue'
+import { useSettings } from '../../../useSettings'
+import { fetchBridges } from './harmonyApi'
+import JoinLine from './JoinLine'
+import { toast } from '../toast'
 import { mixOf, rawOf, trackOf, useAnalyses } from '../mix/analysis'
 import { plan } from '../mix/plan'
 import { startPlayback, usePosition } from '../player'
@@ -13,7 +17,7 @@ import { openBuildSet } from './build/store'
 import GenreTag from './GenreTag'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
-import { autoOrder, transitionChips, type Chip, type OrderMode, type SetTrack } from './setBuilder'
+import { autoOrder, countJoins, transitionChips, type Chip, type OrderMode, type SetTrack } from './setBuilder'
 
 const ORDERS: [OrderMode, string][] = [['tempo', 'Smooth tempo'], ['harmonic', 'Harmonic (Camelot walk)'], ['energy', 'Energy arc']]
 
@@ -35,12 +39,13 @@ function summary(s: PartStats, genre?: string): string {
 
 interface Drop { part: string | null; index: number }
 
-function ChipLine({ chips }: { chips: Chip[] }) {
+function ChipLine({ chips = [], children }: { chips?: Chip[]; children?: ReactNode }) {
   return (
-    <div className="flex flex-wrap gap-1.5 pb-1 pl-8 pr-3">
+    <div className="flex flex-wrap items-center gap-1.5 pb-1 pl-8 pr-3">
       {chips.map(c => (
         <span key={c.text} className={`rounded-full px-2 py-0.5 text-[11px] leading-none ${c.tone === 'warn' ? 'bg-warning/15 text-warning' : 'bg-white/5 text-base-content/60'}`}>{c.text}</span>
       ))}
+      {children}
     </div>
   )
 }
@@ -59,6 +64,8 @@ interface RowProps {
   track?: MusicTrack
   meta: Meta
   chips?: Chip[]
+  /** How this row joins the next one. */
+  join?: ReactNode
   onGenre: () => void
   /** Replace the queue with the playlist, starting here. */
   onPlay: () => void
@@ -75,7 +82,7 @@ interface RowProps {
   onToPart?: (part: string) => void
 }
 
-function Row({ item, track, meta, chips, onGenre, onPlay, parts, here, last, index, ...ev }: RowProps) {
+function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, last, index, ...ev }: RowProps) {
   const title = track?.title ?? item.title ?? 'Missing track'
   const artist = track?.artist ?? item.artist ?? ''
   const duration = track?.duration ?? item.duration ?? 0
@@ -116,7 +123,7 @@ function Row({ item, track, meta, chips, onGenre, onPlay, parts, here, last, ind
       )}
       </div>
       {meta.genre && <div className="pb-1 pl-8 sm:hidden"><GenreTag id={item.track_id} genre={meta.genre} conf={meta.conf} onChange={onGenre} /></div>}
-      {chips && <ChipLine chips={chips} />}
+      {(chips || join) && <ChipLine chips={chips}>{join}</ChipLine>}
     </li>
   )
 }
@@ -146,6 +153,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const parts = node.parts ?? []
 
   const q = useMusicQueue()
+  const [settings] = useSettings()
   const [tick, reload] = useAnalyses(items.map(i => i.track_id))
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   /** A track with its analysis (the set builder's view of it); `id` defaults to the track's. */
@@ -200,6 +208,22 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     }
     return transitionChips(p, a, b, hint)
   }
+  /** The join to the next row, with a Fix that puts the best bridge track between them. */
+  const joinAfter = (item: PlaylistItem): ReactNode => {
+    const i = flatIndex(item.item_id)
+    if (smart || i < 0 || i >= items.length - 1) return undefined
+    const [a, b] = [flat[i], flat[i + 1]]
+    const fix = () => {
+      const at = locate(node, item.item_id)!
+      run(fetchBridges(item.track_id, items[i + 1].track_id, { exclude: items.map(x => x.track_id), limit: 1 }).then(async ({ results: [best] }) => {
+        const t = best && byId.get(best.id)
+        if (!t) return toast('No single track bridges these two')
+        await playlistApi.add(node.id, [{ library: t.library, track_id: t.id }], at.part ?? undefined, at.index + 1)
+        toast(`Inserted ${t.title} between them`)
+      }))
+    }
+    return <JoinLine a={a} b={b} theory={settings.music_theory_level === 'theory'} onFix={fix} />
+  }
   const metaOf = (i: PlaylistItem): Meta => {
     const raw = rawOf(i.track_id)
     return { bpm: raw?.bpm || byId.get(i.track_id)?.bpm, key: raw?.key, camelot: raw?.camelot, genre: raw?.genre, conf: raw?.genreConf ?? 1 }
@@ -219,6 +243,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const groups: { id: string | null; name?: string; items: PlaylistItem[] }[] = isSet(node)
     ? parts.map(p => ({ id: p.id, name: p.name, items: p.items }))
     : [{ id: null, items }]
+  const joinCounts = useMemo(() => countJoins(flat), [flat])
   const partRefs = parts.map(p => ({ id: p.id, name: p.name }))
 
   const drop = (to: Drop) => {
@@ -241,6 +266,9 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
         <div className="flex-1 min-w-40 leading-tight">
           <p className="text-sm text-base-content/60">
             {summary(total)}{isSet(node) && ` · ${parts.length} parts`}
+            {!smart && joinCounts.clashes + joinCounts.jumps > 0 && (
+              <span className="text-warning">{joinCounts.clashes > 0 && ` · ${joinCounts.clashes} ${joinCounts.clashes === 1 ? 'clash' : 'clashes'}`}{joinCounts.jumps > 0 && ` · ${joinCounts.jumps} tempo ${joinCounts.jumps === 1 ? 'jump' : 'jumps'}`}</span>
+            )}
             {smart && ' · fills itself from the rules'}
           </p>
         </div>
@@ -306,6 +334,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
                     track={byId.get(item.track_id)}
                     meta={metaOf(item)}
                     chips={chipsAfter(item, g.id)}
+                    join={joinAfter(item)}
                     onGenre={reload}
                     onPlay={() => playFrom(item)}
                     index={i}
