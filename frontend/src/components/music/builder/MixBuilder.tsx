@@ -53,6 +53,14 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
   )
   const forkRow = mode === 'branch' ? trunkRows.at(-1) : undefined
 
+  const activeRows = active ? rowsOf(active) : []
+  const pickerProps = {
+    tail: activeRows.at(-1) ?? forkRow,
+    flowName: active?.name,
+    flowColor: active ? flowColor(shown.indexOf(active)) : undefined,
+    used: useMemo(() => new Set([...flows.flatMap(f => f.items), ...trunk].map(r => r.track_id)), [flows, trunk]),
+  }
+
   // A drag runs outside React: what is dragged is kept here, where it would land is state.
   const drag = useRef<{ ref: FlowRef; from?: string } | null>(null)
   const [over, setOver] = useState<{ flow: string; at: number } | null>(null)
@@ -125,7 +133,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
 
       <div className="flex-1 min-h-0 flex">
         <aside aria-label="Picker" className="hidden md:flex flex-col min-h-0 w-88 shrink-0 border-r border-white/8">
-          <Picker all={all} get={get} onAdd={add} onDragStart={t => { drag.current = { ref: refOf(t) } }} />
+          <Picker all={all} get={get} {...pickerProps} onAdd={add} onDragStart={t => { drag.current = { ref: refOf(t) } }} />
         </aside>
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {picking ? (
@@ -200,7 +208,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
 
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)} boxClassName="h-[80dvh] flex flex-col p-0">
-          <Picker all={all} get={get} onAdd={add} onDragStart={() => {}} />
+          <Picker all={all} get={get} {...pickerProps} onAdd={add} onDragStart={() => {}} />
         </ResponsiveModal>
       )}
     </div>
