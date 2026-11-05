@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import type { MusicTrack } from '../../../musicLibrary'
 import type { PlaylistItem } from '../../../musicPlaylists'
-import { moodOf } from '../../../harmony'
+import { MOOD_LADDER, moodOf } from '../../../harmony'
 import { keyLabel, useSummaries, type Summary } from '../../../musicMeta'
 import { proxOf } from '../../../musicFits'
+import { dotOf, place } from '../explore/place'
 import Keyboard from '../harmony/Keyboard'
 import { MODES, modeNotes, NOTE, parseReading } from '../harmony/scales'
 import { bridges, fitsAfter, join, joinColor, type Join, type ProxTrack } from './proximity'
@@ -20,7 +21,7 @@ function JoinTag({ j }: { j: Join }) {
   )
 }
 
-const TABS = [['fits', 'Fits next'], ['notes', 'Notes']] as const
+const TABS = [['fits', 'Fits next'], ['notes', 'Notes'], ['vibe', 'Vibe']] as const
 type Tab = (typeof TABS)[number][0]
 
 /** The track's notes and mood, the other centres that use the same 7 notes, and how many library tracks share them. */
@@ -44,6 +45,31 @@ function Notes({ a, s, pool }: { a: ProxTrack; s?: Summary; pool: ProxTrack[] })
         <p className="text-xs text-base-content/50">In your library</p>
         <p className="text-sm">{count(7)} tracks share all 7 notes · {count(6)} share 6</p>
       </div>
+    </div>
+  )
+}
+
+const [VW, VH] = [300, 210]
+const dotColor = (b: number) => MOOD_LADDER.find(m => m.brightness === b)?.color ?? 'oklch(75% .02 265)'
+
+/** Where the set travels in mood (across) and energy (up): the set as a line, the target ringed, the candidates faint. */
+function Vibe({ ids, at, candidates, get }: { ids: string[]; at: number; candidates: string[]; get: (id: string) => Summary | undefined }) {
+  const dot = (id: string) => dotOf(id, get(id))
+  const setDots = ids.map(dot)
+  const line = setDots.flatMap(d => (d ? [d] : []))
+  const sel = setDots[at]
+  return (
+    <div className="flex flex-col gap-2">
+      <svg viewBox={`0 0 ${VW} ${VH}`} role="img" aria-label="The set by mood, dark to bright, and energy, calm to intense" className="w-full rounded-xl bg-white/3">
+        <text x={8} y={VH - 6} className="fill-base-content/50 text-[10px]">Unstable</text>
+        <text x={VW - 8} y={VH - 6} textAnchor="end" className="fill-base-content/50 text-[10px]">Floating</text>
+        <text x={8} y={14} className="fill-base-content/50 text-[10px]">Intense</text>
+        {candidates.map(id => { const d = dot(id); if (!d) return null; const [x, y] = place(d, 'vibe', VW, VH); return <circle key={id} cx={x} cy={y} r={4} fill={dotColor(d.brightness)} fillOpacity={0.3} /> })}
+        {line.length > 1 && <polyline points={line.map(d => place(d, 'vibe', VW, VH).join(',')).join(' ')} fill="none" stroke="currentColor" strokeOpacity={0.5} strokeWidth={1.4} />}
+        {line.map(d => { const [x, y] = place(d, 'vibe', VW, VH); return <circle key={d.id + x} cx={x} cy={y} r={4.5} fill={dotColor(d.brightness)} /> })}
+        {sel && <circle cx={place(sel, 'vibe', VW, VH)[0]} cy={place(sel, 'vibe', VW, VH)[1]} r={8} fill="none" className="stroke-primary" strokeWidth={2} />}
+      </svg>
+      <p className="text-xs text-base-content/60">Across: mood, from Unstable to Floating. Up: energy. The line is the set; ringed is the selection; faint dots fit there.</p>
     </div>
   )
 }
@@ -85,7 +111,7 @@ export default function Inspector({ items, byId, at, between, onInsert, onUnjoin
       <div role="tablist" className="flex gap-1">
         {TABS.map(([k, name]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`btn btn-xs ${tab === k ? 'btn-primary btn-soft' : 'btn-ghost'}`}>{name}</button>)}
       </div>
-      {tab === 'notes' ? <Notes a={a} s={get(a.id)} pool={pool} /> : <>
+      {tab === 'vibe' ? <Vibe ids={items.map(i => i.track_id)} at={at} candidates={rows.map(x => x.id)} get={get} /> : tab === 'notes' ? <Notes a={a} s={get(a.id)} pool={pool} /> : <>
       <p className="text-sm leading-snug">
         {b ? <>Fits between <b>{titleOf(items[at])}</b> and <b>{titleOf(items[at + 1])}</b></> : <>Fits after <b>{titleOf(items[at])}</b></>}
         {b
