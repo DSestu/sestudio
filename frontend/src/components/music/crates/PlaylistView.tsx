@@ -9,7 +9,7 @@ import { post, useMusicQueue } from '../../../musicQueue'
 import { mixOf, rawOf, trackOf, useAnalyses } from '../mix/analysis'
 import { plan } from '../mix/plan'
 import { startPlayback, usePosition } from '../player'
-import FillDialog from './FillDialog'
+import { openBuildSet } from './build/store'
 import GenreTag from './GenreTag'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
@@ -147,7 +147,6 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
 
   const q = useMusicQueue()
   const [tick, reload] = useAnalyses(items.map(i => i.track_id))
-  const [filling, setFilling] = useState(false)
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   /** A track with its analysis (the set builder's view of it); `id` defaults to the track's. */
   const setTrack = (trackId: string, duration: number, bpm?: number, id = trackId): SetTrack => {
@@ -247,7 +246,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
         </div>
         {items.length > 0 && <button onClick={() => playPart()} className="btn btn-primary btn-sm">{isSet(node) ? 'Play set' : 'Play'}</button>}
         {!smart && items.length > 1 && orderMenu(isSet(node) ? 'Auto-order whole set' : 'Auto-order')}
-        {!smart && <button onClick={() => setFilling(true)} className="btn btn-ghost btn-sm">Fill from library</button>}
+        {!smart && <button onClick={() => openBuildSet({ node: node.id })} className="btn btn-ghost btn-sm">Build a set</button>}
         {smart ? (
           <button onClick={() => setEditing(true)} className="btn btn-ghost btn-sm">Edit rules</button>
         ) : (
@@ -329,7 +328,6 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
         })
       )}
       {editing && <SmartForm node={node} onClose={() => setEditing(false)} />}
-      {filling && <FillDialog node={node} byId={byId} toSet={(id, t) => setTrack(id, t?.duration ?? 0, t?.bpm)} onClose={() => setFilling(false)} />}
     </div>
   )
 }

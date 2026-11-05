@@ -59,42 +59,6 @@ export function autoOrder(tracks: SetTrack[], mode: OrderMode): string[] {
   return out.map(t => t.id)
 }
 
-export interface FillQuery {
-  /** Empty means any genre. */
-  genres: string[]
-  bpmMin?: number
-  bpmMax?: number
-  /** Wanted length in seconds. */
-  length: number
-  /** The track the new ones would follow, to rank by how well they continue it. */
-  after?: SetTrack
-}
-
-/** Library tracks fitting the query, best fit first, until their durations reach the wanted length. */
-export function rankFill(pool: SetTrack[], q: FillQuery, inSet: ReadonlySet<string>): SetTrack[] {
-  const want = new Set(q.genres.map(g => g.toLowerCase()))
-  const mid = q.bpmMin !== undefined && q.bpmMax !== undefined ? (q.bpmMin + q.bpmMax) / 2 : undefined
-  const fit = (t: SetTrack) => {
-    const bpm = q.after?.bpm ?? mid
-    const shared = q.after ? harmonyOf(q.after, t).shared : null
-    return (bpm && t.bpm ? Math.abs(bpm - t.bpm) : 15) + (shared === null ? 9 : Math.min(9, (7 - shared) * 3))
-  }
-  const ranked = pool
-    .filter(t => !inSet.has(t.id) && t.bpm)
-    .filter(t => !want.size || want.has((t.genre ?? '').toLowerCase()))
-    .filter(t => (q.bpmMin === undefined || t.bpm! >= q.bpmMin) && (q.bpmMax === undefined || t.bpm! <= q.bpmMax))
-    .map(t => [fit(t), t] as const)
-    .sort((a, b) => a[0] - b[0])
-  const out: SetTrack[] = []
-  let total = 0
-  for (const [, t] of ranked) {
-    if (total >= q.length) break
-    out.push(t)
-    total += t.duration
-  }
-  return out
-}
-
 export interface Chip {
   text: string
   tone: 'ok' | 'warn'

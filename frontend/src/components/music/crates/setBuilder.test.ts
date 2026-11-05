@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Plan } from '../timeline/sampling'
-import { autoOrder, harmonic, keyDistance, rankFill, transitionChips, type SetTrack } from './setBuilder'
+import { autoOrder, harmonic, keyDistance, transitionChips, type SetTrack } from './setBuilder'
 
 const t = (id: string, bpm?: number, camelot?: string, energy?: number, genre?: string, duration = 200): SetTrack => ({ id, bpm, camelot, energy, genre, duration })
 
@@ -38,18 +38,6 @@ describe('autoOrder', () => {
     expect(peak).toBeLessThan(4)
     expect(levels.slice(0, peak + 1)).toEqual([...levels.slice(0, peak + 1)].sort((x, y) => x - y))
     expect(levels.slice(peak)).toEqual([...levels.slice(peak)].sort((x, y) => y - x))
-  })
-})
-
-describe('rankFill', () => {
-  const pool = [t('a', 172, '8A', 0, 'Drum & Bass'), t('b', 170, '9A', 0, 'Drum & Bass'), t('c', 128, '8A', 0, 'House'), t('d', 175, '2B', 0, 'drum & bass'), t('e', 174, '8A', 0, 'Drum & Bass')]
-  it('keeps the genre and tempo range, skips what is in the set, best fit first', () => {
-    const got = rankFill(pool, { genres: ['Drum & Bass'], bpmMin: 168, bpmMax: 176, length: 10_000, after: t('x', 172, '8A') }, new Set(['e']))
-    expect(got.map(x => x.id)).toEqual(['a', 'b', 'd'])
-  })
-  it('stops once the length is reached', () => {
-    const got = rankFill(pool, { genres: [], length: 300, after: t('x', 172, '8A') }, new Set())
-    expect(got).toHaveLength(2)
   })
 })
 

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import AddToPlaylist from '../components/music/crates/AddToPlaylist'
 import AddLibrary from '../components/music/crates/AddLibrary'
 import { openHarmonyBasics } from '../components/music/harmony/store'
+import BuildSet from '../components/music/crates/build/BuildSet'
+import { openBuildSet } from '../components/music/crates/build/store'
 import Crates, { type Crate } from '../components/music/crates/Crates'
 import PlaylistView from '../components/music/crates/PlaylistView'
 import EmptyState from '../components/EmptyState'
@@ -321,7 +323,10 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         <PageHeader
           title="Music"
           status={<><em>{tracks.length}</em> tracks{library && ` in ${activeLabel}`}{genre && ` · ${genre}`}</>}
-          menu={<button onClick={openHarmonyBasics} className="btn btn-ghost btn-sm justify-start">? Harmony basics</button>}
+          menu={<>
+            <button onClick={() => openBuildSet()} className="btn btn-ghost btn-sm justify-start">Build a set</button>
+            <button onClick={openHarmonyBasics} className="btn btn-ghost btn-sm justify-start">? Harmony basics</button>
+          </>}
           tabs={[...TABS]}
           tab={tab}
           onTab={setTab}
@@ -371,6 +376,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} />
         </ResponsiveModal>
       )}
+      <BuildSet byId={byId} />
       {adding && <AddLibrary onClose={() => setAdding(false)} />}
       {pickFor && <AddToPlaylist track={pickFor} onClose={() => setPickFor(undefined)} />}
     </div>
