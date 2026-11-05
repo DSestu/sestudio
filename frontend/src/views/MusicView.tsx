@@ -271,10 +271,13 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   useModalBack(sheet, () => setSheet(false))
   useModalBack(adding, () => setAdding(false))
   // "Fits after this" from any row lands on the Tracks tab, off any open page.
+  const [seenFits, setSeenFits] = useState<typeof fitsRef>()
+  if (fitsRef !== seenFits) {
+    setSeenFits(fitsRef)
+    if (fitsRef) setTab('tracks')
+  }
   useEffect(() => {
-    if (!fitsRef) return
-    setTab('tracks')
-    if (nodeId || albumId || artistName) go({})
+    if (fitsRef && (nodeId || albumId || artistName)) go({})
   }, [fitsRef]) // eslint-disable-line react-hooks/exhaustive-deps
   const playlists = usePlaylists()
   const node = playlists.find(n => n.id === nodeId)
