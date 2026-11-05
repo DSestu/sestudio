@@ -145,3 +145,7 @@ src/sestudio/_tmdb_default.py
 docs/proto/music/lib.json
 docs/proto/music/lib/
 docs/proto/music/audio/
+
+# local Chrome profile (cookies) and agent worktrees
+/~/
+.claude/worktrees/

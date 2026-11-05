@@ -148,7 +148,7 @@ export default function PlaylistTree({ active, onPick }: { active: string; onPic
     const folderList: TreeNode[] = []
     const collect = (l: TreeNode[]) => l.forEach(n => { if (n.kind === 'folder') { folderList.push(n); collect(n.children) } })
     collect(roots)
-    return { rows: all.filter(r => r.node.kind !== 'smart'), smart: nodes.filter(n => n.kind === 'smart') as TreeNode[], folders: folderList }
+    return { rows: all.filter(r => r.node.kind !== 'smart'), smart: nodes.filter(n => n.kind === 'smart').map(n => ({ ...n, children: [] })), folders: folderList }
   }, [nodes, collapsed])
   const toggle = (id: string) => setCollapsed(s => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n })
   const create = (kind: 'playlist' | 'folder') => {
