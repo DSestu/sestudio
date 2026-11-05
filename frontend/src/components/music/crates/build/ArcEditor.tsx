@@ -55,8 +55,10 @@ export default function ArcEditor({ arc, picked, onPick, onChange, blocks = [], 
   }
   const end = () => { drag.current = null }
   const total = Math.max(span, blocks.reduce((s, b) => s + b.duration, 0)) || 1
-  let at = 0
-  const placed = blocks.map(b => { const x0 = x(at / total); at += b.duration; return { ...b, x0, x1: x(at / total) } })
+  const placed = blocks.map((b, i) => {
+    const before = blocks.slice(0, i).reduce((s, p) => s + p.duration, 0)
+    return { ...b, x0: x(before / total), x1: x((before + b.duration) / total) }
+  })
 
   const line = (pts: number[], y: (v: number) => number) => pts.map((v, i) => `${x(i / (pts.length - 1))},${y(v)}`).join(' ')
   const dots = (pts: number[], lane: 'energy' | 'mood', y: (v: number) => number, color: string) => pts.map((v, i) => (
