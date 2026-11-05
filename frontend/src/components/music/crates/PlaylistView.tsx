@@ -23,6 +23,8 @@ import { startPlayback, usePosition } from '../player'
 import Apply from './build/Apply'
 import ArcsWay from './build/ArcsWay'
 import GenreTag from './GenreTag'
+import RowThread from '../RowThread'
+import { rangeOf, type Range } from '../thread'
 import Explore from '../explore/Explore'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
@@ -101,6 +103,8 @@ interface RowProps {
   /** The inspector is on the join after this row. */
   joinSelected?: boolean
   onSelect?: () => void
+  /** The playlist's own energy scale, so the thread's colours compare its tracks. */
+  range: Range | null
 }
 
 function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, last, index, ...ev }: RowProps) {
@@ -111,6 +115,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
   return (
     <li
       draggable={!!ev.onDragStart}
+      className="relative"
       onDragStart={ev.onDragStart}
       onDragOver={ev.onDropHere && (e => e.preventDefault())}
       onDrop={ev.onDropHere && (e => { e.preventDefault(); ev.onDropHere!() })}
@@ -147,6 +152,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
       </div>
       {meta.genre && <div className="pb-1 pl-8 sm:hidden"><GenreTag id={item.track_id} genre={meta.genre} conf={meta.conf} onChange={onGenre} /></div>}
       {(chips || join) && <ChipLine id={`join-${item.item_id}`} selected={ev.joinSelected} chips={chips}>{join}</ChipLine>}
+      {duration > 0 && <RowThread id={item.track_id} dur={duration} range={ev.range} playing={false} />}
     </li>
   )
 }
@@ -181,6 +187,7 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
   const q = useMusicQueue()
   const [settings] = useSettings()
   const [tick, reload] = useAnalyses(items.map(i => i.track_id))
+  const range = rangeOf(items.map(i => i.track_id))
   /** Flat index of the first track of the join shown in the dialog. */
   const [joinAt, setJoinAt] = useState<number>()
   const [kept, keep] = useKeptJoins(node.id)
@@ -482,6 +489,7 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
                     join={joinAfter(item)}
                     onGenre={reload}
                     onPlay={() => playFrom(item)}
+                    range={range}
                     index={i}
                     last={i === g.items.length - 1}
                     parts={partRefs}
