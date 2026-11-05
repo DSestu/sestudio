@@ -565,7 +565,7 @@ export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; ai
     >
       {isPhone(W)
         ? <div className="flex min-h-0 flex-1 flex-col pt-2"><LibraryList q={q} aim={aim} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[15px] font-semibold">Add to queue</h3>} onClose={onClose} /></div>
-        : <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-3.5 pt-3.5">{head}{cards(f.paste ? 'flex items-stretch' : 'grid grid-flow-col grid-rows-2 auto-cols-[11rem] [&>[data-row]]:max-h-none')}</div>}
+        : <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-3.5 pt-3.5">{head}{cards(f.paste ? 'flex items-stretch' : 'grid grid-flow-col grid-rows-2 auto-cols-max [&>[data-row]]:max-h-none')}</div>}
     </aside>
   )
 }
