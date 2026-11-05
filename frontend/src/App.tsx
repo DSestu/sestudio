@@ -35,6 +35,7 @@ import LabMusicView from './views/LabMusicView'
 import MusicView from './views/MusicView'
 import MixBuilder from './components/music/builder/MixBuilder'
 import HarmonyBasics from './components/music/harmony/HarmonyBasics'
+import KeyCard from './components/music/harmony/KeyCard'
 import UnsureMode from './components/music/harmony/UnsureMode'
 import SettingsView from './views/settings/SettingsView'
 import WatchView from './views/WatchView'
@@ -445,6 +446,7 @@ export default function App() {
       <MusicPlayer onMusicPage={route.view === 'music'} />
       <HarmonyBasics />
       <UnsureMode />
+      <KeyCard />
 
       {/* Minimised browser player — shown whenever the playing title is not the
           one on screen, which includes browsing a *different* title in the

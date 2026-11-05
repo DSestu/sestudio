@@ -20,6 +20,7 @@ import {
 import { addPayload, addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
 import { playAll, playFrom, playPayload } from '../components/music/player'
 import { factsLine, genreColor, useAnalysing, useSummaries, type Summary } from '../musicMeta'
+import { openKeyCard } from '../components/music/harmony/keyCardStore'
 import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
@@ -131,6 +132,7 @@ function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: M
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); run(addToQueue(track)) }}>Add to queue</button></li>
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); onPlaylist(track) }}>Add to playlist…</button></li>
           {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setFitsRef(track.id) }}>Fits after this</button></li>}
+          {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openKeyCard(track.id, track.title) }}>Key card</button></li>}
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openBuildSet({ way: 'seed', seed: track.id }) }}>Build a set from this</button></li>
         </ul>
       </div>

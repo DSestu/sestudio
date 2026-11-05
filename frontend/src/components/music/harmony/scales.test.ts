@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modeNotes, parseReading, shared } from './scales'
+import { family, modeNotes, parseReading, shared } from './scales'
 
 describe('parseReading', () => {
   it('reads the server label: notes, home and mood word', () => {
@@ -30,5 +30,15 @@ describe('modeNotes', () => {
   })
   it('C and G major share six notes', () => {
     expect(shared(modeNotes(0, 'ionian'), modeNotes(7, 'ionian'))).toBe(6)
+  })
+})
+
+describe('family', () => {
+  it('lists the seven modes that use the white keys, each centred on its own note', () => {
+    const f = family(modeNotes(0, 'ionian'))
+    expect(f.map(x => [x.tonic, x.mode])).toEqual([[5, 'lydian'], [0, 'ionian'], [7, 'mixolydian'], [2, 'dorian'], [9, 'aeolian'], [4, 'phrygian'], [11, 'locrian']])
+  })
+  it('has none for harmonic minor', () => {
+    expect(family(parseReading('A Harmonic minor')!.notes)).toEqual([])
   })
 })

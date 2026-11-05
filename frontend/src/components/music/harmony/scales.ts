@@ -54,3 +54,8 @@ export function parseReading(label: string) {
 
 /** How many of the seven notes two scales share. */
 export const shared = (a: readonly number[], b: readonly number[]) => a.filter(n => b.includes(n)).length
+
+/** The other modes that use exactly these seven notes, centred on each note in turn (the key card's family); none for harmonic minor. */
+export function family(notes: readonly number[]): { tonic: number; mode: ModeName; word: string }[] {
+  return MODES.flatMap(m => notes.filter(t => shared(modeNotes(t, m.name), notes) === 7).map(tonic => ({ tonic, mode: m.name, word: m.word })))
+}
