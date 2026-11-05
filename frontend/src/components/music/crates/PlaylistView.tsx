@@ -5,9 +5,10 @@ import {
   type PartStats, type PlaylistItem, type PlaylistNode,
 } from '../../../musicPlaylists'
 import { keyLabel } from '../../../musicMeta'
+import { join } from './proximity'
 import { post, useMusicQueue } from '../../../musicQueue'
 import { useSettings } from '../../../useSettings'
-import { fetchBridges } from './harmonyApi'
+import FixDialog from './FixDialog'
 import JoinDialog from './JoinDialog'
 import JoinLine from './JoinLine'
 import { toast } from '../toast'
@@ -19,7 +20,8 @@ import { openBuildSet } from './build/store'
 import GenreTag from './GenreTag'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
-import { autoOrder, countJoins, transitionChips, type Chip, type OrderMode, type SetTrack } from './setBuilder'
+import { autoOrder, bestReorders, countJoins, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder, type SetTrack } from './setBuilder'
+import { useKeptJoins } from './useKeptJoins'
 
 const ORDERS: [OrderMode, string][] = [['tempo', 'Smooth tempo'], ['harmonic', 'Harmonic (Camelot walk)'], ['energy', 'Energy arc']]
 
@@ -165,6 +167,9 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const [tick, reload] = useAnalyses(items.map(i => i.track_id))
   /** Flat index of the first track of the join shown in the dialog. */
   const [joinAt, setJoinAt] = useState<number>()
+  /** Same, for the fix dialog. */
+  const [fixAt, setFixAt] = useState<number>()
+  const [kept, keep] = useKeptJoins(node.id)
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   /** A track with its analysis (the set builder's view of it); `id` defaults to the track's. */
   const setTrack = (trackId: string, duration: number, bpm?: number, id = trackId): SetTrack => {
@@ -223,18 +228,22 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     const i = flatIndex(item.item_id)
     if (smart || i < 0 || i >= items.length - 1) return undefined
     const [a, b] = [flat[i], flat[i + 1]]
-    return <JoinLine a={a} b={b} theory={settings.music_theory_level === 'theory'} onOpen={() => setJoinAt(i)} onFix={() => fixJoin(item, i)} />
+    return (
+      <JoinLine
+        a={a} b={b} theory={settings.music_theory_level === 'theory'} kept={kept.has(keptKey(a, b))}
+        onOpen={() => setJoinAt(i)} onFix={() => setFixAt(i)} onInsert={() => setFixAt(i)}
+      />
+    )
   }
-  const fixJoin = (item: PlaylistItem, i: number) => {
-    {
-      const at = locate(node, item.item_id)!
-      run(fetchBridges(item.track_id, items[i + 1].track_id, { exclude: items.map(x => x.track_id), limit: 1 }).then(async ({ results: [best] }) => {
-        const t = best && byId.get(best.id)
-        if (!t) return toast('No single track bridges these two')
-        await playlistApi.add(node.id, [{ library: t.library, track_id: t.id }], at.part ?? undefined, at.index + 1)
-        toast(`Inserted ${t.title} between them`)
-      }))
-    }
+  const titleAt = (i: number) => byId.get(items[i].track_id)?.title ?? items[i].title ?? 'Track'
+  const insertBetween = (i: number, id: string) => {
+    const at = locate(node, items[i].item_id)!
+    const t = byId.get(id)!
+    run(playlistApi.add(node.id, [{ library: t.library, track_id: id }], at.part ?? undefined, at.index + 1).then(() => toast(`Inserted ${t.title} between them`)))
+  }
+  const reorder = (r: Reorder, text: string) => {
+    const { part, index } = placement(groups.map(g => ({ id: g.id, items: g.items.map(x => x.item_id) })), items[r.from].item_id, r.to)
+    run(playlistApi.moveItem(node.id, items[r.from].item_id, index, part ?? undefined).then(() => toast(`${text}: clashes ${r.before} → ${r.after}`)))
   }
   const metaOf = (i: PlaylistItem): Meta => {
     const raw = rawOf(i.track_id)
@@ -255,7 +264,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const groups: { id: string | null; name?: string; items: PlaylistItem[] }[] = isSet(node)
     ? parts.map(p => ({ id: p.id, name: p.name, items: p.items }))
     : [{ id: null, items }]
-  const joinCounts = useMemo(() => countJoins(flat), [flat])
+  const joinCounts = useMemo(() => countJoins(flat, kept), [flat, kept])
   const partRefs = parts.map(p => ({ id: p.id, name: p.name }))
 
   const drop = (to: Drop) => {
@@ -371,11 +380,27 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
       )}
       {joinAt !== undefined && items[joinAt + 1] && (
         <JoinDialog
-          a={flat[joinAt]} b={flat[joinAt + 1]}
-          titleA={byId.get(items[joinAt].track_id)?.title ?? items[joinAt].title ?? 'Track'} titleB={byId.get(items[joinAt + 1].track_id)?.title ?? items[joinAt + 1].title ?? 'Track'}
-          onFix={() => fixJoin(items[joinAt], joinAt)} onClose={() => setJoinAt(undefined)}
+          a={flat[joinAt]} b={flat[joinAt + 1]} titleA={titleAt(joinAt)} titleB={titleAt(joinAt + 1)} kept={kept.has(keptKey(flat[joinAt], flat[joinAt + 1]))}
+          onFix={() => setFixAt(joinAt)} onClose={() => setJoinAt(undefined)}
         />
       )}
+      {fixAt !== undefined && items[fixAt + 1] && (() => {
+        const [a, b] = [flat[fixAt], flat[fixAt + 1]]
+        const { swap, move } = bestReorders(flat, fixAt, kept)
+        const swapText = swap && `Swap ${titleAt(swap.from)} and ${titleAt(swap.to)}`
+        const moveText = move && `Move ${titleAt(move.from)} to position ${move.to + 1}`
+        return (
+          <FixDialog
+            a={items[fixAt].track_id} b={items[fixAt + 1].track_id} titleA={titleAt(fixAt)} titleB={titleAt(fixAt + 1)}
+            clash={join(a, b).kind === 'clash' && !kept.has(keptKey(a, b))} exclude={items.map(x => x.track_id)} library={byId}
+            swap={swap && { ...swap, text: swapText! }} move={move && { ...move, text: moveText! }}
+            onInsert={id => insertBetween(fixAt, id)}
+            onReorder={r => reorder(r, r === swap ? swapText! : moveText!)}
+            onKeep={() => { keep(keptKey(a, b)); toast('Kept: this join is no longer flagged') }}
+            onClose={() => setFixAt(undefined)}
+          />
+        )
+      })()}
       {editing && <SmartForm node={node} onClose={() => setEditing(false)} />}
     </div>
   )

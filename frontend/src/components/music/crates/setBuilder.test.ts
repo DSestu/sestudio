@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Plan } from '../timeline/sampling'
-import { autoOrder, countJoins, harmonic, keyDistance, transitionChips, type SetTrack } from './setBuilder'
+import { autoOrder, bestReorders, countJoins, harmonic, keyDistance, keptKey, placement, transitionChips, type SetTrack } from './setBuilder'
 
 const t = (id: string, bpm?: number, camelot?: string, energy?: number, genre?: string, duration = 200): SetTrack => ({ id, bpm, camelot, energy, genre, duration })
 
@@ -61,5 +61,25 @@ describe('countJoins', () => {
   })
   it('is quiet for a smooth set', () => {
     expect(countJoins([t('a', 172, '8A'), t('b', 173, '8B')])).toEqual({ clashes: 0, jumps: 0 })
+  })
+})
+
+describe('kept joins and reorders', () => {
+  const set = [t('a', 172, '8A'), t('b', 172, '3B'), t('c', 172, '9A')]
+  it('does not count a kept clash', () => {
+    expect(countJoins(set, new Set([keptKey(set[0], set[1])])).clashes).toBe(1)
+  })
+  it('finds a swap and a move that leave fewer clashes, and none when nothing helps', () => {
+    const { swap, move } = bestReorders(set, 0)
+    expect(swap).toMatchObject({ before: 2, after: 1 })
+    expect(move).toMatchObject({ from: 0, to: 2, after: 1 })
+    expect(bestReorders([t('a', 172, '8A'), t('b', 172, '8A')], 0)).toEqual({})
+  })
+  it('places an item by part and index without itself', () => {
+    const groups = [{ id: 'p1', items: ['a', 'b'] }, { id: 'p2', items: ['c', 'd'] }]
+    expect(placement(groups, 'a', 0)).toEqual({ part: 'p1', index: 0 })
+    expect(placement(groups, 'a', 1)).toEqual({ part: 'p1', index: 1 })
+    expect(placement(groups, 'a', 3)).toEqual({ part: 'p2', index: 2 })
+    expect(placement(groups, 'd', 2)).toEqual({ part: 'p1', index: 2 })
   })
 })
