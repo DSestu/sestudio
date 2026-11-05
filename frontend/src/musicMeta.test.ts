@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { dominantGenre, factsLine, genreColor, genreShort, metaLine } from './musicMeta'
+import { dominantGenre, factsLine, genreColor, genreShort, metaLine, pending } from './musicMeta'
+
+describe('pending', () => {
+  it('is true until the harmony is read', () => {
+    expect(pending(undefined)).toBe(true)
+    expect(pending({ bpm: 120, key: 'F minor' })).toBe(true)
+    expect(pending({ bpm: 120, harmony: { track: { tonic: 'F', mode: 'Aeolian', notes: [] } } })).toBe(false)
+  })
+})
 
 describe('track facts', () => {
   it('shows tempo, key and genre on one line, skipping what is missing', () => {

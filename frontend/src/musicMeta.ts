@@ -26,6 +26,8 @@ export interface Summary {
 export const SUMMARY_RETRY_MS = 10_000
 const CHUNK = 150
 const known = new Map<string, Summary>()
+/** The background analysis is working (on tracks, or on the tonic and mode pass). */
+let busy = false
 const missedAt = new Map<string, number>()
 const wanted = new Set<string>()
 const listeners = new Set<() => void>()
@@ -52,10 +54,13 @@ async function flush() {
   }
 }
 
-/** Queue a track's summary for the next batch, unless known or missed less than a retry ago. */
+/** A summary still lacking its harmony: the track is being analysed, or waits for the harmony pass. */
+export const pending = (s?: Summary) => !s?.harmony
+
+/** Queue a track's summary for the next batch, unless known (and complete, while the analysis runs) or missed less than a retry ago. */
 export function requestSummary(id: string) {
   const at = missedAt.get(id)
-  if (known.has(id) || wanted.has(id) || (at !== undefined && Date.now() - at < SUMMARY_RETRY_MS)) return
+  if ((known.has(id) && !(busy && pending(known.get(id)))) || wanted.has(id) || (at !== undefined && Date.now() - at < SUMMARY_RETRY_MS)) return
   missedAt.set(id, Date.now())
   wanted.add(id)
   timer ||= window.setTimeout(() => { timer = 0; void flush() }, 40)
@@ -73,10 +78,38 @@ export function useSummary(id: string | undefined): Summary | undefined {
   useEffect(() => {
     if (!id) return
     requestSummary(id)
-    const t = window.setInterval(() => { if (known.has(id)) window.clearInterval(t); else requestSummary(id) }, SUMMARY_RETRY_MS)
+    const t = window.setInterval(() => requestSummary(id), SUMMARY_RETRY_MS)
     return () => window.clearInterval(t)
   }, [id])
   return id ? known.get(id) : undefined
+}
+
+let watchers = 0
+let poll = 0
+
+async function checkBusy() {
+  try {
+    const s: { running: boolean; modes: { done: number; total: number } } = await (await fetch('/api/music/analysis/status')).json()
+    const now = s.running || s.modes.done < s.modes.total
+    if (now === busy) return
+    busy = now
+    // The pass just ended: read the last results.
+    if (!busy) known.forEach((v, id) => { if (pending(v)) { missedAt.delete(id); requestSummary(id) } })
+    version++
+    listeners.forEach(l => l())
+  } catch {
+    // Offline or restarting: the next poll asks again.
+  }
+}
+
+/** Whether a track's tonic, mode and energy are still being worked out: the analysis is running and has not got to it. */
+export function useAnalysing(id: string | undefined): boolean {
+  useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => version)
+  useEffect(() => {
+    if (!watchers++) { void checkBusy(); poll = window.setInterval(checkBusy, 3000) }
+    return () => { if (!--watchers) window.clearInterval(poll) }
+  }, [])
+  return id !== undefined && busy && pending(known.get(id))
 }
 
 /** "F min (4A)": the key by name, then its Camelot code (A minor, B major) for mixing. */
