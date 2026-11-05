@@ -2,21 +2,55 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { formatDuration, type MusicTrack } from '../../../musicLibrary'
 import { genreShort, metaLine, type Summary } from '../../../musicMeta'
 import { matchWords } from '../../../musicSearch'
-import { cost, join } from '../crates/proximity'
+import { cost, join, type Join } from '../crates/proximity'
 import { proxOf, type Row } from './flows'
 
 const LIMIT = 200
 type Sort = 'fit' | 'bpm' | 'az'
 const SORTS: [Sort, string][] = [['fit', 'Best next'], ['bpm', 'Tempo'], ['az', 'A–Z']]
 
+const SQUARE = {
+  great: 'bg-success/25 text-success',
+  good: 'bg-info/25 text-info',
+  clash: 'border border-warning text-warning',
+  none: 'bg-white/8 text-base-content/40',
+}
+const squareOf = (kind: Join['kind']) => (kind === 'same-key' || kind === 'pivot' ? SQUARE.great : kind === 'clash' ? SQUARE.clash : kind ? SQUARE.good : SQUARE.none)
+
+const Square = ({ n, cls, title, on }: { n: number; cls: string; title?: string; on?: boolean }) => (
+  <i title={title} className={`grid place-items-center size-5 rounded text-[11px] font-semibold not-italic tabular-nums ${cls} ${on ? 'outline-2 outline-offset-1 outline-current' : ''}`}>{n}</i>
+)
+
+export interface Lane {
+  name: string
+  /** The flow's last track (or its fork); none while it is empty. */
+  tail?: Row
+}
+
+/** One numbered square per flow: how the track would follow that flow's last track. The active flow's is outlined. */
+function Fits({ t, lanes, active, get }: { t: MusicTrack; lanes: Lane[]; active: number; get: (id: string) => Summary | undefined }) {
+  const p = proxOf(t.id, get(t.id), t.bpm)
+  return (
+    <span className="flex gap-1">
+      {lanes.map((l, i) => {
+        const j = l.tail ? join(l.tail.prox, p) : undefined
+        return <Square key={i} n={i + 1} cls={j ? squareOf(j.kind) : SQUARE.great} on={i === active} title={`${l.name}: ${j ? j.kindLabel ?? 'unknown key' : 'opens the flow'}`} />
+      })}
+    </span>
+  )
+}
+
 /** The library to pick from, ranked for the active flow's last track. + adds to the active flow; on desktop a row drags into any flow. */
-export default function Picker({ all, get, tail, flowName, flowColor, used, onAdd, onDragStart }: {
+export default function Picker({ all, get, tail, flowName, flowColor, lanes, active, used, onAdd, onDragStart }: {
   all: MusicTrack[]
   get: (id: string) => Summary | undefined
   /** The active flow's last track (or its fork): what the results should follow. */
   tail?: Row
   flowName?: string
   flowColor?: string
+  /** Every flow of the screen, for the fit squares, and which one is active. */
+  lanes: Lane[]
+  active: number
   /** Ids of the tracks already in a flow: faded, not hidden. */
   used: Set<string>
   onAdd: (t: MusicTrack) => void
@@ -78,7 +112,7 @@ export default function Picker({ all, get, tail, flowName, flowColor, used, onAd
         {found.length} tracks{tail && flowName && sort === 'fit' && <> · ranked for <b style={{ color: flowColor }}>{flowName}</b></>}
       </p>
       <ul className="flex-1 min-h-0 overflow-y-auto px-1.5 pb-3">
-        {found.slice(0, LIMIT).map(({ t, j }) => (
+        {found.slice(0, LIMIT).map(({ t }) => (
           <li
             key={t.id}
             draggable
@@ -89,8 +123,8 @@ export default function Picker({ all, get, tail, flowName, flowColor, used, onAd
             <span className="min-w-0 flex-1 leading-tight">
               <span className="block truncate text-sm font-medium">{t.title}</span>
               <span className="block truncate text-xs text-base-content/60">{[t.artist, metaLine(get(t.id), t.bpm)].filter(Boolean).join(' · ')}</span>
-              {j?.kindLabel && <span className={`block text-[11px] ${j.kind === 'clash' ? 'text-warning' : 'text-base-content/45'}`}>{j.kindLabel}</span>}
             </span>
+            <Fits t={t} lanes={lanes} active={active} get={get} />
             <span className="text-xs tabular-nums text-base-content/50">{formatDuration(t.duration)}</span>
             <button onClick={() => onAdd(t)} aria-label={`Add ${t.title}`} className="btn btn-ghost btn-circle btn-sm relative hit">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
@@ -98,6 +132,11 @@ export default function Picker({ all, get, tail, flowName, flowColor, used, onAd
           </li>
         ))}
       </ul>
+      {lanes.length > 0 && (
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 pb-3 text-[11px] text-base-content/55">
+          <Square n={1} cls={SQUARE.great} />flows well <Square n={1} cls={SQUARE.good} />next door <Square n={1} cls={SQUARE.clash} />clash · number = flow · faded = already in a flow
+        </p>
+      )}
     </div>
   )
 }

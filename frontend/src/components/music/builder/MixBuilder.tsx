@@ -58,6 +58,8 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
     tail: activeRows.at(-1) ?? forkRow,
     flowName: active?.name,
     flowColor: active ? flowColor(shown.indexOf(active)) : undefined,
+    lanes: shown.map(f => ({ name: f.name, tail: rowsOf(f).at(-1) ?? forkRow })),
+    active: active ? shown.indexOf(active) : -1,
     used: useMemo(() => new Set([...flows.flatMap(f => f.items), ...trunk].map(r => r.track_id)), [flows, trunk]),
   }
 
