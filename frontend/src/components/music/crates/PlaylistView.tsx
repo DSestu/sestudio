@@ -8,6 +8,7 @@ import { keyLabel } from '../../../musicMeta'
 import { join } from './proximity'
 import { post, useMusicQueue } from '../../../musicQueue'
 import { useSettings } from '../../../useSettings'
+import ClashTip from './ClashTip'
 import FixDialog from './FixDialog'
 import JoinDialog from './JoinDialog'
 import JoinLine from './JoinLine'
@@ -308,6 +309,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
           </button>
         )}
       </div>
+      {!smart && joinCounts.clashes > 0 && <ClashTip />}
       {!smart && <SetCurve groups={groups.map(g => ({ name: g.name, tracks: g.items.map(i => flat[flatIndex(i.item_id)]) }))} now={now} />}
       {!items.length && !parts.length ? (
         <p className="px-3 py-8 text-center text-sm text-base-content/60">
