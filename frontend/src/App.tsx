@@ -33,6 +33,7 @@ import MusicHeaderSearch from './components/music/MusicHeaderSearch'
 import { type Kind, parseKind, rememberSearch } from './titleSearch'
 import LabMusicView from './views/LabMusicView'
 import MusicView from './views/MusicView'
+import HarmonyBasics from './components/music/harmony/HarmonyBasics'
 import SettingsView from './views/settings/SettingsView'
 import WatchView from './views/WatchView'
 import LanWarningModal from './components/LanWarningModal'
@@ -439,6 +440,7 @@ export default function App() {
       <NowCastingBar navigate={navigate} />
 
       <MusicPlayer onMusicPage={route.view === 'music'} />
+      <HarmonyBasics />
 
       {/* Minimised browser player — shown whenever the playing title is not the
           one on screen, which includes browsing a *different* title in the

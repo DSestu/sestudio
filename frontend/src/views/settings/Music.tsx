@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { openHarmonyBasics } from '../../components/music/harmony/store'
 import AddLibrary from '../../components/music/crates/AddLibrary'
 import { librariesApi, stateLine, useLibraries, type AnalysisStatus, type ShareToken } from '../../musicLibraries'
 import { Choice, RowSelect, SettingRow, SettingsGroup, ToggleRow } from './rows'
@@ -87,6 +88,12 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
             Reanalyse all libraries
           </button>
         )}
+      </SettingsGroup>
+
+      <SettingsGroup title="Learn">
+        <SettingRow label="Harmony basics" help="Eight short steps on scales, modes and mixing, no theory needed">
+          <button onClick={openHarmonyBasics} className="btn btn-ghost btn-sm">Open</button>
+        </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup
