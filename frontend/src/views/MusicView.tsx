@@ -24,6 +24,7 @@ import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
 import Seg from '../components/music/crates/build/Seg'
+import type { Join } from '../components/music/crates/proximity'
 import { proxOf, rankFits, setFitsFilter, setFitsRef, useFitsFilters, useFitsRef, type FitsFilters } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, type Navigate } from '../nav'
@@ -89,7 +90,21 @@ function AlbumCard({ album, get, onOpen }: { album: MusicAlbum; get: (id: string
   )
 }
 
-function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void }) {
+/** Why a result fits after the reference: a dot and the join kind, the energy step, a tempo jump. */
+function Why({ join, className = '' }: { join: Join; className?: string }) {
+  if (!join.kindLabel) return null
+  const dot = join.shared === 7 ? 'bg-success' : join.safe ? 'bg-info' : 'bg-warning'
+  return (
+    <span className={`items-center gap-1.5 text-xs text-base-content/60 ${className}`} title={join.shared === null ? undefined : `${join.shared} of 7 notes shared`}>
+      <i className={`size-1.75 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
+      <span className={join.safe ? '' : 'text-warning'}>{join.kindLabel}</span>
+      {join.energy.step && <span className="text-base-content/45">· {join.energy.step}</span>}
+      {join.tempoJump && <span className="text-warning">· tempo jump</span>}
+    </span>
+  )
+}
+
+function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void; why?: Join }) {
   const analysing = useAnalysing(track.id)
   return (
     <li className="flex items-center gap-1 rounded-xl hover:bg-white/5">
@@ -100,9 +115,11 @@ function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicT
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-sm font-medium">{track.title}</span>
           <span className="block truncate text-xs text-base-content/60">{track.artist}<MetaLine id={track.id} bpm={track.bpm} title={track.title} /></span>
+          {why && <Why join={why} className="flex sm:hidden" />}
         </span>
         <span className="w-10 text-right text-xs text-base-content/60 tabular-nums">{formatDuration(track.duration)}</span>
       </button>
+      {why && <Why join={why} className="hidden sm:flex" />}
       <TrackMeta id={track.id} bpm={track.bpm} title={track.title} />
       <div className="dropdown dropdown-end">
         <button tabIndex={0} aria-label={`Add ${track.title}`} className="btn btn-ghost btn-circle btn-sm mr-1 relative hit">
@@ -310,8 +327,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     if (!fitsMode || !fitsTrack) return []
     const of = new Map(tracks.map(t => [t.id, t]))
     return rankFits(proxOf(fitsTrack, get(fitsTrack.id)), tracks.map(t => proxOf(t, get(t.id))), fitsFilters)
-      .map(r => of.get(r.id)!)
+      .map(r => ({ track: of.get(r.id)!, join: r.join }))
   }, [fitsMode, fitsTrack, tracks, fitsFilters, v]) // eslint-disable-line react-hooks/exhaustive-deps
+  const rankedTracks = useMemo(() => ranked.map(r => r.track), [ranked])
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
   const pick = (id: string) => { setLibrary(id); setSheet(false); if (nodeId || albumId || artistName) go({}) }
@@ -326,7 +344,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     <Detail name={artist.name} round tracks={artist.tracks} get={get} onPlaylist={setPickFor} />
   ) : fitsMode ? (
     ranked.length ? (
-      <ul>{ranked.map(t => <TrackRow key={t.id} track={t} list={ranked} onPlaylist={setPickFor} />)}</ul>
+      <ul>{ranked.map(r => <TrackRow key={r.track.id} track={r.track} list={rankedTracks} onPlaylist={setPickFor} why={r.join} />)}</ul>
     ) : (
       <EmptyState title={`Nothing fits after ${fitsTrack?.title}`} message="No track here follows it safely. Try another library or clear the search." />
     )
