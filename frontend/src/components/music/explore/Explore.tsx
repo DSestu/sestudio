@@ -6,7 +6,7 @@ import { fitsAfter } from '../crates/proximity'
 import ResponsiveModal from '../../ResponsiveModal'
 import { useModalBack } from '../../../useModalBack'
 import { playFrom } from '../player'
-import { proxOf } from '../../../musicFits'
+import { openFitsFor, proxOf } from '../../../musicFits'
 import { isSet, itemsOf, usePlaylists } from '../../../musicPlaylists'
 import Seg from '../crates/build/Seg'
 import DotCard from './DotCard'
@@ -84,6 +84,7 @@ export default function Explore({ tracks, get, v, onPlaylist }: {
       s={get(track.id)}
       onPlay={() => { void playFrom(tracks, track); setSel(undefined) }}
       onSet={() => onPlaylist(track)}
+      onFits={() => { setSel(undefined); openFitsFor(track.id) }}
     />
   )
   const map = (
