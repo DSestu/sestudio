@@ -9,9 +9,11 @@ const BLACK = [1, 3, 6, 8, 10]
  * keys in both are solid, keys in only one are lighter and tagged A or B. With a home, a button plays the
  * scale (or A then B with `other` and `otherHome`).
  */
-export default function Keyboard({ notes, home, other, otherHome, width = 300 }: {
+export default function Keyboard({ notes, home, other, otherHome, width = 300, listen }: {
   notes: readonly number[]
   home?: number
+  /** Label of the play button when there is no `other`. */
+  listen?: string
   other?: readonly number[]
   otherHome?: number
   width?: number
@@ -53,7 +55,7 @@ export default function Keyboard({ notes, home, other, otherHome, width = 300 }:
         onClick={() => (other && otherHome !== undefined ? playChange(notes, home, other, otherHome) : playScale(notes, home))}
         className="btn btn-sm btn-primary btn-soft gap-1.5"
       >
-        <span aria-hidden="true">▶</span>{other && otherHome !== undefined ? 'Hear A, then B' : 'Play the scale'}
+        <span aria-hidden="true">▶</span>{other && otherHome !== undefined ? 'Hear A, then B' : listen ?? 'Play the scale'}
       </button>
     )}
     </div>

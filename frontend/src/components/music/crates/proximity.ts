@@ -9,6 +9,11 @@ export interface Reading {
   notes: string[]
   /** Lydian +3 .. Locrian -3; absent for the exotic modes. */
   brightness?: number | null
+  /** The analysis hesitates: `alt` ("F Phrygian") is the other reading worth hearing, `reason` why. */
+  unsure?: boolean
+  alt?: string
+  reason?: string
+  source?: 'detected' | 'user'
 }
 
 /** What proximity needs to know about a track. */

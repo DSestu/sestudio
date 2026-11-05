@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { modeNotes, shared } from './scales'
+import { modeNotes, parseReading, shared } from './scales'
+
+describe('parseReading', () => {
+  it('reads the server label: notes, home and mood word', () => {
+    const r = parseReading('C# Dorian')!
+    expect(r.home).toBe(1)
+    expect(r.notes).toEqual(modeNotes(1, 'dorian'))
+    expect(r.word).toBe('Smooth')
+  })
+  it('knows the two harmonic-minor scales as Exotic and rejects what it does not know', () => {
+    expect(parseReading('A Harmonic minor')!.word).toBe('Exotic')
+    expect(parseReading('E Phrygian dominant')!.notes).toEqual([4, 5, 8, 9, 11, 0, 2])
+    expect(parseReading('H Dorian')).toBeUndefined()
+    expect(parseReading('C Blues')).toBeUndefined()
+  })
+})
 
 describe('modeNotes', () => {
   it('C ionian is the white keys', () => {
