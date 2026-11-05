@@ -29,9 +29,6 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 export const fetchFitsAfter = (track: string, o: { filters?: Filters; pool?: string[]; exclude?: string[]; limit?: number } = {}) =>
   post<{ track: string; results: { id: string; join: Join }[] }>('proximity/fits-after', { track, ...o })
 
-export const fetchBridges = (a: string, b: string, o: { pool?: string[]; exclude?: string[]; limit?: number } = {}) =>
-  post<{ results: { id: string; before: Join; after: Join }[] }>('proximity/bridges', { a, b, ...o })
-
 export const fetchPresets = async (): Promise<Record<string, Arc>> => (await fetch('/api/music/set/presets')).json()
 
 /** Give `arc` or the name of a `preset`; `length` is in seconds; a new `seed` is "Try another". */
