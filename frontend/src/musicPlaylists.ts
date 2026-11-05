@@ -180,8 +180,8 @@ export function freshName(taken: string[], base = 'New playlist'): string {
 }
 
 /** Save a draft: create the playlist and put its first tracks in; one that cannot be filled is not left behind empty. */
-export async function createWithTracks(tracks: AddPayload['tracks']): Promise<PlaylistNode> {
-  const made = await playlistApi.create('playlist', freshName(nodes.map(n => n.name)))
+export async function createWithTracks(tracks: AddPayload['tracks'], name?: string): Promise<PlaylistNode> {
+  const made = await playlistApi.create('playlist', freshName(nodes.map(n => n.name), name))
   try {
     return await playlistApi.add(made.id, tracks)
   } catch (e) {

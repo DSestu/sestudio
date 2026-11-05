@@ -25,6 +25,7 @@ export const GENRES = ['Drum & Bass', 'Neurofunk', 'Liquid Drum & Bass', 'Dubste
 export const harmonic = (a?: string, b?: string) => keyDistance(a, b) <= 1
 
 export type OrderMode = 'tempo' | 'harmonic' | 'energy'
+export const ORDERS: [OrderMode, string][] = [['harmonic', 'Harmonic path'], ['tempo', 'Smooth tempo'], ['energy', 'Energy arc']]
 
 /** The ids in the order a mode wants them; stable, and tracks without the needed fact keep their place at the end. */
 export function autoOrder(tracks: SetTrack[], mode: OrderMode): string[] {

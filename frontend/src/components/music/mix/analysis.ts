@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { MixSettings, QueueItem, QueueState, TrackInfo } from '../../../musicQueue'
 import { prepTrack, type Plan, type RawAnalysis, type Track } from '../timeline/sampling'
 import { plan } from './plan'
+import type { SetTrack } from '../crates/setBuilder'
 
 // The server's analysis of each queued track, shared by the timeline (its
 // curves) and the engine (its transitions).
@@ -94,6 +95,16 @@ export function trackOf(id: string, dur: number): Track {
 }
 
 /** Whether the server is analysing one of these tracks right now. */
+/** A track with its analysis, as the set builder ranks and orders it; `id` defaults to the track's (a playlist or queue row passes its own). */
+export function setTrackOf(trackId: string, duration: number, bpm?: number, id = trackId): SetTrack {
+  const raw = rawOf(trackId)
+  const en = raw?.energy
+  return {
+    id, duration, bpm: raw?.bpm || bpm, key: raw?.key, camelot: raw?.camelot, genre: raw?.genre, harmony: raw?.harmony, energyScale: raw?.energyScale, curve: en,
+    energy: en?.length ? en.reduce((s, v) => s + v, 0) / en.length / 100 : undefined,
+  }
+}
+
 export const analysing = (ids: string[]) => ids.some(id => cache.get(id)?.part)
 
 export const DEFAULT_MIX: MixSettings = { mode: 'sync', bars: 8, tempo: true, swap: true, nudge: 0 }

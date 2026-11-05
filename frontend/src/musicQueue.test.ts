@@ -40,6 +40,11 @@ describe('applyEvent', () => {
     const s = applyEvent(base({ items: [], current: -1 }), ev('ins', { index: 0, items: [item(1)] }), 0)!
     expect(s.current).toBe(0)
   })
+  it('ord reorders the whole queue and follows the playing track', () => {
+    const s = applyEvent(base(), ev('ord', { order: ['q3', 'q1', 'q2'] }), 0)!
+    expect([ids(s), s.current]).toEqual([['q3', 'q1', 'q2'], base().current + 1])
+    expect(applyEvent(base(), ev('ord', { order: ['q3', 'q9', 'q2'] }), 0)).toBeNull()
+  })
   it('set replaces the queue and starts the first row', () => {
     const s = applyEvent(base(), ev('set', { items: [item(7), item(8)] }), 50)!
     expect([ids(s), s.current, s.playing, s.position]).toEqual([['q7', 'q8'], 0, true, 0])

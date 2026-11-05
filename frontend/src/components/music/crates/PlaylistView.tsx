@@ -11,12 +11,13 @@ import { post, useMusicQueue } from '../../../musicQueue'
 import { useSettings } from '../../../useSettings'
 import ClashTip from './ClashTip'
 import FitsNext from '../FitsNext'
+import SaveAsPlaylist from '../SaveAsPlaylist'
 import ResponsiveModal from '../../ResponsiveModal'
 import { useModalBack } from '../../../useModalBack'
 import JoinDialog from './JoinDialog'
 import JoinLine from './JoinLine'
 import { toast } from '../toast'
-import { mixOf, rawOf, trackOf, useAnalyses } from '../mix/analysis'
+import { mixOf, rawOf, setTrackOf, trackOf, useAnalyses } from '../mix/analysis'
 import { plan } from '../mix/plan'
 import { startPlayback, usePosition } from '../player'
 import Apply from './build/Apply'
@@ -25,10 +26,9 @@ import GenreTag from './GenreTag'
 import Explore from '../explore/Explore'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
-import { autoOrder, bestReorders, countJoins, isClash, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder, type SetTrack } from './setBuilder'
+import { autoOrder, ORDERS, bestReorders, countJoins, isClash, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder } from './setBuilder'
 import { useKeptJoins } from './useKeptJoins'
 
-const ORDERS: [OrderMode, string][] = [['harmonic', 'Harmonic path'], ['tempo', 'Smooth tempo'], ['energy', 'Energy arc']]
 
 const WIDE = '(min-width: 64rem)'
 const useWide = () => useSyncExternalStore(
@@ -194,15 +194,7 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
   useModalBack(insp && !wide, () => setInsp(false))
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   /** A track with its analysis (the set builder's view of it); `id` defaults to the track's. */
-  const setTrack = (trackId: string, duration: number, bpm?: number, id = trackId): SetTrack => {
-    const raw = rawOf(trackId)
-    const en = raw?.energy
-    return {
-      id, duration, bpm: raw?.bpm || bpm, key: raw?.key, camelot: raw?.camelot, genre: raw?.genre, harmony: raw?.harmony, energyScale: raw?.energyScale, curve: en,
-      energy: en?.length ? en.reduce((s, v) => s + v, 0) / en.length / 100 : undefined,
-    }
-  }
-  const setOf = (i: PlaylistItem) => { const f = facts(i); return setTrack(i.track_id, f.duration, f.bpm, i.item_id) }
+  const setOf = (i: PlaylistItem) => { const f = facts(i); return setTrackOf(i.track_id, f.duration, f.bpm, i.item_id) }
   const flat = useMemo(() => items.map(setOf), [items, byId, tick]) // eslint-disable-line react-hooks/exhaustive-deps
   /** The playlist replaces the queue and plays from this row; rows whose track is gone are left out. */
   const playFrom = (from: PlaylistItem) => {
@@ -417,7 +409,11 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
         )}
         {!smart && <button onClick={() => setInsp(o => !o)} aria-pressed={insp} className={`btn btn-sm ${insp ? 'btn-primary btn-soft' : 'btn-ghost'}`}>Fits next</button>}
         {smart ? (
-          <button onClick={() => setEditing(true)} className="btn btn-ghost btn-sm">Edit rules</button>
+          <>
+            <button onClick={() => setEditing(true)} className="btn btn-ghost btn-sm">Edit rules</button>
+            {/* A snapshot: the copy keeps these tracks while the smart list goes on following its rules. */}
+            <SaveAsPlaylist name={node.name} tracks={items.map(i => ({ library: i.library, track_id: i.track_id }))} className="btn btn-ghost btn-sm" />
+          </>
         ) : (
           <button
             onClick={() => { const n = window.prompt(isSet(node) ? 'New part' : 'Split into parts: name of the new part', isSet(node) ? `Part ${parts.length + 1}` : 'Part 2'); if (n?.trim()) run(playlistApi.addPart(node.id, n)) }}
