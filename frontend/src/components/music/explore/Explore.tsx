@@ -9,6 +9,7 @@ import { useModalBack } from '../../../useModalBack'
 import { playFrom } from '../player'
 import { toast } from '../toast'
 import { proxOf } from '../../../musicFits'
+import { isSet, itemsOf, usePlaylists } from '../../../musicPlaylists'
 import Seg from '../crates/build/Seg'
 import DotCard from './DotCard'
 import { dotOf, PAD, place, ringRadius, type Dot } from './place'
@@ -48,6 +49,8 @@ export default function Explore({ tracks, get, v, onPlaylist }: {
 }) {
   const [view, setView] = useState<'vibe' | 'notes'>('vibe')
   const [sel, setSel] = useState<string>()
+  const sets = usePlaylists().filter(isSet)
+  const [pathOf, setPathOf] = useState('')
   const wide = useWide()
   const { flows, loaded } = useFlows()
   useModalBack(!wide && !!sel, () => setSel(undefined))
@@ -62,6 +65,12 @@ export default function Explore({ tracks, get, v, onPlaylist }: {
     return out
   }, [tracks, view, v]) // eslint-disable-line react-hooks/exhaustive-deps
   const R = ringRadius(w, h)
+  // The chosen set's tracks in play order, as far as the map shows them.
+  const path = useMemo(() => {
+    const set = sets.find(n => n.id === pathOf)
+    const by = new Map(dots.map(d => [d.id, d]))
+    return set ? itemsOf(set).map(i => by.get(i.track_id)).filter((d): d is NonNullable<typeof d> => !!d) : []
+  }, [sets, pathOf, dots])
   const picked = sel ? dots.find(d => d.id === sel) : undefined
   const track = picked && tracks.find(t => t.id === picked.id)
   // The five tracks that fit best after the chosen one, as green lines.
@@ -90,6 +99,12 @@ export default function Explore({ tracks, get, v, onPlaylist }: {
     <div className="flex flex-col gap-3 flex-1 min-w-0">
       <div className="flex flex-wrap items-center gap-3">
         <Seg label="Map" options={[['vibe', 'Vibe'], ['notes', 'Notes']]} value={view} onPick={setView} />
+        {sets.length > 0 && (
+          <select value={pathOf} onChange={e => setPathOf(e.target.value)} aria-label="Show a set's path" className="select select-xs select-bordered">
+            <option value="">No set path</option>
+            {sets.map(n => <option key={n.id} value={n.id}>{n.name} path</option>)}
+          </select>
+        )}
         <span className="text-xs text-base-content/60">{dots.length} of {tracks.length} tracks placed</span>
       </div>
       <div ref={box} className="w-full">
@@ -123,6 +138,9 @@ export default function Explore({ tracks, get, v, onPlaylist }: {
                 <circle cx={w / 2} cy={h / 2} r={R * 0.94} fill="none" stroke="currentColor" strokeOpacity={0.08} />
                 <text x={w / 2} y={h / 2 + 4} textAnchor="middle" className={label}>dark</text>
               </>
+            )}
+            {path.length > 1 && (
+              <polyline points={path.map(d => place(d, view, w, h).join(',')).join(' ')} fill="none" stroke="currentColor" strokeOpacity={0.45} strokeWidth={1.5} strokeDasharray="4 3" />
             )}
             {picked && fits.map(f => {
               const [x1, y1] = place(picked, view, w, h)
