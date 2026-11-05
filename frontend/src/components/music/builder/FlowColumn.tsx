@@ -1,6 +1,7 @@
 import type { CSSProperties, DragEvent } from 'react'
 import { moodOf } from '../../../harmony'
 import { formatDuration } from '../../../musicLibrary'
+import { join, tempoOk } from '../crates/proximity'
 import { flowStats, type Flow, type FlowRef, type Row } from './flows'
 
 const blur = () => (document.activeElement as HTMLElement | null)?.blur()
@@ -20,16 +21,33 @@ function EnergyStrip({ rows }: { rows: Row[] }) {
   )
 }
 
-const Line =() => <li aria-hidden="true" className="h-0.5 mx-2 -my-px rounded-full bg-(--lc)" />
+const ForkIcon = () => (
+  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><circle cx="6" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="9" r="2" /><path strokeLinecap="round" d="M6 7v10M18 11c0 4-12 2-12 6" /></svg>
+)
+
+/** How the track follows the one before it (or the fork): the move, amber when it clashes or jumps in tempo. */
+function JoinLine({ from, to }: { from?: Row; to: Row }) {
+  if (!from) return null
+  const j = join(from.prox, to.prox)
+  const bad = j.kind === 'clash' || !tempoOk(j)
+  const text = [j.kindLabel, !tempoOk(j) && 'tempo jump'].filter(Boolean).join(' · ')
+  return text ? <span aria-hidden="true" className={`block px-3 text-[11px] leading-4 ${bad ? 'text-warning' : 'text-base-content/45'}`}>{text}</span> : null
+}
+
+const Line = () => <li aria-hidden="true" className="h-0.5 mx-2 -my-px rounded-full bg-(--lc)" />
 
 /** One flow: its colour and name, a summary line and its tracks in order; a place to drop tracks on desktop. */
-export default function FlowColumn({ flow, color, rows, active, over, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
+export default function FlowColumn({ flow, color, rows, active, over, fork, onKeep, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
   flow: Flow
   color: string
   rows: Row[]
   active: boolean
   /** Where a dragged track would land (0..rows.length), null when it is not over this flow. */
   over: number | null
+  /** A branch: the track the set so far ends on, which the first join is checked against. */
+  fork?: Row
+  /** A branch: add it to the set; the fork moves to its last track. */
+  onKeep?: () => void
   onActive: () => void
   onRename: (name: string) => void
   onDelete: () => void
@@ -39,7 +57,7 @@ export default function FlowColumn({ flow, color, rows, active, over, onActive, 
   onOver: (at: number | null) => boolean
   onDrop: (at: number) => void
 }) {
-  const st = flowStats(rows)
+  const st = flowStats(rows, fork)
   const hover = (at: number) => (e: DragEvent) => {
     if (!onOver(at)) return
     e.preventDefault()
@@ -64,6 +82,17 @@ export default function FlowColumn({ flow, color, rows, active, over, onActive, 
         <div className="flex items-center gap-2">
           <i aria-hidden="true" className="w-1 h-4 rounded-full bg-(--lc)" />
           <h2 className="flex-1 min-w-0 truncate text-sm font-semibold">{flow.name}</h2>
+          {onKeep && (
+            <button
+              onClick={e => { e.stopPropagation(); onKeep() }}
+              disabled={rows.length === 0}
+              title="Add this branch to the set; the fork moves to its last track"
+              className="btn btn-xs rounded-full gap-1"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 12l5 5L20 7" /></svg>
+              Keep
+            </button>
+          )}
           <div className="dropdown dropdown-end" onClick={e => e.stopPropagation()}>
             <button tabIndex={0} aria-label={`Options for ${flow.name}`} className="btn btn-ghost btn-circle btn-xs">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
@@ -89,9 +118,19 @@ export default function FlowColumn({ flow, color, rows, active, over, onActive, 
             <span className="md:hidden">Tap + on a track to add it here.</span>
           </li>
         )}
+        {fork && (
+          <li className="flex items-center gap-2 rounded-xl border border-dashed border-white/15 px-2 min-h-10 py-1 mb-0.5 text-base-content/70">
+            <ForkIcon />
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate text-sm font-medium">{fork.title}</span>
+              <span className="block text-[11px] text-base-content/50">fork point</span>
+            </span>
+          </li>
+        )}
         {rows.map((r, i) => (
           <li key={`${r.ref.track_id}:${i}`} className="contents">
             {over === i && <Line />}
+            <JoinLine from={i ? rows[i - 1] : fork} to={r} />
             <div
               draggable
               onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.title); onDragStart(r.ref) }}
