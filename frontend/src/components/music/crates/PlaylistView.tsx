@@ -27,7 +27,7 @@ import SetCurve from './SetCurve'
 import { autoOrder, bestReorders, countJoins, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder, type SetTrack } from './setBuilder'
 import { useKeptJoins } from './useKeptJoins'
 
-const ORDERS: [OrderMode, string][] = [['tempo', 'Smooth tempo'], ['harmonic', 'Harmonic (Camelot walk)'], ['energy', 'Energy arc']]
+const ORDERS: [OrderMode, string][] = [['harmonic', 'Harmonic path'], ['tempo', 'Smooth tempo'], ['energy', 'Energy arc']]
 
 const WIDE = '(min-width: 64rem)'
 const useWide = () => useSyncExternalStore(
@@ -281,7 +281,12 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   }
   const order = (mode: OrderMode, part?: string | 'whole') => {
     const ids = part && part !== 'whole' ? parts.find(p => p.id === part)!.items : items
-    run(playlistApi.reorder(node.id, autoOrder(ids.map(setOf), mode), part === 'whole' || !part ? undefined : part, part === 'whole' && isSet(node)))
+    const sorted = autoOrder(ids.map(setOf), mode)
+    const after = (isSet(node) && part && part !== 'whole' ? groups.flatMap(g => (g.id === part ? sorted : g.items.map(x => x.item_id))) : sorted).map(id => flat[flatIndex(id)])
+    run(playlistApi.reorder(node.id, sorted, part === 'whole' || !part ? undefined : part, part === 'whole' && isSet(node)).then(() => {
+      const n = countJoins(after, kept).clashes
+      toast(`Ordered by ${ORDERS.find(o => o[0] === mode)![1].toLowerCase()}: ${n === 0 ? 'no clash' : `${n} ${n === 1 ? 'clash' : 'clashes'}`}`)
+    }))
   }
   const orderMenu = (label: string, part?: string) => (
     <div className="dropdown dropdown-end">
@@ -325,7 +330,15 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
           </p>
         </div>
         {items.length > 0 && <button onClick={() => playPart()} className="btn btn-primary btn-sm">{isSet(node) ? 'Play set' : 'Play'}</button>}
-        {!smart && items.length > 1 && orderMenu(isSet(node) ? 'Auto-order whole set' : 'Auto-order')}
+        {!smart && items.length > 1 && (
+          <>
+            <span className="hidden items-center gap-2 text-sm text-base-content/60 sm:flex">
+              Auto-order
+              <span className="join">{ORDERS.map(([mode, name]) => <button key={mode} onClick={() => order(mode, 'whole')} className="btn btn-sm join-item">{name}</button>)}</span>
+            </span>
+            <span className="sm:hidden">{orderMenu(isSet(node) ? 'Auto-order whole set' : 'Auto-order')}</span>
+          </>
+        )}
         {!smart && <button onClick={() => setInsp(o => !o)} aria-pressed={insp} className={`btn btn-sm ${insp ? 'btn-primary btn-soft' : 'btn-ghost'}`}>Fits next</button>}
         {!smart && <button onClick={() => openBuildSet({ node: node.id })} className="btn btn-ghost btn-sm">Build a set</button>}
         {!smart && items.length > 0 && <button onClick={() => run(openInBuilder(node.name, items))} className="btn btn-ghost btn-sm">Open in mix builder</button>}

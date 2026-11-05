@@ -24,9 +24,9 @@ describe('autoOrder', () => {
   it('smooths the tempo upward and leaves tracks without one last', () => {
     expect(autoOrder(tracks, 'tempo')).toEqual(['b', 'd', 'a', 'c'])
   })
-  it('walks the Camelot wheel from the slowest track', () => {
+  it('keeps the first track, then chains the best next join', () => {
     const keyed = [t('a', 128, '8A'), t('b', 126, '3B'), t('c', 127, '9A'), t('d', 129, '4B')]
-    expect(autoOrder(keyed, 'harmonic')).toEqual(['b', 'd', 'a', 'c'])
+    expect(autoOrder(keyed, 'harmonic')).toEqual(['a', 'c', 'b', 'd'])
   })
   it('rises to the peak then falls', () => {
     const e = [t('a', 0, '', 0.2), t('b', 0, '', 0.9), t('c', 0, '', 0.5), t('d', 0, '', 0.1), t('e', 0, '', 0.7)]
