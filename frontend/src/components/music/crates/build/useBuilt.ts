@@ -10,14 +10,16 @@ export function useBuilt(params: Params | null): { built?: BuiltSet; error?: str
   useEffect(() => {
     if (!key) return
     let live = true
-    buildSet(JSON.parse(key)).then(
+    // Wait a beat so a drag asks for one set, not one per pixel.
+    const t = window.setTimeout(() => buildSet(JSON.parse(key)).then(
       built => live && setLast({ key, built }),
       (e: Error) => live && setLast({ key, error: e.message }),
-    )
-    return () => { live = false }
+    ), 120)
+    return () => { live = false; window.clearTimeout(t) }
   }, [key])
   const cur = last?.key === key ? last : undefined
-  return { built: cur?.built, error: cur?.error, busy: !!key && !cur }
+  // The previous set stays up (dimmed by `busy`) while the next one is built.
+  return { built: last?.built, error: cur?.error, busy: !!key && !cur }
 }
 
 let presets: Promise<Record<string, Arc>> | undefined
