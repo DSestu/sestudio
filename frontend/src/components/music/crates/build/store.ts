@@ -12,8 +12,6 @@ export interface BuildState {
   node?: string
   /** A track the set grows from (From a track), or where a bridge starts. */
   seed?: string
-  /** A mix builder flow the result fills (Draw the arcs from a flow's header). */
-  flow?: string
 }
 
 let state: BuildState | null = null

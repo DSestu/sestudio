@@ -10,11 +10,10 @@ import { parseReading } from '../harmony/scales'
 const run = (p: Promise<void>) => { p.catch(() => {}) }
 
 /** A dot's card on the Explore map: who it is, its key and energy, and what to do with it. */
-export default function DotCard({ track, s, onPlay, onFlow, onSet }: {
+export default function DotCard({ track, s, onPlay, onSet }: {
   track: MusicTrack
   s?: Summary
   onPlay: () => void
-  onFlow: () => void
   onSet: () => void
 }) {
   const [keys, setKeys] = useState(false)
@@ -41,7 +40,6 @@ export default function DotCard({ track, s, onPlay, onFlow, onSet }: {
         <button className={item} onClick={onPlay}>Play now</button>
         <button className={item} onClick={() => run(addToQueue(track))}>Add to queue</button>
         <button className={item} onClick={() => setFitsRef(track.id)}>Fits after this</button>
-        <button className={item} onClick={onFlow}>Add to a mix</button>
         <button className={item} onClick={onSet}>Add to a playlist or set…</button>
         {read && <button className={item} aria-pressed={keys} onClick={() => setKeys(k => !k)}>Key card</button>}
       </div>

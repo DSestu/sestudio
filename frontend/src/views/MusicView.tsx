@@ -4,7 +4,6 @@ import AddLibrary from '../components/music/crates/AddLibrary'
 import { openHarmonyBasics } from '../components/music/harmony/store'
 import BuildSet from '../components/music/crates/build/BuildSet'
 import { openBuildSet } from '../components/music/crates/build/store'
-import { newFlow } from '../components/music/builder/flows'
 import Crates, { type Crate } from '../components/music/crates/Crates'
 import PlaylistView from '../components/music/crates/PlaylistView'
 import EmptyState from '../components/EmptyState'
@@ -266,7 +265,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const go = (open: { pl?: string; al?: string; ar?: string }) =>
     navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, al: undefined, ar: undefined, ...open })
   const openNode = (id: string) => go({ pl: id || undefined })
-  const openMix = (id?: string) => id ? navigate('mixes', { f: id }) : run(newFlow('mix').then(f => navigate('mixes', { f: f.id })))
   const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(sheet, () => setSheet(false))
   useModalBack(adding, () => setAdding(false))
@@ -407,7 +405,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           status={<><em>{tracks.length}</em> tracks{library && ` in ${activeLabel}`}{genre && ` · ${genre}`}</>}
           menu={<>
             <button onClick={() => openBuildSet()} className="btn btn-ghost btn-sm justify-start">Build a set</button>
-            <button onClick={() => openMix()} className="btn btn-ghost btn-sm justify-start">New mix</button>
             <button onClick={openHarmonyBasics} className="btn btn-ghost btn-sm justify-start">? Harmony basics</button>
           </>}
           tabs={[...TABS]}
@@ -423,7 +420,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       </div>
       <div className="flex gap-6 items-start">
         <aside className="hidden md:block w-62.5 shrink-0 sticky top-24">
-          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} onMix={openMix} node={nodeId} onNode={pickNode} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} />
         </aside>
         <div className="flex-1 min-w-0 flex flex-col gap-4">
           {!page && (
@@ -468,7 +465,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       </div>
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)}>
-          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} onMix={openMix} node={nodeId} onNode={pickNode} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} />
         </ResponsiveModal>
       )}
       <BuildSet byId={byId} />

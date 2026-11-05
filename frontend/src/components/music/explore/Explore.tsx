@@ -3,11 +3,9 @@ import { MOOD_LADDER } from '../../../harmony'
 import type { MusicTrack } from '../../../musicLibrary'
 import { genreColor, type Summary } from '../../../musicMeta'
 import { fitsAfter } from '../crates/proximity'
-import { flowApi, inserted, newFlow, refOf, useFlows } from '../builder/flows'
 import ResponsiveModal from '../../ResponsiveModal'
 import { useModalBack } from '../../../useModalBack'
 import { playFrom } from '../player'
-import { toast } from '../toast'
 import { proxOf } from '../../../musicFits'
 import { isSet, itemsOf, usePlaylists } from '../../../musicPlaylists'
 import Seg from '../crates/build/Seg'
@@ -52,7 +50,6 @@ export default function Explore({ tracks, get, v, onPlaylist }: {
   const sets = usePlaylists().filter(isSet)
   const [pathOf, setPathOf] = useState('')
   const wide = useWide()
-  const { flows, loaded } = useFlows()
   useModalBack(!wide && !!sel, () => setSel(undefined))
   const [box, w] = useWidth()
   const h = Math.round(w < 520 ? w * 1.1 : w * 0.78)
@@ -81,17 +78,11 @@ export default function Explore({ tracks, get, v, onPlaylist }: {
     return fitsAfter(proxOf(track, get(track.id)), pool, { harmony: 'safe', tempo: 'any', genre: 'any' }, 5)
       .map(f => dots.find(d => d.id === f.id)!)
   }, [track, dots, tracks, v]) // eslint-disable-line react-hooks/exhaustive-deps
-  const addToFlow = async (t: MusicTrack) => {
-    const f = flows[flows.length - 1] ?? await newFlow('mix')
-    await flowApi.patch(f.id, { items: inserted(f.items, refOf(t)) })
-    toast(`Added to ${f.name}`)
-  }
   const card = track && (
     <DotCard
       track={track}
       s={get(track.id)}
       onPlay={() => { void playFrom(tracks, track); setSel(undefined) }}
-      onFlow={() => { if (loaded) addToFlow(track).catch(() => {}) }}
       onSet={() => onPlaylist(track)}
     />
   )
