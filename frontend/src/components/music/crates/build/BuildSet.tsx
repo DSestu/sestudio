@@ -3,6 +3,7 @@ import ResponsiveModal from '../../../ResponsiveModal'
 import type { MusicTrack } from '../../../../musicLibrary'
 import { usePlaylists } from '../../../../musicPlaylists'
 import ArcsWay from './ArcsWay'
+import GapWay from './GapWay'
 import BridgeWay from './BridgeWay'
 import SeedWay from './SeedWay'
 import { closeBuildSet, setWay, useBuildSet, type Way } from './store'
@@ -16,8 +17,6 @@ const WAYS: { way: Way; title: string; text: string; icon: ReactNode }[] = [
   { way: 'gap', title: 'Fill a gap', text: 'Pick a clashing join in your set and fill it with tracks that fit both sides.', icon: icon('M12 5v14M5 12h14') },
 ]
 
-/** Ways with a screen so far; the others show in the chooser, dimmed. */
-const READY: Way[] = ['seed', 'arcs', 'bridge']
 
 /** "Build a set": a large dialog on desktop, a full-height sheet on phones. Open it with openBuildSet(). */
 export default function BuildSet({ byId }: { byId: ReadonlyMap<string, MusicTrack> }) {
@@ -36,12 +35,13 @@ export default function BuildSet({ byId }: { byId: ReadonlyMap<string, MusicTrac
       </div>
       {state.way === 'seed' && <SeedWay seed={state.seed} byId={byId} />}
       {state.way === 'arcs' && <ArcsWay byId={byId} />}
+      {state.way === 'gap' && <GapWay node={node} byId={byId} />}
       {state.way === 'bridge' && <BridgeWay from={state.seed} byId={byId} />}
       {!info && (
         <ul className="grid gap-3 sm:grid-cols-2">
           {WAYS.map(w => (
             <li key={w.way}>
-              <button onClick={() => setWay(w.way)} disabled={!READY.includes(w.way)} className="flex h-full w-full flex-col items-start gap-1 rounded-xl border border-white/10 p-4 text-left hover:bg-white/5 disabled:opacity-50">
+              <button onClick={() => setWay(w.way)} className="flex h-full w-full flex-col items-start gap-1 rounded-xl border border-white/10 p-4 text-left hover:bg-white/5">
                 {w.icon}
                 <b className="text-sm">{w.title}</b>
                 <span className="text-xs text-base-content/60">{w.text}</span>
