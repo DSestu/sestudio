@@ -88,6 +88,15 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
     run(playlistApi.add(base, f.items).then(() => Promise.all(shown.map(b => flowApi.patch(b.id, { items: [], fork })))).then(() => pick(f.id)))
   }
 
+  // A flow becomes a set (a branch with the trunk before it) and the set opens.
+  const save = () => {
+    if (!active?.items.length) return
+    const name = mode === 'branch' && trunkNode ? `${trunkNode.name} · ${active.name}` : active.name
+    run(playlistApi.create('playlist', name)
+      .then(n => playlistApi.add(n.id, mode === 'branch' ? [...trunk, ...active.items] : active.items))
+      .then(n => navigate('music', { pl: n.id })))
+  }
+
   return (
     <div onDragEnd={endDrag} className="fixed inset-0 z-50 md:z-30 md:left-27 flex flex-col bg-base-100 md:pb-[var(--music-bar,0rem)]">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 md:px-5 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:pt-4 border-b border-white/8">
@@ -95,6 +104,11 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" /></svg>
         </button>
         <h1 className="text-base font-semibold mr-auto">Mix builder</h1>
+        {active && !picking && (
+          <button onClick={save} disabled={!active.items.length} className="hidden md:inline-flex btn btn-primary btn-sm rounded-xl max-w-64">
+            <span className="truncate">Save {active.name} as a set</span>
+          </button>
+        )}
         <div role="group" aria-label="Mode" className="flex rounded-full bg-white/6 p-0.5 text-xs">
           {MODES.map(([m, label]) => (
             <button
@@ -173,8 +187,13 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
               </div>
             </>
           )}
-          <div className="md:hidden px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            <button onClick={() => setSheet(true)} className="input input-bordered w-full justify-start text-base-content/60">Search tracks to add…</button>
+          <div className="md:hidden flex gap-2 px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <button onClick={() => setSheet(true)} className="input input-bordered flex-1 min-w-0 justify-start text-base-content/60">Search tracks to add…</button>
+            {active && !picking && (
+              <button onClick={save} disabled={!active.items.length} aria-label={`Save ${active.name} as a set`} className="btn btn-primary btn-square">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6" /></svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
