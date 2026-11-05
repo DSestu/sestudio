@@ -154,7 +154,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     const raw = rawOf(trackId)
     const en = raw?.energy
     return {
-      id, duration, bpm: raw?.bpm || bpm, key: raw?.key, camelot: raw?.camelot, genre: raw?.genre, curve: en,
+      id, duration, bpm: raw?.bpm || bpm, key: raw?.key, camelot: raw?.camelot, genre: raw?.genre, harmony: raw?.harmony, energyScale: raw?.energyScale, curve: en,
       energy: en?.length ? en.reduce((s, v) => s + v, 0) / en.length / 100 : undefined,
     }
   }

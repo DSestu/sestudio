@@ -3,6 +3,7 @@
 // fixed grid only).
 
 import type { Mapper } from './mapping'
+import type { Reading } from '../crates/proximity'
 
 export const FADE = 4
 const PSP = 8 // pixels a sample window covers
@@ -24,6 +25,9 @@ export interface RawAnalysis {
   camelot?: string
   genre?: string
   genreConf?: number
+  /** Tonic, mode and notes of the track, intro and outro; energy on the library scale, 0..100. */
+  harmony?: { track?: Reading }
+  energyScale?: { track?: number; intro?: number; outro?: number }
   /** Still being analysed: `bands` are the part measured so far. */
   partial?: boolean
 }
