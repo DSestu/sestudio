@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { flowStats, inserted, type FlowRef, type Row } from './flows'
+import { dropped, flowStats, inserted, type FlowRef, type Row } from './flows'
 
 const ref = (id: string): FlowRef => ({ library: 'l', track_id: id })
 const ids = (l: FlowRef[]) => l.map(r => r.track_id).join('')
@@ -14,6 +14,24 @@ describe('inserted', () => {
     // Dropped at boundary 3 (after c) from index 0: the gap closes before it lands.
     expect(ids(inserted([ref('a'), ref('b'), ref('c')], ref('a'), 3))).toBe('bca')
     expect(ids(inserted([ref('a'), ref('b'), ref('c')], ref('c'), 0))).toBe('cab')
+  })
+})
+
+describe('dropped', () => {
+  const lists = { x: [ref('a'), ref('b')], y: [ref('c')] }
+  it('adds from the picker to one flow only', () => {
+    const out = dropped(lists, ref('d'), 'y', 0)
+    expect(Object.keys(out)).toEqual(['y'])
+    expect(ids(out.y)).toBe('dc')
+  })
+  it('moves between flows, leaving the first', () => {
+    const out = dropped(lists, ref('a'), 'y', 1, 'x')
+    expect([ids(out.x), ids(out.y)]).toEqual(['b', 'ca'])
+  })
+  it('reorders within a flow', () => {
+    const out = dropped(lists, ref('a'), 'x', 2, 'x')
+    expect(ids(out.x)).toBe('ba')
+    expect(Object.keys(out)).toEqual(['x'])
   })
 })
 

@@ -1,9 +1,10 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import type { MusicTrack } from '../../../musicLibrary'
 import { patchParams, type Navigate } from '../../../nav'
 import { useModalBack } from '../../../useModalBack'
 import ResponsiveModal from '../../ResponsiveModal'
 import FlowColumn from './FlowColumn'
-import { flowApi, flowColor, newFlow, rowOf, useAllTracks, useFlows, type Flow } from './flows'
+import { dropped, flowApi, flowColor, inserted, newFlow, refOf, rowOf, useAllTracks, useFlows, type Flow, type FlowRef } from './flows'
 import Picker from './Picker'
 
 const MODES: [Flow['mode'], string][] = [['mix', 'Mixes side by side'], ['branch', 'Branches from one set']]
@@ -34,12 +35,29 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
     [byId, v], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
+  // A drag runs outside React: what is dragged is kept here, where it would land is state.
+  const drag = useRef<{ ref: FlowRef; from?: string } | null>(null)
+  const [over, setOver] = useState<{ flow: string; at: number } | null>(null)
+  const endDrag = () => { drag.current = null; setOver(null) }
+  const place = (flow: string, at?: number) => {
+    const d = drag.current
+    if (!d) return
+    const lists = Object.fromEntries(flows.map(f => [f.id, f.items]))
+    for (const [id, items] of Object.entries(dropped(lists, d.ref, flow, at, d.from))) run(flowApi.patch(id, { items }))
+    pick(flow)
+    endDrag()
+  }
+  const add = (t: MusicTrack) => {
+    if (!active) return
+    run(flowApi.patch(active.id, { items: inserted(active.items, refOf(t)) }))
+  }
+
   const pick = (id: string) => { setAct(id); patchParams({ f: id }) }
   const create = () => run(newFlow(mode).then(f => pick(f.id)))
   const switchMode = (m: Flow['mode']) => { setMode(m); setAct(''); patchParams({ mode: m, f: undefined }) }
 
   return (
-    <div className="fixed inset-0 z-50 md:z-30 md:left-27 flex flex-col bg-base-100 md:pb-[var(--music-bar,0rem)]">
+    <div onDragEnd={endDrag} className="fixed inset-0 z-50 md:z-30 md:left-27 flex flex-col bg-base-100 md:pb-[var(--music-bar,0rem)]">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 md:px-5 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:pt-4 border-b border-white/8">
         <button onClick={() => navigate('music')} aria-label="Back to Music" className="btn btn-ghost btn-circle btn-sm">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" /></svg>
@@ -61,7 +79,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
 
       <div className="flex-1 min-h-0 flex">
         <aside aria-label="Picker" className="hidden md:flex flex-col min-h-0 w-88 shrink-0 border-r border-white/8">
-          <Picker all={all} get={get} />
+          <Picker all={all} get={get} onAdd={add} onDragStart={t => { drag.current = { ref: refOf(t) } }} />
         </aside>
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           <div role="group" aria-label="Flows" className="md:hidden flex gap-1.5 overflow-x-auto px-3 py-2 [scrollbar-width:none]">
@@ -92,9 +110,18 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
                   color={flowColor(i)}
                   rows={rowsOf(f)}
                   active={f.id === active?.id}
+                  over={over?.flow === f.id ? over.at : null}
                   onActive={() => pick(f.id)}
                   onRename={name => run(flowApi.patch(f.id, { name }))}
                   onDelete={() => run(flowApi.remove(f.id))}
+                  onRemove={i => run(flowApi.patch(f.id, { items: f.items.filter((_, j) => j !== i) }))}
+                  onDragStart={ref => { drag.current = { ref, from: f.id } }}
+                  onOver={at => {
+                    if (at === null || !drag.current) { setOver(null); return false }
+                    setOver(o => (o?.flow === f.id && o.at === at ? o : { flow: f.id, at }))
+                    return true
+                  }}
+                  onDrop={at => place(f.id, at)}
                 />
               </div>
             ))}
@@ -112,7 +139,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
 
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)} boxClassName="h-[80dvh] flex flex-col p-0">
-          <Picker all={all} get={get} />
+          <Picker all={all} get={get} onAdd={add} onDragStart={() => {}} />
         </ResponsiveModal>
       )}
     </div>
