@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { metaLine, useSummary } from '../../musicMeta'
 import { queueActions, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
 import { removeItem } from './adding'
+import { ARCS, setAutopilot, useAutopilot } from './autopilot'
+import JoinChip from './crates/JoinChip'
 import { BLEND } from './engine'
 import { fmtTime } from './format'
 import { ENTER_MS, FLIP_MS, flipOffsets, LEAVE_MS } from './interact'
@@ -198,6 +200,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
     if (row) list.current!.scrollTo({ top: row.offsetTop - 56, behavior: 'smooth' })
   }, [tv, cur, q.items.length])
 
+  const pilot = useAutopilot(q, !tv)
   const left = q.items.slice(q.current + 1)
   const seconds = left.reduce((s, i) => s + (info(i.track_id)?.duration ?? 0) - BLEND.auto, 0)
 
@@ -244,6 +247,10 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             </span>
           </>
         )}
+        {!tv && <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-normal text-base-content/70">
+          <input type="checkbox" role="switch" aria-label="Autopilot" className="toggle toggle-primary toggle-xs" checked={pilot.on} onChange={e => setAutopilot({ on: e.target.checked })} />
+          Autopilot
+        </label>}
         {!tv && !expanded && <button
           aria-expanded={adding}
           className="md:hidden flex h-11 shrink-0 items-center gap-1.5 rounded-[14px] bg-primary px-3.5 text-[13px] font-semibold text-primary-content"
@@ -273,6 +280,13 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
           <svg className="size-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3l5 5-3 1-3.5 3.5.5 4.5-2 2-3.5-5.5L5 20l-1-1 4.5-4.5L3 11l2-2 4.5.5L13 6z" /></svg>
         </button>}
       </header>
+      {pilot.on && !tv && !(library && adding) && (
+        <div role="group" aria-label="Autopilot arc" className="relative flex gap-1.5 overflow-x-auto px-3 pb-2 [scrollbar-width:none]">
+          {ARCS.map(a => (
+            <button key={a.id} aria-pressed={pilot.arc === a.id} onClick={() => setAutopilot({ arc: a.id })} className="h-7 shrink-0 rounded-full bg-white/7 px-3 text-xs font-semibold text-base-content/80 aria-pressed:bg-primary/22 aria-pressed:text-primary">{a.label}</button>
+          ))}
+        </div>
+      )}
       {library && adding ? library : <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden'}`}>
         <span
           data-dropline
@@ -290,6 +304,15 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             range={range}
             leaving={gone ? () => setLeaving(l => l.filter(x => x.item.item_id !== item.item_id)) : undefined}
           />
+        ))}
+        {pilot.ghosts.map(g => (
+          <div key={g.track.id} aria-label={`Autopilot will add ${g.track.title}`} className="flex min-h-14 items-center gap-2.5 px-3 py-1.5 text-[13px] opacity-55">
+            <div className="min-w-0 flex-1">
+              <b className="block truncate font-medium">{g.track.title}</b>
+              {g.join && <JoinChip join={g.join} className="max-w-full text-[11px] text-base-content/70" />}
+            </div>
+            <span className="text-[11px] text-base-content/60">Autopilot</span>
+          </div>
         ))}
         {!q.items.length && <p className="px-3 py-6 text-center text-xs text-base-content/42">The queue is empty.</p>}
         {!tv && <div className={`sticky bottom-0 z-10 px-2.5 pb-2.5 pt-1.5 ${expanded ? '' : 'max-md:hidden'}`} style={{ background: 'linear-gradient(transparent, var(--rowbg) 10px)' }}>
