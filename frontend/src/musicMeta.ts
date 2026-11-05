@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { fmtBpm } from './components/music/format'
+import type { Reading } from './components/music/crates/proximity'
 
 // What a track row shows of the analysis: tempo, key, genre and balance. A
 // light summary, fetched for many rows in one request (the full analysis is
@@ -15,6 +16,9 @@ export interface Summary {
   genreConf?: number
   /** Where the genre came from: the file's tag, an online source, the model, the rules or the user. */
   genreSource?: 'tag' | 'source' | 'model' | 'rules' | 'user'
+  /** Tonic, mode and notes of the track, and its energy on the library scale (0..100). */
+  harmony?: { track?: Reading }
+  energyScale?: { track?: number; intro?: number; outro?: number }
   /** Mean bass, mids, highs, 0..1. */
   balance?: [number, number, number]
 }

@@ -7,10 +7,10 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sestudio.config import load_config
-from sestudio.music import libraries, modes, online, runner, search, store
+from sestudio.music import libraries, modes, online, proximity, runner, search, store
 from sestudio.sites import SiteError
 from sestudio.web.routes.stream import _proxy_url
 
@@ -60,6 +60,7 @@ SUMMARY_KEYS = (
     "genreSource",
     "energyLevel",
     "energyScale",
+    "harmony",
     "balance",
 )
 
@@ -128,6 +129,87 @@ async def unsure_modes() -> dict[str, Any]:
     """Tracks whose mode the analysis is unsure of and the user has not settled yet."""
     ids = await asyncio.to_thread(store.unsure)
     return {"count": len(ids), "ids": ids}
+
+
+def _pool(ids: list[str] | None) -> list[dict[str, Any]]:
+    """The tracks to rank: the given ids, or every analysed local track."""
+    ids = list(store.stamps()) if ids is None else ids
+    found: dict[str, Any] = {}
+    for i in range(0, len(ids), 200):
+        found |= _analyses(ids[i : i + 200])
+    return [found[i] for i in ids if i in found]
+
+
+def _track(track_id: str, pool: list[dict[str, Any]]) -> dict[str, Any]:
+    t = next((t for t in pool if t["id"] == track_id), None) or _analyses(
+        [track_id]
+    ).get(track_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail=f"Not analysed (yet): {track_id}")
+    return t
+
+
+class FitsBody(BaseModel):
+    track: str
+    #: Track ids to rank among; omitted means every analysed local track.
+    pool: list[str] | None = None
+    #: harmony safe|any, tempo near|any, mood up|down|same, energy lift|hold|ease, genre any|same|<name>.
+    filters: dict[str, Any] = {}
+    limit: int = Field(50, ge=1, le=500)
+    exclude: list[str] = []
+
+
+@router.post("/music/proximity/fits-after")
+async def fits_after(body: FitsBody) -> dict[str, Any]:
+    """Tracks that follow one track, best first, each with its explained join."""
+
+    def run() -> list[dict[str, Any]]:
+        pool = _pool(body.pool)
+        return proximity.fits_after(
+            _track(body.track, pool), pool, body.filters, body.limit, body.exclude
+        )
+
+    return {"track": body.track, "results": await asyncio.to_thread(run)}
+
+
+class BridgeBody(BaseModel):
+    a: str
+    b: str
+    pool: list[str] | None = None
+    exclude: list[str] = []
+    limit: int = Field(10, ge=1, le=100)
+    #: Most in-between tracks a path may use (bridge-path only).
+    steps: int = Field(3, ge=1, le=5)
+
+
+@router.post("/music/proximity/bridges")
+async def bridges(body: BridgeBody) -> dict[str, Any]:
+    """Single tracks safe after a and before b, each with both joins."""
+
+    def run() -> list[dict[str, Any]]:
+        pool = _pool(body.pool)
+        a, b = _track(body.a, pool), _track(body.b, pool)
+        return proximity.bridges(a, b, pool, body.limit, body.exclude)
+
+    return {"results": await asyncio.to_thread(run)}
+
+
+@router.post("/music/proximity/bridge-path")
+async def bridge_path(body: BridgeBody) -> dict[str, Any]:
+    """The shortest safe chain of in-between track ids from a to b; ``path`` is null when none exists."""
+
+    def run() -> list[str] | None:
+        pool = _pool(body.pool)
+        a, b = _track(body.a, pool), _track(body.b, pool)
+        return proximity.bridge_path(a, b, pool, body.steps, body.exclude)
+
+    return {"path": await asyncio.to_thread(run)}
+
+
+@router.get("/music/proximity/join")
+async def proximity_join(a: str = Query(...), b: str = Query(...)) -> dict[str, Any]:
+    """The explained join from track a to track b."""
+    return await asyncio.to_thread(lambda: proximity.join(_track(a, []), _track(b, [])))
 
 
 @router.get("/music/online/link")

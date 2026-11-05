@@ -194,6 +194,26 @@ def test_analysis_api(db, root, tmp_path, monkeypatch):
     assert set(light) == set(ids)
     assert "bands" not in light[ids[0]] and "bpm" in light[ids[0]]
     assert c.get("/api/music/tracks/zzz/analysis").status_code == 404
+    fits = c.post(
+        "/api/music/proximity/fits-after",
+        json={"track": ids[0], "filters": {"harmony": "any", "tempo": "any"}},
+    ).json()
+    assert [r["id"] for r in fits["results"]] == [ids[1]] and "shared" in fits[
+        "results"
+    ][0]["join"]
+    assert c.post(
+        "/api/music/proximity/bridge-path", json={"a": ids[0], "b": ids[1]}
+    ).json()["path"] in ([], None)
+    assert (
+        c.post(
+            "/api/music/proximity/bridges", json={"a": ids[0], "b": "zzz"}
+        ).status_code
+        == 404
+    )
+    assert (
+        "kind"
+        in c.get("/api/music/proximity/join", params={"a": ids[0], "b": ids[1]}).json()
+    )
     assert c.get("/api/music/analysis/status").json()["total"] == 2
     assert c.post("/api/music/analysis/renormalise").json() == {"tracks": 2}
 
