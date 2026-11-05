@@ -106,6 +106,11 @@ export interface AppSettings {
   ytmusic_cookies?: string
   /** Detect music genres with the offline Discogs model. */
   music_genre_model?: boolean
+  /** How much theory the music views show: mood words, words with a tap for the key card, or key names. */
+  music_theory_level?: 'plain' | 'tap' | 'theory'
+  music_harmony_rule?: 'same' | 'close' | 'any'
+  music_mood_words?: boolean
+  music_autopilot_arc?: 'warmup' | 'slow-burn' | 'dubstep' | 'flat-out'
   /** Concurrent downloads a watcher may run, kept below the interactive pool. */
   watcher_max_concurrent?: number
   /** Every host a download could use, for the ranking control. Read-only. */

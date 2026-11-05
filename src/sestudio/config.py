@@ -113,6 +113,24 @@ class AppConfig:
     station_browser: str = ""
     # Detect music genres with the offline Discogs model (SPEC-music §9).
     music_genre_model: bool = True
+    # How much theory the music views show: "plain" (mood words), "tap" (words,
+    # a tap opens the key card) or "theory" (key names); the default harmony
+    # rule ("same" notes, "close", "any"); whether mood words show; the arc
+    # Autopilot follows.
+    music_theory_level: str = "plain"
+    music_harmony_rule: str = "same"
+    music_mood_words: bool = True
+    music_autopilot_arc: str = "warmup"
+
+
+THEORY_LEVELS = ("plain", "tap", "theory")
+HARMONY_RULES = ("same", "close", "any")
+AUTOPILOT_ARCS = ("warmup", "slow-burn", "dubstep", "flat-out")
+
+
+def _choice(data: dict, key: str, allowed: tuple[str, ...]) -> str:
+    """The stored value when it is one of the allowed ones, else the first (the default)."""
+    return data[key] if data.get(key) in allowed else allowed[0]
 
 
 def _config_path() -> Path:
@@ -170,6 +188,10 @@ def load_config() -> AppConfig:
             station_fps=min(30, max(10, int(data.get("station_fps", 20)))),
             station_browser=str(data.get("station_browser", "")),
             music_genre_model=bool(data.get("music_genre_model", True)),
+            music_theory_level=_choice(data, "music_theory_level", THEORY_LEVELS),
+            music_harmony_rule=_choice(data, "music_harmony_rule", HARMONY_RULES),
+            music_mood_words=bool(data.get("music_mood_words", True)),
+            music_autopilot_arc=_choice(data, "music_autopilot_arc", AUTOPILOT_ARCS),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)
