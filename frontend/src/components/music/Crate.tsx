@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
 import { albumsOf } from '../../musicLibrary'
 import { metaLine, useSummaries, useSummary } from '../../musicMeta'
+import { useTheory } from '../../musicTheory'
 import { resolveLink, type OnlineLink, type QueueState } from '../../musicQueue'
 import { hitPayload, matchWords, saveHit, useMusicSearch, type OnlineHit } from '../../musicSearch'
 import { addTracks, nextIndex, type Ref } from './adding'
@@ -206,6 +207,7 @@ const inQueue = <span title="In queue" className="relative shrink-0 text-[11px] 
 
 function AddRow({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolean; aim: Aim }) {
   const meta = useSummary(e.hit ? undefined : e.analysisId)
+  const theory = useTheory()
   const bpm = e.bpm ?? meta?.bpm
   const tap = () => { if (!justDragged() && !justSwiped()) put(e, 'last', aim) }
   return (
@@ -229,7 +231,7 @@ function AddRow({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolea
           <span className="block truncate text-[11px] text-base-content/52">
             {e.artist}
             {e.hit?.kind === 'video' && <em className="not-italic ml-[7px] opacity-55">video</em>}
-            {metaLine(meta, bpm) && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{metaLine(meta, bpm)}</em>}
+            {metaLine(meta, bpm, theory) && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{metaLine(meta, bpm, theory)}</em>}
           </span>
           {e.join && <JoinChip join={e.join} className="max-w-full text-[11px] text-base-content/70" />}
         </div>

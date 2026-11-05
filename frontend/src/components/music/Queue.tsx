@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { metaLine, useSummary } from '../../musicMeta'
+import { useTheory } from '../../musicTheory'
 import { queueActions, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
 import { removeItem } from './adding'
 import { ARCS, setAutopilot, useAutopilot } from './autopilot'
@@ -32,6 +33,7 @@ interface RowProps {
 }
 
 function Row({ item, info, playing, source, leaving, tv, range }: RowProps) {
+  const theory = useTheory()
   const analysis = useSummary(item.library === 'online' ? undefined : item.track_id)
   const el = useRef<HTMLDivElement>(null)
 
@@ -92,7 +94,7 @@ function Row({ item, info, playing, source, leaving, tv, range }: RowProps) {
           <b className="block truncate font-medium" style={{ color: 'color-mix(in oklch, white calc(var(--hl, 0) * 100%), currentColor)' }}>{info?.title ?? '…'}</b>
           <span className="block truncate text-[11px] text-base-content/52">
             {info?.artist}
-            {metaLine(analysis) && <em className={`not-italic ${info?.artist ? 'ml-[7px]' : ''} opacity-55 tabular-nums`}>{metaLine(analysis)}</em>}
+            {metaLine(analysis, undefined, theory) && <em className={`not-italic ${info?.artist ? 'ml-[7px]' : ''} opacity-55 tabular-nums`}>{metaLine(analysis, undefined, theory)}</em>}
           </span>
         </div>
         {analysis?.balance && <Meter balance={analysis.balance} />}

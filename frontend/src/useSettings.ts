@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AppSettings } from './api'
 import { getSettings, putSettings } from './api'
+import { publishTheory } from './musicTheory'
 
 const DEFAULTS: AppSettings = {
   output_root: '.', lang: 'vf', download_destination: 'server', tmdb_configured: false,
@@ -15,11 +16,13 @@ export function useSettings(): [AppSettings, (patch: Partial<AppSettings>) => Pr
   const [settings, setSettings] = useState<AppSettings>(DEFAULTS)
 
   useEffect(() => {
-    getSettings().then(setSettings).catch(() => {})
+    getSettings().then(s => { setSettings(s); publishTheory(s) }).catch(() => {})
   }, [])
 
   async function update(patch: Partial<AppSettings>) {
-    setSettings(await putSettings(patch))
+    const s = await putSettings(patch)
+    setSettings(s)
+    publishTheory(s)
   }
 
   return [settings, update]

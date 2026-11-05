@@ -32,3 +32,36 @@ export const ENERGY_LEVELS = ['Calm', 'Steady', 'Driving', 'Intense'] as const
 
 /** How many of the meter's four steps a level lights (1..4); 0 while a track has no level. */
 export const energySteps = (level?: string | null): number => (ENERGY_LEVELS as readonly string[]).indexOf(level ?? '') + 1
+
+/** "F min (4A)": the key by name, then its Camelot code (A minor, B major) for mixing. */
+export const keyLabel = (key?: string, camelot?: string): string | undefined => {
+  const name = key?.replace(' minor', ' min').replace(' major', ' maj')
+  return name && camelot ? `${name} (${camelot})` : name || camelot
+}
+
+/** How much theory the music views show (Settings › Music › Harmony). */
+export interface Theory {
+  level: 'plain' | 'tap' | 'theory'
+  moodWords: boolean
+}
+export const DEFAULT_THEORY: Theory = { level: 'plain', moodWords: true }
+
+/** The parts of a track summary a key label reads. */
+interface KeyFacts {
+  key?: string
+  camelot?: string
+  harmony?: { track?: { tonic: string; mode: string } }
+}
+
+/**
+ * A track's key at the chosen level: the mood word with its colour (Plain, and Plain with theory on tap),
+ * or the key name ("G phrygian (4A)"). Key names also stand in while mood words are off or the mode is not known yet.
+ */
+export function keyDisplay(theory: Theory, s?: KeyFacts): { text: string; color?: string } | undefined {
+  const h = s?.harmony?.track
+  const mood = moodOf(h?.mode)
+  if (mood && theory.level !== 'theory' && theory.moodWords) return { text: mood.word, color: mood.color }
+  const name = h ? `${h.tonic} ${h.mode.toLowerCase()}` : undefined
+  const text = name ? (s?.camelot ? `${name} (${s.camelot})` : name) : keyLabel(s?.key, s?.camelot)
+  return text ? { text } : undefined
+}

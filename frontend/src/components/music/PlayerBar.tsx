@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useBarsHidden } from '../../barsHidden'
 import { useCastState } from '../../cast'
 import { useDlnaState } from '../../dlnaControl'
-import { moodOf } from '../../harmony'
-import { keyLabel, useSummary } from '../../musicMeta'
+import { keyDisplay } from '../../harmony'
+import { useSummary } from '../../musicMeta'
+import { useTheory } from '../../musicTheory'
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { usePhoneStrip } from '../../phoneStrip'
 import BarAura from './BarAura'
@@ -19,7 +20,7 @@ export default function PlayerBar({ onMusicPage }: { onMusicPage: boolean }) {
   const track = item && info(item.track_id)
   const analysis = useAnalysis(item?.track_id)
   const sum = useSummary(item?.track_id)
-  const mood = moodOf(sum?.harmony?.track?.mode)
+  const key = keyDisplay(useTheory(), sum)
   const position = usePosition(q, track?.duration ?? 0)
   const dragFrom = useRef<number | null>(null)
   // Above the Now-Casting bar when a cast is up; the page's bottom padding clears both (AppShell reads --music-bar).
@@ -79,8 +80,7 @@ export default function PlayerBar({ onMusicPage }: { onMusicPage: boolean }) {
           <b className="block truncate text-sm font-medium">{track?.title ?? '…'}</b>
           <span className="block truncate text-xs text-base-content/60">
             {track?.artist}
-            {keyLabel(sum?.key, sum?.camelot) && <span> · {keyLabel(sum?.key, sum?.camelot)}</span>}
-            {mood && <span style={{ color: mood.color }}> · {mood.word}</span>}
+            {key && <span style={{ color: key.color }}> · {key.text}</span>}
             {analysis?.bpm && <span className="tabular-nums"> · {fmtBpm(analysis.bpm)} BPM</span>}
           </span>
         </div>
