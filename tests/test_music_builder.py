@@ -14,7 +14,7 @@ SCALES = [
 def trk(i, genre, bpm, energy, tonic, mode):
     notes = [modes.NAMES[p] for p in modes.pcs(modes.NAMES.index(tonic), mode)]
     return {
-        "id": f"{genre[:3]}{i}", "genre": genre, "bpm": bpm, "duration": 200,
+        "id": f"{genre[:3]}{i}", "genre": genre, "bpm": bpm, "duration": 200 + i,
         "energyScale": {"track": energy, "intro": energy, "outro": energy},
         "harmony": {"track": {"tonic": tonic, "mode": mode, "notes": notes, "brightness": modes.BRIGHTNESS.get(mode)}},
     }  # fmt: skip
@@ -84,3 +84,11 @@ def test_joins_match_proximity():
     got = builder.build_arc(POOL, builder.PRESETS["Flat out"], 900)
     a, b = (next(t for t in POOL if t["id"] == s["id"]) for s in got["slots"][:2])
     assert got["slots"][1]["join"] == proximity.join(a, b)
+
+
+def test_a_copy_of_a_track_is_not_picked_again():
+    # The same file in two libraries: another id, the same analysis.
+    copies = [{**t, "id": t["id"] + "-copy"} for t in POOL]
+    got = builder.build_arc(POOL + copies, builder.PRESETS["Slow burn"], 40 * 60)
+    ids = [s["id"].removesuffix("-copy") for s in got["slots"]]
+    assert len(set(ids)) == len(ids)
