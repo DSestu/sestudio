@@ -5,7 +5,8 @@ import { patchParams, type Navigate } from '../../../nav'
 import { useModalBack } from '../../../useModalBack'
 import ResponsiveModal from '../../ResponsiveModal'
 import FlowColumn from './FlowColumn'
-import { dropped, flowApi, flowColor, inserted, newFlow, refOf, refsOf, rowOf, useAllTracks, useFlows, type Flow, type FlowRef } from './flows'
+import { fitsAfter } from '../crates/proximity'
+import { dropped, flowApi, flowColor, inserted, newFlow, proxOf, refOf, refsOf, rowOf, useAllTracks, useFlows, type Flow, type FlowRef } from './flows'
 import Picker from './Picker'
 import { ForkLine, SetChooser, TrunkBar } from './Trunk'
 
@@ -53,6 +54,19 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
   )
   const forkRow = mode === 'branch' ? trunkRows.at(-1) : undefined
 
+  // The track that would follow each flow best: nearest by notes, tempo and energy, of those in no flow yet.
+  const bests = useMemo(() => {
+    const out = new Map<string, MusicTrack>()
+    const taken = new Set([...flows.flatMap(f => f.items), ...trunk].map(r => r.track_id))
+    const pool = all.filter(t => !taken.has(t.id)).map(t => ({ t, p: proxOf(t.id, get(t.id), t.bpm) }))
+    for (const f of shown) {
+      const tail = f.items.length ? rowsOf(f).at(-1) : forkRow
+      const top = tail && fitsAfter(tail.prox, pool.map(x => x.p), { harmony: 'any', tempo: 'any' }, 1)[0]
+      const t = top && pool.find(x => x.p.id === top.id)?.t
+      if (t) out.set(f.id, t)
+    }
+    return out
+  }, [flows, trunk, shown, all, forkRow, rowsOf, get, v]) // eslint-disable-line react-hooks/exhaustive-deps
   const activeRows = active ? rowsOf(active) : []
   const pickerProps = {
     tail: activeRows.at(-1) ?? forkRow,
@@ -174,6 +188,8 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
                       active={f.id === active?.id}
                       over={over?.flow === f.id ? over.at : null}
                       fork={forkRow}
+                      best={bests.get(f.id)}
+                      onAddBest={() => { const b = bests.get(f.id); if (b) run(flowApi.patch(f.id, { items: inserted(f.items, refOf(b)) })) }}
                       onKeep={mode === 'branch' ? () => keep(f) : undefined}
                       onActive={() => pick(f.id)}
                       onRename={name => run(flowApi.patch(f.id, { name }))}
