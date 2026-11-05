@@ -23,7 +23,8 @@ import { factsLine, useAnalysing, useSummaries, type Summary } from '../musicMet
 import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
-import { setFitsRef, useFitsRef } from '../musicFits'
+import { fitsAfter } from '../components/music/crates/proximity'
+import { proxOf, setFitsRef, useFitsRef } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, type Navigate } from '../nav'
 
@@ -280,18 +281,32 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const page = node ?? album ?? artist
 
   const fitsTrack = fitsRef ? all.find(t => t.id === fitsRef) : undefined
+  const fitsMode = !page && !!fitsTrack && tab === 'tracks'
+  // The tracks shown (library, genre and search text applied), best follow-ups of the reference first.
+  const ranked = useMemo(() => {
+    if (!fitsMode || !fitsTrack) return []
+    const of = new Map(tracks.map(t => [t.id, t]))
+    return fitsAfter(proxOf(fitsTrack, get(fitsTrack.id)), tracks.map(t => proxOf(t, get(t.id))), { harmony: 'safe', tempo: 'near' }, Infinity)
+      .map(r => of.get(r.id)!)
+  }, [fitsMode, fitsTrack, tracks, v]) // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
   const pick = (id: string) => { setLibrary(id); setSheet(false); if (nodeId || albumId || artistName) go({}) }
   const pickNode = (id: string) => { setSheet(false); if (id !== nodeId) openNode(id) }
 
-  const searching = !page && query.trim() !== '' && !LINK_RE.test(query.trim())
+  const searching = !page && !fitsMode && query.trim() !== '' && !LINK_RE.test(query.trim())
   const body = node ? (
     <PlaylistView key={node.id} node={node} byId={byId} />
   ) : album ? (
     <Detail name={album.name} tracks={album.tracks} get={get} onPlaylist={setPickFor} />
   ) : artist ? (
     <Detail name={artist.name} round tracks={artist.tracks} get={get} onPlaylist={setPickFor} />
+  ) : fitsMode ? (
+    ranked.length ? (
+      <ul>{ranked.map(t => <TrackRow key={t.id} track={t} list={ranked} onPlaylist={setPickFor} />)}</ul>
+    ) : (
+      <EmptyState title={`Nothing fits after ${fitsTrack?.title}`} message="No track here follows it safely. Try another library or clear the search." />
+    )
   ) : searching ? (
     <MusicSearch
       query={query}
@@ -382,13 +397,14 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
               ))}
             </div>
           )}
-          {!page && fitsTrack && tab === 'tracks' && (
-            <div className="flex items-center gap-2 text-sm">
+          {fitsMode && fitsTrack && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
               <span className="text-base-content/60">Fits after</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 pl-3 pr-1 h-8 text-primary font-medium min-w-0">
                 <span className="truncate">{fitsTrack.title}</span>
                 <button onClick={() => setFitsRef()} aria-label="Back to the normal list" className="relative hit btn btn-ghost btn-circle btn-xs">✕</button>
               </span>
+              <span className="text-xs text-base-content/60">Ranked by shared notes, then tempo, genre and energy.</span>
             </div>
           )}
           {!page && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
