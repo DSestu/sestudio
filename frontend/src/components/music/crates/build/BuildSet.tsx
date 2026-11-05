@@ -3,6 +3,7 @@ import ResponsiveModal from '../../../ResponsiveModal'
 import type { MusicTrack } from '../../../../musicLibrary'
 import { usePlaylists } from '../../../../musicPlaylists'
 import ArcsWay from './ArcsWay'
+import BridgeWay from './BridgeWay'
 import SeedWay from './SeedWay'
 import { closeBuildSet, setWay, useBuildSet, type Way } from './store'
 
@@ -16,7 +17,7 @@ const WAYS: { way: Way; title: string; text: string; icon: ReactNode }[] = [
 ]
 
 /** Ways with a screen so far; the others show in the chooser, dimmed. */
-const READY: Way[] = ['seed', 'arcs']
+const READY: Way[] = ['seed', 'arcs', 'bridge']
 
 /** "Build a set": a large dialog on desktop, a full-height sheet on phones. Open it with openBuildSet(). */
 export default function BuildSet({ byId }: { byId: ReadonlyMap<string, MusicTrack> }) {
@@ -35,6 +36,7 @@ export default function BuildSet({ byId }: { byId: ReadonlyMap<string, MusicTrac
       </div>
       {state.way === 'seed' && <SeedWay seed={state.seed} byId={byId} />}
       {state.way === 'arcs' && <ArcsWay byId={byId} />}
+      {state.way === 'bridge' && <BridgeWay from={state.seed} byId={byId} />}
       {!info && (
         <ul className="grid gap-3 sm:grid-cols-2">
           {WAYS.map(w => (
