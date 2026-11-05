@@ -383,7 +383,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       ))}
     </ul>
   ) : tab === 'explore' ? (
-    <Explore tracks={tracks} get={get} v={v} />
+    <Explore tracks={tracks} get={get} v={v} onPlaylist={setPickFor} />
   ) : (
     <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={setPickFor} />)}</ul>
   )
