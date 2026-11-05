@@ -19,10 +19,11 @@ import {
 } from '../musicLibrary'
 import { addPayload, addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
 import { playAll, playFrom, playPayload } from '../components/music/player'
-import { factsLine, useSummaries, type Summary } from '../musicMeta'
+import { factsLine, useAnalysing, useSummaries, type Summary } from '../musicMeta'
 import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
+import { setFitsRef, useFitsRef } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, type Navigate } from '../nav'
 
@@ -88,6 +89,7 @@ function AlbumCard({ album, get, onOpen }: { album: MusicAlbum; get: (id: string
 }
 
 function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void }) {
+  const analysing = useAnalysing(track.id)
   return (
     <li className="flex items-center gap-1 rounded-xl hover:bg-white/5">
       <button
@@ -108,6 +110,7 @@ function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicT
         <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 w-56 rounded-xl bg-base-200 p-1 shadow-lg">
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); run(addToQueue(track)) }}>Add to queue</button></li>
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); onPlaylist(track) }}>Add to playlist…</button></li>
+          {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setFitsRef(track.id) }}>Fits after this</button></li>}
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openBuildSet({ way: 'seed', seed: track.id }) }}>Build a set from this</button></li>
         </ul>
       </div>
@@ -208,6 +211,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const [tab, setTab] = useState<MusicTab>(start.tab)
   const [library, setLibrary] = useState(start.lib)
   const query = useMusicQuery()
+  const fitsRef = useFitsRef()
   const [sheet, setSheet] = useState(false)
   const [adding, setAdding] = useState(false)
   // An open playlist, album or artist is its own history entry, so Back leaves it.
@@ -221,6 +225,12 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(sheet, () => setSheet(false))
   useModalBack(adding, () => setAdding(false))
+  // "Fits after this" from any row lands on the Tracks tab, off any open page.
+  useEffect(() => {
+    if (!fitsRef) return
+    setTab('tracks')
+    if (nodeId || albumId || artistName) go({})
+  }, [fitsRef]) // eslint-disable-line react-hooks/exhaustive-deps
   const playlists = usePlaylists()
   const node = playlists.find(n => n.id === nodeId)
 
@@ -269,6 +279,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const artist = useMemo(() => artistName ? artistsOf(all).find(a => a.name === artistName) : undefined, [all, artistName])
   const page = node ?? album ?? artist
 
+  const fitsTrack = fitsRef ? all.find(t => t.id === fitsRef) : undefined
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
   const pick = (id: string) => { setLibrary(id); setSheet(false); if (nodeId || albumId || artistName) go({}) }
@@ -369,6 +380,15 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
                   {g || 'All'} <span className="tabular-nums opacity-60">{n}</span>
                 </button>
               ))}
+            </div>
+          )}
+          {!page && fitsTrack && tab === 'tracks' && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-base-content/60">Fits after</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 pl-3 pr-1 h-8 text-primary font-medium min-w-0">
+                <span className="truncate">{fitsTrack.title}</span>
+                <button onClick={() => setFitsRef()} aria-label="Back to the normal list" className="relative hit btn btn-ghost btn-circle btn-xs">✕</button>
+              </span>
             </div>
           )}
           {!page && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
