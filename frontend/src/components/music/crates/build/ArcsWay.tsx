@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { MusicTrack } from '../../../../musicLibrary'
 import type { Arc } from '../harmonyApi'
 import { GENRES } from '../setBuilder'
@@ -9,6 +9,7 @@ import { LENGTHS } from './join'
 import Result from './Result'
 import Seg from './Seg'
 import { useBuilt, usePresets } from './useBuilt'
+import { useSummaries } from '../../../../musicMeta'
 
 /** "Draw the arcs": energy, mood and genre over time; the set follows the lines. */
 export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack> }) {
@@ -22,6 +23,8 @@ export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack
   const [length, setLength] = useState(45)
   const [variant, setVariant] = useState(0)
   const { built, error, busy } = useBuilt(arc ? { arc, length: length * 60, seed: variant } : null)
+  const ids = useMemo(() => built?.slots.map(s => s.id) ?? [], [built])
+  const { get } = useSummaries(ids)
   if (!arc) return <p className="py-6 text-center text-sm text-base-content/60">Loading…</p>
 
   const points = arc.energy.length
@@ -46,7 +49,7 @@ export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack
         </span>
       </div>
       <p className="text-xs text-base-content/60">Drag the dots. Drag a bar to move a genre change, click a genre block to change it.</p>
-      <ArcEditor arc={arc} picked={picked} onPick={k => setPicked(p => (p === k ? undefined : k))} onChange={setDrawn} />
+      <ArcEditor arc={arc} picked={picked} onPick={k => setPicked(p => (p === k ? undefined : k))} onChange={setDrawn} span={length * 60} blocks={ids.map(id => { const s = get(id); return { duration: byId.get(id)?.duration ?? 0, energy: s?.energyScale?.track, mood: s?.harmony?.track?.brightness ?? undefined, genre: s?.genre } })} />
       {picked !== undefined && arc.genre[picked] && (
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Genre of the block">
           {GENRES.map(g => (
