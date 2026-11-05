@@ -37,7 +37,7 @@ function JoinLine({ from, to }: { from?: Row; to: Row }) {
 const Line = () => <li aria-hidden="true" className="h-0.5 mx-2 -my-px rounded-full bg-(--lc)" />
 
 /** One flow: its colour and name, a summary line and its tracks in order; a place to drop tracks on desktop. */
-export default function FlowColumn({ flow, color, rows, active, over, fork, best, onAddBest, onKeep, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
+export default function FlowColumn({ flow, color, rows, active, over, fork, compact, best, onAddBest, onKeep, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
   flow: Flow
   color: string
   rows: Row[]
@@ -46,6 +46,8 @@ export default function FlowColumn({ flow, color, rows, active, over, fork, best
   over: number | null
   /** A branch: the track the set so far ends on, which the first join is checked against. */
   fork?: Row
+  /** Phone, side by side: narrow, so only the count and the clashes. */
+  compact?: boolean
   /** The track that would follow best, and the tap that adds it. */
   best?: { title: string }
   onAddBest: () => void
@@ -108,11 +110,11 @@ export default function FlowColumn({ flow, color, rows, active, over, fork, best
         </div>
         <p className="flex flex-wrap gap-x-2 text-xs text-base-content/60 tabular-nums">
           <span>{st.count} {st.count === 1 ? 'track' : 'tracks'}</span>
-          {st.duration > 0 && <span>{formatDuration(st.duration)}</span>}
+          {st.duration > 0 && <span className={compact ? "max-md:hidden" : ""}>{formatDuration(st.duration)}</span>}
           <span className={st.clashes ? 'text-warning' : ''}>{st.clashes ? `${st.clashes} ${st.clashes === 1 ? 'clash' : 'clashes'}` : 'no clash'}</span>
-          {st.tempoJumps > 0 && <span className="text-warning">{st.tempoJumps} tempo {st.tempoJumps === 1 ? 'jump' : 'jumps'}</span>}
+          {st.tempoJumps > 0 && <span className={`text-warning ${compact ? "max-md:hidden" : ""}`}>{st.tempoJumps} tempo {st.tempoJumps === 1 ? 'jump' : 'jumps'}</span>}
         </p>
-        <EnergyStrip rows={rows} />
+        <div className={compact ? "max-md:hidden" : ""}><EnergyStrip rows={rows} /></div>
       </header>
       <ol className="flex-1 min-h-0 overflow-y-auto px-1.5 pb-3">
         {rows.length === 0 && (

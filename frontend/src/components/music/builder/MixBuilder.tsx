@@ -31,6 +31,10 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
   })
   const [act, setAct] = useState(params.get('f') ?? '')
   const [sheet, setSheet] = useState(false)
+  // Phone: one flow at a time, or every flow side by side.
+  const [cmp, setCmp] = useState(false)
+  const [note, setNote] = useState('')
+  const noteTimer = useRef(0)
   useModalBack(sheet, () => setSheet(false))
 
   // Branch mode works on one set at a time: the one picked, else the active branch's, else the first branch's.
@@ -92,6 +96,9 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
   const add = (t: MusicTrack) => {
     if (!active) return
     run(flowApi.patch(active.id, { items: inserted(active.items, refOf(t)) }))
+    setNote(`Added ${t.title} to ${active.name}`)
+    window.clearTimeout(noteTimer.current)
+    noteTimer.current = window.setTimeout(() => setNote(''), 1800)
   }
 
   const pick = (id: string) => { setAct(id); patchParams({ f: id }) }
@@ -133,6 +140,14 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
             <span className="truncate">Save {active.name} as a set</span>
           </button>
         )}
+        <button
+          onClick={() => setCmp(!cmp)}
+          aria-pressed={cmp}
+          aria-label={cmp ? 'Show one flow' : 'Show flows side by side'}
+          className="md:hidden btn btn-ghost btn-circle btn-sm"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">{cmp ? <path strokeLinecap="round" d="M6 4h12v16H6z" /> : <path strokeLinecap="round" d="M4 4h6v16H4zM14 4h6v16h-6z" />}</svg>
+        </button>
         <div role="group" aria-label="Mode" className="flex rounded-full bg-white/6 p-0.5 text-xs">
           {MODES.map(([m, label]) => (
             <button
@@ -172,7 +187,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
                 ))}
                 <button onClick={create} aria-label={`New ${NOUN[mode]}`} className="shrink-0 rounded-full px-3 h-8 text-xs bg-white/6">+</button>
               </div>
-              <div className="flex-1 min-h-0 flex gap-3 md:overflow-x-auto p-3 md:p-4">
+              <div className={`flex-1 min-h-0 flex gap-3 md:overflow-x-auto p-3 md:p-4 ${cmp ? "max-md:overflow-x-auto max-md:snap-x" : ""}`}>
                 {loaded && shown.length === 0 && (
                   <p className="m-auto text-sm text-base-content/60 text-center">
                     No {NOUN[mode]} yet.<br />
@@ -180,7 +195,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
                   </p>
                 )}
                 {shown.map((f, i) => (
-                  <div key={f.id} className={`min-h-0 w-full md:w-auto ${f.id === active?.id ? 'flex' : 'hidden md:flex'}`}>
+                  <div key={f.id} className={`min-h-0 ${cmp ? "flex w-[62%] shrink-0 snap-start md:w-auto" : "w-full md:w-auto"} ${cmp || f.id === active?.id ? "flex" : "hidden md:flex"}`}>
                     <FlowColumn
                       flow={f}
                       color={flowColor(i)}
@@ -188,6 +203,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
                       active={f.id === active?.id}
                       over={over?.flow === f.id ? over.at : null}
                       fork={forkRow}
+                      compact={cmp}
                       best={bests.get(f.id)}
                       onAddBest={() => { const b = bests.get(f.id); if (b) run(flowApi.patch(f.id, { items: inserted(f.items, refOf(b)) })) }}
                       onKeep={mode === 'branch' ? () => keep(f) : undefined}
@@ -226,9 +242,20 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
 
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)} boxClassName="h-[80dvh] flex flex-col p-0">
+          <div className="px-3 pt-3 flex items-center gap-2 text-xs text-base-content/60">
+            Adding to
+            <button
+              onClick={() => active && pick(shown[(shown.indexOf(active) + 1) % shown.length].id)}
+              style={{ '--lc': pickerProps.flowColor } as CSSProperties}
+              className="flex items-center gap-1.5 rounded-full bg-primary/20 text-primary px-3 h-7 font-medium"
+            >
+              <i aria-hidden="true" className="size-2 rounded-full bg-(--lc)" />{active?.name}
+            </button>
+          </div>
           <Picker all={all} get={get} {...pickerProps} onAdd={add} onDragStart={() => {}} />
         </ResponsiveModal>
       )}
+      {note && <p role="status" className="fixed z-1000 inset-x-4 bottom-24 mx-auto w-fit max-w-full truncate rounded-full glass px-4 py-2 text-sm">{note}</p>}
     </div>
   )
 }
