@@ -32,13 +32,6 @@ export const fetchFitsAfter = (track: string, o: { filters?: Filters; pool?: str
 export const fetchBridges = (a: string, b: string, o: { pool?: string[]; exclude?: string[]; limit?: number } = {}) =>
   post<{ results: { id: string; before: Join; after: Join }[] }>('proximity/bridges', { a, b, ...o })
 
-/** `path` is the in-between ids, [] when a to b is already safe, null when no path exists. */
-export const fetchBridgePath = (a: string, b: string, o: { steps?: number; pool?: string[]; exclude?: string[] } = {}) =>
-  post<{ path: string[] | null }>('proximity/bridge-path', { a, b, ...o })
-
-export const fetchJoin = async (a: string, b: string): Promise<Join> =>
-  (await fetch(`/api/music/proximity/join?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`)).json()
-
 export const fetchPresets = async (): Promise<Record<string, Arc>> => (await fetch('/api/music/set/presets')).json()
 
 /** Give `arc` or the name of a `preset`; `length` is in seconds; a new `seed` is "Try another". */

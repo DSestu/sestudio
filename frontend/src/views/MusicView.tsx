@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import AddToPlaylist from '../components/music/crates/AddToPlaylist'
 import AddLibrary from '../components/music/crates/AddLibrary'
-import { openHarmonyBasics } from '../components/music/harmony/store'
-import BuildSet from '../components/music/crates/build/BuildSet'
-import { openBuildSet } from '../components/music/crates/build/store'
 import Crates, { type Crate } from '../components/music/crates/Crates'
+import NewPlaylist from '../components/music/crates/NewPlaylist'
 import PlaylistView from '../components/music/crates/PlaylistView'
 import EmptyState from '../components/EmptyState'
 import PageHeader from '../components/PageHeader'
@@ -28,7 +26,7 @@ import Seg from '../components/music/crates/build/Seg'
 import type { Join } from '../components/music/crates/proximity'
 import { clearFitsFilters, proxOf, rankFits, relaxations, setFitsFilter, setFitsRef, useFitsFilters, useFitsRef, type FitsFilters } from '../musicFits'
 import { useModalBack } from '../useModalBack'
-import { currentParams, patchParams, type Navigate } from '../nav'
+import { currentParams, patchParams, replaceParams, type Navigate } from '../nav'
 
 const TABS = [
   { id: 'albums', label: 'Albums' },
@@ -132,7 +130,7 @@ function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: M
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); onPlaylist(track) }}>Add to playlist…</button></li>
           {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setFitsRef(track.id) }}>Fits after this</button></li>}
           {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openKeyCard(track.id, track.title) }}>Key card</button></li>}
-          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openBuildSet({ way: 'seed', seed: track.id }) }}>Build a set from this</button></li>
+          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); window.location.hash = `#/music?pl=new&seed=${encodeURIComponent(track.id)}` }}>New playlist from this</button></li>
         </ul>
       </div>
     </li>
@@ -262,8 +260,16 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const nodeId = params.get('pl') ?? ''
   const albumId = params.get('al') ?? ''
   const artistName = params.get('ar') ?? ''
-  const go = (open: { pl?: string; al?: string; ar?: string }) =>
-    navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, al: undefined, ar: undefined, ...open })
+  const drafting = nodeId === 'new'
+  const go = (open: { pl?: string; al?: string; ar?: string; seed?: string }) =>
+    navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, al: undefined, ar: undefined, seed: undefined, ...open })
+  const newPlaylist = (seed?: string) => { setSheet(false); go({ pl: 'new', seed }) }
+  /** The draft became a playlist: its page replaces the draft's history entry. */
+  const opened = (id: string) => {
+    const next = { ...Object.fromEntries(currentParams()), pl: id, seed: undefined }
+    replaceParams('music', next)
+    navigate('music', next)
+  }
   const openNode = (id: string) => go({ pl: id || undefined })
   const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(sheet, () => setSheet(false))
@@ -323,7 +329,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   // A page shows the whole album or artist, whatever the library, genre or search.
   const album = albumId ? allAlbums.find(a => albumKey(a) === albumId) : undefined
   const artist = useMemo(() => artistName ? artistsOf(all).find(a => a.name === artistName) : undefined, [all, artistName])
-  const page = node ?? album ?? artist
+  const page = node ?? album ?? artist ?? drafting
 
   const fitsTrack = fitsRef ? all.find(t => t.id === fitsRef) : undefined
   const fitsMode = !page && !!fitsTrack && tab === 'tracks'
@@ -341,7 +347,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const pickNode = (id: string) => { setSheet(false); if (id !== nodeId) openNode(id) }
 
   const searching = !page && !fitsMode && tab !== 'explore' && query.trim() !== '' && !LINK_RE.test(query.trim())
-  const body = node ? (
+  const body = drafting ? (
+    <NewPlaylist key={params.get('seed') ?? ''} byId={byId} seed={params.get('seed') ?? undefined} onCreated={opened} />
+  ) : node ? (
     <PlaylistView key={node.id} node={node} byId={byId} />
   ) : album ? (
     <Detail name={album.name} tracks={album.tracks} get={get} onPlaylist={setPickFor} />
@@ -393,7 +401,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
 
   return (
     <div className="flex flex-col gap-4">
-      {node ? (
+      {drafting ? (
+        <PageHeader title="New playlist" status="Music" onBack={() => go({})} />
+      ) : node ? (
         <PageHeader title={node.name} status={`${KIND_LABEL[node.kind]} · Music`} onBack={() => go({})} />
       ) : album ? (
         <PageHeader title={album.name} status={`Album · ${album.artist}`} onBack={() => go({})} />
@@ -403,10 +413,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         <PageHeader
           title="Music"
           status={<><em>{tracks.length}</em> tracks{library && ` in ${activeLabel}`}{genre && ` · ${genre}`}</>}
-          menu={<>
-            <button onClick={() => openBuildSet()} className="btn btn-ghost btn-sm justify-start">Build a set</button>
-            <button onClick={openHarmonyBasics} className="btn btn-ghost btn-sm justify-start">? Harmony basics</button>
-          </>}
+          action={{ label: 'New playlist', onClick: () => newPlaylist() }}
           tabs={[...TABS]}
           tab={tab}
           onTab={setTab}
@@ -420,7 +427,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       </div>
       <div className="flex gap-6 items-start">
         <aside className="hidden md:block w-62.5 shrink-0 sticky top-24">
-          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} />
         </aside>
         <div className="flex-1 min-w-0 flex flex-col gap-4">
           {!page && (
@@ -465,10 +472,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       </div>
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)}>
-          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} />
         </ResponsiveModal>
       )}
-      <BuildSet byId={byId} />
       {adding && <AddLibrary onClose={() => setAdding(false)} />}
       {pickFor && <AddToPlaylist track={pickFor} onClose={() => setPickFor(undefined)} />}
     </div>

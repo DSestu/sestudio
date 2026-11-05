@@ -12,7 +12,7 @@ export interface Crate {
 }
 
 /** The libraries and playlists column on desktop, and the body of the phone's sheet. */
-export default function Crates({ crates, active, onPick, onAdd, node, onNode }: {
+export default function Crates({ crates, active, onPick, onAdd, node, onNode, onNew }: {
   crates: Crate[]
   active: string
   onPick: (id: string) => void
@@ -20,6 +20,8 @@ export default function Crates({ crates, active, onPick, onAdd, node, onNode }: 
   /** The selected playlist or smart list, '' when a library is. */
   node: string
   onNode: (id: string) => void
+  /** Open the New playlist page. */
+  onNew: () => void
 }) {
   return (
     <nav aria-label="Libraries">
@@ -50,7 +52,7 @@ export default function Crates({ crates, active, onPick, onAdd, node, onNode }: 
           </button>
         </li>
       </ul>
-      <PlaylistTree active={node} onPick={onNode} />
+      <PlaylistTree active={node} onPick={onNode} onNew={onNew} />
     </nav>
   )
 }
