@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import AddToPlaylist from '../components/music/crates/AddToPlaylist'
 import AddLibrary from '../components/music/crates/AddLibrary'
 import Crates, { type Crate } from '../components/music/crates/Crates'
@@ -14,7 +14,8 @@ import {
   albumsOf, albumsOfTracks, artistsOf, formatDuration, initials, matchTracks,
   type MusicAlbum, type MusicTrack,
 } from '../musicLibrary'
-import { addPayload, addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
+import { addPayload, addToQueue, post, resolveLink, useMusicQueue, type OnlineLink } from '../musicQueue'
+import { addTracks, nextIndex } from '../components/music/adding'
 import { playAll, playFrom, playPayload } from '../components/music/player'
 import { factsLine, genreColor, useAnalysing, useSummaries, type Summary } from '../musicMeta'
 import { openKeyCard } from '../components/music/harmony/keyCardStore'
@@ -22,9 +23,8 @@ import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
 import Explore from '../components/music/explore/Explore'
-import Seg from '../components/music/crates/build/Seg'
-import type { Join } from '../components/music/crates/proximity'
-import { clearFitsFilters, proxOf, rankFits, relaxations, setFitsFilter, setFitsRef, useFitsFilters, useFitsRef, type FitsFilters } from '../musicFits'
+import FitsNext from '../components/music/FitsNext'
+import { closeFits, openFitsFor, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, replaceParams, type Navigate } from '../nav'
 
@@ -90,21 +90,7 @@ function AlbumCard({ album, get, onOpen }: { album: MusicAlbum; get: (id: string
   )
 }
 
-/** Why a result fits after the reference: a dot and the join kind, the energy step, a tempo jump. */
-function Why({ join, className = '' }: { join: Join; className?: string }) {
-  if (!join.kindLabel) return null
-  const dot = join.shared === 7 ? 'bg-success' : join.safe ? 'bg-info' : 'bg-warning'
-  return (
-    <span className={`items-center gap-1.5 text-xs text-base-content/60 ${className}`} title={join.shared === null ? undefined : `${join.shared} of 7 notes shared`}>
-      <i className={`size-1.75 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
-      <span className={join.safe ? '' : 'text-warning'}>{join.kindLabel}</span>
-      {join.energy.step && <span className="text-base-content/45">· {join.energy.step}</span>}
-      {join.tempoJump && <span className="text-warning">· tempo jump</span>}
-    </span>
-  )
-}
-
-function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void; why?: Join }) {
+function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void }) {
   const analysing = useAnalysing(track.id)
   return (
     <li className="flex items-center gap-1 rounded-xl hover:bg-white/5">
@@ -115,11 +101,9 @@ function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: M
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-sm font-medium">{track.title}</span>
           <span className="block truncate text-xs text-base-content/60">{track.artist}<MetaLine id={track.id} bpm={track.bpm} title={track.title} /></span>
-          {why && <Why join={why} className="flex sm:hidden" />}
         </span>
         <span className="w-10 text-right text-xs text-base-content/60 tabular-nums">{formatDuration(track.duration)}</span>
       </button>
-      {why && <Why join={why} className="hidden sm:flex" />}
       <TrackMeta id={track.id} bpm={track.bpm} title={track.title} />
       <div className="dropdown dropdown-end">
         <button tabIndex={0} aria-label={`Add ${track.title}`} className="btn btn-ghost btn-circle btn-sm mr-1 relative hit">
@@ -128,7 +112,7 @@ function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: M
         <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 w-56 rounded-xl bg-base-200 p-1 shadow-lg">
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); run(addToQueue(track)) }}>Add to queue</button></li>
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); onPlaylist(track) }}>Add to playlist…</button></li>
-          {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setFitsRef(track.id) }}>Fits after this</button></li>}
+          {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openFitsFor(track.id) }}>Fits next</button></li>}
           {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openKeyCard(track.id, track.title) }}>Key card</button></li>}
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); window.location.hash = `#/music?pl=new&seed=${encodeURIComponent(track.id)}` }}>New playlist from this</button></li>
         </ul>
@@ -213,27 +197,11 @@ function LinkCard({ url }: { url: string }) {
   )
 }
 
-const MOVES: { key: keyof FitsFilters; label: string; options: [string, string][] }[] = [
-  { key: 'harmony', label: 'Harmony', options: [['same', 'Same notes'], ['close', 'Close'], ['any', 'Any']] },
-  { key: 'mood', label: 'Mood', options: [['any', 'Any'], ['up', 'Brighter'], ['same', 'Same'], ['down', 'Darker']] },
-  { key: 'energy', label: 'Energy', options: [['any', 'Any'], ['lift', 'Lift'], ['hold', 'Hold'], ['ease', 'Ease off']] },
-  { key: 'genre', label: 'Genre', options: [['same', 'Same'], ['any', 'Any']] },
-  { key: 'tempo', label: 'Tempo', options: [['near', '±6%'], ['any', 'Any']] },
-]
-
-/** What kind of move to look for: one row of segmented controls, scrolling sideways on phones. */
-function MoveFilters({ value }: { value: FitsFilters }) {
-  return (
-    <div className="flex items-center gap-x-3 overflow-x-auto pb-1 [scrollbar-width:none]">
-      {MOVES.map(m => (
-        <div key={m.key} className="flex shrink-0 items-center gap-1.5">
-          <span className="text-xs text-base-content/60">{m.label}</span>
-          <Seg label={m.label} options={m.options} value={value[m.key]} onPick={v => setFitsFilter(m.key, v as never)} />
-        </div>
-      ))}
-    </div>
-  )
-}
+const WIDE = '(min-width: 64rem)'
+const useWide = () => useSyncExternalStore(
+  cb => { const m = matchMedia(WIDE); m.addEventListener('change', cb); return () => m.removeEventListener('change', cb) },
+  () => matchMedia(WIDE).matches,
+)
 
 const KIND_LABEL = { folder: 'Folder', playlist: 'Playlist', smart: 'Smart list' } as const
 
@@ -252,8 +220,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const [tab, setTab] = useState<MusicTab>(start.tab)
   const [library, setLibrary] = useState(start.lib)
   const query = useMusicQuery()
-  const fitsRef = useFitsRef()
-  const fitsFilters = useFitsFilters()
+  const fitsFor = useFitsFor()
+  const wide = useWide()
+  const queue = useMusicQueue()
   const [sheet, setSheet] = useState(false)
   const [adding, setAdding] = useState(false)
   // An open playlist, album or artist is its own history entry, so Back leaves it.
@@ -274,21 +243,21 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(sheet, () => setSheet(false))
   useModalBack(adding, () => setAdding(false))
-  // "Fits after this" from any row lands on the Tracks tab, off any open page.
-  const [seenFits, setSeenFits] = useState<typeof fitsRef>()
-  if (fitsRef !== seenFits) {
-    setSeenFits(fitsRef)
-    if (fitsRef) setTab('tracks')
-  }
-  useEffect(() => {
-    if (fitsRef && (nodeId || albumId || artistName)) go({})
-  }, [fitsRef]) // eslint-disable-line react-hooks/exhaustive-deps
   const playlists = usePlaylists()
   const node = playlists.find(n => n.id === nodeId)
 
   const others = useLibraryTracks()
   const libraries = useLibraries()
   const all = useMemo(() => [...albumsOf(titles).flatMap(a => a.tracks), ...others], [titles, others])
+  const fitsTrack = fitsFor ? all.find(t => t.id === fitsFor) : undefined
+  useModalBack(!!fitsTrack && !wide, closeFits)
+  // Escape closes the panel (and Back, on a phone, through useModalBack).
+  useEffect(() => {
+    if (!fitsTrack) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) closeFits() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fitsTrack])
   const crates = useMemo<Crate[]>(() => [
     { id: '', label: 'All', count: all.length },
     ...libraries.map(l => ({ id: l.id, label: l.label, count: l.count, dot: DOT[l.state], line: stateLine(l) })),
@@ -331,22 +300,20 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const artist = useMemo(() => artistName ? artistsOf(all).find(a => a.name === artistName) : undefined, [all, artistName])
   const page = node ?? album ?? artist ?? drafting
 
-  const fitsTrack = fitsRef ? all.find(t => t.id === fitsRef) : undefined
-  const fitsMode = !page && !!fitsTrack && tab === 'tracks'
-  // The tracks shown (library, genre and search text applied), best follow-ups of the reference first.
-  const ranked = useMemo(() => {
-    if (!fitsMode || !fitsTrack) return []
-    const of = new Map(tracks.map(t => [t.id, t]))
-    return rankFits(proxOf(fitsTrack, get(fitsTrack.id)), tracks.map(t => proxOf(t, get(t.id))), fitsFilters)
-      .map(r => ({ track: of.get(r.id)!, join: r.join }))
-  }, [fitsMode, fitsTrack, tracks, fitsFilters, v]) // eslint-disable-line react-hooks/exhaustive-deps
-  const rankedTracks = useMemo(() => ranked.map(r => r.track), [ranked])
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
   const pick = (id: string) => { setLibrary(id); setSheet(false); if (nodeId || albumId || artistName) go({}) }
   const pickNode = (id: string) => { setSheet(false); if (id !== nodeId) openNode(id) }
 
-  const searching = !page && !fitsMode && tab !== 'explore' && query.trim() !== '' && !LINK_RE.test(query.trim())
+  const fitsPanel = fitsTrack && (
+    <FitsNext
+      anchor={fitsTrack} library={all} exclude={queue.items.map(i => i.track_id)}
+      action={{ label: 'Add to queue', onPick: t => void addTracks([{ library: t.library, track_id: t.id }], undefined, `Added ${t.title}`) }}
+      onClose={closeFits}
+      footer={<button onClick={() => void addTracks([{ library: fitsTrack.library, track_id: fitsTrack.id }], nextIndex(), `${fitsTrack.title} plays next`)} className="btn btn-sm h-11 w-full sm:h-8">Play next</button>}
+    />
+  )
+  const searching = !page && tab !== 'explore' && query.trim() !== '' && !LINK_RE.test(query.trim())
   const body = drafting ? (
     <NewPlaylist key={params.get('seed') ?? ''} byId={byId} seed={params.get('seed') ?? undefined} onCreated={opened} />
   ) : node ? (
@@ -355,15 +322,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     <Detail name={album.name} tracks={album.tracks} get={get} onPlaylist={setPickFor} />
   ) : artist ? (
     <Detail name={artist.name} round tracks={artist.tracks} get={get} onPlaylist={setPickFor} />
-  ) : fitsMode ? (
-    ranked.length ? (
-      <ul>{ranked.map(r => <TrackRow key={r.track.id} track={r.track} list={rankedTracks} onPlaylist={setPickFor} why={r.join} />)}</ul>
-    ) : (
-      <EmptyState title={`Nothing fits after ${fitsTrack?.title}`} message="No track here follows it under these filters. Loosen one:">
-        {relaxations(fitsFilters).map(r => <button key={r.label} className="btn btn-sm" onClick={() => setFitsFilter(r.key, r.to as never)}>{r.label}</button>)}
-        <button className="btn btn-ghost btn-sm" onClick={clearFitsFilters}>Clear filters</button>
-      </EmptyState>
-    )
   ) : searching ? (
     <MusicSearch
       query={query}
@@ -455,21 +413,14 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
               ))}
             </div>
           )}
-          {fitsMode && fitsTrack && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              <span className="text-base-content/60">Fits after</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 pl-3 pr-1 h-8 text-primary font-medium min-w-0">
-                <span className="truncate">{fitsTrack.title}</span>
-                <button onClick={() => setFitsRef()} aria-label="Back to the normal list" className="relative hit btn btn-ghost btn-circle btn-xs">✕</button>
-              </span>
-              <span className="text-xs text-base-content/60">Ranked by shared notes, then tempo, genre and energy.</span>
-            </div>
-          )}
-          {fitsMode && <MoveFilters value={fitsFilters} />}
           {!page && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {body}
         </div>
+        {fitsPanel && wide && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{fitsPanel}</aside>}
       </div>
+      {fitsPanel && !wide && (
+        <ResponsiveModal onClose={closeFits} boxClassName="flex h-[60vh] flex-col p-0">{fitsPanel}</ResponsiveModal>
+      )}
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)}>
           <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} />

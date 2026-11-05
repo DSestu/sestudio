@@ -1,5 +1,5 @@
 import { MOOD_LADDER, moodOf } from '../../../harmony'
-import { setFitsRef } from '../../../musicFits'
+import { openFitsFor } from '../../../musicFits'
 import { genreColor, genreShort, useSummary } from '../../../musicMeta'
 import { useModalBack } from '../../../useModalBack'
 import ResponsiveModal from '../../ResponsiveModal'
@@ -58,7 +58,7 @@ function Card({ id, title }: { id: string; title: string }) {
             </div>
             <Keyboard notes={reading.notes} home={reading.home} />
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => { closeKeyCard(); setFitsRef(id) }} className="btn btn-sm">Fits after this</button>
+              <button onClick={() => { closeKeyCard(); openFitsFor(id) }} className="btn btn-sm">Fits next</button>
               <button onClick={() => { closeKeyCard(); openHarmonyBasics(2) }} className="btn btn-sm btn-ghost">What is a mode?</button>
             </div>
           </div>
