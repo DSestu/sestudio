@@ -22,6 +22,7 @@ import { startPlayback, usePosition } from '../player'
 import Apply from './build/Apply'
 import ArcsWay from './build/ArcsWay'
 import GenreTag from './GenreTag'
+import Explore from '../explore/Explore'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
 import { autoOrder, bestReorders, countJoins, isClash, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder, type SetTrack } from './setBuilder'
@@ -151,7 +152,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
 }
 
 /** A playlist's tracks (grouped by part for a set) or a smart list's matches. */
-export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId: ReadonlyMap<string, MusicTrack> }) {
+export default function PlaylistView({ node, byId, onPlaylist }: { node: PlaylistNode; byId: ReadonlyMap<string, MusicTrack>; onPlaylist: (t: MusicTrack) => void }) {
   const [matches, setMatches] = useState<{ id: string; list: PlaylistItem[] }>()
   const [editing, setEditing] = useState(false)
   /** The Draw the arcs editor, rebuilding this playlist. */
@@ -169,7 +170,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     return () => { live = false }
   }, [smart, node.id, rulesKey])
 
-  const items = smart ? (matches?.id === node.id + rulesKey ? matches.list : []) : itemsOf(node)
+  const items = useMemo(() => smart ? (matches?.id === node.id + rulesKey ? matches.list : []) : itemsOf(node), [smart, matches, node, rulesKey])
   const facts = (i: PlaylistItem) => {
     const t = byId.get(i.track_id)
     return t ? { duration: t.duration, bpm: t.bpm } : { duration: i.duration ?? 0 }
@@ -188,6 +189,8 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const [insp, setInsp] = useState(false)
   const [sel, setSel] = useState<string>()
   const [between, setBetween] = useState(false)
+  /** The tracks as a list or as a map of mood and energy. */
+  const [mode, setMode] = useState<'list' | 'map'>('list')
   useModalBack(insp && !wide, () => setInsp(false))
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   /** A track with its analysis (the set builder's view of it); `id` defaults to the track's. */
@@ -258,8 +261,8 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const target = Math.max(0, sel && flatIndex(sel) >= 0 ? flatIndex(sel) : items.length - 1)
   const pick = (item: PlaylistItem, join = false) => { setSel(item.item_id); setBetween(join); setInsp(true) }
   const insertAfterTarget = (t: MusicTrack) => {
-    const at = locate(node, items[target].item_id)!
-    run(playlistApi.add(node.id, [{ library: t.library, track_id: t.id }], at.part ?? undefined, at.index + 1).then(() => { toast(`Added ${t.title}`); setBetween(false); setSel(undefined) }))
+    const at = items[target] && locate(node, items[target].item_id)
+    run(playlistApi.add(node.id, [{ library: t.library, track_id: t.id }], at ? at.part ?? undefined : undefined, at ? at.index + 1 : undefined).then(() => { toast(`Added ${t.title}`); setBetween(false); setSel(undefined) }))
   }
   const library = useMemo(() => [...byId.values()], [byId])
   const taken = items.map(i => i.track_id)
@@ -275,6 +278,11 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     pick(items[i], true)
     requestAnimationFrame(() => document.getElementById(`join-${items[i].item_id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
   }
+  /** The map's path: the rows whose track is in the library, and the rows touching a clashing join. */
+  const stops = useMemo(() => items.flatMap(i => { const track = byId.get(i.track_id); return track ? [{ key: i.item_id, track }] : [] }), [items, byId])
+  const clashRows = useMemo(() => new Set(clashes.flatMap(i => [items[i].item_id, items[i + 1].item_id])), [clashes, items])
+  const showMap = (m: 'list' | 'map') => { setMode(m); if (m === 'map' && wide) setInsp(true) }
+  const mapping = mode === 'map' && !smart
   const titleAt = (i: number) => byId.get(items[i].track_id)?.title ?? items[i].title ?? 'Track'
   const reorder = (r: Reorder, text: string) => {
     const { part, index } = placement(groups.map(g => ({ id: g.id, items: g.items.map(x => x.item_id) })), items[r.from].item_id, r.to)
@@ -374,6 +382,13 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
             {smart && ' · fills itself from the rules'}
           </p>
         </div>
+        {!smart && (
+          <div role="group" aria-label="View" className="inline-flex rounded-full bg-white/6 p-0.5">
+            {([['list', 'List'], ['map', 'Map']] as const).map(([m, text]) => (
+              <button key={m} onClick={() => showMap(m)} aria-pressed={mode === m} className={`relative hit h-9 rounded-full px-4 text-sm font-medium ${mode === m ? 'bg-primary/20 text-primary' : 'text-base-content/70 hover:text-base-content'}`}>{text}</button>
+            ))}
+          </div>
+        )}
         {items.length > 0 && <button onClick={() => playPart()} className="btn btn-primary btn-sm">{isSet(node) ? 'Play set' : 'Play'}</button>}
         {!smart && (
           <div className="dropdown dropdown-end">
@@ -405,9 +420,16 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
           </button>
         )}
       </div>
-      {!smart && joinCounts.clashes > 0 && <ClashTip />}
-      {!smart && <SetCurve groups={groups.map(g => ({ name: g.name, tracks: g.items.map(i => flat[flatIndex(i.item_id)]) }))} now={now} />}
-      {!items.length && !parts.length ? (
+      {!smart && !mapping && joinCounts.clashes > 0 && <ClashTip />}
+      {!smart && !mapping && <SetCurve groups={groups.map(g => ({ name: g.name, tracks: g.items.map(i => flat[flatIndex(i.item_id)]) }))} now={now} />}
+      {mapping ? (
+        <Explore
+          library={library} path={stops} clash={clashRows} onPick={key => { const i = items.find(x => x.item_id === key); if (i) pick(i) }}
+          anchor={anchor ? { key: items[target].item_id, track: anchor } : undefined}
+          action={{ label: anchor ? `Insert after ${anchor.title}` : 'Add to this playlist', onPick: insertAfterTarget }}
+          onPlaylist={onPlaylist}
+        />
+      ) : !items.length && !parts.length ? (
         <p className="px-3 py-8 text-center text-sm text-base-content/60">
           {smart ? 'No track matches these rules yet.' : 'Empty. Add tracks with the + on any track row.'}
         </p>

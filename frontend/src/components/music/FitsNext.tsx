@@ -1,8 +1,9 @@
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { keyDisplay } from '../../harmony'
 import { formatDuration, type MusicTrack } from '../../musicLibrary'
 import { useAnalysing, useSummaries } from '../../musicMeta'
 import { filtersOf, plainKind, proxOf, rankFits, relaxations, type FitsFilters } from '../../musicFits'
+import { setFitsPref as setPref, useFitsPrefs } from '../../fitsPrefs'
 import { useTheory } from '../../musicTheory'
 import { useSettings } from '../../useSettings'
 import { bridges, joinColor, type Join } from './crates/proximity'
@@ -17,12 +18,6 @@ const SHOWN = 30
 
 /** One song across libraries: its title and artist, ignoring case. */
 const songKey = (t?: MusicTrack) => t && `${t.title}\u0000${t.artist}`.toLowerCase()
-
-type Prefs = Partial<FitsFilters>
-let prefs: Prefs = {}
-const listeners = new Set<() => void>()
-const setPref = (p: Prefs) => { prefs = { ...prefs, ...p }; listeners.forEach(l => l()) }
-const usePrefs = () => useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => prefs)
 
 const MORE: { key: keyof FitsFilters; label: string; options: [string, string][] }[] = [
   { key: 'mood', label: 'Mood', options: [['any', 'Any'], ['up', 'Brighter'], ['same', 'Same'], ['down', 'Darker']] },
@@ -90,7 +85,7 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
   const theory = useTheory()
   const deep = theory.level === 'theory'
   const [settings] = useSettings()
-  const f = filtersOf(usePrefs(), settings.music_harmony_rule)
+  const f = filtersOf(useFitsPrefs(), settings.music_harmony_rule)
   const [more, setMore] = useState(false)
   const { get, v } = useSummaries(useMemo(() => library.map(t => t.id), [library]))
   const analysing = useAnalysing(anchor.id)
