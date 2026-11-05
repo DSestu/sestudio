@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import ResponsiveModal from '../../../ResponsiveModal'
 import type { MusicTrack } from '../../../../musicLibrary'
 import { usePlaylists } from '../../../../musicPlaylists'
-import { useFlows } from '../../builder/flows'
 import ArcsWay from './ArcsWay'
 import GapWay from './GapWay'
 import BridgeWay from './BridgeWay'
@@ -23,7 +22,6 @@ const WAYS: { way: Way; title: string; text: string; icon: ReactNode }[] = [
 export default function BuildSet({ byId }: { byId: ReadonlyMap<string, MusicTrack> }) {
   const state = useBuildSet()
   const nodes = usePlaylists()
-  const flow = useFlows().flows.find(f => f.id === state?.flow)
   if (!state) return null
   const info = WAYS.find(w => w.way === state.way)
   const node = nodes.find(n => n.id === state.node)
@@ -33,7 +31,7 @@ export default function BuildSet({ byId }: { byId: ReadonlyMap<string, MusicTrac
       <div className="mb-3 flex items-center gap-2">
         {info && <button onClick={() => setWay()} className="btn btn-ghost btn-xs">‹ Ways to build</button>}
         <h3 className="font-semibold">{info?.title ?? 'Build a set'}</h3>
-        {(node || flow) && <span className="ml-auto truncate text-xs text-base-content/60">for {(node ?? flow)!.name}</span>}
+        {node && <span className="ml-auto truncate text-xs text-base-content/60">for {node.name}</span>}
       </div>
       {state.way === 'seed' && <SeedWay seed={state.seed} byId={byId} />}
       {state.way === 'arcs' && <ArcsWay byId={byId} />}
