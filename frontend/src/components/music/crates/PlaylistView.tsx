@@ -12,7 +12,7 @@ import JoinDialog from './JoinDialog'
 import JoinLine from './JoinLine'
 import { toast } from '../toast'
 import { mixOf, rawOf, trackOf, useAnalyses } from '../mix/analysis'
-import { flowApi } from '../builder/flows'
+import { flowApi, refsOf } from '../builder/flows'
 import { plan } from '../mix/plan'
 import { startPlayback, usePosition } from '../player'
 import { openBuildSet } from './build/store'
@@ -42,7 +42,7 @@ function summary(s: PartStats, genre?: string): string {
 /** The set's tracks as a new mix in the builder. */
 const openInBuilder = (name: string, items: PlaylistItem[]) =>
   flowApi
-    .create(name, 'mix', { items: items.map(({ library, track_id, source, title, artist, duration }) => ({ library, track_id, source, title, artist, duration })) })
+    .create(name, 'mix', { items: refsOf(items) })
     .then(f => { window.location.hash = `#/mixes?f=${f.id}` })
 
 interface Drop { part: string | null; index: number }

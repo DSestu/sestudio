@@ -3,6 +3,7 @@ import { useDownloadedLibrary } from '../../../downloadedLibrary'
 import { albumsOf, type MusicTrack } from '../../../musicLibrary'
 import { useLibraryTracks } from '../../../musicLibraries'
 import { useSummaries, type Summary } from '../../../musicMeta'
+import type { PlaylistItem } from '../../../musicPlaylists'
 import type { AddPayload } from '../../../musicQueue'
 import { join, tempoOk, type ProxTrack } from '../crates/proximity'
 
@@ -159,8 +160,12 @@ export const flowApi = {
 }
 
 /** A new empty flow named "Mix 3" or "Branch 2" after the ones of its kind. */
-export const newFlow = (mode: Flow['mode']) =>
-  flowApi.create(`${mode === 'mix' ? 'Mix' : 'Branch'} ${flows.filter(f => f.mode === mode).length + 1}`, mode)
+export const newFlow = (mode: Flow['mode'], extra: { fork?: FlowRef | null; base?: string | null } = {}) =>
+  flowApi.create(`${mode === 'mix' ? 'Mix' : 'Branch'} ${flows.filter(f => f.mode === mode && (f.base ?? null) === (extra.base ?? null)).length + 1}`, mode, extra)
+
+/** A playlist's items as flow refs. */
+export const refsOf = (items: PlaylistItem[]): FlowRef[] =>
+  items.map(({ library, track_id, source, title, artist, duration }) => ({ library, track_id, source, title, artist, duration }))
 
 /** Every track the builder can place: this PC's and the other libraries'. */
 export function useAllTracks() {
