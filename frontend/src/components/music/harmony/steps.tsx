@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { playScale, playSemitones, scaleSemitones } from './audio'
 import Keyboard from './Keyboard'
 import { MODES, NOTE, modeNotes, modeOf, shared, type ModeName } from './scales'
 
@@ -17,10 +18,13 @@ function Strip({ bars, label, className = 'bg-primary' }: { bars: number[]; labe
   )
 }
 
+const PHRYGIAN = scaleSemitones(modeNotes(7, 'phrygian'), 7)
 const CALM = [0.2, 0.25, 0.2, 0.3, 0.25, 0.2, 0.3, 0.25, 0.2, 0.25, 0.3, 0.2]
 const INTENSE = [0.7, 0.9, 0.8, 1, 0.85, 0.95, 0.8, 1, 0.9, 0.85, 1, 0.9]
 const FADE_OUT = [0.9, 0.8, 0.7, 0.55, 0.4, 0.28, 0.2, 0.2]
 const FADE_IN = [0.2, 0.2, 0.28, 0.4, 0.55, 0.7, 0.85, 0.95]
+
+const PlayRow = ({ children }: { children: ReactNode }) => <div className="flex flex-wrap gap-2">{children}</div>
 
 const P = ({ children }: { children: ReactNode }) => <p className="text-[15px] leading-relaxed text-base-content/80">{children}</p>
 
@@ -38,7 +42,7 @@ function Shared() {
   return (
     <>
       <P>During a mix both tracks play at once. The more notes they share, the cleaner the blend: 7 are seamless, 6 smooth, 5 or fewer rub. Each note they don&apos;t share is a chance for the blend to sound off.</P>
-      <Keyboard notes={C_MAJOR} other={G_MAJOR} />
+      <Keyboard notes={C_MAJOR} home={0} other={G_MAJOR} otherHome={7} />
       <div className="text-sm font-medium text-primary">{n} of 7 shared: smooth</div>
       <div className="text-xs text-base-content/50">Solid: in both. A: only the first track. B: only the second.</div>
     </>
@@ -49,7 +53,7 @@ function Home() {
   return (
     <>
       <P>Keep the same 7 notes but move the <b>home note</b> and the mood changes. Each home is a <b>mode</b>. C ionian and A aeolian use exactly the same notes; one sounds bright, the other dark, and they mix perfectly: a pivot.</P>
-      <Keyboard notes={C_MAJOR} other={modeNotes(9, 'aeolian')} />
+      <Keyboard notes={C_MAJOR} home={0} other={modeNotes(9, 'aeolian')} otherHome={9} />
       <div className="grid grid-cols-2 gap-2 text-sm">
         <div className="rounded-lg bg-base-200 p-2"><b>C ionian</b><div className="text-xs text-base-content/60">{modeOf('ionian').word}</div></div>
         <div className="rounded-lg bg-base-200 p-2"><b>A aeolian</b><div className="text-xs text-base-content/60">{modeOf('aeolian').word}</div></div>
@@ -68,7 +72,7 @@ function Ladder() {
           <button
             key={m.name}
             aria-pressed={mode === m.name}
-            onClick={() => setMode(m.name)}
+            onClick={() => { setMode(m.name); playScale(modeNotes(7, m.name), 7) }}
             className={`flex items-baseline justify-between rounded-lg px-3 py-2 text-sm ${mode === m.name ? 'bg-primary/20 text-primary' : 'bg-base-200 hover:bg-base-300'}`}
           >
             <b>{m.word}</b><span className="text-xs opacity-70">G {m.name}</span>
@@ -85,6 +89,10 @@ function Energy() {
     <>
       <P>Mood comes from the notes. <b>Energy</b> is how hard the track hits: loudness, density and drums, bar by bar. A dark track can be calm, and a bright one intense.</P>
       <Strip bars={CALM} label="G phrygian · calm" />
+      <PlayRow>
+        <button onClick={() => playSemitones(PHRYGIAN, { wave: 'sine', dur: 0.5, step: 0.45 })} className="btn btn-sm btn-primary btn-soft">▶ Calm and dark</button>
+        <button onClick={() => playSemitones([...PHRYGIAN, ...PHRYGIAN], { wave: 'sawtooth', dur: 0.09, step: 0.08 })} className="btn btn-sm btn-primary btn-soft">▶ Intense and dark</button>
+      </PlayRow>
       <Strip bars={INTENSE} label="G phrygian · intense" />
     </>
   )

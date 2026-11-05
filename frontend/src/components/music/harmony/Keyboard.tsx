@@ -1,3 +1,4 @@
+import { playChange, playScale } from './audio'
 import { NOTE } from './scales'
 
 const WHITE = [0, 2, 4, 5, 7, 9, 11]
@@ -5,12 +6,14 @@ const BLACK = [1, 3, 6, 8, 10]
 
 /**
  * One octave of keys in SVG. `notes` are lit; `home` is ringed; `other` is a second scale to compare:
- * keys in both are solid, keys in only one are lighter and tagged A or B.
+ * keys in both are solid, keys in only one are lighter and tagged A or B. With a home, a button plays the
+ * scale (or A then B with `other` and `otherHome`).
  */
-export default function Keyboard({ notes, home, other, width = 300 }: {
+export default function Keyboard({ notes, home, other, otherHome, width = 300 }: {
   notes: readonly number[]
   home?: number
   other?: readonly number[]
+  otherHome?: number
   width?: number
 }) {
   const kw = width / 7
@@ -37,6 +40,7 @@ export default function Keyboard({ notes, home, other, width = 300 }: {
     )
   }
   return (
+    <div className="flex flex-col items-start gap-2">
     <svg role="img" aria-label="Keys of the scale" viewBox={`0 0 ${width} ${h + 18}`} width="100%" style={{ maxWidth: width }}>
       {WHITE.map((pc, i) => key(pc, i * kw + 0.5, kw - 1, h, false))}
       {BLACK.map(pc => key(pc, (WHITE.indexOf(pc - 1) + 1) * kw - kw * 0.3, kw * 0.6, h * 0.6, true))}
@@ -44,5 +48,14 @@ export default function Keyboard({ notes, home, other, width = 300 }: {
         <text key={pc} x={i * kw + kw / 2} y={h + 13} fontSize={10} textAnchor="middle" fill="currentColor" fillOpacity={0.6}>{NOTE[pc]}</text>
       ))}
     </svg>
+    {home !== undefined && (
+      <button
+        onClick={() => (other && otherHome !== undefined ? playChange(notes, home, other, otherHome) : playScale(notes, home))}
+        className="btn btn-sm btn-primary btn-soft gap-1.5"
+      >
+        <span aria-hidden="true">▶</span>{other && otherHome !== undefined ? 'Hear A, then B' : 'Play the scale'}
+      </button>
+    )}
+    </div>
   )
 }
