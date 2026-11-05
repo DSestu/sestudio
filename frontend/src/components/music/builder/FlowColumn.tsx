@@ -37,7 +37,7 @@ function JoinLine({ from, to }: { from?: Row; to: Row }) {
 const Line = () => <li aria-hidden="true" className="h-0.5 mx-2 -my-px rounded-full bg-(--lc)" />
 
 /** One flow: its colour and name, a summary line and its tracks in order; a place to drop tracks on desktop. */
-export default function FlowColumn({ flow, color, rows, active, over, fork, compact, best, onAddBest, onKeep, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
+export default function FlowColumn({ flow, color, rows, active, over, fork, compact, best, onAddBest, onKeep, onFill, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
   flow: Flow
   color: string
   rows: Row[]
@@ -53,6 +53,8 @@ export default function FlowColumn({ flow, color, rows, active, over, fork, comp
   onAddBest: () => void
   /** A branch: add it to the set; the fork moves to its last track. */
   onKeep?: () => void
+  /** Open Draw the arcs for this flow. */
+  onFill: () => void
   onActive: () => void
   onRename: (name: string) => void
   onDelete: () => void
@@ -98,6 +100,9 @@ export default function FlowColumn({ flow, color, rows, active, over, fork, comp
               Keep
             </button>
           )}
+          <button onClick={e => { e.stopPropagation(); onFill() }} aria-label={`Fill ${flow.name} from arcs`} title="Fill from arcs" className="btn btn-ghost btn-circle btn-xs">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 17l5-6 4 4 8-10" /></svg>
+          </button>
           <div className="dropdown dropdown-end" onClick={e => e.stopPropagation()}>
             <button tabIndex={0} aria-label={`Options for ${flow.name}`} className="btn btn-ghost btn-circle btn-xs">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>

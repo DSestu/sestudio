@@ -4,6 +4,8 @@ import { itemsOf, playlistApi, usePlaylists } from '../../../musicPlaylists'
 import { patchParams, type Navigate } from '../../../nav'
 import { useModalBack } from '../../../useModalBack'
 import ResponsiveModal from '../../ResponsiveModal'
+import BuildSet from '../crates/build/BuildSet'
+import { openBuildSet } from '../crates/build/store'
 import FlowColumn from './FlowColumn'
 import { fitsAfter } from '../crates/proximity'
 import { dropped, flowApi, flowColor, inserted, newFlow, proxOf, refOf, refsOf, rowOf, useAllTracks, useFlows, type Flow, type FlowRef } from './flows'
@@ -207,6 +209,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
                       best={bests.get(f.id)}
                       onAddBest={() => { const b = bests.get(f.id); if (b) run(flowApi.patch(f.id, { items: inserted(f.items, refOf(b)) })) }}
                       onKeep={mode === 'branch' ? () => keep(f) : undefined}
+                      onFill={() => openBuildSet({ way: 'arcs', flow: f.id })}
                       onActive={() => pick(f.id)}
                       onRename={name => run(flowApi.patch(f.id, { name }))}
                       onDelete={() => run(flowApi.remove(f.id))}
@@ -255,6 +258,7 @@ export default function MixBuilder({ params, navigate }: { params: URLSearchPara
           <Picker all={all} get={get} {...pickerProps} onAdd={add} onDragStart={() => {}} />
         </ResponsiveModal>
       )}
+      <BuildSet byId={byId} />
       {note && <p role="status" className="fixed z-1000 inset-x-4 bottom-24 mx-auto w-fit max-w-full truncate rounded-full glass px-4 py-2 text-sm">{note}</p>}
     </div>
   )

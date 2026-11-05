@@ -160,7 +160,7 @@ export const flowApi = {
 }
 
 /** A new empty flow named "Mix 3" or "Branch 2" after the ones of its kind. */
-export const newFlow = (mode: Flow['mode'], extra: { fork?: FlowRef | null; base?: string | null } = {}) =>
+export const newFlow = (mode: Flow['mode'], extra: { fork?: FlowRef | null; base?: string | null; items?: FlowRef[] } = {}) =>
   flowApi.create(`${mode === 'mix' ? 'Mix' : 'Branch'} ${flows.filter(f => f.mode === mode && (f.base ?? null) === (extra.base ?? null)).length + 1}`, mode, extra)
 
 /** A playlist's items as flow refs. */
