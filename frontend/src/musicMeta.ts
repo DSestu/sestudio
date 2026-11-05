@@ -18,6 +18,7 @@ export interface Summary {
   genreSource?: 'tag' | 'source' | 'model' | 'rules' | 'user'
   /** Tonic, mode and notes of the track, and its energy on the library scale (0..100). */
   harmony?: { track?: Reading }
+  energyLevel?: 'Calm' | 'Steady' | 'Driving' | 'Intense'
   energyScale?: { track?: number; intro?: number; outro?: number }
   /** Mean bass, mids, highs, 0..1. */
   balance?: [number, number, number]

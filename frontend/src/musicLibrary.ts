@@ -1,4 +1,6 @@
 import type { DownloadedFile, DownloadedTitle } from './api'
+import type { Summary } from './musicMeta'
+import { matchWords } from './musicSearch'
 
 // The Music tab's views of the downloaded listing: audio folders are albums,
 // and the same tracks regrouped by artist or filtered by a search.
@@ -110,13 +112,13 @@ export function artistsOf(tracks: MusicTrack[]): MusicArtist[] {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** Tracks whose title, artist or album contains every word of the query. */
-export function matchTracks(tracks: MusicTrack[], query: string): MusicTrack[] {
+/** Tracks matching every word of the query in title, artist or album, or in the analysis (key, mood, energy, genre, tempo). */
+export function matchTracks(tracks: MusicTrack[], query: string, summary?: (id: string) => Summary | undefined): MusicTrack[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (!words.length) return tracks
   return tracks.filter(t => {
     const hay = `${t.title} ${t.artist} ${t.album}`.toLowerCase()
-    return words.every(w => hay.includes(w))
+    return matchWords(words, hay, summary?.(t.id))
   })
 }
 

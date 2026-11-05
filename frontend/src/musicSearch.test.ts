@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import type { MusicTrack } from './musicLibrary'
-import { groupResults, hitPayload, mergeResults, type OnlineHit } from './musicSearch'
+import { groupResults, hitPayload, matchWords, mergeResults, type OnlineHit } from './musicSearch'
+
+describe('matchWords', () => {
+  const s = { bpm: 149.6, key: 'G minor', genre: 'Dubstep', energyLevel: 'Intense', harmony: { track: { tonic: 'G', mode: 'Phrygian', notes: [] } } } as never
+  const ok = (q: string) => matchWords(q.split(' '), 'some title', s)
+  it('finds a track by key, mode, mood, energy, genre and tempo', () => {
+    for (const q of ['g minor', 'phryg', 'menacing', 'intense', 'dubstep 150', 'title']) expect(ok(q), q).toBe(true)
+    for (const q of ['dark', 'calm', 'dubstep 120', 'a minor']) expect(ok(q), q).toBe(false)
+  })
+  it('only matches the title without an analysis', () => {
+    expect(matchWords(['dark'], 'some title')).toBe(false)
+  })
+})
 
 const hit = (source: string, id: string): OnlineHit => ({
   library: 'online', source, track_id: id, title: id, artist: 'A', duration: 1, kind: 'track', thumb: '', url: '',

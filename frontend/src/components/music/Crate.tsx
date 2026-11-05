@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
 import { albumsOf } from '../../musicLibrary'
-import { metaLine, useSummary } from '../../musicMeta'
+import { metaLine, useSummaries, useSummary } from '../../musicMeta'
 import { resolveLink, type OnlineLink, type QueueState } from '../../musicQueue'
-import { hitPayload, saveHit, useMusicSearch, type OnlineHit } from '../../musicSearch'
+import { hitPayload, matchWords, saveHit, useMusicSearch, type OnlineHit } from '../../musicSearch'
 import { addTracks, nextIndex, type Ref } from './adding'
 import { toast } from './toast'
 import { fmtTime } from './format'
@@ -87,10 +87,12 @@ function useFinder(all: Entry[]) {
   const [paste, setPaste] = useState(false)
   const [pick, setPick] = useState<Stop | null>(null)
   const libs = useMemo(() => [...new Map(all.map(e => [e.library, e.libraryLabel])).entries()], [all])
+  const ids = useMemo(() => all.map(e => e.analysisId).filter(Boolean), [all])
+  const { get, v } = useSummaries(ids)
   const found = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-    return all.filter(e => (!lib || e.library === lib) && words.every(w => `${e.title} ${e.artist}`.toLowerCase().includes(w)))
-  }, [all, query, lib])
+    return all.filter(e => (!lib || e.library === lib) && matchWords(words, `${e.title} ${e.artist}`.toLowerCase(), get(e.analysisId)))
+  }, [all, query, lib, v]) // eslint-disable-line react-hooks/exhaustive-deps
   const q = query.trim()
   const search = useMusicSearch(q, 'all')
   const online = useMemo(() => {

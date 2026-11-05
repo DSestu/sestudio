@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { postDownloads } from './api'
 import type { MusicTrack } from './musicLibrary'
 import type { AddPayload } from './musicQueue'
+import type { Summary } from './musicMeta'
+import { moodOf } from './harmony'
 
 // One music search across the libraries and the online sources (SPEC-music §13.4).
 // The add panel's YouTube Music / SoundCloud tabs reuse searchMusic and the rows.
@@ -140,6 +142,21 @@ export function useMusicSearch(query: string, source: SearchSource, delay = 350)
     const sources = partsOf(source)
     return { res: mergeResults(q, sources, state.parts), pending: sources.filter(s => !state.parts[s]) }
   }, [state, key, q, source])
+}
+
+/** The words a track answers to besides its title: key, tonic, mode, mood, energy level and genre. */
+function analysisTokens(s: Summary): string[] {
+  const r = s.harmony?.track
+  const mode = r?.mode.toLowerCase() ?? ''
+  return [s.key, s.camelot, r?.tonic, mode, moodOf(r?.mode)?.word, s.energyLevel, s.genre].flatMap(x => x?.toLowerCase().split(/\s+/) ?? [])
+}
+
+/** Whether each query word is in the haystack (title, artist, album), a prefix of an analysis word
+ *  ("dark", "dors", "g minor", "intense", "dubstep"), or a tempo within 2 BPM ("150"). */
+export function matchWords(words: string[], hay: string, s?: Summary): boolean {
+  const tokens = s ? analysisTokens(s) : []
+  return words.every(w =>
+    hay.includes(w) || tokens.some(t => t.startsWith(w)) || (!!s?.bpm && /^\d{2,3}$/.test(w) && Math.abs(s.bpm - +w) <= 2))
 }
 
 /** What the queue takes for an online hit. */
