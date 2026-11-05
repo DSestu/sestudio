@@ -93,11 +93,11 @@ function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicT
       >
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-sm font-medium">{track.title}</span>
-          <span className="block truncate text-xs text-base-content/60">{track.artist}<MetaLine id={track.id} bpm={track.bpm} /></span>
+          <span className="block truncate text-xs text-base-content/60">{track.artist}<MetaLine id={track.id} bpm={track.bpm} title={track.title} /></span>
         </span>
         <span className="w-10 text-right text-xs text-base-content/60 tabular-nums">{formatDuration(track.duration)}</span>
       </button>
-      <TrackMeta id={track.id} bpm={track.bpm} />
+      <TrackMeta id={track.id} bpm={track.bpm} title={track.title} />
       <div className="dropdown dropdown-end">
         <button tabIndex={0} aria-label={`Add ${track.title}`} className="btn btn-ghost btn-circle btn-sm mr-1 relative hit">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
