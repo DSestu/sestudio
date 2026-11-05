@@ -45,6 +45,16 @@ export function inserted(items: FlowRef[], ref: FlowRef, at?: number): FlowRef[]
   return out
 }
 
+/**
+ * The lists that change when `ref` is dropped at `at` of flow `to`; `from` is the flow it was
+ * dragged out of (none: it comes from the picker). A flow's list is only touched when it changes.
+ */
+export function dropped(lists: Record<string, FlowRef[]>, ref: FlowRef, to: string, at?: number, from?: string): Record<string, FlowRef[]> {
+  const out = { [to]: inserted(lists[to] ?? [], ref, at) }
+  if (from && from !== to) Object.assign(out, { [from]: (lists[from] ?? []).filter(r => refKey(r) !== refKey(ref)) })
+  return out
+}
+
 // --- what a row shows -----------------------------------------------------------
 
 export interface Row {
