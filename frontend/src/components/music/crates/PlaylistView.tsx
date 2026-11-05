@@ -4,7 +4,8 @@ import {
   isSet, itemsOf, locate, playlistApi, statsOf,
   type PartStats, type PlaylistItem, type PlaylistNode,
 } from '../../../musicPlaylists'
-import { keyLabel } from '../../../musicMeta'
+import { keyDisplay } from '../../../harmony'
+import { useTheory } from '../../../musicTheory'
 import { join } from './proximity'
 import { post, useMusicQueue } from '../../../musicQueue'
 import { useSettings } from '../../../useSettings'
@@ -75,6 +76,7 @@ interface Meta {
   bpm?: number
   key?: string
   camelot?: string
+  harmony?: { track?: { tonic: string; mode: string } }
   genre?: string
   conf: number
 }
@@ -109,6 +111,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
   const title = track?.title ?? item.title ?? 'Missing track'
   const artist = track?.artist ?? item.artist ?? ''
   const duration = track?.duration ?? item.duration ?? 0
+  const key = keyDisplay(useTheory(), meta)
   return (
     <li
       draggable={!!ev.onDragStart}
@@ -128,7 +131,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
       </button>
       {item.library === 'online' && <span className="hidden sm:inline text-[11px] text-base-content/40">{item.source === 'ytmusic' ? 'YT Music' : 'YouTube'}</span>}
       {meta.genre && <span className="hidden sm:block"><GenreTag id={item.track_id} genre={meta.genre} conf={meta.conf} onChange={onGenre} /></span>}
-      {meta.camelot && <span className="rounded bg-white/8 px-1.5 py-0.5 text-[11px] leading-none tabular-nums text-base-content/70">{keyLabel(meta.key, meta.camelot)}</span>}
+      {key && <span className="inline-flex items-center gap-1.5 rounded bg-white/8 px-1.5 py-0.5 text-[11px] leading-none tabular-nums text-base-content/70">{key.color && <i className="inline-block size-2 rounded-full" style={{ background: key.color }} />}{key.text}</span>}
       {meta.bpm !== undefined && <span className="text-[11px] text-base-content/40 tabular-nums">{Math.round(meta.bpm)}<span className="hidden sm:inline"> bpm</span></span>}
       <span className="w-10 text-right text-xs text-base-content/60 tabular-nums">{formatDuration(duration)}</span>
       {ev.onRemove && (
@@ -277,7 +280,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   }
   const metaOf = (i: PlaylistItem): Meta => {
     const raw = rawOf(i.track_id)
-    return { bpm: raw?.bpm || byId.get(i.track_id)?.bpm, key: raw?.key, camelot: raw?.camelot, genre: raw?.genre, conf: raw?.genreConf ?? 1 }
+    return { bpm: raw?.bpm || byId.get(i.track_id)?.bpm, key: raw?.key, camelot: raw?.camelot, harmony: raw?.harmony, genre: raw?.genre, conf: raw?.genreConf ?? 1 }
   }
   const order = (mode: OrderMode, part?: string | 'whole') => {
     const ids = part && part !== 'whole' ? parts.find(p => p.id === part)!.items : items

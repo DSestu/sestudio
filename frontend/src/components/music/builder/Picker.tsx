@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { formatDuration, type MusicTrack } from '../../../musicLibrary'
 import { genreShort, metaLine, type Summary } from '../../../musicMeta'
 import { matchWords } from '../../../musicSearch'
+import { useTheory } from '../../../musicTheory'
 import { cost, join, type Join } from '../crates/proximity'
 import { proxOf, type Row } from './flows'
 
@@ -56,6 +57,7 @@ export default function Picker({ all, get, tail, flowName, flowColor, lanes, act
   onAdd: (t: MusicTrack) => void
   onDragStart: (t: MusicTrack) => void
 }) {
+  const theory = useTheory()
   const [query, setQuery] = useState('')
   const [genre, setGenre] = useState('')
   const [fitOnly, setFitOnly] = useState(false)
@@ -122,7 +124,7 @@ export default function Picker({ all, get, tail, flowName, flowColor, lanes, act
           >
             <span className="min-w-0 flex-1 leading-tight">
               <span className="block truncate text-sm font-medium">{t.title}</span>
-              <span className="block truncate text-xs text-base-content/60">{[t.artist, metaLine(get(t.id), t.bpm)].filter(Boolean).join(' · ')}</span>
+              <span className="block truncate text-xs text-base-content/60">{[t.artist, metaLine(get(t.id), t.bpm, theory)].filter(Boolean).join(' · ')}</span>
             </span>
             <Fits t={t} lanes={lanes} active={active} get={get} />
             <span className="text-xs tabular-nums text-base-content/50">{formatDuration(t.duration)}</span>

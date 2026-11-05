@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { clockSkew, getQueue, positionNow, useMusicQueue, type Analysis, type TrackInfo } from '../../musicQueue'
-import { keyLabel, useSummary } from '../../musicMeta'
+import { keyDisplay } from '../../harmony'
+import { useSummary } from '../../musicMeta'
+import { useTheory } from '../../musicTheory'
 import { engine, useSyncStatus } from './engine'
 import { fmtBpm } from './format'
 import { normBar0 } from './timeline/sampling'
@@ -36,7 +38,7 @@ export default function Title({ info, analysis }: { info?: TrackInfo; analysis: 
   const bpm = analysis?.bpm
   const sync = useSyncStatus()
   const summary = useSummary(info?.id)
-  const key = keyLabel(summary?.key, summary?.camelot)
+  const key = keyDisplay(useTheory(), summary)
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-2 text-[15px] text-base-content/60">
@@ -49,7 +51,7 @@ export default function Title({ info, analysis }: { info?: TrackInfo; analysis: 
             {sync ? `${fmtBpm(sync.from)} → ${fmtBpm(sync.to)}` : `${fmtBpm(bpm * engine.rate)} BPM`}
           </span>
         )}
-        {key && <span className="shrink-0 tabular-nums">{key}</span>}
+        {key && <span className="shrink-0 tabular-nums" style={{ color: key.color }}>{key.text}</span>}
       </div>
       <h2 className="mt-1 truncate font-bold leading-[.95] tracking-[-.04em] text-[clamp(2.25rem,8vw,6rem)] short:text-[32px] pb-1">
         {info?.title ?? ''}

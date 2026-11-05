@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { fmtBpm } from './components/music/format'
 import type { Reading } from './components/music/crates/proximity'
+import { DEFAULT_THEORY, keyDisplay, keyLabel, type Theory } from './harmony'
 
 // What a track row shows of the analysis: tempo, key, genre and balance. A
 // light summary, fetched for many rows in one request (the full analysis is
@@ -113,11 +114,7 @@ export function useAnalysing(id: string | undefined): boolean {
   return id !== undefined && busy && pending(known.get(id))
 }
 
-/** "F min (4A)": the key by name, then its Camelot code (A minor, B major) for mixing. */
-export const keyLabel = (key?: string, camelot?: string): string | undefined => {
-  const name = key?.replace(' minor', ' min').replace(' major', ' maj')
-  return name && camelot ? `${name} (${camelot})` : name || camelot
-}
+export { keyLabel }
 
 /** The short name of a genre for a chip, and its colour (a neutral grey for the genres with none). */
 const GENRE_SHORT: Record<string, string> = { 'Drum & Bass': 'DnB', Neurofunk: 'Neuro', 'Liquid Drum & Bass': 'Liquid', Electronic: 'Electro' }
@@ -136,8 +133,8 @@ export const genreShort = (g: string): string => GENRE_SHORT[g] ?? g
 export const genreColor = (g: string): string => GENRE_COLOR[g] ?? 'oklch(75% .02 265)'
 
 /** "174 · F min (4A) · Liquid": the one muted line phones show (and queue rows). */
-export const metaLine = (s: Summary | undefined, bpm?: number): string =>
-  [(s?.bpm || bpm) && fmtBpm((s?.bpm || bpm)!), keyLabel(s?.key, s?.camelot), s?.genre && genreShort(s.genre)].filter(Boolean).join(' · ')
+export const metaLine = (s: Summary | undefined, bpm?: number, theory: Theory = DEFAULT_THEORY): string =>
+  [(s?.bpm || bpm) && fmtBpm((s?.bpm || bpm)!), keyDisplay(theory, s)?.text, s?.genre && genreShort(s.genre)].filter(Boolean).join(' · ')
 
 /** Summaries of many tracks (a library view): the getter, and a number that changes as more arrive. */
 export function useSummaries(ids: string[]): { get: (id: string) => Summary | undefined; v: number } {
