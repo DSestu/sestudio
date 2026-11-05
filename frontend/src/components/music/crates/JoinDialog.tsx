@@ -87,7 +87,7 @@ export default function JoinDialog({ a, b, titleA, titleB, kept, onFix, onClose 
       </dl>
       {clash && (
         <div className="flex flex-wrap gap-2">
-          {onFix && <button onClick={() => { onClose(); onFix() }} className="btn btn-primary btn-sm">Fix this join</button>}
+          {onFix && <button onClick={() => { onClose(); onFix() }} className="btn btn-primary btn-sm">Fits between</button>}
           <button onClick={() => { onClose(); openHarmonyBasics(1) }} className="btn btn-ghost btn-sm">Why does this clash?</button>
         </div>
       )}

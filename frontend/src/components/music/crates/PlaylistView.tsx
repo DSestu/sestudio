@@ -10,7 +10,6 @@ import { join } from './proximity'
 import { post, useMusicQueue } from '../../../musicQueue'
 import { useSettings } from '../../../useSettings'
 import ClashTip from './ClashTip'
-import FixDialog from './FixDialog'
 import FitsNext from '../FitsNext'
 import ResponsiveModal from '../../ResponsiveModal'
 import { useModalBack } from '../../../useModalBack'
@@ -25,7 +24,7 @@ import ArcsWay from './build/ArcsWay'
 import GenreTag from './GenreTag'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
-import { autoOrder, bestReorders, countJoins, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder, type SetTrack } from './setBuilder'
+import { autoOrder, bestReorders, countJoins, isClash, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder, type SetTrack } from './setBuilder'
 import { useKeptJoins } from './useKeptJoins'
 
 const ORDERS: [OrderMode, string][] = [['harmonic', 'Harmonic path'], ['tempo', 'Smooth tempo'], ['energy', 'Energy arc']]
@@ -54,9 +53,9 @@ function summary(s: PartStats, genre?: string): string {
 
 interface Drop { part: string | null; index: number }
 
-function ChipLine({ chips = [], children }: { chips?: Chip[]; children?: ReactNode }) {
+function ChipLine({ id, selected, chips = [], children }: { id?: string; selected?: boolean; chips?: Chip[]; children?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 pb-1 pl-8 pr-3">
+    <div id={id} className={`flex flex-wrap items-center gap-1.5 pb-1 pl-8 pr-3 ${selected ? 'mx-1 mb-1 rounded-lg bg-primary/10 pt-1 ring-1 ring-primary/40' : ''}`}>
       {chips.map(c => (
         <span key={c.text} className={`rounded-full px-2 py-0.5 text-[11px] leading-none ${c.tone === 'warn' ? 'bg-warning/15 text-warning' : 'bg-white/5 text-base-content/60'}`}>{c.text}</span>
       ))}
@@ -98,6 +97,8 @@ interface RowProps {
   onToPart?: (part: string) => void
   /** The row is the inspector's target. */
   selected?: boolean
+  /** The inspector is on the join after this row. */
+  joinSelected?: boolean
   onSelect?: () => void
 }
 
@@ -144,7 +145,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
       )}
       </div>
       {meta.genre && <div className="pb-1 pl-8 sm:hidden"><GenreTag id={item.track_id} genre={meta.genre} conf={meta.conf} onChange={onGenre} /></div>}
-      {(chips || join) && <ChipLine chips={chips}>{join}</ChipLine>}
+      {(chips || join) && <ChipLine id={`join-${item.item_id}`} selected={ev.joinSelected} chips={chips}>{join}</ChipLine>}
     </li>
   )
 }
@@ -181,8 +182,6 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const [tick, reload] = useAnalyses(items.map(i => i.track_id))
   /** Flat index of the first track of the join shown in the dialog. */
   const [joinAt, setJoinAt] = useState<number>()
-  /** Same, for the fix dialog. */
-  const [fixAt, setFixAt] = useState<number>()
   const [kept, keep] = useKeptJoins(node.id)
   const wide = useWide()
   /** The inspector: open or not, the row picked, and whether the target is the join after it. */
@@ -243,7 +242,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     }
     return transitionChips(p, a, b, hint)
   }
-  /** The join to the next row, with a Fix that puts the best bridge track between them. */
+  /** The join to the next row; a clash's Fix and the + open Fits between for it. */
   const joinAfter = (item: PlaylistItem): ReactNode => {
     const i = flatIndex(item.item_id)
     if (smart || i < 0 || i >= items.length - 1) return undefined
@@ -251,7 +250,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     return (
       <JoinLine
         a={a} b={b} theory={settings.music_theory_level === 'theory'} kept={kept.has(keptKey(a, b))}
-        onOpen={() => setJoinAt(i)} onFix={() => setFixAt(i)} onInsert={() => insp ? pick(item, true) : setFixAt(i)}
+        onOpen={() => setJoinAt(i)} onFix={() => pick(item, true)} onInsert={() => pick(item, true)}
       />
     )
   }
@@ -266,22 +265,53 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const taken = items.map(i => i.track_id)
   const anchor = items[target] && byId.get(items[target].track_id)
   const then = between && items[target + 1] ? byId.get(items[target + 1].track_id) : undefined
-  const inspector = insp && !smart && (anchor ? (
-    <FitsNext
-      anchor={anchor} then={then} where={sel ? undefined : 'the last track'} library={library} exclude={taken}
-      action={{ label: 'Insert', onPick: insertAfterTarget }} onAfter={() => setBetween(false)} onClose={() => setInsp(false)}
-    />
-  ) : <p className="p-4 text-sm text-base-content/60">Add a track to see what fits next.</p>)
-  const titleAt = (i: number) => byId.get(items[i].track_id)?.title ?? items[i].title ?? 'Track'
-  const insertBetween = (i: number, id: string) => {
-    const at = locate(node, items[i].item_id)!
-    const t = byId.get(id)!
-    run(playlistApi.add(node.id, [{ library: t.library, track_id: id }], at.part ?? undefined, at.index + 1).then(() => toast(`Inserted ${t.title} between them`)))
+  /** Joins after a row that clash and were not kept, as flat indexes. */
+  const clashes = useMemo(() => flat.flatMap((t, i) => i < flat.length - 1 && isClash(join(t, flat[i + 1])) && !kept.has(keptKey(t, flat[i + 1])) ? [i] : []), [flat, kept])
+  const clashHere = between && clashes.includes(target)
+  /** Select the next clashing join after the current one, wrapping round, and bring it into view. */
+  const nextClash = () => {
+    const i = clashes.find(c => c > (between ? target : -1)) ?? clashes[0]
+    if (i === undefined) return
+    pick(items[i], true)
+    requestAnimationFrame(() => document.getElementById(`join-${items[i].item_id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
   }
+  const titleAt = (i: number) => byId.get(items[i].track_id)?.title ?? items[i].title ?? 'Track'
   const reorder = (r: Reorder, text: string) => {
     const { part, index } = placement(groups.map(g => ({ id: g.id, items: g.items.map(x => x.item_id) })), items[r.from].item_id, r.to)
     run(playlistApi.moveItem(node.id, items[r.from].item_id, index, part ?? undefined).then(() => toast(`${text}: clashes ${r.before} → ${r.after}`)))
   }
+  /** What else settles the clash under the Fits between list: the best swap and move, or keeping the join. */
+  const otherFixes = () => {
+    const { swap, move } = bestReorders(flat, target, kept)
+    const fixes = [
+      swap && { r: swap, text: `Swap ${titleAt(swap.from)} and ${titleAt(swap.to)}` },
+      move && { r: move, text: `Move ${titleAt(move.from)} to position ${move.to + 1}` },
+    ].filter(x => !!x)
+    const btn = 'btn btn-sm h-11 justify-between gap-3 font-normal sm:h-8'
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-base-content/60">Or fix the clash another way</p>
+        {fixes.map(x => (
+          // The pair under the panel changes with the order, so the panel goes back to the last track.
+          <button key={x.text} onClick={() => { reorder(x.r, x.text); setBetween(false); setSel(undefined) }} className={btn}>
+            <span className="truncate">{x.text}</span>
+            <span className="shrink-0 text-xs text-base-content/60">{x.r.before} → {x.r.after} {x.r.after === 1 ? 'clash' : 'clashes'}</span>
+          </button>
+        ))}
+        <button onClick={() => { keep(keptKey(flat[target], flat[target + 1])); toast('Kept: this join is no longer flagged') }} className={btn}>
+          <span>Keep this join</span>
+          <span className="text-xs text-base-content/60">stops being flagged</span>
+        </button>
+      </div>
+    )
+  }
+  const inspector = insp && !smart && (anchor ? (
+    <FitsNext
+      anchor={anchor} then={then} where={sel ? undefined : 'the last track'} library={library} exclude={taken}
+      action={{ label: 'Insert', onPick: insertAfterTarget }} onAfter={() => setBetween(false)} onClose={() => setInsp(false)}
+      footer={clashHere ? otherFixes() : undefined}
+    />
+  ) : <p className="p-4 text-sm text-base-content/60">Add a track to see what fits next.</p>)
   const metaOf = (i: PlaylistItem): Meta => {
     const raw = rawOf(i.track_id)
     return { bpm: raw?.bpm || byId.get(i.track_id)?.bpm, key: raw?.key, camelot: raw?.camelot, harmony: raw?.harmony, genre: raw?.genre, conf: raw?.genreConf ?? 1 }
@@ -331,7 +361,15 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
           <p className="text-sm text-base-content/60">
             {summary(total)}{isSet(node) && ` · ${parts.length} parts`}
             {!smart && joinCounts.clashes + joinCounts.jumps > 0 && (
-              <span className="text-warning">{joinCounts.clashes > 0 && ` · ${joinCounts.clashes} ${joinCounts.clashes === 1 ? 'clash' : 'clashes'}`}{joinCounts.jumps > 0 && ` · ${joinCounts.jumps} tempo ${joinCounts.jumps === 1 ? 'jump' : 'jumps'}`}</span>
+              <>
+                {joinCounts.clashes > 0 && (
+                  <>
+                    {' · '}
+                    <button onClick={nextClash} title="Next clash" className="relative hit rounded-full bg-warning/15 px-2.5 py-0.5 text-warning hover:brightness-125">{joinCounts.clashes} {joinCounts.clashes === 1 ? 'clash' : 'clashes'}</button>
+                  </>
+                )}
+                {joinCounts.jumps > 0 && <span className="text-warning">{` · ${joinCounts.jumps} tempo ${joinCounts.jumps === 1 ? 'jump' : 'jumps'}`}</span>}
+              </>
             )}
             {smart && ' · fills itself from the rules'}
           </p>
@@ -424,6 +462,7 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
                     parts={partRefs}
                     here={g.id}
                     selected={insp && !smart && flatIndex(item.item_id) === target}
+                    joinSelected={insp && !smart && between && flatIndex(item.item_id) === target}
                     {...(!smart && {
                       onDragStart: () => setDrag(item.item_id),
                       onDropHere: () => drop({ part: g.id, index: i }),
@@ -443,26 +482,9 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
       {joinAt !== undefined && items[joinAt + 1] && (
         <JoinDialog
           a={flat[joinAt]} b={flat[joinAt + 1]} titleA={titleAt(joinAt)} titleB={titleAt(joinAt + 1)} kept={kept.has(keptKey(flat[joinAt], flat[joinAt + 1]))}
-          onFix={() => setFixAt(joinAt)} onClose={() => setJoinAt(undefined)}
+          onFix={() => pick(items[joinAt], true)} onClose={() => setJoinAt(undefined)}
         />
       )}
-      {fixAt !== undefined && items[fixAt + 1] && (() => {
-        const [a, b] = [flat[fixAt], flat[fixAt + 1]]
-        const { swap, move } = bestReorders(flat, fixAt, kept)
-        const swapText = swap && `Swap ${titleAt(swap.from)} and ${titleAt(swap.to)}`
-        const moveText = move && `Move ${titleAt(move.from)} to position ${move.to + 1}`
-        return (
-          <FixDialog
-            a={items[fixAt].track_id} b={items[fixAt + 1].track_id} titleA={titleAt(fixAt)} titleB={titleAt(fixAt + 1)}
-            clash={join(a, b).kind === 'clash' && !kept.has(keptKey(a, b))} exclude={items.map(x => x.track_id)} library={byId}
-            swap={swap && { ...swap, text: swapText! }} move={move && { ...move, text: moveText! }}
-            onInsert={id => insertBetween(fixAt, id)}
-            onReorder={r => reorder(r, r === swap ? swapText! : moveText!)}
-            onKeep={() => { keep(keptKey(a, b)); toast('Kept: this join is no longer flagged') }}
-            onClose={() => setFixAt(undefined)}
-          />
-        )
-      })()}
       {editing && <SmartForm node={node} onClose={() => setEditing(false)} />}
       {arcs && (
         <ResponsiveModal onClose={() => setArcs(false)} boxClassName="max-w-3xl max-sm:h-full max-sm:max-h-full max-sm:rounded-none">
