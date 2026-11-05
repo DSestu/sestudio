@@ -23,18 +23,19 @@ function Level({ label, value }: { label: string; value?: number }) {
 }
 
 /** One join opened: what changes in the notes, the mood, the energy, the genre and the tempo, with a way to hear it. */
-export default function JoinDialog({ a, b, titleA, titleB, onFix, onClose }: {
+export default function JoinDialog({ a, b, titleA, titleB, kept, onFix, onClose }: {
   a: SetTrack
   b: SetTrack
   titleA: string
   titleB: string
+  kept?: boolean
   /** Offered for a clash. */
   onFix?: () => void
   onClose: () => void
 }) {
   useModalBack(true, onClose)
   const j = join(a, b)
-  const clash = isClash(j)
+  const clash = isClash(j) && !kept
   const [x, y] = [read(a), read(b)]
   const onlyA = x && y ? x.notes.filter(p => !y.notes.includes(p)) : []
   const onlyB = x && y ? y.notes.filter(p => !x.notes.includes(p)) : []

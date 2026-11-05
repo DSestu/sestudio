@@ -76,14 +76,53 @@ export function transitionChips(p: Plan, a: SetTrack, b: SetTrack, hint?: string
 
 export const isClash = (j: Join) => j.kind === 'clash'
 
-/** Clashes and tempo jumps over a run of tracks, for the set header. */
-export function countJoins(tracks: SetTrack[]): { clashes: number; jumps: number } {
+/** A join the mixer chose to keep, as `kept` holds it: item ids, "a>b". */
+export const keptKey = (a: { id: string }, b: { id: string }) => `${a.id}>${b.id}`
+
+/** Clashes and tempo jumps over a run of tracks, for the set header; joins in `kept` don't count as clashes. */
+export function countJoins(tracks: SetTrack[], kept: ReadonlySet<string> = new Set()): { clashes: number; jumps: number } {
   let clashes = 0
   let jumps = 0
   for (let i = 1; i < tracks.length; i++) {
     const j = join(tracks[i - 1], tracks[i])
-    if (isClash(j)) clashes++
+    if (isClash(j) && !kept.has(keptKey(tracks[i - 1], tracks[i]))) clashes++
     if (j.tempoJump) jumps++
   }
   return { clashes, jumps }
+}
+
+/** Moving the track at `from` so it ends at index `to`. */
+export function moved<T>(list: T[], from: number, to: number): T[] {
+  const out = [...list]
+  out.splice(to, 0, ...out.splice(from, 1))
+  return out
+}
+
+/** A reorder that leaves fewer clashes: the track at `from` goes to `to`. */
+export interface Reorder { from: number; to: number; before: number; after: number }
+
+/** For the clash between tracks i and i+1: the best swap with a neighbour and the best move of either to anywhere, when they cut clashes. */
+export function bestReorders(tracks: SetTrack[], i: number, kept: ReadonlySet<string> = new Set()): { swap?: Reorder; move?: Reorder } {
+  const before = countJoins(tracks, kept).clashes
+  const swaps = [[i, i - 1], [i, i + 1], [i + 1, i + 2]].filter(([, to]) => to >= 0 && to < tracks.length)
+  const pick = (cands: number[][]): Reorder | undefined => {
+    const best = cands
+      .map(([from, to]) => ({ from, to, before, after: countJoins(moved(tracks, from, to), kept).clashes }))
+      .sort((x, y) => x.after - y.after || Math.abs(x.to - x.from) - Math.abs(y.to - y.from))[0]
+    return best && best.after < before ? best : undefined
+  }
+  const moves = [i, i + 1].flatMap(from => tracks.map((_, to) => [from, to])).filter(([from, to]) => Math.abs(to - from) > 1)
+  return { swap: pick(swaps), move: pick(moves) }
+}
+
+/** Where the server should put item `id` so it ends at flat index `to`: its part, and its index among that part without it. */
+export function placement(groups: { id: string | null; items: string[] }[], id: string, to: number): { part: string | null; index: number } {
+  const rest = groups.map(g => ({ id: g.id, items: g.items.filter(x => x !== id) }))
+  let seen = 0
+  for (const g of rest) {
+    if (to <= seen + g.items.length) return { part: g.id, index: to - seen }
+    seen += g.items.length
+  }
+  const last = rest[rest.length - 1]
+  return { part: last.id, index: last.items.length }
 }
