@@ -192,10 +192,45 @@ export function meanF(c: Float64Array, a: number, b: number): number {
   return B - A < 1e-6 ? 0 : (at(b) - at(a)) / (B - A)
 }
 
+/** The visible items' indices by start, their starts in that order, and the longest track: `cov` looks up the few
+ *  items a window can touch instead of scanning the whole queue for every point. */
+let byStart = new Int32Array(0)
+let starts = new Float64Array(0)
+let maxDur = 0
+const near: number[] = []
+
+function indexStarts(items: DrawItem[]): void {
+  const n = items.length
+  if (byStart.length < n) { byStart = new Int32Array(n * 2); starts = new Float64Array(n * 2) }
+  maxDur = 0
+  for (let i = 0; i < n; i++) { byStart[i] = i; maxDur = Math.max(maxDur, items[i].track.dur) }
+  // Already in order outside a queue morph; insertion sort is linear then.
+  for (let i = 1; i < n; i++) {
+    const v = byStart[i], a = items[v].a
+    let j = i - 1
+    while (j >= 0 && items[byStart[j]].a > a) { byStart[j + 1] = byStart[j]; j-- }
+    byStart[j + 1] = v
+  }
+  for (let i = 0; i < n; i++) starts[i] = items[byStart[i]].a
+}
+
+/** First position in `starts[0..n)` whose value is >= v. */
+function lower(n: number, v: number): number {
+  let lo = 0, hi = n
+  while (lo < hi) { const m = (lo + hi) >> 1; if (starts[m] < v) lo = m + 1; else hi = m }
+  return lo
+}
+
 /** Crossfade-weighted sum of the three groups over the window [s0, s1] (screen-time). */
 function cov(items: DrawItem[], s0: number, s1: number, out: Float64Array): void {
   out[0] = out[1] = out[2] = 0
-  for (const j of items) {
+  // Only items starting in (s0 - maxDur, s1] can overlap the window; the second runs a second wider either side,
+  // and the loop below still drops the ones that miss. They are summed in queue order, as a full scan would.
+  near.length = 0
+  for (let k = lower(items.length, s0 - maxDur - 1), e = lower(items.length, s1 + 1); k < e; k++) near.push(byStart[k])
+  for (let k = 1; k < near.length; k++) if (near[k] < near[k - 1]) { near.sort((p, q) => p - q); break }
+  for (const ix of near) {
+    const j = items[ix]
     const o0 = Math.max(0, s0 - j.a)
     const o1 = Math.min(j.track.dur, s1 - j.a)
     if (o1 <= o0) continue
@@ -286,6 +321,7 @@ export function sample(items: DrawItem[], M: Mapper, out: Points): void {
   out.n = 0
   visible.length = 0
   for (const it of items) if (it.sc > 0.001) visible.push(it)
+  indexStarts(visible)
   // Items are already in queue order, which is also the order of their audible starts.
   for (let n = 0; n < visible.length; n++) {
     const it = visible[n]

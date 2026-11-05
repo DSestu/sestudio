@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
 import { frameAt, getMode, titleWidth, MODE_MS, ModeMotion, pull, setMode, useMode } from './mode'
-import { closePlayer, closeThen, usePosition, useTvSound } from './player'
+import { closePlayer, closeThen, useTvSound } from './player'
 import PlayerSearch from './PlayerSearch'
 import Crate, { LibraryList } from './Crate'
 import { wake } from './idle'
@@ -59,7 +59,6 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const item = q.items[q.current]
   const track = item && info(item.track_id)
   const analysis = useAnalysis(item?.track_id)
-  const position = usePosition(q, track?.duration ?? 0)
   const touch = useRef<number | null>(null)
   const [reveal, setReveal] = useState<Reveal>('off')
   const adding = reveal !== 'off'
@@ -559,7 +558,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
         onAim={at => { setAim(at); setReveal('pinned') }}
       />
       <div ref={transportEl} className="absolute left-0 top-0">
-        <Transport q={q} position={position} duration={track?.duration ?? 0} tv={tv} compact={expanded && isPhone(vw.W) && !isShort(vw.W, vw.H)} />
+        <Transport q={q} duration={track?.duration ?? 0} tv={tv} compact={expanded && isPhone(vw.W) && !isShort(vw.W, vw.H)} />
       </div>
       <div ref={queueEl} className="absolute" onPointerEnter={hoverIn} onPointerLeave={hoverOut}>
         <Queue

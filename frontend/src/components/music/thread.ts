@@ -65,8 +65,13 @@ export function useCanvas(draw: (g: CanvasRenderingContext2D, w: number, h: numb
   useEffect(() => {
     const c = ref.current
     if (!c) return
-    const run = () => {
-      const { width: w, height: h } = c.getBoundingClientRect(), dpr = devicePixelRatio || 1
+    let last = ''
+    const run = (w: number, h: number) => {
+      const dpr = devicePixelRatio || 1
+      // The observer's first call repeats the mount's size: nothing to redraw.
+      const key = `${w}|${h}|${dpr}`
+      if (key === last) return
+      last = key
       c.width = Math.round(w * dpr)
       c.height = Math.round(h * dpr)
       const g = c.getContext('2d')!
@@ -74,8 +79,12 @@ export function useCanvas(draw: (g: CanvasRenderingContext2D, w: number, h: numb
       g.clearRect(0, 0, w, h)
       draw(g, w, h)
     }
-    run()
-    const ro = new ResizeObserver(run)
+    const r = c.getBoundingClientRect()
+    run(r.width, r.height)
+    // The size comes with the entry: reading the box after a redraw would force a layout per canvas, and a
+    // queue sheet resizing through the mode switch resizes every row's canvas on every frame.
+    // shortcut: the entry's size ignores CSS transforms (the mount's read does not); fine while no scaled box holds one.
+    const ro = new ResizeObserver(([e]) => run(e.contentRect.width, e.contentRect.height))
     ro.observe(c)
     return () => ro.disconnect()
   }, deps) // eslint-disable-line react-hooks/exhaustive-deps

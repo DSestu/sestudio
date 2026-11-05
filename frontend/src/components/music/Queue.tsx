@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { metaLine, useSummary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
-import { queueActions, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
+import { getQueue, queueActions, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
 import { removeItem } from './adding'
 import { ARCS, setAutopilot, useAutopilot } from './autopilot'
 import JoinChip from './crates/JoinChip'
@@ -30,9 +30,13 @@ interface RowProps {
   tv: boolean
   /** The queue's energy scale, for the row's thread. */
   range: Range | null
+  /** Bumps when analyses arrive: the thread reads them at render. */
+  v: number
 }
 
-function Row({ item, info, playing, source, leaving, tv, range }: RowProps) {
+// Memoised: the Layer re-renders on every mode change and queue tick, and a long queue re-rendering all its rows
+// stalls the frame. `source` is rebuilt each render but reads the queue through a ref, so only its index counts.
+const Row = memo(function Row({ item, info, playing, source, leaving, tv, range }: RowProps) {
   const theory = useTheory()
   const analysis = useSummary(item.library === 'online' ? undefined : item.track_id)
   const el = useRef<HTMLDivElement>(null)
@@ -66,8 +70,9 @@ function Row({ item, info, playing, source, leaving, tv, range }: RowProps) {
       tabIndex={0}
       data-row
       {...(!leaving && { 'data-item': item.item_id })}
+      // Off-screen rows skip layout and paint (a long queue re-flows on every frame of the mode switch); 50 px is a row's height.
       aria-current={playing || undefined}
-      className={`group relative overflow-hidden cursor-pointer select-none touch-pan-y transition-opacity duration-[350ms] data-[played=1]:opacity-[.42] ${leaving ? 'pointer-events-none' : ''}`}
+      className={`group relative overflow-hidden [content-visibility:auto] [contain-intrinsic-height:auto_50px] cursor-pointer select-none touch-pan-y transition-opacity duration-[350ms] data-[played=1]:opacity-[.42] ${leaving ? 'pointer-events-none' : ''}`}
       onClick={go}
       onKeyDown={e => { if (e.key === 'Enter') go(); else if (e.key === 'Delete' || e.key === 'Backspace') remove?.() }}
       onPointerDown={leaving ? undefined : e => {
@@ -103,7 +108,7 @@ function Row({ item, info, playing, source, leaving, tv, range }: RowProps) {
       </div>
     </div>
   )
-}
+}, (a, b) => a.item === b.item && a.info === b.info && a.playing === b.playing && a.tv === b.tv && a.range === b.range && a.v === b.v && a.source.from === b.source.from && !a.leaving === !b.leaving)
 
 interface Leaving {
   item: QueueItem
@@ -131,7 +136,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
 }) {
   const list = useRef<HTMLDivElement>(null)
   const ids = q.items.map(i => i.track_id)
-  useAnalyses(ids)
+  const [v] = useAnalyses(ids)
   const range = rangeOf(ids)
   const seen = useRef<{ ids: string[]; tops: Map<string, number> }>({ ids: [], tops: new Map() })
 
@@ -208,7 +213,8 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
 
   const source = (i: number, item: QueueItem): DragSource => ({
     from: i,
-    cur: () => q.current,
+    // The live queue, not this render's: a memoised row keeps the source of its last render.
+    cur: () => getQueue().current,
     onDrop: at => {
       dropped = item.item_id
       void queueActions.move(item.item_id, at > i ? at - 1 : at)
@@ -304,6 +310,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             source={source(i, item)}
             tv={tv}
             range={range}
+            v={v}
             leaving={gone ? () => setLeaving(l => l.filter(x => x.item.item_id !== item.item_id)) : undefined}
           />
         ))}
