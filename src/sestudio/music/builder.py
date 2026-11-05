@@ -67,6 +67,11 @@ def _genre_at(segments: list[dict[str, Any]], x: float) -> str:
     return next((s["g"] for s in segments if x <= s["x1"]), segments[-1]["g"])
 
 
+def _song(t: dict[str, Any]) -> tuple[Any, ...]:
+    """What copies of one recording share; a track without a length is only itself."""
+    return (t["duration"], t.get("bpm")) if t.get("duration") else (t["id"],)
+
+
 def jitter(track_id: str, seed: int) -> float:
     """0..1, the same for the same track and seed (FNV-1a; Python's hash() changes per run)."""
     h = 2166136261
@@ -118,8 +123,10 @@ def build_arc(
     previous slot, None for the first) so screens can draw and flag the set.
     """
     used = {*skip, *([start["id"]] if start else [])}
-    left = [t for t in pool if t["id"] not in used]
     out = [start] if start else []
+    # One file in two libraries or folders has two ids but the same decoded length and tempo.
+    songs = {_song(t) for t in out}
+    left = [t for t in pool if t["id"] not in used and _song(t) not in songs]
     elapsed = float(start.get("duration") or 0) if start else 0.0
     while elapsed < length and len(out) < MAX_TRACKS:
         x = min(1.0, (elapsed + LOOKAHEAD) / length)
@@ -138,7 +145,7 @@ def build_arc(
             break
         _, _, best = min(ranked, key=lambda r: r[:2])
         out.append(best)
-        left.remove(best)
+        left = [t for t in left if t is not best and _song(t) != _song(best)]
         elapsed += float(best.get("duration") or 0)
     joins = [None, *(proximity.join(a, b) for a, b in zip(out, out[1:]))] if out else []
     return {
