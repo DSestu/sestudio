@@ -16,7 +16,7 @@ import uuid
 from typing import Any
 
 from sestudio import library
-from sestudio.music import genres
+from sestudio.music import genres, store
 
 KINDS = ("folder", "playlist", "smart")
 DAY = 86400
@@ -50,6 +50,9 @@ def clean_rules(raw: dict[str, Any]) -> dict[str, Any]:
         "bpm_min": num("bpm_min"),
         "bpm_max": num("bpm_max"),
         "added_days": num("added_days"),
+        "mood_min": num("mood_min"),
+        "mood_max": num("mood_max"),
+        "energy_min": num("energy_min"),
         "never_played": bool(raw.get("never_played")),
     }
 
@@ -406,6 +409,15 @@ def matches(
             return False
         if rules.get("bpm_max") is not None and bpm > rules["bpm_max"]:
             return False
+    for key, field, ok in (
+        ("mood_min", "brightness", lambda v, r: v >= r),
+        ("mood_max", "brightness", lambda v, r: v <= r),
+        ("energy_min", "energy", lambda v, r: v >= r),
+    ):
+        if rules.get(key) is not None and (
+            track.get(field) is None or not ok(track[field], rules[key])
+        ):
+            return False
     days = rules.get("added_days")
     if days is not None and track["mtime"] < now - days * DAY:
         return False
@@ -444,6 +456,16 @@ def evaluate(
                     chunk,
                 )
             )
+    # Mood and energy are served by the store (mode overrides, library-wide scale); it takes the lock itself.
+    if any(rules.get(k) is not None for k in ("mood_min", "mood_max", "energy_min")):
+        for start in range(0, len(ids), 500):
+            for tid, a in store.get(ids[start : start + 500]).items():
+                info.setdefault(tid, {}).update(
+                    brightness=((a.get("harmony") or {}).get("track") or {}).get(
+                        "brightness"
+                    ),
+                    energy=(a.get("energyScale") or {}).get("track"),
+                )
     return [
         {"library": c.get("library", "local"), "track_id": c["track_id"]}
         for c in candidates

@@ -26,6 +26,10 @@ export interface SmartRules {
   bpm_max: number | null
   added_days: number | null
   never_played: boolean
+  /** Brightness on the mood ladder (-3 Unstable .. 3 Floating), and the energy score 0..100; absent on lists made before. */
+  mood_min?: number | null
+  mood_max?: number | null
+  energy_min?: number | null
 }
 export interface PlaylistNode {
   id: string
