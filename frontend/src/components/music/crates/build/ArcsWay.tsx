@@ -13,8 +13,11 @@ import { useBuilt, usePresets } from './useBuilt'
 /** "Draw the arcs": energy, mood and genre over time; the set follows the lines. */
 export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack> }) {
   const presets = usePresets()
+  const names = Object.keys(presets)
+  // A preset sets all three lanes; the first edit makes the arc a custom one.
+  const [preset, setPreset] = useState<string>()
   const [drawn, setDrawn] = useState<Arc>()
-  const arc = drawn ?? Object.values(presets)[0]
+  const arc = drawn ?? presets[preset ?? names[0]]
   const [picked, setPicked] = useState<number>()
   const [length, setLength] = useState(45)
   const [variant, setVariant] = useState(0)
@@ -27,6 +30,13 @@ export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Shape">
+        {names.map(n => {
+          const on = !drawn && n === (preset ?? names[0])
+          return <button key={n} onClick={() => { setDrawn(undefined); setPreset(n); setPicked(undefined) }} aria-pressed={on} className={`btn btn-xs rounded-full ${on ? 'btn-primary' : 'btn-ghost border-white/15'}`}>{n}</button>
+        })}
+        <button aria-pressed={!!drawn} disabled={!drawn} className={`btn btn-xs rounded-full ${drawn ? 'btn-primary' : 'btn-ghost border-white/15'}`}>Custom</button>
+      </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Seg label="Length" options={LENGTHS.map(n => [n, `${n} min`])} value={length} onPick={setLength} />
         <button onClick={() => genre(addChange(arc.genre))} className="btn btn-xs btn-ghost border-white/15">+ Genre change</button>
