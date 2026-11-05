@@ -9,13 +9,13 @@ const name = (t: SetTrack) => {
 }
 
 /** How a track joins the next one, as chips: key move, energy step, genre change, tempo jump; a clash gets a Fix button. */
-export default function JoinLine({ a, b, theory, onFix }: { a: SetTrack; b: SetTrack; theory: boolean; onFix?: () => void }) {
+export default function JoinLine({ a, b, theory, onOpen, onFix }: { a: SetTrack; b: SetTrack; theory: boolean; onOpen?: () => void; onFix?: () => void }) {
   const j = join(a, b)
   const clash = isClash(j)
   const keys = theory && name(a) && name(b) ? `${name(a)} → ${name(b)} · ` : ''
   return (
     <>
-      {j.kindLabel && <span className={chip(clash)}>{keys}{j.kindLabel}{theory && j.shared !== null ? ` · ${j.shared} of 7 notes` : ''}</span>}
+      {j.kindLabel && <button onClick={onOpen} aria-label="Open this join" className={`${chip(clash)} cursor-pointer hover:brightness-125`}>{keys}{j.kindLabel}{theory && j.shared !== null ? ` · ${j.shared} of 7 notes` : ''}</button>}
       {j.energy.step && <span className={chip(false)}>Energy {j.energy.step}</span>}
       {j.genreChange && <span className={chip(false)}>{a.genre} → {b.genre}</span>}
       {j.tempoJump && <span className={chip(true)}>Tempo {Math.round(a.bpm!)} → {Math.round(b.bpm!)}</span>}

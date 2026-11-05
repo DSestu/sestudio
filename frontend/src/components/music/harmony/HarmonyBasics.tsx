@@ -3,7 +3,7 @@ import ResponsiveModal from '../../ResponsiveModal'
 import { useModalBack } from '../../../useModalBack'
 import StepBody from './steps'
 import { STEP_TITLES } from './titles'
-import { closeHarmonyBasics, useHarmonyBasicsOpen } from './store'
+import { closeHarmonyBasics, harmonyBasicsStep, useHarmonyBasicsOpen } from './store'
 
 /**
  * The beginner explainer: a dialog with the step list beside it on desktop, a full-screen pager with
@@ -16,7 +16,7 @@ export default function HarmonyBasics() {
 }
 
 function Basics() {
-  const [k, setK] = useState(0)
+  const [k, setK] = useState(harmonyBasicsStep)
   const last = k === STEP_TITLES.length - 1
   return (
     <ResponsiveModal

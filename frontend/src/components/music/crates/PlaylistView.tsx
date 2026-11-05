@@ -8,6 +8,7 @@ import { keyLabel } from '../../../musicMeta'
 import { post, useMusicQueue } from '../../../musicQueue'
 import { useSettings } from '../../../useSettings'
 import { fetchBridges } from './harmonyApi'
+import JoinDialog from './JoinDialog'
 import JoinLine from './JoinLine'
 import { toast } from '../toast'
 import { mixOf, rawOf, trackOf, useAnalyses } from '../mix/analysis'
@@ -162,6 +163,8 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
   const q = useMusicQueue()
   const [settings] = useSettings()
   const [tick, reload] = useAnalyses(items.map(i => i.track_id))
+  /** Flat index of the first track of the join shown in the dialog. */
+  const [joinAt, setJoinAt] = useState<number>()
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   /** A track with its analysis (the set builder's view of it); `id` defaults to the track's. */
   const setTrack = (trackId: string, duration: number, bpm?: number, id = trackId): SetTrack => {
@@ -220,7 +223,10 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     const i = flatIndex(item.item_id)
     if (smart || i < 0 || i >= items.length - 1) return undefined
     const [a, b] = [flat[i], flat[i + 1]]
-    const fix = () => {
+    return <JoinLine a={a} b={b} theory={settings.music_theory_level === 'theory'} onOpen={() => setJoinAt(i)} onFix={() => fixJoin(item, i)} />
+  }
+  const fixJoin = (item: PlaylistItem, i: number) => {
+    {
       const at = locate(node, item.item_id)!
       run(fetchBridges(item.track_id, items[i + 1].track_id, { exclude: items.map(x => x.track_id), limit: 1 }).then(async ({ results: [best] }) => {
         const t = best && byId.get(best.id)
@@ -229,7 +235,6 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
         toast(`Inserted ${t.title} between them`)
       }))
     }
-    return <JoinLine a={a} b={b} theory={settings.music_theory_level === 'theory'} onFix={fix} />
   }
   const metaOf = (i: PlaylistItem): Meta => {
     const raw = rawOf(i.track_id)
@@ -363,6 +368,13 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
             </section>
           )
         })
+      )}
+      {joinAt !== undefined && items[joinAt + 1] && (
+        <JoinDialog
+          a={flat[joinAt]} b={flat[joinAt + 1]}
+          titleA={byId.get(items[joinAt].track_id)?.title ?? items[joinAt].title ?? 'Track'} titleB={byId.get(items[joinAt + 1].track_id)?.title ?? items[joinAt + 1].title ?? 'Track'}
+          onFix={() => fixJoin(items[joinAt], joinAt)} onClose={() => setJoinAt(undefined)}
+        />
       )}
       {editing && <SmartForm node={node} onClose={() => setEditing(false)} />}
     </div>
