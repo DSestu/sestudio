@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
 import { albumsOf } from '../../musicLibrary'
+import { useLibraryTracks } from '../../musicLibraries'
 import { metaLine, useSummaries, useSummary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import { resolveLink, type OnlineLink, type QueueState } from '../../musicQueue'
@@ -67,12 +68,13 @@ const SHOWN = 60
 
 function useEntries(): Entry[] {
   const titles = useDownloadedLibrary()
+  const others = useLibraryTracks()
   return useMemo(
-    () => albumsOf(titles).flatMap(a => a.tracks).map(t => ({
+    () => [...albumsOf(titles).flatMap(a => a.tracks), ...others].map(t => ({
       key: `${t.library}/${t.id}`, title: t.title, artist: t.artist, duration: t.duration, bpm: t.bpm, analysisId: t.id,
       ref: { library: t.library, track_id: t.id }, library: t.library, libraryLabel: t.libraryLabel,
     })),
-    [titles],
+    [titles, others],
   )
 }
 
