@@ -240,8 +240,8 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     patchParams({ tab: tab === 'albums' ? undefined : tab, lib: library || undefined, genre: genre || undefined })
   }, [tab, library, genre])
   const inLibrary = useMemo(
-    () => matchTracks(all.filter(t => !library || (t.crate ?? t.library) === library), query),
-    [all, library, query],
+    () => matchTracks(all.filter(t => !library || (t.crate ?? t.library) === library), query, get),
+    [all, library, query, v], // eslint-disable-line react-hooks/exhaustive-deps
   )
   // Genres of what is listed, most common first.
   const genres = useMemo(() => {
