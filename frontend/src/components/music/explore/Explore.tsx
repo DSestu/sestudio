@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { MOOD_LADDER } from '../../../harmony'
 import type { MusicTrack } from '../../../musicLibrary'
 import { genreColor, type Summary } from '../../../musicMeta'
+import { fitsAfter } from '../crates/proximity'
+import { flowApi, inserted, newFlow, refOf, useFlows } from '../builder/flows'
+import ResponsiveModal from '../../ResponsiveModal'
+import { useModalBack } from '../../../useModalBack'
+import { playFrom } from '../player'
+import { toast } from '../toast'
+import { proxOf } from '../../../musicFits'
 import Seg from '../crates/build/Seg'
+import DotCard from './DotCard'
 import { dotOf, PAD, place, ringRadius, type Dot } from './place'
 
 const NOTES = ['C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯', 'A♭', 'E♭', 'B♭', 'F']
@@ -23,11 +31,26 @@ function useWidth() {
   return [ref, w] as const
 }
 
+const WIDE = '(min-width: 48rem)'
+const useWide = () => useSyncExternalStore(
+  cb => { const m = matchMedia(WIDE); m.addEventListener('change', cb); return () => m.removeEventListener('change', cb) },
+  () => matchMedia(WIDE).matches,
+)
+
 const label = 'fill-base-content/50 text-[11px]'
 
 /** Music › Explore: the tracks as dots, by mood and energy (Vibe) or by note set (Notes). Static SVG, drawn at the pixel size of its box. */
-export default function Explore({ tracks, get, v }: { tracks: MusicTrack[]; get: (id: string) => Summary | undefined; v: number }) {
+export default function Explore({ tracks, get, v, onPlaylist }: {
+  tracks: MusicTrack[]
+  get: (id: string) => Summary | undefined
+  v: number
+  onPlaylist: (t: MusicTrack) => void
+}) {
   const [view, setView] = useState<'vibe' | 'notes'>('vibe')
+  const [sel, setSel] = useState<string>()
+  const wide = useWide()
+  const { flows, loaded } = useFlows()
+  useModalBack(!wide && !!sel, () => setSel(undefined))
   const [box, w] = useWidth()
   const h = Math.round(w < 520 ? w * 1.1 : w * 0.78)
   const dots = useMemo(() => {
@@ -39,8 +62,32 @@ export default function Explore({ tracks, get, v }: { tracks: MusicTrack[]; get:
     return out
   }, [tracks, view, v]) // eslint-disable-line react-hooks/exhaustive-deps
   const R = ringRadius(w, h)
-  return (
-    <div className="flex flex-col gap-3">
+  const picked = sel ? dots.find(d => d.id === sel) : undefined
+  const track = picked && tracks.find(t => t.id === picked.id)
+  // The five tracks that fit best after the chosen one, as green lines.
+  const fits = useMemo(() => {
+    if (!track) return []
+    const placed = new Set(dots.map(d => d.id))
+    const pool = tracks.filter(t => placed.has(t.id)).map(t => proxOf(t, get(t.id)))
+    return fitsAfter(proxOf(track, get(track.id)), pool, { harmony: 'safe', tempo: 'any', genre: 'any' }, 5)
+      .map(f => dots.find(d => d.id === f.id)!)
+  }, [track, dots, tracks, v]) // eslint-disable-line react-hooks/exhaustive-deps
+  const addToFlow = async (t: MusicTrack) => {
+    const f = flows[flows.length - 1] ?? await newFlow('mix')
+    await flowApi.patch(f.id, { items: inserted(f.items, refOf(t)) })
+    toast(`Added to ${f.name}`)
+  }
+  const card = track && (
+    <DotCard
+      track={track}
+      s={get(track.id)}
+      onPlay={() => { void playFrom(tracks, track); setSel(undefined) }}
+      onFlow={() => { if (loaded) addToFlow(track).catch(() => {}) }}
+      onSet={() => onPlaylist(track)}
+    />
+  )
+  const map = (
+    <div className="flex flex-col gap-3 flex-1 min-w-0">
       <div className="flex flex-wrap items-center gap-3">
         <Seg label="Map" options={[['vibe', 'Vibe'], ['notes', 'Notes']]} value={view} onPick={setView} />
         <span className="text-xs text-base-content/60">{dots.length} of {tracks.length} tracks placed</span>
@@ -77,10 +124,21 @@ export default function Explore({ tracks, get, v }: { tracks: MusicTrack[]; get:
                 <text x={w / 2} y={h / 2 + 4} textAnchor="middle" className={label}>dark</text>
               </>
             )}
-            {dots.map(d => {
+            {picked && fits.map(f => {
+              const [x1, y1] = place(picked, view, w, h)
+              const [x2, y2] = place(f, view, w, h)
+              return <line key={f.id} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--color-success)" strokeOpacity={0.55} strokeWidth={1.5} />
+            })}
+            {[...dots.filter(d => d.id !== sel), ...(picked ? [picked] : [])].map(d => {
               const [x, y] = place(d, view, w, h)
+              const on = d.id === sel
               return (
-                <circle key={d.id} cx={x} cy={y} r={view === 'vibe' && w < 520 ? 4.5 : 6} fill={view === 'vibe' && d.genre ? genreColor(d.genre) : view === 'vibe' ? 'oklch(75% .02 265)' : moodColor(d.brightness)} fillOpacity={0.85}>
+                <circle
+                  key={d.id} cx={x} cy={y} r={on ? 9 : view === 'vibe' && w < 520 ? 4.5 : 6}
+                  fill={view === 'vibe' && d.genre ? genreColor(d.genre) : view === 'vibe' ? 'oklch(75% .02 265)' : moodColor(d.brightness)}
+                  fillOpacity={on ? 1 : 0.85} stroke={on ? '#fff' : 'transparent'} strokeWidth={on ? 2 : 12}
+                  className="cursor-pointer" onClick={() => setSel(on ? undefined : d.id)}
+                >
                   <title>{d.title}</title>
                 </circle>
               )
@@ -89,6 +147,17 @@ export default function Explore({ tracks, get, v }: { tracks: MusicTrack[]; get:
         )}
       </div>
       {view === 'notes' && <p className="text-xs text-base-content/60">Neighbours on the circle share 6 of 7 notes. The nearer the centre, the darker the mood.</p>}
+    </div>
+  )
+  return (
+    <div className="flex gap-4 items-start">
+      {map}
+      {wide && (
+        <aside className="w-64 shrink-0 sticky top-24">
+          {card ?? <p className="text-sm text-base-content/60 p-3">Pick a dot. Green lines go to the tracks that fit after it.</p>}
+        </aside>
+      )}
+      {!wide && card && <ResponsiveModal onClose={() => setSel(undefined)}>{card}</ResponsiveModal>}
     </div>
   )
 }
