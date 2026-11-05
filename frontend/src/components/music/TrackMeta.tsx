@@ -1,4 +1,4 @@
-import { keyLabel, metaLine, refreshSummary, useSummary } from '../../musicMeta'
+import { genreColor, genreShort, keyLabel, metaLine, refreshSummary, useSummary } from '../../musicMeta'
 import GenreTag from './crates/GenreTag'
 
 /** A track's analysis on a list row, wide screens: tempo, key chip (muted when unsure), genre tag. */
@@ -18,6 +18,12 @@ export default function TrackMeta({ id, bpm }: { id: string; bpm?: number }) {
 
 /** The same on phones, as one muted line to put after the artist: tempo · key · genre. */
 export function MetaLine({ id, bpm }: { id: string; bpm?: number }) {
-  const line = metaLine(useSummary(id), bpm)
-  return line ? <span className="sm:hidden text-base-content/40 tabular-nums"> · {line}</span> : null
+  const s = useSummary(id)
+  const line = metaLine(s && { ...s, genre: undefined }, bpm)
+  return line || s?.genre ? (
+    <span className="sm:hidden text-base-content/40 tabular-nums">
+      {line && ` · ${line}`}
+      {s?.genre && <> · <span className="font-medium" style={{ color: genreColor(s.genre) }}>{genreShort(s.genre)}</span></>}
+    </span>
+  ) : null
 }

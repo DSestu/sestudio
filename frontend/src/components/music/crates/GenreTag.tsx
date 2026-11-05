@@ -1,3 +1,4 @@
+import { genreColor, genreShort } from '../../../musicMeta'
 import { setGenre } from '../mix/analysis'
 import { GENRES } from './setBuilder'
 
@@ -24,9 +25,10 @@ export default function GenreTag({ id, genre, conf, source, onChange }: { id: st
       <button
         tabIndex={0}
         title={`${ORIGIN[source ?? 'rules'] ?? ''}${doubtful ? ' — not sure: confirm or change it' : ' — click to change'}`}
-        className={`rounded-full px-2 py-0.5 text-[11px] leading-none ${doubtful ? 'border border-dashed border-white/30 text-base-content/60' : 'bg-white/8 text-base-content/80'}`}
+        style={{ color: genreColor(genre) }}
+        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold leading-none ${doubtful ? 'border border-dashed border-current/50 opacity-70' : 'bg-white/8'}`}
       >
-        {genre}{doubtful && ` ${Math.round(conf * 100)}%`}
+        {genreShort(genre)}{doubtful && ` ${Math.round(conf * 100)}%`}
       </button>
       <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 max-h-72 w-52 flex-nowrap overflow-y-auto rounded-xl bg-base-200 p-1 shadow-lg">
         {doubtful && <li><button onClick={() => pick(genre)}>Confirm {genre}</button></li>}
