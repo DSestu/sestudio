@@ -10,7 +10,16 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from sestudio.config import load_config
-from sestudio.music import libraries, modes, online, proximity, runner, search, store
+from sestudio.music import (
+    builder,
+    libraries,
+    modes,
+    online,
+    proximity,
+    runner,
+    search,
+    store,
+)
 from sestudio.sites import SiteError
 from sestudio.web.routes.stream import _proxy_url
 
@@ -210,6 +219,42 @@ async def bridge_path(body: BridgeBody) -> dict[str, Any]:
 async def proximity_join(a: str = Query(...), b: str = Query(...)) -> dict[str, Any]:
     """The explained join from track a to track b."""
     return await asyncio.to_thread(lambda: proximity.join(_track(a, []), _track(b, [])))
+
+
+@router.get("/music/set/presets")
+async def set_presets() -> dict[str, Any]:
+    """The ready-made arcs (energy 0..1, mood -3..3, genre segments) the set builder starts from."""
+    return builder.PRESETS
+
+
+class BuildBody(BaseModel):
+    #: Arcs: ``energy`` and ``mood`` are evenly spaced points, ``genre`` is ``[{"g", "x1"}]``.
+    arc: dict[str, Any] | None = None
+    #: A name from ``/music/set/presets``, used when no ``arc`` is given.
+    preset: str | None = None
+    #: Wanted length in seconds.
+    length: float = Field(..., gt=0, le=6 * 3600)
+    #: "Try another" is a new seed; the same seed gives the same set.
+    seed: int = 0
+    #: A track the set opens with.
+    start: str | None = None
+    pool: list[str] | None = None
+    skip: list[str] = []
+
+
+@router.post("/music/set/build")
+async def build_set(body: BuildBody) -> dict[str, Any]:
+    """A set following the arcs: ``slots`` (id and join from the previous one), duration and flag counts."""
+    arc = body.arc or builder.PRESETS.get(body.preset or "")
+    if not arc or not arc.get("energy") or not arc.get("mood") or not arc.get("genre"):
+        raise HTTPException(status_code=400, detail="Give an arc or a known preset")
+
+    def run() -> dict[str, Any]:
+        pool = _pool(body.pool)
+        start = _track(body.start, pool) if body.start else None
+        return builder.build_arc(pool, arc, body.length, body.seed, start, body.skip)
+
+    return await asyncio.to_thread(run)
 
 
 @router.get("/music/online/link")

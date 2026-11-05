@@ -214,6 +214,13 @@ def test_analysis_api(db, root, tmp_path, monkeypatch):
         "kind"
         in c.get("/api/music/proximity/join", params={"a": ids[0], "b": ids[1]}).json()
     )
+    assert "Slow burn" in c.get("/api/music/set/presets").json()
+    built = c.post(
+        "/api/music/set/build",
+        json={"preset": "Slow burn", "length": 60, "start": ids[0]},
+    ).json()
+    assert built["slots"][0] == {"id": ids[0], "join": None}
+    assert c.post("/api/music/set/build", json={"length": 60}).status_code == 400
     assert c.get("/api/music/analysis/status").json()["total"] == 2
     assert c.post("/api/music/analysis/renormalise").json() == {"tracks": 2}
 
