@@ -233,6 +233,17 @@ def test_matches_unit():
     assert not playlists.matches(rules, track, now=100.0 + 2 * 86400)
 
 
+def test_matches_mood_and_energy():
+    t = {"mtime": 0.0, "brightness": -2, "energy": 70}
+    m = lambda **r: playlists.matches(playlists.clean_rules(r), t, now=0.0)  # noqa: E731
+    assert m(mood_max=-1, energy_min=60)  # "Dark & driving"
+    assert not m(mood_min=0)
+    assert not m(energy_min=80)
+    assert not playlists.matches(
+        playlists.clean_rules({"mood_max": 0}), {"mtime": 0.0}, now=0.0
+    )
+
+
 def test_reorder_items(client):
     pl = mk(client, "playlist", "P")
     got = client.post(

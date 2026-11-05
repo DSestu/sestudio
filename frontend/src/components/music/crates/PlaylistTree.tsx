@@ -5,6 +5,7 @@ import {
   type PlaylistNode, type SmartRules, type TreeNode,
 } from '../../../musicPlaylists'
 import { startPlayback } from '../player'
+import { MOOD_LADDER } from '../../../harmony'
 
 const run = (p: Promise<unknown>) => { p.catch(e => window.alert((e as Error).message)) }
 
@@ -64,10 +65,15 @@ export function SmartForm({ node, onClose }: { node?: PlaylistNode; onClose: () 
   const [max, setMax] = useState(r?.bpm_max?.toString() ?? '')
   const [days, setDays] = useState(r?.added_days?.toString() ?? '')
   const [never, setNever] = useState(r?.never_played ?? false)
+  const [moodSide, setMoodSide] = useState<'' | 'max' | 'min'>(r?.mood_max != null ? 'max' : r?.mood_min != null ? 'min' : '')
+  const [mood, setMood] = useState(String(r?.mood_max ?? r?.mood_min ?? -1))
+  const [energy, setEnergy] = useState(r?.energy_min?.toString() ?? '')
   const save = () => {
     const rules: Partial<SmartRules> = {
       genres: genres.split(',').map(g => g.trim()).filter(Boolean),
       bpm_min: num(min), bpm_max: num(max), added_days: num(days), never_played: never,
+      mood_max: moodSide === 'max' ? Number(mood) : null, mood_min: moodSide === 'min' ? Number(mood) : null,
+      energy_min: num(energy),
     }
     run((node
       ? playlistApi.rename(node.id, name || node.name).then(() => playlistApi.setRules(node.id, rules))
@@ -93,6 +99,28 @@ export function SmartForm({ node, onClose }: { node?: PlaylistNode; onClose: () 
             <input className={field} type="number" min={0} value={max} onChange={e => setMax(e.target.value)} />
           </label>
         </div>
+        <div className="flex gap-3">
+          <label className="flex-1 flex flex-col gap-1 text-xs">Mood
+            <select className="select select-bordered select-sm w-full" value={moodSide} onChange={e => setMoodSide(e.target.value as typeof moodSide)}>
+              <option value="">Any</option>
+              <option value="max">This or darker</option>
+              <option value="min">This or brighter</option>
+            </select>
+          </label>
+          <label className="flex-1 flex flex-col gap-1 text-xs">is
+            <select className="select select-bordered select-sm w-full" disabled={!moodSide} value={mood} onChange={e => setMood(e.target.value)}>
+              {MOOD_LADDER.map(m => <option key={m.mode} value={m.brightness}>{m.word}</option>)}
+            </select>
+          </label>
+        </div>
+        <label className="flex flex-col gap-1 text-xs">Energy at least
+          <select className="select select-bordered select-sm w-full" value={energy} onChange={e => setEnergy(e.target.value)}>
+            <option value="">Any</option>
+            <option value="25">Steady</option>
+            <option value="50">Driving</option>
+            <option value="75">Intense</option>
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-xs">Added within the last (days)
           <input className={field} type="number" min={0} value={days} onChange={e => setDays(e.target.value)} />
         </label>
