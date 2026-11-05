@@ -98,6 +98,8 @@ interface Props<T extends string> {
   onBack?: () => void
   /** The page's actions, behind the ⋯ button. */
   menu?: ReactNode
+  /** The page's one primary action: a plus icon button on the phone card, a labelled button on desktop. */
+  action?: { label: string; onClick: () => void }
   tabs?: HeaderTab<T>[]
   tab?: T
   onTab?: (id: T) => void
@@ -107,7 +109,7 @@ interface Props<T extends string> {
   wrapTitle?: boolean
 }
 
-export default function PageHeader<T extends string>({ title, status, onBack, menu, tabs, tab, onTab, away, wrapTitle }: Props<T>) {
+export default function PageHeader<T extends string>({ title, status, onBack, menu, action, tabs, tab, onTab, away, wrapTitle }: Props<T>) {
   useEffect(() => { pageHeaderMounted(1); return () => pageHeaderMounted(-1) }, [])
   const desk = useDeskSlots()
   const back = onBack && (
@@ -117,6 +119,7 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
       </svg>
     </button>
   )
+  const plus = <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
   const segmented = tabs && onTab && <Segmented tabs={tabs} tab={tab} onTab={onTab} />
   return (
     <>
@@ -124,6 +127,7 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
         <div className="flex items-center gap-2 min-h-11">
           {back}
           <CardTitle title={title} status={status} wrap={wrapTitle} />
+          {action && <button onClick={action.onClick} aria-label={action.label} className={`${GLASS_BUTTON} bg-primary/24 text-primary`}>{plus}</button>}
           {menu && <Menu>{menu}</Menu>}
           {!onBack && <ActivityBell />}
           {!onBack && <SettingsButton />}
@@ -138,7 +142,13 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
         </div>,
         desk.title,
       )}
-      {menu && desk.menu && createPortal(<Menu>{menu}</Menu>, desk.menu)}
+      {(menu || action) && desk.menu && createPortal(
+        <>
+          {action && <button onClick={action.onClick} className="btn btn-primary btn-sm gap-1.5 shrink-0">{plus}{action.label}</button>}
+          {menu && <Menu>{menu}</Menu>}
+        </>,
+        desk.menu,
+      )}
       {segmented && desk.tabs && createPortal(<div className="pb-3 w-fit min-w-96">{segmented}</div>, desk.tabs)}
     </>
   )

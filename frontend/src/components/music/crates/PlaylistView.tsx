@@ -20,7 +20,8 @@ import { toast } from '../toast'
 import { mixOf, rawOf, trackOf, useAnalyses } from '../mix/analysis'
 import { plan } from '../mix/plan'
 import { startPlayback, usePosition } from '../player'
-import { openBuildSet } from './build/store'
+import Apply from './build/Apply'
+import ArcsWay from './build/ArcsWay'
 import GenreTag from './GenreTag'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
@@ -152,6 +153,9 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
 export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId: ReadonlyMap<string, MusicTrack> }) {
   const [matches, setMatches] = useState<{ id: string; list: PlaylistItem[] }>()
   const [editing, setEditing] = useState(false)
+  /** The Draw the arcs editor, rebuilding this playlist. */
+  const [arcs, setArcs] = useState(false)
+  useModalBack(arcs, () => setArcs(false))
   const [drag, setDrag] = useState<string>()
   const smart = node.kind === 'smart'
   const rulesKey = JSON.stringify(node.rules)
@@ -333,17 +337,25 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
           </p>
         </div>
         {items.length > 0 && <button onClick={() => playPart()} className="btn btn-primary btn-sm">{isSet(node) ? 'Play set' : 'Play'}</button>}
-        {!smart && items.length > 1 && (
-          <>
-            <span className="hidden items-center gap-2 text-sm text-base-content/60 sm:flex">
-              Auto-order
-              <span className="join">{ORDERS.map(([mode, name]) => <button key={mode} onClick={() => order(mode, 'whole')} className="btn btn-sm join-item">{name}</button>)}</span>
-            </span>
-            <span className="sm:hidden">{orderMenu(isSet(node) ? 'Auto-order whole set' : 'Auto-order')}</span>
-          </>
+        {!smart && (
+          <div className="dropdown dropdown-end">
+            <button tabIndex={0} className="btn btn-ghost btn-sm relative hit gap-1.5">
+              <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.8 15.9L9 18.75l-.8-2.85a4.5 4.5 0 00-3.1-3.1L2.25 12l2.85-.8a4.5 4.5 0 003.1-3.1L9 5.25l.8 2.85a4.5 4.5 0 003.1 3.1l2.85.8-2.85.8a4.5 4.5 0 00-3.1 3.1zM18.3 8.7L18 9.75l-.3-1.05a3.4 3.4 0 00-2.3-2.3L14.25 6l1.15-.3a3.4 3.4 0 002.3-2.3L18 2.25l.3 1.15a3.4 3.4 0 002.3 2.3l1.15.3-1.15.3a3.4 3.4 0 00-2.3 2.4z" /></svg>
+              Shape ▾
+            </button>
+            <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 w-56 rounded-xl bg-base-200 p-1 shadow-lg max-sm:[&_li>button]:min-h-11">
+              {items.length > 1 && (
+                <>
+                  <li className="menu-title">Auto-order{isSet(node) && ' the whole set'}</li>
+                  {ORDERS.map(([mode, name]) => <li key={mode}><button onClick={() => { blur(); order(mode, 'whole') }}>{name}</button></li>)}
+                  <li className="my-0.5 h-px bg-white/10 p-0" aria-hidden="true" />
+                </>
+              )}
+              <li><button onClick={() => { blur(); setArcs(true) }}>Draw the arcs…</button></li>
+            </ul>
+          </div>
         )}
         {!smart && <button onClick={() => setInsp(o => !o)} aria-pressed={insp} className={`btn btn-sm ${insp ? 'btn-primary btn-soft' : 'btn-ghost'}`}>Fits next</button>}
-        {!smart && <button onClick={() => openBuildSet({ node: node.id })} className="btn btn-ghost btn-sm">Build a set</button>}
         {smart ? (
           <button onClick={() => setEditing(true)} className="btn btn-ghost btn-sm">Edit rules</button>
         ) : (
@@ -452,6 +464,16 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
         )
       })()}
       {editing && <SmartForm node={node} onClose={() => setEditing(false)} />}
+      {arcs && (
+        <ResponsiveModal onClose={() => setArcs(false)} boxClassName="max-w-3xl max-sm:h-full max-sm:max-h-full max-sm:rounded-none">
+          <div className="mb-3 flex items-center gap-2">
+            <h3 className="font-semibold">Draw the arcs</h3>
+            <span className="truncate text-xs text-base-content/60">for {node.name}</span>
+            <button onClick={() => setArcs(false)} aria-label="Close" className="btn btn-ghost btn-sm btn-circle relative hit ml-auto">✕</button>
+          </div>
+          <ArcsWay byId={byId} actions={(ids, again) => <Apply ids={ids} byId={byId} onAnother={again} node={node} onDone={() => setArcs(false)} />} />
+        </ResponsiveModal>
+      )}
     </div>
     {inspector && wide && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{inspector}</aside>}
     {inspector && !wide && (

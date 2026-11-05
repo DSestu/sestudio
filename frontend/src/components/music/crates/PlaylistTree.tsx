@@ -138,7 +138,7 @@ export function SmartForm({ node, onClose }: { node?: PlaylistNode; onClose: () 
 }
 
 /** PLAYLISTS (folders, playlists, sets) and SMART LISTS under the libraries. */
-export default function PlaylistTree({ active, onPick }: { active: string; onPick: (id: string) => void }) {
+export default function PlaylistTree({ active, onPick, onNew }: { active: string; onPick: (id: string) => void; onNew: () => void }) {
   const nodes = usePlaylists()
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [form, setForm] = useState(false)
@@ -151,9 +151,9 @@ export default function PlaylistTree({ active, onPick }: { active: string; onPic
     return { rows: all.filter(r => r.node.kind !== 'smart'), smart: nodes.filter(n => n.kind === 'smart').map(n => ({ ...n, children: [] })), folders: folderList }
   }, [nodes, collapsed])
   const toggle = (id: string) => setCollapsed(s => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n })
-  const create = (kind: 'playlist' | 'folder') => {
-    const name = window.prompt(kind === 'playlist' ? 'New playlist' : 'New folder')
-    if (name?.trim()) run(playlistApi.create(kind, name).then(n => kind === 'playlist' && onPick(n.id)))
+  const newFolder = () => {
+    const name = window.prompt('New folder')
+    if (name?.trim()) run(playlistApi.create('folder', name))
   }
   const cell = (n: TreeNode, depth: number, label: string) => (
     <li key={n.id} className="flex items-center" style={{ paddingLeft: depth * 14 }}>
@@ -184,8 +184,8 @@ export default function PlaylistTree({ active, onPick }: { active: string; onPic
         <div className="flex items-center justify-between px-3 pb-1">
           <h3 className="text-[11px] font-semibold tracking-wider text-base-content/50">PLAYLISTS</h3>
           <span className="flex gap-1">
-            <button onClick={() => create('playlist')} className="btn btn-ghost btn-xs">New playlist</button>
-            <button onClick={() => create('folder')} className="btn btn-ghost btn-xs">New folder</button>
+            <button onClick={onNew} className="btn btn-ghost btn-xs">New playlist</button>
+            <button onClick={newFolder} className="btn btn-ghost btn-xs">New folder</button>
           </span>
         </div>
         <ul className="flex flex-col gap-0.5">{rows.map(r => cell(r.node, r.depth, label(r.node)))}</ul>
