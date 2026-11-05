@@ -129,6 +129,19 @@ describe('sampling grid', () => {
     expect(tight).toBeLessThan(pts.n * 0.02)
   })
 
+  it('draws the same curve whatever the queue holds far from the view', () => {
+    const tracks = Array.from({ length: 300 }, (_, i) => noisy(`t${i}`, 120 + (i % 7) * 30, 120 + (i % 5) * 10, 0.2, i + 1))
+    const lay = layoutQueue(tracks)
+    const G = lay.TS[150] + 40
+    const at = (lo: number, hi: number) => {
+      const items: DrawItem[] = tracks.slice(lo, hi).map((track, k) => ({ track, span: lay.spans[lo + k], a: lay.TS[lo + k] - G, sc: 1, hl: 0 }))
+      const pts = new Points()
+      sample(items, new Mapper(1280, 800).at(0), pts)
+      return [...pts.x.subarray(0, pts.n), ...pts.s[0].subarray(0, pts.n), ...pts.s[2].subarray(0, pts.n)]
+    }
+    expect(at(0, 300)).toEqual(at(140, 175))
+  })
+
   it('keeps every point near the screen when the track started minutes ago (expanded)', () => {
     const { items, lay } = scene()
     const M = new Mapper(1280, 800).at(1)

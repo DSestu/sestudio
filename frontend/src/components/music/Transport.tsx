@@ -5,7 +5,7 @@ import { fmtTime } from './format'
 import { wake } from './idle'
 import { rawOf, useAnalyses } from './mix/analysis'
 import { bar as hold } from './scrub'
-import { togglePlay } from './player'
+import { togglePlay, usePosition } from './player'
 import CastStrip from './CastStrip'
 import SendToTv from './SendToTv'
 import { drawThread, rangeOf, useCanvas } from './thread'
@@ -159,7 +159,9 @@ const stepBtn = 'size-12 short:size-10 rounded-xl bg-white/6 grid place-items-ce
 
 /** Seek row and transport (SPEC-music-player §5.6). The cast button and the "Playing on" strip sit with it.
  * On a phone on its side it is one row: previous, play, next, the seek bar, cast; the "Playing on" strip floats above it. */
-export default function Transport({ q, position, duration, tv = false, compact = false }: { q: QueueState; position: number; duration: number; tv?: boolean; compact?: boolean }) {
+export default function Transport({ q, duration, tv = false, compact = false }: { q: QueueState; duration: number; tv?: boolean; compact?: boolean }) {
+  // Read here, not in the Layer: its 100 ms tick would re-render the whole player, queue rows included.
+  const position = usePosition(q, duration)
   const idle = q.current < 0
   if (tv) return <div className="w-105"><Seek q={q} position={position} duration={duration} readOnly /></div>
   // A phone's expanded view: one row beside the title; the timeline above is the seek bar.

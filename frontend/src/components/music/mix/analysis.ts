@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { MixSettings, QueueItem, QueueState, TrackInfo } from '../../../musicQueue'
 import { prepTrack, type Plan, type RawAnalysis, type Track } from '../timeline/sampling'
 import { plan } from './plan'
@@ -15,6 +15,9 @@ const CHUNK = 40
 
 /** `part`: the bands so far of a track the server is analysing; `raw` stays null until it is done. */
 const cache = new Map<string, { raw: RawAnalysis | null; part?: RawAnalysis; at: number; track?: Track }>()
+/** Bumps when a finished analysis arrives, whoever fetched it: what reads `rawOf` at render follows it. */
+let done = 0
+const doneListeners = new Set<() => void>()
 
 /** Fetch what is missing; true when something new arrived. */
 export async function loadAnalyses(ids: string[]): Promise<boolean> {
@@ -37,8 +40,10 @@ export async function loadAnalyses(ids: string[]): Promise<boolean> {
           // Unchanged since the last ask: keep the prepared track.
           if (a.bands?.[0]?.length === cache.get(id)?.part?.bands?.[0]?.length) continue
           cache.set(id, { raw: null, part: a, at: now })
-        } else if (a) cache.set(id, { raw: a, at: now })
-        else if (cache.get(id)?.part) cache.set(id, { raw: null, at: now }) // the analysis failed
+        } else if (a) {
+          cache.set(id, { raw: a, at: now })
+          done++
+        } else if (cache.get(id)?.part) cache.set(id, { raw: null, at: now }) // the analysis failed
         else continue
         changed = true
       }
@@ -46,6 +51,7 @@ export async function loadAnalyses(ids: string[]): Promise<boolean> {
       // Offline or restarting: the retry picks it up.
     }
   }
+  if (changed) doneListeners.forEach(l => l())
   return changed
 }
 
@@ -54,13 +60,14 @@ export const rawOf = (id: string) => cache.get(id)?.raw
 /** Load the analyses of some tracks; the number changes when new ones arrive, and `reload` forces a redraw. */
 export function useAnalyses(ids: string[]): [number, () => void] {
   const [tick, setTick] = useState(0)
+  const fin = useSyncExternalStore(l => { doneListeners.add(l); return () => doneListeners.delete(l) }, () => done)
   const key = ids.join(',')
   useEffect(() => {
     let live = true
     loadAnalyses(key ? key.split(',') : []).then(changed => { if (live && changed) setTick(t => t + 1) })
     return () => { live = false }
   }, [key])
-  return [tick, () => setTick(t => t + 1)]
+  return [tick + fin, () => setTick(t => t + 1)]
 }
 
 /** Confirm or fix a track's genre on the server (null clears it) and in the local copy. */
