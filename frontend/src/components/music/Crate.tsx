@@ -10,6 +10,9 @@ import { fmtTime } from './format'
 import Meter from './Meter'
 import { armRowDrag, justDragged, type DragSource } from './rowDrag'
 import { armSwipe, justSwiped } from './swipe'
+import { fetchFitsAfter } from './crates/harmonyApi'
+import JoinChip from './crates/JoinChip'
+import type { Join } from './crates/proximity'
 import { crateHeight, isPhone, isShort, shortCols } from './timeline/mapping'
 
 // Adding to the queue (SPEC-music-player §5.5). In the default view the stage rises to uncover the crate
@@ -33,6 +36,8 @@ interface Entry {
   libraryLabel: string
   /** An online source's hit: artwork and a source badge, no analysis. */
   hit?: OnlineHit
+  /** How it joins the last queued track, in the Fits next tab. */
+  join?: Join
 }
 
 const ONLINE = ['ytmusic', 'soundcloud', 'youtube'] as const
@@ -80,8 +85,27 @@ function useViewport() {
   return { W: innerWidth, H: innerHeight }
 }
 
+/** The library ranked after the queue's last track (the server's fits-after), each with its join. */
+function useFits(on: boolean, all: Entry[], queue: QueueState): Entry[] {
+  const last = queue.items.at(-1)?.track_id
+  const key = queue.items.map(i => i.track_id).join()
+  const [res, setRes] = useState<{ key: string; list: { id: string; join: Join }[] }>()
+  useEffect(() => {
+    if (!on || !last) return
+    let live = true
+    fetchFitsAfter(last, { exclude: key.split(','), limit: 50 }).then(r => live && setRes({ key, list: r.results }), () => live && setRes({ key, list: [] }))
+    return () => { live = false }
+  }, [on, last, key])
+  return useMemo(() => {
+    const by = new Map(all.map(e => [e.analysisId, e]))
+    return (res?.key === key ? res.list : []).flatMap(r => by.has(r.id) ? [{ ...by.get(r.id)!, join: r.join }] : [])
+  }, [res, key, all])
+}
+
 /** The list's state: which library, the search (here and online), the stop shown, and whether a pasted link is shown instead. */
-function useFinder(all: Entry[]) {
+function useFinder(all: Entry[], queue: QueueState) {
+  const [tab, setTab] = useState<'lib' | 'fits'>('lib')
+  const fits = useFits(tab === 'fits', all, queue)
   const [query, setQuery] = useState('')
   const [lib, setLib] = useState('')
   const [paste, setPaste] = useState(false)
@@ -114,7 +138,8 @@ function useFinder(all: Entry[]) {
   const setQ = (v: string) => { setQuery(v); if (!v.trim()) setPick(null) }
   return {
     query, setQuery: setQ, q, lib, setLib, libs, found, paste, setPaste, online, pending, errors, stop, setStop: setPick,
-    shown: stop === 'local' ? found : (online[stop] ?? []),
+    tab, setTab: (t: 'lib' | 'fits') => { setPaste(false); setTab(t) },
+    shown: tab === 'fits' ? fits : stop === 'local' ? found : (online[stop] ?? []),
     total: lib ? all.filter(e => e.library === lib).length : all.length,
   }
 }
@@ -206,6 +231,7 @@ function AddRow({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolea
             {e.hit?.kind === 'video' && <em className="not-italic ml-[7px] opacity-55">video</em>}
             {metaLine(meta, bpm) && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{metaLine(meta, bpm)}</em>}
           </span>
+          {e.join && <JoinChip join={e.join} className="max-w-full text-[11px] text-base-content/70" />}
         </div>
         {meta?.balance && <Meter balance={meta.balance} />}
         {e.hit && cloudIcon}
@@ -235,6 +261,7 @@ function AddCard({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boole
       {e.hit && <Thumb h={e.hit} size={34} />}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <b className="block truncate pr-1 font-semibold">{e.title}</b>
+        {e.join && <JoinChip join={e.join} className="max-w-full text-[11px] text-base-content/70" />}
         <span className="flex items-center gap-1.5 text-[11px] text-base-content/52">
           <span className="truncate tabular-nums">{[e.hit && e.artist, bpm && `${Math.round(bpm)} BPM`, e.duration && fmtTime(e.duration)].filter(Boolean).join(' · ')}</span>
           {meta?.balance && <Meter balance={meta.balance} />}
@@ -293,6 +320,7 @@ function PasteLink({ q, queued, aim, cards }: { q: QueueState; queued: Set<strin
 
 function LibraryPicker({ f }: { f: Finder }) {
   // The picker filters this machine's files; an online stop just names its source.
+  if (f.tab === 'fits') return null
   if (f.stop !== 'local') return <span className="truncate text-xs font-semibold" style={{ color: SRC[f.stop].color }}>{SRC[f.stop].label}</span>
   if (f.libs.length < 2) return <span className="truncate text-xs text-base-content/52">{f.libs[0]?.[1] ?? ''}</span>
   return (
@@ -305,6 +333,17 @@ function LibraryPicker({ f }: { f: Finder }) {
       <option value="">All libraries</option>
       {f.libs.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
     </select>
+  )
+}
+
+/** Library | Fits next: the whole library, or what fits after the queue's last track. */
+function Tabs({ f }: { f: Finder }) {
+  return (
+    <div role="tablist" aria-label="Crate" className="flex shrink-0 rounded-lg bg-white/6 p-0.5 text-xs font-semibold">
+      {([['lib', 'Library'], ['fits', 'Fits next']] as const).map(([id, label]) => (
+        <button key={id} role="tab" aria-selected={f.tab === id} onClick={() => f.setTab(id)} className="h-7 rounded-md px-2.5 aria-selected:bg-primary/22 aria-selected:text-primary">{label}</button>
+      ))}
+    </div>
   )
 }
 
@@ -321,6 +360,7 @@ function Search({ f, className = '' }: { f: Finder; className?: string }) {
 }
 
 function PasteToggle({ f }: { f: Finder }) {
+  if (f.tab === 'fits') return null
   return (
     <button
       aria-pressed={f.paste}
@@ -348,6 +388,7 @@ function AimChip({ aim, title }: { aim: Aim; title?: string }) {
 
 /** What the list says when the stop shown has no rows. */
 function emptyNote(f: Finder): string {
+  if (f.tab === 'fits') return 'Nothing to rank after yet: queue a track first.'
   if (f.stop === 'local') return 'No track matches.'
   const name = SRC[f.stop].label
   if (f.pending.includes(f.stop)) return `Searching ${name}…`
@@ -439,7 +480,7 @@ function Stops({ f, vertical }: { f: Finder; vertical: boolean }) {
 
 /** The library as a list: the phone's crate sheet, its Library page, and the desktop's column (`rail`). */
 export function LibraryList({ q, aim, aimTitle, head, onClose, rail = false }: { q: QueueState; aim: Aim; aimTitle?: string; head?: ReactNode; onClose?: () => void; rail?: boolean }) {
-  const f = useFinder(useEntries())
+  const f = useFinder(useEntries(), q)
   const queued = useMemo(() => new Set(q.items.map(i => i.track_id)), [q.items])
   const list = (
     <div data-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -450,15 +491,16 @@ export function LibraryList({ q, aim, aimTitle, head, onClose, rail = false }: {
     <div className="@container relative flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 px-3 pb-2 pt-1">
         {head}
+        <Tabs f={f} />
         <LibraryPicker f={f} />
         <span className="ml-auto" />
         <PasteToggle f={f} />
         {onClose && closeBtn(onClose)}
       </div>
       {aim.at !== null && <div className="px-3 pb-2"><AimChip aim={aim} title={aimTitle} /></div>}
-      {!f.paste && <div className="px-3 pb-2"><Search f={f} className="w-full" /></div>}
-      {!f.paste && !rail && <div className="px-3 pb-2"><Stops f={f} vertical={false} /></div>}
-      {rail && !f.paste ? <div className="flex min-h-0 flex-1 border-t border-white/7"><Stops f={f} vertical />{list}</div> : list}
+      {!f.paste && f.tab === 'lib' && <div className="px-3 pb-2"><Search f={f} className="w-full" /></div>}
+      {!f.paste && !rail && f.tab === 'lib' && <div className="px-3 pb-2"><Stops f={f} vertical={false} /></div>}
+      {rail && !f.paste ? <div className="flex min-h-0 flex-1 border-t border-white/7">{f.tab === 'lib' && <Stops f={f} vertical />}{list}</div> : list}
     </div>
   )
 }
@@ -466,7 +508,7 @@ export function LibraryList({ q, aim, aimTitle, head, onClose, rail = false }: {
 /** The default view's crate: a floor under the stage, which rises to uncover it (Layer); on its side the phone keeps a box over the transport. */
 export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; aim: Aim; aimTitle?: string; onClose: () => void }) {
   const { W, H } = useViewport()
-  const f = useFinder(useEntries())
+  const f = useFinder(useEntries(), q)
   const queued = useMemo(() => new Set(q.items.map(i => i.track_id)), [q.items])
   const short = isShort(W, H)
 
@@ -482,9 +524,10 @@ export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; ai
   const head = (
     <div className="flex items-center gap-2.5">
       <h3 className="shrink-0 text-[13px] font-semibold">Add to queue</h3>
+      <Tabs f={f} />
       <LibraryPicker f={f} />
-      {!f.paste && <Search f={f} className="h-8 w-56 min-w-0 max-w-[30vw]" />}
-      {!f.paste && <div className="min-w-0"><Stops f={f} vertical={false} /></div>}
+      {!f.paste && f.tab === 'lib' && <Search f={f} className="h-8 w-56 min-w-0 max-w-[30vw]" />}
+      {!f.paste && f.tab === 'lib' && <div className="min-w-0"><Stops f={f} vertical={false} /></div>}
       <AimChip aim={aim} title={aimTitle} />
       <span className="ml-auto" />
       <PasteToggle f={f} />
