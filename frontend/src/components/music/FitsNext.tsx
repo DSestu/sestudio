@@ -81,10 +81,12 @@ interface Props {
   onAfter?: () => void
   onClose?: () => void
   footer?: ReactNode
+  /** A short strip (the desktop crate): the title, filters and footer share a row and the list runs in columns. */
+  dense?: boolean
 }
 
 /** The ranked list of what plays well after a track (or between two), with why each fits. */
-export default function FitsNext({ anchor, then, where, library, exclude = [], action, onAfter, onClose, footer }: Props) {
+export default function FitsNext({ anchor, then, where, library, exclude = [], action, onAfter, onClose, footer, dense }: Props) {
   const theory = useTheory()
   const deep = theory.level === 'theory'
   const [settings] = useSettings()
@@ -115,27 +117,26 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
       ? <>No key is known for <b>{anchor.title}</b> yet, so nothing can be ranked after it.</>
       : b ? 'Nothing in your library fits both sides.' : 'Nothing fits with these filters.'
 
-  return (
-    <section aria-label={b ? 'Fits between' : 'Fits next'} className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-start gap-2 px-4 pt-4 pb-2">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold tracking-tight">{b ? 'Fits between' : 'Fits next'}</h2>
-          <p className="truncate text-xs text-base-content/60">
-            {b ? <>{anchor.title} → {then!.title}</> : <>after {anchor.title}{where && ` · ${where}`}</>}
-          </p>
-        </div>
-        <button onClick={() => openHarmonyBasics()} className="btn btn-ghost btn-sm h-11 sm:h-8 font-normal text-base-content/60">How it works</button>
-        {onClose && (
-          <button onClick={onClose} aria-label="Close" className="btn btn-ghost btn-circle size-11 sm:size-8">
-            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" /></svg>
-          </button>
-        )}
-      </header>
-
-      {b ? (
-        onAfter && <p className="px-4 pb-2 text-xs text-base-content/60">Tracks that join both sides. <button onClick={onAfter} className="text-primary hover:underline">Rank after {anchor.title} instead</button></p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
+  const head = (
+    <>
+      <div className={`min-w-0 flex-1 ${dense ? 'flex items-baseline gap-2' : ''}`}>
+        <h2 className="shrink-0 text-base font-semibold tracking-tight">{b ? 'Fits between' : 'Fits next'}</h2>
+        <p className="truncate text-xs text-base-content/60">
+          {b ? <>{anchor.title} → {then!.title}</> : <>after {anchor.title}{where && ` · ${where}`}</>}
+        </p>
+      </div>
+      <button onClick={() => openHarmonyBasics()} className={`btn btn-ghost btn-sm font-normal text-base-content/60 ${dense ? 'h-8' : 'h-11 sm:h-8'}`}>How it works</button>
+      {onClose && (
+        <button onClick={onClose} aria-label="Close" className="btn btn-ghost btn-circle size-11 sm:size-8">
+          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      )}
+    </>
+  )
+  const filters = b ? (
+    onAfter && <p className="px-4 pb-2 text-xs text-base-content/60">Tracks that join both sides. <button onClick={onAfter} className="text-primary hover:underline">Rank after {anchor.title} instead</button></p>
+  ) : (
+    <div className={`flex flex-wrap items-center gap-1.5 ${dense ? '' : 'px-4 pb-2'}`}>
           <Choice
             label="Harmony"
             value={deep ? f.harmony : f.harmony === 'any' ? 'any' : 'fits'}
@@ -155,9 +156,24 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
             </span>
           ))}
         </div>
+  )
+
+  return (
+    <section aria-label={b ? 'Fits between' : 'Fits next'} className="flex min-h-0 flex-1 flex-col">
+      {dense ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-1">
+          {head}
+          {filters}
+          {footer && <div className="ml-auto">{footer}</div>}
+        </div>
+      ) : (
+        <>
+          <header className="flex items-start gap-2 px-4 pt-4 pb-2">{head}</header>
+          {filters}
+        </>
       )}
 
-      <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <ul className={`min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${dense ? 'grid grid-cols-3 content-start gap-x-2' : ''}`}>
         {rows.map(r => {
           const t = byId.get(r.id)!
           const k = keyDisplay(theory, get(r.id))
@@ -196,7 +212,7 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
           </li>
         )}
       </ul>
-      {footer && <footer className="border-t border-white/8 px-4 py-3">{footer}</footer>}
+      {footer && !dense && <footer className="border-t border-white/8 px-4 py-3">{footer}</footer>}
     </section>
   )
 }

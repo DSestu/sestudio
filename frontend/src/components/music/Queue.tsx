@@ -3,7 +3,7 @@ import { metaLine, useSummary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import { getQueue, queueActions, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
 import { removeItem } from './adding'
-import { ARCS, setAutopilot, useAutopilot } from './autopilot'
+import { useAutopilot } from './autopilot'
 import JoinChip from './crates/JoinChip'
 import { BLEND } from './engine'
 import { fmtTime } from './format'
@@ -255,10 +255,6 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             </span>
           </>
         )}
-        {!tv && <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-normal text-base-content/70">
-          <input type="checkbox" role="switch" aria-label="Autopilot" className="toggle toggle-primary toggle-xs" checked={pilot.on} onChange={e => setAutopilot({ on: e.target.checked })} />
-          Autopilot
-        </label>}
         {!tv && !expanded && <button
           aria-expanded={adding}
           className="md:hidden flex h-11 shrink-0 items-center gap-1.5 rounded-[14px] bg-primary px-3.5 text-[13px] font-semibold text-primary-content"
@@ -288,13 +284,6 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
           <svg className="size-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3l5 5-3 1-3.5 3.5.5 4.5-2 2-3.5-5.5L5 20l-1-1 4.5-4.5L3 11l2-2 4.5.5L13 6z" /></svg>
         </button>}
       </header>
-      {pilot.on && !tv && !(library && adding) && (
-        <div role="group" aria-label="Autopilot arc" className="relative flex gap-1.5 overflow-x-auto px-3 pb-2 [scrollbar-width:none]">
-          {ARCS.map(a => (
-            <button key={a.id} aria-pressed={pilot.arc === a.id} onClick={() => setAutopilot({ arc: a.id })} className="h-7 shrink-0 rounded-full bg-white/7 px-3 text-xs font-semibold text-base-content/80 aria-pressed:bg-primary/22 aria-pressed:text-primary">{a.label}</button>
-          ))}
-        </div>
-      )}
       {library && adding ? library : <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden'}`}>
         <span
           data-dropline

@@ -39,13 +39,18 @@ const subscribe = (l: () => void) => { listeners.add(l); return () => listeners.
 export interface Ghost { track: MusicTrack; join: Join | null }
 const NONE: Ghost[] = []
 
-/** The toggle, the arc in force (the chosen chip, else the settings' default) and the ghost rows. */
-export function useAutopilot(q: QueueState, enabled: boolean) {
+/** The switch and the arc in force (the chosen one, else the settings' default), for the control that sets them. */
+export function useAutopilotState() {
   const st = useSyncExternalStore(subscribe, () => state)
   const [fallback, setFallback] = useState<ArcId>('warmup')
   useEffect(() => { getSettings().then(s => s.music_autopilot_arc && setFallback(s.music_autopilot_arc), () => {}) }, [])
-  const arc = st.arc ?? fallback
-  const on = enabled && st.on
+  return { on: st.on, arc: st.arc ?? fallback }
+}
+
+/** The toggle, the arc in force and the ghost rows. */
+export function useAutopilot(q: QueueState, enabled: boolean) {
+  const { on: set, arc } = useAutopilotState()
+  const on = enabled && set
   const lib = useDownloadedLibrary()
   const byId = useMemo(() => new Map(albumsOf(lib).flatMap(a => a.tracks).map(t => [t.id, t])), [lib])
   const last = q.items.at(-1)?.track_id
@@ -68,5 +73,5 @@ export function useAutopilot(q: QueueState, enabled: boolean) {
     if (!ghosts.length || left >= LOW) return
     void addTracks(ghosts.map(g => ({ library: g.track.library, track_id: g.track.id })), undefined, `Autopilot added ${ghosts.length} to the queue`)
   }, [ghosts, left])
-  return { on: st.on, arc, ghosts }
+  return { on: set, arc, ghosts }
 }
