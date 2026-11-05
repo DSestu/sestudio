@@ -5,7 +5,22 @@ import { flowStats, type Flow, type FlowRef, type Row } from './flows'
 
 const blur = () => (document.activeElement as HTMLElement | null)?.blur()
 
-const Line = () => <li aria-hidden="true" className="h-0.5 mx-2 -my-px rounded-full bg-(--lc)" />
+const STRIP_H = 20
+
+/** One bar per track: its height the energy, its colour the mood. Room for six tracks before the bars narrow. */
+function EnergyStrip({ rows }: { rows: Row[] }) {
+  const w = 100 / Math.max(rows.length, 6)
+  return (
+    <svg aria-hidden="true" viewBox={`0 0 100 ${STRIP_H}`} preserveAspectRatio="none" className="w-full h-5">
+      {rows.map((r, i) => {
+        const h = r.energy === undefined ? 2 : 2 + (r.energy / 100) * (STRIP_H - 2)
+        return <rect key={i} x={i * w + 0.4} y={STRIP_H - h} width={w - 0.8} height={h} rx="0.8" fill={moodOf(r.mode)?.color ?? 'currentColor'} opacity={r.energy === undefined ? 0.25 : 0.85} />
+      })}
+    </svg>
+  )
+}
+
+const Line =() => <li aria-hidden="true" className="h-0.5 mx-2 -my-px rounded-full bg-(--lc)" />
 
 /** One flow: its colour and name, a summary line and its tracks in order; a place to drop tracks on desktop. */
 export default function FlowColumn({ flow, color, rows, active, over, onActive, onRename, onDelete, onRemove, onDragStart, onOver, onDrop }: {
@@ -59,9 +74,13 @@ export default function FlowColumn({ flow, color, rows, active, over, onActive, 
             </ul>
           </div>
         </div>
-        <p className="text-xs text-base-content/60 tabular-nums">
-          {st.count} {st.count === 1 ? 'track' : 'tracks'}{st.duration ? ` · ${formatDuration(st.duration)}` : ''}
+        <p className="flex flex-wrap gap-x-2 text-xs text-base-content/60 tabular-nums">
+          <span>{st.count} {st.count === 1 ? 'track' : 'tracks'}</span>
+          {st.duration > 0 && <span>{formatDuration(st.duration)}</span>}
+          <span className={st.clashes ? 'text-warning' : ''}>{st.clashes ? `${st.clashes} ${st.clashes === 1 ? 'clash' : 'clashes'}` : 'no clash'}</span>
+          {st.tempoJumps > 0 && <span className="text-warning">{st.tempoJumps} tempo {st.tempoJumps === 1 ? 'jump' : 'jumps'}</span>}
         </p>
+        <EnergyStrip rows={rows} />
       </header>
       <ol className="flex-1 min-h-0 overflow-y-auto px-1.5 pb-3">
         {rows.length === 0 && (
