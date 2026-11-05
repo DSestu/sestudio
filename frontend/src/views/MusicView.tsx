@@ -19,10 +19,11 @@ import {
 } from '../musicLibrary'
 import { addPayload, addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
 import { playAll, playFrom, playPayload } from '../components/music/player'
-import { factsLine, useAnalysing, useSummaries, type Summary } from '../musicMeta'
+import { factsLine, genreColor, useAnalysing, useSummaries, type Summary } from '../musicMeta'
 import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
+import Explore from '../components/music/explore/Explore'
 import Seg from '../components/music/crates/build/Seg'
 import type { Join } from '../components/music/crates/proximity'
 import { clearFitsFilters, proxOf, rankFits, relaxations, setFitsFilter, setFitsRef, useFitsFilters, useFitsRef, type FitsFilters } from '../musicFits'
@@ -33,6 +34,7 @@ const TABS = [
   { id: 'albums', label: 'Albums' },
   { id: 'artists', label: 'Artists' },
   { id: 'tracks', label: 'Tracks' },
+  { id: 'explore', label: 'Explore' },
 ] as const
 type MusicTab = (typeof TABS)[number]['id']
 
@@ -335,7 +337,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const pick = (id: string) => { setLibrary(id); setSheet(false); if (nodeId || albumId || artistName) go({}) }
   const pickNode = (id: string) => { setSheet(false); if (id !== nodeId) openNode(id) }
 
-  const searching = !page && !fitsMode && query.trim() !== '' && !LINK_RE.test(query.trim())
+  const searching = !page && !fitsMode && tab !== 'explore' && query.trim() !== '' && !LINK_RE.test(query.trim())
   const body = node ? (
     <PlaylistView key={node.id} node={node} byId={byId} />
   ) : album ? (
@@ -380,6 +382,8 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         </li>
       ))}
     </ul>
+  ) : tab === 'explore' ? (
+    <Explore tracks={tracks} get={get} v={v} />
   ) : (
     <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={setPickFor} />)}</ul>
   )
@@ -436,6 +440,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
                   onClick={() => setGenre(g)}
                   className={`relative hit shrink-0 rounded-full px-3 h-8 text-xs font-medium ${genre === g ? 'bg-primary/20 text-primary' : 'bg-white/6 text-base-content/70 hover:bg-white/10'}`}
                 >
+                  {tab === 'explore' && g && <i className="inline-block size-2 rounded-full mr-1.5" style={{ background: genreColor(g) }} aria-hidden="true" />}
                   {g || 'All'} <span className="tabular-nums opacity-60">{n}</span>
                 </button>
               ))}
