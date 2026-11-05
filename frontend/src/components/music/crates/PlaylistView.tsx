@@ -11,7 +11,7 @@ import { post, useMusicQueue } from '../../../musicQueue'
 import { useSettings } from '../../../useSettings'
 import ClashTip from './ClashTip'
 import FixDialog from './FixDialog'
-import Inspector from './Inspector'
+import FitsNext from '../FitsNext'
 import ResponsiveModal from '../../ResponsiveModal'
 import { useModalBack } from '../../../useModalBack'
 import JoinDialog from './JoinDialog'
@@ -258,9 +258,16 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
     const at = locate(node, items[target].item_id)!
     run(playlistApi.add(node.id, [{ library: t.library, track_id: t.id }], at.part ?? undefined, at.index + 1).then(() => { toast(`Added ${t.title}`); setBetween(false); setSel(undefined) }))
   }
-  const inspector = insp && !smart && (
-    <Inspector items={items} byId={byId} at={target} between={between && target < items.length - 1} onInsert={insertAfterTarget} onUnjoin={() => setBetween(false)} />
-  )
+  const library = useMemo(() => [...byId.values()], [byId])
+  const taken = items.map(i => i.track_id)
+  const anchor = items[target] && byId.get(items[target].track_id)
+  const then = between && items[target + 1] ? byId.get(items[target + 1].track_id) : undefined
+  const inspector = insp && !smart && (anchor ? (
+    <FitsNext
+      anchor={anchor} then={then} where={sel ? undefined : 'the last track'} library={library} exclude={taken}
+      action={{ label: 'Insert', onPick: insertAfterTarget }} onAfter={() => setBetween(false)} onClose={() => setInsp(false)}
+    />
+  ) : <p className="p-4 text-sm text-base-content/60">Add a track to see what fits next.</p>)
   const titleAt = (i: number) => byId.get(items[i].track_id)?.title ?? items[i].title ?? 'Track'
   const insertBetween = (i: number, id: string) => {
     const at = locate(node, items[i].item_id)!
@@ -446,10 +453,9 @@ export default function PlaylistView({ node, byId }: { node: PlaylistNode; byId:
       })()}
       {editing && <SmartForm node={node} onClose={() => setEditing(false)} />}
     </div>
-    {inspector && wide && <aside className="sticky top-4 max-h-[calc(100vh-8rem)] w-80 shrink-0 overflow-y-auto rounded-2xl bg-white/5">{inspector}</aside>}
+    {inspector && wide && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{inspector}</aside>}
     {inspector && !wide && (
-      <ResponsiveModal onClose={() => setInsp(false)} boxClassName="max-h-[80vh] p-0">
-        <div className="flex items-center px-3 pt-3"><h2 className="flex-1 text-base font-semibold">Fits next</h2><button onClick={() => setInsp(false)} aria-label="Close" className="btn btn-ghost btn-sm btn-circle">✕</button></div>
+      <ResponsiveModal onClose={() => setInsp(false)} boxClassName="flex h-[60vh] flex-col p-0">
         {inspector}
       </ResponsiveModal>
     )}

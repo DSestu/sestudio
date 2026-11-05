@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { fitsAfter, type Filters, type Join, type ProxTrack } from './components/music/crates/proximity'
+import { fitsAfter, type Filters, type Join, type Kind, type ProxTrack } from './components/music/crates/proximity'
 import { getSettings } from './api'
 import type { Summary } from './musicMeta'
 import type { MusicTrack } from './musicLibrary'
@@ -69,4 +69,16 @@ export function relaxations(f: FitsFilters): { label: string; key: keyof FitsFil
   if (f.genre !== 'any') out.push({ label: 'Any genre', key: 'genre', to: 'any' })
   if (f.tempo !== 'any') out.push({ label: 'Any tempo', key: 'tempo', to: 'any' })
   return out
+}
+
+/** The filters in force: the user's picks over the defaults, harmony starting from the settings' rule. */
+export function filtersOf(p: Partial<FitsFilters>, rule?: FitsFilters['harmony']): FitsFilters {
+  return { harmony: rule ?? 'close', mood: 'any', energy: 'any', genre: 'any', tempo: 'near', ...p }
+}
+
+/** A join in plain words: smooth (all notes shared), next door (one changes), clash. */
+export function plainKind(kind: Kind | null): string {
+  if (kind === 'clash') return 'clash'
+  if (kind === 'modal-shift' || kind === 'next-door') return 'next door'
+  return kind ? 'smooth' : 'key not known'
 }
