@@ -127,6 +127,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const topRow = useRef<HTMLButtonElement>(null)
   const card = useRef<HTMLDivElement>(null)
   const raf = useRef(0)
+  const rail = useRef<HTMLElement | null>(null)
 
   // Every part is placed from the one progress value, on the same frame.
   const apply = useCallback((t: number) => {
@@ -186,6 +187,13 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     const short = isShort(W, H)
     fade(topRow.current, short ? 1 : 1 - t, short ? 0 : -14 * t)
     fade(card.current, short ? 0 : t, -20 * (1 - t))
+    const rl = rail.current
+    if (rl) {
+      rl.style.opacity = t < 1 ? String(t) : ''
+      rl.style.transform = t < 1 ? `translateX(${-24 * (1 - t)}px)` : ''
+      rl.style.visibility = t < 0.01 ? 'hidden' : ''
+      rl.inert = t < 0.5
+    }
   }, [])
 
   const kick = useCallback(() => {
@@ -468,18 +476,27 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       e.stopPropagation()
       closeThen(() => t.click())
     }
-    if (rail) {
-      rail.style.zIndex = '80'
-      rail.addEventListener('click', pick, true)
-    }
+    rail?.addEventListener('click', pick, true)
     return () => {
       shut.forEach(c => { c.inert = false })
-      if (rail) {
-        rail.style.zIndex = ''
-        rail.removeEventListener('click', pick, true)
-      }
+      rail?.removeEventListener('click', pick, true)
     }
   }, [tv, withRail])
+
+  // On a desktop the rail rides above the player and moves with the same progress as every part
+  // (see `apply`, so a drag moves it too): gone in the default view, beside the stage when expanded.
+  useEffect(() => {
+    const el = tv || isPhone(innerWidth) ? null : document.querySelector<HTMLElement>('[data-rail]')
+    rail.current = el
+    if (!el) return
+    el.style.zIndex = '80'
+    apply(progress())
+    return () => {
+      rail.current = null
+      Object.assign(el.style, { zIndex: '', opacity: '', transform: '', visibility: '' })
+      el.inert = false
+    }
+  }, [tv, apply, progress])
 
   useEffect(() => {
     if (tv) return
