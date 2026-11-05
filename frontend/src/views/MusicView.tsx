@@ -23,8 +23,8 @@ import { factsLine, useAnalysing, useSummaries, type Summary } from '../musicMet
 import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
-import { fitsAfter } from '../components/music/crates/proximity'
-import { proxOf, setFitsRef, useFitsRef } from '../musicFits'
+import Seg from '../components/music/crates/build/Seg'
+import { proxOf, rankFits, setFitsFilter, setFitsRef, useFitsFilters, useFitsRef, type FitsFilters } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, type Navigate } from '../nav'
 
@@ -195,6 +195,28 @@ function LinkCard({ url }: { url: string }) {
   )
 }
 
+const MOVES: { key: keyof FitsFilters; label: string; options: [string, string][] }[] = [
+  { key: 'harmony', label: 'Harmony', options: [['same', 'Same notes'], ['close', 'Close'], ['any', 'Any']] },
+  { key: 'mood', label: 'Mood', options: [['any', 'Any'], ['up', 'Brighter'], ['same', 'Same'], ['down', 'Darker']] },
+  { key: 'energy', label: 'Energy', options: [['any', 'Any'], ['lift', 'Lift'], ['hold', 'Hold'], ['ease', 'Ease off']] },
+  { key: 'genre', label: 'Genre', options: [['same', 'Same'], ['any', 'Any']] },
+  { key: 'tempo', label: 'Tempo', options: [['near', '±6%'], ['any', 'Any']] },
+]
+
+/** What kind of move to look for: one row of segmented controls, scrolling sideways on phones. */
+function MoveFilters({ value }: { value: FitsFilters }) {
+  return (
+    <div className="flex items-center gap-x-3 overflow-x-auto pb-1 [scrollbar-width:none]">
+      {MOVES.map(m => (
+        <div key={m.key} className="flex shrink-0 items-center gap-1.5">
+          <span className="text-xs text-base-content/60">{m.label}</span>
+          <Seg label={m.label} options={m.options} value={value[m.key]} onPick={v => setFitsFilter(m.key, v as never)} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const KIND_LABEL = { folder: 'Folder', playlist: 'Playlist', smart: 'Smart list' } as const
 
 // The browse state lives in the URL (Back returns to it as it was) and here,
@@ -213,6 +235,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const [library, setLibrary] = useState(start.lib)
   const query = useMusicQuery()
   const fitsRef = useFitsRef()
+  const fitsFilters = useFitsFilters()
   const [sheet, setSheet] = useState(false)
   const [adding, setAdding] = useState(false)
   // An open playlist, album or artist is its own history entry, so Back leaves it.
@@ -286,9 +309,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const ranked = useMemo(() => {
     if (!fitsMode || !fitsTrack) return []
     const of = new Map(tracks.map(t => [t.id, t]))
-    return fitsAfter(proxOf(fitsTrack, get(fitsTrack.id)), tracks.map(t => proxOf(t, get(t.id))), { harmony: 'safe', tempo: 'near' }, Infinity)
+    return rankFits(proxOf(fitsTrack, get(fitsTrack.id)), tracks.map(t => proxOf(t, get(t.id))), fitsFilters)
       .map(r => of.get(r.id)!)
-  }, [fitsMode, fitsTrack, tracks, v]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fitsMode, fitsTrack, tracks, fitsFilters, v]) // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
   const pick = (id: string) => { setLibrary(id); setSheet(false); if (nodeId || albumId || artistName) go({}) }
@@ -407,6 +430,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
               <span className="text-xs text-base-content/60">Ranked by shared notes, then tempo, genre and energy.</span>
             </div>
           )}
+          {fitsMode && <MoveFilters value={fitsFilters} />}
           {!page && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {body}
         </div>
