@@ -26,3 +26,9 @@ export function moodOf(mode?: string | null): Mood | undefined {
   if (!mode) return undefined
   return MOOD_LADDER.find(m => m.mode.toLowerCase() === mode.toLowerCase()) ?? (/harmonic|dominant/i.test(mode) ? EXOTIC : undefined)
 }
+
+/** The four energy levels, lowest first: the library's tracks ranked in quarters (the analysis' `energyLevel`). */
+export const ENERGY_LEVELS = ['Calm', 'Steady', 'Driving', 'Intense'] as const
+
+/** How many of the meter's four steps a level lights (1..4); 0 while a track has no level. */
+export const energySteps = (level?: string | null): number => (ENERGY_LEVELS as readonly string[]).indexOf(level ?? '') + 1
