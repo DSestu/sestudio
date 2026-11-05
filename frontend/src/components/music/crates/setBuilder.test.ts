@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Plan } from '../timeline/sampling'
-import { autoOrder, harmonic, keyDistance, transitionChips, type SetTrack } from './setBuilder'
+import { autoOrder, countJoins, harmonic, keyDistance, transitionChips, type SetTrack } from './setBuilder'
 
 const t = (id: string, bpm?: number, camelot?: string, energy?: number, genre?: string, duration = 200): SetTrack => ({ id, bpm, camelot, energy, genre, duration })
 
@@ -43,15 +43,23 @@ describe('autoOrder', () => {
 
 describe('transitionChips', () => {
   const sync: Plan = { mode: 'sync', mixOut: 0, len: 11, startOff: 0, rate: 1, bars: 8 }
-  it('says synced and harmonic', () => {
+  it('says synced', () => {
     expect(transitionChips(sync, t('a', 172, '8A'), t('b', 172, '9A'))).toEqual([
       { text: '8 bars · synced', tone: 'ok' },
-      { text: '8A → 9A · harmonic', tone: 'ok' },
     ])
   })
   it('warns when the tempos are too far apart, with the suggestion', () => {
     const fade: Plan = { mode: 'fade', mixOut: 0, len: 4, startOff: 0, rate: 1, why: 'tempo' }
     const [c] = transitionChips(fade, t('a', 174), t('b', 150), 'Move to Cool down?')
     expect(c).toEqual({ text: 'fade 4 s · 174 → 150 is too far to sync. Move to Cool down?', tone: 'warn' })
+  })
+})
+
+describe('countJoins', () => {
+  it('counts clashes and tempo jumps between neighbours', () => {
+    expect(countJoins([t('a', 172, '8A'), t('b', 172, '9A'), t('c', 140, '3B')])).toEqual({ clashes: 1, jumps: 1 })
+  })
+  it('is quiet for a smooth set', () => {
+    expect(countJoins([t('a', 172, '8A'), t('b', 173, '8B')])).toEqual({ clashes: 0, jumps: 0 })
   })
 })

@@ -1,5 +1,5 @@
 import type { Plan } from '../timeline/sampling'
-import { harmonyOf, join, keyDistance, KINDS, type ProxTrack } from './proximity'
+import { harmonyOf, join, keyDistance, type Join, type ProxTrack } from './proximity'
 
 export { keyDistance }
 
@@ -71,9 +71,19 @@ export function transitionChips(p: Plan, a: SetTrack, b: SetTrack, hint?: string
   else if (p.why === 'tempo') chips.push({ text: `fade ${p.len} s · ${Math.round(a.bpm!)} → ${Math.round(b.bpm!)} is too far to sync${hint ? `. ${hint}` : ''}`, tone: 'warn' })
   else if (p.why === 'short') chips.push({ text: `fade ${p.len} s · track too short to sync`, tone: 'warn' })
   else chips.push({ text: `fade ${p.len} s${!a.bpm || !b.bpm ? ' · tempo not known yet' : ''}`, tone: 'ok' })
-  const { kind, safe } = join(a, b)
-  const [ra, rb] = [a.harmony?.track, b.harmony?.track]
-  if (ra && rb && kind) chips.push({ text: `${ra.tonic} ${ra.mode} → ${rb.tonic} ${rb.mode} · ${KINDS[kind].toLowerCase()}`, tone: safe ? 'ok' : 'warn' })
-  else if (a.camelot && b.camelot) chips.push({ text: `${a.camelot} → ${b.camelot} · ${safe ? 'harmonic' : 'key clash'}`, tone: safe ? 'ok' : 'warn' })
   return chips
+}
+
+export const isClash = (j: Join) => j.kind === 'clash'
+
+/** Clashes and tempo jumps over a run of tracks, for the set header. */
+export function countJoins(tracks: SetTrack[]): { clashes: number; jumps: number } {
+  let clashes = 0
+  let jumps = 0
+  for (let i = 1; i < tracks.length; i++) {
+    const j = join(tracks[i - 1], tracks[i])
+    if (isClash(j)) clashes++
+    if (j.tempoJump) jumps++
+  }
+  return { clashes, jumps }
 }
