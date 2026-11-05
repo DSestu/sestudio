@@ -2,6 +2,7 @@ import { energySteps, keyDisplay } from '../../harmony'
 import { genreColor, genreShort, metaLine, refreshSummary, useAnalysing, useSummary, type Summary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import GenreTag from './crates/GenreTag'
+import { openKeyCard } from './harmony/keyCardStore'
 import { openUnsure } from './harmony/unsure'
 
 /** The spinner and word a row shows while its harmony and energy are being worked out. */
@@ -17,14 +18,16 @@ export function Analysing() {
 const Dot = ({ color }: { color: string }) => <i className="inline-block size-2 shrink-0 rounded-full align-middle" style={{ background: color }} />
 
 /** The key at the chosen theory level: the mood word after a dot in its colour, or the key name; muted when unsure. */
-export function KeyChip({ s }: { s?: Summary }) {
-  const k = keyDisplay(useTheory(), s)
+export function KeyChip({ id, title, s }: { id: string; title: string; s?: Summary }) {
+  const theory = useTheory()
+  const k = keyDisplay(theory, s)
   if (!k) return null
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded bg-white/8 px-1.5 py-0.5 text-[11px] leading-none tabular-nums ${(s?.keyConf ?? 0) >= 0.5 ? 'text-base-content/70' : 'text-base-content/35'}`}>
-      {k.color && <Dot color={k.color} />}{k.text}
-    </span>
-  )
+  const inner = <>{k.color && <Dot color={k.color} />}{k.text}</>
+  const cls = `inline-flex items-center gap-1.5 rounded bg-white/8 px-1.5 py-0.5 text-[11px] leading-none tabular-nums ${(s?.keyConf ?? 0) >= 0.5 ? 'text-base-content/70' : 'text-base-content/35'}`
+  // Plain keeps the label a label; the other levels open the key card from it.
+  return theory.level === 'plain'
+    ? <span className={cls}>{inner}</span>
+    : <button onClick={() => openKeyCard(id, title)} aria-label={`Key card of ${title}`} className={cls}>{inner}</button>
 }
 
 /** Four rising steps, as many lit as the track's energy level; its name on hover. Nothing while it has no level. */
@@ -48,7 +51,7 @@ export default function TrackMeta({ id, bpm, title }: { id: string; bpm?: number
     <span className="hidden sm:flex items-center gap-2">
       {s?.genre && <GenreTag id={id} genre={s.genre} conf={s.genreConf ?? 1} source={s.genreSource} onChange={() => refreshSummary(id)} />}
       {analysing && <Analysing />}
-      {!analysing && <KeyChip s={s} />}
+      {!analysing && <KeyChip id={id} title={title} s={s} />}
       {!analysing && unsure && (
         <button onClick={() => openUnsure(id, title)} aria-label={`Settle the mode of ${title} by ear`} title="Unsure of the mode: listen to both" className="btn btn-ghost btn-xs h-5 min-h-0 px-1.5 text-[11px] text-warning">?</button>
       )}
@@ -62,14 +65,20 @@ export default function TrackMeta({ id, bpm, title }: { id: string; bpm?: number
 export function MetaLine({ id, bpm, title }: { id: string; bpm?: number; title: string }) {
   const s = useSummary(id)
   const analysing = useAnalysing(id)
-  const k = keyDisplay(useTheory(), s)
+  const theory = useTheory()
+  const k = keyDisplay(theory, s)
   const line = metaLine(s && { ...s, genre: undefined, key: undefined, camelot: undefined, harmony: undefined }, bpm)
   if (analysing) return <span className="sm:hidden text-base-content/40"> · <Analysing /></span>
   return line || k || s?.genre ? (
     <span className="sm:hidden text-base-content/40 tabular-nums">
       {s?.energyLevel && <> · <EnergyMeter level={s.energyLevel} /></>}
       {line && ` · ${line}`}
-      {k && <> · {k.color && <Dot color={k.color} />} {k.text}</>}
+      {k && <> · {theory.level === 'plain' ? <>{k.color && <Dot color={k.color} />} {k.text}</> : (
+        // Not a button: the row around it is one.
+        <span role="button" tabIndex={0} aria-label={`Key card of ${title}`} className="underline decoration-dotted"
+          onClick={e => { e.stopPropagation(); openKeyCard(id, title) }}
+          onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); openKeyCard(id, title) } }}>{k.color && <Dot color={k.color} />} {k.text}</span>
+      )}</>}
       {s?.harmony?.track?.unsure && (
         // Not a button: the row around it is one.
         <span role="button" tabIndex={0} aria-label={`Settle the mode of ${title} by ear`} className="px-1 font-semibold text-warning"
