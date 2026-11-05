@@ -65,7 +65,7 @@ export default function JoinDialog({ a, b, titleA, titleB, kept, onFix, onClose 
         {j.mood && (
           <div>
             <dt className="text-xs text-base-content/50">Mood</dt>
-            <dd>{x?.word} → {y?.word} <span className="text-base-content/50">({j.mood === 'same' ? 'same brightness' : j.mood})</span></dd>
+            <dd>{x?.word} → {y?.word} <span className="text-base-content/50">({j.mood === 'same' ? 'same brightness' : j.mood})</span> <button onClick={() => { onClose(); openHarmonyBasics(2) }} className="link text-xs">What is a mode?</button></dd>
           </div>
         )}
         {j.energy.step && (
