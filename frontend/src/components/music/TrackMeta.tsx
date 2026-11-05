@@ -1,3 +1,4 @@
+import { moodOf } from '../../harmony'
 import { genreColor, genreShort, keyLabel, metaLine, refreshSummary, useAnalysing, useSummary } from '../../musicMeta'
 import GenreTag from './crates/GenreTag'
 
@@ -11,6 +12,12 @@ export function Analysing() {
   )
 }
 
+/** A dot in the colour of the track's mood, named on hover; nothing while it has no mode. */
+const MoodDot = ({ mode }: { mode?: string }) => {
+  const m = moodOf(mode)
+  return m ? <i title={m.word} className="inline-block size-2 shrink-0 rounded-full align-middle" style={{ background: m.color }} /> : null
+}
+
 /** A track's analysis on a list row, wide screens: tempo, key chip (muted when unsure), genre tag. */
 export default function TrackMeta({ id, bpm }: { id: string; bpm?: number }) {
   const s = useSummary(id)
@@ -20,6 +27,7 @@ export default function TrackMeta({ id, bpm }: { id: string; bpm?: number }) {
     <span className="hidden sm:flex items-center gap-2">
       {s?.genre && <GenreTag id={id} genre={s.genre} conf={s.genreConf ?? 1} source={s.genreSource} onChange={() => refreshSummary(id)} />}
       {analysing && <Analysing />}
+      {!analysing && <MoodDot mode={s?.harmony?.track?.mode} />}
       {!analysing && s?.camelot && (
         <span className={`rounded bg-white/8 px-1.5 py-0.5 text-[11px] leading-none tabular-nums ${(s.keyConf ?? 0) >= 0.5 ? 'text-base-content/70' : 'text-base-content/35'}`}>{keyLabel(s.key, s.camelot)}</span>
       )}
@@ -36,6 +44,7 @@ export function MetaLine({ id, bpm }: { id: string; bpm?: number }) {
   if (analysing) return <span className="sm:hidden text-base-content/40"> · <Analysing /></span>
   return line || s?.genre ? (
     <span className="sm:hidden text-base-content/40 tabular-nums">
+      {s?.harmony?.track?.mode && <> · <MoodDot mode={s.harmony.track.mode} /></>}
       {line && ` · ${line}`}
       {s?.genre && <> · <span className="font-medium" style={{ color: genreColor(s.genre) }}>{genreShort(s.genre)}</span></>}
     </span>
