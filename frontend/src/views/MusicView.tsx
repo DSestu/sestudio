@@ -17,12 +17,11 @@ import {
 import { addPayload, addToQueue, post, resolveLink, useMusicQueue, type OnlineLink } from '../musicQueue'
 import { addTracks, nextIndex } from '../components/music/adding'
 import { playAll, playFrom, playPayload } from '../components/music/player'
-import { factsLine, genreColor, useAnalysing, useSummaries, type Summary } from '../musicMeta'
+import { factsLine, useAnalysing, useSummaries, type Summary } from '../musicMeta'
 import { openKeyCard } from '../components/music/harmony/keyCardStore'
 import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
-import Explore from '../components/music/explore/Explore'
 import FitsNext from '../components/music/FitsNext'
 import { closeFits, openFitsFor, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
@@ -32,7 +31,6 @@ const TABS = [
   { id: 'albums', label: 'Albums' },
   { id: 'artists', label: 'Artists' },
   { id: 'tracks', label: 'Tracks' },
-  { id: 'explore', label: 'Explore' },
 ] as const
 type MusicTab = (typeof TABS)[number]['id']
 
@@ -211,7 +209,8 @@ const last = { tab: 'albums' as MusicTab, lib: '', genre: '' }
 const initial = () => {
   const p = currentParams()
   const tab = TABS.find(t => t.id === p.get('tab'))?.id
-  return { tab: tab ?? last.tab, lib: p.get('lib') ?? last.lib, genre: p.get('genre') ?? last.genre }
+  // A tab that no longer exists (?tab=explore) opens Albums.
+  return { tab: tab ?? (p.get('tab') ? 'albums' : last.tab), lib: p.get('lib') ?? last.lib, genre: p.get('genre') ?? last.genre }
 }
 
 export default function MusicView({ params, navigate }: { params: URLSearchParams; navigate: Navigate }) {
@@ -313,11 +312,11 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       footer={<button onClick={() => void addTracks([{ library: fitsTrack.library, track_id: fitsTrack.id }], nextIndex(), `${fitsTrack.title} plays next`)} className="btn btn-sm h-11 w-full sm:h-8">Play next</button>}
     />
   )
-  const searching = !page && tab !== 'explore' && query.trim() !== '' && !LINK_RE.test(query.trim())
+  const searching = !page && query.trim() !== '' && !LINK_RE.test(query.trim())
   const body = drafting ? (
     <NewPlaylist key={params.get('seed') ?? ''} byId={byId} seed={params.get('seed') ?? undefined} onCreated={opened} />
   ) : node ? (
-    <PlaylistView key={node.id} node={node} byId={byId} />
+    <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} />
   ) : album ? (
     <Detail name={album.name} tracks={album.tracks} get={get} onPlaylist={setPickFor} />
   ) : artist ? (
@@ -351,8 +350,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         </li>
       ))}
     </ul>
-  ) : tab === 'explore' ? (
-    <Explore tracks={tracks} get={get} v={v} onPlaylist={setPickFor} />
   ) : (
     <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={setPickFor} />)}</ul>
   )
@@ -407,7 +404,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
                   onClick={() => setGenre(g)}
                   className={`relative hit shrink-0 rounded-full px-3 h-8 text-xs font-medium ${genre === g ? 'bg-primary/20 text-primary' : 'bg-white/6 text-base-content/70 hover:bg-white/10'}`}
                 >
-                  {tab === 'explore' && g && <i className="inline-block size-2 rounded-full mr-1.5" style={{ background: genreColor(g) }} aria-hidden="true" />}
                   {g || 'All'} <span className="tabular-nums opacity-60">{n}</span>
                 </button>
               ))}
