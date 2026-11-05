@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSummaries, type Summary } from '../../../musicMeta'
 import { clockSkew, getQueue, onQueueEvent, positionNow, queueActions, type QueueState, type TrackInfo } from '../../../musicQueue'
+import { addTracks } from '../adding'
 import { claimSound, engine, useSyncStatus } from '../engine'
 import { fmtTime } from '../format'
 import { frameLoop, wake } from '../idle'
+import { join as joinOf, joinColor, type ProxTrack } from '../crates/proximity'
 import { joins, type Join } from '../joins'
 import { bez, crossed, dipScale, flash, MORPH_MS, morphOffsets, stepHl } from '../interact'
 import { analysing, loadAnalyses, mixOf, PARTIAL_MS, rawOf, RETRY_MS, trackOf } from '../mix/analysis'
@@ -31,7 +34,14 @@ interface Model {
   cur: number
 }
 
-function buildModel(q: QueueState, info: (id: string) => TrackInfo | undefined): Model {
+const proxOf = (id: string, s?: Summary): ProxTrack => ({ id, bpm: s?.bpm, camelot: s?.camelot, genre: s?.genre, harmony: s?.harmony, energyScale: s?.energyScale })
+
+const joinTone = (a: ProxTrack, b: ProxTrack) => {
+  const j = joinOf(a, b)
+  return j.kind ? joinColor(j) : undefined
+}
+
+function buildModel(q: QueueState, info: (id: string) => TrackInfo | undefined, summary: (id: string) => Summary | undefined): Model {
   const tracks: Track[] = []
   const rows: number[] = []
   const ids: string[] = []
@@ -45,6 +55,7 @@ function buildModel(q: QueueState, info: (id: string) => TrackInfo | undefined):
   const { TS, spans, plans } = layoutQueue(tracks, (a, b) => plan(a, b, mixOf(q, a.id, b.id)))
   const items = tracks.map((track, i): LabelItem => ({
     track, span: spans[i], a: 0, sc: 1, hl: 0, title: info(track.id)?.title ?? '', plan: plans[i - 1],
+    tone: i && summary(track.id) && summary(tracks[i - 1].id) ? joinTone(proxOf(tracks[i - 1].id, summary(tracks[i - 1].id)), proxOf(track.id, summary(track.id))) : undefined,
   }))
   const last = tracks.length - 1
   return { q, items, TS, spans, rows, ids, end: last < 0 ? 0 : TS[last] + tracks[last].dur - 0.5, cur: rows.indexOf(q.current) }
@@ -141,8 +152,9 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
   // Titles arrive later than the queue, so they count too. The current track too: on the TV page it
   // follows the station's clock, which reaches the next track after the queue's revision did.
   const titles = q.items.map(i => info(i.track_id)?.title ?? '').join('\n')
+  const sums = useSummaries(useMemo(() => ids.split(',').filter(Boolean), [ids]))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const model = useMemo(() => buildModel(q, info), [q.rev, q.current, ids, titles, version])
+  const model = useMemo(() => buildModel(q, info, sums.get), [q.rev, q.current, ids, titles, version, sums.v])
   const live = useRef({ model, progress, palette, onOutside, marks, aim })
   // Any render may carry a change the loop should draw (queue, mode, look).
   useEffect(() => {
@@ -428,6 +440,12 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
           x={open.x}
           above={open.above}
           onClose={close}
+          queued={model.q.items.map(i => i.track_id)}
+          onUse={t => {
+            const old = model.q.items[model.rows[at]]
+            void addTracks([{ library: t.library, track_id: t.id }], model.rows[at], `${t.title} replaces ${model.items[at].title}`).then(() => queueActions.remove(old.item_id))
+            close()
+          }}
           onHear={() => hear(at, Math.max(0, model.items[at].plan!.mixOut - 8))}
         />
       )}

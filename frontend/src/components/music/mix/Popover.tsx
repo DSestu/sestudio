@@ -1,7 +1,16 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useDownloadedLibrary } from '../../../downloadedLibrary'
+import { moodOf } from '../../../harmony'
+import { albumsOf, type MusicTrack } from '../../../musicLibrary'
+import { useSummary, type Summary } from '../../../musicMeta'
 import { queueActions, type MixSettings } from '../../../musicQueue'
+import { fetchFitsAfter } from '../crates/harmonyApi'
+import JoinChip from '../crates/JoinChip'
+import { join as joinOf, type Join, type ProxTrack } from '../crates/proximity'
 import type { SyncStatus } from '../engine'
 import { fmtBpm } from '../format'
+import Keyboard from '../harmony/Keyboard'
+import { parseReading } from '../harmony/scales'
 import type { Plan, Track } from '../timeline/sampling'
 
 // The transition popover (SPEC-music-player §9.4): one pair's mix settings.
@@ -19,6 +28,10 @@ export interface PopoverProps {
   above: number
   onClose: () => void
   onHear: () => void
+  /** Queued track ids, never offered again as a smoother pick. */
+  queued: string[]
+  /** Swap `b` for this library track. */
+  onUse: (t: MusicTrack) => void
 }
 
 const BARS = [4, 8, 16, 32]
@@ -59,7 +72,68 @@ function statusLine(p: Plan, a: Track, b: Track, settings: MixSettings, sync: Sy
   return settings.mode === 'sync' ? 'No tempo for one of the tracks, fading instead' : '4 s equal-power fade'
 }
 
-export default function MixPopover({ a, b, plan, settings, defaultMix, sync, x, above, onClose, onHear }: PopoverProps) {
+const proxOf = (id: string, s?: Summary): ProxTrack => ({ id, bpm: s?.bpm, camelot: s?.camelot, genre: s?.genre, harmony: s?.harmony, energyScale: s?.energyScale })
+const reading = (s?: Summary) => {
+  const t = s?.harmony?.track
+  return t ? parseReading(`${t.tonic} ${t.mode}`) : undefined
+}
+
+/** How the pair joins, and a few smoother picks to swap in. */
+function Harmony({ a, b, queued, onUse }: { a: string; b: string; queued: string[]; onUse: (t: MusicTrack) => void }) {
+  const sa = useSummary(a)
+  const sb = useSummary(b)
+  const j = useMemo(() => joinOf(proxOf(a, sa), proxOf(b, sb)), [a, b, sa, sb])
+  const lib = useDownloadedLibrary()
+  const byId = useMemo(() => new Map(albumsOf(lib).flatMap(al => al.tracks).map(t => [t.id, t])), [lib])
+  const [alts, setAlts] = useState<{ t: MusicTrack; join: Join }[]>([])
+  const key = queued.join()
+  useEffect(() => {
+    if (j.safe || !j.kind) return
+    let live = true
+    fetchFitsAfter(a, { exclude: key.split(','), filters: { harmony: 'safe' }, limit: 6 }).then(
+      r => live && setAlts(r.results.flatMap(x => byId.has(x.id) ? [{ t: byId.get(x.id)!, join: x.join }] : []).slice(0, 3)),
+      () => live && setAlts([]),
+    )
+    return () => { live = false }
+  }, [a, j.safe, j.kind, key, byId])
+  const ra = reading(sa)
+  const rb = reading(sb)
+  const wa = moodOf(sa?.harmony?.track?.mode)?.word
+  const wb = moodOf(sb?.harmony?.track?.mode)?.word
+  if (!j.kind) return <div className="pt-1.5 border-t border-white/10 text-base-content/55">No key for one of the tracks yet, so no harmony.</div>
+  const facts = [
+    j.shared !== null && `${j.shared} of 7 notes`,
+    wa && wb && `${wa} → ${wb}`,
+    j.energy.step && `energy ${j.energy.step}`,
+    j.tempoJump && 'tempo jump',
+  ].filter(Boolean).join(' · ')
+  return (
+    <div className="flex flex-col gap-2 pt-1.5 border-t border-white/10">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-base-content/45">Harmony</div>
+      <div>
+        <JoinChip join={j} className="font-semibold text-[13px]" />
+        <div className="text-base-content/60">{facts}</div>
+      </div>
+      {ra && rb && <Keyboard notes={ra.notes} home={ra.home} other={rb.notes} otherHome={rb.home} width={250} />}
+      {!j.safe && alts.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <div className="text-base-content/60">Smoother next tracks</div>
+          {alts.map(({ t, join }) => (
+            <div key={t.id} className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <b className="block truncate font-medium">{t.title}</b>
+                <JoinChip join={join} className="text-[11px] text-base-content/60" />
+              </div>
+              <button type="button" onClick={() => onUse(t)} className="px-2.5 py-1 rounded-lg bg-primary/25 text-primary font-medium hover:bg-primary/35">Use instead</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function MixPopover({ a, b, plan, settings, defaultMix, sync, x, above, onClose, onHear, queued, onUse }: PopoverProps) {
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
     root.current?.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'ease-out' })
@@ -117,6 +191,7 @@ export default function MixPopover({ a, b, plan, settings, defaultMix, sync, x, 
         <button type="button" onClick={onHear} className="px-3 py-1.5 rounded-lg bg-primary/25 text-primary font-medium hover:bg-primary/35">Hear it</button>
       </div>
       <Seg label="Default mix" value={defaultMix as 'fade' | 'sync'} options={[['fade', 'Fade 4 s'], ['sync', 'Beat sync']]} onPick={m => void queueActions.setDefaultMix(m)} />
+      <Harmony a={a.track.id} b={b.track.id} queued={queued} onUse={onUse} />
     </div>
   )
 }

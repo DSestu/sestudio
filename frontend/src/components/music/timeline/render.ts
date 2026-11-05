@@ -93,6 +93,8 @@ export interface LabelItem extends DrawItem {
   title: string
   /** The handover into this track. */
   plan?: Plan
+  /** CSS colour of that join's kind (green flows, blue next door, amber clash); the signal blue when unknown. */
+  tone?: string
 }
 
 export interface Frame {
@@ -288,8 +290,9 @@ export class TimelineRenderer {
       const x = X(it.a + it.span.i0 + it.span.il / 2)
       if (x < R.x || x > R.x + R.w) continue
       const k = x < px ? 0.6 : 1
-      T.vgrad(x - 0.5, y0 - amp * 0.98, 1, amp * 1.88, [[0, NONE], [0.35, pm(sig, 0.85 * k)], [0.62, pm(sig, 0.85 * k)], [1, NONE]])
-      T.diamond(x, y0, 4, pm(sig, 0.95 * k))
+      const c = it.tone ? rgb(it.tone) : sig
+      T.vgrad(x - 0.5, y0 - amp * 0.98, 1, amp * 1.88, [[0, NONE], [0.35, pm(c, 0.85 * k)], [0.62, pm(c, 0.85 * k)], [1, NONE]])
+      T.diamond(x, y0, 4, pm(c, 0.95 * k))
     }
 
     // The rest of a track being analysed: a dotted horizon from its front to its end (2 px on, 5 off).

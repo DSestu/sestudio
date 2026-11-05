@@ -36,9 +36,9 @@ export const KINDS: Record<Kind, string> = {
   'next-door': 'Next door',
   clash: 'Clash',
 }
-/** One colour per kind of join: flows (green), next door (blue), clash (amber). */
+/** One colour per kind of join: flows (green), next door (blue), clash (amber). Literal colours, for the timeline's canvas too. */
 export const joinColor = (j: { kind: Kind | null }) =>
-  j.kind === 'clash' ? 'var(--color-warning)' : j.kind === 'modal-shift' || j.kind === 'next-door' ? 'var(--color-primary)' : j.kind ? 'var(--color-success)' : 'oklch(75% .02 265)'
+  j.kind === 'clash' ? 'oklch(80% .16 80)' : j.kind === 'modal-shift' || j.kind === 'next-door' ? 'oklch(72% .16 230)' : j.kind ? 'oklch(76% .17 150)' : 'oklch(75% .02 265)'
 /** Shared notes (of 7) from which a join counts as safe. */
 export const SAFE_NOTES = 6
 /** Largest tempo change inside one genre, as a share of A's tempo. */
