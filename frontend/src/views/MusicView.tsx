@@ -30,7 +30,7 @@ import { currentParams, patchParams, replaceParams, type Navigate } from '../nav
 import { useSettings } from '../useSettings'
 import FlowsHome from '../components/music/flows/FlowsHome'
 import MixesList from '../components/music/flows/MixesList'
-import FlowEditor from '../components/music/flows/FlowEditor'
+import FlowLanes from '../components/music/flows/FlowLanes'
 import MixView from '../components/music/flows/MixView'
 import { useFlows } from '../musicFlows'
 
@@ -342,7 +342,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   )
   const searching = !page && query.trim() !== '' && !LINK_RE.test(query.trim())
   const body = lab && flowEdit ? (
-    <FlowEditor key={flowEdit} flowId={flowEdit} byId={byId} />
+    <FlowLanes key={flowEdit} flowId={flowEdit} byId={byId} onOpen={id => go({ fl: id })} />
   ) : lab && mixOpen ? (
     <MixView key={mixOpen} mixId={mixOpen} byId={byId} onEditFlow={id => go({ fl: id })} />
   ) : drafting ? (
