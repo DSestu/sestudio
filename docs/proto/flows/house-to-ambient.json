@@ -1,0 +1,12 @@
+{
+  "name": "Stress test: house at 124 into ambient (the test library cannot do this)",
+  "chunks": [
+    {"id": "house", "share": 1, "next": ["ambient"], "layers": {
+      "tempo": [[0, 124], [1, 126]], "energy": [[0, 0.5], [1, 0.7]],
+      "genre": [{"from": 0, "to": 1, "genres": ["House"]}]}},
+    {"id": "ambient", "share": 1, "layers": {
+      "energy": [[0, 0.3], [1, 0.05]],
+      "harmony": [{"at": 0, "kind": "break"}],
+      "genre": [{"from": 0, "to": 1, "genres": ["Ambient"]}]}}
+  ]
+}

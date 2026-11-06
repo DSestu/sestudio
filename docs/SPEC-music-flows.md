@@ -46,17 +46,23 @@ Two shapes, one per kind of data.
 
 Each block is a stretch with a target and a strictness (must / prefer).
 
-**Harmony** is the motion from the previous track, not a fixed key. Movement words in the editor; theory words on hover or in the detail.
+**Harmony** is about one thing: the compatibility of two consecutive tracks, on the app's reading of every track as a scale (tonic + mode, a set of 7 notes), not on Camelot. A join is one of three things: a **match**, a **modulation**, or a **break**. The layer is not blocks to fill: **every join is a match unless an event is placed**. The tone is implicit: the first track sets it, matches carry it, each modulation moves it by a known amount.
 
-| Movement | Key relations (Camelot) | Feel |
+| Join | What the pair shows | Feel |
 |---|---|---|
-| Stay | same key | seamless |
-| Drift | ±1 on the wheel, relative (A↔B same number) | smooth change |
-| Lift | +1, or +2 (energy boost), or major from minor | brighter, rising |
-| Drop | −1, or minor from major | darker, settling |
-| Far | anything else, or an unrelated key on purpose | a reset |
+| Match | same key, or the relative (all 7 notes shared) | seamless |
+| Up a fifth | one note swapped sharpward, new tonic (to the dominant side) | brighter, lifting |
+| Down a fifth | one note swapped flatward, new tonic (to the subdominant side) | darker, settling |
+| Brighter mode | same tonic, one note sharpward (Aeolian → Dorian) | colour change, same ground |
+| Darker mode | same tonic, one note flatward (Aeolian → Phrygian) | colour change, same ground |
+| Relative | same notes, new tonic (minor ↔ major) | a modulation you barely hear, placed on purpose |
+| Break | fewer than 6 shared notes | a reset |
 
-Key confidence under .5 counts as "unknown": the generator treats the track as fitting any movement at reduced score and the row shows the key dashed, as today.
+An **event** is a point on the chunk's timeline with one of the six kinds above (the five modulations and Break). It is realised at the first join after it; when no track can realise it there, it slides to the next join and shows as pending; at the chunk's end it is dropped and shown as missed. A chunk reads like a sentence: *mostly match, one Up a fifth at 60 %, a Break at the start of the come-down*. "Lift every track" is an event on every join: the lane shows the absurdity.
+
+**Harmony is a pull, not a gate.** It never excludes a track: every candidate gets a fit from 0 to 1 for the join wanted (the exact join 1, the relative for a match .8, a safe modulation nobody asked for .6, a plain match while an event is pending .5, a break not asked for 0, an unread key .4), weighted by the flow's **pull** (light ×1, strong ×2 by default, only ×6) against tempo and energy closeness (×1 each). So the mix never leaves the tempo or energy curve to find a key, but among everything in range it takes the harmonic neighbour first, and events are reached for when a track in range can serve them. Harmony has no relaxation step; the fit is shown on every join instead. The same fit and pull rank **suggestions** (Fits next, the add panel): a list ordered by the combined score, each row saying why in one word (Match · Up a fifth · Break), the pending event named at the top as what the flow is looking for.
+
+A chunk with no harmony layer is free. A track whose mode is unsure keeps its tonic and shows "?".
 
 **Mood** is analysed per track on three axes: dark ↔ bright, calm ↔ aggressive, sad ↔ happy. A mood block names a region of that space ("dark and aggressive"); named moods are presets over the axes, so the user can define their own. Where the scores come from (Essentia's CC BY-NC-SA mood models, the key's mode and brightness, or a mix of both) is decided by a research note on the test tracks first (§11). If models are used they are optional like the genre model: stated in Settings, the mood layer is absent without them.
 
@@ -80,7 +86,7 @@ Given a flow, a path, a length and the library:
 1. Slice the path into slots (one per expected track, from length and the tempo-typical track duration).
 2. For each slot, score every candidate on every present layer; a candidate must satisfy *must* blocks and the curves' bands, and is ranked by *prefer* blocks, closeness to the curve's centre, and no repeats.
 3. Choose with a seed (so "same again" is possible) and a little randomness (so "again" gives a cousin).
-4. When nothing satisfies a slot, **relax and show it**: widen tempo first, then energy, then harmony (Stay → Drift → Far), then mood, then genre. The stretch shows the relaxation it needed ("tempo stretched to ±8 here"); the user can accept, pin a track, or widen the flow.
+4. When nothing satisfies a slot, **relax and show it**. First one layer alone, in this order: tempo (±8 instead of ±3), energy (two steps), mood, genre (harmony is never relaxed: it is a weight, §4.2). Then the same order cumulatively. Last, every curve becomes a preference, so a mix never stops short of its length. The stretch shows exactly the relaxation it needed ("harmony: loose" rather than every layer at once); the user can accept, pin a track, or widen the flow.
 5. Pins are fixed before scoring; slots around a pin score against it.
 6. Transitions between chosen tracks use the existing mix plan (beat-synced out of an outro into an intro, never over a drop).
 
@@ -99,7 +105,7 @@ Source: the local library. A flow carries an **Allow online** switch, off by def
 - The flow editor is a timeline with one lane per layer; the multiverse view adds branches as parallel lanes that split off.
 - Building is **drag and drop**: a preset flow, chunk or layer dropped onto the timeline; dropped between two points it inserts, dropped on a layer lane it replaces that stretch of that layer only.
 - **Branching** is one gesture: drag a chunk onto the timeline while holding, or press "Branch here" at a point, which duplicates the remaining path into a second future to edit.
-- Presets ship as a small starter library (names are illustrative): *Warm-up* (tempo and energy rise, Stay/Drift), *Peak* (high energy, Lift every few tracks), *Come-down* (energy falls, Drop, Drift), *Deep* (dark mood, Stay), plus layer presets (*Climb*, *Plateau*, *Wave* for curves; *Stay then Lift* for harmony).
+- Presets ship as a small starter library (names are illustrative): *Warm-up* (tempo and energy rise, matches only), *Peak* (high energy, one Up a fifth halfway), *Come-down* (energy falls, a Break at its start, then the Relative), *Deep* (dark mood, a Darker mode halfway), plus layer presets (*Climb*, *Plateau*, *Wave* for curves; *One lift*, *Lift then home*, *Colour change*, *Reset* for harmony).
 - Everything a user builds can be saved as a preset at any grain (whole flow, chunk, single layer).
 
 ## 9. Entry experience
@@ -122,7 +128,7 @@ A playing mix is the queue. The player shows the lit path through the flow, the 
 ## 11. Open decision and next step
 
 1. **Mood source** (§4.2): a research note benchmarks, on the 46 test tracks against the user's own judgement, Essentia's mood models (aggressive, happy, sad, relaxed, party) versus key mode + brightness for dark ↔ bright, then picks per axis.
-2. **Next step: prototype the generator alone.** A script over the test tracks that renders a flow (curves, harmony movements, genre blocks, pins, relaxation order, seed) to a mix, so the harmony table and the relaxation rules are tested by ear before any UI. Mockups (phone and desktop) and the PR plan follow it.
+2. **Prototype: the flow lab** (`docs/proto/flows/`, 2026-11-06). A page that edits a flow (curves, centre, progression, genre, forks, presets by drag and drop, pins, freeze) and plays the rendered mix with real audio; `flowgen.js` is the generator with a self-check. Judged by ear next; mockups (phone and desktop) and the PR plan follow it. The harmony model above is the third: movement words per join made every join a lift with no home; centre + progression blocks held the tone but asked the user to author a home scale and degrees; match-by-default with placed, characterised modulations keeps only the pair compatibility and was chosen as the one to root the tool in.
 
 ## 12. Anti-goals
 
