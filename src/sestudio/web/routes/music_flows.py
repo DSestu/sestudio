@@ -129,10 +129,18 @@ def render_flow(flow_id: str, body: RenderBody) -> dict[str, Any]:
     )
 
 
+class DraftBody(BaseModel):
+    flow: dict[str, Any]
+    choices: dict[str, str] | None = None
+    minutes: float | None = None
+    seed: int = 1
+
+
 @router.post("/flows/render")
-def render_draft(body: FlowBody) -> dict[str, Any]:
-    """A flow that is not saved yet (the editor while it is being drawn)."""
-    return mixes.render_flow(_run(mixes.clean_flow, body.flow or {}), _pool())
+def render_draft(body: DraftBody) -> dict[str, Any]:
+    """A flow that is not saved yet (the editor while it is being drawn), with its fork choices."""
+    flow = _run(mixes.clean_flow, body.flow)
+    return mixes.render_flow(flow, _pool(), body.choices, body.minutes, body.seed)
 
 
 @router.get("/mixes")

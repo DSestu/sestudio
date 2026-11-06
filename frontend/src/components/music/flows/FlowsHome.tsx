@@ -39,16 +39,16 @@ function Shape({ flow }: { flow: Flow }) {
   )
 }
 
-function FlowCard({ flow }: { flow: Flow }) {
+function FlowCard({ flow, onOpen }: { flow: Flow; onOpen: () => void }) {
   const n = futures(flow)
   const length = LENGTHS.find(l => l.id === flow.length)?.label ?? 'Endless'
   return (
     <li className="flex flex-col gap-1 rounded-box bg-base-200 p-3">
       <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1 leading-tight">
+        <button onClick={onOpen} className="min-w-0 flex-1 text-left leading-tight hover:text-primary" title="Edit this flow">
           <p className="truncate text-sm font-semibold">{flow.name}</p>
           {flow.chunks.length > 1 && <p className="truncate text-xs text-base-content/60">{outline(flow)}</p>}
-        </div>
+        </button>
         <PlayButton label={`Play ${flow.name}`} onClick={() => run(playFlow(flow.id))} />
       </div>
       <Shape flow={flow} />
@@ -124,7 +124,11 @@ function Dial({ flows }: { flows: Flow[] }) {
   )
 }
 
-export default function FlowsHome() {
+export default function FlowsHome({ onOpen }: { onOpen: (id: string) => void }) {
+  const create = async () => {
+    const f = await saveFlow('New flow', { chunks: [{ id: 'start', share: 1, next: [], layers: { harmony: [] } }], pull: 'strong', length: 'endless' })
+    onOpen(f.id)
+  }
   const { flows, loaded } = useFlows()
   // Yours first (newest first, as the server sends them), then the presets; the dial's own flow is the dial.
   // Presets in the order of a night: they were seeded together, so oldest first is their own order.
@@ -138,7 +142,13 @@ export default function FlowsHome() {
           <span className="loading loading-dots loading-sm text-base-content/40" />
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map(f => <FlowCard key={f.id} flow={f} />)}
+            {shown.map(f => <FlowCard key={f.id} flow={f} onOpen={() => onOpen(f.id)} />)}
+            <li>
+              <button onClick={() => run(create())} className="flex h-full min-h-24 w-full flex-col items-start justify-center gap-0.5 rounded-box border border-dashed border-base-300 p-3 text-left hover:bg-white/4">
+                <span className="text-sm font-semibold text-base-content/80">New flow</span>
+                <span className="text-xs text-base-content/50">from scratch; presets drop into it</span>
+              </button>
+            </li>
           </ul>
         )}
       </section>
