@@ -55,6 +55,7 @@ def _empty() -> dict[str, Any]:
         "default_mix": "sync",
         "mix": {},
         "next_item": 1,
+        "source": None,
     }
 
 
@@ -88,6 +89,8 @@ def _view(rev: int, doc: dict[str, Any]) -> dict[str, Any]:
         "repeat": doc["repeat"],
         "default_mix": doc["default_mix"],
         "mix": doc["mix"],
+        # The flow or mix the queue plays (SPEC-music-flows §7), None for a hand-made queue.
+        "source": doc.get("source"),
         "station": _station_clock,
         "volume": _volume,
     }
@@ -228,11 +231,13 @@ def add(
     replace: bool = False,
     if_rev: int | None = None,
     start: int = 0,
+    source: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Insert *tracks* (``{library, track_id}``) at *index* (default: the end).
 
     ``replace`` swaps the whole queue for them (play all of a folder) and
-    starts at the first (or at *start*);
+    starts at the first (or at *start*); it plays *source* (a flow or a mix),
+    or nothing in particular when that is None;
     ``play_now`` jumps to the first inserted one.
     """
     if not tracks:
@@ -245,10 +250,11 @@ def add(
             doc["next_item"] += 1
         if replace:
             doc["items"] = new
+            doc["source"] = source
             at = max(0, min(start, len(new) - 1))
             _go(doc, new[at]["item_id"])
             doc["playing"] = True
-            return {"items": new, "start": at}
+            return {"items": new, "start": at, "source": source}
         at = (
             len(doc["items"])
             if index is None
@@ -265,6 +271,30 @@ def add(
         return detail
 
     return _mutate("set" if replace else "ins", if_rev, change)
+
+
+def future(
+    tracks: list[dict[str, Any]], source: dict[str, Any], if_rev: int | None = None
+) -> dict[str, Any]:
+    """Replace what comes after the current item with *tracks* (a re-rendered flow).
+
+    The played part and the current item stay, so playback does not move; the
+    queue now plays *source*.
+    """
+
+    def change(doc: dict[str, Any]) -> dict[str, Any]:
+        keep = _index(doc) + 1
+        new = []
+        for t in tracks:
+            new.append({**t, "item_id": f"q{doc['next_item']}"})
+            doc["next_item"] += 1
+        doc["items"] = doc["items"][:keep] + new
+        doc["source"] = source
+        if doc["current_item"] is None and new:
+            doc["current_item"] = new[0]["item_id"]
+        return {"keep": keep, "items": new, "source": source}
+
+    return _mutate("fut", if_rev, change)
 
 
 def remove(item_id: str, if_rev: int | None = None) -> dict[str, Any]:

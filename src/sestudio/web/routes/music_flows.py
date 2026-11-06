@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from sestudio import downloaded
-from sestudio.music import libraries, mixes, store
+from sestudio.music import libraries, mixes, queue, store
 
 router = APIRouter(prefix="/music")
 
@@ -47,13 +47,52 @@ def _run(fn: Any, *args: Any, **kw: Any) -> Any:
 
 
 def _pool() -> list[dict[str, Any]]:
-    """Every analysed track of the folder libraries: what the generator draws from (§6)."""
-    ids = [
-        f.track_id
-        for _lib, root in libraries.folder_roots()
-        for f in downloaded.audio_files(root, _lib)
+    """Every analysed track of the folder libraries: what the generator draws from (§6).
+
+    Each carries its ``library`` so a rendered mix can go into the queue.
+    """
+    where = {
+        f.track_id: lib
+        for lib, root in libraries.folder_roots()
+        for f in downloaded.audio_files(root, lib)
+    }
+    found = store.get(list(where))
+    return [{**a, "library": where[tid]} for tid, a in found.items()]
+
+
+FLOW_FIELDS = ("chunk", "join", "fit", "event", "relaxed")
+
+
+def _items(
+    rendered: dict[str, Any], pool: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Queue items for a rendered mix, each with what its join did (§6)."""
+    where = {t["id"]: t["library"] for t in pool}
+    return [
+        {
+            "library": where[m["track_id"]],
+            "track_id": m["track_id"],
+            "flow": {k: m.get(k) for k in FLOW_FIELDS},
+        }
+        for m in rendered["mix"]
+        if m["track_id"] in where
     ]
-    return list(store.get(ids).values())
+
+
+def _source(rendered: dict[str, Any], **ids: Any) -> dict[str, Any]:
+    return {
+        **ids,
+        "path": rendered.get("path", []),
+        "auto": rendered.get("auto", {}),
+        "minutes": rendered.get("minutes"),
+    }
+
+
+def _queue_run(fn: Any, *args: Any, **kw: Any) -> Any:
+    try:
+        return fn(*args, **kw)
+    except queue.Invalid as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 @router.get("/flows")
@@ -161,3 +200,91 @@ def thaw_mix(mix_id: str) -> dict[str, Any]:
 def read_mix(mix_id: str, body: ReadBody) -> dict[str, Any]:
     """Give a hand list a flow inferred from its tracks, every track pinned (§7)."""
     return _run(mixes.read_as_flow, mix_id, body.name, _pool())
+
+
+class PlayBody(BaseModel):
+    choices: dict[str, str] | None = None
+    minutes: float | None = None
+    seed: int = 1
+
+
+@router.post("/flows/{flow_id}/play")
+def play_flow(flow_id: str, body: PlayBody) -> dict[str, Any]:
+    """Render the flow and play it: the queue becomes this mix (§7)."""
+    flow = _run(mixes.flow_get, flow_id)
+    pool = _pool()
+    rendered = mixes.render_flow(flow, pool, body.choices, body.minutes, body.seed)
+    source = _source(
+        rendered, flow=flow_id, mix=None, choices=body.choices or {}, seed=body.seed
+    )
+    return _queue_run(queue.add, _items(rendered, pool), replace=True, source=source)
+
+
+@router.post("/mixes/{mix_id}/play")
+def play_mix(mix_id: str) -> dict[str, Any]:
+    mix = _run(mixes.mix_get, mix_id)
+    pool = _pool()
+    rendered = _run(mixes.render_mix, mix, pool)
+    source = _source(
+        rendered,
+        flow=mix.get("flow"),
+        mix=mix_id,
+        choices=mix.get("choices") or {},
+        seed=mix.get("seed", 1),
+    )
+    if mix.get("frozen") is not None:
+        source["frozen"] = True
+    return _queue_run(queue.add, _items(rendered, pool), replace=True, source=source)
+
+
+class RerouteBody(BaseModel):
+    choices: dict[str, str] | None = None
+    seed: int | None = None
+
+
+@router.post("/queue/reroute")
+def reroute(body: RerouteBody) -> dict[str, Any]:
+    """Re-render what is still to come (a fork taken, a reroll, a flow edit): the played part stays (§5)."""
+    state = queue.get_state()
+    src = state.get("source")
+    if not src or not src.get("flow"):
+        raise HTTPException(400, "the queue does not play a flow")
+    if src.get("frozen"):
+        raise HTTPException(400, "the queue plays a frozen mix")
+    flow = _run(mixes.flow_get, src["flow"])
+    choices = {**(src.get("choices") or {}), **(body.choices or {})}
+    seed = body.seed if body.seed is not None else src.get("seed", 1)
+    played = state["items"][: state["current"] + 1]
+    pins = {str(i): it["track_id"] for i, it in enumerate(played)}
+    pool = _pool()
+    rendered = mixes.render_flow(flow, pool, choices, src.get("minutes"), seed, pins)
+    items = _items(rendered, pool)[len(played) :]
+    source = _source(
+        rendered, flow=src["flow"], mix=src.get("mix"), choices=choices, seed=seed
+    )
+    return _queue_run(queue.future, items, source)
+
+
+class ReadBody2(BaseModel):
+    name: str = "Queue"
+
+
+@router.post("/queue/read")
+def read_queue(body: ReadBody2) -> dict[str, Any]:
+    """Give a hand-made queue a flow read from its tracks, every track pinned; it then plays that mix (§7)."""
+    state = queue.get_state()
+    ids = [it["track_id"] for it in state["items"]]
+    if not ids:
+        raise HTTPException(400, "the queue is empty")
+    mix = _run(mixes.mix_create, body.name, None, tracks=ids)
+    pool = _pool()
+    mix = _run(mixes.read_as_flow, mix["id"], body.name, pool)
+    # Long enough for every pinned track: they all stay, now with what each join does.
+    dur = {t["id"]: t.get("duration") or 240 for t in pool}
+    minutes = sum(dur.get(t, 240) for t in ids) / 60 + 1
+    rendered = mixes.render_flow(
+        _run(mixes.flow_get, mix["flow"]), pool, {}, minutes, 1, mix["pins"]
+    )
+    source = _source(rendered, flow=mix["flow"], mix=mix["id"], choices={}, seed=1)
+    keep = state["current"] + 1
+    return _queue_run(queue.future, _items(rendered, pool)[keep : len(ids)], source)

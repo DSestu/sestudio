@@ -21,6 +21,27 @@ export interface QueueItem extends TrackRef {
   title?: string
   artist?: string
   duration?: number
+  /** What this item's join did, when the queue plays a flow (SPEC-music-flows §6). */
+  flow?: FlowSlot
+}
+/** One rendered slot of a flow: its chunk, the join from the previous track, how well it served the flow. */
+export interface FlowSlot {
+  chunk: string
+  join: string | null
+  fit: number | null
+  event: { at: number; kind: string; index: number; realised: boolean } | null
+  relaxed: string[]
+}
+/** The flow or mix the queue plays (SPEC-music-flows §7). */
+export interface QueueSource {
+  flow: string | null
+  mix: string | null
+  choices: Record<string, string>
+  seed: number
+  path: string[]
+  auto: Record<string, string>
+  minutes: number | null
+  frozen?: boolean
 }
 export interface MixSettings {
   mode: string
@@ -44,6 +65,8 @@ export interface QueueState {
   mix: Record<string, MixSettings>
   /** The station's playback clock while one runs (SPEC-music §7). */
   station?: StationClock | null
+  /** The flow or mix playing, null for a hand-made queue. */
+  source?: QueueSource | null
 }
 export interface StationClock {
   item_id: string | null
@@ -93,7 +116,13 @@ export function applyEvent(s: QueueState, ev: QueueEvent, serverNow: number): Qu
     }
     case 'set':
       next.items = ev.items as QueueItem[]
+      next.source = (ev.source as QueueSource | null | undefined) ?? null
       return Object.assign(next, restart((ev.start as number | undefined) ?? 0, true))
+    case 'fut':
+      // The flow re-rendered what is still to come; the played part and the current item stay.
+      next.items = [...s.items.slice(0, ev.keep as number), ...(ev.items as QueueItem[])]
+      next.source = ev.source as QueueSource
+      return next
     case 'rm': {
       const i = ev.index as number
       const items = s.items.filter(x => x.item_id !== ev.item_id)
@@ -191,7 +220,7 @@ async function refetch() {
   if (res.ok) setState(await res.json())
 }
 
-const OPS = ['ins', 'rm', 'mv', 'ord', 'go', 'set', 'mix', 'mixd', 'transport']
+const OPS = ['ins', 'rm', 'mv', 'ord', 'go', 'set', 'fut', 'mix', 'mixd', 'transport']
 
 function connect() {
   if (source) return
