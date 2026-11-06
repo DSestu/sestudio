@@ -13,6 +13,7 @@ describe('lanes', () => {
     const f = toFlow(NIGHT)
     expect(f.length).toBe('100')
     expect(f.chunks).toHaveLength(1)
+    expect(f.chunks[0].layers.harmony).toEqual([]) // joins want a key match
     expect(fromFlow(f as Flow)).toEqual({ lanes: NIGHT, lossy: false })
   })
   it('read a chunked flow along its first path, flagged as lossy', () => {
