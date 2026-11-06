@@ -1,8 +1,9 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { clockSkew, positionNow, type QueueState } from '../../musicQueue'
-import { draw, perimeter, prep, bandAt, type Prepped, type Shape } from './barAuraDraw'
-import { tc } from './background/bands'
-import { energyAt, grid, type Grid } from './background/energy'
+import { draw, perimeter, prep, type Prepped, type Shape } from './barAuraDraw'
+import { Bands, lightLead, tc } from './background/bands'
+import { bend, Energy, grid, type Grid } from './background/energy'
+import { getLook } from './background/settings'
 import { engine } from './engine'
 import { rawOf, useAnalyses } from './mix/analysis'
 
@@ -27,8 +28,9 @@ export default function BarAura({ bar, q, duration }: { bar: RefObject<HTMLEleme
     if (!cv) return
     const c = cv.getContext('2d')!, off = document.createElement('canvas').getContext('2d')!
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const levels = new Float32Array(8)
-    let energy = 0, calm = 0, last = 0, raf = 0
+    // The EQ's own chain (Background.tsx): the live analyser through the Look's bands, bent by the track's energy.
+    const bands = new Bands(), energy = new Energy()
+    let fq = new Uint8Array(0), nb = 0, spk = 0, calm = 0, last = 0, raf = 0
     let track = '', p: Prepped | null = null, g: Grid | null = null, seen = -1
     let shape: Shape = { w: 0, h: 0, rt: 0, rb: 0 }, pts: [number, number][] = [], key = ''
     const step = (now: number) => {
@@ -39,6 +41,7 @@ export default function BarAura({ bar, q, duration }: { bar: RefObject<HTMLEleme
       if (!el) return
       const { q, duration, id, tick } = live.current
       if (id !== track || tick !== seen) {
+        if (id !== track) { bands.reset(); energy.reset() }
         track = id; seen = tick
         const raw = rawOf(id)
         p = prep(raw); g = grid(raw)
@@ -61,17 +64,27 @@ export default function BarAura({ bar, q, duration }: { bar: RefObject<HTMLEleme
       const t = Math.max(0, positionNow(q, clockSkew(), Date.now(), duration || Infinity) - engine.lag)
       const playing = q.playing && !still.matches
       calm += ((playing ? 0 : 1) - calm) * (still.matches ? 1 : tc(dt, 1000))
-      if (playing) {
-        for (let b = 0; b < 8; b++) {
-          const v = p ? bandAt(p, b, t) : 0.3
-          levels[b] += (v - levels[b]) * tc(dt, v > levels[b] ? 60 : 260)
-        }
-        const e = g ? energyAt(g, t, 1) : levels.reduce((a, v) => a + v, 0) / 8
-        energy += (e - energy) * tc(dt, e > energy ? 120 : 600)
+      const look = getLook(), an = engine.analyser
+      if (an) {
+        const ac = an.context as AudioContext
+        // Read once, as the EQ does: the browser's figure drifts, and every move of the delay is heard.
+        spk ||= (ac.outputLatency || 0) + (ac.baseLatency || 0)
+        engine.setLead(lightLead(an, look.s, spk))
       }
+      energy.step(g, t, q.playing, dt, look.s)
+      const { p: s } = bend({ ...look.s }, energy.I, g?.bl ?? 0.5)
+      if (s.nb !== nb) { nb = s.nb; bands.reset() }
+      let bins: Uint8Array | null = null
+      if (an && playing) {
+        if (Math.abs(an.smoothingTimeConstant - s.sm) > 0.005) an.smoothingTimeConstant = s.sm
+        if (fq.length !== an.frequencyBinCount) fq = new Uint8Array(an.frequencyBinCount)
+        an.getByteFrequencyData(fq)
+        bins = fq
+      }
+      bands.update(bins, an?.context.sampleRate ?? 44100, dt, s)
       c.setTransform(dpr, 0, 0, dpr, 0, 0)
       off.setTransform(dpr, 0, 0, dpr, 0, 0)
-      draw(c, off, shape, pts, { levels, energy, calm, progress: duration ? Math.min(1, t / duration) : 0, env: p })
+      draw(c, off, shape, pts, { levels: bands.SE.subarray(0, nb), energy: energy.I, calm, progress: duration ? Math.min(1, t / duration) : 0, env: p })
     }
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
