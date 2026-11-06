@@ -41,7 +41,10 @@ function energyName(a: number, b: number): string {
 
 // --- lanes → flow --------------------------------------------------------------------
 
-/** One chunk whose layers carry the three lanes; the length is the lanes' minutes. */
+/**
+ * One chunk whose layers carry the three lanes; the length is the lanes' minutes. `harmony: []` asks
+ * every join to match its neighbour's key: without the key the generator treats joins as free.
+ */
 export function toFlow(l: Lanes): Pick<Flow, 'chunks' | 'length'> {
   const T = total(l) || 1
   const energy: [number, number][] = []
@@ -56,7 +59,7 @@ export function toFlow(l: Lanes): Pick<Flow, 'chunks' | 'length'> {
     return [k === 'genre' ? { ...span, genres: genresOf(b.v), strict: 'must' as const } : { ...span, colour: b.v }]
   })
   return {
-    chunks: [{ id: 'all', share: 1, next: [], layers: { energy, genre: blocks('genre') as GenreBlock[], colour: blocks('colour') } as never }],
+    chunks: [{ id: 'all', share: 1, next: [], layers: { energy, genre: blocks('genre') as GenreBlock[], colour: blocks('colour'), harmony: [] } as never }],
     length: String(T) as Flow['length'],
   }
 }
