@@ -5,7 +5,8 @@ or more = a fork) and ``layers``: ``tempo`` and ``energy`` as ``[[fraction,
 value], ...]`` curves (energy 0..1 on the library's scale), ``harmony`` as a list
 of events ``{"at": fraction, "kind": up|down|mode+|mode-|relative|break}`` (every
 other join wants a match; no ``harmony`` key = free), ``genre`` as blocks
-``{"from", "to", "genres", "strict": must|prefer}``.
+``{"from", "to", "genres", "strict": must|prefer}``, ``colour`` as blocks
+``{"from", "to", "colour"}``: the key's colour a stretch keeps (bright, warm, dark, exotic).
 
 Tracks are the dicts of :func:`sestudio.music.store.get` (``id``, ``duration``,
 ``bpm``, ``genre``, ``harmony.track``, ``energyScale.track``). The same rules
@@ -17,7 +18,7 @@ from __future__ import annotations
 import random
 from typing import Any, Final
 
-from sestudio.music.modes import NAMES, SCALES
+from sestudio.music.modes import BRIGHTNESS, NAMES, SCALES
 
 BLEND_S: Final = 20.0  # shortcut: fixed overlap, the real plan() varies per pair
 TEMPO_BAND: Final = 3.0
@@ -25,7 +26,9 @@ ENERGY_BAND: Final = 0.2  # one step of five
 SAFE_NOTES: Final = 6
 #: Relaxation order (§6.4): one layer alone, then cumulative; ``any`` makes the
 #: curves preferences so a mix never stops short. Harmony is never relaxed.
-LADDER: Final = ("tempo", "energy", "genre", "any")
+LADDER: Final = ("tempo", "energy", "colour", "genre", "any")
+#: A key's colour from its mode's brightness; the harmonic-minor modes have none and are exotic.
+COLOURS: Final = ("bright", "warm", "dark", "exotic")
 #: How much the harmony fit weighs against tempo and energy closeness (1 each).
 PULL: Final = {"light": 1.0, "strong": 2.0, "only": 6.0}
 KINDS: Final = {
@@ -118,6 +121,17 @@ def block(blocks: list[dict[str, Any]] | None, f: float) -> dict[str, Any] | Non
     return next((b for b in blocks or [] if b["from"] <= f < b["to"]), None)
 
 
+def colour(t: Track) -> str | None:
+    """bright (Lydian, Ionian), warm (Mixolydian, Dorian), dark (Aeolian, Phrygian, Locrian), exotic; None unread."""
+    s = scale(t)
+    if s is None:
+        return None
+    b = BRIGHTNESS.get(s[1])
+    return (
+        "exotic" if b is None else "bright" if b >= 2 else "warm" if b >= 0 else "dark"
+    )
+
+
 def energy(t: Track) -> float | None:
     e = (t.get("energyScale") or {}).get("track")
     return None if e is None else e / 100
@@ -150,6 +164,13 @@ def score(
         s += 1 - d / band
     if prev is not None and "harmony" in layers:
         s += pull * fit(join(prev, t), event or "match")
+    k = block(layers.get("colour"), f)
+    if k and "colour" not in relax:
+        c = colour(t)
+        if c == k.get("colour"):
+            s += 1
+        elif c is not None:  # an unread key is no reason to leave a track out
+            return None
     g = block(layers.get("genre"), f)
     if g and g.get("genres") and "genre" not in relax:
         if t.get("genre") in g["genres"]:
@@ -353,6 +374,16 @@ def render(
         prev = pick
         i += 1
     return mix
+
+
+def fits(layers: dict[str, Any], a: float, b: float, lib: list[Track]) -> list[Track]:
+    """The tracks that meet every layer somewhere in [a, b) with nothing relaxed: what a stretch can draw on."""
+    probe = [a + (b - a) * x for x in (0.02, 0.5, 0.98)]
+    return [
+        t
+        for t in lib
+        if any(score(t, None, layers, f, set(), None, 1.0) is not None for f in probe)
+    ]
 
 
 def read(tracks: list[Track]) -> dict[str, Any]:
