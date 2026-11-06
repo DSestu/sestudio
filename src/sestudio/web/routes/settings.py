@@ -11,7 +11,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from sestudio import interpolate, restart
+from sestudio import downloaded, interpolate, restart
 from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.config import DEFAULT_DOWNLOAD_ORDER, load_config, save_config, tmdb_key
 from sestudio.dlna import _local_ipv4s
@@ -202,6 +202,18 @@ async def get_server_log(after: int = 0) -> dict[str, Any]:
     """What the server logged since line *after* (0: all it still holds), and
     when it started (Unix seconds), for its uptime."""
     return {"lines": LOG_BUFFER.since(after), "started": _STARTED}
+
+
+@router.get("/server/cache")
+async def get_server_cache() -> dict[str, int]:
+    """Bytes the video cache (stream segments, audio-track copies) holds."""
+    return {"bytes": await asyncio.to_thread(downloaded.video_cache_size)}
+
+
+@router.delete("/server/cache")
+async def clear_server_cache() -> dict[str, int]:
+    """Empty the video cache; bytes freed. Whatever plays rebuilds what it needs."""
+    return {"freed": await asyncio.to_thread(downloaded.clear_video_cache)}
 
 
 @router.get("/server/lan")

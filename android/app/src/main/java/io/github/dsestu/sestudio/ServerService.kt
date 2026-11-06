@@ -98,18 +98,29 @@ class ServerService : Service() {
         val runtime = Runtime(this)
         writeFirstConfig(runtime)
         val downloads = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!.apply { mkdirs() }
-        // Nightly builds main afresh on every start (same URL, new code: hence the refresh);
+        // Nightly builds main afresh on every start (same URL, new code: hence the reinstall);
         // a build from source has no default TMDB key, so posters need one in Settings.
-        val source = if (nightly(this)) {
-            arrayOf("--refresh-package", "sestudio", "--from", MAIN_ARCHIVE, "sestudio")
-        } else {
-            arrayOf("sestudio@latest")
-        }
+        val source = if (nightly(this)) "--reinstall-package sestudio --from $MAIN_ARCHIVE sestudio" else "sestudio@latest"
         val storage = storageRoots()
         writeStorage(runtime, storage)
+        // One installed copy, upgraded in place, instead of a uvx environment per version that
+        // uv's cache keeps for ever (it reached 30 GB). The copy doesn't need the cache
+        // (UV_LINK_MODE=copy), so the cache is emptied after each install. A failed install
+        // (offline) runs the copy already there. The server's own Restart runs this script too.
+        File(runtime.rootfs, START_SCRIPT.removePrefix("/")).writeText(
+            """
+            |#!/bin/sh
+            |# Written by the Android app on every start.
+            |# Nothing runs yet, and Debian's /tmp is never emptied by a reboot.
+            |rm -rf /tmp/sestudio-*
+            |uv tool install $source && uv cache clean
+            |export SESTUDIO_RESTART=$START_SCRIPT
+            |exec /root/.local/bin/sestudio --http_port ${BuildConfig.HTTP_PORT} --https_port ${BuildConfig.HTTPS_PORT}
+            |
+            """.trimMargin(),
+        )
         process = runtime.command(
-            "uvx", *source,
-            "--http_port", "${BuildConfig.HTTP_PORT}", "--https_port", "${BuildConfig.HTTPS_PORT}",
+            "/bin/sh", START_SCRIPT,
             // Shared storage at the same paths inside, so they match what Android shows.
             binds = listOf(downloads.path to DOWNLOADS) + storage.map { it.second to it.second },
         )
@@ -206,6 +217,9 @@ class ServerService : Service() {
             private set
 
         private const val MAIN_ARCHIVE = "https://github.com/DSestu/sestudio/archive/refs/heads/main.zip"
+
+        /** Inside Debian: installs or updates sestudio, empties uv's cache, runs it. */
+        private const val START_SCRIPT = "/root/start-sestudio.sh"
 
         /** Where downloads appear inside Debian: the app's Movies folder on the phone. */
         const val DOWNLOADS = "/downloads"

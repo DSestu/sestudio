@@ -721,6 +721,21 @@ export async function serverRestartWay(): Promise<{ restart: RestartWay; command
 }
 
 /** Restart the server on newer code. It is gone for a few seconds after. */
+/** Bytes the server's video cache holds (stream segments, audio-track copies). */
+export async function getVideoCache(): Promise<number | null> {
+  try {
+    const res = await fetch(`${BASE}/server/cache`, { cache: 'no-store' })
+    return res.ok ? (await res.json()).bytes : null
+  } catch {
+    return null
+  }
+}
+
+export async function clearVideoCache(): Promise<void> {
+  const res = await fetch(`${BASE}/server/cache`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Could not clear the cache: ${res.status}`)
+}
+
 export async function restartServer(): Promise<void> {
   const res = await fetch(`${BASE}/server/restart`, { method: 'POST' })
   if (!res.ok) throw new Error(`Could not restart: ${res.status}`)

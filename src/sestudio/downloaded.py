@@ -743,6 +743,8 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
     if out is None:
         return None
     if out.is_file() and out.stat().st_size > 0:
+        # Touched so eviction reads it as recently used, not merely old.
+        out.touch()
         return out
     key = out.stem
     codec = tracks_of(file).audio[index].codec
@@ -793,6 +795,7 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
         )
         if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
             os.replace(tmp, out)
+            _prune_video_cache(keep=out)
             return out
         return None
     except (OSError, subprocess.SubprocessError):
@@ -808,9 +811,17 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
 #: seek costs one transcode, long enough that process startup is not most of it.
 HLS_SEGMENT_SECONDS = 6.0
 
-#: Ceiling on the segment cache, evicted oldest-first.
+#: Ceiling on the video cache (HLS segments and audio-track copies together),
+#: evicted oldest-first. A phone gets less: the cache sits in the app's own storage.
 # ponytail: one global cap; per-title budgets if one film ever starves another.
-_HLS_CACHE_BYTES = 4 * 1024**3
+_VIDEO_CACHE_BYTES = 4 * 1024**3
+_PHONE_VIDEO_CACHE_BYTES = 2 * 1024**3
+
+
+def _video_cache_bytes() -> int:
+    # The Android app writes this file on every start; nothing else does.
+    on_phone = (config_dir() / "android_storage.json").is_file()
+    return _PHONE_VIDEO_CACHE_BYTES if on_phone else _VIDEO_CACHE_BYTES
 
 
 def _hls_dir() -> Path:
@@ -1200,7 +1211,7 @@ def _encode_segment(
         )
         if result.returncode == 0 and tmp.is_file() and tmp.stat().st_size > 0:
             os.replace(tmp, out)
-            _prune_hls_cache()
+            _prune_video_cache(keep=out)
             return out
         return None
     except (OSError, subprocess.SubprocessError):
@@ -1419,7 +1430,7 @@ def _draw_segment(
         )  # fmt: skip
         if ok and tmp.is_file() and tmp.stat().st_size > 0:
             os.replace(tmp, out)
-            _prune_hls_cache()
+            _prune_video_cache(keep=out)
             return out
         return None
     except OSError:
@@ -1651,30 +1662,57 @@ def stream_drawn(
     )  # fmt: skip
 
 
-def _prune_hls_cache() -> None:
-    """Drop the oldest segments once the cache passes its ceiling.
+def _video_cache_files() -> list[tuple[float, int, Path]]:
+    """(mtime, size, path) of every HLS segment and audio-track copy, in-progress ones included."""
+    files = [*_hls_dir().glob("*.ts"), *_audio_dir().glob("*.mp4")]
+    found = []
+    for f in files:
+        with contextlib.suppress(OSError):  # gone since the glob
+            stat = f.stat()
+            found.append((stat.st_mtime, stat.st_size, f))
+    return found
+
+
+def video_cache_size() -> int:
+    """Bytes the video cache holds now."""
+    return sum(size for _, size, _ in _video_cache_files())
+
+
+def clear_video_cache() -> int:
+    """Delete the whole video cache; bytes freed. A file in use where that
+    blocks deleting it (Windows) stays, for the next prune."""
+    freed = 0
+    for _, size, path in _video_cache_files():
+        with contextlib.suppress(OSError):
+            path.unlink()
+            freed += size
+    return freed
+
+
+def _prune_video_cache(keep: Path | None = None) -> None:
+    """Drop the oldest segments and audio-track copies once the cache passes its ceiling.
 
     Watching a film through leaves about a gigabyte behind, and it is worth
     keeping: a re-watch, or a seek back to a scene, then costs nothing. Worth
-    keeping, but not for ever.
+    keeping, but not for ever. An audio-track copy is a whole film, so it
+    shares the one budget instead of growing on its own. *keep*, the file just
+    made for the player, is never dropped, even when it alone is over budget.
     """
-    try:
-        files = [
-            (f.stat().st_mtime, f.stat().st_size, f) for f in _hls_dir().glob("*.ts")
-        ]
-    except OSError:
-        return
+    files = _video_cache_files()
     total = sum(size for _, size, _ in files)
-    if total <= _HLS_CACHE_BYTES:
+    budget = _video_cache_bytes()
+    if total <= budget:
         return
     for _, size, path in sorted(files):
+        if path == keep:
+            continue
         try:
             path.unlink()
         except OSError:  # pragma: no cover — raced with another prune
             continue
         total -= size
         # To 90%, so this does not run again on the very next segment.
-        if total <= _HLS_CACHE_BYTES * 0.9:
+        if total <= budget * 0.9:
             return
 
 
