@@ -77,6 +77,9 @@ def command() -> tuple[list[str], str, str | None]:
     :func:`launcher`); else "uvx" — `uvx sestudio@latest`, the newest release,
     with the options it was started with; else "python" — the same Python,
     whose code is the checkout's as it is now, if it runs from one."""
+    # The Android app starts the server from a script (install, clean uv's cache, run).
+    if script := os.environ.get("SESTUDIO_RESTART"):
+        return ["/bin/sh", script], "launcher", None
     if found := launcher():
         return found[0], "launcher", found[1]
     args = sys.argv[1:]

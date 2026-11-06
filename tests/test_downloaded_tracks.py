@@ -580,3 +580,36 @@ def test_a_stream_segment_reads_through_the_proxy_at_the_best_variant(
     assert "-ss" not in commands[1]
     assert downloaded.stream_segment(url, 999, 0, hls=True) is None
     assert downloaded.stream_segment(url, 0, 1080, hls=True) is None
+
+
+def test_segments_and_audio_copies_share_one_budget_and_the_new_file_stays(
+    monkeypatch, tmp_path
+):
+    """Oldest go first across both folders, down to 90%; the file just made is
+    kept even when it alone is over budget. Clearing empties both."""
+    import os
+
+    monkeypatch.setattr(downloaded, "_hls_dir", lambda: tmp_path / "hls")
+    monkeypatch.setattr(downloaded, "_audio_dir", lambda: tmp_path / "audio")
+    monkeypatch.setattr(downloaded, "_video_cache_bytes", lambda: 100)
+    (tmp_path / "hls").mkdir()
+    (tmp_path / "audio").mkdir()
+    files = [
+        tmp_path / "hls" / "old.ts",
+        tmp_path / "audio" / "mid.mp4",
+        tmp_path / "hls" / "new.ts",
+    ]
+    for age, f in enumerate(files):
+        f.write_bytes(b"x" * 40)
+        os.utime(f, (age, age))
+    downloaded._prune_video_cache(keep=files[2])
+    assert [f.exists() for f in files] == [False, True, True]  # 120 -> 80
+
+    huge = tmp_path / "audio" / "film.mp4"
+    huge.write_bytes(b"x" * 500)
+    downloaded._prune_video_cache(keep=huge)
+    assert huge.exists() and not files[1].exists() and not files[2].exists()
+
+    assert downloaded.video_cache_size() == 500
+    assert downloaded.clear_video_cache() == 500
+    assert downloaded.video_cache_size() == 0

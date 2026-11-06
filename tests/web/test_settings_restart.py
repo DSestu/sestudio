@@ -55,6 +55,11 @@ def test_a_restart_runs_the_uv_command_it_was_started_with(monkeypatch, tmp_path
     monkeypatch.setattr(restart, "checkout", lambda: tmp_path)
     argv, how, _cwd = restart.command()
     assert (argv[1:], how) == (["-m", "sestudio", "--http_port", "9000"], "python")
+    # The Android app's start script wins over everything: it installs, cleans, runs.
+    monkeypatch.setenv("SESTUDIO_RESTART", "/root/start-sestudio.sh")
+    assert restart.command() == (
+        ["/bin/sh", "/root/start-sestudio.sh"], "launcher", None,
+    )  # fmt: skip
 
 
 def test_the_next_server_is_started_waiting_for_this_one_and_this_one_stops(

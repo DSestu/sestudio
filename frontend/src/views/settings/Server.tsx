@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LogLine, RestartWay } from '../../api'
-import { getServerLog, restartServer, serverRestartWay } from '../../api'
+import { clearVideoCache, getServerLog, getVideoCache, restartServer, serverRestartWay } from '../../api'
+import { fmtSize } from '../../downloadedLibrary'
 import { SettingRow, SettingsGroup, ToggleRow } from './rows'
 import { uptime } from './useSettingsStatus'
 import type { SettingsProps } from './SettingsView'
@@ -17,6 +18,10 @@ export default function Server({ settings }: Pick<SettingsProps, 'settings'>) {
       )}
 
       <ServerLog />
+
+      <SettingsGroup title="Storage">
+        <VideoCache />
+      </SettingsGroup>
 
       <SettingsGroup title="Restart">
         {window.SestudioApp?.setNightly && <NightlyToggle />}
@@ -88,6 +93,43 @@ function NightlyToggle() {
       busy={state === 'restarting'}
       onChange={next => { void flip(next) }}
     />
+  )
+}
+
+/** What the server keeps of videos already watched, and a way to empty it. */
+function VideoCache() {
+  const [bytes, setBytes] = useState<number | null>(null)
+  const [state, setState] = useState<'idle' | 'clearing' | 'failed'>('idle')
+  useEffect(() => { void getVideoCache().then(setBytes) }, [])
+
+  async function clear() {
+    setState('clearing')
+    try {
+      await clearVideoCache()
+      setBytes(await getVideoCache())
+      setState('idle')
+    } catch {
+      setState('failed')
+    }
+  }
+
+  return (
+    <SettingRow
+      label={`Video cache${bytes === null ? '' : `: ${fmtSize(bytes)}`}`}
+      help={state === 'failed'
+        ? 'Could not empty it. Try again.'
+        : 'Videos already played, kept so a re-watch or a seek back is instant. Oldest go first past 4 GB (2 GB on a phone)'}
+    >
+      <button
+        type="button"
+        className="btn btn-sm btn-outline gap-2"
+        disabled={state === 'clearing' || !bytes}
+        onClick={() => { void clear() }}
+      >
+        {state === 'clearing' && <span className="loading loading-spinner loading-xs" />}
+        Clear
+      </button>
+    </SettingRow>
   )
 }
 
