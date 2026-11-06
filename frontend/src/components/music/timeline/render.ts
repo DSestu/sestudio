@@ -95,7 +95,23 @@ export interface LabelItem extends DrawItem {
   plan?: Plan
   /** CSS colour of that join's kind (green flows, blue next door, amber clash); the signal blue when unknown. */
   tone?: string
+  /** Seconds since this track's tempo arrived, while that plays out (count-in, dock, lock). */
+  lock?: number
 }
+
+// When a track's tempo arrives: its ticks are laid by a front (count-in), ghosts show where its
+// blend's bars will land, the queue docks there, then each bar settles into blue. Seconds.
+export const COUNT_IN = 1.6
+export const SEEN = 1
+export const DOCK = 1.1
+const STAGGER = 0.05
+const SETTLE = 0.22
+const GLOW = 0.5
+/** When the whole sequence is over. */
+export const LOCK_END = COUNT_IN + SEEN + DOCK + 7 * STAGGER + GLOW
+/** Ease in and out, strongly (quintic): the docking slide. */
+export const quint = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 16 * x ** 5 : 1 - (-2 * x + 2) ** 5 / 2)
+const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x))
 
 export interface Frame {
   items: LabelItem[]
@@ -257,14 +273,28 @@ export class TimelineRenderer {
       }
     }
 
-    // Beat ticks, on the horizon, where beats are at least 5 px apart (downbeats alone where tighter).
-    for (const it of items) {
-      const { track, span: S, a } = it
-      if (!track.bpm) continue
+    const under = T.n
+
+    // Beat ticks, on the horizon over the curves, where beats are at least 5 px apart (downbeats alone
+    // where tighter). A synced blend's downbeats on the incoming track are blue: they lock to the outgoing one's.
+    const edge = rgb(oklch(f.palette.edge))
+    items.forEach((it, i) => {
+      const { track, span: S, a, plan: P, lock } = it
+      if (!track.bpm) return
       const bt = 60 / track.bpm
       const lo = Math.max(S.i0, -200 - a)
       const hi = Math.min(S.o0 + S.ol, 1600 - a)
-      if (hi <= lo) continue
+      if (hi <= lo) return
+      // The count-in: a front runs from the track's start to the edge and lays the ticks behind it.
+      const counting = lock !== undefined && lock < COUNT_IN
+      const fx = counting ? X(a + S.i0) + (R.x + R.w + 30 - X(a + S.i0)) * (1 - (1 - lock! / COUNT_IN) ** 3) : Infinity
+      if (counting) {
+        T.hgrad(fx - RIM, y0 - 2, RIM, 4, [[0, NONE], [1, pm(edge, 0.3)]])
+        T.hgrad(fx - RIM, y0 - 0.75, RIM, 1.5, [[0, NONE], [1, pm(edge, 0.95)]])
+      }
+      const sync = P?.mode === 'sync' && P.bars ? P.bars : 0
+      // Seconds since bar j of the blend locked (Infinity: long locked).
+      const since = (j: number) => (lock === undefined ? Infinity : lock - COUNT_IN - SEEN - DOCK - j * STAGGER)
       const near = Math.min(hi, Math.max(lo, -a))
       const n0 = Math.round((near - track.bar0) / bt)
       for (const dir of [1, -1]) {
@@ -277,12 +307,42 @@ export class TimelineRenderer {
           if (gap * 4 < 6) break
           const x = X(a + o)
           if (x < R.x || x > R.x + R.w) continue
+          const k = (x < px ? 0.6 : 1) * (counting ? smooth((fx - x) / 30) : 1)
           const h = isBar ? 9 : 4
-          T.rect(x - 0.5, y0 - h, 1, h * 2, pm(WHITE, (isBar ? 0.42 : 0.22) * (x < px ? 0.6 : 1)))
+          const j = n / 4
+          const s = isBar && j >= 0 && j < sync ? since(j) : -1
+          if (s < 0) { T.rect(x - 0.5, y0 - h, 1, h * 2, pm(WHITE, (isBar ? 0.42 : 0.22) * k)); continue }
+          // Settles into blue: wider and taller, a glow under it that fades.
+          const e = smooth(s / SETTLE)
+          if (s < GLOW) T.vgrad(x - 3, y0 - 12, 6, 24, [[0, NONE], [0.5, pm(sig, 0.45 * (1 - s / GLOW))], [1, NONE]])
+          const w = 1 + 0.8 * e
+          const bh = h * (1 + 0.3 * e)
+          if (e < 1) T.rect(x - w / 2, y0 - bh, w, bh * 2, pm(WHITE, 0.42 * (1 - e) * k))
+          T.rect(x - w / 2, y0 - bh, w, bh * 2, pm(sig, 0.95 * e * k))
         }
       }
-    }
-    const under = T.n
+      // The ghosts: where the blend's bars will land on the outgoing track, from the count-in's end until each locks.
+      const prev = items[i - 1]
+      if (!sync || lock === undefined || lock < COUNT_IN || !prev?.track.bpm) return
+      const ga = smooth((lock - COUNT_IN) / 0.35)
+      const bar = 240 / prev.track.bpm
+      for (let j = 0; j < sync; j++) {
+        if (since(j) >= 0) continue
+        const x = X(prev.a + P!.mixOut + j * bar)
+        for (let y = -12; y < 12; y += 4) T.rect(x - 0.7, y0 + y, 1.4, 2, pm(sig, 0.85 * ga))
+      }
+      const x0 = X(prev.a + P!.mixOut)
+      const x1 = X(prev.a + P!.mixOut + sync * bar)
+      const ba = ga * (1 - smooth((since(sync - 1) + 0.3) / 0.3))
+      if (ba > 0.01) {
+        T.rect(x0, y0 - 17, x1 - x0, 1, pm(sig, 0.55 * ba))
+        T.rect(x0, y0 - 17, 1, 4, pm(sig, 0.55 * ba))
+        T.rect(x1 - 1, y0 - 17, 1, 4, pm(sig, 0.55 * ba))
+        t2.font = '500 10px ui-sans-serif,system-ui'
+        t2.fillStyle = `${SIGNAL} / ${(0.9 * ba).toFixed(3)})`
+        t2.fillText(`${sync} bars`, x0 + 3, y0 - 21)
+      }
+    })
 
     // Joins: a hairline at the middle of each overlap, from under the label, with a small diamond on the horizon.
     for (const it of items) {
@@ -498,7 +558,16 @@ export class TimelineRenderer {
       const fr = it.track.front
       const pct = Math.round((Math.min(fr ?? 0, it.track.dur) / it.track.dur) * 100)
       // The bands come first; tempo and key are measured after them, over the whole track.
-      const second = fr === undefined ? mixLabel(it.plan) : pct >= 100 ? 'Finding tempo and key…' : fr > 0 ? `Analysing · ${pct} %` : 'Analysing…'
+      const bpm = `${Math.round(it.track.bpm)} BPM`
+      const l = it.lock ?? Infinity
+      const syncs = it.plan.mode === 'sync'
+      const second =
+        l < COUNT_IN ? `${bpm} · finding key…`
+        : syncs && l < COUNT_IN + SEEN ? `${bpm} · syncing…`
+        : syncs && l < COUNT_IN + SEEN + DOCK ? `${bpm} · docking…`
+        : fr === undefined ? mixLabel(it.plan)
+        : it.track.bpm ? `${mixLabel(it.plan)} · finding key…`
+        : pct >= 100 ? 'Finding tempo and key…' : fr > 0 ? `Analysing · ${pct} %` : 'Analysing…'
       g2.fillText(`${a < 600 ? `in ${fmtTime(a)}` : 'later'} · ${second}`, x0 + 6, y0 - amp * 1.02 - 8)
     }
   }
