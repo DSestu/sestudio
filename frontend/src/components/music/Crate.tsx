@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
-import { albumsOf } from '../../musicLibrary'
+import { useLibraryTracks } from '../../musicLibraries'
+import { albumsOf, type MusicTrack } from '../../musicLibrary'
 import { metaLine, useSummaries, useSummary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import { resolveLink, type OnlineLink, type QueueState } from '../../musicQueue'
@@ -11,9 +12,8 @@ import { fmtTime } from './format'
 import Meter from './Meter'
 import { armRowDrag, justDragged, type DragSource } from './rowDrag'
 import { armSwipe, justSwiped } from './swipe'
-import { fetchFitsAfter } from './crates/harmonyApi'
-import JoinChip from './crates/JoinChip'
-import type { Join } from './crates/proximity'
+import AutopilotFill from './AutopilotFill'
+import FitsNext from './FitsNext'
 import { crateHeight, isPhone, isShort, shortCols } from './timeline/mapping'
 
 // Adding to the queue (SPEC-music-player §5.5). In the default view the stage rises to uncover the crate
@@ -37,8 +37,8 @@ interface Entry {
   libraryLabel: string
   /** An online source's hit: artwork and a source badge, no analysis. */
   hit?: OnlineHit
-  /** How it joins the last queued track, in the Fits next tab. */
-  join?: Join
+  /** The library track, for ranking; online hits have none. */
+  track?: MusicTrack
 }
 
 const ONLINE = ['ytmusic', 'soundcloud', 'youtube'] as const
@@ -65,14 +65,16 @@ export interface Aim {
 /** Rows drawn at once: the rest is one search away. */
 const SHOWN = 60
 
+/** Every library's tracks, as MusicView lists them: this PC's, then the other libraries'. */
 function useEntries(): Entry[] {
   const titles = useDownloadedLibrary()
+  const others = useLibraryTracks()
   return useMemo(
-    () => albumsOf(titles).flatMap(a => a.tracks).map(t => ({
+    () => [...albumsOf(titles).flatMap(a => a.tracks), ...others].map(t => ({
       key: `${t.library}/${t.id}`, title: t.title, artist: t.artist, duration: t.duration, bpm: t.bpm, analysisId: t.id,
-      ref: { library: t.library, track_id: t.id }, library: t.library, libraryLabel: t.libraryLabel,
+      ref: { library: t.library, track_id: t.id }, library: t.library, libraryLabel: t.libraryLabel, track: t,
     })),
-    [titles],
+    [titles, others],
   )
 }
 
@@ -86,27 +88,33 @@ function useViewport() {
   return { W: innerWidth, H: innerHeight }
 }
 
-/** The library ranked after the queue's last track (the server's fits-after), each with its join. */
-function useFits(on: boolean, all: Entry[], queue: QueueState): Entry[] {
-  const last = queue.items.at(-1)?.track_id
-  const key = queue.items.map(i => i.track_id).join()
-  const [res, setRes] = useState<{ key: string; list: { id: string; join: Join }[] }>()
-  useEffect(() => {
-    if (!on || !last) return
-    let live = true
-    fetchFitsAfter(last, { exclude: key.split(','), limit: 50 }).then(r => live && setRes({ key, list: r.results }), () => live && setRes({ key, list: [] }))
-    return () => { live = false }
-  }, [on, last, key])
-  return useMemo(() => {
-    const by = new Map(all.map(e => [e.analysisId, e]))
-    return (res?.key === key ? res.list : []).flatMap(r => by.has(r.id) ? [{ ...by.get(r.id)!, join: r.join }] : [])
-  }, [res, key, all])
+/** Fits next, anchored to the queue's last track (else the playing one): the shared list, with Autopilot under it. */
+function FitsTab({ all, q, dense }: { all: Entry[]; q: QueueState; dense?: boolean }) {
+  const library = useMemo(() => all.flatMap(e => e.track ?? []), [all])
+  const byId = useMemo(() => new Map(library.map(t => [t.id, t])), [library])
+  const ids = useMemo(() => q.items.map(i => i.track_id), [q.items])
+  const lastId = [...ids].reverse().find(id => byId.has(id)) ?? ids[q.current]
+  const anchor = lastId ? byId.get(lastId) : undefined
+  const footer = <AutopilotFill compact={dense} />
+  if (!anchor) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <p className="px-4 py-6 text-center text-sm text-base-content/60">Play or queue a track and what fits after it shows here.</p>
+        <div className="px-4 pb-3">{footer}</div>
+      </div>
+    )
+  }
+  return (
+    <FitsNext
+      anchor={anchor} where={lastId === ids.at(-1) ? 'last in the queue' : undefined} library={library} exclude={ids} dense={dense} footer={footer}
+      action={{ label: 'Add to queue', onPick: t => void addTracks([{ library: t.library, track_id: t.id }], undefined, `Added ${t.title}`) }}
+    />
+  )
 }
 
 /** The list's state: which library, the search (here and online), the stop shown, and whether a pasted link is shown instead. */
-function useFinder(all: Entry[], queue: QueueState) {
+function useFinder(all: Entry[]) {
   const [tab, setTab] = useState<'lib' | 'fits'>('lib')
-  const fits = useFits(tab === 'fits', all, queue)
   const [query, setQuery] = useState('')
   const [lib, setLib] = useState('')
   const [paste, setPaste] = useState(false)
@@ -140,7 +148,7 @@ function useFinder(all: Entry[], queue: QueueState) {
   return {
     query, setQuery: setQ, q, lib, setLib, libs, found, paste, setPaste, online, pending, errors, stop, setStop: setPick,
     tab, setTab: (t: 'lib' | 'fits') => { setPaste(false); setTab(t) },
-    shown: tab === 'fits' ? fits : stop === 'local' ? found : (online[stop] ?? []),
+    shown: stop === 'local' ? found : (online[stop] ?? []),
     total: lib ? all.filter(e => e.library === lib).length : all.length,
   }
 }
@@ -233,7 +241,6 @@ function AddRow({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boolea
             {e.hit?.kind === 'video' && <em className="not-italic ml-[7px] opacity-55">video</em>}
             {metaLine(meta, bpm, theory) && <em className="not-italic ml-[7px] opacity-55 tabular-nums">{metaLine(meta, bpm, theory)}</em>}
           </span>
-          {e.join && <JoinChip join={e.join} className="max-w-full text-[11px] text-base-content/70" />}
         </div>
         {meta?.balance && <Meter balance={meta.balance} />}
         {e.hit && cloudIcon}
@@ -263,7 +270,6 @@ function AddCard({ e, q, queued, aim }: { e: Entry; q: QueueState; queued: boole
       {e.hit && <Thumb h={e.hit} size={34} />}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <b className="block truncate pr-1 font-semibold">{e.title}</b>
-        {e.join && <JoinChip join={e.join} className="max-w-full text-[11px] text-base-content/70" />}
         <span className="flex items-center gap-1.5 text-[11px] text-base-content/52">
           <span className="truncate tabular-nums">{[e.hit && e.artist, bpm && `${Math.round(bpm)} BPM`, e.duration && fmtTime(e.duration)].filter(Boolean).join(' · ')}</span>
           {meta?.balance && <Meter balance={meta.balance} />}
@@ -339,7 +345,8 @@ function LibraryPicker({ f }: { f: Finder }) {
 }
 
 /** Library | Fits next: the whole library, or what fits after the queue's last track. */
-function Tabs({ f }: { f: Finder }) {
+function Tabs({ f, noFits = false }: { f: Finder; noFits?: boolean }) {
+  if (noFits) return null
   return (
     <div role="tablist" aria-label="Crate" className="flex shrink-0 rounded-lg bg-white/6 p-0.5 text-xs font-semibold">
       {([['lib', 'Library'], ['fits', 'Fits next']] as const).map(([id, label]) => (
@@ -390,7 +397,6 @@ function AimChip({ aim, title }: { aim: Aim; title?: string }) {
 
 /** What the list says when the stop shown has no rows. */
 function emptyNote(f: Finder): string {
-  if (f.tab === 'fits') return 'Nothing to rank after yet: queue a track first.'
   if (f.stop === 'local') return 'No track matches.'
   const name = SRC[f.stop].label
   if (f.pending.includes(f.stop)) return `Searching ${name}…`
@@ -413,7 +419,7 @@ function Rows({ f, q, aim, queued }: { f: Finder; q: QueueState; aim: Aim; queue
 /** One stop's state: a count, a spinner while it searches, a red dot when it failed, nothing before a search. */
 function useStops(f: Finder) {
   return [
-    { id: 'local' as Stop, label: 'This PC', short: 'PC', color: '', count: f.found.length, busy: false, error: '' },
+    { id: 'local' as Stop, label: 'All', short: 'All', color: '', count: f.found.length, busy: false, error: '' },
     ...ONLINE.map(s => ({
       id: s as Stop, ...SRC[s], count: f.online[s]?.length ?? 0, busy: f.pending.includes(s), error: f.errors[s] ?? '',
     })),
@@ -482,9 +488,10 @@ function Stops({ f, vertical }: { f: Finder; vertical: boolean }) {
 
 /** The library as a list: the phone's crate sheet, its Library page, and the desktop's column (`rail`). */
 export function LibraryList({ q, aim, aimTitle, head, onClose, rail = false }: { q: QueueState; aim: Aim; aimTitle?: string; head?: ReactNode; onClose?: () => void; rail?: boolean }) {
-  const f = useFinder(useEntries(), q)
+  const all = useEntries()
+  const f = useFinder(all)
   const queued = useMemo(() => new Set(q.items.map(i => i.track_id)), [q.items])
-  const list = (
+  const list = f.tab === 'fits' ? <FitsTab all={all} q={q} /> : (
     <div data-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
       <Rows f={f} q={q} aim={aim} queued={queued} />
     </div>
@@ -510,7 +517,8 @@ export function LibraryList({ q, aim, aimTitle, head, onClose, rail = false }: {
 /** The default view's crate: a floor under the stage, which rises to uncover it (Layer); on its side the phone keeps a box over the transport. */
 export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; aim: Aim; aimTitle?: string; onClose: () => void }) {
   const { W, H } = useViewport()
-  const f = useFinder(useEntries(), q)
+  const all = useEntries()
+  const f = useFinder(all)
   const queued = useMemo(() => new Set(q.items.map(i => i.track_id)), [q.items])
   const short = isShort(W, H)
 
@@ -522,12 +530,15 @@ export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; ai
       { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' },
     )
   }, [short])
+  // A phone on its side has no room for the list: Fits next is only in the other layouts.
+  useEffect(() => { if (short && f.tab === 'fits') f.setTab('lib') }, [short, f.tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const head = (
     <div className="flex items-center gap-2.5">
       <h3 className="shrink-0 text-[13px] font-semibold">Add to queue</h3>
-      <Tabs f={f} />
+      <Tabs f={f} noFits={short} />
       <LibraryPicker f={f} />
+      {short && <AutopilotFill compact />}
       {!f.paste && f.tab === 'lib' && <Search f={f} className="h-8 w-56 min-w-0 max-w-[30vw]" />}
       {!f.paste && f.tab === 'lib' && <div className="min-w-0"><Stops f={f} vertical={false} /></div>}
       <AimChip aim={aim} title={aimTitle} />
@@ -565,7 +576,7 @@ export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; ai
     >
       {isPhone(W)
         ? <div className="flex min-h-0 flex-1 flex-col pt-2"><LibraryList q={q} aim={aim} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[15px] font-semibold">Add to queue</h3>} onClose={onClose} /></div>
-        : <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-3.5 pt-3.5">{head}{cards(f.paste ? 'flex items-stretch' : 'grid grid-flow-col grid-rows-2 auto-cols-[11rem] [&>[data-row]]:max-h-none')}</div>}
+        : <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-3.5 pt-3.5">{head}{f.tab === 'fits' ? <FitsTab all={all} q={q} dense /> : cards(f.paste ? 'flex items-stretch' : 'grid grid-flow-col grid-rows-2 auto-cols-max [&>[data-row]]:max-h-none')}</div>}
     </aside>
   )
 }

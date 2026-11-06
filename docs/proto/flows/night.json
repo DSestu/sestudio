@@ -1,0 +1,20 @@
+{
+  "name": "Night: warm-up, then peak or deep, then come-down",
+  "chunks": [
+    {"id": "warmup", "share": 1, "next": ["peak-lift", "deep-stay"], "layers": {
+      "tempo": [[0, 170], [1, 172]], "energy": [[0, 0.2], [1, 0.5]],
+      "harmony": [],
+      "genre": [{"from": 0, "to": 1, "genres": ["Drum & Bass"], "strict": "prefer"}]}},
+    {"id": "peak-lift", "share": 2, "next": ["comedown"], "layers": {
+      "tempo": [[0, 172], [1, 175]], "energy": [[0, 0.6], [1, 0.95]],
+      "harmony": [{"at": 0.35, "kind": "up"}, {"at": 0.7, "kind": "up"}],
+      "genre": [{"from": 0, "to": 1, "genres": ["Drum & Bass"]}]}},
+    {"id": "deep-stay", "share": 2, "next": ["comedown"], "layers": {
+      "tempo": [[0, 172], [1, 172]], "energy": [[0, 0.5], [1, 0.6]],
+      "harmony": [{"at": 0.5, "kind": "mode-"}]}},
+    {"id": "comedown", "share": 1, "layers": {
+      "tempo": [[0, 172], [1, 145]], "energy": [[0, 0.6], [1, 0.15]],
+      "harmony": [{"at": 0, "kind": "break"}, {"at": 0.5, "kind": "relative"}],
+      "genre": [{"from": 0.5, "to": 1, "genres": ["Dubstep", "Ambient"], "strict": "prefer"}]}}
+  ]
+}

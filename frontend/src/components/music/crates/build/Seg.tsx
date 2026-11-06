@@ -3,7 +3,7 @@ export default function Seg<T extends string | number>({ options, value, onPick,
   return (
     <div className="join" role="group" aria-label={label}>
       {options.map(([v, text]) => (
-        <button key={v} onClick={() => onPick(v)} aria-pressed={v === value} className={`btn btn-xs join-item ${v === value ? 'btn-primary' : 'btn-ghost border-white/15'}`}>{text}</button>
+        <button key={v} onClick={() => onPick(v)} aria-pressed={v === value} className={`relative hit btn btn-xs join-item ${v === value ? 'btn-primary' : 'btn-ghost border-white/15'}`}>{text}</button>
       ))}
     </div>
   )

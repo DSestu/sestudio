@@ -6,6 +6,8 @@ import os
 import sqlite3
 import threading
 import time
+import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -179,12 +181,96 @@ CREATE TABLE IF NOT EXISTS music_flows (
 );
 """
 
-_MIGRATIONS: tuple[str, ...] = (
+
+def _migration_6_flows_to_playlists(conn: sqlite3.Connection) -> None:
+    """The Mix builder is gone: each flow with tracks becomes a playlist.
+
+    Same name, or "<name> (mix)" when a playlist already has it. A branch becomes
+    its base set's tracks followed by the branch's own (what "Save as set" did).
+    Empty flows are dropped, then ``music_flows`` is dropped so this never reruns.
+    The inserts and the DROP TABLE commit together (``_migrate`` commits).
+    """
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='music_flows'"
+    ).fetchone():
+        return
+
+    def playlist_tracks(node_id: str | None) -> list[dict[str, Any]]:
+        row = conn.execute(
+            "SELECT data FROM music_playlists WHERE id = ? AND kind = 'playlist'",
+            (node_id,),
+        ).fetchone()
+        if row is None:
+            return []
+        data = json.loads(row["data"])
+        parts = (i for p in data.get("parts", []) for i in p["items"])
+        return [*data.get("items", []), *parts]
+
+    names = {r["name"] for r in conn.execute("SELECT name FROM music_playlists")}
+    flows = conn.execute(
+        "SELECT * FROM music_flows ORDER BY position, rowid"
+    ).fetchall()
+    for flow in flows:
+        data = json.loads(flow["data"])
+        items = data.get("items") or []
+        if not items:
+            continue
+        if flow["mode"] == "branch":
+            items = [*playlist_tracks(data.get("base")), *items]
+        name = flow["name"]
+        n = 1
+        while name in names:
+            name = f"{flow['name']} (mix)" if n == 1 else f"{flow['name']} (mix {n})"
+            n += 1
+        names.add(name)
+        tracks = [
+            {**{k: v for k, v in t.items() if k != "item_id"}, "item_id": f"p{i + 1}"}
+            for i, t in enumerate(items)
+        ]
+        (position,) = conn.execute(
+            "SELECT COALESCE(MAX(position) + 1, 0) FROM music_playlists "
+            "WHERE parent IS NULL"
+        ).fetchone()
+        conn.execute(
+            "INSERT INTO music_playlists (id, parent, kind, name, position, data) "
+            "VALUES (?, NULL, 'playlist', ?, ?, ?)",
+            (
+                uuid.uuid4().hex[:10],
+                name,
+                position,
+                json.dumps({"items": tracks, "parts": [], "next": len(tracks) + 1}),
+            ),
+        )
+    conn.execute("DROP TABLE music_flows")
+
+
+# Flows and mixes (sestudio.music.mixes, SPEC-music-flows): one JSON document
+# each. The music_flows name was freed by migration 6; this is a new table.
+_MIGRATION_7_FLOWS_AND_MIXES = """
+CREATE TABLE IF NOT EXISTS music_flows (
+    id      TEXT    PRIMARY KEY,
+    name    TEXT    NOT NULL,
+    created INTEGER NOT NULL,
+    data    TEXT    NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS music_mixes (
+    id      TEXT    PRIMARY KEY,
+    name    TEXT    NOT NULL,
+    created INTEGER NOT NULL,
+    data    TEXT    NOT NULL DEFAULT '{}'
+);
+"""
+
+
+# A migration is SQL (run as a script) or a function of the connection.
+_MIGRATIONS: tuple[str | Callable[[sqlite3.Connection], None], ...] = (
     _MIGRATION_1_WATCHERS,
     _MIGRATION_2_MUSIC_QUEUE,
     _MIGRATION_3_MUSIC_ANALYSIS,
     _MIGRATION_4_MUSIC_PLAYLISTS,
     _MIGRATION_5_MUSIC_FLOWS,
+    _migration_6_flows_to_playlists,
+    _MIGRATION_7_FLOWS_AND_MIXES,
 )
 
 _conn: sqlite3.Connection | None = None
@@ -207,7 +293,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     """
     applied = int(conn.execute("PRAGMA user_version").fetchone()[0])
     for index in range(applied, len(_MIGRATIONS)):
-        conn.executescript(_MIGRATIONS[index])
+        step = _MIGRATIONS[index]
+        if callable(step):
+            step(conn)
+        else:
+            conn.executescript(step)
         # PRAGMA takes no placeholders; the value is a loop counter, not input.
         conn.execute(f"PRAGMA user_version = {index + 1}")
         conn.commit()

@@ -23,6 +23,18 @@ describe('positionNow', () => {
 })
 
 describe('applyEvent', () => {
+  it('fut replaces only what comes after the current item, and the queue plays the flow', () => {
+    const source = { flow: 'f', mix: null, choices: { a: 'b' }, seed: 1, path: ['a', 'b'], auto: {}, minutes: 60 }
+    const s = applyEvent(base(), ev('fut', { keep: 2, items: [item(8), item(9)], source }), 0)!
+    expect(ids(s)).toEqual(['q1', 'q2', 'q8', 'q9'])
+    expect([s.current, s.position, s.playing]).toEqual([1, 30, true])
+    expect(s.source?.path).toEqual(['a', 'b'])
+  })
+  it('set carries the source, or clears it for a hand-made queue', () => {
+    const source = { flow: 'f', mix: 'm', choices: {}, seed: 1, path: ['a'], auto: {}, minutes: 60 }
+    expect(applyEvent(base(), ev('set', { items: [item(7)], start: 0, source }), 0)!.source?.mix).toBe('m')
+    expect(applyEvent(base({ source }), ev('set', { items: [item(7)], start: 0 }), 0)!.source).toBeNull()
+  })
   it('refuses an event that skips a revision', () => {
     expect(applyEvent(base(), ev('mv', { item_id: 'q1', from: 0, to: 2 }, 8), 0)).toBeNull()
   })
@@ -39,6 +51,11 @@ describe('applyEvent', () => {
   it('ins into an empty queue makes the first row current', () => {
     const s = applyEvent(base({ items: [], current: -1 }), ev('ins', { index: 0, items: [item(1)] }), 0)!
     expect(s.current).toBe(0)
+  })
+  it('ord reorders the whole queue and follows the playing track', () => {
+    const s = applyEvent(base(), ev('ord', { order: ['q3', 'q1', 'q2'] }), 0)!
+    expect([ids(s), s.current]).toEqual([['q3', 'q1', 'q2'], base().current + 1])
+    expect(applyEvent(base(), ev('ord', { order: ['q3', 'q9', 'q2'] }), 0)).toBeNull()
   })
   it('set replaces the queue and starts the first row', () => {
     const s = applyEvent(base(), ev('set', { items: [item(7), item(8)] }), 50)!

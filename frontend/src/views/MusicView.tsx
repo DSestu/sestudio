@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import AddToPlaylist from '../components/music/crates/AddToPlaylist'
 import AddLibrary from '../components/music/crates/AddLibrary'
-import { openHarmonyBasics } from '../components/music/harmony/store'
-import BuildSet from '../components/music/crates/build/BuildSet'
-import { openBuildSet } from '../components/music/crates/build/store'
-import { newFlow } from '../components/music/builder/flows'
 import Crates, { type Crate } from '../components/music/crates/Crates'
+import NewPlaylist from '../components/music/crates/NewPlaylist'
 import PlaylistView from '../components/music/crates/PlaylistView'
 import EmptyState from '../components/EmptyState'
 import PageHeader from '../components/PageHeader'
@@ -17,27 +14,34 @@ import {
   albumsOf, albumsOfTracks, artistsOf, formatDuration, initials, matchTracks,
   type MusicAlbum, type MusicTrack,
 } from '../musicLibrary'
-import { addPayload, addToQueue, post, resolveLink, type OnlineLink } from '../musicQueue'
+import { addPayload, addToQueue, post, resolveLink, useMusicQueue, type OnlineLink } from '../musicQueue'
+import { addTracks, nextIndex } from '../components/music/adding'
 import { playAll, playFrom, playPayload } from '../components/music/player'
-import { factsLine, genreColor, useAnalysing, useSummaries, type Summary } from '../musicMeta'
+import { factsLine, useAnalysing, useSummaries, type Summary } from '../musicMeta'
 import { openKeyCard } from '../components/music/harmony/keyCardStore'
 import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
 import MusicSearch from '../components/music/MusicSearch'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
-import Explore from '../components/music/explore/Explore'
-import Seg from '../components/music/crates/build/Seg'
-import type { Join } from '../components/music/crates/proximity'
-import { clearFitsFilters, proxOf, rankFits, relaxations, setFitsFilter, setFitsRef, useFitsFilters, useFitsRef, type FitsFilters } from '../musicFits'
+import FitsNext from '../components/music/FitsNext'
+import SaveAsPlaylist from '../components/music/SaveAsPlaylist'
+import { closeFits, openFitsFor, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
-import { currentParams, patchParams, type Navigate } from '../nav'
+import { currentParams, patchParams, replaceParams, type Navigate } from '../nav'
+import { useSettings } from '../useSettings'
+import FlowsHome from '../components/music/flows/FlowsHome'
+import MixesList from '../components/music/flows/MixesList'
+import FlowEditor from '../components/music/flows/FlowEditor'
+import MixView from '../components/music/flows/MixView'
+import { useFlows } from '../musicFlows'
 
 const TABS = [
   { id: 'albums', label: 'Albums' },
   { id: 'artists', label: 'Artists' },
   { id: 'tracks', label: 'Tracks' },
-  { id: 'explore', label: 'Explore' },
 ] as const
-type MusicTab = (typeof TABS)[number]['id']
+// Flows and mixes (SPEC-music-flows), behind the lab flag until the old lists go (§12 PR 11).
+const LAB_TABS = [{ id: 'flows', label: 'Flows' }, { id: 'mixes', label: 'Mixes' }, ...TABS] as const
+type MusicTab = (typeof LAB_TABS)[number]['id']
 
 const DOT: Record<LibraryStatus['state'], string> = {
   online: 'bg-success',
@@ -93,21 +97,7 @@ function AlbumCard({ album, get, onOpen }: { album: MusicAlbum; get: (id: string
   )
 }
 
-/** Why a result fits after the reference: a dot and the join kind, the energy step, a tempo jump. */
-function Why({ join, className = '' }: { join: Join; className?: string }) {
-  if (!join.kindLabel) return null
-  const dot = join.shared === 7 ? 'bg-success' : join.safe ? 'bg-info' : 'bg-warning'
-  return (
-    <span className={`items-center gap-1.5 text-xs text-base-content/60 ${className}`} title={join.shared === null ? undefined : `${join.shared} of 7 notes shared`}>
-      <i className={`size-1.75 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
-      <span className={join.safe ? '' : 'text-warning'}>{join.kindLabel}</span>
-      {join.energy.step && <span className="text-base-content/45">· {join.energy.step}</span>}
-      {join.tempoJump && <span className="text-warning">· tempo jump</span>}
-    </span>
-  )
-}
-
-function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void; why?: Join }) {
+function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void }) {
   const analysing = useAnalysing(track.id)
   return (
     <li className="flex items-center gap-1 rounded-xl hover:bg-white/5">
@@ -118,11 +108,9 @@ function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: M
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-sm font-medium">{track.title}</span>
           <span className="block truncate text-xs text-base-content/60">{track.artist}<MetaLine id={track.id} bpm={track.bpm} title={track.title} /></span>
-          {why && <Why join={why} className="flex sm:hidden" />}
         </span>
         <span className="w-10 text-right text-xs text-base-content/60 tabular-nums">{formatDuration(track.duration)}</span>
       </button>
-      {why && <Why join={why} className="hidden sm:flex" />}
       <TrackMeta id={track.id} bpm={track.bpm} title={track.title} />
       <div className="dropdown dropdown-end">
         <button tabIndex={0} aria-label={`Add ${track.title}`} className="btn btn-ghost btn-circle btn-sm mr-1 relative hit">
@@ -131,9 +119,9 @@ function TrackRow({ track, list, onPlaylist, why }: { track: MusicTrack; list: M
         <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 w-56 rounded-xl bg-base-200 p-1 shadow-lg">
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); run(addToQueue(track)) }}>Add to queue</button></li>
           <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); onPlaylist(track) }}>Add to playlist…</button></li>
-          {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setFitsRef(track.id) }}>Fits after this</button></li>}
+          {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openFitsFor(track.id) }}>Fits next</button></li>}
           {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openKeyCard(track.id, track.title) }}>Key card</button></li>}
-          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openBuildSet({ way: 'seed', seed: track.id }) }}>Build a set from this</button></li>
+          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); window.location.hash = `#/music?pl=new&seed=${encodeURIComponent(track.id)}` }}>New playlist from this</button></li>
         </ul>
       </div>
     </li>
@@ -164,17 +152,17 @@ function Detail({ name, round, tracks, get, onPlaylist }: {
             {facts && <span className="block text-xs text-base-content/60">{facts}</span>}
           </p>
           <div className="hidden md:flex gap-2">
-            <DetailActions tracks={tracks} shuffled={shuffled} />
+            <DetailActions name={name} tracks={tracks} shuffled={shuffled} />
           </div>
         </div>
       </div>
-      <div className="flex gap-2 md:hidden"><DetailActions tracks={tracks} shuffled={shuffled} /></div>
+      <div className="flex gap-2 md:hidden"><DetailActions name={name} tracks={tracks} shuffled={shuffled} /></div>
       <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={onPlaylist} />)}</ul>
     </div>
   )
 }
 
-function DetailActions({ tracks, shuffled }: { tracks: MusicTrack[]; shuffled: () => MusicTrack[] }) {
+function DetailActions({ name, tracks, shuffled }: { name: string; tracks: MusicTrack[]; shuffled: () => MusicTrack[] }) {
   return (
     <>
       <button onClick={() => run(playAll(tracks))} className="btn btn-primary rounded-xl gap-2">
@@ -182,10 +170,21 @@ function DetailActions({ tracks, shuffled }: { tracks: MusicTrack[]; shuffled: (
       </button>
       <button onClick={() => run(playAll(shuffled()))} className="btn rounded-xl">Shuffle</button>
       <button onClick={() => run(post(addPayload(tracks, 'append')))} className="btn rounded-xl">Add to queue</button>
+      <SaveAsPlaylist name={name} tracks={addPayload(tracks, 'append').tracks} />
     </>
   )
 }
 
+
+/** The count of a shown list and the button that saves it as a playlist. */
+function ListSave({ count, name, tracks }: { count: number; name: string; tracks: MusicTrack[] }) {
+  return (
+    <div className="flex items-center gap-2 px-3">
+      <span className="flex-1 text-xs text-base-content/60">{count} {count === 1 ? 'track' : 'tracks'}</span>
+      <SaveAsPlaylist name={name} tracks={addPayload(tracks, 'append').tracks} className="btn btn-ghost btn-sm h-11 sm:h-8" />
+    </div>
+  )
+}
 
 /** A pasted YouTube / YouTube Music link: play it as music or queue it. */
 function LinkCard({ url }: { url: string }) {
@@ -216,27 +215,11 @@ function LinkCard({ url }: { url: string }) {
   )
 }
 
-const MOVES: { key: keyof FitsFilters; label: string; options: [string, string][] }[] = [
-  { key: 'harmony', label: 'Harmony', options: [['same', 'Same notes'], ['close', 'Close'], ['any', 'Any']] },
-  { key: 'mood', label: 'Mood', options: [['any', 'Any'], ['up', 'Brighter'], ['same', 'Same'], ['down', 'Darker']] },
-  { key: 'energy', label: 'Energy', options: [['any', 'Any'], ['lift', 'Lift'], ['hold', 'Hold'], ['ease', 'Ease off']] },
-  { key: 'genre', label: 'Genre', options: [['same', 'Same'], ['any', 'Any']] },
-  { key: 'tempo', label: 'Tempo', options: [['near', '±6%'], ['any', 'Any']] },
-]
-
-/** What kind of move to look for: one row of segmented controls, scrolling sideways on phones. */
-function MoveFilters({ value }: { value: FitsFilters }) {
-  return (
-    <div className="flex items-center gap-x-3 overflow-x-auto pb-1 [scrollbar-width:none]">
-      {MOVES.map(m => (
-        <div key={m.key} className="flex shrink-0 items-center gap-1.5">
-          <span className="text-xs text-base-content/60">{m.label}</span>
-          <Seg label={m.label} options={m.options} value={value[m.key]} onPick={v => setFitsFilter(m.key, v as never)} />
-        </div>
-      ))}
-    </div>
-  )
-}
+const WIDE = '(min-width: 64rem)'
+const useWide = () => useSyncExternalStore(
+  cb => { const m = matchMedia(WIDE); m.addEventListener('change', cb); return () => m.removeEventListener('change', cb) },
+  () => matchMedia(WIDE).matches,
+)
 
 const KIND_LABEL = { folder: 'Folder', playlist: 'Playlist', smart: 'Smart list' } as const
 
@@ -245,46 +228,63 @@ const KIND_LABEL = { folder: 'Folder', playlist: 'Playlist', smart: 'Smart list'
 const last = { tab: 'albums' as MusicTab, lib: '', genre: '' }
 const initial = () => {
   const p = currentParams()
-  const tab = TABS.find(t => t.id === p.get('tab'))?.id
-  return { tab: tab ?? last.tab, lib: p.get('lib') ?? last.lib, genre: p.get('genre') ?? last.genre }
+  const tab = LAB_TABS.find(t => t.id === p.get('tab'))?.id
+  // A tab that no longer exists (?tab=explore) opens Albums.
+  return { tab: tab ?? (p.get('tab') ? 'albums' : last.tab), lib: p.get('lib') ?? last.lib, genre: p.get('genre') ?? last.genre }
 }
 
 export default function MusicView({ params, navigate }: { params: URLSearchParams; navigate: Navigate }) {
   const titles = useDownloadedLibrary()
   const [start] = useState(initial)
-  const [tab, setTab] = useState<MusicTab>(start.tab)
+  const [picked, setTab] = useState<MusicTab>(start.tab)
+  const [settings] = useSettings()
+  const lab = !!settings.lab
+  const tabs = lab ? LAB_TABS : TABS
+  const tab: MusicTab = !lab && (picked === 'flows' || picked === 'mixes') ? 'albums' : picked
+  const flowsTab = tab === 'flows' || tab === 'mixes'
   const [library, setLibrary] = useState(start.lib)
   const query = useMusicQuery()
-  const fitsRef = useFitsRef()
-  const fitsFilters = useFitsFilters()
+  const fitsFor = useFitsFor()
+  const wide = useWide()
+  const queue = useMusicQueue()
   const [sheet, setSheet] = useState(false)
   const [adding, setAdding] = useState(false)
   // An open playlist, album or artist is its own history entry, so Back leaves it.
   const nodeId = params.get('pl') ?? ''
   const albumId = params.get('al') ?? ''
   const artistName = params.get('ar') ?? ''
-  const go = (open: { pl?: string; al?: string; ar?: string }) =>
-    navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, al: undefined, ar: undefined, ...open })
+  const drafting = nodeId === 'new'
+  const flowEdit = params.get('fl') ?? ''
+  const mixOpen = params.get('mx') ?? ''
+  const { flows: allFlows, mixes: allMixes } = useFlows()
+  const go = (open: { pl?: string; al?: string; ar?: string; seed?: string; fl?: string; mx?: string }) =>
+    navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, al: undefined, ar: undefined, seed: undefined, fl: undefined, mx: undefined, ...open })
+  const newPlaylist = (seed?: string) => { setSheet(false); go({ pl: 'new', seed }) }
+  /** The draft became a playlist: its page replaces the draft's history entry. */
+  const opened = (id: string) => {
+    const next = { ...Object.fromEntries(currentParams()), pl: id, seed: undefined }
+    replaceParams('music', next)
+    navigate('music', next)
+  }
   const openNode = (id: string) => go({ pl: id || undefined })
-  const openMix = (id?: string) => id ? navigate('mixes', { f: id }) : run(newFlow('mix').then(f => navigate('mixes', { f: f.id })))
   const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(sheet, () => setSheet(false))
   useModalBack(adding, () => setAdding(false))
-  // "Fits after this" from any row lands on the Tracks tab, off any open page.
-  const [seenFits, setSeenFits] = useState<typeof fitsRef>()
-  if (fitsRef !== seenFits) {
-    setSeenFits(fitsRef)
-    if (fitsRef) setTab('tracks')
-  }
-  useEffect(() => {
-    if (fitsRef && (nodeId || albumId || artistName)) go({})
-  }, [fitsRef]) // eslint-disable-line react-hooks/exhaustive-deps
   const playlists = usePlaylists()
   const node = playlists.find(n => n.id === nodeId)
 
   const others = useLibraryTracks()
   const libraries = useLibraries()
   const all = useMemo(() => [...albumsOf(titles).flatMap(a => a.tracks), ...others], [titles, others])
+  const fitsTrack = fitsFor ? all.find(t => t.id === fitsFor) : undefined
+  useModalBack(!!fitsTrack && !wide, closeFits)
+  // Escape closes the panel (and Back, on a phone, through useModalBack).
+  useEffect(() => {
+    if (!fitsTrack) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) closeFits() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fitsTrack])
   const crates = useMemo<Crate[]>(() => [
     { id: '', label: 'All', count: all.length },
     ...libraries.map(l => ({ id: l.id, label: l.label, count: l.count, dot: DOT[l.state], line: stateLine(l) })),
@@ -325,45 +325,47 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   // A page shows the whole album or artist, whatever the library, genre or search.
   const album = albumId ? allAlbums.find(a => albumKey(a) === albumId) : undefined
   const artist = useMemo(() => artistName ? artistsOf(all).find(a => a.name === artistName) : undefined, [all, artistName])
-  const page = node ?? album ?? artist
+  const page = (node ?? album ?? artist ?? drafting) || (lab && (!!flowEdit || !!mixOpen))
 
-  const fitsTrack = fitsRef ? all.find(t => t.id === fitsRef) : undefined
-  const fitsMode = !page && !!fitsTrack && tab === 'tracks'
-  // The tracks shown (library, genre and search text applied), best follow-ups of the reference first.
-  const ranked = useMemo(() => {
-    if (!fitsMode || !fitsTrack) return []
-    const of = new Map(tracks.map(t => [t.id, t]))
-    return rankFits(proxOf(fitsTrack, get(fitsTrack.id)), tracks.map(t => proxOf(t, get(t.id))), fitsFilters)
-      .map(r => ({ track: of.get(r.id)!, join: r.join }))
-  }, [fitsMode, fitsTrack, tracks, fitsFilters, v]) // eslint-disable-line react-hooks/exhaustive-deps
-  const rankedTracks = useMemo(() => ranked.map(r => r.track), [ranked])
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
   const pick = (id: string) => { setLibrary(id); setSheet(false); if (nodeId || albumId || artistName) go({}) }
   const pickNode = (id: string) => { setSheet(false); if (id !== nodeId) openNode(id) }
 
-  const searching = !page && !fitsMode && tab !== 'explore' && query.trim() !== '' && !LINK_RE.test(query.trim())
-  const body = node ? (
-    <PlaylistView key={node.id} node={node} byId={byId} />
+  const fitsPanel = fitsTrack && (
+    <FitsNext
+      anchor={fitsTrack} library={all} exclude={queue.items.map(i => i.track_id)}
+      action={{ label: 'Add to queue', onPick: t => void addTracks([{ library: t.library, track_id: t.id }], undefined, `Added ${t.title}`) }}
+      onClose={closeFits}
+      footer={<button onClick={() => void addTracks([{ library: fitsTrack.library, track_id: fitsTrack.id }], nextIndex(), `${fitsTrack.title} plays next`)} className="btn btn-sm h-11 w-full sm:h-8">Play next</button>}
+    />
+  )
+  const searching = !page && query.trim() !== '' && !LINK_RE.test(query.trim())
+  const body = lab && flowEdit ? (
+    <FlowEditor key={flowEdit} flowId={flowEdit} byId={byId} />
+  ) : lab && mixOpen ? (
+    <MixView key={mixOpen} mixId={mixOpen} byId={byId} onEditFlow={id => go({ fl: id })} />
+  ) : drafting ? (
+    <NewPlaylist key={params.get('seed') ?? ''} byId={byId} seed={params.get('seed') ?? undefined} onCreated={opened} />
+  ) : node ? (
+    <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} />
   ) : album ? (
     <Detail name={album.name} tracks={album.tracks} get={get} onPlaylist={setPickFor} />
   ) : artist ? (
     <Detail name={artist.name} round tracks={artist.tracks} get={get} onPlaylist={setPickFor} />
-  ) : fitsMode ? (
-    ranked.length ? (
-      <ul>{ranked.map(r => <TrackRow key={r.track.id} track={r.track} list={rankedTracks} onPlaylist={setPickFor} why={r.join} />)}</ul>
-    ) : (
-      <EmptyState title={`Nothing fits after ${fitsTrack?.title}`} message="No track here follows it under these filters. Loosen one:">
-        {relaxations(fitsFilters).map(r => <button key={r.label} className="btn btn-sm" onClick={() => setFitsFilter(r.key, r.to as never)}>{r.label}</button>)}
-        <button className="btn btn-ghost btn-sm" onClick={clearFitsFilters}>Clear filters</button>
-      </EmptyState>
-    )
   ) : searching ? (
     <MusicSearch
       query={query}
       byId={byId}
-      renderLibrary={ts => <ul>{ts.map(t => <TrackRow key={t.id} track={t} list={ts} onPlaylist={setPickFor} />)}</ul>}
+      renderLibrary={ts => <>
+        <ListSave count={ts.length} name={query.trim()} tracks={ts} />
+        <ul>{ts.map(t => <TrackRow key={t.id} track={t} list={ts} onPlaylist={setPickFor} />)}</ul>
+      </>}
     />
+  ) : tab === 'flows' ? (
+    <FlowsHome onOpen={id => go({ fl: id })} />
+  ) : tab === 'mixes' ? (
+    <MixesList onOpen={id => go({ mx: id })} />
   ) : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
   ) : !tracks.length ? (
@@ -387,15 +389,22 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         </li>
       ))}
     </ul>
-  ) : tab === 'explore' ? (
-    <Explore tracks={tracks} get={get} v={v} onPlaylist={setPickFor} />
   ) : (
-    <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={setPickFor} />)}</ul>
+    <>
+      <ListSave count={tracks.length} name={[activeLabel === 'All' ? 'All tracks' : activeLabel, genre].filter(Boolean).join(' · ')} tracks={tracks} />
+      <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={setPickFor} />)}</ul>
+    </>
   )
 
   return (
     <div className="flex flex-col gap-4">
-      {node ? (
+      {lab && flowEdit ? (
+        <PageHeader title={allFlows.find(f => f.id === flowEdit)?.name ?? 'Flow'} status="Flow · Music" onBack={() => go({})} />
+      ) : lab && mixOpen ? (
+        <PageHeader title={allMixes.find(m => m.id === mixOpen)?.name ?? 'Mix'} status="Mix · Music" onBack={() => go({})} />
+      ) : drafting ? (
+        <PageHeader title="New playlist" status="Music" onBack={() => go({})} />
+      ) : node ? (
         <PageHeader title={node.name} status={`${KIND_LABEL[node.kind]} · Music`} onBack={() => go({})} />
       ) : album ? (
         <PageHeader title={album.name} status={`Album · ${album.artist}`} onBack={() => go({})} />
@@ -405,12 +414,8 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         <PageHeader
           title="Music"
           status={<><em>{tracks.length}</em> tracks{library && ` in ${activeLabel}`}{genre && ` · ${genre}`}</>}
-          menu={<>
-            <button onClick={() => openBuildSet()} className="btn btn-ghost btn-sm justify-start">Build a set</button>
-            <button onClick={() => openMix()} className="btn btn-ghost btn-sm justify-start">New mix</button>
-            <button onClick={openHarmonyBasics} className="btn btn-ghost btn-sm justify-start">? Harmony basics</button>
-          </>}
-          tabs={[...TABS]}
+          action={{ label: 'New playlist', onClick: () => newPlaylist() }}
+          tabs={[...tabs]}
           tab={tab}
           onTab={setTab}
         />
@@ -423,7 +428,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       </div>
       <div className="flex gap-6 items-start">
         <aside className="hidden md:block w-62.5 shrink-0 sticky top-24">
-          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} onMix={openMix} node={nodeId} onNode={pickNode} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} />
         </aside>
         <div className="flex-1 min-w-0 flex flex-col gap-4">
           {!page && (
@@ -436,7 +441,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
               className="input input-bordered w-full md:hidden"
             />
           )}
-          {!page && !searching && genres.length > 0 && (
+          {!page && !searching && !flowsTab && genres.length > 0 && (
             <div role="group" aria-label="Filter by genre" className="flex gap-1.5 overflow-x-auto pt-1.5 pb-2.5 -mt-1.5 -mb-1.5 [scrollbar-width:none]">
               {[['', inLibrary.length] as const, ...genres].map(([g, n]) => (
                 <button
@@ -445,33 +450,25 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
                   onClick={() => setGenre(g)}
                   className={`relative hit shrink-0 rounded-full px-3 h-8 text-xs font-medium ${genre === g ? 'bg-primary/20 text-primary' : 'bg-white/6 text-base-content/70 hover:bg-white/10'}`}
                 >
-                  {tab === 'explore' && g && <i className="inline-block size-2 rounded-full mr-1.5" style={{ background: genreColor(g) }} aria-hidden="true" />}
                   {g || 'All'} <span className="tabular-nums opacity-60">{n}</span>
                 </button>
               ))}
             </div>
           )}
-          {fitsMode && fitsTrack && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              <span className="text-base-content/60">Fits after</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 pl-3 pr-1 h-8 text-primary font-medium min-w-0">
-                <span className="truncate">{fitsTrack.title}</span>
-                <button onClick={() => setFitsRef()} aria-label="Back to the normal list" className="relative hit btn btn-ghost btn-circle btn-xs">✕</button>
-              </span>
-              <span className="text-xs text-base-content/60">Ranked by shared notes, then tempo, genre and energy.</span>
-            </div>
-          )}
-          {fitsMode && <MoveFilters value={fitsFilters} />}
           {!page && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {body}
         </div>
+        {/* A playlist page has its own Fits next aside: a second one opens as a dialog instead. */}
+        {fitsPanel && wide && !node && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{fitsPanel}</aside>}
       </div>
+      {fitsPanel && (!wide || node) && (
+        <ResponsiveModal onClose={closeFits} boxClassName="flex h-[60vh] flex-col p-0">{fitsPanel}</ResponsiveModal>
+      )}
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)}>
-          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} onMix={openMix} node={nodeId} onNode={pickNode} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} />
         </ResponsiveModal>
       )}
-      <BuildSet byId={byId} />
       {adding && <AddLibrary onClose={() => setAdding(false)} />}
       {pickFor && <AddToPlaylist track={pickFor} onClose={() => setPickFor(undefined)} />}
     </div>

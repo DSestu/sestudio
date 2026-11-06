@@ -16,9 +16,9 @@ export function navTabs(): Tab[] {
  * none takes a slot in the nav. `lab/music` needs the server's lab flag, see
  * gateRoute.
  */
-export type View = Tab | 'watch' | 'settings' | 'person' | 'channel' | 'creators' | 'mixes' | 'lab/music'
+export type View = Tab | 'watch' | 'settings' | 'person' | 'channel' | 'creators' | 'lab/music'
 
-const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person', 'channel', 'creators', 'mixes', 'lab/music']
+const VIEWS: readonly string[] = [...TABS, 'watch', 'settings', 'person', 'channel', 'creators', 'lab/music']
 
 /** A lab route without the lab flag is an unknown route: it lands on home. */
 export function gateRoute(route: Route, lab: boolean): Route {
