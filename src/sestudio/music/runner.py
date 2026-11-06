@@ -194,6 +194,7 @@ def run_once(
         return analysis.analyse_file(
             str(base / f.path),
             lambda bands, dur: store.set_partial(f.track_id, bands, dur),
+            lambda bpm, bar0: store.set_partial_tempo(f.track_id, bpm, bar0),
         )
 
     with ThreadPoolExecutor(workers, thread_name_prefix="analyse") as ex:

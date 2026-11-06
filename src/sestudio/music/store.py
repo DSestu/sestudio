@@ -374,6 +374,8 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
 #: Track id -> (raw band envelopes so far, duration), while it is being analysed.
 _partial: dict[str, tuple[np.ndarray, float]] = {}
 _partial_lock = threading.Lock()
+#: Track id -> (bpm, bar0) once the tempo is measured, before the key is.
+_partial_tempo: dict[str, tuple[float | None, float | None]] = {}
 
 
 def set_partial(
@@ -384,15 +386,23 @@ def set_partial(
         _partial[track_id] = (np.zeros((8, 0)) if bands is None else bands, duration)
 
 
+def set_partial_tempo(track_id: str, bpm: float | None, bar0: float | None) -> None:
+    """The tempo of a track still being analysed (None without a steady beat)."""
+    with _partial_lock:
+        _partial_tempo[track_id] = (bpm, bar0)
+
+
 def drop_partial(track_id: str) -> None:
     with _partial_lock:
         _partial.pop(track_id, None)
+        _partial_tempo.pop(track_id, None)
 
 
 def partial(ids: list[str]) -> dict[str, dict[str, Any]]:
     """The tracks of *ids* being analysed: their bands so far, normalised like ``get``'s."""
     with _partial_lock:
         found = {i: _partial[i] for i in ids if i in _partial}
+        tempos = {i: _partial_tempo[i] for i in found if i in _partial_tempo}
     if not found:
         return {}
     norm = (_get_state() or renormalise())["norm"]
@@ -406,6 +416,8 @@ def partial(ids: list[str]) -> dict[str, dict[str, Any]]:
             "progress": round(min(1.0, n / 10 / duration), 3) if duration else 0.0,
             "bands": [_percent(bands[i], norm[i]) for i in range(8)],
         }
+        if tid in tempos:
+            out[tid]["bpm"], out[tid]["bar0"] = tempos[tid]
     return out
 
 
