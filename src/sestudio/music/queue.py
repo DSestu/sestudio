@@ -55,6 +55,7 @@ def _empty() -> dict[str, Any]:
         "default_mix": "sync",
         "mix": {},
         "next_item": 1,
+        "source": None,
     }
 
 
@@ -88,6 +89,10 @@ def _view(rev: int, doc: dict[str, Any]) -> dict[str, Any]:
         "repeat": doc["repeat"],
         "default_mix": doc["default_mix"],
         "mix": doc["mix"],
+        # The flow or mix the queue plays (SPEC-music-flows §7), None for a hand-made queue.
+        "source": doc.get("source"),
+        # The last tracks left by Next, True when it was well before their end (a branch condition, §5).
+        "skips": doc.get("skips", []),
         "station": _station_clock,
         "volume": _volume,
     }
@@ -228,11 +233,13 @@ def add(
     replace: bool = False,
     if_rev: int | None = None,
     start: int = 0,
+    source: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Insert *tracks* (``{library, track_id}``) at *index* (default: the end).
 
     ``replace`` swaps the whole queue for them (play all of a folder) and
-    starts at the first (or at *start*);
+    starts at the first (or at *start*); it plays *source* (a flow or a mix),
+    or nothing in particular when that is None;
     ``play_now`` jumps to the first inserted one.
     """
     if not tracks:
@@ -245,10 +252,11 @@ def add(
             doc["next_item"] += 1
         if replace:
             doc["items"] = new
+            doc["source"] = source
             at = max(0, min(start, len(new) - 1))
             _go(doc, new[at]["item_id"])
             doc["playing"] = True
-            return {"items": new, "start": at}
+            return {"items": new, "start": at, "source": source}
         at = (
             len(doc["items"])
             if index is None
@@ -265,6 +273,30 @@ def add(
         return detail
 
     return _mutate("set" if replace else "ins", if_rev, change)
+
+
+def future(
+    tracks: list[dict[str, Any]], source: dict[str, Any], if_rev: int | None = None
+) -> dict[str, Any]:
+    """Replace what comes after the current item with *tracks* (a re-rendered flow).
+
+    The played part and the current item stay, so playback does not move; the
+    queue now plays *source*.
+    """
+
+    def change(doc: dict[str, Any]) -> dict[str, Any]:
+        keep = _index(doc) + 1
+        new = []
+        for t in tracks:
+            new.append({**t, "item_id": f"q{doc['next_item']}"})
+            doc["next_item"] += 1
+        doc["items"] = doc["items"][:keep] + new
+        doc["source"] = source
+        if doc["current_item"] is None and new:
+            doc["current_item"] = new[0]["item_id"]
+        return {"keep": keep, "items": new, "source": source}
+
+    return _mutate("fut", if_rev, change)
 
 
 def remove(item_id: str, if_rev: int | None = None) -> dict[str, Any]:
@@ -291,6 +323,20 @@ def move(item_id: str, to: int, if_rev: int | None = None) -> dict[str, Any]:
         return {"item_id": item_id, "from": i, "to": dest}
 
     return _mutate("mv", if_rev, change)
+
+
+def order(item_ids: list[str], if_rev: int | None = None) -> dict[str, Any]:
+    """Put the whole queue in *item_ids* order at once (an auto-order of what is
+    next): one change and one event, instead of a move per row."""
+
+    def change(doc: dict[str, Any]) -> dict[str, Any]:
+        by_id = {i["item_id"]: i for i in doc["items"]}
+        if sorted(item_ids) != sorted(by_id):
+            raise Invalid("the order must list every queue item once")
+        doc["items"] = [by_id[i] for i in item_ids]
+        return {"order": item_ids}
+
+    return _mutate("ord", if_rev, change)
 
 
 def play(
@@ -335,6 +381,8 @@ def transport(
         items = doc["items"]
         if not items:
             raise Invalid("the queue is empty")
+        if action == "next" and doc["current_item"]:
+            doc["skips"] = [*doc.get("skips", []), _skipped(doc)][-SKIPS_KEPT:]
         j = _index(doc) + 1 if action == "next" else max(_index(doc) - 1, 0)
         doc["playing"] = True
         if j >= len(items):
@@ -365,6 +413,26 @@ def transport(
         }
 
     return _mutate("go" if action in ("next", "prev") else "transport", if_rev, change)
+
+
+#: How many recent Next presses are remembered, and how close to its end a track may be left without counting as skipped.
+SKIPS_KEPT = 10
+SKIP_MARGIN = 30.0
+
+
+def _skipped(doc: dict[str, Any]) -> bool:
+    """Next pressed well before the current track's end (a fade's own Next comes in its last seconds)."""
+    item = doc["items"][_index(doc)]
+    row = (
+        library._connect()
+        .execute(
+            "SELECT duration FROM music_analysis WHERE track_id = ?",
+            (item["track_id"],),
+        )
+        .fetchone()
+    )
+    duration = row["duration"] if row else item.get("duration")
+    return bool(duration) and _position_now(doc) < duration - SKIP_MARGIN
 
 
 def clean_mix(raw: dict[str, Any]) -> dict[str, Any]:

@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow lab · sestudio</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --house: oklch(16% 0.015 240); --aisle: oklch(20% 0.02 240); --row: oklch(26% 0.025 240);
+    --slate: oklch(30% 0.02 240); --ink: oklch(92% 0.01 240); --blue: oklch(72% 0.16 230);
+    --blue-ink: oklch(18% 0.05 230); --coral: oklch(70% 0.17 25); --good: oklch(76% 0.17 155);
+    --ease: cubic-bezier(.2, .8, .2, 1);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  ::selection { background: color-mix(in oklch, var(--blue) 40%, transparent); }
+  body { margin: 0; background: var(--house); color: var(--ink); font: 14px/1.43 ui-sans-serif, system-ui, sans-serif; }
+  header { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+    padding: 12px 20px; background: color-mix(in oklch, var(--house) 95%, transparent); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--row); }
+  h1 { margin: 0; font-size: 1.125rem; font-weight: 600; letter-spacing: -0.025em; }
+  label { display: inline-flex; gap: 6px; align-items: center; color: color-mix(in oklch, var(--ink) 70%, transparent); font-size: 12px; font-weight: 500; }
+  select, input[type=number] { background: var(--aisle); color: var(--ink); border: 1px solid var(--row); border-radius: .25rem;
+    height: 32px; padding: 0 8px; font: inherit; font-variant-numeric: tabular-nums; }
+  input[type=number] { width: 64px; }
+  button { height: 32px; padding: 0 12px; border-radius: .25rem; border: 0; background: transparent; color: var(--ink);
+    font: 500 13px ui-sans-serif, system-ui, sans-serif; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  button:hover { background: var(--row); }
+  button.primary { background: var(--blue); color: var(--blue-ink); }
+  button.primary:hover { background: color-mix(in oklch, var(--blue) 88%, white); }
+  button[aria-pressed=true] { background: var(--row); color: var(--blue); }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .grow { flex: 1; }
+  .group { display: flex; gap: 4px; align-items: center; }
+  .now { font-variant-numeric: tabular-nums; color: color-mix(in oklch, var(--ink) 70%, transparent); min-width: 14ch; }
+  main { padding: 16px 20px 40px; display: grid; gap: 20px; }
+  main > section { min-width: 0; }
+  section > h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; color: color-mix(in oklch, var(--ink) 70%, transparent); }
+  .hint { font-size: 12px; color: color-mix(in oklch, var(--ink) 50%, transparent); }
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; }
+  .preset { padding: 4px 10px; border-radius: 2rem; background: var(--aisle); border: 1px solid var(--row); cursor: grab; font-size: 12px; font-weight: 500; user-select: none; }
+  .preset.layer { border-style: dashed; }
+  .preset:active { cursor: grabbing; }
+  svg { display: block; width: 100%; touch-action: none; user-select: none; }
+  svg text { font: 500 11px ui-sans-serif, system-ui, sans-serif; fill: var(--ink); font-variant-numeric: tabular-nums; }
+  .panel { background: var(--aisle); border-radius: .5rem; padding: 8px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+  th { text-align: left; font-weight: 500; font-size: 12px; color: color-mix(in oklch, var(--ink) 50%, transparent); padding: 6px 8px; border-bottom: 1px solid var(--row); }
+  td { padding: 5px 8px; border-bottom: 1px solid color-mix(in oklch, var(--row) 60%, transparent); white-space: nowrap; }
+  td.title { white-space: normal; min-width: 18ch; }
+  tr.playing td { background: color-mix(in oklch, var(--blue) 12%, transparent); }
+  .dim { color: color-mix(in oklch, var(--ink) 45%, transparent); }
+  .chip { display: inline-block; padding: 0 7px; border-radius: 2rem; font-size: 11px; font-weight: 500; background: color-mix(in oklch, var(--coral) 15%, transparent); color: var(--coral); margin-right: 3px; }
+  .chip.pin { background: color-mix(in oklch, var(--blue) 15%, transparent); color: var(--blue); }
+  .mv-lift { color: var(--good); } .mv-drop { color: oklch(74% 0.14 250); } .mv-far { color: var(--coral); }
+  .tablewrap { overflow-x: auto; }
+  #pop { position: fixed; z-index: 5; display: none; background: var(--aisle); border: 1px solid var(--row); border-radius: .5rem;
+    padding: 10px; box-shadow: 0 8px 24px oklch(0% 0 0 / .5); min-width: 200px; }
+  #pop label { display: flex; padding: 3px 0; color: var(--ink); font-size: 13px; }
+  #pop .row { display: flex; gap: 6px; margin-top: 8px; }
+  .banner { padding: 8px 12px; border-radius: .5rem; background: color-mix(in oklch, var(--blue) 12%, transparent); color: var(--blue); font-size: 13px; display: none; }
+  @media (max-width: 640px) { header, main { padding-left: 12px; padding-right: 12px; } .hide-sm { display: none; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Flow lab</h1>
+  <label>Flow <select id="flowSel"></select></label>
+  <label>Length <input id="minutes" type="number" min="10" max="240" step="5"> min</label>
+  <span class="group"><label>Seed <input id="seed" type="number" min="1"></label>
+    <button id="reroll" title="Another seed: a cousin of this mix">Reroll</button></span>
+  <label title="How much the key pulls the choice, against tempo and energy. It never excludes a track.">Harmony pull <select id="pull"><option value="light">light</option><option value="strong" selected>strong</option><option value="only">only</option></select></label>
+  <button id="freeze" aria-pressed="false" title="A frozen mix keeps its tracks when the flow changes">Freeze</button>
+  <span class="grow"></span>
+  <span class="group">
+    <button id="play" class="primary">Play</button>
+    <button id="nextBlend" title="Jump to 8 s before the next blend">Next blend</button>
+    <button id="nextTrack">Next</button>
+  </span>
+  <span class="now" id="now">0:00</span>
+  <button id="export" class="hide-sm" title="Download this flow as JSON">Export</button>
+</header>
+<main>
+  <section>
+    <h2>Multiverse</h2>
+    <div class="panel"><svg id="tree"></svg></div>
+    <p class="hint">Every future of the flow. The lit path is the one the mix follows; click a chunk to route through it.</p>
+  </section>
+  <section>
+    <h2>Presets</h2>
+    <div class="palette" id="palette"></div>
+    <p class="hint">Drop a chunk (solid) on the header row to insert it there. Drop a layer (dashed) on a lane to replace that layer of the chunk under it.</p>
+  </section>
+  <section>
+    <h2>Score</h2>
+    <div class="banner" id="banner"></div>
+    <div class="panel"><svg id="score"></svg></div>
+    <p class="hint">Curves: drag a point; double-click to add one; right-click a point to remove it (the last two remove the layer); double-click an empty lane to add it.
+      Harmony: click the lane to place a modulation at that point (every other join is a match); click an event to choose its kind, drag it, right-click to remove it; right-click the lane to free the chunk of harmony. Genre: click to pick, shift-click for must / prefer, double-click to split, right-click to merge.
+      Header: drag a boundary to resize; click a chunk name for Branch here / Delete; pills at a fork pick the future (auto = generator).
+      Mix: click a track to play from it.</p>
+  </section>
+  <section>
+    <h2>Mix</h2>
+    <div class="tablewrap"><table id="list"></table></div>
+  </section>
+</main>
+<div id="pop"></div>
+<audio id="a0" preload="auto"></audio><audio id="a1" preload="auto"></audio>
+
+<script type="module">
+import { load, resolve, render, spans, curve, block, shared, scaleName, join, KINDS, MODULATIONS, PULL, BLEND_S, TEMPO_BAND, ENERGY_BAND } from './flowgen.js'
+
+const $ = s => document.querySelector(s)
+const lib = load(await (await fetch('lib.json')).json())
+const GENRES = [...new Set(lib.map(t => t.genre).filter(Boolean))].sort()
+const FLOWS = { night: 'night.json', 'house-to-ambient': 'house-to-ambient.json' }
+const FEEL = { up: 'brighter, lifting', down: 'darker, settling', 'mode+': 'same ground, one note brighter', 'mode-': 'same ground, one note darker', relative: 'same notes, minor ↔ major', break: 'a reset: few shared notes' }
+const PRESETS = {
+  chunks: {
+    'Warm-up': { tempo: [[0, 170], [1, 172]], energy: [[0, 0.2], [1, 0.5]], harmony: [] },
+    Peak: { tempo: [[0, 172], [1, 175]], energy: [[0, 0.65], [1, 0.95]], harmony: [{ at: 0.5, kind: 'up' }] },
+    Plateau: { tempo: [[0, 172], [1, 172]], energy: [[0, 0.55], [1, 0.55]], harmony: [] },
+    Deep: { energy: [[0, 0.35], [1, 0.45]], harmony: [{ at: 0.5, kind: 'mode-' }] },
+    'Come-down': { tempo: [[0, 172], [1, 145]], energy: [[0, 0.6], [1, 0.15]], harmony: [{ at: 0, kind: 'break' }, { at: 0.5, kind: 'relative' }] },
+  },
+  layers: {
+    Climb: ['energy', [[0, 0.2], [1, 0.9]]], Wave: ['energy', [[0, 0.3], [0.33, 0.8], [0.66, 0.3], [1, 0.8]]],
+    Glide: ['tempo', [[0, 165], [1, 175]]],
+    'Match only': ['harmony', []], 'One lift': ['harmony', [{ at: 0.6, kind: 'up' }]], 'Lift, then home': ['harmony', [{ at: 0.4, kind: 'up' }, { at: 0.8, kind: 'down' }]],
+    'Colour change': ['harmony', [{ at: 0.5, kind: 'mode+' }]], Reset: ['harmony', [{ at: 0, kind: 'break' }]],
+    'D&B only': ['genre', [{ from: 0, to: 1, genres: ['Drum & Bass'] }]],
+  },
+}
+const HARMONY_TIP = 'Every join wants a match (same key, or the relative) unless an event is placed; an event wants its modulation at the first join after it and slides on if nothing serves it. Harmony pulls the choice, it never excludes a track: the pull in the header sets how hard.'
+
+const S = { flow: null, flowName: 'night', choices: {}, minutes: 60, seed: 1, pins: {}, frozen: null, view: null, pull: 'strong' }
+const P = { idx: -1, cur: $('#a0'), nxt: $('#a1'), blending: false, playing: false }
+
+// ---------- model ----------
+async function loadFlow(name) {
+  S.flowName = name
+  S.flow = name === 'empty' ? { name: 'Empty', chunks: [{ id: 'start', share: 1, layers: {} }] } : await (await fetch(FLOWS[name])).json()
+  S.choices = {}; S.pins = {}; S.frozen = null; $('#freeze').setAttribute('aria-pressed', 'false')
+  stop(); update()
+}
+const byId = id => S.flow.chunks.find(c => c.id === id)
+const parentOf = id => S.flow.chunks.find(c => (c.next || []).includes(id))
+let uid = 0
+const freshId = base => { let id; do id = `${base.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${++uid}`; while (byId(id)); return id }
+const clone = o => JSON.parse(JSON.stringify(o))
+
+function compute() {
+  const opts = { minutes: S.minutes, seed: S.seed, pull: PULL[S.pull] }
+  const { chunks, auto } = resolve(S.flow, S.choices, lib, opts)
+  const pins = { ...S.pins }
+  // The past is fixed: while playing, every slot up to the current one keeps its track.
+  if (P.idx >= 0 && S.view) for (let i = 0; i <= P.idx && i < S.view.mix.length; i++) pins[i] = S.view.mix[i].track.id
+  const mix = S.frozen || render(chunks, lib, { ...opts, pins })
+  S.view = { chunks, auto, sp: spans(chunks), mix }
+}
+
+function update() { compute(); draw() }
+
+// ---------- score geometry ----------
+const LANES = [
+  { k: 'head', h: 36 }, { k: 'tempo', h: 130, lo: 140, hi: 180, label: 'Tempo' },
+  { k: 'energy', h: 110, lo: 0, hi: 1, label: 'Energy' }, { k: 'harmony', h: 40, label: 'Harmony' },
+  { k: 'genre', h: 34, label: 'Genre' }, { k: 'mix', h: 54, label: 'Mix' },
+]
+const GAP = 8, PADL = 70, PADR = 12
+let y0 = 0; for (const l of LANES) { l.y = y0; y0 += l.h + GAP }
+const HEIGHT = y0
+const lane = k => LANES.find(l => l.k === k)
+const svg = $('#score')
+const W = () => svg.clientWidth || 900
+const xOf = sec => PADL + (sec / (S.minutes * 60)) * (W() - PADL - PADR)
+const secOf = x => ((x - PADL) / (W() - PADL - PADR)) * S.minutes * 60
+const yOf = (l, v) => l.y + l.h - 6 - ((v - l.lo) / (l.hi - l.lo)) * (l.h - 12)
+const vOf = (l, y) => l.lo + ((l.y + l.h - 6 - y) / (l.h - 12)) * (l.hi - l.lo)
+const spanSec = s => [s.a * S.minutes * 60, s.b * S.minutes * 60]
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+
+function draw() {
+  const { sp, mix, auto } = S.view
+  const w = W()
+  svg.setAttribute('viewBox', `0 0 ${w} ${HEIGHT}`); svg.setAttribute('height', HEIGHT)
+  let o = ''
+  // lane backgrounds and labels
+  for (const l of LANES) {
+    if (l.k !== 'head') o += `<rect x="${PADL}" y="${l.y}" width="${w - PADL - PADR}" height="${l.h}" rx="4" fill="var(--house)"/>`
+    if (l.label) o += `<text x="8" y="${l.y + 16}" opacity=".7">${l.label}</text>`
+  }
+  for (const v of [150, 160, 170, 180]) { const y = yOf(lane('tempo'), v); o += `<line x1="${PADL}" x2="${w - PADR}" y1="${y}" y2="${y}" stroke="var(--row)" stroke-dasharray="2 4"/><text x="${PADL - 6}" y="${y + 4}" text-anchor="end" opacity=".45">${v}</text>` }
+  for (const v of [0, 0.5, 1]) { const y = yOf(lane('energy'), v); o += `<text x="${PADL - 6}" y="${y + 4}" text-anchor="end" opacity=".45">${v}</text>` }
+
+  sp.forEach((s, ci) => {
+    const c = s.c, [a, b] = spanSec(s), xa = xOf(a), xb = xOf(b)
+    // header: name, boundary handle, fork pills
+    const h = lane('head')
+    o += `<g data-kind="chunkname" data-chunk="${c.id}" style="cursor:pointer"><rect x="${xa + 1}" y="${h.y + 4}" width="${Math.max(0, xb - xa - 2)}" height="${h.h - 8}" rx="4" fill="var(--row)"/>
+      <text x="${xa + 8}" y="${h.y + 22}">${esc(c.id)} <tspan opacity=".5">${fmt(a)}–${fmt(b)}</tspan></text></g>`
+    if (ci > 0) o += `<rect data-kind="boundary" data-i="${ci}" x="${xa - 5}" y="${h.y}" width="10" height="${HEIGHT - lane('mix').h - GAP}" fill="transparent" style="cursor:ew-resize"/>
+      <line x1="${xa}" x2="${xa}" y1="${h.y}" y2="${HEIGHT}" stroke="var(--slate)"/>`
+    const nxt = c.next || []
+    if (nxt.length > 1) {
+      let px = xb - 6
+      const pills = [...nxt.map(id => [id, id]), ['auto', '', 'auto']].reverse()
+      for (const [id, val, text = id] of pills) {
+        const on = (S.choices[c.id] || '') === val
+        const isAuto = !S.choices[c.id] && auto[c.id] === id
+        const tw = text.length * 6.2 + 16
+        px -= tw + 4
+        o += `<g data-kind="fork" data-chunk="${c.id}" data-val="${val}" style="cursor:pointer"><rect x="${px}" y="${h.y + 8}" width="${tw}" height="20" rx="10"
+          fill="${on ? 'var(--blue)' : 'var(--aisle)'}" stroke="${isAuto ? 'var(--blue)' : 'var(--slate)'}"/>
+          <text x="${px + tw / 2}" y="${h.y + 22}" text-anchor="middle" style="fill:${on ? 'var(--blue-ink)' : 'var(--ink)'}">${esc(text)}</text></g>`
+      }
+    }
+    // curves
+    for (const k of ['tempo', 'energy']) {
+      const l = lane(k), pts = c.layers[k]
+      if (!pts) {
+        o += `<rect data-kind="emptylane" data-chunk="${c.id}" data-lane="${k}" x="${xa + 2}" y="${l.y + 2}" width="${Math.max(0, xb - xa - 4)}" height="${l.h - 4}" fill="transparent" stroke="var(--row)" stroke-dasharray="4 4" rx="4"/>
+          <text x="${(xa + xb) / 2}" y="${l.y + l.h / 2 + 4}" text-anchor="middle" opacity=".35" pointer-events="none">no constraint</text>`
+        continue
+      }
+      const band = k === 'tempo' ? TEMPO_BAND : ENERGY_BAND
+      const N = 24, up = [], dn = [], mid = []
+      for (let i = 0; i <= N; i++) {
+        const f = i / N, x = xOf(a + (b - a) * f), v = curve(pts, f)
+        mid.push(`${x},${yOf(l, v)}`); up.push(`${x},${yOf(l, Math.min(l.hi, v + band))}`); dn.unshift(`${x},${yOf(l, Math.max(l.lo, v - band))}`)
+      }
+      o += `<rect data-kind="lanebg" data-chunk="${c.id}" data-lane="${k}" x="${xa}" y="${l.y}" width="${xb - xa}" height="${l.h}" fill="transparent"/>`
+      o += `<polygon points="${up.concat(dn).join(' ')}" fill="color-mix(in oklch, var(--blue) 14%, transparent)" pointer-events="none"/>`
+      o += `<polyline points="${mid.join(' ')}" fill="none" stroke="var(--blue)" stroke-width="1.5" pointer-events="none"/>`
+      pts.forEach(([f, v], pi) => {
+        o += `<circle data-kind="point" data-chunk="${c.id}" data-lane="${k}" data-i="${pi}" cx="${xOf(a + (b - a) * f)}" cy="${yOf(l, v)}" r="6"
+          fill="var(--house)" stroke="var(--blue)" stroke-width="2" style="cursor:grab"><title>${k === 'tempo' ? v.toFixed(0) + ' BPM' : 'energy ' + v.toFixed(2)}</title></circle>`
+      })
+    }
+    // blocks
+    // harmony: a lane of matches with placed events
+    {
+      const l = lane('harmony'), evs = c.layers.harmony
+      if (!evs) {
+        o += `<rect data-kind="emptyharmony" data-chunk="${c.id}" data-lane="harmony" x="${xa + 2}" y="${l.y + 2}" width="${Math.max(0, xb - xa - 4)}" height="${l.h - 4}" rx="4" fill="transparent" stroke="var(--row)" stroke-dasharray="4 4"/>
+          <text x="${(xa + xb) / 2}" y="${l.y + 24}" text-anchor="middle" opacity=".35" pointer-events="none">free</text>`
+      } else {
+        o += `<rect data-kind="harmonybg" data-chunk="${c.id}" data-lane="harmony" x="${xa + 2}" y="${l.y + 2}" width="${Math.max(0, xb - xa - 4)}" height="${l.h - 4}" rx="4" fill="color-mix(in oklch, var(--blue) 8%, transparent)"><title>Match. ${HARMONY_TIP}</title></rect>`
+        if (!evs.length) o += `<text x="${xa + 8}" y="${l.y + 24}" opacity=".5" pointer-events="none">match</text>`
+        const realised = new Set(mix.filter(m => m.chunk === c.id && m.event?.realised).map(m => m.event.index))
+        const missed = new Set(mix.filter(m => m.chunk === c.id && m.event && !m.event.realised).map(m => m.event.index))
+        evs.forEach((ev, ei) => {
+          const x = xOf(a + (b - a) * ev.at), done = realised.has(ei), brk = ev.kind === 'break'
+          const col = brk ? 'var(--coral)' : 'var(--blue)'
+          o += `<g data-kind="event" data-chunk="${c.id}" data-i="${ei}" style="cursor:pointer"><line x1="${x}" x2="${x}" y1="${l.y + 3}" y2="${l.y + l.h - 3}" stroke="${col}" stroke-width="2" ${brk ? 'stroke-dasharray="3 3"' : ''}/>
+            <path d="M${x - 6},${l.y + 3} l6,7 l6,-7z" fill="${done ? col : 'var(--house)'}" stroke="${col}" stroke-width="1.5"/>
+            <text x="${x + 8}" y="${l.y + 25}" style="fill:${done || !missed.has(ei) ? 'var(--ink)' : 'var(--coral)'}">${esc(KINDS[ev.kind])}${missed.has(ei) && !done ? ' · not yet' : ''}</text>
+            <title>${esc(KINDS[ev.kind])}: ${esc(FEEL[ev.kind])}. ${done ? 'Realised.' : missed.has(ei) ? 'No track could do it at the joins so far; it slides on.' : ''}</title></g>`
+        })
+      }
+    }
+    // genre blocks
+    for (const k of ['genre']) {
+      const l = lane(k), blocks = c.layers[k] || []
+      if (!blocks.length) {
+        o += `<rect data-kind="emptyblock" data-chunk="${c.id}" data-lane="${k}" x="${xa + 2}" y="${l.y + 2}" width="${Math.max(0, xb - xa - 4)}" height="${l.h - 4}" rx="4" fill="transparent" stroke="var(--row)" stroke-dasharray="4 4"/>
+          <text x="${(xa + xb) / 2}" y="${l.y + 21}" text-anchor="middle" opacity=".35" pointer-events="none">any</text>`
+        continue
+      }
+      blocks.forEach((bl, bi) => {
+        const x1 = xOf(a + (b - a) * bl.from), x2 = xOf(a + (b - a) * bl.to)
+        const prefer = bl.strict === 'prefer'
+        const text = (bl.genres || []).join(', ') || 'any'
+        const tip = `${text} — ${prefer ? 'prefer' : 'must'}`
+        o += `<g data-kind="block" data-chunk="${c.id}" data-lane="${k}" data-i="${bi}" style="cursor:pointer"><rect x="${x1 + 2}" y="${l.y + 3}" width="${Math.max(0, x2 - x1 - 4)}" height="${l.h - 6}" rx="4"
+          fill="${prefer ? 'transparent' : 'color-mix(in oklch, var(--blue) 18%, var(--aisle))'}" stroke="var(--blue)" stroke-opacity="${prefer ? 0.7 : 0.35}" ${prefer ? 'stroke-dasharray="4 3"' : ''}/>
+          <text x="${x1 + 8}" y="${l.y + 21}">${esc(text)}</text><title>${esc(tip)}</title></g>`
+      })
+    }
+  })
+  // the mix: dots on the curves, bars on the mix lane
+  const lt = lane('tempo'), le = lane('energy'), lm = lane('mix')
+  mix.forEach((m, i) => {
+    const t = m.track, x = xOf(m.at), x2 = xOf(Math.min(S.minutes * 60, m.at + t.dur))
+    const relaxed = m.relaxed.filter(r => r !== 'pin')
+    const col = relaxed.length ? 'var(--coral)' : 'var(--ink)'
+    if (t.bpm >= lt.lo && t.bpm <= lt.hi) o += `<circle cx="${x}" cy="${yOf(lt, t.bpm)}" r="3.5" fill="${col}" pointer-events="none"/>`
+    else o += `<path d="M${x - 4},${lt.y + lt.h - 4} l4,-6 l4,6z" fill="var(--coral)" pointer-events="none"/>`
+    o += `<circle cx="${x}" cy="${yOf(le, t.e)}" r="3.5" fill="${col}" pointer-events="none"/>`
+    const playing = i === P.idx
+    o += `<g data-kind="track" data-i="${i}" style="cursor:pointer"><rect x="${x + 1}" y="${lm.y + 4 + (i % 2) * 22}" width="${Math.max(2, x2 - x - 2)}" height="20" rx="4"
+      fill="${playing ? 'var(--blue)' : 'var(--row)'}" stroke="${relaxed.length ? 'var(--coral)' : 'none'}"/>
+      <text x="${x + 6}" y="${lm.y + 18 + (i % 2) * 22}" style="fill:${playing ? 'var(--blue-ink)' : 'var(--ink)'}">${esc(t.title.slice(0, Math.max(0, Math.floor((x2 - x - 12) / 6))))}</text>
+      <title>${esc(t.title)} · ${Math.round(t.bpm)} BPM · ${t.scale ? scaleName(t.scale) + (t.scale.unsure ? '?' : '') : 'key unread'}${m.join ? ' · ' + KINDS[m.join] : ''} · energy ${t.e.toFixed(2)} · ${t.genre}${relaxed.length ? ' · relaxed: ' + relaxed.join(', ') : ''}</title></g>`
+  })
+  const last = mix.at(-1)
+  if (last && last.at + last.track.dur < S.minutes * 60 * 0.95) o += `<text x="${xOf(last.at + last.track.dur) + 8}" y="${lm.y + 30}" fill="var(--coral)" style="fill:var(--coral)">library exhausted</text>`
+  o += `<line id="head" x1="0" x2="0" y1="0" y2="${HEIGHT}" stroke="var(--ink)" stroke-width="1.5" opacity="${P.idx >= 0 ? 0.9 : 0}"/>`
+  svg.innerHTML = o
+  drawTree(); drawList(); drawBanner(); tickHead()
+}
+
+// ---------- multiverse tree ----------
+function drawTree() {
+  const t = $('#tree'), chunks = S.flow.chunks, depth = {}, rows = {}
+  const q = [[chunks[0].id, 0]]
+  while (q.length) {
+    const [id, d] = q.shift()
+    if (id in depth) continue
+    depth[id] = d
+    for (const n of byId(id)?.next || []) q.push([n, d + 1])
+  }
+  for (const c of chunks) if (!(c.id in depth)) depth[c.id] = 0
+  const cols = {}
+  for (const c of chunks) { const d = depth[c.id]; rows[c.id] = cols[d] = (cols[d] ?? -1) + 1 }
+  const maxRow = Math.max(...Object.values(cols)) + 1
+  const w = t.clientWidth || 900, nd = Math.max(...Object.values(depth)) + 1
+  const cw = Math.min(200, (w - 24) / nd), H = maxRow * 44 + 12
+  t.setAttribute('viewBox', `0 0 ${w} ${H}`); t.setAttribute('height', H)
+  const lit = new Set(S.view.chunks.map(c => c.id))
+  const pos = id => [12 + depth[id] * cw, 8 + rows[id] * 44]
+  let o = ''
+  for (const c of chunks) for (const n of c.next || []) {
+    const [x1, y1] = pos(c.id), [x2, y2] = pos(n), on = lit.has(c.id) && lit.has(n) && S.view.chunks.indexOf(byId(n)) === S.view.chunks.indexOf(c) + 1
+    o += `<path d="M${x1 + cw - 28},${y1 + 15} C${x1 + cw - 6},${y1 + 15} ${x2 - 22},${y2 + 15} ${x2},${y2 + 15}" fill="none" stroke="${on ? 'var(--blue)' : 'var(--slate)'}" stroke-width="${on ? 2 : 1}"/>`
+  }
+  for (const c of chunks) {
+    const [x, y] = pos(c.id), on = lit.has(c.id)
+    o += `<g data-kind="node" data-chunk="${c.id}" style="cursor:pointer"><rect x="${x}" y="${y}" width="${cw - 28}" height="30" rx="6" fill="${on ? 'color-mix(in oklch, var(--blue) 20%, var(--row))' : 'var(--house)'}" stroke="${on ? 'var(--blue)' : 'var(--row)'}"/>
+      <text x="${x + 10}" y="${y + 19}" style="fill:${on ? 'var(--ink)' : 'color-mix(in oklch, var(--ink) 55%, transparent)'}">${esc(c.id)}</text></g>`
+  }
+  t.innerHTML = o
+}
+$('#tree').addEventListener('click', e => {
+  const g = e.target.closest('[data-kind=node]'); if (!g) return
+  // route through the clicked chunk: set choices along the path from the root to it
+  const target = g.dataset.chunk, prev = {}, q = [S.flow.chunks[0].id]
+  while (q.length) { const id = q.shift(); for (const n of byId(id).next || []) if (!(n in prev)) { prev[n] = id; q.push(n) } }
+  for (let id = target; prev[id]; id = prev[id]) if ((byId(prev[id]).next || []).length > 1) S.choices[prev[id]] = id
+  update()
+})
+
+// ---------- list ----------
+function drawList() {
+  const { mix } = S.view
+  let o = `<tr><th>#</th><th>Time</th><th>Chunk</th><th>Title</th><th>BPM <span class="dim">want</span></th><th>Scale</th><th>Join <span class="dim">want</span></th><th>Fit</th><th>Notes</th><th>Energy <span class="dim">want</span></th><th>Genre</th><th>Relaxed</th><th></th></tr>`
+  mix.forEach((m, i) => {
+    const t = m.track, relaxed = m.relaxed.filter(r => r !== 'pin'), pinned = i in S.pins
+    const prev = mix[i - 1]?.track, joinN = prev?.scale && t.scale ? shared(prev.scale, t.scale) : null
+    const want = m.event ? KINDS[m.event.kind] : i ? 'Match' : ''
+    const good = m.fit != null && m.fit >= 0.8
+    o += `<tr class="${i === P.idx ? 'playing' : ''}"><td class="dim">${i + 1}</td><td>${fmt(m.at)}</td><td class="dim">${esc(m.chunk)}</td>
+      <td class="title">${esc(t.title)}</td><td>${Math.round(t.bpm)} <span class="dim">${m.tempoT != null ? m.tempoT.toFixed(0) : ''}</span></td>
+      <td title="${esc(t.harmony?.track?.reason || '')}">${t.scale ? esc(scaleName(t.scale)) + (t.scale.unsure ? '<span class="dim">?</span>' : '') : '<span class="dim">unread</span>'}</td>
+      <td class="${m.join ? (good ? 'mv-lift' : m.join === 'break' ? 'mv-far' : '') : ''}" title="${esc(m.join ? FEEL[m.join] || '' : '')}">${m.join ? esc(KINDS[m.join]) : '<span class="dim">–</span>'} <span class="dim">${want !== (m.join && KINDS[m.join]) ? esc(want) : ''}</span></td>
+      <td class="${m.fit == null ? 'dim' : m.fit >= 0.8 ? 'mv-lift' : m.fit <= 0.2 ? 'mv-far' : ''}" title="How well this join serves what the flow wanted, 0 to 1">${m.fit == null ? '' : m.fit.toFixed(1)}</td>
+      <td class="${joinN == null ? 'dim' : joinN >= 6 ? 'mv-lift' : 'mv-far'}" title="Notes shared with the previous track, of 7">${joinN == null ? (i ? '?' : '') : joinN + '/7'}</td>
+      <td>${t.e.toFixed(2)} <span class="dim">${m.energyT != null ? m.energyT.toFixed(2) : ''}</span></td><td>${esc(t.genre)}</td>
+      <td>${pinned ? '<span class="chip pin">pinned</span>' : ''}${relaxed.map(r => `<span class="chip">${r}</span>`).join('')}</td>
+      <td><button data-act="pin" data-i="${i}" aria-pressed="${pinned}">${pinned ? 'Unpin' : 'Pin'}</button><button data-act="play" data-i="${i}">Play</button></td></tr>`
+  })
+  $('#list').innerHTML = o
+}
+$('#list').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return
+  const i = +b.dataset.i
+  if (b.dataset.act === 'play') return playFrom(i)
+  if (i in S.pins) delete S.pins[i]; else S.pins[i] = S.view.mix[i].track.id
+  update()
+})
+
+function drawBanner() {
+  const b = $('#banner')
+  if (S.frozen) {
+    const live = render(S.view.chunks, lib, { minutes: S.minutes, seed: S.seed, pins: S.pins, pull: PULL[S.pull] })
+    const changed = live.map(m => m.track.id).join() !== S.frozen.map(m => m.track.id).join()
+    b.textContent = changed ? 'Frozen: the flow has changed since, this mix kept its tracks. Unfreeze to follow the flow.' : 'Frozen: this mix keeps its tracks whatever happens to the flow.'
+    b.style.display = 'block'
+  } else b.style.display = 'none'
+}
+
+// ---------- editing ----------
+let drag = null
+const local = (c, sec) => { const s = S.view.sp.find(x => x.c === c); const [a, b] = spanSec(s); return Math.min(1, Math.max(0, (sec - a) / (b - a))) }
+const pt = e => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) * (W() / r.width), (e.clientY - r.top) * (HEIGHT / r.height)] }
+
+svg.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return
+  const g = e.target.closest('[data-kind]'); if (!g) return
+  const k = g.dataset.kind, c = byId(g.dataset.chunk)
+  if (k === 'point') { drag = { k, c, lane: g.dataset.lane, i: +g.dataset.i }; svg.setPointerCapture(e.pointerId) }
+  else if (k === 'event') { drag = { k, c, i: +g.dataset.i, moved: false }; svg.setPointerCapture(e.pointerId) }
+  else if (k === 'boundary') { drag = { k, i: +g.dataset.i }; svg.setPointerCapture(e.pointerId) }
+})
+svg.addEventListener('pointermove', e => {
+  if (!drag) return
+  const [x, y] = pt(e)
+  if (drag.k === 'point') {
+    const pts = drag.c.layers[drag.lane], l = lane(drag.lane), i = drag.i
+    let f = pts[i][0]
+    if (i > 0 && i < pts.length - 1) f = Math.min(pts[i + 1][0] - 0.02, Math.max(pts[i - 1][0] + 0.02, local(drag.c, secOf(x))))
+    let v = Math.min(l.hi, Math.max(l.lo, vOf(l, y)))
+    v = drag.lane === 'tempo' ? Math.round(v) : Math.round(v * 100) / 100
+    pts[i] = [f, v]
+  } else if (drag.k === 'event') {
+    const ev = drag.c.layers.harmony[drag.i], at = Math.round(local(drag.c, secOf(x)) * 100) / 100
+    if (at === ev.at) return // a click, not a drag
+    drag.moved = true; ev.at = at
+    drag.c.layers.harmony.sort((p, q) => p.at - q.at); drag.i = drag.c.layers.harmony.indexOf(ev)
+  } else if (drag.k === 'boundary') {
+    const sp = S.view.sp, i = drag.i, A = sp[i - 1], B = sp[i]
+    const total = S.view.chunks.reduce((s, c) => s + c.share, 0), pair = A.c.share + B.c.share
+    const f = Math.min(B.b - 0.03, Math.max(A.a + 0.03, secOf(x) / (S.minutes * 60)))
+    A.c.share = Math.round(((f - A.a) * total) * 100) / 100; B.c.share = Math.round((pair - A.c.share) * 100) / 100
+  }
+  update()
+})
+svg.addEventListener('pointerup', e => {
+  if (drag?.k === 'event' && !drag.moved && e.button === 0) eventPop(e, drag.c.layers.harmony[drag.i])
+  drag = null
+})
+
+svg.addEventListener('dblclick', e => {
+  const g = e.target.closest('[data-kind]'); if (!g) return
+  const k = g.dataset.kind, c = byId(g.dataset.chunk), ln = g.dataset.lane, [x, y] = pt(e)
+  if (k === 'emptylane') { const l = lane(ln), v = vOf(l, y); c.layers[ln] = [[0, ln === 'tempo' ? Math.round(v) : +v.toFixed(2)], [1, ln === 'tempo' ? Math.round(v) : +v.toFixed(2)]] }
+  else if (k === 'lanebg' || k === 'point') {
+    if (k === 'point') return
+    const l = lane(ln), f = local(c, secOf(x)), pts = c.layers[ln]
+    const v = ln === 'tempo' ? Math.round(vOf(l, y)) : +vOf(l, y).toFixed(2)
+    pts.splice(pts.findIndex(p => p[0] > f), 0, [f, v])
+  } else if (k === 'block') {
+    const bl = c.layers[ln], i = +g.dataset.i, f = local(c, secOf(x))
+    if (f - bl[i].from < 0.05 || bl[i].to - f < 0.05) return
+    bl.splice(i + 1, 0, { ...clone(bl[i]), from: f }); bl[i].to = f
+  } else return
+  update()
+})
+
+svg.addEventListener('contextmenu', e => {
+  const g = e.target.closest('[data-kind]'); if (!g) return
+  const k = g.dataset.kind, c = byId(g.dataset.chunk), ln = g.dataset.lane, i = +g.dataset.i
+  if (k === 'point') { e.preventDefault(); const pts = c.layers[ln]; if (pts.length <= 2) delete c.layers[ln]; else pts.splice(i, 1); update() }
+  else if (k === 'event') { e.preventDefault(); c.layers.harmony.splice(i, 1); update() }
+  else if (k === 'harmonybg') { e.preventDefault(); delete c.layers.harmony; update() }
+  else if (k === 'block') {
+    e.preventDefault(); const bl = c.layers[ln]
+    if (i > 0) { bl[i - 1].to = bl[i].to; bl.splice(i, 1) } else if (bl.length === 1) delete c.layers[ln]
+    else { bl[1].from = 0; bl.splice(0, 1) }
+    update()
+  }
+})
+
+svg.addEventListener('click', e => {
+  const g = e.target.closest('[data-kind]'); if (!g) return
+  const k = g.dataset.kind, c = byId(g.dataset.chunk), ln = g.dataset.lane
+  if (k === 'fork') { if (g.dataset.val) S.choices[c.id] = g.dataset.val; else delete S.choices[c.id]; update() }
+  else if (k === 'track') playFrom(+g.dataset.i)
+  else if (k === 'emptyharmony') { c.layers.harmony = []; update() }
+  else if (k === 'harmonybg') { const [x] = pt(e); c.layers.harmony.push({ at: Math.round(local(c, secOf(x)) * 100) / 100, kind: 'up' }); c.layers.harmony.sort((p, q) => p.at - q.at); update() }
+  else if (k === 'emptyblock') { c.layers[ln] = [{ from: 0, to: 1, genres: [GENRES[0]] }]; update()
+  } else if (k === 'block') {
+    const bl = c.layers[ln][+g.dataset.i]
+    if (e.shiftKey) { bl.strict = bl.strict === 'prefer' ? 'must' : 'prefer'; return update() }
+    genrePop(e, bl)
+  } else if (k === 'chunkname') chunkPop(e, c)
+})
+
+function eventPop(e, ev) {
+  openPop(e, MODULATIONS.map(k => `<label><input type="radio" name="kind" value="${k}" ${ev.kind === k ? 'checked' : ''}> ${esc(KINDS[k])} <span class="dim">${esc(FEEL[k])}</span></label>`).join('')
+    + `<p class="hint" style="margin:6px 0 0">${HARMONY_TIP} Drag to move, right-click to remove.</p>`,
+    p => p.addEventListener('change', ev2 => { ev.kind = ev2.target.value; update() }))
+}
+
+const pop = $('#pop')
+function openPop(e, html, wire) {
+  pop.innerHTML = html; pop.style.display = 'block'
+  pop.style.left = Math.min(e.clientX, innerWidth - 240) + 'px'; pop.style.top = Math.min(e.clientY + 8, innerHeight - pop.offsetHeight - 8) + 'px'
+  wire(pop); pop.querySelector('input,button')?.focus()
+}
+addEventListener('pointerdown', e => { if (!pop.contains(e.target)) pop.style.display = 'none' }, true)
+addEventListener('keydown', e => { if (e.key === 'Escape') pop.style.display = 'none' })
+
+function genrePop(e, bl) {
+  openPop(e, GENRES.map(g => `<label><input type="checkbox" value="${esc(g)}" ${bl.genres?.includes(g) ? 'checked' : ''}> ${esc(g)}</label>`).join(''), p => {
+    p.addEventListener('change', () => { bl.genres = [...p.querySelectorAll('input:checked')].map(i => i.value); update() })
+  })
+}
+
+function chunkPop(e, c) {
+  const first = c === S.flow.chunks[0]
+  openPop(e, `<div style="font-weight:600;margin-bottom:6px">${esc(c.id)}</div>
+    <div class="row" style="flex-direction:column;align-items:stretch">
+      ${first ? '' : '<button data-a="branch">Branch here: a second future from this point</button>'}
+      ${S.view.chunks.length > 1 ? '<button data-a="delete">Delete this chunk</button>' : ''}
+    </div>`, p => p.addEventListener('click', ev => {
+      const a = ev.target.closest('button')?.dataset.a; if (!a) return
+      pop.style.display = 'none'
+      const pi = S.view.chunks.indexOf(c), par = S.view.chunks[pi - 1]
+      if (a === 'branch') {
+        const copy = { ...clone(c), id: freshId(c.id) }
+        par.next = [...(par.next || []), copy.id]; S.flow.chunks.push(copy); S.choices[par.id] = copy.id
+      } else if (a === 'delete') {
+        const nxt = c.next || []
+        if (par) { par.next = (par.next || []).flatMap(id => (id === c.id ? nxt : [id])); par.next = [...new Set(par.next)]; if (S.choices[par.id] === c.id) delete S.choices[par.id] }
+        S.flow.chunks = S.flow.chunks.filter(x => x !== c)
+        if (!par) S.flow.chunks.sort((x, y) => (x === byId(nxt[0]) ? -1 : y === byId(nxt[0]) ? 1 : 0))
+        for (const x of S.flow.chunks) if (x.next) x.next = x.next.filter(id => byId(id))
+      }
+      update()
+    }))
+}
+
+// ---------- presets: drag and drop ----------
+const pal = $('#palette')
+pal.innerHTML = Object.keys(PRESETS.chunks).map(n => `<span class="preset" draggable="true" data-type="chunk" data-name="${n}" title="Chunk: insert it into the flow">${n}</span>`).join('')
+  + Object.entries(PRESETS.layers).map(([n, [k]]) => `<span class="preset layer" draggable="true" data-type="layer" data-name="${n}" title="${k} layer: drop on a lane">${n} <span class="dim">${k}</span></span>`).join('')
+pal.addEventListener('dragstart', e => { const p = e.target.closest('.preset'); e.dataTransfer.setData('text/plain', `${p.dataset.type}|${p.dataset.name}`) })
+svg.addEventListener('dragover', e => e.preventDefault())
+svg.addEventListener('drop', e => {
+  e.preventDefault()
+  const [type, name] = e.dataTransfer.getData('text/plain').split('|')
+  const [x, y] = pt(e), sec = secOf(x)
+  const s = S.view.sp.find(z => spanSec(z)[0] <= sec && sec < spanSec(z)[1]) || S.view.sp.at(-1)
+  if (type === 'layer') {
+    const [k, val] = PRESETS.layers[name], l = lane(k)
+    if (y < l.y - GAP || y > l.y + l.h + GAP) return flash(`Drop ${name} on the ${l.label} lane`)
+    s.c.layers[k] = clone(val)
+  } else {
+    // insert before or after the chunk under the pointer, whichever edge is nearer
+    const [a, b] = spanSec(s), after = sec - a > (b - a) / 2
+    const n = { id: freshId(name), share: 1, layers: clone(PRESETS.chunks[name]) }
+    const idx = S.view.chunks.indexOf(s.c)
+    const prev = after ? s.c : S.view.chunks[idx - 1], next = after ? S.view.chunks[idx + 1] : s.c
+    n.next = next ? [next.id] : []
+    if (prev) { prev.next = (prev.next || []).map(id => (next && id === next.id ? n.id : id)); if (!next) prev.next.push(n.id); if (S.choices[prev.id] === next?.id) S.choices[prev.id] = n.id }
+    S.flow.chunks.splice(prev ? S.flow.chunks.indexOf(prev) + 1 : 0, 0, n)
+  }
+  update()
+})
+function flash(t) { const b = $('#banner'); b.textContent = t; b.style.display = 'block'; setTimeout(drawBanner, 1800) }
+
+// ---------- header controls ----------
+$('#flowSel').innerHTML = Object.keys(FLOWS).map(n => `<option>${n}</option>`).join('') + '<option value="empty">empty flow</option>'
+$('#flowSel').onchange = e => loadFlow(e.target.value)
+$('#minutes').value = S.minutes; $('#seed').value = S.seed
+$('#minutes').onchange = e => { S.minutes = Math.max(10, +e.target.value || 60); update() }
+$('#seed').onchange = e => { S.seed = +e.target.value || 1; update() }
+$('#pull').onchange = e => { S.pull = e.target.value; update() }
+$('#reroll').onclick = () => { $('#seed').value = ++S.seed; update() }
+$('#freeze').onclick = e => {
+  S.frozen = S.frozen ? null : S.view.mix
+  e.target.setAttribute('aria-pressed', String(!!S.frozen)); e.target.textContent = S.frozen ? 'Frozen' : 'Freeze'
+  update()
+}
+$('#export').onclick = () => {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S.flow, null, 1)], { type: 'application/json' }))
+  a.download = `${S.flowName}.json`; a.click()
+}
+addEventListener('resize', () => draw())
+
+// ---------- playback: two elements, equal-power blend over BLEND_S ----------
+const src = t => 'lib/' + encodeURIComponent(t.file)
+function playFrom(i, offset = 0) {
+  const m = S.view.mix[i]; if (!m) return stop()
+  P.nxt.pause(); P.nxt.removeAttribute('src')
+  P.idx = i; P.blending = false
+  P.cur.src = src(m.track); P.cur.currentTime = offset; P.cur.volume = 1
+  P.cur.play(); P.playing = true; $('#play').textContent = 'Pause'
+  update()
+}
+function stop() { P.idx = -1; P.playing = false; P.blending = false; for (const a of [P.cur, P.nxt]) { a.pause(); a.removeAttribute('src') } $('#play').textContent = 'Play' }
+$('#play').onclick = () => {
+  if (P.idx < 0) return playFrom(0)
+  P.playing = !P.playing
+  for (const a of P.blending ? [P.cur, P.nxt] : [P.cur]) P.playing ? a.play() : a.pause()
+  $('#play').textContent = P.playing ? 'Pause' : 'Play'
+}
+$('#nextTrack').onclick = () => playFrom(P.idx + 1)
+$('#nextBlend').onclick = () => {
+  if (P.idx < 0) playFrom(0)
+  const d = P.cur.duration || S.view.mix[P.idx].track.dur
+  if (!P.blending) P.cur.currentTime = Math.max(0, d - BLEND_S - 8)
+}
+function tick() {
+  if (P.playing && P.idx >= 0) {
+    const d = P.cur.duration || S.view.mix[P.idx]?.track.dur || 0, t = P.cur.currentTime
+    const next = S.view.mix[P.idx + 1]
+    if (!P.blending && next && d && t >= d - BLEND_S) {
+      P.blending = true; P.nxt.src = src(next.track); P.nxt.currentTime = 0; P.nxt.volume = 0; P.nxt.play()
+    }
+    if (P.blending) {
+      const k = Math.min(1, Math.max(0, (t - (d - BLEND_S)) / BLEND_S))
+      P.cur.volume = Math.cos(k * Math.PI / 2); P.nxt.volume = Math.sin(k * Math.PI / 2)
+      if (k >= 1 || P.cur.ended) {
+        P.cur.pause(); [P.cur, P.nxt] = [P.nxt, P.cur]; P.cur.volume = 1; P.blending = false; P.idx++
+        draw()
+      }
+    } else if (P.cur.ended) stop(), draw()
+  }
+  tickHead()
+  requestAnimationFrame(tick)
+}
+function tickHead() {
+  const h = $('#head'), m = S.view?.mix[P.idx]
+  if (!h || !m) { $('#now').textContent = '–'; return }
+  const sec = m.at + P.cur.currentTime
+  h.setAttribute('x1', xOf(sec)); h.setAttribute('x2', xOf(sec))
+  $('#now').textContent = `${fmt(sec)} · ${P.idx + 1}/${S.view.mix.length}${P.blending ? ' · blending' : ''}`
+}
+requestAnimationFrame(tick)
+
+await loadFlow('night')
+</script>
+</body>
+</html>

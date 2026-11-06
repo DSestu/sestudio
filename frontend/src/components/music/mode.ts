@@ -90,8 +90,12 @@ function mix<T extends Record<string, number>>(p: T, q: T, t: number): T {
   return Object.fromEntries(Object.keys(p).map(k => [k, lerp(p[k], q[k], t)])) as T
 }
 
-/** The default view's queue width on desktop: 1.5 × 350, narrower when the window leaves less room beside the transport (136 + 420). */
-const queueW = (W: number) => Math.max(350, Math.min(525, W - 590))
+/** Preferred title measure on desktop default before the queue grows past its floor.
+ *  136 (title.x) + 560 + 14 (gap) + 20 (right inset) = 730. Keeps the title readable on
+ *  tablet / mid widths where the old W−590 rule froze it at 420 while the queue absorbed every pixel. */
+const TITLE_PREF = 560
+/** The default view's queue width on desktop: 1.5 × 350 once the title has TITLE_PREF, else the floor. */
+const queueW = (W: number) => Math.max(350, Math.min(525, W - 170 - TITLE_PREF))
 
 /** The title's box width, before its scale. */
 /** The phone's expanded one-row transport: three buttons. */

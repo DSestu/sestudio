@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { MusicTrack } from '../../../../musicLibrary'
 import type { Arc } from '../harmonyApi'
 import { GENRES } from '../setBuilder'
 import { addChange, MAX_POINTS, MIN_POINTS, removeBlock, resample, setBlockGenre } from './arc'
 import ArcEditor from './ArcEditor'
-import Apply from './Apply'
 import { LENGTHS } from './join'
 import Result from './Result'
 import Seg from './Seg'
@@ -12,7 +11,7 @@ import { useBuilt, usePresets } from './useBuilt'
 import { useSummaries } from '../../../../musicMeta'
 
 /** "Draw the arcs": energy, mood and genre over time; the set follows the lines. */
-export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack> }) {
+export default function ArcsWay({ byId, actions }: { byId: ReadonlyMap<string, MusicTrack>; /** The buttons under the built tracks: what to do with them. */ actions: (ids: string[], again: () => void) => ReactNode }) {
   const presets = usePresets()
   const names = Object.keys(presets)
   // A preset sets all three lanes; the first edit makes the arc a custom one.
@@ -36,13 +35,13 @@ export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Shape">
         {names.map(n => {
           const on = !drawn && n === (preset ?? names[0])
-          return <button key={n} onClick={() => { setDrawn(undefined); setPreset(n); setPicked(undefined) }} aria-pressed={on} className={`btn btn-xs rounded-full ${on ? 'btn-primary' : 'btn-ghost border-white/15'}`}>{n}</button>
+          return <button key={n} onClick={() => { setDrawn(undefined); setPreset(n); setPicked(undefined) }} aria-pressed={on} className={`relative hit btn btn-xs rounded-full ${on ? 'btn-primary' : 'btn-ghost border-white/15'}`}>{n}</button>
         })}
-        <button aria-pressed={!!drawn} disabled={!drawn} className={`btn btn-xs rounded-full ${drawn ? 'btn-primary' : 'btn-ghost border-white/15'}`}>Custom</button>
+        <button aria-pressed={!!drawn} disabled={!drawn} className={`relative hit btn btn-xs rounded-full ${drawn ? 'btn-primary' : 'btn-ghost border-white/15'}`}>Custom</button>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Seg label="Length" options={LENGTHS.map(n => [n, `${n} min`])} value={length} onPick={setLength} />
-        <button onClick={() => genre(addChange(arc.genre))} className="btn btn-xs btn-ghost border-white/15">+ Genre change</button>
+        <button onClick={() => genre(addChange(arc.genre))} className="relative hit btn btn-xs btn-ghost border-white/15">+ Genre change</button>
         <span className="flex items-center gap-1 text-xs text-base-content/60">Points
           <button onClick={() => resize(points - 1)} disabled={points <= MIN_POINTS} aria-label="Fewer points" className="btn btn-xs btn-ghost btn-square">−</button>
           <button onClick={() => resize(points + 1)} disabled={points >= MAX_POINTS} aria-label="More points" className="btn btn-xs btn-ghost btn-square">+</button>
@@ -53,7 +52,7 @@ export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack
       {picked !== undefined && arc.genre[picked] && (
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Genre of the block">
           {GENRES.map(g => (
-            <button key={g} onClick={() => genre(setBlockGenre(arc.genre, picked, g))} aria-pressed={arc.genre[picked].g === g} className={`btn btn-xs rounded-full ${arc.genre[picked].g === g ? 'btn-primary' : 'btn-ghost border-white/15'}`}>{g}</button>
+            <button key={g} onClick={() => genre(setBlockGenre(arc.genre, picked, g))} aria-pressed={arc.genre[picked].g === g} className={`relative hit btn btn-xs rounded-full ${arc.genre[picked].g === g ? 'btn-primary' : 'btn-ghost border-white/15'}`}>{g}</button>
           ))}
           {arc.genre.length > 1 && <button onClick={() => genre(removeBlock(arc.genre, picked))} className="btn btn-xs btn-ghost text-error">Remove block</button>}
         </div>
@@ -63,7 +62,7 @@ export default function ArcsWay({ byId }: { byId: ReadonlyMap<string, MusicTrack
       {built && (
         <div className={busy ? 'opacity-60' : ''}>
           <Result slots={built.slots} byId={byId} stats={{ duration: built.duration, clashes: built.clashes, tempoJumps: built.tempoJumps }}>
-            <Apply ids={built.slots.map(s => s.id)} byId={byId} onAnother={() => setVariant(v => v + 1)} />
+            {actions(ids, () => setVariant(v => v + 1))}
           </Result>
         </div>
       )}

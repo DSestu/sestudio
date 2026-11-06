@@ -49,6 +49,10 @@ class MoveBody(BaseModel):
     to: int
 
 
+class OrderBody(BaseModel):
+    item_ids: list[str]
+
+
 class PlayBody(BaseModel):
     item_id: str
     position: float | None = Field(default=None, ge=0)
@@ -168,6 +172,15 @@ def move_item(
     rev: int | None = Query(default=None),
 ) -> Any:
     return _run(lambda: queue.move(body.item_id, body.to, _rev(if_match, rev)))
+
+
+@router.post("/order")
+def order_items(
+    body: OrderBody,
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    return _run(lambda: queue.order(body.item_ids, _rev(if_match, rev)))
 
 
 @router.post("/play")

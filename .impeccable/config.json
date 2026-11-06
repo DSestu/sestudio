@@ -1,0 +1,35 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/flows/board.html"
+        ],
+        "createdAt": "2026-11-06T11:00:00.028Z",
+        "reason": "Claude: low-fidelity decision board drawn at 0.7 scale (1024px frame for a 1440px app); sizes are not the shipped values"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/flows/board.html"
+        ],
+        "createdAt": "2026-11-06T11:00:00.066Z",
+        "reason": "Claude: low-fidelity decision board drawn at 0.7 scale (1024px frame for a 1440px app); sizes are not the shipped values"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/flows/board.html"
+        ],
+        "createdAt": "2026-11-06T11:00:00.110Z",
+        "reason": "Claude: low-fidelity decision board drawn at 0.7 scale (1024px frame for a 1440px app); sizes are not the shipped values"
+      }
+    ]
+  }
+}

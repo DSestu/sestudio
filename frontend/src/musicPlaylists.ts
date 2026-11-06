@@ -170,3 +170,22 @@ export const playlistApi = {
   play: (id: string, part?: string) => call(`/${id}/play`, 'POST', { part }),
   smartTracks: (id: string) => call<{ library: string; track_id: string }[]>(`/${id}/tracks`, 'GET'),
 }
+
+/** "New playlist", or "New playlist 2", 3… when that name is taken. */
+export function freshName(taken: string[], base = 'New playlist'): string {
+  const names = new Set(taken)
+  let n = 1
+  while (names.has(n === 1 ? base : `${base} ${n}`)) n++
+  return n === 1 ? base : `${base} ${n}`
+}
+
+/** Save a draft: create the playlist and put its first tracks in; one that cannot be filled is not left behind empty. */
+export async function createWithTracks(tracks: AddPayload['tracks'], name?: string): Promise<PlaylistNode> {
+  const made = await playlistApi.create('playlist', freshName(nodes.map(n => n.name), name))
+  try {
+    return await playlistApi.add(made.id, tracks)
+  } catch (e) {
+    await playlistApi.remove(made.id).catch(() => {})
+    throw e
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTree, isSet, itemsOf, locate, statsOf, visibleRows, type PlaylistItem, type PlaylistNode } from './musicPlaylists'
+import { buildTree, freshName, isSet, itemsOf, locate, statsOf, visibleRows, type PlaylistItem, type PlaylistNode } from './musicPlaylists'
 
 const node = (id: string, kind: PlaylistNode['kind'], parent: string | null, extra: Partial<PlaylistNode> = {}): PlaylistNode =>
   ({ id, kind, parent, name: id, position: 0, ...extra })
@@ -48,5 +48,14 @@ describe('sets', () => {
     const s = statsOf(set.parts![0].items.concat(set.parts![1].items), i => facts[i.item_id as keyof typeof facts])
     expect(s).toEqual({ count: 3, duration: 160, bpmMin: 120, bpmMax: 128 })
     expect(statsOf([item('q')], () => undefined)).toEqual({ count: 1, duration: 0 })
+  })
+})
+
+describe('freshName', () => {
+  it('uses the plain name first, then counts up past the taken ones', () => {
+    expect(freshName([])).toBe('New playlist')
+    expect(freshName(['New playlist'])).toBe('New playlist 2')
+    expect(freshName(['New playlist', 'New playlist 3'])).toBe('New playlist 2')
+    expect(freshName(['New playlist', 'New playlist 2'])).toBe('New playlist 3')
   })
 })
