@@ -181,10 +181,42 @@ def _first_path(
     return out
 
 
+def holds(cond: dict[str, Any], at_min: float, ctx: dict[str, Any]) -> bool:
+    """Whether a branch condition (§5) holds when the fork is reached, *at_min* minutes into the mix.
+
+    *ctx*: ``skips`` (recent tracks, True = skipped, oldest first), ``clock`` (minutes after
+    midnight when the mix started). Session length is the mix's own time.
+    """
+    kind = cond.get("kind")
+    if kind == "skips":
+        recent = list(ctx.get("skips") or [])[-int(cond.get("of", 4)) :]
+        return sum(recent) >= int(cond.get("count", 2))
+    if kind == "session":
+        return at_min >= float(cond.get("minutes", 60))
+    if kind == "time":
+        h, _, m = str(cond.get("after", "23:00")).partition(":")
+        after = int(h) * 60 + int(m or 0)
+        start = float(ctx.get("clock", 0))
+        # "after 23:00" on a mix started at 22:30 is 30 min in; one started at 23:30 holds at once,
+        # unless the hour is far behind (before 06:00 counts as the same night).
+        if after < start and start - after > 18 * 60:
+            after += 24 * 60
+        return start + at_min >= after
+    return False
+
+
 def resolve(
-    flow: dict[str, Any], choices: dict[str, str], lib: list[Track], **opts: Any
+    flow: dict[str, Any],
+    choices: dict[str, str],
+    lib: list[Track],
+    context: dict[str, Any] | None = None,
+    **opts: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    """The chunks along the path; at an unchosen fork the generator takes the future it fills best."""
+    """The chunks along the path.
+
+    At a fork: the listener's choice, else the first future whose condition holds
+    (``when`` on the forking chunk, §5), else the future the generator fills best.
+    """
     by = {c["id"]: c for c in flow["chunks"]}
     out: list[dict[str, Any]] = []
     auto: dict[str, str] = {}
@@ -194,10 +226,27 @@ def resolve(
         nxt = [n for n in c.get("next") or [] if n in by]
         if not nxt:
             break
+        when = c.get("when") or {}
+        done = sum(x["share"] for x in out)
+
+        def at_min(cid: str) -> float:
+            trial = out + [by[cid]] + _first_path(by, by[cid])
+            return (
+                done / (sum(x["share"] for x in trial) or 1) * opts.get("minutes", 60)
+            )
+
+        met = [
+            n
+            for n in nxt
+            if context is not None and n in when and holds(when[n], at_min(n), context)
+        ]
         if choices.get(c["id"]) in nxt:
             c = by[choices[c["id"]]]
         elif len(nxt) == 1:
             c = by[nxt[0]]
+        elif met:
+            auto[c["id"]] = met[0]
+            c = by[met[0]]
         else:
 
             def cost(cid: str) -> tuple[int, float]:

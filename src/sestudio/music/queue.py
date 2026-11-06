@@ -91,6 +91,8 @@ def _view(rev: int, doc: dict[str, Any]) -> dict[str, Any]:
         "mix": doc["mix"],
         # The flow or mix the queue plays (SPEC-music-flows §7), None for a hand-made queue.
         "source": doc.get("source"),
+        # The last tracks left by Next, True when it was well before their end (a branch condition, §5).
+        "skips": doc.get("skips", []),
         "station": _station_clock,
         "volume": _volume,
     }
@@ -379,6 +381,8 @@ def transport(
         items = doc["items"]
         if not items:
             raise Invalid("the queue is empty")
+        if action == "next" and doc["current_item"]:
+            doc["skips"] = [*doc.get("skips", []), _skipped(doc)][-SKIPS_KEPT:]
         j = _index(doc) + 1 if action == "next" else max(_index(doc) - 1, 0)
         doc["playing"] = True
         if j >= len(items):
@@ -409,6 +413,26 @@ def transport(
         }
 
     return _mutate("go" if action in ("next", "prev") else "transport", if_rev, change)
+
+
+#: How many recent Next presses are remembered, and how close to its end a track may be left without counting as skipped.
+SKIPS_KEPT = 10
+SKIP_MARGIN = 30.0
+
+
+def _skipped(doc: dict[str, Any]) -> bool:
+    """Next pressed well before the current track's end (a fade's own Next comes in its last seconds)."""
+    item = doc["items"][_index(doc)]
+    row = (
+        library._connect()
+        .execute(
+            "SELECT duration FROM music_analysis WHERE track_id = ?",
+            (item["track_id"],),
+        )
+        .fetchone()
+    )
+    duration = row["duration"] if row else item.get("duration")
+    return bool(duration) and _position_now(doc) < duration - SKIP_MARGIN
 
 
 def clean_mix(raw: dict[str, Any]) -> dict[str, Any]:

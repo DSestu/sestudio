@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import {
   KINDS, LENGTHS, playFlow, refreshFlows, saveFlow, useFlows,
-  type Chunk, type Flow, type GenreBlock, type Layers,
+  type Chunk, type Condition, type Flow, type GenreBlock, type Layers,
 } from '../../../musicFlows'
 import type { MusicTrack } from '../../../musicLibrary'
 import { useSummaries } from '../../../musicMeta'
@@ -383,6 +383,45 @@ export default function FlowEditor({ flowId, byId }: { flowId: string; byId: Map
           disabled={path.indexOf(selected) === 0} className="btn btn-ghost btn-xs">Branch here</button>
         <button onClick={() => { change(deleteChunk(doc, selected.id)); setChunkSel('') }} disabled={doc.chunks.length <= 1} className="btn btn-ghost btn-xs text-error">Delete {selected.id}</button>
       </div>
+
+      {(() => {
+        // A future of a fork can be taken on its own: after skips, after a while, after a time.
+        const i = path.indexOf(selected), parent = path[i - 1]
+        if (!parent || parent.next.length < 2) return null
+        const cond = parent.when?.[selected.id]
+        const set = (c: Condition | null) => editChunk(parent.id, cc => {
+          const w = { ...(cc.when ?? {}) }
+          if (c) w[selected.id] = c
+          else delete w[selected.id]
+          cc.when = Object.keys(w).length ? w : undefined
+        })
+        const pick = (k: string) => set(k === 'skips' ? { kind: 'skips', count: 2, of: 4 } : k === 'session' ? { kind: 'session', minutes: 60 } : k === 'time' ? { kind: 'time', after: '23:00' } : null)
+        return (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-base-content/60">Take <b className="font-semibold text-base-content">{selected.id}</b> on its own</span>
+            <select aria-label="Condition" value={cond?.kind ?? ''} onChange={e => pick(e.target.value)} className="select select-xs w-auto">
+              <option value="">never: the choice or the generator</option>
+              <option value="skips">when tracks get skipped</option>
+              <option value="session">after a while</option>
+              <option value="time">after a time of night</option>
+            </select>
+            {cond?.kind === 'skips' && (
+              <span className="flex items-center gap-1">
+                <input aria-label="Skips" type="number" min={1} max={cond.of} value={cond.count} onChange={e => set({ ...cond, count: Number(e.target.value) || 1 })} className="input input-xs w-12" />
+                of the last
+                <input aria-label="Tracks" type="number" min={1} max={10} value={cond.of} onChange={e => set({ ...cond, of: Number(e.target.value) || 4 })} className="input input-xs w-12" />
+                skipped
+              </span>
+            )}
+            {cond?.kind === 'session' && (
+              <span className="flex items-center gap-1">after <input aria-label="Minutes" type="number" min={5} step={5} value={cond.minutes} onChange={e => set({ ...cond, minutes: Number(e.target.value) || 60 })} className="input input-xs w-16" /> min of the mix</span>
+            )}
+            {cond?.kind === 'time' && (
+              <span className="flex items-center gap-1">after <input aria-label="Time" type="time" value={cond.after} onChange={e => set({ ...cond, after: e.target.value || '23:00' })} className="input input-xs w-24" /></span>
+            )}
+          </div>
+        )
+      })()}
 
       <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]" aria-label="Presets">
         {Object.keys(CHUNK_PRESETS).map(n => (

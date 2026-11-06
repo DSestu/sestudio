@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -79,8 +81,20 @@ def _items(
     ]
 
 
+def _clock(at: float) -> float:
+    """Minutes after local midnight at epoch seconds *at*."""
+    t = datetime.fromtimestamp(at)
+    return t.hour * 60 + t.minute + t.second / 60
+
+
+def _context(started: float, skips: list[bool] | None = None) -> dict[str, Any]:
+    """What a fork's conditions read (§5): the clock when the mix started, recent skips."""
+    return {"clock": _clock(started), "skips": skips or []}
+
+
 def _source(rendered: dict[str, Any], **ids: Any) -> dict[str, Any]:
     return {
+        "started": time.time(),
         **ids,
         "path": rendered.get("path", []),
         "auto": rendered.get("auto", {}),
@@ -140,7 +154,14 @@ class DraftBody(BaseModel):
 def render_draft(body: DraftBody) -> dict[str, Any]:
     """A flow that is not saved yet (the editor while it is being drawn), with its fork choices."""
     flow = _run(mixes.clean_flow, body.flow)
-    return mixes.render_flow(flow, _pool(), body.choices, body.minutes, body.seed)
+    return mixes.render_flow(
+        flow,
+        _pool(),
+        body.choices,
+        body.minutes,
+        body.seed,
+        context=_context(time.time()),
+    )
 
 
 @router.get("/mixes")
@@ -221,7 +242,9 @@ def play_flow(flow_id: str, body: PlayBody) -> dict[str, Any]:
     """Render the flow and play it: the queue becomes this mix (§7)."""
     flow = _run(mixes.flow_get, flow_id)
     pool = _pool()
-    rendered = mixes.render_flow(flow, pool, body.choices, body.minutes, body.seed)
+    rendered = mixes.render_flow(
+        flow, pool, body.choices, body.minutes, body.seed, context=_context(time.time())
+    )
     source = _source(
         rendered, flow=flow_id, mix=None, choices=body.choices or {}, seed=body.seed
     )
@@ -265,11 +288,23 @@ def reroute(body: RerouteBody) -> dict[str, Any]:
     played = state["items"][: state["current"] + 1]
     pins = {str(i): it["track_id"] for i, it in enumerate(played)}
     pool = _pool()
-    rendered = mixes.render_flow(flow, pool, choices, src.get("minutes"), seed, pins)
-    items = _items(rendered, pool)[len(played) :]
-    source = _source(
-        rendered, flow=src["flow"], mix=src.get("mix"), choices=choices, seed=seed
+    started = src.get("started") or time.time()
+    rendered = mixes.render_flow(
+        flow,
+        pool,
+        choices,
+        src.get("minutes"),
+        seed,
+        pins,
+        context=_context(started, state.get("skips")),
     )
+    items = _items(rendered, pool)[len(played) :]
+    source = {
+        **_source(
+            rendered, flow=src["flow"], mix=src.get("mix"), choices=choices, seed=seed
+        ),
+        "started": started,
+    }
     return _queue_run(queue.future, items, source)
 
 
