@@ -189,12 +189,15 @@ def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
 
 
 def analyse_file(
-    path: str, on_bands: Callable[[np.ndarray, float], None] | None = None
+    path: str,
+    on_bands: Callable[[np.ndarray, float], None] | None = None,
+    on_tempo: Callable[[float | None, float | None], None] | None = None,
 ) -> RawAnalysis:
     """Decode *path* a few times and measure it. Slow (seconds): run off the request path.
 
     The band envelopes come first, so *on_bands* (envelopes so far, duration) can show them
-    while the tempo and the profile are still being measured.
+    while the tempo and the profile are still being measured; *on_tempo* (bpm, bar0, both
+    None without a steady beat) gets the tempo before the key is measured.
     """
     low = decode(path, 4000)
     duration = len(low) / 4000
@@ -208,6 +211,8 @@ def analyse_file(
     x = decode(path, TEMPO_SR)
     if duration >= MIN_TEMPO_SECONDS:
         bpm, beat0, bar0, conf = tempo(x)
+    if on_tempo:
+        on_tempo(bpm, bar0)
     extra = _profile(x, bands, loud, bpm, bar0)
     return RawAnalysis(duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra)
 

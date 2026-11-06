@@ -13,7 +13,7 @@ import { plan } from '../mix/plan'
 import MixPopover from '../mix/Popover'
 import { barPos, registerScrubber, Scrubber } from '../scrub'
 import { PALETTES, TIMELINE_PALETTE, type PaletteName } from './palette'
-import { TimelineRenderer, type LabelItem } from './render'
+import { COUNT_IN, DOCK, LOCK_END, quint, SEEN, TimelineRenderer, type LabelItem } from './render'
 import { layoutQueue, trackAt, type Span, type Track } from './sampling'
 
 // The whole queue as one bass, mids and highs timeline (SPEC-music-player §6).
@@ -188,7 +188,9 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     let movedId: string | undefined
     let lastG: number | null = null
     /** A changed plan glides the drawn layout from where it was to the new one. */
-    let tween: { t0: number; ts: number[]; spans: Span[] } | null = null
+    let tween: { t0: number; ts: number[]; spans: Span[]; ms: number; ease: (x: number) => number } | null = null
+    /** Track id -> when its tempo arrived while shown (ms): its count-in, dock and lock play from then. */
+    const landed = new Map<string, number>()
     const scrub = new Scrubber({
       root: (cv.closest('[role="dialog"]') as HTMLElement | null) ?? document.body,
       r,
@@ -317,7 +319,20 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         if (seenModel && seenModel.items.length && m.items.length && differs(seenModel.ids, m.ids)) {
           morph = makeMorph(seenModel, m, movedId, now)
           tween = null
-        } else tween = { t0: now, ts: [...shown.ts], spans: shown.spans.map(s => ({ ...s })) }
+        } else {
+          // A tempo that just arrived: its ticks are laid and the landing shown before the queue docks.
+          const had = new Map(seenModel?.items.map(it => [it.track.id, it.track.bpm]) ?? [])
+          let fresh = false
+          for (const it of m.items) {
+            if (it.track.bpm && had.has(it.track.id) && !had.get(it.track.id) && !still.matches) {
+              landed.set(it.track.id, now)
+              fresh = true
+            }
+          }
+          tween = fresh
+            ? { t0: now + (COUNT_IN + SEEN) * 1000, ts: [...shown.ts], spans: shown.spans.map(s => ({ ...s })), ms: DOCK * 1000, ease: quint }
+            : { t0: now, ts: [...shown.ts], spans: shown.spans.map(s => ({ ...s })), ms: MORPH_MS, ease: bez }
+        }
         if (seenModel) {
           // The highlight survives a rebuild of the layout.
           const old = new Map(seenModel.ids.map((id, i) => [id, seenModel!.items[i].hl]))
@@ -331,7 +346,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       // The drawn layout glides to the planned one, so a changed plan moves the joins and resizes the blends.
       const n = m.items.length
       const tw = tween && tween.ts.length === n && !still.matches ? tween : null
-      const em = tw ? bez(Math.min(1, (now - tw.t0) / MORPH_MS)) : 1
+      const em = tw ? tw.ease(Math.max(0, Math.min(1, (now - tw.t0) / tw.ms))) : 1
       if (em >= 1) tween = null
       shown.ts.length = n
       for (let i = 0; i < n; i++) {
@@ -359,6 +374,12 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         it.sc = morph ? (morph.grow.has(id) ? me : id === morph.moved ? dipScale(me) : 1) : 1
         it.hl = stepHl(it.hl, i === k ? 1 : 0, dt)
         it.front = stepFront(it.track, dt)
+        const at = landed.get(it.track.id)
+        it.lock = at === undefined ? undefined : (now - at) / 1000
+        if (it.lock !== undefined && it.lock > LOCK_END) {
+          landed.delete(it.track.id)
+          it.lock = undefined
+        }
       })
       let items = m.items
       if (morph) {
@@ -384,7 +405,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       const show = placeJoins(m, G)
       // Nothing to draw next frame when this one matches the last (and nothing plays).
       let sum = 0
-      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol + (it.front ?? 0)
+      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol + (it.front ?? 0) + (it.lock ?? 0)
       const sig = `${G.toFixed(3)}|${t.toFixed(3)}|${level.toFixed(3)}|${scrub.hovered}|${sum.toFixed(3)}|${items.length}|${show}|${joins.slot}|${live.current.aim}`
       const moved = sig !== lastSig || getQueue().playing
       lastSig = sig
