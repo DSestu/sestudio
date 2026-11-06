@@ -229,9 +229,13 @@ def test_the_bands_are_reported_as_they_are_decoded(tmp_path):
     f = tmp_path / "long.flac"
     _write_wav(f, sine(60, 13))
     seen: list[tuple[int, float]] = []
-    a = analysis.analyse_file(str(f), lambda b, d: seen.append((b.shape[1], d)))
+    tempos: list[tuple[float | None, float | None]] = []
+    a = analysis.analyse_file(
+        str(f), lambda b, d: seen.append((b.shape[1], d)), lambda *t: tempos.append(t)
+    )
     # 13 s in 5 s steps: 50, 100, then the rest.
     assert [n for n, _ in seen] == [50, 100, a.bands.shape[1]]
+    assert tempos == [(a.bpm, a.bar0)]
     assert all(d == pytest.approx(a.duration) for _, d in seen)
 
 
@@ -254,6 +258,11 @@ def test_a_track_being_analysed_is_served_as_partial(db, root, tmp_path, monkeyp
     store.set_partial("yt:abc", np.full((8, 40), 1.0), 8.0)
     got = c.get("/api/music/tracks/analysis", params={"ids": "yt:abc"}).json()["yt:abc"]
     assert got["progress"] == 0.5 and len(got["bands"][0]) == 40
+    assert "bpm" not in got
+    # The tempo is served as soon as it is measured, before the key.
+    store.set_partial_tempo("yt:abc", 174.5, 1.25)
+    got = c.get("/api/music/tracks/analysis", params={"ids": "yt:abc"}).json()["yt:abc"]
+    assert (got["bpm"], got["bar0"], got["partial"]) == (174.5, 1.25, True)
     # The summary (track rows) leaves it out until it is done.
     assert c.get("/api/music/tracks/summary", params={"ids": "yt:abc"}).json() == {}
     store.drop_partial("yt:abc")

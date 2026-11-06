@@ -38,8 +38,9 @@ export async function loadAnalyses(ids: string[]): Promise<boolean> {
       for (const id of chunk) {
         const a = found[id]
         if (a?.partial) {
-          // Unchanged since the last ask: keep the prepared track.
-          if (a.bands?.[0]?.length === cache.get(id)?.part?.bands?.[0]?.length) continue
+          // Unchanged since the last ask (bands and tempo): keep the prepared track.
+          const was = cache.get(id)?.part
+          if (a.bands?.[0]?.length === was?.bands?.[0]?.length && a.bpm === was?.bpm) continue
           cache.set(id, { raw: null, part: a, at: now })
         } else if (a) {
           cache.set(id, { raw: a, at: now })
