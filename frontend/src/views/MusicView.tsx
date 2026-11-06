@@ -27,13 +27,18 @@ import SaveAsPlaylist from '../components/music/SaveAsPlaylist'
 import { closeFits, openFitsFor, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, replaceParams, type Navigate } from '../nav'
+import { useSettings } from '../useSettings'
+import FlowsHome from '../components/music/flows/FlowsHome'
+import MixesList from '../components/music/flows/MixesList'
 
 const TABS = [
   { id: 'albums', label: 'Albums' },
   { id: 'artists', label: 'Artists' },
   { id: 'tracks', label: 'Tracks' },
 ] as const
-type MusicTab = (typeof TABS)[number]['id']
+// Flows and mixes (SPEC-music-flows), behind the lab flag until the old lists go (§12 PR 11).
+const LAB_TABS = [{ id: 'flows', label: 'Flows' }, { id: 'mixes', label: 'Mixes' }, ...TABS] as const
+type MusicTab = (typeof LAB_TABS)[number]['id']
 
 const DOT: Record<LibraryStatus['state'], string> = {
   online: 'bg-success',
@@ -220,7 +225,7 @@ const KIND_LABEL = { folder: 'Folder', playlist: 'Playlist', smart: 'Smart list'
 const last = { tab: 'albums' as MusicTab, lib: '', genre: '' }
 const initial = () => {
   const p = currentParams()
-  const tab = TABS.find(t => t.id === p.get('tab'))?.id
+  const tab = LAB_TABS.find(t => t.id === p.get('tab'))?.id
   // A tab that no longer exists (?tab=explore) opens Albums.
   return { tab: tab ?? (p.get('tab') ? 'albums' : last.tab), lib: p.get('lib') ?? last.lib, genre: p.get('genre') ?? last.genre }
 }
@@ -228,7 +233,12 @@ const initial = () => {
 export default function MusicView({ params, navigate }: { params: URLSearchParams; navigate: Navigate }) {
   const titles = useDownloadedLibrary()
   const [start] = useState(initial)
-  const [tab, setTab] = useState<MusicTab>(start.tab)
+  const [picked, setTab] = useState<MusicTab>(start.tab)
+  const [settings] = useSettings()
+  const lab = !!settings.lab
+  const tabs = lab ? LAB_TABS : TABS
+  const tab: MusicTab = !lab && (picked === 'flows' || picked === 'mixes') ? 'albums' : picked
+  const flowsTab = tab === 'flows' || tab === 'mixes'
   const [library, setLibrary] = useState(start.lib)
   const query = useMusicQuery()
   const fitsFor = useFitsFor()
@@ -342,6 +352,10 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         <ul>{ts.map(t => <TrackRow key={t.id} track={t} list={ts} onPlaylist={setPickFor} />)}</ul>
       </>}
     />
+  ) : tab === 'flows' ? (
+    <FlowsHome />
+  ) : tab === 'mixes' ? (
+    <MixesList />
   ) : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
   ) : !tracks.length ? (
@@ -387,7 +401,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           title="Music"
           status={<><em>{tracks.length}</em> tracks{library && ` in ${activeLabel}`}{genre && ` · ${genre}`}</>}
           action={{ label: 'New playlist', onClick: () => newPlaylist() }}
-          tabs={[...TABS]}
+          tabs={[...tabs]}
           tab={tab}
           onTab={setTab}
         />
@@ -413,7 +427,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
               className="input input-bordered w-full md:hidden"
             />
           )}
-          {!page && !searching && genres.length > 0 && (
+          {!page && !searching && !flowsTab && genres.length > 0 && (
             <div role="group" aria-label="Filter by genre" className="flex gap-1.5 overflow-x-auto pt-1.5 pb-2.5 -mt-1.5 -mb-1.5 [scrollbar-width:none]">
               {[['', inLibrary.length] as const, ...genres].map(([g, n]) => (
                 <button

@@ -1,0 +1,186 @@
+import { useEffect, useSyncExternalStore } from 'react'
+import { startPlayback } from './components/music/player'
+
+// Flows and mixes (docs/SPEC-music-flows.md): the server's documents, the calls
+// that play them, and the pure helpers the cards and the path strip draw from.
+
+const BASE = '/api/music'
+
+export type Curve = [number, number][]
+export interface HarmonyEvent { at: number; kind: string }
+export interface GenreBlock { from: number; to: number; genres: string[]; strict?: 'must' | 'prefer' }
+export interface Layers {
+  tempo?: Curve
+  energy?: Curve
+  harmony?: HarmonyEvent[]
+  genre?: GenreBlock[]
+}
+export interface Chunk { id: string; share: number; next: string[]; layers: Layers }
+export interface Flow {
+  id: string
+  name: string
+  created: number
+  chunks: Chunk[]
+  pull: 'light' | 'strong' | 'only'
+  length: '30' | '60' | '120' | 'endless'
+  allowOnline: boolean
+  preset: boolean
+}
+export interface Mix {
+  id: string
+  name: string
+  created: number
+  flow: string | null
+  choices: Record<string, string>
+  minutes: number | null
+  seed: number
+  pins: Record<string, string>
+  frozen: string[] | null
+}
+
+export const KINDS: Record<string, string> = {
+  match: 'Match', relative: 'Relative', up: 'Up a fifth', down: 'Down a fifth',
+  'mode+': 'Brighter mode', 'mode-': 'Darker mode', shift: 'Shift', break: 'Break',
+}
+export const LENGTHS: { id: Flow['length']; label: string }[] = [
+  { id: '30', label: '30 min' }, { id: '60', label: '1 h' }, { id: '120', label: '2 h' }, { id: 'endless', label: 'Endless' },
+]
+
+// --- the store -----------------------------------------------------------------
+
+let snap: { flows: Flow[]; mixes: Mix[]; loaded: boolean } = { flows: [], mixes: [], loaded: false }
+const listeners = new Set<() => void>()
+
+async function json<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+  })
+  if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`)
+  return res.json() as Promise<T>
+}
+
+export async function refreshFlows() {
+  const [flows, mixes] = await Promise.all([json<Flow[]>('/flows'), json<Mix[]>('/mixes')])
+  snap = { flows, mixes, loaded: true }
+  listeners.forEach(l => l())
+}
+
+const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
+
+/** The saved flows (presets included) and mixes, loaded on first use. */
+export function useFlows() {
+  useEffect(() => { if (!snap.loaded) void refreshFlows().catch(() => {}) }, [])
+  return useSyncExternalStore(subscribe, () => snap)
+}
+
+export const playFlow = (id: string, body: { choices?: Record<string, string>; minutes?: number; seed?: number } = {}) =>
+  startPlayback(async () => { await json(`/flows/${id}/play`, { method: 'POST', body: JSON.stringify(body) }) })
+
+export const playMix = (id: string) =>
+  startPlayback(async () => { await json(`/mixes/${id}/play`, { method: 'POST' }) })
+
+export async function saveFlow(name: string, flow: Partial<Flow>, id?: string): Promise<Flow> {
+  const out = id
+    ? await json<Flow>(`/flows/${id}`, { method: 'PATCH', body: JSON.stringify({ name, flow }) })
+    : await json<Flow>('/flows', { method: 'POST', body: JSON.stringify({ name, flow }) })
+  await refreshFlows()
+  return out
+}
+
+export async function reroute(body: { choices?: Record<string, string>; seed?: number }) {
+  await json('/queue/reroute', { method: 'POST', body: JSON.stringify(body) })
+}
+
+// --- the dial ------------------------------------------------------------------
+
+/** The one name the dial keeps rewriting, so playing it many times is still one flow. */
+export const DIAL_NAME = 'Now'
+
+/** A one-chunk flow around the dial's three values (energy and mood 0..1, tempo in BPM). */
+export function dialFlow(energy: number, tempo: number, length: Flow['length']): Partial<Flow> {
+  // shortcut: mood has no analysis yet (SPEC §11.1), so it does not shape the flow; wire it with PR 12.
+  return {
+    chunks: [{ id: 'now', share: 1, next: [], layers: { tempo: [[0, tempo], [1, tempo]], energy: [[0, energy], [1, energy]], harmony: [] } }],
+    pull: 'strong',
+    length,
+  }
+}
+
+// --- what the cards draw -------------------------------------------------------
+
+/** The first route through the flow, as the generator would start it. */
+export function firstPath(flow: Pick<Flow, 'chunks'>): Chunk[] {
+  const by = new Map(flow.chunks.map(c => [c.id, c]))
+  const out: Chunk[] = []
+  let c = flow.chunks[0]
+  while (c && !out.includes(c)) {
+    out.push(c)
+    c = by.get(c.next[0] ?? '')!
+  }
+  return out
+}
+
+/** How many ends the flow can reach: 1 for a straight flow, more with forks. */
+export function futures(flow: Pick<Flow, 'chunks'>): number {
+  const by = new Map(flow.chunks.map(c => [c.id, c]))
+  const count = (id: string, seen: Set<string>): number => {
+    const c = by.get(id)
+    if (!c || seen.has(id)) return 1
+    const next = c.next.filter(n => by.has(n))
+    if (!next.length) return 1
+    const s = new Set(seen).add(id)
+    return next.reduce((n, x) => n + count(x, s), 0)
+  }
+  return flow.chunks.length ? count(flow.chunks[0].id, new Set()) : 0
+}
+
+/** The energy curve along the first path, as [0..1 position, 0..1 energy] points; null where no chunk has energy. */
+export function energyShape(flow: Pick<Flow, 'chunks'>): Curve | null {
+  const path = firstPath(flow)
+  const total = path.reduce((s, c) => s + c.share, 0) || 1
+  const out: Curve = []
+  let at = 0
+  for (const c of path) {
+    const w = c.share / total
+    for (const [f, v] of c.layers.energy ?? []) out.push([at + f * w, v])
+    at += w
+  }
+  return out.length >= 2 ? out : null
+}
+
+/** The harmony events along the first path, placed on the whole flow's 0..1 axis. */
+export function eventDots(flow: Pick<Flow, 'chunks'>): { at: number; kind: string }[] {
+  const path = firstPath(flow)
+  const total = path.reduce((s, c) => s + c.share, 0) || 1
+  const out: { at: number; kind: string }[] = []
+  let at = 0
+  for (const c of path) {
+    const w = c.share / total
+    for (const e of c.layers.harmony ?? []) out.push({ at: at + e.at * w, kind: e.kind })
+    at += w
+  }
+  return out
+}
+
+/** "warm-up · peak or deep · come-down": the chunks in order, a fork's futures joined by "or". */
+export function outline(flow: Pick<Flow, 'chunks'>): string {
+  const by = new Map(flow.chunks.map(c => [c.id, c]))
+  const parts: string[] = []
+  let layer = flow.chunks.slice(0, 1)
+  const seen = new Set<string>()
+  while (layer.length && parts.length < 8) {
+    layer.forEach(c => seen.add(c.id))
+    parts.push(layer.map(c => c.id).join(' or '))
+    const next = [...new Set(layer.flatMap(c => c.next))].filter(id => by.has(id) && !seen.has(id))
+    layer = next.map(id => by.get(id)!)
+  }
+  return parts.join(' · ')
+}
+
+/** "Upcoming events": a short readable line for a card. */
+export function eventsLine(flow: Pick<Flow, 'chunks'>): string {
+  const dots = eventDots(flow)
+  if (!dots.length) return 'matches only'
+  return dots.map(d => KINDS[d.kind] ?? d.kind).join(', ')
+}
