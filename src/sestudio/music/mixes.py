@@ -101,6 +101,8 @@ PRESETS: tuple[dict[str, Any], ...] = (
     },
 )
 LENGTHS = {"30": 30, "60": 60, "120": 120, "endless": None}
+#: What a fork may wait for (§5): skips in the last tracks, minutes into the mix, a clock time.
+CONDITIONS = ("skips", "session", "time")
 
 
 def _new_id() -> str:
@@ -153,16 +155,21 @@ def clean_flow(raw: dict[str, Any]) -> dict[str, Any]:
         for e in layers.get("harmony") or []:
             if e.get("kind") not in flows.MODULATIONS:
                 raise Invalid(f"chunk {cid}: unknown harmony event {e.get('kind')!r}")
+        when = c.get("when") or {}
+        for cond in when.values():
+            if cond.get("kind") not in CONDITIONS:
+                raise Invalid(f"chunk {cid}: unknown condition {cond.get('kind')!r}")
         out.append(
             {
                 "id": cid,
                 "share": max(0.05, float(c.get("share") or 1)),
                 "next": [str(n) for n in c.get("next") or []],
                 "layers": layers,
+                **({"when": {str(k): v for k, v in when.items()}} if when else {}),
             }
         )
     for c in out:
-        if any(n not in ids for n in c["next"]):
+        if any(n not in ids for n in [*c["next"], *c.get("when", {})]):
             raise Invalid(f"chunk {c['id']}: next names an unknown chunk")
     pull = raw.get("pull") or "strong"
     if pull not in flows.PULL:
@@ -328,12 +335,16 @@ def render_flow(
     minutes: float | None = None,
     seed: int = 1,
     pins: dict[str, str] | None = None,
+    context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """The path and the mix of *flow* over *lib* (§6). Endless renders two hours."""
+    """The path and the mix of *flow* over *lib* (§6). Endless renders two hours.
+
+    *context* (skips, clock) lets a fork's conditions decide; without it they are ignored.
+    """
     mins = minutes or LENGTHS.get(str(flow.get("length"))) or 120
     pull = flows.PULL[flow.get("pull") or "strong"]
     path, auto = flows.resolve(
-        flow, choices or {}, lib, minutes=mins, seed=seed, pull=pull
+        flow, choices or {}, lib, context, minutes=mins, seed=seed, pull=pull
     )
     mix = flows.render(path, lib, minutes=mins, seed=seed, pins=pins, pull=pull)
     return {"path": [c["id"] for c in path], "auto": auto, "minutes": mins, "mix": mix}

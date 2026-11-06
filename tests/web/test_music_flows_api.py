@@ -141,3 +141,14 @@ def test_a_draft_renders_with_its_fork_choice(client):
         ).status_code
         == 400
     )
+
+
+def test_next_well_before_the_end_counts_as_a_skip(client):
+    queue.add(
+        [{"library": "local", "track_id": f"t{i}", "duration": 300} for i in range(4)],
+        replace=True,
+    )
+    client.post("/api/music/queue/transport", json={"action": "next", "position": 20})
+    client.post("/api/music/queue/transport", json={"action": "seek", "position": 290})
+    client.post("/api/music/queue/transport", json={"action": "next"})
+    assert client.get("/api/music/queue").json()["skips"] == [True, False]

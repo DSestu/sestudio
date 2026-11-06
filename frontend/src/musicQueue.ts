@@ -67,6 +67,8 @@ export interface QueueState {
   station?: StationClock | null
   /** The flow or mix playing, null for a hand-made queue. */
   source?: QueueSource | null
+  /** The last tracks left by Next, true when skipped well before their end. */
+  skips?: boolean[]
 }
 export interface StationClock {
   item_id: string | null

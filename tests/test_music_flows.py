@@ -255,3 +255,103 @@ def test_hand_list_becomes_a_live_mix_with_pins(db):
         "2",
         "3",
     ]
+
+
+def test_branch_conditions_hold_when_the_fork_is_reached():
+    assert flows.holds(
+        {"kind": "skips", "count": 2, "of": 4}, 0, {"skips": [False, True, False, True]}
+    )
+    assert not flows.holds(
+        {"kind": "skips", "count": 2, "of": 4},
+        0,
+        {"skips": [True, True, False, False, False, False]},
+    )
+    assert flows.holds({"kind": "session", "minutes": 60}, 61, {})
+    assert not flows.holds({"kind": "session", "minutes": 60}, 30, {})
+    late = {"kind": "time", "after": "23:00"}
+    assert not flows.holds(late, 20, {"clock": 22 * 60 + 30})  # 22:50
+    assert flows.holds(late, 40, {"clock": 22 * 60 + 30})  # 23:10
+    assert flows.holds(late, 0, {"clock": 23 * 60 + 30})  # started after it
+    assert flows.holds(
+        {"kind": "time", "after": "01:00"}, 90, {"clock": 23 * 60 + 40}
+    )  # past midnight
+
+
+def test_a_condition_takes_the_fork_before_the_generator_but_not_before_a_choice():
+    fork = {
+        "chunks": [
+            {
+                "id": "a",
+                "share": 1,
+                "next": ["b", "c"],
+                "layers": {},
+                "when": {"b": {"kind": "skips", "count": 1, "of": 2}},
+            },
+            {
+                "id": "b",
+                "share": 1,
+                "next": [],
+                "layers": {"tempo": [[0, 124], [1, 124]]},
+            },
+            {
+                "id": "c",
+                "share": 1,
+                "next": [],
+                "layers": {"tempo": [[0, 172], [1, 172]]},
+            },
+        ]
+    }
+    path, auto = flows.resolve(fork, {}, LIB, {"skips": [True]}, minutes=30, seed=1)
+    assert [c["id"] for c in path] == ["a", "b"] and auto == {"a": "b"}
+    assert flows.resolve(fork, {}, LIB, {"skips": [False]}, minutes=30, seed=1)[1] == {
+        "a": "c"
+    }
+    assert [
+        c["id"]
+        for c in flows.resolve(
+            fork, {"a": "c"}, LIB, {"skips": [True]}, minutes=30, seed=1
+        )[0]
+    ] == ["a", "c"]
+    assert flows.resolve(fork, {}, LIB, None, minutes=30, seed=1)[1] == {
+        "a": "c"
+    }  # no context: conditions ignored
+
+
+def test_conditions_are_validated(db):
+    ok = {
+        "chunks": [
+            {
+                "id": "a",
+                "next": ["b", "c"],
+                "layers": {},
+                "when": {"b": {"kind": "session", "minutes": 45}},
+            },
+            {"id": "b", "layers": {}},
+            {"id": "c", "layers": {}},
+        ]
+    }
+    assert mixes.flow_create("x", ok)["chunks"][0]["when"] == {
+        "b": {"kind": "session", "minutes": 45}
+    }
+    with pytest.raises(mixes.Invalid):
+        mixes.flow_create(
+            "x",
+            {
+                **ok,
+                "chunks": [
+                    {**ok["chunks"][0], "when": {"b": {"kind": "mood"}}},
+                    *ok["chunks"][1:],
+                ],
+            },
+        )
+    with pytest.raises(mixes.Invalid):
+        mixes.flow_create(
+            "x",
+            {
+                **ok,
+                "chunks": [
+                    {**ok["chunks"][0], "when": {"zz": {"kind": "session"}}},
+                    *ok["chunks"][1:],
+                ],
+            },
+        )

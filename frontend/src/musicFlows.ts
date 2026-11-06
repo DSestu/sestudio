@@ -16,7 +16,12 @@ export interface Layers {
   harmony?: HarmonyEvent[]
   genre?: GenreBlock[]
 }
-export interface Chunk { id: string; share: number; next: string[]; layers: Layers }
+/** What a fork may wait for (SPEC §5): skips in the last tracks, minutes into the mix, a clock time. */
+export type Condition =
+  | { kind: 'skips'; count: number; of: number }
+  | { kind: 'session'; minutes: number }
+  | { kind: 'time'; after: string }
+export interface Chunk { id: string; share: number; next: string[]; layers: Layers; when?: Record<string, Condition> }
 export interface Flow {
   id: string
   name: string

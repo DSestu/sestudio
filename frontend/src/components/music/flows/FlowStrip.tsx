@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { KINDS, forkAhead, refreshFlows, reroute, useFlows } from '../../../musicFlows'
 import type { FlowSlot, QueueState } from '../../../musicQueue'
 
@@ -26,10 +26,19 @@ export default function FlowStrip({ q }: { q: QueueState }) {
   const { flows } = useFlows()
   const [saved, setSaved] = useState(false)
   const src = q.source
-  if (!src?.flow) return null
-  const flow = flows.find(f => f.id === src.flow)
-  const cur = q.items[q.current]?.flow?.chunk
+  const flow = src?.flow ? flows.find(f => f.id === src.flow) : undefined
   const fork = forkAhead(q, flow)
+  // A fork with conditions is asked again as it comes near: skips and the clock may have changed since the mix was drawn.
+  const asked = useRef('')
+  const conditional = !!fork && !src?.choices[fork.chunk] && !!flow?.chunks.find(c => c.id === fork.chunk)?.when
+  const key = fork ? `${fork.chunk}:${q.current}:${q.skips?.length ?? 0}` : ''
+  useEffect(() => {
+    if (!conditional || asked.current === key) return
+    asked.current = key
+    run(reroute({}))
+  }, [conditional, key])
+  if (!src?.flow) return null
+  const cur = q.items[q.current]?.flow?.chunk
   // Untaken futures of every fork on the path, dashed beside the taken one.
   const untaken = flow
     ? src.path.flatMap(id => (flow.chunks.find(c => c.id === id)?.next ?? []).filter(n => !src.path.includes(n)))
