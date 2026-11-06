@@ -28,7 +28,8 @@ export interface Flow {
   created: number
   chunks: Chunk[]
   pull: 'light' | 'strong' | 'only'
-  length: '30' | '60' | '120' | 'endless'
+  /** A named length, or the lanes editor's own minutes ("95"). */
+  length: '30' | '60' | '120' | 'endless' | `${number}`
   allowOnline: boolean
   preset: boolean
 }

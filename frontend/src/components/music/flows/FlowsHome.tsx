@@ -3,6 +3,7 @@ import {
   DIAL_NAME, LENGTHS, dialFlow, energyShape, eventDots, eventsLine, futures, outline, playFlow, saveFlow, useFlows,
   type Flow,
 } from '../../../musicFlows'
+import { fresh, toFlow } from './lanes'
 
 // The Music tab's entry (SPEC-music-flows §9, board 1): the dial on top, the flows under it.
 
@@ -41,7 +42,7 @@ function Shape({ flow }: { flow: Flow }) {
 
 function FlowCard({ flow, onOpen }: { flow: Flow; onOpen: () => void }) {
   const n = futures(flow)
-  const length = LENGTHS.find(l => l.id === flow.length)?.label ?? 'Endless'
+  const length = LENGTHS.find(l => l.id === flow.length)?.label ?? (/^\d+$/.test(flow.length) ? `${flow.length} min` : 'Endless')
   return (
     <li className="flex flex-col gap-1 rounded-box bg-base-200 p-3">
       <div className="flex items-start gap-2">
@@ -126,7 +127,7 @@ function Dial({ flows }: { flows: Flow[] }) {
 
 export default function FlowsHome({ onOpen }: { onOpen: (id: string) => void }) {
   const create = async () => {
-    const f = await saveFlow('New flow', { chunks: [{ id: 'start', share: 1, next: [], layers: { harmony: [] } }], pull: 'strong', length: 'endless' })
+    const f = await saveFlow('New flow', { ...toFlow(fresh()), pull: 'strong' })
     onOpen(f.id)
   }
   const { flows, loaded } = useFlows()
