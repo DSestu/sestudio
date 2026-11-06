@@ -15,6 +15,7 @@ import { playItem } from './player'
 import { armRowDrag, gripRowDrag, justDragged, lastDrop, type DragSource } from './rowDrag'
 import { armSwipe, justSwiped } from './swipe'
 import RowThread from './RowThread'
+import FlowStrip, { SlotChip } from './flows/FlowStrip'
 import { rangeOf, type Range } from './thread'
 
 const EASE = 'cubic-bezier(.2,.7,.2,1)'
@@ -103,6 +104,7 @@ const Row = memo(function Row({ item, info, playing, source, leaving, tv, range 
             {metaLine(analysis, undefined, theory) && <em className={`not-italic ${info?.artist ? 'ml-[7px]' : ''} opacity-55 tabular-nums`}>{metaLine(analysis, undefined, theory)}</em>}
           </span>
         </div>
+        {item.flow && <SlotChip slot={item.flow} />}
         {analysis?.balance && <Meter balance={analysis.balance} />}
         {info?.duration ? <RowThread id={item.track_id} dur={info.duration} range={range} playing={playing} /> : null}
         <span className="relative w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{info?.duration ? fmtTime(info.duration) : ''}</span>
@@ -286,6 +288,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
           <svg className="size-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3l5 5-3 1-3.5 3.5.5 4.5-2 2-3.5-5.5L5 20l-1-1 4.5-4.5L3 11l2-2 4.5.5L13 6z" /></svg>
         </button>}
       </header>
+      {!tv && !(library && adding) && <FlowStrip q={q} />}
       {library && adding ? library : <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden'}`}>
         <span
           data-dropline

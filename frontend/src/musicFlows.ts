@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { startPlayback } from './components/music/player'
+import type { QueueState } from './musicQueue'
 
 // Flows and mixes (docs/SPEC-music-flows.md): the server's documents, the calls
 // that play them, and the pure helpers the cards and the path strip draw from.
@@ -183,4 +184,21 @@ export function eventsLine(flow: Pick<Flow, 'chunks'>): string {
   const dots = eventDots(flow)
   if (!dots.length) return 'matches only'
   return dots.map(d => KINDS[d.kind] ?? d.kind).join(', ')
+}
+
+/** A fork the queue reaches within this many tracks is asked about (board 2). */
+const AHEAD = 2
+
+/** The fork coming up: the playing chunk splits, and few of its tracks are left. */
+export function forkAhead(q: QueueState, flow: Flow | undefined): { chunk: string; futures: string[]; taken: string; left: number } | null {
+  const cur = q.items[q.current]?.flow?.chunk
+  const src = q.source
+  if (!cur || !src || !flow) return null
+  const chunk = flow.chunks.find(c => c.id === cur)
+  if (!chunk || chunk.next.length < 2) return null
+  const rest = q.items.slice(q.current + 1)
+  const left = rest.findIndex(i => i.flow?.chunk !== cur)
+  if (left < 0 || left > AHEAD) return null
+  const at = src.path.indexOf(cur)
+  return { chunk: cur, futures: chunk.next, taken: src.path[at + 1] ?? '', left }
 }
