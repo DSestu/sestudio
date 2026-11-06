@@ -29,6 +29,15 @@ def _tables(path) -> set[str]:
         conn.close()
 
 
+def _builder_flows(path) -> bool:
+    """The old Mix builder's flows table (migration 5) is there; migration 7's music_flows has no `mode`."""
+    conn = sqlite3.connect(str(path))
+    try:
+        return "mode" in {r[1] for r in conn.execute("PRAGMA table_info(music_flows)")}
+    finally:
+        conn.close()
+
+
 def test_fresh_database_is_fully_migrated(db):
     assert library.schema_version() == len(library._MIGRATIONS)
     names = _tables(db)
@@ -124,7 +133,7 @@ def test_flows_become_playlists_once(db):
     assert [t["track_id"] for t in nodes["Friday"]["items"]] == [
         "a"
     ]  # the base is untouched
-    assert "music_flows" not in _tables(db)
+    assert not _builder_flows(db)
 
     # The converted playlist works like any other (the next item id is free).
     playlists.add_items(nodes["Branch 1"]["id"], [_ref("f")])
@@ -132,6 +141,6 @@ def test_flows_become_playlists_once(db):
     assert len(playlists.tree()) == 3  # a second start converts nothing
 
 
-def test_fresh_database_has_no_flows_table(db):
+def test_fresh_database_has_no_builder_flows_table(db):
     library.schema_version()
-    assert "music_flows" not in _tables(db)
+    assert not _builder_flows(db)
