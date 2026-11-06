@@ -53,7 +53,8 @@ export default function Title({ info, analysis }: { info?: TrackInfo; analysis: 
         )}
         {key && <span className="shrink-0 tabular-nums" style={{ color: key.color }}>{key.text}</span>}
       </div>
-      <h2 className="mt-1 truncate font-bold leading-[.95] tracking-[-.04em] text-[clamp(2.25rem,8vw,6rem)] short:text-[32px] pb-1">
+      {/* Product: up to two balanced lines (§5.7 / §11); the prototype's single-line nowrap truncates too early on tablet. */}
+      <h2 className="mt-1 line-clamp-2 text-balance font-bold leading-[.95] tracking-[-.04em] text-[clamp(2.25rem,8vw,6rem)] short:text-[32px] pb-1">
         {info?.title ?? ''}
       </h2>
     </div>

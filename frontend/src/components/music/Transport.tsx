@@ -69,7 +69,8 @@ function Seek({ q, position, duration, readOnly = false }: { q: QueueState; posi
     void queueActions.transport('seek', { position: t })
   }
   return (
-    <div className="flex items-center gap-3 text-xs text-base-content/45 tabular-nums">
+    // Room under the bar for the next-track peek when the seek thread previews into the following track.
+    <div className={`flex items-center gap-3 text-xs text-base-content/45 tabular-nums ${frac < 1 && !readOnly ? 'pb-3.5' : ''}`}>
       <span>{fmtTime(shown)}</span>
       {readOnly && threaded ? (
         <div className="relative flex-1 h-5"><SeekThread q={q} shown={position} duration={duration} frac={frac} /></div>

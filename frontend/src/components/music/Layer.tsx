@@ -176,6 +176,11 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     const te = titleEl.current!.style
     te.width = `${titleWidth(W, H, title.x, t)}px`
     te.transform = `translate(${title.x}px, ${title.y}px) scale(${title.scale})`
+    // A two-line title can grow past the transport's parked y; keep a 20 px gap under it.
+    if (!phone && titleEl.current) {
+      const bottom = title.y + titleEl.current.offsetHeight * title.scale
+      if (bottom + 20 > transport.y) transport.y = bottom + 20
+    }
     const tr = transportEl.current!.style
     tr.width = `${transport.w}px`
     tr.transform = `translate(${transport.x}px, ${transport.y}px)`
