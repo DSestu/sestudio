@@ -12,7 +12,7 @@ function lineage(mix: Mix, flows: Flow[]): string {
   return mix.frozen ? `${from} · frozen` : `${from} · live, follows the flow`
 }
 
-export default function MixesList() {
+export default function MixesList({ onOpen }: { onOpen: (id: string) => void }) {
   const { flows, mixes, loaded } = useFlows()
   if (loaded && !mixes.length) {
     return <EmptyState title="No mixes yet" message="Play a flow, then save what it made as a mix." />
@@ -21,12 +21,12 @@ export default function MixesList() {
     <ul className="flex flex-col">
       {mixes.map(m => (
         <li key={m.id} className="flex h-14 items-center gap-3 rounded-xl px-3 hover:bg-white/5">
-          <span className="min-w-0 flex-1 leading-tight">
+          <button onClick={() => onOpen(m.id)} className="min-w-0 flex-1 text-left leading-tight">
             <span className="block truncate text-sm font-semibold">{m.name}</span>
             <span className="block truncate text-xs text-base-content/60">
               {lineage(m, flows)}{m.frozen ? ` · ${m.frozen.length} tracks` : ''}
             </span>
-          </span>
+          </button>
           <button onClick={() => run(playMix(m.id))} aria-label={`Play ${m.name}`} className="btn btn-ghost btn-sm btn-circle">
             <svg className="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
           </button>
