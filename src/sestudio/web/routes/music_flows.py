@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from sestudio import downloaded
-from sestudio.music import libraries, mixes, queue, store
+from sestudio.music import flows, libraries, mixes, queue, store
 
 router = APIRouter(prefix="/music")
 
@@ -162,6 +162,26 @@ def render_draft(body: DraftBody) -> dict[str, Any]:
         body.seed,
         context=_context(time.time()),
     )
+
+
+class FitsBody(BaseModel):
+    layers: dict[str, Any]
+    stretches: list[tuple[float, float]]
+
+
+@router.post("/flows/fits")
+def flow_fits(body: FitsBody) -> dict[str, Any]:
+    """The lanes editor's library check: per stretch, how many tracks fit and a few of them; the genres there are."""
+    pool = _pool()
+    out = []
+    for a, b in body.stretches:
+        hit = flows.fits(body.layers, a, b, pool)
+        out.append({"count": len(hit), "ids": [t["id"] for t in hit[:8]]})
+    genres: dict[str, int] = {}
+    for t in pool:
+        if t.get("genre"):
+            genres[t["genre"]] = genres.get(t["genre"], 0) + 1
+    return {"stretches": out, "genres": genres}
 
 
 @router.get("/mixes")

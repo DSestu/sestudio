@@ -355,3 +355,67 @@ def test_conditions_are_validated(db):
                 ],
             },
         )
+
+
+def test_colour_blocks_keep_the_key_colour_and_relax_like_genre():
+    assert [
+        flows.colour(trk(1, mode=m))
+        for m in ("Lydian", "Dorian", "Phrygian", "Harmonic minor")
+    ] == [
+        "bright",
+        "warm",
+        "dark",
+        "exotic",
+    ]
+    assert flows.colour(trk(1, tonic=None)) is None
+    lib = [trk(1, mode="Ionian"), trk(2, mode="Aeolian"), trk(3, tonic=None)]
+    layers = {"colour": [{"from": 0, "to": 0.5, "colour": "bright"}]}
+    # A stretch keeps its colour; an unread key is not left out; outside the block anything goes.
+    assert [t["id"] for t in flows.fits(layers, 0, 0.5, lib)] == ["1", "3"]
+    assert len(flows.fits(layers, 0.5, 1, lib)) == 3
+    # Rendering never stops short: with no bright track left the colour relaxes.
+    mix = flows.render(
+        [
+            {
+                "id": "a",
+                "share": 1,
+                "next": [],
+                "layers": {"colour": [{"from": 0, "to": 1, "colour": "bright"}]},
+            }
+        ],
+        lib[1:2],
+        minutes=5,
+    )
+    assert mix and mix[0]["relaxed"] == ["colour"]
+
+
+def test_a_flow_keeps_its_length_in_minutes(db):
+    f = mixes.flow_create(
+        "Lanes",
+        {
+            "chunks": [
+                {
+                    "id": "all",
+                    "layers": {"colour": [{"from": 0, "to": 1, "colour": "dark"}]},
+                }
+            ],
+            "length": "95",
+        },
+    )
+    assert f["length"] == "95" and mixes.length_minutes(f) == 95
+    assert (
+        mixes.flow_create("x", {"chunks": [{"id": "a"}], "length": "9999"})["length"]
+        == "endless"
+    )
+    with pytest.raises(mixes.Invalid):
+        mixes.flow_create(
+            "bad",
+            {
+                "chunks": [
+                    {
+                        "id": "a",
+                        "layers": {"colour": [{"from": 0, "to": 1, "colour": "grey"}]},
+                    }
+                ]
+            },
+        )

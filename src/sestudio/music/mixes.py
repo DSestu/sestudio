@@ -152,6 +152,9 @@ def clean_flow(raw: dict[str, Any]) -> dict[str, Any]:
                 raise Invalid(
                     f"chunk {cid}: {k} must be two or more [fraction, value] points"
                 )
+        for b in layers.get("colour") or []:
+            if b.get("colour") not in flows.COLOURS:
+                raise Invalid(f"chunk {cid}: unknown colour {b.get('colour')!r}")
         for e in layers.get("harmony") or []:
             if e.get("kind") not in flows.MODULATIONS:
                 raise Invalid(f"chunk {cid}: unknown harmony event {e.get('kind')!r}")
@@ -177,10 +180,23 @@ def clean_flow(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "chunks": out,
         "pull": pull,
-        "length": raw.get("length") if raw.get("length") in LENGTHS else "endless",
+        "length": _length(raw.get("length")),
         "allowOnline": bool(raw.get("allowOnline")),
         "preset": bool(raw.get("preset")),
     }
+
+
+def _length(raw: Any) -> str:
+    """A named length, or minutes as a string (the lanes editor's own length, 5 to 600)."""
+    s = str(raw) if raw is not None else ""
+    if s in LENGTHS:
+        return s
+    return s if s.isdigit() and 5 <= int(s) <= 600 else "endless"
+
+
+def length_minutes(flow: dict[str, Any]) -> float | None:
+    s = str(flow.get("length"))
+    return LENGTHS[s] if s in LENGTHS else float(s) if s.isdigit() else None
 
 
 def flows_list() -> list[dict[str, Any]]:
@@ -341,7 +357,7 @@ def render_flow(
 
     *context* (skips, clock) lets a fork's conditions decide; without it they are ignored.
     """
-    mins = minutes or LENGTHS.get(str(flow.get("length"))) or 120
+    mins = minutes or length_minutes(flow) or 120
     pull = flows.PULL[flow.get("pull") or "strong"]
     path, auto = flows.resolve(
         flow, choices or {}, lib, context, minutes=mins, seed=seed, pull=pull
