@@ -16,6 +16,11 @@ export function edge(u: number, p: Pick<Params, 'lo' | 'hi' | 'warp'>) {
   return fl ** (1 - p.warp) * fm ** p.warp
 }
 
+/** How long the sound waits behind the analyser so the light's peak lands on the hit: the FFT window's centre,
+ *  the attack and one display frame, less what the speakers (`spk`) already add. */
+export const lightLead = (an: AnalyserNode, p: Pick<Params, 'att' | 'sync'>, spk: number) =>
+  an.fftSize / 2 / an.context.sampleRate + (p.att + p.sync) / 1000 + 1 / 60 - spk
+
 /** Linear up to the knee, then eases towards 1 instead of clipping flat. */
 export const softCeil = (v: number, k: number) => (v <= k ? v : k + (1 - k) * Math.tanh((v - k) / (1 - k)))
 

@@ -2,17 +2,13 @@ import type { RawAnalysis } from './timeline/sampling'
 import { PALETTES, TIMELINE_PALETTE, type Oklch } from './timeline/palette'
 
 // The player bar's light (mockup .impeccable/mocks/eq-bars, B5): an aura that
-// glows inward from the glass outline with the track's spectrum, and over it
+// glows inward from the glass outline with the EQ's live bands, and over it
 // the whole track's envelope on the top and bottom edges, lit up to "now".
 
 const pct = (a: number[], q: number) => [...a].sort((x, y) => x - y)[Math.floor(q * (a.length - 1))] ?? 0
 const clamp = (v: number) => Math.max(0, Math.min(1, v))
 
 export interface Prepped {
-  /** Per band: the track's own 10th and 95th percentiles, so every band moves. */
-  lo: number[]
-  hi: number[]
-  bands: number[][]
   /** The whole track's envelope, 0..1, ENV points. */
   env: number[]
 }
@@ -37,14 +33,7 @@ export function prep(raw: RawAnalysis | null | undefined): Prepped | null {
     for (let j = k - 2; j <= k + 2; j++) if (j >= 0 && j < ENV) { a += mixed[j]; c++ }
     return a / c
   })
-  return { lo: bands.map(b => pct(b, 0.1)), hi: bands.map(b => pct(b, 0.95)), bands, env }
-}
-
-/** Band b's level at t seconds, 0..1, from the 10 Hz envelopes. */
-export function bandAt(p: Prepped, b: number, t: number) {
-  const row = p.bands[b], x = Math.max(0, Math.min(row.length - 1.001, t * 10)), k = Math.floor(x), f = x - k
-  const v = row[k] * (1 - f) + (row[k + 1] ?? row[k]) * f
-  return clamp((v - p.lo[b]) / Math.max(1, p.hi[b] - p.lo[b]))
+  return { env }
 }
 
 /** The envelope at u (0..1 of the track). */

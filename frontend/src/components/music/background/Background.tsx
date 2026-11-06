@@ -4,7 +4,7 @@ import { engine } from '../engine'
 import { rawOf } from '../mix/analysis'
 import { probe } from '../timeline/render'
 import type { RawAnalysis } from '../timeline/sampling'
-import { liveBands } from './bands'
+import { lightLead, liveBands } from './bands'
 import { fx } from './color'
 import { canvasSize, History, paint } from './draw'
 import { bend, Energy, grid, type Grid } from './energy'
@@ -85,9 +85,8 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
       const out = ac ? (ac.outputLatency || 0) + (ac.baseLatency || 0) : 0
       // The speakers' latency is read once: the browser's figure drifts, and every move of the delay is heard.
       if (!spk) spk = out
-      // The light reacts late: the FFT window's centre, the attack and one display frame. The sound waits that
-      // long behind the analyser (less what the speakers add), so the attack plays out before the hit and the peak lands on it.
-      if (an) engine.setLead(an.fftSize / 2 / an.context.sampleRate + (look.s.att + look.s.sync) / 1000 + 1 / 60 - spk)
+      // The light reacts late; the sound waits that long, so the attack plays out before the hit and the peak lands on it.
+      if (an) engine.setLead(lightLead(an, look.s, spk))
       // What is heard now: the media clock minus the delay and the output latency.
       const heard = engine.time - engine.lead - out
       energy.step(grids.g, heard, q.playing, dt, look.s)

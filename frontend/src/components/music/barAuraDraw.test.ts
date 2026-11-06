@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bandAt, ENV, envAt, perimeter, prep } from './barAuraDraw'
+import { ENV, envAt, perimeter, prep } from './barAuraDraw'
 
 // 20 s at 10 Hz: quiet for 10 s, then loud.
 const raw = { bands: Array.from({ length: 8 }, () => Array.from({ length: 200 }, (_, i) => (i < 100 ? 10 : 90))) }
@@ -8,14 +8,6 @@ describe('bar aura', () => {
   it('needs the 8 band envelopes', () => {
     expect(prep(null)).toBeNull()
     expect(prep({ bands: [[1, 2]] })).toBeNull()
-  })
-
-  it('reads each band against its own range, so the quiet half is low and the loud half high', () => {
-    const p = prep(raw)!
-    expect(bandAt(p, 0, 2)).toBe(0)
-    expect(bandAt(p, 0, 15)).toBe(1)
-    // Past the end it holds the last value.
-    expect(bandAt(p, 3, 999)).toBe(1)
   })
 
   it('wraps the whole track into a 0..1 envelope, rising where the track gets loud', () => {
