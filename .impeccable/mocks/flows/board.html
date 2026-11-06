@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flows · UI board</title>
+<style>
+:root{--house:oklch(16% .015 240);--aisle:oklch(20% .02 240);--row:oklch(26% .025 240);--slate:oklch(30% .02 240);--ink:oklch(92% .01 240);--blue:oklch(72% .16 230);--blue-ink:oklch(18% .05 230);--coral:oklch(70% .17 25);--good:oklch(76% .17 155);--violet:oklch(58% .2 300);--rose:oklch(70% .15 350);--gold:oklch(85% .12 85)}
+*{box-sizing:border-box}body{margin:0;background:#07090d;color:var(--ink);font:13px/1.4 ui-sans-serif,system-ui,sans-serif}
+h1{font-size:18px;font-weight:600;letter-spacing:-.02em;margin:24px 24px 4px}h1+p{margin:0 24px 16px;color:oklch(92% .01 240/.55)}
+.sec{padding:8px 24px 28px}.sec h2{font-size:13px;font-weight:600;color:oklch(92% .01 240/.6);margin:0 0 10px}.sec p.note{max-width:70ch;color:oklch(92% .01 240/.55);margin:0 0 12px}
+.pair{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.desk{width:1024px;height:600px;background:var(--house);border-radius:12px;overflow:hidden;display:flex;position:relative;font-size:12px}
+.rail{width:64px;background:oklch(20% .02 240/.5);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:14px;border-right:1px solid var(--row)}
+.rail .logo{width:28px;height:28px;border-radius:50%;background:var(--blue);margin-bottom:8px}.rail .q{width:40px;height:40px;border-radius:12px;background:var(--blue)}
+.rail .it{font-size:9px;color:oklch(92% .01 240/.6);text-align:center;width:48px;padding:6px 0;border-radius:8px}.rail .it i{display:block;width:16px;height:16px;border:1.5px solid currentColor;border-radius:4px;margin:0 auto 3px}.rail .it.on{color:var(--blue);background:var(--row)}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{margin:12px 16px 0;background:var(--aisle);border-radius:10px;padding:10px 12px;display:flex;gap:12px;align-items:center}.top .t{font-weight:600;font-size:15px}.top .t small{display:block;font-weight:400;font-size:10px;opacity:.6}
+.search{flex:1;height:36px;border-radius:8px;border:2px solid oklch(72% .16 230/.8);box-shadow:0 0 0 4px oklch(72% .16 230/.15);background:var(--house);display:flex;align-items:center;padding:0 12px;color:oklch(92% .01 240/.45)}
+.tabs{display:flex;gap:2px;background:var(--house);border-radius:8px;padding:3px}.tabs span{padding:5px 12px;border-radius:6px;color:oklch(92% .01 240/.7)}.tabs span.on{background:var(--row);color:var(--blue)}
+.body{flex:1;padding:12px 16px;display:flex;gap:16px;min-height:0;overflow:hidden}
+.phone{width:390px;height:780px;background:var(--house);border-radius:28px;overflow:hidden;position:relative;border:1px solid var(--row);font-size:13px;display:flex;flex-direction:column}
+.pt{height:56px;display:flex;align-items:center;padding:0 16px;gap:10px;background:oklch(20% .02 240/.95);border-bottom:1px solid var(--row)}.pt .logo{width:24px;height:24px;border-radius:50%;background:var(--blue)}.pt b{font-weight:600}
+.pb{flex:1;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.dock{height:60px;display:flex;align-items:center;justify-content:space-around;background:oklch(20% .02 240/.95);border-top:1px solid var(--row);font-size:10px;color:oklch(92% .01 240/.6)}.dock span{text-align:center}.dock span i{display:block;width:16px;height:16px;border:1.5px solid currentColor;border-radius:4px;margin:0 auto 2px}.dock .on{color:var(--blue);position:relative}.dock .on:before{content:"";position:absolute;top:-10px;left:50%;width:32px;height:2px;background:var(--blue);transform:translateX(-50%);border-radius:2px}
+.panel{background:var(--aisle);border-radius:10px;padding:12px}.h{font-size:11px;font-weight:600;letter-spacing:.02em;color:oklch(92% .01 240/.55);text-transform:uppercase;margin-bottom:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:6px;background:transparent;color:var(--ink);font-weight:500;font-size:12px}.btn.pri{background:var(--blue);color:var(--blue-ink)}.btn.ghost{background:var(--row)}
+.chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:10px;font-weight:500;background:var(--row);color:oklch(92% .01 240/.8)}.chip.blue{background:oklch(72% .16 230/.15);color:var(--blue)}.chip.coral{background:oklch(70% .17 25/.15);color:var(--coral)}.chip.good{background:oklch(76% .17 155/.15);color:var(--good)}
+.slider{display:grid;grid-template-columns:62px 1fr 44px;align-items:center;gap:10px;margin:8px 0}.slider .tr{height:6px;border-radius:3px;background:var(--row);position:relative}.slider .tr:after{content:"";position:absolute;top:50%;width:18px;height:18px;border-radius:50%;background:var(--blue);transform:translate(-50%,-50%);left:var(--v);box-shadow:0 2px 8px oklch(0% 0 0/.5)}.slider .tr i{position:absolute;left:0;top:0;bottom:0;width:var(--v);background:var(--blue);border-radius:3px;opacity:.5}.slider small{color:oklch(92% .01 240/.55);text-align:right;font-variant-numeric:tabular-nums}
+.cards{display:grid;gap:10px}.card{background:var(--aisle);border-radius:10px;padding:10px;position:relative;overflow:hidden}.card .nm{font-weight:600;margin-bottom:2px}.card .mt{font-size:11px;color:oklch(92% .01 240/.55)}.card svg{display:block;width:100%;height:34px;margin:6px 0 2px}.card .play{position:absolute;right:10px;top:10px;width:28px;height:28px;border-radius:50%;background:var(--blue)}.card .play:after{content:"";position:absolute;left:11px;top:8px;border-left:9px solid var(--blue-ink);border-top:6px solid transparent;border-bottom:6px solid transparent}
+.row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;position:relative}.row .n{width:16px;color:oklch(92% .01 240/.4);font-variant-numeric:tabular-nums}.row .ti{flex:1;min-width:0}.row .ti b{font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row .ti small{color:oklch(92% .01 240/.5);font-size:10px}.row.now{background:oklch(72% .16 230/.12)}.row .thr{position:absolute;left:8px;right:8px;bottom:2px;height:2px;background:linear-gradient(90deg,var(--violet),var(--rose),var(--gold));opacity:.6;border-radius:1px}
+.join{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--row)}.join.g{color:var(--good)}.join.c{color:var(--coral)}
+.lane{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center;margin:4px 0}.lane .lb{font-size:10px;color:oklch(92% .01 240/.6)}.lane .ar{background:var(--house);border-radius:6px;height:var(--h,48px);position:relative;overflow:hidden}
+.mini{height:3px;background:var(--row);border-radius:2px;position:relative}.mini i{position:absolute;left:0;top:0;bottom:0;background:var(--blue);border-radius:2px}
+.path{display:flex;gap:4px;align-items:center}.path span{flex:var(--w,1);height:22px;border-radius:6px;background:var(--row);display:flex;align-items:center;padding:0 8px;font-size:10px;white-space:nowrap;overflow:hidden}.path span.lit{background:oklch(72% .16 230/.25);color:var(--blue);outline:1px solid var(--blue)}.path span.alt{background:transparent;outline:1px dashed var(--slate);color:oklch(92% .01 240/.5)}
+.fork{border:1px dashed var(--blue);border-radius:8px;padding:8px 10px;display:flex;gap:8px;align-items:center;font-size:11px}.fork .btn{height:26px;font-size:11px}
+.bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:560px;height:56px;border-radius:14px;background:oklch(20% .02 240/.95);border:1px solid var(--row);display:flex;align-items:center;gap:12px;padding:0 12px;box-shadow:0 8px 30px oklch(0% 0 0/.5)}.bar .ic{width:28px;height:28px;border-radius:7px;background:var(--row)}.bar .tx{flex:1;font-size:12px}.bar .tx small{display:block;color:oklch(92% .01 240/.55);font-size:10px}.bar .pl{width:36px;height:36px;border-radius:50%;background:var(--blue)}.bar .aura{position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,var(--violet),var(--rose),var(--gold));opacity:.7}
+.tl{position:relative;height:120px;background:var(--house);border-radius:10px;overflow:hidden}
+.ev{position:absolute;top:0;bottom:0;width:2px;background:var(--blue)}.ev.c{background:var(--coral);background:repeating-linear-gradient(var(--coral) 0 3px,transparent 3px 6px)}.ev:before{content:"";position:absolute;top:0;left:-5px;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid currentColor;color:inherit}
+.ev b{position:absolute;top:8px;left:7px;font-size:10px;font-weight:500;white-space:nowrap}
+.strip{display:flex;gap:6px;overflow:hidden}.strip .pre{padding:5px 10px;border-radius:99px;background:var(--aisle);border:1px solid var(--row);font-size:11px;white-space:nowrap}.strip .pre.l{border-style:dashed}
+.why{font-size:10px;color:oklch(92% .01 240/.55)}
+.ann{position:absolute;background:var(--gold);color:#201a06;font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;z-index:2}
+.caption{width:1024px;font-size:12px;color:oklch(92% .01 240/.6);margin-top:8px}
+</style></head><body>
+<h1>Flows · one board, five surfaces</h1>
+<p>Each surface on the app's chrome, desktop (1024 wide) and phone (390). Low fidelity on purpose: layout, hierarchy and the words; the look follows the design system. Yellow tags mark what to decide.</p>
+
+<!-- ===================== 1. ENTRY ===================== -->
+<section class="sec"><h2>1 · Entry: the Music tab opens on the dial, flows under it, the library behind</h2>
+<p class="note">Three sliders, then Play: a flow is generated around them and plays. Below, your flows: recent first, then presets. Albums / Artists / Tracks move behind a "Library" tab. The pull is the fourth control, folded by default.</p>
+<div class="pair">
+<div class="desk">
+  <div class="rail"><div class="logo"></div><div class="q"></div><div class="it"><i></i>Home</div><div class="it"><i></i>Media</div><div class="it"><i></i>Discover</div><div class="it on"><i></i>Music</div><div class="it"><i></i>Library</div></div>
+  <div class="main">
+    <div class="top"><div class="t">Music<small>46 tracks · playing Night</small></div><div class="search">Search your libraries and online, or paste a link</div><div class="tabs"><span class="on">Flows</span><span>Mixes</span><span>Library</span></div></div>
+    <div class="body">
+      <div class="panel" style="width:360px;align-self:flex-start">
+        <div class="h">How should it feel now</div>
+        <div class="slider"><span>Energy</span><div class="tr" style="--v:62%"><i></i></div><small>lively</small></div>
+        <div class="slider"><span>Mood</span><div class="tr" style="--v:28%"><i></i></div><small>dark</small></div>
+        <div class="slider"><span>Tempo</span><div class="tr" style="--v:80%"><i></i></div><small>172</small></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px"><span class="btn pri">▶ Play</span><span class="btn ghost">Endless ▾</span><span class="why" style="margin-left:auto">harmony pull: strong ▾</span></div>
+        <div class="why" style="margin-top:8px">34 tracks fit · a lift at the start, home by the end</div>
+        <span class="ann" style="right:10px;top:10px">A: dial as a panel</span>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="h">Your flows</div>
+        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
+          <div class="card"><div class="play"></div><div class="nm">Night</div><div class="mt">warm-up · peak or deep · come-down · 3 h ago</div><svg viewBox="0 0 200 34"><path d="M0 28 C40 26 60 10 100 8 S160 6 200 24" fill="none" stroke="var(--blue)" stroke-width="2"/><path d="M0 30 L200 30" stroke="var(--row)"/><circle cx="70" cy="12" r="3" fill="var(--blue)"/><circle cx="130" cy="7" r="3" fill="var(--blue)"/><circle cx="150" cy="12" r="3" fill="var(--coral)"/></svg><div class="mt"><span class="chip blue">2 futures</span> <span class="chip">1 h 00</span></div></div>
+          <div class="card"><div class="play"></div><div class="nm">Sunday deep</div><div class="mt">plateau · darker mode · endless</div><svg viewBox="0 0 200 34"><path d="M0 20 C60 18 120 20 200 19" fill="none" stroke="var(--blue)" stroke-width="2"/><circle cx="100" cy="19" r="3" fill="var(--blue)"/></svg><div class="mt"><span class="chip">endless</span></div></div>
+          <div class="card" style="opacity:.8"><div class="play"></div><div class="nm">Peak</div><div class="mt">preset · one lift halfway</div><svg viewBox="0 0 200 34"><path d="M0 26 C60 22 120 6 200 4" fill="none" stroke="var(--blue)" stroke-width="2"/><circle cx="100" cy="14" r="3" fill="var(--blue)"/></svg><div class="mt"><span class="chip">preset</span></div></div>
+          <div class="card" style="opacity:.8"><div class="play"></div><div class="nm">Come-down</div><div class="mt">preset · break, then the relative</div><svg viewBox="0 0 200 34"><path d="M0 6 C60 8 120 20 200 28" fill="none" stroke="var(--blue)" stroke-width="2"/><circle cx="4" cy="6" r="3" fill="var(--coral)"/><circle cx="100" cy="14" r="3" fill="var(--blue)"/></svg><div class="mt"><span class="chip">preset</span></div></div>
+          <div class="card" style="border:1px dashed var(--slate);background:transparent"><div class="nm" style="color:oklch(92% .01 240/.6)">+ New flow</div><div class="mt">from scratch, or from any mix</div></div>
+        </div>
+        <span class="ann" style="position:relative;display:inline-block;margin-top:10px">card = name · shape of the energy curve · events as dots · futures</span>
+      </div>
+    </div>
+    <div class="bar"><div class="ic"></div><div class="tx">Noir<small>Night › peak · Up a fifth · 174 BPM</small></div><div class="pl"></div><div class="aura"></div></div>
+  </div>
+</div>
+<div class="phone">
+  <div class="pt"><div class="logo"></div><b>Music</b><span style="margin-left:auto;opacity:.6">⚙</span></div>
+  <div class="pb">
+    <div class="tabs"><span class="on">Flows</span><span>Mixes</span><span>Library</span></div>
+    <div class="panel">
+      <div class="h">How should it feel now</div>
+      <div class="slider"><span>Energy</span><div class="tr" style="--v:62%"><i></i></div><small>lively</small></div>
+      <div class="slider"><span>Mood</span><div class="tr" style="--v:28%"><i></i></div><small>dark</small></div>
+      <div class="slider"><span>Tempo</span><div class="tr" style="--v:80%"><i></i></div><small>172</small></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><span class="btn pri" style="flex:1;justify-content:center">▶ Play</span><span class="btn ghost">Endless ▾</span></div>
+    </div>
+    <div class="h">Your flows</div>
+    <div class="cards">
+      <div class="card"><div class="play"></div><div class="nm">Night</div><div class="mt">warm-up · peak or deep · come-down</div><svg viewBox="0 0 200 34"><path d="M0 28 C40 26 60 10 100 8 S160 6 200 24" fill="none" stroke="var(--blue)" stroke-width="2"/><circle cx="70" cy="12" r="3" fill="var(--blue)"/><circle cx="150" cy="12" r="3" fill="var(--coral)"/></svg><div class="mt"><span class="chip blue">2 futures</span> <span class="chip">1 h 00</span></div></div>
+      <div class="card"><div class="play"></div><div class="nm">Sunday deep</div><div class="mt">plateau · darker mode · endless</div><svg viewBox="0 0 200 34"><path d="M0 20 C60 18 120 20 200 19" fill="none" stroke="var(--blue)" stroke-width="2"/></svg></div>
+      <div class="card" style="opacity:.8"><div class="play"></div><div class="nm">Peak <span class="chip">preset</span></div><div class="mt">one lift halfway</div></div>
+    </div>
+  </div>
+  <div class="bar" style="width:362px;bottom:70px;height:50px"><div class="ic"></div><div class="tx">Noir<small>Night › peak · Up a fifth</small></div><div class="pl" style="width:32px;height:32px"></div><div class="aura"></div></div>
+  <div class="dock"><span><i></i>Home</span><span><i></i>Media</span><span><i></i>Search</span><span class="on"><i></i>Music</span><span><i></i>Library</span><span><i></i>Settings</span></div>
+</div>
+</div></section>
+
+<!-- ===================== 2. PLAYING MIX ===================== -->
+<section class="sec"><h2>2 · The playing mix: the path lit through the flow, the fork ahead, what each join did</h2>
+<p class="note">The player's expanded mode gains a path strip above the timeline: chunks as segments, the one playing lit, untaken futures dashed. When a fork is within two tracks, it becomes a question on the strip and on the queue. Queue rows say the join in one word with its fit, and a relaxation as a chip.</p>
+<div class="pair">
+<div class="desk" style="background:oklch(12% .02 260)">
+  <div class="main" style="padding:14px 18px;gap:10px">
+    <div class="path"><span class="lit" style="--w:1">warm-up</span><span class="lit" style="--w:2">peak · Up a fifth ✓ · Up a fifth …</span><span class="alt" style="--w:2">deep · darker mode</span><span style="--w:1">come-down</span></div>
+    <div class="fork"><b>Fork in 2 tracks:</b> after Noir, the flow splits. <span class="btn ghost">Stay on peak</span><span class="btn ghost">Go deep</span><span class="why">or let it choose: peak fits 9 of 10 tracks, deep 7</span><span class="ann" style="position:static">B: fork ahead</span></div>
+    <div class="tl"><svg viewBox="0 0 980 120" style="width:100%;height:100%"><defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="oklch(85% .12 85)"/><stop offset=".5" stop-color="oklch(70% .15 350)"/><stop offset="1" stop-color="oklch(58% .2 300)"/></linearGradient></defs><path d="M0 70 C80 60 120 30 200 40 S320 80 400 60 S560 20 640 45 S820 90 980 60 L980 120 L0 120Z" fill="url(#g)" opacity=".75"/><line x1="90" x2="90" y1="0" y2="120" stroke="white" stroke-width="1.5"/><text x="96" y="14" fill="white" font-size="10">Noir · 2:41</text><text x="420" y="14" fill="oklch(92% .01 240/.7)" font-size="10">Wanna · match · 6/7</text><line x1="400" x2="400" y1="0" y2="120" stroke="oklch(72% .16 230)" stroke-dasharray="3 3"/><text x="650" y="14" fill="oklch(92% .01 240/.7)" font-size="10">Fade Black · looking for Up a fifth</text><text x="650" y="26" fill="oklch(72% .16 230)" font-size="10">▲ event pending</text></svg></div>
+    <div style="display:flex;gap:14px;flex:1;min-height:0">
+      <div class="panel" style="flex:1">
+        <div class="h">Queue · Night › peak</div>
+        <div class="row"><span class="n">8</span><div class="ti"><b>Dune</b><small>174 · F Aeolian</small></div><span class="join g">Match 7/7</span><div class="thr"></div></div>
+        <div class="row now"><span class="n">9</span><div class="ti"><b>Noir</b><small>174 · G Phrygian</small></div><span class="join g">Up a fifth ✓ 6/7</span><div class="thr"></div></div>
+        <div class="row"><span class="n">10</span><div class="ti"><b>Wanna</b><small>172 · G Aeolian</small></div><span class="join g">Match</span><div class="thr"></div></div>
+        <div class="row"><span class="n">11</span><div class="ti"><b>Fade Black – Elysium</b><small>175 · D Aeolian</small></div><span class="join c">Break</span><span class="chip coral">tempo ±8</span><div class="thr"></div></div>
+        <div class="row" style="opacity:.55"><span class="n">12</span><div class="ti"><b>Aurora (Justin Hawkes Remix)</b><small>175 · F Aeolian · after the fork</small></div><span class="join">Relative</span><div class="thr"></div></div>
+      </div>
+      <div class="panel" style="width:300px"><div class="h">This flow</div><div class="why" style="margin-bottom:8px">Night · live · pull strong</div><div class="lane" style="grid-template-columns:50px 1fr"><div class="lb">Energy</div><div class="ar" style="--h:40px"><svg viewBox="0 0 200 40" style="width:100%;height:100%"><path d="M0 34 C40 32 60 16 100 14 S160 10 200 30" fill="none" stroke="var(--blue)" stroke-width="2"/><circle cx="64" cy="20" r="3" fill="white"/></svg></div></div><div class="lane" style="grid-template-columns:50px 1fr"><div class="lb">Harmony</div><div class="ar" style="--h:28px"><div class="ev" style="left:40%;color:var(--blue)"><b>Up ✓</b></div><div class="ev" style="left:70%;color:var(--blue);opacity:.6"><b>Up …</b></div></div></div><div style="display:flex;gap:6px;margin-top:10px"><span class="btn ghost">Edit flow</span><span class="btn ghost">Freeze mix</span></div></div>
+    </div>
+  </div>
+</div>
+<div class="phone" style="background:oklch(12% .02 260)">
+  <div class="pb" style="padding-top:14px">
+    <div class="path"><span class="lit" style="--w:1">warm</span><span class="lit" style="--w:2">peak ✓ …</span><span class="alt" style="--w:2">deep</span><span style="--w:1">down</span></div>
+    <div class="tl" style="height:150px"><svg viewBox="0 0 360 150" style="width:100%;height:100%"><path d="M0 90 C40 80 60 40 100 50 S160 100 200 80 S280 30 360 70 L360 150 L0 150Z" fill="url(#g)" opacity=".75"/><line x1="50" x2="50" y1="0" y2="150" stroke="white" stroke-width="1.5"/><text x="56" y="16" fill="white" font-size="11">Noir · 2:41</text><text x="200" y="16" fill="oklch(72% .16 230)" font-size="10">▲ looking for Up a fifth</text></svg></div>
+    <div style="text-align:center"><div style="font-size:18px;font-weight:600;letter-spacing:-.02em">Noir</div><div class="why">Night › peak · Up a fifth · 174 BPM</div></div>
+    <div class="fork" style="flex-direction:column;align-items:stretch;gap:6px"><b>Fork in 2 tracks</b><div style="display:flex;gap:6px"><span class="btn ghost" style="flex:1;justify-content:center">Stay on peak</span><span class="btn ghost" style="flex:1;justify-content:center">Go deep</span></div><span class="why">silence = peak (fits 9 of 10)</span></div>
+    <div class="panel" style="flex:1;overflow:hidden"><div class="h">Up next</div>
+      <div class="row"><span class="n">10</span><div class="ti"><b>Wanna</b><small>172 · G Aeolian</small></div><span class="join g">Match</span><div class="thr"></div></div>
+      <div class="row"><span class="n">11</span><div class="ti"><b>Fade Black – Elysium</b><small>175 · D Aeolian</small></div><span class="join c">Break</span><div class="thr"></div></div>
+      <div class="row" style="opacity:.55"><span class="n">12</span><div class="ti"><b>Aurora</b><small>after the fork</small></div><span class="join">Relative</span><div class="thr"></div></div>
+    </div>
+  </div>
+  <div class="dock" style="justify-content:center;gap:28px;font-size:12px"><span>prev</span><span style="width:44px;height:44px;border-radius:50%;background:var(--blue);display:block"></span><span>next</span></div>
+</div>
+</div></section>
+
+<!-- ===================== 3. EDITOR ===================== -->
+<section class="sec"><h2>3 · The flow editor: the lab in the app's chrome; on the phone, full, lanes stacked</h2>
+<p class="note">Desktop: multiverse strip, presets rail, the score with its lanes, the rendered mix underneath; what the lab does today, with the design system's shapes. Phone: the same lanes one above the other, scrolled; one chunk at a time with the multiverse strip as the way between chunks; a point or an event is grabbed after a long press so scrolling and dragging do not fight.</p>
+<div class="pair">
+<div class="desk">
+  <div class="rail"><div class="logo"></div><div class="q"></div><div class="it"><i></i>Home</div><div class="it"><i></i>Media</div><div class="it"><i></i>Discover</div><div class="it on"><i></i>Music</div><div class="it"><i></i>Library</div></div>
+  <div class="main">
+    <div class="top"><div class="t">Night<small>flow · live · 2 mixes use it</small></div><div style="flex:1"></div><span class="btn ghost">1 h 00 ▾</span><span class="btn ghost">pull strong ▾</span><span class="btn ghost">Save as preset</span><span class="btn pri">▶ Play</span></div>
+    <div class="body" style="flex-direction:column;gap:10px">
+      <div class="path"><span class="lit" style="--w:1">warm-up</span><span class="lit" style="--w:2">peak</span><span class="alt" style="--w:2">deep</span><span style="--w:1">come-down</span><span class="btn ghost" style="flex:0;height:22px;font-size:10px">+ Branch</span></div>
+      <div class="strip"><span class="pre">Warm-up</span><span class="pre">Peak</span><span class="pre">Plateau</span><span class="pre">Deep</span><span class="pre">Come-down</span><span class="pre l">Climb · energy</span><span class="pre l">Wave · energy</span><span class="pre l">One lift · harmony</span><span class="pre l">Lift, then home</span><span class="pre l">Reset · harmony</span><span class="pre l">D&amp;B only · genre</span></div>
+      <div class="panel" style="flex:1;position:relative">
+        <div class="lane"><div class="lb"></div><div style="display:flex;gap:4px"><span class="chip blue" style="flex:1">warm-up 0:00–15:00</span><span class="chip blue" style="flex:2">peak 15:00–45:00 · <u>deep</u> · auto</span><span class="chip" style="flex:1">come-down 45:00–60:00</span></div></div>
+        <div class="lane"><div class="lb">Tempo</div><div class="ar" style="--h:64px"><svg viewBox="0 0 900 64" style="width:100%;height:100%" preserveAspectRatio="none"><path d="M0 40 L225 36 L675 28 L900 56" fill="none" stroke="var(--blue)" stroke-width="2"/><path d="M0 30 L225 26 L675 18 L900 46 L900 66 L675 38 L225 46 L0 50Z" fill="oklch(72% .16 230/.14)"/><circle cx="0" cy="40" r="5" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><circle cx="225" cy="36" r="5" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><circle cx="675" cy="28" r="5" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><circle cx="900" cy="56" r="5" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><g fill="white"><circle cx="60" cy="40" r="2.5"/><circle cx="150" cy="38" r="2.5"/><circle cx="300" cy="34" r="2.5"/><circle cx="450" cy="31" r="2.5"/><circle cx="600" cy="30" r="2.5"/><circle cx="760" cy="44" r="2.5" fill="var(--coral)"/></g></svg></div></div>
+        <div class="lane"><div class="lb">Energy</div><div class="ar" style="--h:64px"><svg viewBox="0 0 900 64" style="width:100%;height:100%" preserveAspectRatio="none"><path d="M0 52 L225 36 L675 8 L900 54" fill="none" stroke="var(--blue)" stroke-width="2"/><circle cx="225" cy="36" r="5" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><circle cx="675" cy="8" r="5" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><g fill="white"><circle cx="60" cy="50" r="2.5"/><circle cx="300" cy="30" r="2.5"/><circle cx="450" cy="22" r="2.5"/><circle cx="600" cy="14" r="2.5"/></g></svg></div></div>
+        <div class="lane"><div class="lb">Harmony</div><div class="ar" style="--h:34px;background:oklch(72% .16 230/.06)"><span class="why" style="position:absolute;left:8px;top:10px">match</span><div class="ev" style="left:40%;color:var(--blue)"><b>Up a fifth</b></div><div class="ev" style="left:62%;color:var(--blue);opacity:.7"><b>Up a fifth · not yet</b></div><div class="ev c" style="left:75%;color:var(--coral)"><b>Break</b></div><div class="ev" style="left:88%;color:var(--blue);opacity:.7"><b>Relative</b></div></div></div>
+        <div class="lane"><div class="lb">Genre</div><div style="display:flex;gap:4px"><span class="chip" style="flex:1;border:1px dashed var(--slate);background:transparent">Drum &amp; Bass · prefer</span><span class="chip blue" style="flex:2">Drum &amp; Bass</span><span class="chip" style="flex:.5;background:transparent"></span><span class="chip" style="flex:.5;border:1px dashed var(--slate);background:transparent">Dubstep, Ambient</span></div></div>
+        <div class="lane"><div class="lb">Mix</div><div style="display:flex;gap:3px;flex-wrap:wrap"><span class="chip">Mefjus &amp; C</span><span class="chip">These Days</span><span class="chip">The Hole</span><span class="chip">Farewell</span><span class="chip blue">Noir ▶</span><span class="chip">Wanna</span><span class="chip coral">Fade Black</span><span class="chip">Aurora</span><span class="chip">Concussion</span><span class="chip">Before You</span><span class="chip">Found You</span></div></div>
+        <span class="ann" style="right:12px;top:12px">C: lane order and heights</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="phone">
+  <div class="pt"><span style="opacity:.6">‹</span><b>Night</b><span class="why" style="margin-left:4px">live</span><span class="btn pri" style="margin-left:auto;height:26px">▶</span></div>
+  <div class="pb" style="gap:8px">
+    <div class="path"><span class="lit" style="--w:1">warm</span><span class="lit" style="--w:2">peak</span><span class="alt" style="--w:2">deep</span><span style="--w:1">down</span></div>
+    <div style="display:flex;align-items:center;gap:8px"><b>peak</b><span class="why">15:00–45:00 · 2 of 4 chunks</span><span class="btn ghost" style="margin-left:auto;height:24px;font-size:11px">Branch here</span></div>
+    <div class="lane" style="grid-template-columns:52px 1fr"><div class="lb">Tempo</div><div class="ar" style="--h:70px"><svg viewBox="0 0 300 70" style="width:100%;height:100%" preserveAspectRatio="none"><path d="M0 40 L300 24" fill="none" stroke="var(--blue)" stroke-width="2"/><path d="M0 30 L300 14 L300 34 L0 50Z" fill="oklch(72% .16 230/.14)"/><circle cx="0" cy="40" r="7" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><circle cx="300" cy="24" r="7" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><g fill="white"><circle cx="40" cy="38" r="3"/><circle cx="110" cy="34" r="3"/><circle cx="180" cy="30" r="3"/><circle cx="250" cy="27" r="3"/></g></svg></div></div>
+    <div class="lane" style="grid-template-columns:52px 1fr"><div class="lb">Energy</div><div class="ar" style="--h:70px"><svg viewBox="0 0 300 70" style="width:100%;height:100%" preserveAspectRatio="none"><path d="M0 50 L300 8" fill="none" stroke="var(--blue)" stroke-width="2"/><circle cx="0" cy="50" r="7" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><circle cx="300" cy="8" r="7" fill="var(--house)" stroke="var(--blue)" stroke-width="2"/><g fill="white"><circle cx="40" cy="44" r="3"/><circle cx="110" cy="36" r="3"/><circle cx="180" cy="24" r="3"/><circle cx="250" cy="14" r="3"/></g></svg></div></div>
+    <div class="lane" style="grid-template-columns:52px 1fr"><div class="lb">Harmony</div><div class="ar" style="--h:44px;background:oklch(72% .16 230/.06)"><span class="why" style="position:absolute;left:8px;top:14px">match</span><div class="ev" style="left:35%;color:var(--blue)"><b>Up a fifth</b></div><div class="ev" style="left:70%;color:var(--blue);opacity:.7"><b>Up · not yet</b></div></div></div>
+    <div class="lane" style="grid-template-columns:52px 1fr"><div class="lb">Genre</div><span class="chip blue" style="display:block;padding:6px 10px">Drum &amp; Bass · must</span></div>
+    <div class="strip"><span class="pre">Peak</span><span class="pre">Plateau</span><span class="pre l">Climb</span><span class="pre l">One lift</span><span class="pre l">Reset</span></div>
+    <div class="panel" style="flex:1;overflow:hidden"><div class="h">Mix in this chunk</div>
+      <div class="row"><span class="n">5</span><div class="ti"><b>No Way Out</b><small>175 · G Aeolian</small></div><span class="join g">Match</span></div>
+      <div class="row"><span class="n">6</span><div class="ti"><b>Wanna</b><small>172 · G Aeolian</small></div><span class="join g">Match</span></div>
+      <div class="row now"><span class="n">9</span><div class="ti"><b>Noir</b><small>174 · G Phrygian</small></div><span class="join g">Up a fifth ✓</span></div>
+    </div>
+    <span class="ann" style="right:14px;top:150px">D: long press to grab</span>
+  </div>
+  <div class="dock"><span><i></i>Home</span><span><i></i>Media</span><span><i></i>Search</span><span class="on"><i></i>Music</span><span><i></i>Library</span><span><i></i>Settings</span></div>
+</div>
+</div></section>
+
+<!-- ===================== 4. MIX AS A LIST ===================== -->
+<section class="sec"><h2>4 · A mix as a list: live or frozen, pins, lineage, "read as a flow"</h2>
+<p class="note">Every list is a mix. The header says where it comes from and whether it follows its flow. A hand-placed track is a pin; a hand-made list has every track pinned and a flow read from it. Freeze and thaw are one toggle.</p>
+<div class="pair">
+<div class="desk">
+  <div class="rail"><div class="logo"></div><div class="q"></div><div class="it"><i></i>Home</div><div class="it"><i></i>Media</div><div class="it"><i></i>Discover</div><div class="it on"><i></i>Music</div><div class="it"><i></i>Library</div></div>
+  <div class="main">
+    <div class="top"><div class="t">Friday peak<small>mix · from <u>Night › peak</u> · live, follows the flow · 17 tracks · 58 min</small></div><div style="flex:1"></div><span class="btn ghost">❄ Freeze</span><span class="btn ghost">Edit flow</span><span class="btn ghost">Regenerate</span><span class="btn pri">▶ Play</span></div>
+    <div class="body" style="flex-direction:column">
+      <div class="panel" style="flex:1">
+        <div class="lane" style="grid-template-columns:40px 1fr;margin-bottom:8px"><div class="lb">Path</div><div class="path"><span class="lit" style="--w:1">warm-up</span><span class="lit" style="--w:2">peak</span><span class="lit" style="--w:1">come-down</span></div></div>
+        <div class="row"><span class="n">1</span><div class="ti"><b>Mefjus &amp; Camo &amp; Krooked</b><small>172 · G Dorian</small></div><span class="join">first</span><span class="why" style="width:90px"></span><div class="thr"></div></div>
+        <div class="row"><span class="n">2</span><div class="ti"><b>These Days</b><small>172 · G Dorian</small></div><span class="join g">Match</span><span class="why" style="width:90px"></span><div class="thr"></div></div>
+        <div class="row" style="outline:1px solid oklch(72% .16 230/.5)"><span class="n">3</span><div class="ti"><b>Sinkhole (OUT NOW)</b><small>172 · F Phrygian dominant · you placed it</small></div><span class="join c">Break</span><span class="chip blue" style="width:90px;text-align:center">📌 pinned</span><div class="thr"></div></div>
+        <div class="row"><span class="n">4</span><div class="ti"><b>Farewell</b><small>172 · G Aeolian · refilled around the pin</small></div><span class="join g">Relative</span><span class="why" style="width:90px"></span><div class="thr"></div></div>
+        <div class="row"><span class="n">5</span><div class="ti"><b>No Way Out (feat. Mira Lu Kovacs)</b><small>175 · G Aeolian</small></div><span class="join g">Match</span><span class="chip coral" style="width:90px;text-align:center">energy</span><div class="thr"></div></div>
+        <div class="row"><span class="n">6</span><div class="ti"><b>Wanna</b><small>172 · G Aeolian</small></div><span class="join g">Match</span><span class="why" style="width:90px"></span><div class="thr"></div></div>
+        <div class="why" style="margin-top:10px;padding:8px;border-radius:8px;background:var(--house)">Drag a row to reorder: it becomes a pin. Unpin to let the flow decide again. Right-click a row: Pin · Swap · Fits next.</div>
+        <span class="ann" style="right:12px;top:12px">E: pin look</span>
+      </div>
+      <div class="panel" style="display:flex;gap:12px;align-items:center"><div><b>Imported playlist "neuro 2024"</b><div class="why">38 tracks · no flow yet</div></div><span class="btn ghost" style="margin-left:auto">Read as a flow</span><span class="why">every track pinned; unpin to let it breathe</span></div>
+    </div>
+  </div>
+</div>
+<div class="phone">
+  <div class="pt"><span style="opacity:.6">‹</span><div><b>Friday peak</b><div class="why">from Night › peak · live</div></div><span class="btn ghost" style="margin-left:auto;height:26px">❄</span></div>
+  <div class="pb" style="gap:8px">
+    <div class="path"><span class="lit" style="--w:1">warm</span><span class="lit" style="--w:2">peak</span><span class="lit" style="--w:1">down</span></div>
+    <div style="display:flex;gap:6px"><span class="btn pri" style="flex:1;justify-content:center">▶ Play</span><span class="btn ghost">Edit flow</span><span class="btn ghost">↻</span></div>
+    <div class="panel" style="flex:1;overflow:hidden;padding:6px">
+      <div class="row"><span class="n">1</span><div class="ti"><b>Mefjus &amp; Camo &amp; Krooked</b><small>172 · G Dorian</small></div><span class="join">first</span><div class="thr"></div></div>
+      <div class="row"><span class="n">2</span><div class="ti"><b>These Days</b><small>172 · G Dorian</small></div><span class="join g">Match</span><div class="thr"></div></div>
+      <div class="row" style="outline:1px solid oklch(72% .16 230/.5)"><span class="n">3</span><div class="ti"><b>Sinkhole</b><small>📌 you placed it</small></div><span class="join c">Break</span><div class="thr"></div></div>
+      <div class="row"><span class="n">4</span><div class="ti"><b>Farewell</b><small>172 · G Aeolian</small></div><span class="join g">Relative</span><div class="thr"></div></div>
+      <div class="row"><span class="n">5</span><div class="ti"><b>No Way Out</b><small>175 · <span class="chip coral">energy</span></small></div><span class="join g">Match</span><div class="thr"></div></div>
+      <div class="row"><span class="n">6</span><div class="ti"><b>Wanna</b><small>172 · G Aeolian</small></div><span class="join g">Match</span><div class="thr"></div></div>
+      <div class="row"><span class="n">7</span><div class="ti"><b>Dune</b><small>174 · F Aeolian</small></div><span class="join g">Match</span><div class="thr"></div></div>
+    </div>
+    <div class="why">Long press a row: Pin · Swap · Fits next · Move</div>
+  </div>
+  <div class="dock"><span><i></i>Home</span><span><i></i>Media</span><span><i></i>Search</span><span class="on"><i></i>Music</span><span><i></i>Library</span><span><i></i>Settings</span></div>
+</div>
+</div></section>
+
+<!-- ===================== 5. SUGGESTIONS ===================== -->
+<section class="sec"><h2>5 · Suggestions: Fits next and the add panel ranked by the pull, saying why</h2>
+<p class="note">One list, ordered by the combined score. What the flow is looking for at this join is named at the top. Each row: the join in one word, its fit, and the other layers' distance when they cost something. Nothing is hidden; a break is simply last.</p>
+<div class="pair">
+<div class="desk">
+  <div class="rail"><div class="logo"></div><div class="q"></div><div class="it"><i></i>Home</div><div class="it"><i></i>Media</div><div class="it"><i></i>Discover</div><div class="it on"><i></i>Music</div><div class="it"><i></i>Library</div></div>
+  <div class="main">
+    <div class="top"><div class="t">After Noir<small>in Night › peak · the flow is looking for <b style="color:var(--blue)">Up a fifth</b>, then a match</small></div><div class="search">Search your libraries and online, or paste a link</div><span class="btn ghost">pull strong ▾</span></div>
+    <div class="body">
+      <div class="panel" style="flex:1">
+        <div class="h">Fits next · 44 candidates, best first</div>
+        <div class="row"><span class="n">1</span><div class="ti"><b>Fade Black – Elysium</b><small>175 · D Aeolian</small></div><span class="join g">Up a fifth</span><span class="why" style="width:120px">fit 1.0 · tempo +1</span><span class="btn ghost" style="height:24px">Play next</span><div class="thr"></div></div>
+        <div class="row"><span class="n">2</span><div class="ti"><b>Hear Me</b><small>172 · B Harmonic minor</small></div><span class="join g">Up a fifth</span><span class="why" style="width:120px">fit 1.0 · energy −0.2</span><span class="btn ghost" style="height:24px">Play next</span><div class="thr"></div></div>
+        <div class="row"><span class="n">3</span><div class="ti"><b>Wanna</b><small>172 · G Aeolian</small></div><span class="join">Match</span><span class="why" style="width:120px">fit 0.5 · waits for the lift</span><span class="btn ghost" style="height:24px">Play next</span><div class="thr"></div></div>
+        <div class="row"><span class="n">4</span><div class="ti"><b>Perseverance</b><small>172 · D# Aeolian</small></div><span class="join">Down a fifth</span><span class="why" style="width:120px">fit 0.6</span><span class="btn ghost" style="height:24px">Play next</span><div class="thr"></div></div>
+        <div class="row" style="opacity:.7"><span class="n">5</span><div class="ti"><b>Best Of Me ft. Dia Frampton</b><small>124 · F Ionian</small></div><span class="join c">Break</span><span class="why" style="width:120px">fit 0 · tempo −50</span><span class="btn ghost" style="height:24px">Play next</span><div class="thr"></div></div>
+        <span class="ann" style="right:12px;top:12px">F: how much "why" per row</span>
+      </div>
+      <div class="panel" style="width:260px"><div class="h">Or shape it</div><div class="why">Place an event instead of a track:</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"><span class="chip blue">Up a fifth</span><span class="chip blue">Down a fifth</span><span class="chip blue">Brighter mode</span><span class="chip blue">Darker mode</span><span class="chip blue">Relative</span><span class="chip coral">Break</span></div><div class="why" style="margin-top:10px">The flow finds the track; the event stays in the flow.</div></div>
+    </div>
+  </div>
+</div>
+<div class="phone">
+  <div class="pt"><span style="opacity:.6">‹</span><div><b>After Noir</b><div class="why">looking for <b style="color:var(--blue)">Up a fifth</b></div></div></div>
+  <div class="pb" style="gap:8px">
+    <div class="search" style="height:40px;flex:0 0 auto">Search, or paste a link</div>
+    <div class="panel" style="flex:1;overflow:hidden;padding:6px">
+      <div class="row"><div class="ti"><b>Fade Black – Elysium</b><small>175 · D Aeolian</small></div><span class="join g">Up a fifth</span></div>
+      <div class="row"><div class="ti"><b>Hear Me</b><small>172 · B Harmonic minor · <span class="chip coral">energy</span></small></div><span class="join g">Up a fifth</span></div>
+      <div class="row"><div class="ti"><b>Wanna</b><small>172 · G Aeolian · waits for the lift</small></div><span class="join">Match</span></div>
+      <div class="row"><div class="ti"><b>Perseverance</b><small>172 · D# Aeolian</small></div><span class="join">Down a fifth</span></div>
+      <div class="row" style="opacity:.7"><div class="ti"><b>Best Of Me</b><small>124 · <span class="chip coral">tempo</span></small></div><span class="join c">Break</span></div>
+    </div>
+    <div class="panel"><div class="why">Or place an event</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"><span class="chip blue">Up a fifth</span><span class="chip blue">Down</span><span class="chip blue">Brighter</span><span class="chip blue">Darker</span><span class="chip blue">Relative</span><span class="chip coral">Break</span></div></div>
+  </div>
+  <div class="dock"><span><i></i>Home</span><span><i></i>Media</span><span><i></i>Search</span><span class="on"><i></i>Music</span><span><i></i>Library</span><span><i></i>Settings</span></div>
+</div>
+</div></section>
+</body></html>

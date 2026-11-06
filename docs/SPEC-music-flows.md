@@ -130,7 +130,31 @@ A playing mix is the queue. The player shows the lit path through the flow, the 
 1. **Mood source** (§4.2): a research note benchmarks, on the 46 test tracks against the user's own judgement, Essentia's mood models (aggressive, happy, sad, relaxed, party) versus key mode + brightness for dark ↔ bright, then picks per axis.
 2. **Prototype: the flow lab** (`docs/proto/flows/`, 2026-11-06). A page that edits a flow (curves, centre, progression, genre, forks, presets by drag and drop, pins, freeze) and plays the rendered mix with real audio; `flowgen.js` is the generator with a self-check. Judged by ear next; mockups (phone and desktop) and the PR plan follow it. The harmony model above is the third: movement words per join made every join a lift with no home; centre + progression blocks held the tone but asked the user to author a home scale and degrees; match-by-default with placed, characterised modulations keeps only the pair compatibility and was chosen as the one to root the tool in.
 
-## 12. Anti-goals
+## 12. UI board and PR plan
+
+**Board** (2026-11-06, approved globally): `.impeccable/mocks/flows/board.html`, five surfaces, each desktop and phone on the app's chrome: (1) entry with the dial and flow cards, (2) the playing mix with the path strip and the fork ahead, (3) the editor, full on the phone with stacked lanes and long-press grab, (4) the mix as a list with lineage, pins and freeze, (5) suggestions ranked by the pull with one word of why. Decisions still open on the board: the dial's wording and shape ("How should it feel now" is a placeholder the user will redo), the fork-ahead shape, lane order and heights, the pin look, how much "why" per suggestion row.
+
+**Plan.** Each PR is shippable on its own; the flows tab stays behind the existing `lab` flag until PR 11 removes the old objects.
+
+| # | PR | Deps | Size |
+|---|---|---|---|
+| 0 | **Board in the repo** (this PR): the board and this plan. | — | S |
+| 1 | **Data model and API.** A `flow` document (chunks with `share`, `next`, `layers`: tempo and energy curves, harmony events, genre blocks; `pull`, `length`, `allowOnline`) and a `mix` document (flow id, path choices, length, seed, pins, `frozen` track list or null) in `library.db`; CRUD under `/api/music/flows` and `/api/music/mixes`; presets as flows with `preset: true` seeded on first run (§8). Tests: round trips, a frozen mix ignores a flow change. | — | M |
+| 2 | **Generator on the server.** `music/flows.py`: `join()` (the seven kinds from note sets, §4.2), `fit()` and the pull, the relaxation ladder (one layer alone, then cumulative, then `any`), events realised at the first join after them and sliding on, pins, the seed deciding only between near-ties, `resolve()` taking the fillable future at an unchosen fork. `POST /api/music/flows/{id}/render` and `/mixes/{id}/render`. Ported from `docs/proto/flows/flowgen.js` with the same self-checks as tests, plus the relaxation labels on the 46 test tracks. | 1 | M |
+| 3 | **Queue = the playing mix.** The queue document carries the mix it plays; playing a mix fills it; the played part is fixed and the future re-renders when the flow, the pull or a pin changes; a `mix` field in the queue state and SSE. "Read as a flow": a hand list becomes a live mix with every track pinned and a flow inferred from its tracks (§7). | 2 | M |
+| 4 | **Music tab entry** (board 1). Flows / Mixes / Library tabs; flow cards (name, energy shape, events as dots, futures, length chip, one-tap play); the dial as three sliders generating a one-chunk flow (placeholder design, to be redone); New flow. Albums / Artists / Tracks behind Library. | 3 | M |
+| 5 | **Player: the path** (board 2). Path strip above the timeline (chunks, the lit one, untaken futures dashed); the fork ahead within two tracks as a choice on the strip and on the queue, silence = the generator's pick; queue rows with the join word, its fit and relaxation chips; the "looking for" event on the timeline; "This flow" side panel with Edit flow and Freeze. | 3 | M |
+| 6 | **Editor, desktop** (board 3). The lab as a React view: multiverse strip with Branch here, presets rail with drag and drop of chunks and layers, lanes (tempo, energy curves with points; harmony events; genre blocks), chunk resize, forks, the rendered mix under the lanes, Save as preset, length and pull. SVG, not WebGL: nothing is redrawn per frame. | 2 | L |
+| 7 | **Editor, phone** (board 3). One chunk at a time, lanes stacked, the strip to move between chunks, long press to grab a point or an event, presets as a horizontal rail, the chunk's mix below. | 6 | M |
+| 8 | **Mix as a list** (board 4). Lineage header (from flow › chunk, live or frozen), Freeze / thaw as one toggle, Regenerate, drag to reorder = pin, Unpin, row menu (Pin, Swap, Fits next, Move), "Read as a flow" on lists with no flow. | 3 | M |
+| 9 | **Suggestions** (board 5). Fits next and the add panel ranked by the combined score with the pull; "looking for" named at the top; one join word and fit per row, other layers' cost when it matters; "place an event instead" chips. Replaces the Fits next filters. | 2, 5 | M |
+| 10 | **Branch conditions and online fill.** Skips, session length, time of day on a branch (§5); the `Allow online` switch filling a slot from SoundCloud/YouTube after every local relaxation fails, analysed on add (§6). | 3 | M |
+| 11 | **Migration and removal.** Playlists → live mixes with every track pinned; smart lists → one-layer flows; set builder, Order what's next, the old Fits next entry points and the queue page removed; the `lab` flag dropped. | 4–9 | M |
+| 12 | **Mood.** The research note (§11.1), then the mood layer (three axes, blocks, optional model like genre) and the dial's mood slider on real data. | 2 | L |
+
+**Ask before building:** PR 4's dial design (the user redoes it), PR 5's fork-ahead shape, PR 6's lane order.
+
+## 13. Anti-goals
 
 - No second list object beside mix.
 - No theory in the editor's first layer of words; theory is one hover away.
