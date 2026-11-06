@@ -9,6 +9,9 @@ import { useSettings } from '../../useSettings'
 import { bridges, joinColor, type Join } from './crates/proximity'
 import { openHarmonyBasics } from './harmony/store'
 import { openKeyCard } from './harmony/keyCardStore'
+import { PULL, rankByPull } from '../../flowFits'
+import { KINDS, useFlows, type Flow } from '../../musicFlows'
+import { useMusicQueue } from '../../musicQueue'
 
 // "What plays well next", the same list wherever it shows: beside a playlist, in the
 // player's Add to queue, or for any track. The filters are shared too, so a choice made
@@ -25,6 +28,21 @@ const MORE: { key: keyof FitsFilters; label: string; options: [string, string][]
   { key: 'tempo', label: 'Tempo', options: [['near', '±6%'], ['any', 'Any']] },
 ]
 const ENERGY: [FitsFilters['energy'], string][] = [['any', 'Any energy'], ['lift', 'Lift'], ['hold', 'Hold'], ['ease', 'Ease off']]
+const PULLS: [Flow['pull'], string][] = [['light', 'Light'], ['strong', 'Strong'], ['only', 'Only']]
+const LOOK: [string, string][] = [['match', 'Match'], ...['up', 'down', 'mode+', 'mode-', 'relative', 'break'].map(k => [k, KINDS[k]] as [string, string])]
+
+/** Why a row ranks where it does, in the flow's words: the join, its fit, and what tempo or energy cost. */
+function FlowWhy({ join, fit, tempo, energy }: { join: string | null; fit: number; tempo: number | null; energy: number | null }) {
+  const tone = join === 'break' ? 'text-error' : fit >= 0.8 ? 'text-success' : 'text-base-content/75'
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs">
+      <span className={tone}>{join ? KINDS[join] ?? join : 'Key not known'}</span>
+      <span className="text-base-content/45 tabular-nums">· fit {fit.toFixed(1)}</span>
+      {tempo !== null && Math.abs(tempo) > 3 && <span className="text-base-content/50 tabular-nums">· tempo {tempo > 0 ? '+' : ''}{Math.round(tempo)}</span>}
+      {energy !== null && Math.abs(energy) > 0.2 && <span className="text-base-content/50">· energy {energy > 0 ? 'up' : 'down'}</span>}
+    </span>
+  )
+}
 
 /** One choice of a few, as joined pills; tall enough for a thumb on phones. */
 function Choice<T extends string>({ label, value, options, onPick }: { label: string; value: T; options: [T, string][]; onPick: (v: T) => void }) {
@@ -87,6 +105,17 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
   const [settings] = useSettings()
   const f = filtersOf(useFitsPrefs(), settings.music_harmony_rule)
   const [more, setMore] = useState(false)
+  // In the lab, "after" ranks by the flow model: the pull and what the playing flow looks for next.
+  const flowMode = !!settings.lab && !then
+  const q = useMusicQueue()
+  const { flows } = useFlows()
+  const playing = q.source?.flow ? flows.find(x => x.id === q.source!.flow) : undefined
+  const at = q.items.findIndex(i => i.track_id === anchor.id)
+  const wanted = at >= 0 ? q.items[at + 1]?.flow?.event : undefined
+  const [pullPick, setPull] = useState<Flow['pull'] | null>(null)
+  const [lookPick, setLook] = useState<string | null>(null)
+  const pull = pullPick ?? playing?.pull ?? 'strong'
+  const look = lookPick ?? (wanted && !wanted.realised ? wanted.kind : 'match')
   const { get, v } = useSummaries(useMemo(() => library.map(t => t.id), [library]))
   const analysing = useAnalysing(anchor.id)
   const byId = useMemo(() => new Map(library.map(t => [t.id, t])), [library])
@@ -104,6 +133,18 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
     if (b) return bridges(a, b, pool, SHOWN * 2, skip).filter(r => once(r.id)).slice(0, SHOWN).map(r => ({ id: r.id, join: r.before, then: r.after }))
     return rankFits(a, pool, f).filter(r => !skip.has(r.id) && once(r.id)).slice(0, SHOWN).map(r => ({ ...r, then: undefined }))
   }, [anchor.id, then?.id, pool, exKey, fKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const flowRows = useMemo(() => {
+    if (!flowMode) return []
+    const skip = new Set([...exclude, anchor.id])
+    const seen = new Set([...skip].map(id => songKey(byId.get(id))))
+    const once = (id: string) => { const k = songKey(byId.get(id)); if (!k || seen.has(k)) return false; seen.add(k); return true }
+    const fitOf = (t: MusicTrack) => {
+      const s = get(t.id)
+      const e = s?.energyScale?.track
+      return { id: t.id, bpm: s?.bpm || t.bpm, energy: e === undefined ? undefined : e / 100, reading: s?.harmony?.track }
+    }
+    return rankByPull(fitOf(anchor), library.map(fitOf), look, PULL[pull]).filter(r => !skip.has(r.id) && once(r.id)).slice(0, SHOWN)
+  }, [flowMode, anchor.id, library, v, exKey, look, pull]) // eslint-disable-line react-hooks/exhaustive-deps
   const moreOn = MORE.filter(m => f[m.key] !== filtersOf({}, settings.music_harmony_rule)[m.key]).length
 
   const empty = analysing && !known
@@ -117,7 +158,7 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
       <div className={`min-w-0 flex-1 ${dense ? 'flex items-baseline gap-2' : ''}`}>
         <h2 className="shrink-0 text-base font-semibold tracking-tight">{b ? 'Fits between' : 'Fits next'}</h2>
         <p className="truncate text-xs text-base-content/60">
-          {b ? <>{anchor.title} → {then!.title}</> : <>after {anchor.title}{where && ` · ${where}`}</>}
+          {b ? <>{anchor.title} → {then!.title}</> : <>after {anchor.title}{where && ` · ${where}`}{flowMode && playing && <> · {playing.name} looks for <b className="font-medium text-primary">{look === 'match' ? 'a match' : KINDS[look]}</b></>}</>}
         </p>
       </div>
       <button onClick={() => openHarmonyBasics()} className={`btn btn-ghost btn-sm font-normal text-base-content/60 ${dense ? 'h-8' : 'h-11 sm:h-8'}`}>How it works</button>
@@ -128,7 +169,15 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
       )}
     </>
   )
-  const filters = b ? (
+  const filters = flowMode ? (
+    <div className={`flex flex-wrap items-center gap-1.5 ${dense ? '' : 'px-4 pb-2'}`}>
+      <Choice label="Pull" value={pull} options={PULLS} onPick={setPull} />
+      <span className="text-xs text-base-content/50">Look for</span>
+      <select aria-label="Look for" value={look} onChange={e => setLook(e.target.value)} className="select select-xs w-auto">
+        {LOOK.map(([k, l]) => <option key={k} value={k}>{l}{wanted && !wanted.realised && wanted.kind === k ? ' · the flow' : ''}</option>)}
+      </select>
+    </div>
+  ) : b ? (
     onAfter && <p className="px-4 pb-2 text-xs text-base-content/60">Tracks that join both sides. <button onClick={onAfter} className="text-primary hover:underline">Rank after {anchor.title} instead</button></p>
   ) : (
     <div className={`flex flex-wrap items-center gap-1.5 ${dense ? '' : 'px-4 pb-2'}`}>
@@ -169,7 +218,26 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
       )}
 
       <ul className={`min-h-0 flex-1 overflow-y-auto px-2 pb-2 ${dense ? 'grid grid-cols-3 content-start gap-x-2' : ''}`}>
-        {rows.map(r => {
+        {flowMode && flowRows.map(r => {
+          const t = byId.get(r.id)!
+          const k = keyDisplay(theory, get(r.id))
+          return (
+            <li key={r.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-white/5">
+              <span className="min-w-0 flex-1 leading-tight">
+                <span className="block truncate text-sm font-medium">{t.title}</span>
+                <span className="flex items-center gap-1.5 truncate text-xs text-base-content/60">
+                  <span className="truncate">{t.artist}</span>
+                  {k && <span className="shrink-0">· {k.text}</span>}
+                </span>
+                <span className="mt-0.5 flex"><FlowWhy {...r} /></span>
+              </span>
+              <button onClick={() => action.onPick(t)} aria-label={`${action.label} ${t.title}`} className="btn btn-ghost btn-circle size-11 sm:size-8 text-primary">
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+              </button>
+            </li>
+          )
+        })}
+        {!flowMode && rows.map(r => {
           const t = byId.get(r.id)!
           const k = keyDisplay(theory, get(r.id))
           const bpm = get(r.id)?.bpm || t.bpm
@@ -194,7 +262,7 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
             </li>
           )
         })}
-        {!rows.length && (
+        {!flowMode && !rows.length && (
           <li className="flex flex-col items-center gap-3 px-4 py-8 text-center text-sm text-base-content/60">
             <p>{empty}</p>
             {known && !b && (
