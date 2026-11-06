@@ -244,6 +244,24 @@ def _migration_6_flows_to_playlists(conn: sqlite3.Connection) -> None:
     conn.execute("DROP TABLE music_flows")
 
 
+# Flows and mixes (sestudio.music.mixes, SPEC-music-flows): one JSON document
+# each. The music_flows name was freed by migration 6; this is a new table.
+_MIGRATION_7_FLOWS_AND_MIXES = """
+CREATE TABLE IF NOT EXISTS music_flows (
+    id      TEXT    PRIMARY KEY,
+    name    TEXT    NOT NULL,
+    created INTEGER NOT NULL,
+    data    TEXT    NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS music_mixes (
+    id      TEXT    PRIMARY KEY,
+    name    TEXT    NOT NULL,
+    created INTEGER NOT NULL,
+    data    TEXT    NOT NULL DEFAULT '{}'
+);
+"""
+
+
 # A migration is SQL (run as a script) or a function of the connection.
 _MIGRATIONS: tuple[str | Callable[[sqlite3.Connection], None], ...] = (
     _MIGRATION_1_WATCHERS,
@@ -252,6 +270,7 @@ _MIGRATIONS: tuple[str | Callable[[sqlite3.Connection], None], ...] = (
     _MIGRATION_4_MUSIC_PLAYLISTS,
     _MIGRATION_5_MUSIC_FLOWS,
     _migration_6_flows_to_playlists,
+    _MIGRATION_7_FLOWS_AND_MIXES,
 )
 
 _conn: sqlite3.Connection | None = None
