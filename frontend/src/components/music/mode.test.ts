@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { bez } from './interact'
-import { frameAt, getMode, MODE_MS, ModeMotion, pull, readMode, setMode } from './mode'
+import { frameAt, getMode, MODE_MS, ModeMotion, pull, readMode, setMode, titleWidth } from './mode'
 import { rects } from './timeline/mapping'
 
 describe('ModeMotion', () => {
@@ -57,6 +57,18 @@ describe('frameAt', () => {
     expect(half.queue.x).toBe(817.5)
     expect(half.title.scale).toBeCloseTo(0.865, 6)
     expect(frameAt(390, 844, 1).title.scale).toBe(0.62)
+  })
+
+  it('gives the title room on tablet before growing the queue', () => {
+    // Mid tablet: queue stays at its floor so the title can leave the old 420 px plateau.
+    expect(titleWidth(1024, 768, 136, 0)).toBe(504)
+    expect(frameAt(1024, 768, 0).queue).toMatchObject({ x: 654, w: 350 })
+    // Title prefers 560 until the queue has room to grow toward 525.
+    expect(titleWidth(1112, 834, 136, 0)).toBe(560)
+    expect(frameAt(1112, 834, 0).queue.w).toBe(382)
+    // Wide desktop still caps the queue at 525 and matches the 1280 reference.
+    expect(frameAt(1280, 800, 0).queue.w).toBe(525)
+    expect(titleWidth(1280, 800, 136, 0)).toBe(585)
   })
 
   it('stacks a phone on its side into a left column beside the queue, in both modes', () => {
