@@ -125,3 +125,19 @@ def test_read_the_queue_as_a_flow(client):
     assert [i["track_id"] for i in s["items"]] == before[:4]
     mix = client.get(f"/api/music/mixes/{s['source']['mix']}").json()
     assert mix["pins"] == {str(k): t for k, t in enumerate(before[:4])}
+
+
+def test_a_draft_renders_with_its_fork_choice(client):
+    r = client.post(
+        "/api/music/flows/render", json={"flow": FORK, "choices": {"a": "b"}, "seed": 3}
+    )
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["path"] == ["a", "b"] and out["auto"] == {}
+    assert out["mix"] and all(m["chunk"] in ("a", "b") for m in out["mix"])
+    assert (
+        client.post(
+            "/api/music/flows/render", json={"flow": {"chunks": []}}
+        ).status_code
+        == 400
+    )

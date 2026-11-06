@@ -30,6 +30,7 @@ import { currentParams, patchParams, replaceParams, type Navigate } from '../nav
 import { useSettings } from '../useSettings'
 import FlowsHome from '../components/music/flows/FlowsHome'
 import MixesList from '../components/music/flows/MixesList'
+import FlowEditor from '../components/music/flows/FlowEditor'
 
 const TABS = [
   { id: 'albums', label: 'Albums' },
@@ -251,8 +252,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const albumId = params.get('al') ?? ''
   const artistName = params.get('ar') ?? ''
   const drafting = nodeId === 'new'
-  const go = (open: { pl?: string; al?: string; ar?: string; seed?: string }) =>
-    navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, al: undefined, ar: undefined, seed: undefined, ...open })
+  const flowEdit = params.get('fl') ?? ''
+  const go = (open: { pl?: string; al?: string; ar?: string; seed?: string; fl?: string }) =>
+    navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, al: undefined, ar: undefined, seed: undefined, fl: undefined, ...open })
   const newPlaylist = (seed?: string) => { setSheet(false); go({ pl: 'new', seed }) }
   /** The draft became a playlist: its page replaces the draft's history entry. */
   const opened = (id: string) => {
@@ -319,7 +321,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   // A page shows the whole album or artist, whatever the library, genre or search.
   const album = albumId ? allAlbums.find(a => albumKey(a) === albumId) : undefined
   const artist = useMemo(() => artistName ? artistsOf(all).find(a => a.name === artistName) : undefined, [all, artistName])
-  const page = node ?? album ?? artist ?? drafting
+  const page = (node ?? album ?? artist ?? drafting) || (lab && !!flowEdit)
 
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
@@ -335,7 +337,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     />
   )
   const searching = !page && query.trim() !== '' && !LINK_RE.test(query.trim())
-  const body = drafting ? (
+  const body = lab && flowEdit ? (
+    <FlowEditor key={flowEdit} flowId={flowEdit} byId={byId} />
+  ) : drafting ? (
     <NewPlaylist key={params.get('seed') ?? ''} byId={byId} seed={params.get('seed') ?? undefined} onCreated={opened} />
   ) : node ? (
     <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} />
@@ -353,7 +357,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       </>}
     />
   ) : tab === 'flows' ? (
-    <FlowsHome />
+    <FlowsHome onOpen={id => go({ fl: id })} />
   ) : tab === 'mixes' ? (
     <MixesList />
   ) : !all.length ? (
@@ -388,7 +392,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
 
   return (
     <div className="flex flex-col gap-4">
-      {drafting ? (
+      {lab && flowEdit ? (
+        <PageHeader title="Flow" status="Edit · Music" onBack={() => go({})} />
+      ) : drafting ? (
         <PageHeader title="New playlist" status="Music" onBack={() => go({})} />
       ) : node ? (
         <PageHeader title={node.name} status={`${KIND_LABEL[node.kind]} · Music`} onBack={() => go({})} />
