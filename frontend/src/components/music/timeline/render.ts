@@ -436,7 +436,8 @@ export class TimelineRenderer {
     const s = isPhone(W) ? 0.9 : 1.15
     items.forEach((it, i) => {
       const prev = items[i - 1]
-      if (!it.plan || !it.prevReading || !prev) return
+      // A row held over a join takes over: its panel alone, so the two never overlap.
+      if (!it.plan || !it.prevReading || !prev || f.drop) return
       const near = it.near !== undefined && it.reading ? { heard: [], land: 1, t: it.near } : null
       const ph = it.harm ?? near
       const show = it.harm ? (it.harm.t < FOLD_AT || near ? 1 : Math.max(0, 1 - (it.harm.t - FOLD_AT) / 0.35)) : near ? smooth(near.t / 0.3) : it.open ? 1 : 0
