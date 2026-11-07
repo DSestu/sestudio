@@ -9,7 +9,7 @@ the top bin (3.5 kHz) is under its Nyquist, and the kernels are L1-normalised,
 so magnitudes match the 22 kHz original.
 
 GiantSteps key (604 EDM excerpts): 64.4 % exact, 80.5 % Camelot-compatible,
-the same as the torch original; the network's output matches it to 1e-7.
+the same as the torch original; the network's output matches it to 1e-6.
 
 S-KEY code and weights: Copyright (c) 2019-present, Deezer SA. MIT License
 (https://github.com/deezer/skey/blob/main/LICENSE).
@@ -69,7 +69,7 @@ def vqt(x: np.ndarray) -> np.ndarray:
 def _erf(x: np.ndarray) -> np.ndarray:
     """Abramowitz-Stegun 7.1.26 (error < 1.5e-7): numpy has no erf."""
     s, a = np.sign(x), np.abs(x)
-    t = 1 / (1 + 0.3275911 * a)
+    t = 1 / (1 + np.float32(0.3275911) * a)
     p = t * (
         0.254829592
         + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))
@@ -78,7 +78,7 @@ def _erf(x: np.ndarray) -> np.ndarray:
 
 
 def _gelu(x: np.ndarray) -> np.ndarray:
-    return 0.5 * x * (1 + _erf(x / np.sqrt(2)))
+    return 0.5 * x * (1 + _erf(x * np.float32(1 / np.sqrt(2))))
 
 
 def _norm(x: np.ndarray) -> np.ndarray:
@@ -88,29 +88,29 @@ def _norm(x: np.ndarray) -> np.ndarray:
 
 @cache
 def _weights() -> dict[str, np.ndarray]:
+    # float32 is 3x faster than float64 here; the probabilities move by under 1e-6.
     with np.load(WEIGHTS) as w:
-        return {k: w[k].astype(np.float64) for k in w.files}
+        return {k: w[k].astype(np.float32) for k in w.files}
 
 
 def chromanet(spec: np.ndarray) -> np.ndarray:
     """24 probabilities, S-KEY order: A..G# major, then B..Bb minor."""
     w = _weights()
-    x = spec[None]  # (C, H, W)
+    x = spec[None].astype(np.float32)  # (C, H, W)
     for i in range(7):
         d, c = f"time_downsampling_blocks.{i}.conv.", f"convnext_blocks.{i}."
         x = _norm(x)
         x = x[:, :, : x.shape[2] // 2 * 2]
-        x = np.einsum(
-            "chwk,ock->ohw", x.reshape(*x.shape[:2], -1, 2), w[d + "weight"][:, :, 0]
+        x = np.tensordot(
+            w[d + "weight"][:, :, 0], x.reshape(*x.shape[:2], -1, 2), ([1, 2], [0, 3])
         )
         x = _gelu(x + w[d + "bias"][:, None, None])
-        k = w[c + "dwconv.weight"].shape[-1]
-        y = np.pad(x, ((0, 0), (k // 2, k // 2), (k // 2, k // 2)), mode="edge")
-        y = np.einsum(
-            "chwij,cij->chw",
-            sliding_window_view(y, (k, k), (1, 2)),
-            w[c + "dwconv.weight"][:, 0],
-        )
+        dw = w[c + "dwconv.weight"][:, 0]
+        k, (_, h, wd) = dw.shape[-1], x.shape
+        pad = np.pad(x, ((0, 0), (k // 2, k // 2), (k // 2, k // 2)), mode="edge")
+        y = np.zeros_like(x)
+        for a, b in np.ndindex(k, k):  # depthwise conv as k*k shifted adds: no k*k copy
+            y += pad[:, a : a + h, b : b + wd] * dw[:, a, b, None, None]
         y = _norm(y + w[c + "dwconv.bias"][:, None, None]).transpose(1, 2, 0)
         y = _gelu(y @ w[c + "pwconv1.weight"].T + w[c + "pwconv1.bias"])
         y = (y @ w[c + "pwconv2.weight"].T + w[c + "pwconv2.bias"]) * w[c + "gamma"]
@@ -122,7 +122,7 @@ def chromanet(spec: np.ndarray) -> np.ndarray:
     x = (x - w["batch_norm.running_mean"][:, None]) / np.sqrt(
         w["batch_norm.running_var"][:, None] + 1e-5
     )
-    e = np.exp(x.ravel() - x.max())
+    e = np.exp(x.ravel().astype(np.float64) - x.max())
     return e / e.sum()
 
 

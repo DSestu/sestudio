@@ -109,9 +109,11 @@ def _sustained(mag: np.ndarray) -> np.ndarray:
     return out
 
 
-def _frames(
-    x: np.ndarray, lo: float, hi: float
-) -> tuple[np.ndarray, np.ndarray] | None:
+#: Per frame, 12 pitch-class weights and loudness (:func:`_frames`); None when too short.
+Frames = tuple[np.ndarray, np.ndarray] | None
+
+
+def _frames(x: np.ndarray, lo: float, hi: float) -> Frames:
     """Per frame, its 12-bin pitch-class weights (each frame sums to 1) and its loudness.
 
     Spectral peaks of the sustained part within ``PEAK_FLOOR`` of each frame's
@@ -148,9 +150,17 @@ def profile(x: np.ndarray, lo: float = 50.0, hi: float = 2500.0) -> np.ndarray:
     return np.full(12, 1 / 12) if f is None else _profile_of(*f)
 
 
-def profile_steps(x: np.ndarray, steps: int = 10) -> list[np.ndarray]:
-    """The profile of the first tenth, first two tenths... of *x*: the notes heard so far, from one pass."""
-    f = _frames(x, 50.0, 2500.0)
+def notes(x: np.ndarray) -> Frames:
+    """The per-frame notes of an 11025 Hz signal, for :func:`profile_steps` and :func:`fields` to share."""
+    return _frames(x, 50.0, 2500.0)
+
+
+def profile_steps(x: np.ndarray, steps: int = 10, f: Frames = None) -> list[np.ndarray]:
+    """The profile of the first tenth, first two tenths... of *x*: the notes heard so far, from one pass.
+
+    *f* is :func:`notes` of *x* when the caller already has it.
+    """
+    f = f or notes(x)
     if f is None:
         return []
     per, total = f
@@ -194,9 +204,10 @@ def _decide(
     return pa / max(pa + pb, 1e-12), pa + pb, names
 
 
-def read(x: np.ndarray, skey: np.ndarray) -> Mode:
-    """Tonic and mode of an 11025 Hz passage, given S-KEY's 24 outputs for it."""
-    prof, bass = profile(x), profile(x, *BASS_HZ)
+def read(x: np.ndarray, skey: np.ndarray, f: Frames = None) -> Mode:
+    """Tonic and mode of an 11025 Hz passage, given S-KEY's 24 outputs for it (and :func:`notes` of it)."""
+    prof = _profile_of(*f) if f else profile(x)
+    bass = profile(x, *BASS_HZ)
     ws, wb, wo = TONIC_WEIGHTS
     t = ws * skey_mass(skey) + wb * bass + wo * prof
     first, second = (int(i) for i in np.argsort(-t)[:2])
@@ -235,10 +246,12 @@ def edges(samples: int) -> dict[str, slice]:
     }
 
 
-def analyse(x: np.ndarray, skey: np.ndarray | None = None) -> dict[str, Any] | None:
+def analyse(
+    x: np.ndarray, skey: np.ndarray | None = None, f: Frames = None
+) -> dict[str, Any] | None:
     """Readings of an 11025 Hz signal for the whole track, intro and outro; None when too short.
 
-    *skey* is S-KEY's answer for the whole of *x* when the caller already has it.
+    *skey* is S-KEY's answer and *f* :func:`notes` for the whole of *x* when the caller already has them.
     """
     out: dict[str, Any] = {}
     for name, cut in edges(len(x)).items():
@@ -247,7 +260,7 @@ def analyse(x: np.ndarray, skey: np.ndarray | None = None) -> dict[str, Any] | N
             continue
         p = skey if name == "track" and skey is not None else keynet.probs(part)
         if p is not None:
-            m = read(part, p)
+            m = read(part, p, f if name == "track" else None)
             out[name] = {**asdict(m), "label": m.label, "skey": skey_label(p)}
     return out or None
 
@@ -285,13 +298,15 @@ def served(
     return out or None
 
 
-def fields(x: np.ndarray, skey: np.ndarray | None = None) -> dict[str, Any]:
+def fields(
+    x: np.ndarray, skey: np.ndarray | None = None, f: Frames = None
+) -> dict[str, Any]:
     """What a track's stored analysis gets: ``harmony`` (track, intro, outro) and ``modesV``.
 
     Each passage keeps tonic, mode, notes, brightness, contrast, tonic share,
     unsure, alt and reason; S-KEY's label is already the track's ``key``.
     """
-    found = analyse(x, skey)
+    found = analyse(x, skey, f)
     out: dict[str, Any] = {"modesV": VERSION}
     if found:
         out["harmony"] = {
