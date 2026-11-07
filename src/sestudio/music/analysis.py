@@ -16,9 +16,12 @@ import os
 for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")
 
+import re  # noqa: E402
 import subprocess  # noqa: E402
+import tempfile  # noqa: E402
 from collections.abc import Callable  # noqa: E402
 from dataclasses import dataclass, field  # noqa: E402
+from pathlib import Path  # noqa: E402
 from typing import Any  # noqa: E402
 
 import numpy as np  # noqa: E402
@@ -55,7 +58,11 @@ def decode(path: str, rate: int, af: str | None = None) -> np.ndarray:
     cmd = [ffmpeg_binary(), "-v", "error", "-i", path, "-ac", "1", "-ar", str(rate)]
     if af:
         cmd += ["-af", af]
-    raw = subprocess.run([*cmd, "-f", "s16le", "-"], capture_output=True).stdout
+    return _s16(subprocess.run([*cmd, "-f", "s16le", "-"], capture_output=True).stdout)
+
+
+def _s16(raw: bytes) -> np.ndarray:
+    """Mono s16le bytes as float32 in -1..1."""
     return (
         np.frombuffer(raw[: len(raw) // 2 * 2], dtype=np.int16).astype(np.float32)
         / 32768
@@ -105,36 +112,65 @@ def _band_frames(x: np.ndarray, gain2: np.ndarray, win: int) -> np.ndarray:
 
 
 def _bands(
-    path: str, on_bands: Callable[[np.ndarray], None] | None = None
+    path: str,
+    on_bands: Callable[[np.ndarray, float], None] | None = None,
+    also: dict[int, Path] | None = None,
 ) -> np.ndarray:
     """8 band RMS envelopes at 10 Hz from one decode: each 0.1 s frame's power spectrum weighted by the filters' |H|².
 
     Was 8 ffmpeg decodes, one per filter (about 5x slower); same filters, so the values match within a few percent.
-    Read from ffmpeg as it decodes, ``BAND_STEP`` seconds at a time, and *on_bands* gets the envelopes so far after each.
+    Read from ffmpeg as it decodes, ``BAND_STEP`` seconds at a time, and *on_bands* gets the envelopes so far after
+    each, with the duration in the file's header (0 without one). The same decode writes the mono signal at each
+    rate of *also* (rate -> file, s16le): one decode instead of one per rate.
     """
     win = 1600
     # shortcut: the filters ran at the source rate (usually 44.1 kHz) before the resample; this assumes 44.1 kHz.
     gain2 = _biquad_gain2(np.fft.rfftfreq(win, 1 / 16000), 44100)
-    cmd = [ffmpeg_binary(), "-v", "error", "-i", path, "-ac", "1", "-ar", "16000"]
+    # Info level, so the header's duration is in the log before the first samples.
+    cmd = [ffmpeg_binary(), "-hide_banner", "-nostats", "-i", path]
+    for rate, out in (also or {}).items():
+        cmd += ["-ac", "1", "-ar", str(rate), "-f", "s16le", str(out)]
+    cmd += ["-ac", "1", "-ar", "16000", "-f", "s16le", "-"]
     step = win * 10 * BAND_STEP * 2  # whole frames of s16le
     parts: list[np.ndarray] = []
-    with subprocess.Popen(
-        [*cmd, "-f", "s16le", "-"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
-    ) as proc:
+    duration: float | None = None
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        open(Path(tmp, "log"), "wb") as log,
+        subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=log) as proc,
+    ):
         assert proc.stdout is not None
         while chunk := proc.stdout.read(step):
-            x = np.frombuffer(chunk[: len(chunk) // 2 * 2], np.int16)
-            parts.append(_band_frames(x.astype(np.float32) / 32768, gain2, win))
+            parts.append(_band_frames(_s16(chunk), gain2, win))
             if on_bands:
-                on_bands(np.concatenate(parts, axis=1))
+                if duration is None:
+                    duration = _header_duration(
+                        Path(tmp, "log").read_text("utf-8", "replace")
+                    )
+                on_bands(np.concatenate(parts, axis=1), duration)
     return np.concatenate(parts, axis=1) if parts else np.zeros((8, 0))
+
+
+def _header_duration(log: str) -> float:
+    """Seconds in ffmpeg's ``Duration: 00:05:35.36`` line, 0 when the file has none."""
+    m = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", log)
+    return int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3]) if m else 0.0
 
 
 def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
     """(bpm, beat0, bar0, confidence) of a mono signal at ``TEMPO_SR``; see SPEC-music-player §6.12."""
     n = int((len(x) - FFT_N) / HOP)
-    idx = (np.arange(n) * HOP).astype(int)[:, None] + np.arange(FFT_N)[None, :]
-    spec = np.abs(np.fft.rfft(x[idx] * np.hanning(FFT_N), axis=1))
+    starts = (np.arange(n) * HOP).astype(int)[:, None]
+    win = np.hanning(FFT_N)
+    # In chunks: all frames at once took 550 MB (indices and samples) for a 5 min track.
+    spec = np.concatenate(
+        [
+            np.abs(
+                np.fft.rfft(x[starts[i : i + 2048] + np.arange(FFT_N)] * win, axis=1)
+            )
+            for i in range(0, n, 2048)
+        ]
+    )
     flux = np.maximum(0, np.diff(np.log1p(1000 * spec), axis=0))
     freqs = np.fft.rfftfreq(FFT_N, 1 / TEMPO_SR)
     kick = flux[:, (freqs > 30) & (freqs < 150)].sum(1)
@@ -142,14 +178,17 @@ def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
     onset = np.maximum(onset - np.convolve(onset, np.ones(50) / 50, "same"), 0)
     fps = TEMPO_SR / HOP
 
-    score = []
-    for bpm in np.arange(70, 200.01, 0.1):
-        p = 60 * fps / bpm
-        lags = np.arange(1, 9) * p
-        s = sum(
-            np.dot(onset[: -int(lag) - 1], onset[int(lag) : -1]) for lag in lags
-        ) / len(lags)
-        score.append((s * np.exp(-0.5 * (np.log2(bpm / 140) / 0.6) ** 2), bpm))
+    # The comb only reads whole-frame lags: each lag's autocorrelation once, not per tempo.
+    bpms = np.arange(70, 200.01, 0.1)
+    lags = (np.arange(1, 9)[None, :] * (60 * fps / bpms)[:, None]).astype(int)
+    ac = np.array(
+        [np.dot(onset[: -lag - 1], onset[lag:-1]) for lag in range(lags.max() + 1)]
+    )
+    combs = ac[lags].sum(1) / lags.shape[1]
+    score = [
+        (s * np.exp(-0.5 * (np.log2(bpm / 140) / 0.6) ** 2), bpm)
+        for s, bpm in zip(combs, bpms)
+    ]
     score.sort(reverse=True)
     bpm = score[0][1]
     conf = score[0][0] / (np.mean([s for s, _ in score]) + 1e-9)
@@ -166,7 +205,7 @@ def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
     def fit(b: float) -> float:
         p = 60 * fps / b
         ph, k = phases(b)
-        return max(np.interp(o + k * p, t, onset).sum() for o in ph)
+        return np.interp(ph[:, None] + k * p, t, onset).sum(1).max()
 
     cands = np.arange(bpm - 1.5, bpm + 1.501, 0.02)
     bpm = float(cands[int(np.argmax([fit(b) for b in cands]))])
@@ -201,16 +240,19 @@ def analyse_file(
     None without a steady beat) gets the tempo before the key is measured, and
     *on_notes* the notes heard by each tenth of the track (:func:`modes.profile_steps`).
     """
-    low = decode(path, 4000)
+    with tempfile.TemporaryDirectory() as tmp:
+        also = {4000: Path(tmp, "low"), TEMPO_SR: Path(tmp, "tempo")}
+        bands = _bands(path, on_bands, also)
+        low, x = (
+            _s16(f.read_bytes()) if f.exists() else _s16(b"") for f in also.values()
+        )
     duration = len(low) / 4000
-    i = np.arange(1, len(low), 7)
-    zcr = float(np.sum((low[i - 1] < 0) != (low[i] < 0)) / max(len(low) / 7, 1))
     if duration <= 0:
         raise ValueError("no audio decoded")
-    bands = _bands(path, on_bands and (lambda b: on_bands(b, duration)))
+    i = np.arange(1, len(low), 7)
+    zcr = float(np.sum((low[i - 1] < 0) != (low[i] < 0)) / max(len(low) / 7, 1))
     loud = _rms(low, 4, 400)
     bpm = beat0 = bar0 = conf = None
-    x = decode(path, TEMPO_SR)
     if duration >= MIN_TEMPO_SECONDS:
         bpm, beat0, bar0, conf = tempo(x)
     if on_tempo:

@@ -6,7 +6,8 @@ import { filtersOf, plainKind, proxOf, rankFits, relaxations, type FitsFilters }
 import { setFitsPref as setPref, useFitsPrefs } from '../../fitsPrefs'
 import { useTheory } from '../../musicTheory'
 import { useSettings } from '../../useSettings'
-import { bridges, joinColor, type Join } from './crates/proximity'
+import { joinColor, type Join } from './crates/proximity'
+import { gapBridges } from './gaps'
 import { openHarmonyBasics } from './harmony/store'
 import { openKeyCard } from './harmony/keyCardStore'
 import { PULL, rankByPull } from '../../flowFits'
@@ -135,7 +136,7 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
     // The same song in two libraries is one suggestion, and never the anchor (or a taken track) again.
     const seen = new Set([...skip].map(id => songKey(byId.get(id))))
     const once = (id: string) => { const k = songKey(byId.get(id)); if (!k || seen.has(k)) return false; seen.add(k); return true }
-    if (b) return bridges(a, b, pool, SHOWN * 2, skip).filter(r => once(r.id)).slice(0, SHOWN).map(r => ({ id: r.id, join: r.before, then: r.after }))
+    if (b) return gapBridges(a, b, pool, SHOWN * 2, skip).filter(r => once(r.id)).slice(0, SHOWN).map(r => ({ id: r.id, join: r.before, then: r.after }))
     return rankFits(a, pool, f).filter(r => !skip.has(r.id) && once(r.id)).slice(0, SHOWN).map(r => ({ ...r, then: undefined }))
   }, [anchor.id, then?.id, pool, exKey, fKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const flowRows = useMemo(() => {

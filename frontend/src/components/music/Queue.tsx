@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { metaLine, useSummary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import { getQueue, queueActions, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
@@ -18,6 +18,8 @@ import { armSwipe, justSwiped } from './swipe'
 import RowThread from './RowThread'
 import FlowStrip, { SlotChip } from './flows/FlowStrip'
 import { rangeOf, type Range } from './thread'
+import { ComingUp, GapBox, GapMark, GapRail } from './QueueGap'
+import { useQueueGaps } from './queueGaps'
 
 const EASE = 'cubic-bezier(.2,.7,.2,1)'
 /** More changes than this at once (a replaced queue, a playlist) just appear. */
@@ -126,7 +128,7 @@ const plus = <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="cur
 let dropped: string | null = null
 
 /** The queue sheet: header and rows. Rows slide in, out and over each other (SPEC-music-player §7.7). */
-export default function Queue({ q, info, adding, onAdd, expanded, onPin, library, tv = false }: {
+export default function Queue({ q, info, adding, onAdd, expanded, onPin, library, tv = false, aim = null, onAim }: {
   q: QueueState
   info: (id: string) => TrackInfo | undefined
   /** The library is open: the crate, the desktop's column, or (with `library`) this sheet's Library page. */
@@ -138,6 +140,10 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
   onPin: () => void
   /** The station's picture: read-only, and it scrolls itself to the playing row. */
   tv?: boolean
+  /** The open gap: the queue index an add goes to (Layer's aim). */
+  aim?: number | null
+  /** Open a gap (null closes it); `more` also opens Fits next on it. */
+  onAim?: (at: number | null, more?: boolean) => void
 }) {
   const list = useRef<HTMLDivElement>(null)
   const ids = q.items.map(i => i.track_id)
@@ -212,6 +218,14 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
     if (row) list.current!.scrollTo({ top: row.offsetTop - 56, behavior: 'smooth' })
   }, [tv, cur, q.items.length])
 
+  const gaps = useQueueGaps(q)
+  const editable = !tv && !!onAim
+  // An opened gap (from the rail, a mark, the phone strip) scrolls into view.
+  useEffect(() => {
+    if (aim !== null) list.current?.querySelector('[data-gapbox]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [aim])
+  const titleAt = (at: number) => info(q.items[at]?.track_id ?? '')?.title ?? 'the track'
+
   const pilot = useAutopilot(q, !tv)
   const left = q.items.slice(q.current + 1)
   const seconds = left.reduce((s, i) => s + (info(i.track_id)?.duration ?? 0) - BLEND.auto, 0)
@@ -242,6 +256,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
           ))}
         </span>
       </button>}
+      {library && editable && <ComingUp q={q} info={info} rough={gaps.rough} onFix={at => { if (adding) onAdd(); onAim!(at) }} />}
       <header className="relative flex items-center gap-2 px-3 pt-3 pb-2 text-[13px] font-semibold max-md:pt-0">
         {library ? (
           <div role="tablist" className="flex flex-1 gap-0.5 rounded-xl bg-white/7 p-[3px] data-[over=1]:ring-2 data-[over=1]:ring-primary">
@@ -255,8 +270,9 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
         ) : (
           <>
             <span>Queue</span>
-            <span className="ml-auto text-xs font-normal text-base-content/42">
+            <span className="ml-auto whitespace-nowrap text-xs font-normal text-base-content/42">
               {left.length} left · {Math.max(0, Math.round(seconds / 60))} min
+              {editable && gaps.rough.length > 0 && <> · <span className="text-warning">{gaps.rough.length} rough</span></>}
             </span>
           </>
         )}
@@ -291,15 +307,17 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
         </button>}
       </header>
       {!tv && !(library && adding) && <FlowStrip q={q} />}
-      {library && adding ? library : <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden'}`}>
+      {library && adding ? library : <div className="relative flex min-h-0 flex-1 flex-col">
+      {editable && expanded && <GapRail rough={gaps.rough} n={q.items.length} current={q.current} title={titleAt} onOpen={at => onAim!(at)} />}
+      <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden'} ${editable && expanded && gaps.rough.length ? 'pr-2.5' : ''}`}>
         <span
           data-dropline
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-2.5 z-10 h-0.5 rounded-sm bg-primary opacity-0 ring-[3px] ring-primary/22 transition-[top,opacity] duration-80"
         />
         {entries.map(({ item, i, gone }) => (
+          <Fragment key={item.item_id}>
           <Row
-            key={item.item_id}
             item={item}
             info={info(item.track_id)}
             playing={!gone && i === q.current}
@@ -309,6 +327,10 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             v={v}
             leaving={gone ? () => setLeaving(l => l.filter(x => x.item.item_id !== item.item_id)) : undefined}
           />
+          {editable && expanded && !gone && i >= q.current && i < q.items.length - 1 && (aim === i + 1
+            ? <GapBox key={`box${q.items[i + 1].item_id}`} q={q} at={i + 1} gap={gaps.gap(i + 1)} info={info} onClose={() => onAim!(null)} onMore={() => onAim!(i + 1, true)} onKeep={() => { gaps.keep(i + 1); onAim!(null) }} />
+            : <GapMark gap={gaps.gap(i + 1)} at={i + 1} title={titleAt(i + 1)} onOpen={at => onAim!(at)} />)}
+          </Fragment>
         ))}
         {pilot.ghosts.map(g => (
           <div key={g.track.id} aria-label={`Autopilot will add ${g.track.title}`} className="flex min-h-14 items-center gap-2.5 px-3 py-1.5 text-[13px] opacity-55">
@@ -332,6 +354,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             <span className="ml-auto text-[11px] font-normal text-base-content/42"><kbd className="font-sans">A</kbd></span>
           </button>
         </div>}
+      </div>
       </div>}
     </section>
   )
