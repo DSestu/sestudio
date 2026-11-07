@@ -1,9 +1,16 @@
 import { useState } from 'react'
-import { ExternalLink, SettingRow, SettingsGroup, ToggleRow } from './rows'
+import { ExternalLink, RowSelect, SettingRow, SettingsGroup, ToggleRow } from './rows'
+import { INTERVALS } from '../../watcherKinds'
 import type { SettingsProps } from './SettingsView'
 
 /** Where to get a CallMeBot key — you message their bot and it replies with one. */
 const CALLMEBOT_GUIDE_URL = 'https://www.callmebot.com/blog/free-api-whatsapp-messages/'
+
+const SOURCES = [
+  { key: 'watcher_interval_twitch', label: 'Twitch channels', fallback: 300 },
+  { key: 'watcher_interval_youtube', label: 'YouTube channels', fallback: 86400 },
+  { key: 'watcher_interval_other', label: 'Episodes, films and searches', fallback: 86400 },
+] as const
 
 const FIELD = 'input input-sm h-9 w-full bg-base-100 border-0 font-mono'
 
@@ -44,6 +51,23 @@ export default function Notifications({ settings, onUpdate }: SettingsProps) {
           checked={settings.notifications_enabled === true}
           onChange={on => onUpdate({ notifications_enabled: on })}
         />
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="How often watchers check"
+        footnote="For watchers set to Default. A watcher’s own frequency, in Activity, overrides it."
+      >
+        {SOURCES.map(s => (
+          <SettingRow key={s.key} label={s.label} htmlFor={`set-${s.key}`}>
+            <RowSelect
+              id={`set-${s.key}`}
+              value={settings[s.key] ?? s.fallback}
+              onChange={e => onUpdate({ [s.key]: Number(e.target.value) })}
+            >
+              {INTERVALS.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
+            </RowSelect>
+          </SettingRow>
+        ))}
       </SettingsGroup>
 
       <SettingsGroup

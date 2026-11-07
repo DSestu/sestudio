@@ -14,7 +14,7 @@ from sestudio import library
 from sestudio.catalogs import TtlCache, parallel
 from sestudio.sites.base import SiteError
 from sestudio.sites.creators import _TWITCH_LIVE, _YtDlpSite, twitch_gql, twitch_live
-from sestudio.watchers.models import DEFAULT_INTERVALS, validate_config
+from sestudio.watchers.models import validate_config
 from sestudio.watchers.poller import initial_next_poll
 
 router = APIRouter()
@@ -212,7 +212,6 @@ async def import_follows(body: ImportBody) -> dict[str, Any]:
             "channel",
             validate_config("channel", config),
             label=config["name"],
-            interval_seconds=DEFAULT_INTERVALS["channel"],
             next_poll_at=initial_next_poll(),
         )
         added += 1

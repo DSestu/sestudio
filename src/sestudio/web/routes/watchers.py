@@ -8,7 +8,6 @@ from pydantic import BaseModel
 
 from sestudio import library
 from sestudio.watchers.models import (
-    DEFAULT_INTERVALS,
     WATCHER_KINDS,
     Watcher,
     normalise_interval,
@@ -60,12 +59,7 @@ async def create_watcher(body: WatcherCreateBody) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    interval = normalise_interval(
-        body.kind,
-        body.interval_seconds
-        if body.interval_seconds is not None
-        else DEFAULT_INTERVALS.get(body.kind, 3600),
-    )
+    interval = normalise_interval(body.interval_seconds)
     return await asyncio.to_thread(
         library.watcher_create,
         body.kind,
@@ -93,9 +87,7 @@ async def patch_watcher(watcher_id: int, body: WatcherPatchBody) -> dict[str, An
     if body.auto_download is not None:
         updates["auto_download"] = body.auto_download
     if body.interval_seconds is not None:
-        updates["interval_seconds"] = normalise_interval(
-            existing["kind"], body.interval_seconds
-        )
+        updates["interval_seconds"] = normalise_interval(body.interval_seconds)
     if body.config is not None:
         try:
             updates["config"] = validate_config(existing["kind"], body.config)

@@ -15,18 +15,10 @@ WATCHER_KINDS: tuple[str, ...] = (
     "channel",
 )
 
-# How often each kind is worth re-checking. Episodes land daily, search results
-# move slowly, and a metadata sweep is expensive enough to run once a day.
-DEFAULT_INTERVALS: dict[str, int] = {
-    "series_episodes": 3600,
-    "title_lang": 3600,
-    "film_available": 3600,
-    "saved_search": 21600,
-    "tmdb_criteria": 86400,
-    # One cheap request per poll (an RSS feed, a GraphQL query), and going live
-    # is only news while it lasts.
-    "channel": 300,
-}
+# Each source has its own default check interval in Settings. Going live on
+# Twitch is only news while it lasts; YouTube uploads, episodes and search results
+# are fine to learn about once a day.
+INTERVAL_SOURCES: tuple[str, ...] = ("twitch", "youtube", "other")
 
 # Kinds whose config points at a single title page.
 PAGE_KINDS: tuple[str, ...] = ("series_episodes", "title_lang", "film_available")
@@ -176,10 +168,25 @@ def validate_config(kind: str, config: Any) -> dict[str, Any]:
     }
 
 
-def normalise_interval(kind: str, value: Any) -> int:
-    """Clamp a requested interval, falling back to the kind's default."""
+def interval_source(kind: str, config: dict[str, Any]) -> str:
+    """Which Settings default a watcher follows: twitch, youtube or other."""
+    if kind == "channel" and config.get("source") in ("twitch", "youtube"):
+        return str(config["source"])
+    return "other"
+
+
+def default_interval(kind: str, config: dict[str, Any]) -> int:
+    """The Settings interval for this watcher's source."""
+    from sestudio.config import load_config
+
+    source = interval_source(kind, config)
+    return max(_MIN_INTERVAL, int(getattr(load_config(), f"watcher_interval_{source}")))
+
+
+def normalise_interval(value: Any) -> int:
+    """Clamp a requested interval; 0 (or junk) means follow the source default."""
     try:
         seconds = int(value)
     except (TypeError, ValueError):
-        seconds = DEFAULT_INTERVALS.get(kind, 3600)
-    return max(_MIN_INTERVAL, seconds)
+        return 0
+    return 0 if seconds <= 0 else max(_MIN_INTERVAL, seconds)
