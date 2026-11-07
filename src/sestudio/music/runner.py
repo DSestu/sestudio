@@ -8,9 +8,11 @@ a listing happens. Requests never wait on it.
 from __future__ import annotations
 
 import logging
+import multiprocessing as mp
 import os
+import queue as queues
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +97,26 @@ def _loop(root: str) -> None:
         logger.exception("Music analysis stopped")
         with _lock:
             _running = False
+
+
+#: In an analysis worker: the queue its partial results go to the server by.
+_progress: Any = None
+
+
+def _init_worker(queue: Any) -> None:
+    global _progress
+    _progress = queue
+
+
+def _analyse(path: str, track_id: str) -> analysis.RawAnalysis:
+    """In a worker process: analyse one file, sending what is measured so far to the server."""
+    q = _progress
+    return analysis.analyse_file(
+        path,
+        lambda bands, dur: q.put((store.set_partial, track_id, bands, dur)),
+        lambda bpm, bar0: q.put((store.set_partial_tempo, track_id, bpm, bar0)),
+        lambda steps: q.put((store.set_partial_notes, track_id, steps)),
+    )
 
 
 def _upgrade_v2(base: Path, files: list, workers: int) -> int:
@@ -190,28 +212,50 @@ def run_once(
     for f in pending:
         store.set_partial(f.track_id)
 
-    def one(f) -> analysis.RawAnalysis:
-        return analysis.analyse_file(
-            str(base / f.path),
-            lambda bands, dur: store.set_partial(f.track_id, bands, dur),
-            lambda bpm, bar0: store.set_partial_tempo(f.track_id, bpm, bar0),
-            lambda steps: store.set_partial_notes(f.track_id, steps),
-        )
+    # Processes, not threads: the analysis' Python loops hold the GIL (4 threads ran
+    # 2.2x one, 4 processes 3.3x). Spawned, never forked: the server has threads.
+    ctx = mp.get_context("spawn")
+    ex: ProcessPoolExecutor | ThreadPoolExecutor
+    try:
+        queue: Any = ctx.Queue()
+        ex = ProcessPoolExecutor(workers, ctx, _init_worker, (queue,))
+    except (ImportError, OSError):  # no working sem_open (some Android setups)
+        queue = queues.Queue()
+        _init_worker(queue)
+        ex = ThreadPoolExecutor(workers, thread_name_prefix="analyse")
+    finished: set[str] = set()
+    gate = threading.Lock()  # a late partial must not bring back a finished track
 
-    with ThreadPoolExecutor(workers, thread_name_prefix="analyse") as ex:
-        futures = {ex.submit(one, f): f for f in pending}
-        for future in as_completed(futures):
-            f = futures[future]
-            try:
-                store.save(f.track_id, f.mtime, f.size, future.result())
-                ok += 1
-            except Exception:
-                logger.warning("Could not analyse %s", f.path, exc_info=True)
-                _failed[f.track_id] = (f.mtime, f.size)
-            finally:
-                store.drop_partial(f.track_id)
-            with _lock:
-                _done += 1
+    def relay() -> None:
+        while (msg := queue.get()) is not None:
+            with gate:
+                if msg[1] not in finished:
+                    msg[0](*msg[1:])
+
+    relayer = threading.Thread(target=relay, daemon=True, name="analyse-progress")
+    relayer.start()
+    try:
+        with ex:
+            futures = {
+                ex.submit(_analyse, str(base / f.path), f.track_id): f for f in pending
+            }
+            for future in as_completed(futures):
+                f = futures[future]
+                try:
+                    store.save(f.track_id, f.mtime, f.size, future.result())
+                    ok += 1
+                except Exception:
+                    logger.warning("Could not analyse %s", f.path, exc_info=True)
+                    _failed[f.track_id] = (f.mtime, f.size)
+                finally:
+                    with gate:
+                        finished.add(f.track_id)
+                        store.drop_partial(f.track_id)
+                with _lock:
+                    _done += 1
+    finally:
+        queue.put(None)  # after the workers exited and flushed theirs
+        relayer.join()
     store.renormalise_if_needed()
     _decide_genres(base, files, workers)
     _read_modes(base, files, workers)

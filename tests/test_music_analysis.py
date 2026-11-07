@@ -166,6 +166,16 @@ def test_a_broken_file_is_skipped_and_not_retried(db, root):
     assert store.count() == 0
 
 
+def test_analysis_runs_in_threads_where_processes_cannot(db, root, monkeypatch):
+    def no_processes(*_args, **_kwargs):
+        raise OSError("no sem_open")
+
+    monkeypatch.setattr(runner, "ProcessPoolExecutor", no_processes)
+    _write_wav(root / "Artist - Bass.flac", sine(60))
+    assert runner.run_once(root, workers=1) == 1
+    assert store.count() == 1
+
+
 def test_analysis_api(db, root, tmp_path, monkeypatch):
     monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
     downloaded.invalidate()
