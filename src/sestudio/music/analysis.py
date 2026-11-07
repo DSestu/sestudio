@@ -215,9 +215,11 @@ def analyse_file(
         bpm, beat0, bar0, conf = tempo(x)
     if on_tempo:
         on_tempo(bpm, bar0)
+    # The notes pass is the slow part of both; too short a signal has none (and fields skips it).
+    notes = modes.notes(x) if len(x) >= modes.MIN_SAMPLES else None
     if on_notes and duration >= MIN_TEMPO_SECONDS:
-        on_notes(modes.profile_steps(x))
-    extra = _profile(x, bands, loud, bpm, bar0)
+        on_notes(modes.profile_steps(x, f=notes))
+    extra = _profile(x, bands, loud, bpm, bar0, notes)
     return RawAnalysis(duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra)
 
 
@@ -227,11 +229,12 @@ def _profile(
     loud: np.ndarray,
     bpm: float | None,
     bar0: float | None,
+    notes: modes.Frames = None,
 ) -> dict[str, Any]:
-    """Key, energy, structure and genre, then tonic and mode, sharing S-KEY's pass."""
+    """Key, energy, structure and genre, then tonic and mode, sharing S-KEY's pass (and *notes*)."""
     p = keynet.probs(x)
     key = None if p is None else keynet.top(p)
-    return profile.profile(key, bands, loud, bpm, bar0) | modes.fields(x, p)
+    return profile.profile(key, bands, loud, bpm, bar0) | modes.fields(x, p, notes)
 
 
 def upgrade(path: str, a: RawAnalysis) -> dict[str, Any]:
