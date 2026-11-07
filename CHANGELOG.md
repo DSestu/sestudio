@@ -1,5 +1,76 @@
 # Changelog
 
+## [1.12.0](https://github.com/DSestu/sestudio/compare/v1.11.0...v1.12.0) (2026-11-07)
+
+
+### New features
+
+* a live-preview skill gives each worktree its own preview URL ([#503](https://github.com/DSestu/sestudio/issues/503)) ([bf94147](https://github.com/DSestu/sestudio/commit/bf9414788b38e701fff1cf09913ad8e9d55a3252))
+* a mix as a list: lineage, freeze, pins, read as a flow (lab) ([#491](https://github.com/DSestu/sestudio/issues/491)) ([6598c94](https://github.com/DSestu/sestudio/commit/6598c947437f43a4fdc4c26e0fe9ea67d27c9bac))
+* a playlist edit mode: add from your folders or online, Fits follows the pointer, drag anything in ([#511](https://github.com/DSestu/sestudio/issues/511)) ([3ed9b18](https://github.com/DSestu/sestudio/commit/3ed9b183e4d901d75a88051b3bb19b4b1a14f00e))
+* a playlist has a Map view that draws its path by mood and energy with what fits ringed, replacing the Explore tab ([#476](https://github.com/DSestu/sestudio/issues/476)) ([875c550](https://github.com/DSestu/sestudio/commit/875c550aaf9eba58354519d4d2451903f1cb4e00))
+* a playlist's Fits next panel is one shared list that says why each track fits, filters by Smooth only and energy (more at the theory level), and lists each song once ([#470](https://github.com/DSestu/sestudio/issues/470)) ([278cdba](https://github.com/DSestu/sestudio/commit/278cdba3f4640cbe7ecc38f6060acd87eb24aae8))
+* any music list (a library, genre, search, album, artist, smart list or the queue) saves as a playlist, and the queue's Order what's next reorders the tracks after the playing one by harmonic path, tempo or energy arc ([#478](https://github.com/DSestu/sestudio/issues/478)) ([222b95f](https://github.com/DSestu/sestudio/commit/222b95f980fcf02b28b684044408bd3a267b7bc3))
+* branch conditions: a fork takes a future after skips, after a while, or after a time ([#493](https://github.com/DSestu/sestudio/issues/493)) ([efb04c7](https://github.com/DSestu/sestudio/commit/efb04c76e56fe31f654c536357b560161574fb95))
+* every row of an open playlist shows the track's energy thread along its bottom edge, as the queue does ([#481](https://github.com/DSestu/sestudio/issues/481)) ([3d02e67](https://github.com/DSestu/sestudio/commit/3d02e6784d43ed3ac6cfd9d3fa8fa0b11e6af360))
+* fits between any two tracks of the queue: gaps open in place, a rail of rough transitions, Fits next follows playback ([#509](https://github.com/DSestu/sestudio/issues/509)) ([89204b1](https://github.com/DSestu/sestudio/commit/89204b1605d356d6ed3524cce6e8f34676e1ccf5))
+* Fits next on any track opens the shared panel beside the list (a sheet on phones), replacing the Tracks tab's Fits after mode ([#474](https://github.com/DSestu/sestudio/issues/474)) ([f1c49f7](https://github.com/DSestu/sestudio/commit/f1c49f7d4acf6f7b6c175529a7c54c29a761e2f2))
+* Fits next ranks by the harmony pull and the playing flow (lab) ([#492](https://github.com/DSestu/sestudio/issues/492)) ([c1017e0](https://github.com/DSestu/sestudio/commit/c1017e014ea550d8fd53d3f19f983cacd68f1209))
+* flow lab, an interactive prototype of the music flows spec ([#484](https://github.com/DSestu/sestudio/issues/484)) ([d5b6cc6](https://github.com/DSestu/sestudio/commit/d5b6cc695118af49a7ba06114466bd359ab004ca))
+* flows and mixes are on the Music page for everyone, no lab flag ([#501](https://github.com/DSestu/sestudio/issues/501)) ([c73e40b](https://github.com/DSestu/sestudio/commit/c73e40b3abb722b95f90556097285c67fe1807f0))
+* flows and mixes on the server: generator, documents and API ([#486](https://github.com/DSestu/sestudio/issues/486)) ([26af1af](https://github.com/DSestu/sestudio/commit/26af1af8809fb86d293e8b680b6a97af8bf16c06))
+* Flows and Mixes tabs in Music: the dial, flow cards and mixes (lab) ([#488](https://github.com/DSestu/sestudio/issues/488)) ([7611bca](https://github.com/DSestu/sestudio/commit/7611bca0d3f3f7cdc778a79d0cc59fcf744828ea))
+* flows keep a key colour, last any number of minutes, and say what fits each stretch ([#496](https://github.com/DSestu/sestudio/issues/496)) ([4d8c5cd](https://github.com/DSestu/sestudio/commit/4d8c5cd7f31ea8d987cef6185a004374a4f7df6a))
+* New playlist opens a draft page that starts from a track, from drawn arcs or by hand, and is saved once it has a track; Shape holds Auto-order and Draw the arcs ([#471](https://github.com/DSestu/sestudio/issues/471)) ([dc8147a](https://github.com/DSestu/sestudio/commit/dc8147a70eaa6c76acfa1c822c38fc29142cbe76))
+* one sestudio can stand in front of another, over Tailscale (server side) ([#521](https://github.com/DSestu/sestudio/issues/521)) ([eee93f8](https://github.com/DSestu/sestudio/commit/eee93f808e642da68d42ecfefccf710aae806d51))
+* Settings › Servers, the "via" chip and the way back when the other server stops answering ([#522](https://github.com/DSestu/sestudio/issues/522)) ([ecf43e2](https://github.com/DSestu/sestudio/commit/ecf43e2669343bd0df5e0672fc77628b9d9c7542))
+* tapping a clash or the clash count opens Fits between in the playlist panel, with the best swap, move or keep under it, replacing the Fix dialog ([#473](https://github.com/DSestu/sestudio/issues/473)) ([898a6d5](https://github.com/DSestu/sestudio/commit/898a6d5198ab32d44cac6b581489ce5143ca7107))
+* the desktop rail fades and slides in with the music player expanding and out as it returns to full screen, following the drag like the other parts ([#480](https://github.com/DSestu/sestudio/issues/480)) ([c7def4d](https://github.com/DSestu/sestudio/commit/c7def4d4fa3e1662b02bfff3bea76505c5457a0c))
+* the flow editor is three lanes of bricks: energy, genre and the key's colour (lab) ([#497](https://github.com/DSestu/sestudio/issues/497)) ([12a294a](https://github.com/DSestu/sestudio/commit/12a294a8e217f69d3dce906d6c2ff16df06444ae))
+* the flow editor, desktop and phone (lab) ([#490](https://github.com/DSestu/sestudio/issues/490)) ([bdf396b](https://github.com/DSestu/sestudio/commit/bdf396b50160611513b98abb7048f4ddb433594c))
+* the key comparison shows at every join, and a key moved up or down is a good join ([#519](https://github.com/DSestu/sestudio/issues/519)) ([a5be754](https://github.com/DSestu/sestudio/commit/a5be75491948f847434307708adb9509a202d82f))
+* the key lands on the timeline: notes heard in fifths, the join's shared notes and verdict ([#500](https://github.com/DSestu/sestudio/issues/500)) ([fc5493e](https://github.com/DSestu/sestudio/commit/fc5493eb50779e7286f254733c39e5de33508cc1))
+* the music player grows out of its bar and shrinks back into it, following a drag on phones and desktop ([#510](https://github.com/DSestu/sestudio/issues/510)) ([208bd7b](https://github.com/DSestu/sestudio/commit/208bd7b5786a4d5032f4e030bd857cef51823903))
+* the player shows the playing flow: path, fork ahead, joins ([#489](https://github.com/DSestu/sestudio/issues/489)) ([504efbe](https://github.com/DSestu/sestudio/commit/504efbe983f2d622ad63befc8ee2a3f05729e167))
+* the player's Fits next ranks after the last queued track with the shared list and filters, and Autopilot sits under it as Keep filling like this ([#475](https://github.com/DSestu/sestudio/issues/475)) ([a4c922e](https://github.com/DSestu/sestudio/commit/a4c922ee27f2a487406811c073d4ee4d2c5286c9))
+* the queue plays a flow, re-renders its future and reads a hand-made queue as a flow ([#487](https://github.com/DSestu/sestudio/issues/487)) ([0520699](https://github.com/DSestu/sestudio/commit/0520699cb1c8b87b2213ac48e848071c90ab9af7))
+* the tempo lands on the timeline: count-in, ghost dock, settle ([#498](https://github.com/DSestu/sestudio/issues/498)) ([c56da41](https://github.com/DSestu/sestudio/commit/c56da417b3cea0a70835cb2d0acbb32c0f67d551))
+* the watch page below the player: one line, a Playback row, About beside the cast ([#516](https://github.com/DSestu/sestudio/issues/516)) ([582b60c](https://github.com/DSestu/sestudio/commit/582b60c3d7f3109081ab6cc945b90f45804115c9))
+
+
+### Bug fixes
+
+* a flow made in the lanes editor wants each join to match the key ([#499](https://github.com/DSestu/sestudio/issues/499)) ([361ee3a](https://github.com/DSestu/sestudio/commit/361ee3a2c5a13391f6884718183152ddd740d986))
+* a transposed join reads "Up 2 · Lift" in the popover and dialog, and a held row's panel stands alone ([#520](https://github.com/DSestu/sestudio/issues/520)) ([c612285](https://github.com/DSestu/sestudio/commit/c6122859558e5e44b064e631f18373e5cee34705))
+* Add to queue lists the tracks of your music folders, not only the downloads ([#468](https://github.com/DSestu/sestudio/issues/468)) ([580b97b](https://github.com/DSestu/sestudio/commit/580b97b9ae98c5767ef8bae092c0bc34fe91cf63))
+* bound what the Android app keeps on disk: one uv install, capped video cache ([#494](https://github.com/DSestu/sestudio/issues/494)) ([42c3aa5](https://github.com/DSestu/sestudio/commit/42c3aa5b840aad818a313b91ea162c6eb84a072d))
+* Fits next opened from a track while a playlist is open shows as a dialog instead of a second side panel, the clash sheet has Next clash, and the playlist row menu says Fits next ([#477](https://github.com/DSestu/sestudio/issues/477)) ([c944d3e](https://github.com/DSestu/sestudio/commit/c944d3e55e0af33963fcad913c353db630c00693))
+* fits next tracks drag onto the queue like library tracks ([#502](https://github.com/DSestu/sestudio/issues/502)) ([add1c21](https://github.com/DSestu/sestudio/commit/add1c21913e276b8cdd3f0da2006b493e233aa48))
+* give the music title room on tablet before the queue grows ([#482](https://github.com/DSestu/sestudio/issues/482)) ([0392060](https://github.com/DSestu/sestudio/commit/03920602cceb7fda3715b94d557d3850ff9643df))
+* the music bar's aura moves like the timeline EQ: same live bands, gate, auto level and energy-driven release ([#495](https://github.com/DSestu/sestudio/issues/495)) ([61c4215](https://github.com/DSestu/sestudio/commit/61c42159516bd6ccd4320ccc38472b2e397f5319))
+* the Music page no longer goes black once a smart list exists, and git ignores the local Chrome profile and agent worktrees ([#466](https://github.com/DSestu/sestudio/issues/466)) ([1ff7e75](https://github.com/DSestu/sestudio/commit/1ff7e75b6d03e74ba7888079cffe4116deb70734))
+* the playlist shaper no longer picks the same song twice in a row when it is in two libraries or folders ([#479](https://github.com/DSestu/sestudio/issues/479)) ([bc6ad55](https://github.com/DSestu/sestudio/commit/bc6ad5555f2b84c48b55035ea9c7a80ddad7e243))
+* track sections start on the music's phrases, one name per section ([#512](https://github.com/DSestu/sestudio/issues/512)) ([3bfc9ca](https://github.com/DSestu/sestudio/commit/3bfc9caa6e68983e2f3bbe0f43f01bfee71f5350))
+
+
+### Documentation
+
+* music flows spec, the spirit of music in sestudio ([#483](https://github.com/DSestu/sestudio/issues/483)) ([436a4de](https://github.com/DSestu/sestudio/commit/436a4dedbe5e83b2ead794b862b99ab1399e24c9))
+* music flows UI board and the 13-PR implementation plan ([#485](https://github.com/DSestu/sestudio/issues/485)) ([bd1a0c2](https://github.com/DSestu/sestudio/commit/bd1a0c2ca0300f227f979ada86c6b8d01e8cfa51))
+
+
+### Performance improvements
+
+* music analysis decodes each file once instead of three times ([#508](https://github.com/DSestu/sestudio/issues/508)) ([9877e13](https://github.com/DSestu/sestudio/commit/9877e13d1d89d7c185179835d05ea8d9f5070f1e))
+* music analysis runs in worker processes instead of threads ([#506](https://github.com/DSestu/sestudio/issues/506)) ([60e6dcd](https://github.com/DSestu/sestudio/commit/60e6dcd66e93d6e8ac2914078b8e16fc0f6a68f4))
+* music analysis runs the key network in float32 and the notes pass once ([#505](https://github.com/DSestu/sestudio/issues/505)) ([38caf41](https://github.com/DSestu/sestudio/commit/38caf4112598cd964fad9e63c10c7a34d2b85938))
+* music analysis uses up to 6 workers instead of 4 ([#514](https://github.com/DSestu/sestudio/issues/514)) ([b70667a](https://github.com/DSestu/sestudio/commit/b70667a77d85098364e30d8205a03a2f3c9724b4))
+* tempo search reads each lag once and builds its frames in chunks ([#507](https://github.com/DSestu/sestudio/issues/507)) ([47b69b0](https://github.com/DSestu/sestudio/commit/47b69b0a4f58255dd38fc95092f7aff2a82137a1))
+* the genre model reads its windows from the analysis' decode ([#517](https://github.com/DSestu/sestudio/issues/517)) ([b5cc209](https://github.com/DSestu/sestudio/commit/b5cc209662a4b118f1bd796531e088a90c465d2d))
+* the intro and outro readings reuse the track's passes ([#518](https://github.com/DSestu/sestudio/issues/518)) ([690859c](https://github.com/DSestu/sestudio/commit/690859c65a986e207c0e381eebb5cdee86d7e557))
+* the key network runs in ONNX Runtime when it is installed ([#515](https://github.com/DSestu/sestudio/issues/515)) ([095f117](https://github.com/DSestu/sestudio/commit/095f117ada9b3cd3fa107bc1974485916af6673c))
+* the notes pass takes its sustained median with a partition ([#513](https://github.com/DSestu/sestudio/issues/513)) ([becb9b4](https://github.com/DSestu/sestudio/commit/becb9b4419eda60396841dc9de6be3f1b39149d5))
+
 ## [1.11.0](https://github.com/DSestu/sestudio/compare/v1.10.0...v1.11.0) (2026-11-05)
 
 
