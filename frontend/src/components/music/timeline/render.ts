@@ -10,6 +10,9 @@ import { TV } from '../tv'
 import { FADE, Points, sample, type DrawItem, type Plan } from './sampling'
 import { Gl, pm, rgb, Tris, type Curves, type RGBA } from './gl'
 import { wake } from '../idle'
+import type { Reading } from '../crates/proximity'
+import { alpha, drawJoin, moodColor, PANEL_W, VERDICT_AT, FOLD_AT, type Phase } from '../harmonyListen'
+import { moodOf } from '../../../harmony'
 
 // The blurs are made by drawing small and scaling up, not with a full-size Canvas `filter: blur`:
 // as soft, at a fraction of the work (measured 19 to 48 fps on the station's software renderer).
@@ -97,6 +100,15 @@ export interface LabelItem extends DrawItem {
   tone?: string
   /** Seconds since this track's tempo arrived, while that plays out (count-in, dock, lock). */
   lock?: number
+  /** This track's key and mode, and the outgoing track's, once known. */
+  reading?: Reading
+  prevReading?: Reading
+  /** What the join into this track is (its kind and colour), once both keys are known. */
+  verdict?: { label: string; color: string } | null
+  /** The harmony step while it plays out (harmonyListen). */
+  harm?: Phase | null
+  /** The join's panel opened by a tap on its diamond. */
+  open?: boolean
 }
 
 // When a track's tempo arrives: its ticks are laid by a front (count-in), ghosts show where its
@@ -211,12 +223,20 @@ export class TimelineRenderer {
   }
 
   /** The labels drawn last frame, for hit tests: the join they open (index of the incoming item) and their box. */
-  private hits: { i: number; x0: number; x1: number; ty: number }[] = []
+  private hits: { i: number; x0: number; x1: number; ty: number; b: number }[] = []
+  /** The joins' diamonds drawn last frame: a tap opens the join's notes. */
+  private joinHits: { i: number; x: number; y: number }[] = []
+
+  /** The join whose diamond is under a point (within 12 px), by the incoming item's index. */
+  joinAt(x: number, y: number): number | null {
+    for (const h of this.joinHits) if (Math.abs(x - h.x) <= 12 && Math.abs(y - h.y) <= 12) return h.i
+    return null
+  }
 
   /** The label under a point of the canvas, and whether it is the second line (the transition). */
   labelAt(x: number, y: number): { i: number; x0: number; ty: number; second: boolean } | null {
     for (const h of this.hits) {
-      if (x >= h.x0 && x <= h.x1 && y >= h.ty - 14 && y <= h.ty + 18) return { i: h.i, x0: h.x0, ty: h.ty, second: y > h.ty + 3 }
+      if (x >= h.x0 && x <= h.x1 && y >= h.ty - 14 && y <= h.ty + h.b) return { i: h.i, x0: h.x0, ty: h.ty, second: y > h.ty + 3 }
     }
     return null
   }
@@ -224,6 +244,7 @@ export class TimelineRenderer {
   draw(f: Frame) {
     const { W, H, M, text: t2, gl } = this
     this.hits.length = 0
+    this.joinHits.length = 0
     if (!W) return
     const { X } = M.at(f.t)
     const { R, px, y0, amp } = M
@@ -345,15 +366,27 @@ export class TimelineRenderer {
     })
 
     // Joins: a hairline at the middle of each overlap, from under the label, with a small diamond on the horizon.
-    for (const it of items) {
-      if (!it.plan) continue
+    items.forEach((it, i) => {
+      if (!it.plan) return
       const x = X(it.a + it.span.i0 + it.span.il / 2)
-      if (x < R.x || x > R.x + R.w) continue
+      if (x < R.x || x > R.x + R.w) return
+      this.joinHits.push({ i, x, y: y0 })
       const k = x < px ? 0.6 : 1
-      const c = it.tone ? rgb(it.tone) : sig
-      T.vgrad(x - 0.5, y0 - amp * 0.98, 1, amp * 1.88, [[0, NONE], [0.35, pm(c, 0.85 * k)], [0.62, pm(c, 0.85 * k)], [1, NONE]])
+      // When the key just arrived, the join stays blue until the notes are compared, then settles into its kind's colour.
+      const to = it.tone ? rgb(it.tone) : sig
+      const vt = it.harm ? it.harm.t - VERDICT_AT : Infinity
+      const e = vt === Infinity ? 1 : Math.max(0, Math.min(1, vt / 0.22))
+      const c = [0, 1, 2].map(j => sig[j] + (to[j] - sig[j]) * e) as unknown as typeof sig
+      if (vt > 0 && vt < 0.5) T.vgrad(x - 3, y0 - amp * 0.6, 6, amp * 1.2, [[0, NONE], [0.5, pm(to, 0.35 * (1 - vt / 0.5))], [1, NONE]])
+      const top = y0 - amp * 0.98
+      const h = amp * 1.88
+      if (it.reading?.unsure || it.prevReading?.unsure) {
+        // Dashed: one of the two keys is unsure.
+        const at = (f: number) => (f < 0.35 ? f / 0.35 : f > 0.62 ? (1 - f) / 0.38 : 1)
+        for (let y = 0; y < h; y += 6) T.rect(x - 0.5, top + y, 1, Math.min(3, h - y), pm(c, 0.85 * k * at((y + 1.5) / h)))
+      } else T.vgrad(x - 0.5, top, 1, h, [[0, NONE], [0.35, pm(c, 0.85 * k)], [0.62, pm(c, 0.85 * k)], [1, NONE]])
       T.diamond(x, y0, 4, pm(c, 0.95 * k))
-    }
+    })
 
     // The rest of a track being analysed: a dotted horizon from its front to its end (2 px on, 5 off).
     for (const it of items) {
@@ -393,6 +426,23 @@ export class TimelineRenderer {
     }
 
     this.labels(f, y0, amp)
+
+    // A join's notes: while a key lands (then folding into the diamond), or opened by a tap.
+    const s = isPhone(W) ? 0.9 : 1.15
+    items.forEach((it, i) => {
+      const prev = items[i - 1]
+      if (!it.plan || !it.prevReading || !prev) return
+      const ph = it.harm ?? null
+      const show = it.open ? 1 : ph ? (ph.t < FOLD_AT ? 1 : Math.max(0, 1 - (ph.t - FOLD_AT) / 0.35)) : 0
+      if (show <= 0) return
+      const jx = X(it.a + it.span.i0 + it.span.il / 2)
+      const pw = PANEL_W * s
+      const x0 = Math.max(R.x + 12, Math.min(jx - pw / 2, R.x + R.w - pw - 4))
+      t2.save()
+      t2.globalAlpha = show
+      drawJoin(t2, x0, y0 + amp * 0.42, s, it.prevReading, ph && ph.land <= 0 ? undefined : it.reading, it.open ? null : ph, it.verdict ?? null, false)
+      t2.restore()
+    })
 
     // Axis ticks fade through the switch.
     t2.font = '500 11px ui-sans-serif,system-ui'
@@ -535,7 +585,9 @@ export class TimelineRenderer {
       const a = it.a + it.span.i0
       if (X(a) > right - 40) continue
       g2.font = '600 12px ui-sans-serif,system-ui'
-      const ty = y0 - amp * 1.02 - 22
+      const r = it.reading
+      const land = !r ? 0 : it.harm ? it.harm.land : 1
+      const ty = y0 - amp * 1.02 - 22 - (r || it.harm ? 14 : 0)
       let tw = this.widths.get(it.title)
       if (tw === undefined) this.widths.set(it.title, (tw = g2.measureText(it.title).width))
       const box = Math.max(tw, 120) + 12
@@ -544,11 +596,11 @@ export class TimelineRenderer {
       if (x0 < px + 30 || x0 - last < 200) continue
       if (avoid && x0 + box > avoid.left && x0 < avoid.right && ty - 14 < avoid.bottom && ty + 18 > avoid.top) continue
       last = x0
-      this.hits.push({ i, x0, x1: x0 + box, ty })
+      this.hits.push({ i, x0, x1: x0 + box, ty, b: r ? 32 : 18 })
       if (f.hover === i) {
         g2.fillStyle = 'oklch(72% .16 230 / .16)'
         g2.beginPath()
-        g2.roundRect(x0, ty - 14, box, 46, 8)
+        g2.roundRect(x0, ty - 14, box, r ? 60 : 46, 8)
         g2.fill()
       }
       g2.fillStyle = f.hover === i ? 'oklch(98% .01 240)' : 'oklch(92% .01 240 / .92)'
@@ -568,7 +620,20 @@ export class TimelineRenderer {
         : fr === undefined ? mixLabel(it.plan)
         : it.track.bpm ? `${mixLabel(it.plan)} · finding key…`
         : pct >= 100 ? 'Finding tempo and key…' : fr > 0 ? `Analysing · ${pct} %` : 'Analysing…'
-      g2.fillText(`${a < 600 ? `in ${fmtTime(a)}` : 'later'} · ${second}`, x0 + 6, y0 - amp * 1.02 - 8)
+      g2.fillText(`${a < 600 ? `in ${fmtTime(a)}` : 'later'} · ${second}`, x0 + 6, ty + 14)
+      if (r && land > 0) {
+        // The mood, in its colour ("Dark?" when unsure), then the key and the other reading worth hearing.
+        const word = `${moodOf(r.mode)?.word ?? r.mode}${r.unsure ? '?' : ''}`
+        g2.font = '600 11px ui-sans-serif,system-ui'
+        g2.fillStyle = alpha(moodColor(r), land)
+        g2.fillText(word, x0 + 6, ty + 28)
+        const short = (m: string) => (m === 'Aeolian' ? 'min' : m === 'Ionian' ? 'maj' : m)
+        const [at, am] = (r.alt ?? '').split(' ')
+        const alt = r.unsure && am ? ` · or ${at === r.tonic ? short(am) : `${at} ${short(am)}`}` : ''
+        g2.font = '500 11px ui-sans-serif,system-ui'
+        g2.fillStyle = `oklch(92% .01 240 / ${(0.8 * land).toFixed(3)})`
+        g2.fillText(` · ${r.tonic} ${short(r.mode)}${alt}`, x0 + 6 + g2.measureText(word).width, ty + 28)
+      }
     }
   }
 }

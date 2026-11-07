@@ -9,6 +9,7 @@ import { BLEND } from './engine'
 import { fmtTime } from './format'
 import { ENTER_MS, FLIP_MS, flipOffsets, LEAVE_MS } from './interact'
 import Meter from './Meter'
+import KeyListen from './KeyListen'
 import QueueActions from './QueueActions'
 import { useAnalyses } from './mix/analysis'
 import { playItem } from './player'
@@ -105,7 +106,8 @@ const Row = memo(function Row({ item, info, playing, source, leaving, tv, range 
           </span>
         </div>
         {item.flow && <SlotChip slot={item.flow} />}
-        {analysis?.balance && <Meter balance={analysis.balance} />}
+        {/* While its key is measured the row shows the notes heard so far, then the key's run (harmonyListen). */}
+        <KeyListen id={item.track_id} reading={analysis?.harmony?.track} fallback={analysis?.balance && <Meter balance={analysis.balance} />} />
         {info?.duration ? <RowThread id={item.track_id} dur={info.duration} range={range} playing={playing} /> : null}
         <span className="relative w-[30px] text-right text-[11px] text-base-content/42 tabular-nums">{info?.duration ? fmtTime(info.duration) : ''}</span>
       </div>

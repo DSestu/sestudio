@@ -3,6 +3,8 @@ import type { MixSettings, QueueItem, QueueState, TrackInfo } from '../../../mus
 import { prepTrack, type Plan, type RawAnalysis, type Track } from '../timeline/sampling'
 import { plan } from './plan'
 import type { SetTrack } from '../crates/setBuilder'
+import { refreshSummary } from '../../../musicMeta'
+import { heard } from '../harmonyListen'
 
 // The server's analysis of each queued track, shared by the timeline (its
 // curves) and the engine (its transitions).
@@ -40,9 +42,12 @@ export async function loadAnalyses(ids: string[]): Promise<boolean> {
         if (a?.partial) {
           // Unchanged since the last ask (bands and tempo): keep the prepared track.
           const was = cache.get(id)?.part
-          if (a.bands?.[0]?.length === was?.bands?.[0]?.length && a.bpm === was?.bpm) continue
+          if (a.bands?.[0]?.length === was?.bands?.[0]?.length && a.bpm === was?.bpm && !!a.notes === !!was?.notes) continue
+          if (a.notes) heard(id, a.notes)
           cache.set(id, { raw: null, part: a, at: now })
         } else if (a) {
+          // Just finished: its key and mode are in the summary now, not in 10 s.
+          if (cache.get(id)?.part) refreshSummary(id)
           cache.set(id, { raw: a, at: now })
           done++
         } else if (cache.get(id)?.part) cache.set(id, { raw: null, at: now }) // the analysis failed
