@@ -28,8 +28,14 @@ import { rangeOf, type Range } from '../thread'
 import Explore from '../explore/Explore'
 import { SmartForm } from './PlaylistTree'
 import SetCurve from './SetCurve'
-import { autoOrder, ORDERS, bestReorders, countJoins, isClash, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder } from './setBuilder'
+import { autoOrder, ORDERS, bestReorders, countJoins, isClash, keptKey, placement, transitionChips, type Chip, type OrderMode, type Reorder, type SetTrack } from './setBuilder'
 import { useKeptJoins } from './useKeptJoins'
+import { aim, dragGap, dragProps, endDrag, getFocus, hover, refOf, setSheet, startDrag, unhover, useFocus, type Drag } from '../edit/focus'
+import { analyseOnline, useRun, useSeenOnline } from '../edit/onlineAnalysis'
+import { DropPreview, FocusBar, WhereItFits } from '../edit/EditFits'
+import { spotsFor } from '../edit/spots'
+import { useSummary } from '../../../musicMeta'
+import { proxOf } from '../../../musicFits'
 
 
 const WIDE = '(min-width: 64rem)'
@@ -105,9 +111,31 @@ interface RowProps {
   onSelect?: () => void
   /** The playlist's own energy scale, so the thread's colours compare its tracks. */
   range: Range | null
+  /** Edit mode: the pointer rests on the row (false) or on its join (true). */
+  onAim?: (join: boolean) => void
+  onDragOverRow?: (lower: boolean) => void
+  /** A drop would land just before this row, or (the last row) just after it. */
+  gapBefore?: boolean
+  gapAfter?: boolean
+  /** Where it fits: this row's gap is spot n (0 best), before it or (the last row) after it. */
+  pin?: number
+  pinAfter?: number
 }
 
-function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, last, index, ...ev }: RowProps) {
+const Pin = ({ n }: { n: number }) => (
+  <span className={`pointer-events-none absolute -left-1 z-10 grid size-5 -translate-y-1/2 place-items-center rounded-full text-[11px] font-bold ring-3 ring-base-100 ${n ? 'bg-primary/25 text-primary' : 'bg-primary text-primary-content'}`}>{n + 1}</span>
+)
+const GapLine = () => <span className="pointer-events-none absolute inset-x-2 z-10 h-0.5 -translate-y-1/2 rounded-full bg-primary" />
+
+/** An online track not analysed yet: its joins stay grey until the Analyse here finishes. */
+function AnalyseChip({ id }: { id: string }) {
+  const run = useRun(id)
+  return run?.state === 'run'
+    ? <span className="inline-flex items-center gap-1.5 text-[11px] text-primary"><span className="loading loading-spinner loading-xs" />{run.bpm ? `Tempo ${Math.round(run.bpm)} · key…` : 'Analysing…'}</span>
+    : <><span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] leading-none text-base-content/60">Not analysed</span><button onClick={() => void analyseOnline(id)} className="btn btn-ghost btn-xs h-5 min-h-0 px-2 text-primary">Analyse</button></>
+}
+
+function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, last, index, onAim, onDragOverRow, gapBefore, gapAfter, pin, pinAfter, ...ev }: RowProps) {
   const title = track?.title ?? item.title ?? 'Missing track'
   const artist = track?.artist ?? item.artist ?? ''
   const duration = track?.duration ?? item.duration ?? 0
@@ -117,10 +145,12 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
       draggable={!!ev.onDragStart}
       className="relative"
       onDragStart={ev.onDragStart}
-      onDragOver={ev.onDropHere && (e => e.preventDefault())}
+      onDragOver={ev.onDropHere && (e => { e.preventDefault(); if (onDragOverRow) { const r = e.currentTarget.getBoundingClientRect(); onDragOverRow(e.clientY > r.top + r.height / 2) } })}
       onDrop={ev.onDropHere && (e => { e.preventDefault(); ev.onDropHere!() })}
     >
-      <div className={`flex items-center gap-1 rounded-xl hover:bg-white/5 ${ev.selected ? 'bg-primary/10' : ''}`}>
+      {gapBefore && <span className="absolute inset-x-0 top-0"><GapLine /></span>}
+      {pin !== undefined && <span className="absolute left-0 top-0"><Pin n={pin} /></span>}
+      <div onPointerEnter={onAim && (e => { if (e.pointerType === 'mouse') onAim(false) })} onPointerLeave={onAim && unhover} className={`flex items-center gap-1 rounded-xl hover:bg-white/5 ${ev.selected ? 'bg-primary/10' : ''}`}>
       {ev.onDragStart && (
         <svg className="ml-1 w-4 h-4 shrink-0 cursor-grab text-base-content/30" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
       )}
@@ -151,14 +181,25 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
       )}
       </div>
       {meta.genre && <div className="pb-1 pl-8 sm:hidden"><GenreTag id={item.track_id} genre={meta.genre} conf={meta.conf} onChange={onGenre} /></div>}
-      {(chips || join) && <ChipLine id={`join-${item.item_id}`} selected={ev.joinSelected} chips={chips}>{join}</ChipLine>}
+      {item.library === 'online' && !meta.bpm && !meta.key && <div className="flex items-center gap-1.5 pb-1 pl-8"><AnalyseChip id={item.track_id} /></div>}
+      {(chips || join) && <div onPointerEnter={onAim && (e => { if (e.pointerType === 'mouse') onAim(true) })} onPointerLeave={onAim && unhover}><ChipLine id={`join-${item.item_id}`} selected={ev.joinSelected} chips={chips}>{join}</ChipLine></div>}
       {duration > 0 && <RowThread id={item.track_id} dur={duration} range={ev.range} playing={false} />}
+      {gapAfter && <span className="absolute inset-x-0 bottom-0"><GapLine /></span>}
+      {pinAfter !== undefined && <span className="absolute bottom-0 left-0"><Pin n={pinAfter} /></span>}
     </li>
   )
 }
 
 /** A playlist's tracks (grouped by part for a set) or a smart list's matches. */
-export default function PlaylistView({ node, byId, onPlaylist }: { node: PlaylistNode; byId: ReadonlyMap<string, MusicTrack>; onPlaylist: (t: MusicTrack) => void }) {
+export default function PlaylistView({ node, byId, onPlaylist, edit = false, onEdit }: {
+  node: PlaylistNode
+  byId: ReadonlyMap<string, MusicTrack>
+  onPlaylist: (t: MusicTrack) => void
+  /** The editor (SPEC-playlist-edit): Fits always beside the list, following the pointer; drops from Add from. */
+  edit?: boolean
+  /** Open the editor. */
+  onEdit?: () => void
+}) {
   const [matches, setMatches] = useState<{ id: string; list: PlaylistItem[] }>()
   const [editing, setEditing] = useState(false)
   /** The Draw the arcs editor, rebuilding this playlist. */
@@ -194,11 +235,20 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
   const wide = useWide()
   /** The inspector: open or not, the row picked, and whether the target is the join after it. */
   const [insp, setInsp] = useState(false)
-  const [sel, setSel] = useState<string>()
-  const [between, setBetween] = useState(false)
+  const [selPick, setSel] = useState<string>()
+  const [betweenPick, setBetween] = useState(false)
   /** The tracks as a list or as a map of mood and energy. */
   const [mode, setMode] = useState<'list' | 'map'>('list')
-  useModalBack(insp && !wide, () => setInsp(false))
+  const focus = useFocus()
+  const online = useSeenOnline()
+  // The editor's Fits shows beside the list on wide screens, and as a sheet (opened from the strip) on narrow ones.
+  const fitsShown = edit ? (wide || focus.sheet === 'fits') : insp
+  const closeFits = () => edit ? setSheet(null) : setInsp(false)
+  useModalBack(fitsShown && !wide, closeFits)
+  // In the editor, the row or join Fits is about is the pointer's target.
+  const ft = edit && focus.target && focus.target.k !== 'track' ? focus.target : undefined
+  const sel = ft ? ft.item : selPick
+  const between = ft ? ft.k === 'join' : betweenPick
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   /** A track with its analysis (the set builder's view of it); `id` defaults to the track's. */
   const setOf = (i: PlaylistItem) => { const f = facts(i); return setTrackOf(i.track_id, f.duration, f.bpm, i.item_id) }
@@ -258,15 +308,25 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
   }
   /** The inspector's target: the picked row, else the last track. */
   const target = Math.max(0, sel && flatIndex(sel) >= 0 ? flatIndex(sel) : items.length - 1)
-  const pick = (item: PlaylistItem, join = false) => { setSel(item.item_id); setBetween(join); setInsp(true) }
+  const pick = (item: PlaylistItem, join = false) => {
+    setSel(item.item_id)
+    setBetween(join)
+    if (!edit) return setInsp(true)
+    aim({ k: join ? 'join' : 'row', item: item.item_id })
+    if (!wide) setSheet('fits')
+  }
   const insertAfterTarget = (t: MusicTrack) => {
     const at = items[target] && locate(node, items[target].item_id)
-    run(playlistApi.add(node.id, [{ library: t.library, track_id: t.id }], at ? at.part ?? undefined : undefined, at ? at.index + 1 : undefined).then(() => { toast(`Added ${t.title}`); setBetween(false); setSel(undefined) }))
+    run(playlistApi.add(node.id, [refOf(t)], at ? at.part ?? undefined : undefined, at ? at.index + 1 : undefined).then(() => { toast(`Added ${t.title}`); setBetween(false); setSel(undefined) }))
   }
-  const library = useMemo(() => [...byId.values()], [byId])
+  // The editor also ranks the online tracks met in Add from, and anchors on online rows.
+  const library = useMemo(() => edit ? [...byId.values(), ...online] : [...byId.values()], [byId, online, edit])
+  const trackOfItem = (i?: PlaylistItem): MusicTrack | undefined => !i ? undefined : byId.get(i.track_id) ?? (i.library === 'online'
+    ? { id: i.track_id, library: 'online', libraryLabel: i.source ?? 'Online', source: i.source, title: i.title ?? 'Track', artist: i.artist ?? '', album: '', duration: i.duration ?? 0, folder: '' }
+    : undefined)
   const taken = items.map(i => i.track_id)
-  const anchor = items[target] && byId.get(items[target].track_id)
-  const then = between && items[target + 1] ? byId.get(items[target + 1].track_id) : undefined
+  const anchor = trackOfItem(items[target])
+  const then = between && items[target + 1] ? trackOfItem(items[target + 1]) : undefined
   /** Joins after a row that clash and were not kept, as flat indexes. */
   const clashes = useMemo(() => flat.flatMap((t, i) => i < flat.length - 1 && isClash(join(t, flat[i + 1])) && !kept.has(keptKey(t, flat[i + 1])) ? [i] : []), [flat, kept])
   const clashHere = between && clashes.includes(target)
@@ -280,7 +340,7 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
   /** The map's path: the rows whose track is in the library, and the rows touching a clashing join. */
   const stops = useMemo(() => items.flatMap(i => { const track = byId.get(i.track_id); return track ? [{ key: i.item_id, track }] : [] }), [items, byId])
   const clashRows = useMemo(() => new Set(clashes.flatMap(i => [items[i].item_id, items[i + 1].item_id])), [clashes, items])
-  const showMap = (m: 'list' | 'map') => { setMode(m); if (m === 'map' && wide) setInsp(true) }
+  const showMap = (m: 'list' | 'map') => { setMode(m); if (m === 'map' && wide && !edit) setInsp(true) }
   const mapping = mode === 'map' && !smart
   const titleAt = (i: number) => byId.get(items[i].track_id)?.title ?? items[i].title ?? 'Track'
   const reorder = (r: Reorder, text: string) => {
@@ -319,10 +379,11 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
       </div>
     )
   }
-  const inspector = insp && !smart && (anchor ? (
+  const inspector = !smart && (anchor ? (
     <FitsNext
       anchor={anchor} then={then} where={sel ? undefined : 'the last track'} library={library} exclude={taken}
-      action={{ label: 'Insert', onPick: insertAfterTarget }} onAfter={() => setBetween(false)} onClose={() => setInsp(false)}
+      action={{ label: 'Insert', onPick: insertAfterTarget }} onAfter={() => { setBetween(false); if (ft) aim({ k: 'row', item: ft.item }) }} onClose={edit && wide ? undefined : closeFits}
+      dragRow={edit ? t => dragProps(t) : undefined}
       footer={clashHere ? otherFixes() : undefined}
     />
   ) : <p className="p-4 text-sm text-base-content/60">Add a track to see what fits next.</p>)
@@ -363,6 +424,53 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
   }
   const shift = (i: PlaylistItem, part: string | null, at: number, by: number) =>
     run(playlistApi.moveItem(node.id, i.item_id, at + by, part ?? undefined))
+
+  /** Where a flat gap lands: before the item at it, or after the last one. */
+  const gapPlace = (gap: number): { part: string | null; index: number } => {
+    const at = items[gap] ? locate(node, items[gap].item_id) : items.length ? locate(node, items[items.length - 1].item_id) : null
+    return !at ? { part: null, index: 0 } : items[gap] ? at : { part: at.part, index: at.index + 1 }
+  }
+  /** The editor's drop (or Put here): a playlist row moves, any other track is added. */
+  const dropAt = (gap: number, d: Drag | undefined = getFocus().drag) => {
+    endDrag()
+    if (!d) return
+    const to = gapPlace(gap)
+    if (!d.item) {
+      run(playlistApi.add(node.id, [refOf(d.track)], to.part ?? undefined, to.index).then(() => toast(`Added ${d.track.title} as track ${gap + 1}`)))
+      return
+    }
+    const fi = flatIndex(d.item)
+    const from = locate(node, d.item)
+    if (!from || gap === fi || gap === fi + 1) return
+    const index = from.part === to.part && from.index < to.index ? to.index - 1 : to.index
+    run(playlistApi.moveItem(node.id, d.item, index, to.part ?? undefined))
+  }
+  // A drag dropped outside the playlist, or cancelled, ends here.
+  useEffect(() => {
+    if (!edit) return
+    window.addEventListener('dragend', endDrag)
+    return () => window.removeEventListener('dragend', endDrag)
+  }, [edit])
+  const tgtTrack = edit && focus.target?.k === 'track' ? focus.target.track : undefined
+  const tgtSum = useSummary(tgtTrack?.id)
+  /** Where it fits: the best gaps for the targeted track, numbered in the list. */
+  const pins = useMemo(() => {
+    const m = new Map<number, number>()
+    const x = tgtTrack && proxOf(tgtTrack, tgtSum)
+    if (x && !focus.drag && (x.harmony?.track || x.camelot)) spotsFor(flat, x, titleAt, tgtTrack!.title).forEach((sp, n) => m.set(sp.gap, n))
+    return m
+  }, [tgtTrack, tgtSum, flat, focus.drag]) // eslint-disable-line react-hooks/exhaustive-deps
+  const dragSum = useSummary(focus.drag?.track.id)
+  const dragX = (d: Drag): SetTrack => d.item && flatIndex(d.item) >= 0 ? flat[flatIndex(d.item)] : { ...proxOf(d.track, dragSum), duration: d.track.duration }
+  const fitsLabel = focus.drag ? 'Drop preview' : focus.pinned ? 'Pinned' : focus.target ? (matchMedia('(hover: hover)').matches ? 'Following your pointer' : 'Following your last tap') : 'Resting · after the last track'
+  const panel = !edit ? inspector : (
+    <>
+      <FocusBar pinned={focus.pinned} label={fitsLabel} />
+      {focus.drag ? <DropPreview drag={focus.drag} flat={flat} titleOf={titleAt} x={dragX(focus.drag)} />
+        : tgtTrack ? <WhereItFits track={tgtTrack} flat={flat} titleOf={titleAt} onPut={g => dropAt(g, { track: tgtTrack })} />
+          : inspector}
+    </>
+  )
 
   const playPart = (part?: string) => run(startPlayback(() => playlistApi.play(node.id, part).then(() => undefined)))
 
@@ -414,7 +522,8 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
             </ul>
           </div>
         )}
-        {!smart && <button onClick={() => setInsp(o => !o)} aria-pressed={insp} className={`btn btn-sm ${insp ? 'btn-primary btn-soft' : 'btn-ghost'}`}>Fits next</button>}
+        {!smart && !edit && <button onClick={() => setInsp(o => !o)} aria-pressed={insp} className={`btn btn-sm ${insp ? 'btn-primary btn-soft' : 'btn-ghost'}`}>Fits next</button>}
+        {!smart && !edit && onEdit && <button onClick={onEdit} className="btn btn-sm btn-primary btn-soft">Edit</button>}
         {smart ? (
           <>
             <button onClick={() => setEditing(true)} className="btn btn-ghost btn-sm">Edit rules</button>
@@ -494,11 +603,19 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
                     last={i === g.items.length - 1}
                     parts={partRefs}
                     here={g.id}
-                    selected={insp && !smart && flatIndex(item.item_id) === target}
-                    joinSelected={insp && !smart && between && flatIndex(item.item_id) === target}
+                    selected={fitsShown && !smart && !tgtTrack && flatIndex(item.item_id) === target}
+                    joinSelected={fitsShown && !smart && !tgtTrack && between && flatIndex(item.item_id) === target}
+                    {...(edit && !smart && {
+                      onAim: (j: boolean) => hover({ k: j ? 'join' : 'row', item: item.item_id }),
+                      onDragOverRow: (lower: boolean) => dragGap(flatIndex(item.item_id) + (lower ? 1 : 0)),
+                      gapBefore: focus.drag?.gap === flatIndex(item.item_id),
+                      gapAfter: item === items[items.length - 1] && focus.drag?.gap === items.length,
+                      pin: pins.get(flatIndex(item.item_id)),
+                      pinAfter: item === items[items.length - 1] ? pins.get(items.length) : undefined,
+                    })}
                     {...(!smart && {
-                      onDragStart: () => setDrag(item.item_id),
-                      onDropHere: () => drop({ part: g.id, index: i }),
+                      onDragStart: () => { if (edit) { const t = trackOfItem(item); if (t) startDrag({ track: t, item: item.item_id }) } else setDrag(item.item_id) },
+                      onDropHere: () => edit ? dropAt(getFocus().drag?.gap ?? flatIndex(item.item_id)) : drop({ part: g.id, index: i }),
                       onSelect: () => pick(item),
                       onUp: () => shift(item, g.id, i, -1),
                       onDown: () => shift(item, g.id, i, 1),
@@ -530,10 +647,10 @@ export default function PlaylistView({ node, byId, onPlaylist }: { node: Playlis
         </ResponsiveModal>
       )}
     </div>
-    {inspector && wide && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{inspector}</aside>}
-    {inspector && !wide && (
-      <ResponsiveModal onClose={() => setInsp(false)} boxClassName="flex h-[60vh] flex-col p-0">
-        {inspector}
+    {panel && fitsShown && wide && <aside aria-label="Fits" className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{panel}</aside>}
+    {panel && fitsShown && !wide && (
+      <ResponsiveModal onClose={closeFits} boxClassName="flex h-[60vh] flex-col p-0">
+        {panel}
       </ResponsiveModal>
     )}
     </div>

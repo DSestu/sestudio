@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playlist edit mode — decide</title>
+<style>
+:root{
+  --b1:oklch(16% .015 240);--b2:oklch(20% .02 240);--b3:oklch(26% .025 240);--b4:oklch(31% .025 240);
+  --tx:oklch(92% .01 240);--p:oklch(72% .16 230);--pink:oklch(80% .07 230 / .9);
+  --ok:oklch(76% .17 155);--warn:oklch(83% .16 85);--bad:oklch(68% .19 25);--rel:oklch(78% .13 300);--fifth:oklch(80% .12 200);
+  --dark:oklch(62% .2 330);--smooth:oklch(70% .12 190);--float:oklch(78% .1 260);--warm:oklch(76% .14 60);
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#05080d;color:var(--tx);font:14px/1.43 ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:oklch(72% .16 230 / .35)}
+.num{font-variant-numeric:tabular-nums}
+.dim{color:oklch(92% .01 240 / .55)}.dimmer{color:oklch(92% .01 240 / .4)}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.s{width:15px;height:15px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ---------- desktop frame ---------- */
+.desk{width:1440px;height:900px;background:var(--b1);position:relative;overflow:hidden;display:flex;gap:16px;padding:12px 16px 12px 12px}
+.rail{width:84px;flex:none;border-radius:16px;background:oklch(20% .02 240 / .6);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:6px}
+.rail .logo{width:28px;height:34px;margin-bottom:10px;color:var(--tx)}
+.rail .srch{width:52px;height:52px;border-radius:12px;background:var(--p);color:var(--b1);display:grid;place-items:center;margin-bottom:8px}
+.rail .it{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:oklch(92% .01 240 / .7);padding:8px 0;width:64px;border-radius:10px}
+.rail .it.on{color:var(--p)}.rail .it.on .ic{background:oklch(72% .16 230 / .18);border-radius:10px;padding:4px 14px}
+.rail .grow{flex:1}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.top{height:56px;border-radius:16px;background:var(--b2);border:1px solid var(--b3);display:flex;align-items:center;gap:12px;padding:0 8px 0 8px}
+.back{width:38px;height:38px;border-radius:10px;background:var(--b3);display:grid;place-items:center}
+.ttl{line-height:1.15}.ttl b{font-size:19px;font-weight:600;letter-spacing:-.02em}.ttl small{display:block;font-size:12px;color:oklch(92% .01 240 / .55)}
+.edtag{font-size:11px;font-weight:600;color:var(--p);background:oklch(72% .16 230 / .14);border-radius:99px;padding:3px 9px;margin-left:6px;vertical-align:3px}
+.top .sp{flex:1}
+.btn{height:32px;border-radius:6px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500}
+.btn.pr{background:var(--p);color:oklch(18% .05 230)}.btn.gh{color:oklch(92% .01 240 / .8)}.btn.gh:hover{background:var(--b3)}
+.btn.soft{background:oklch(72% .16 230 / .14);color:var(--p)}
+.undo{font-size:12px}
+
+.cols{flex:1;min-height:0;display:grid;grid-template-columns:352px minmax(0,1fr) 372px;gap:12px}
+.col{min-height:0;border-radius:16px;background:oklch(20% .02 240 / .55);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.colh{padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid oklch(26% .025 240 / .7)}
+.colh .row1{display:flex;align-items:center;gap:8px}
+.h{font-size:15px;font-weight:600;letter-spacing:-.02em}
+.seg{display:inline-flex;background:oklch(100% 0 0 / .05);border-radius:99px;padding:2px}
+.seg b{font-weight:500;font-size:12px;height:28px;padding:0 13px;border-radius:99px;display:inline-flex;align-items:center;gap:6px;color:oklch(92% .01 240 / .7)}
+.seg b.on{background:oklch(72% .16 230 / .2);color:var(--p)}
+.field{height:34px;border-radius:8px;background:var(--b1);border:1px solid var(--b3);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;color:oklch(92% .01 240 / .45)}
+.field.live{border-color:oklch(72% .16 230 / .8);box-shadow:0 0 0 3px oklch(72% .16 230 / .15);color:var(--tx)}
+.crumbs{display:flex;align-items:center;gap:4px;font-size:12.5px;flex-wrap:wrap}
+.crumbs a{color:oklch(92% .01 240 / .6);padding:2px 5px;border-radius:5px}.crumbs a:hover{background:var(--b3)}
+.crumbs .sep{color:oklch(92% .01 240 / .3)}.crumbs .cur{color:var(--tx);font-weight:600;padding:2px 5px}
+.scroll{flex:1;min-height:0;overflow:hidden;padding:6px}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.02em;color:oklch(92% .01 240 / .45);padding:10px 8px 6px;display:flex;align-items:center;gap:8px}
+.lbl .r{margin-left:auto;font-weight:500;letter-spacing:0}
+
+/* source rows */
+.srow{display:flex;align-items:center;gap:10px;height:44px;padding:0 8px;border-radius:9px;position:relative}
+.srow:hover,.srow.hov{background:oklch(100% 0 0 / .05)}
+.srow.hov{box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .45);background:oklch(72% .16 230 / .08)}
+.srow .grip{color:oklch(92% .01 240 / .25);width:12px}
+.srow .t{flex:1;min-width:0;line-height:1.2}.srow .t b{display:block;font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .du{font-size:12px;color:oklch(92% .01 240 / .5);width:36px;text-align:right}
+.fold{width:30px;height:30px;border-radius:7px;background:var(--b3);display:grid;place-items:center;color:oklch(92% .01 240 / .7);flex:none}
+.fold.lib{background:oklch(72% .16 230 / .14);color:var(--p)}
+.cnt{font-size:12px;color:oklch(92% .01 240 / .45)}
+.chev{color:oklch(92% .01 240 / .3)}
+.inpl{font-size:10.5px;color:var(--ok);background:oklch(76% .17 155 / .12);border-radius:99px;padding:2px 7px;white-space:nowrap}
+.drawer{position:absolute;right:6px;top:7px;display:flex;gap:4px}
+.drawer b{height:30px;border-radius:7px;background:var(--b4);display:inline-flex;align-items:center;gap:5px;padding:0 9px;font-weight:500;font-size:12px}
+.drawer b.pr{background:var(--p);color:oklch(18% .05 230)}
+.ldot{width:8px;height:8px;border-radius:99px;background:var(--ok);flex:none}
+
+.key{display:inline-flex;align-items:center;gap:5px;font-size:11px;border-radius:5px;background:oklch(100% 0 0 / .07);padding:2px 6px;color:oklch(92% .01 240 / .75);white-space:nowrap}
+.key i{width:8px;height:8px;border-radius:99px;display:inline-block}
+.bpm{font-size:11.5px;color:oklch(92% .01 240 / .45);white-space:nowrap}
+.gen{font-size:11px;color:var(--smooth);border:1px solid oklch(70% .12 190 / .45);border-radius:99px;padding:1px 7px;white-space:nowrap}
+.na{font-size:11px;color:oklch(92% .01 240 / .4);font-style:normal;white-space:nowrap}
+
+/* playlist */
+.plh{padding:12px 16px 10px;display:flex;align-items:center;gap:12px;border-bottom:1px solid oklch(26% .025 240 / .7)}
+.plh .meta{font-size:12.5px;color:oklch(92% .01 240 / .55)}
+.chip{font-size:12px;border-radius:99px;padding:2px 9px;white-space:nowrap}
+.chip.warn{background:oklch(83% .16 85 / .14);color:var(--warn)}
+.curve{height:46px;margin:8px 16px 4px;border-radius:10px;background:var(--b1);position:relative;overflow:hidden}
+.prow{display:flex;align-items:center;gap:10px;height:46px;padding:0 10px 0 6px;border-radius:9px;position:relative}
+.prow:hover,.prow.hov{background:oklch(100% 0 0 / .05)}
+.prow.lifted{opacity:.35}
+.prow .ix{width:20px;text-align:right;font-size:11.5px;color:oklch(92% .01 240 / .35)}
+.prow .t{flex:1;min-width:0;line-height:1.2}.prow .t b{display:block;font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.prow .du{font-size:12px;color:oklch(92% .01 240 / .55);width:38px;text-align:right}
+.prow .grip{color:oklch(92% .01 240 / .25)}
+.prow.now .t b{color:var(--p)}
+.join{height:22px;display:flex;align-items:center;gap:8px;padding-left:36px;position:relative}
+.join::before{content:"";position:absolute;left:26px;right:14px;top:50%;height:1px;background:oklch(26% .025 240 / .9)}
+.jc{position:relative;font-size:11px;border-radius:99px;padding:1px 8px;background:var(--b2);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;box-shadow:0 0 0 3px var(--b2)}
+.jc i{width:6px;height:6px;border-radius:99px;display:inline-block}
+.jc.m{color:var(--ok)}.jc.m i{background:var(--ok)}
+.jc.f{color:var(--fifth)}.jc.f i{background:var(--fifth)}
+.jc.r{color:var(--rel)}.jc.r i{background:var(--rel)}
+.jc.c{color:var(--warn)}.jc.c i{background:var(--warn)}
+.jc.x{color:var(--bad)}.jc.x i{background:var(--bad)}
+.jc .sub{color:oklch(92% .01 240 / .45)}
+.join.hov::before{background:oklch(72% .16 230 / .7);height:2px}
+.join.hov .jc{box-shadow:0 0 0 1px oklch(72% .16 230 / .7),0 0 0 4px var(--b2)}
+.pin{position:relative;width:18px;height:18px;border-radius:99px;background:var(--p);color:oklch(18% .05 230);font-size:11px;font-weight:700;display:grid;place-items:center;box-shadow:0 0 0 3px var(--b2)}
+.pin.g{background:oklch(72% .16 230 / .25);color:var(--p)}
+.ghostline{height:0;position:relative;margin:0 14px 0 26px}
+.ins{height:50px;margin:2px 4px;border-radius:10px;border:1.5px dashed oklch(72% .16 230 / .75);background:oklch(72% .16 230 / .07);display:flex;align-items:center;gap:10px;padding:0 10px;position:relative}
+.ins .t b{font-size:13.5px;font-weight:500}.ins .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.dragcard{position:absolute;z-index:20;width:300px;height:48px;border-radius:10px;background:var(--b4);box-shadow:0 14px 30px -6px #000c,0 0 0 1px oklch(72% .16 230 / .6);display:flex;align-items:center;gap:10px;padding:0 10px;transform:rotate(-1.5deg)}
+.dragcard .t b{font-size:13px;font-weight:500;display:block}.dragcard .t small{font-size:11px;color:oklch(92% .01 240 / .55)}
+.cursor{position:absolute;z-index:21;width:18px;height:22px}
+
+/* fits */
+.fh{padding:12px 14px 10px;border-bottom:1px solid oklch(26% .025 240 / .7);display:flex;flex-direction:column;gap:8px}
+.follow{display:flex;align-items:center;gap:7px;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.follow .dot{width:7px;height:7px;border-radius:99px;background:var(--p);box-shadow:0 0 0 3px oklch(72% .16 230 / .2)}
+.follow .pinb{margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:7px;color:oklch(92% .01 240 / .7);background:oklch(100% 0 0 / .05)}
+.follow .pinb.on{color:var(--p);background:oklch(72% .16 230 / .15)}
+.about{display:flex;align-items:center;gap:10px}
+.about .art{width:40px;height:40px;border-radius:7px;background:var(--b3);flex:none;background-size:cover;background-position:center}
+.about .t{min-width:0;flex:1;line-height:1.25}.about .t b{font-size:15px;font-weight:600;letter-spacing:-.015em;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.about .t small{font-size:12px;color:oklch(92% .01 240 / .55)}
+.frow{display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:9px;position:relative}
+.frow:hover{background:oklch(100% 0 0 / .05)}
+.frow .t{flex:1;min-width:0;line-height:1.28}.frow .t b{display:block;font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.why{font-size:11.5px;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.why i{width:7px;height:7px;border-radius:99px;display:inline-block}
+.src{font-size:10.5px;border-radius:4px;padding:1px 5px;background:oklch(100% 0 0 / .07);color:oklch(92% .01 240 / .6)}
+.plus{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;color:var(--p)}
+.spot{border-radius:10px;background:oklch(100% 0 0 / .035);padding:10px 12px;display:flex;gap:10px;align-items:flex-start;margin:0 6px 6px}
+.spot.best{background:oklch(72% .16 230 / .09);box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .35)}
+.spot .t{flex:1;min-width:0}.spot .t b{font-size:13px;font-weight:500;display:block}
+.spot .t small{font-size:12px;color:oklch(92% .01 240 / .55);display:block;margin-top:2px}
+.spot .lines{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.verdict{margin:10px 6px 8px;padding:12px;border-radius:12px;background:oklch(100% 0 0 / .04)}
+.verdict .vh{font-size:13px;font-weight:600;margin-bottom:8px}
+.vline{display:grid;grid-template-columns:86px 1fr;gap:6px;font-size:12.5px;padding:3px 0}
+.vline span:first-child{color:oklch(92% .01 240 / .5)}
+.bar{height:6px;border-radius:99px;background:var(--b3);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--ok);border-radius:99px}
+.tip{font-size:12px;color:oklch(92% .01 240 / .55);padding:4px 10px 10px}
+
+/* online */
+.oart{width:44px;height:44px;border-radius:6px;background:var(--b3) center/cover;flex:none}
+.orow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:9px;position:relative}
+.orow.hov{background:oklch(72% .16 230 / .08);box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .45)}
+.orow .t{flex:1;min-width:0;line-height:1.25}.orow .t b{display:block;font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.orow .facts{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
+.anl{height:28px;border-radius:7px;border:1px solid oklch(72% .16 230 / .5);color:var(--p);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px;padding:0 9px;white-space:nowrap}
+.prog{display:flex;flex-direction:column;gap:3px;font-size:11px;width:118px}
+.prog .st{display:flex;align-items:center;gap:5px;color:oklch(92% .01 240 / .5)}
+.prog .st.done{color:var(--ok)}.prog .st.run{color:var(--p)}
+.spin{width:10px;height:10px;border-radius:99px;border:2px solid oklch(72% .16 230 / .3);border-top-color:var(--p);display:inline-block}
+.srail{width:88px;flex:none;border-right:1px solid oklch(26% .025 240 / .7);padding:6px;display:flex;flex-direction:column;gap:3px}
+.stop{border-radius:9px;padding:8px;font-size:12px;line-height:1.2;color:oklch(92% .01 240 / .7)}
+.stop b{display:block;font-weight:500;font-size:12.5px}.stop small{font-size:11px;color:oklch(92% .01 240 / .45)}
+.stop.on{background:oklch(72% .16 230 / .14);color:var(--p)}.stop.on small{color:oklch(72% .16 230 / .75)}
+.stopdiv{font-size:10px;color:oklch(92% .01 240 / .35);padding:6px 8px 2px;letter-spacing:.04em}
+
+.note{position:absolute;z-index:40;background:oklch(83% .16 85);color:#1a1405;font-size:12px;font-weight:600;border-radius:8px;padding:6px 9px;max-width:230px;line-height:1.3;box-shadow:0 8px 20px -6px #000a}
+.note:before{content:attr(data-n);display:inline-grid;place-items:center;width:17px;height:17px;border-radius:99px;background:#1a1405;color:oklch(83% .16 85);font-size:10.5px;margin-right:6px;vertical-align:1px}
+
+/* ---------- phone ---------- */
+.phone{width:390px;height:844px;background:var(--b1);position:relative;overflow:hidden;display:flex;flex-direction:column}
+.ptop{margin:10px 12px 0;height:56px;border-radius:16px;background:var(--b2);border:1px solid var(--b3);display:flex;align-items:center;gap:10px;padding:0 8px;flex:none}
+.pbody{flex:1;min-height:0;overflow:hidden;padding:8px 8px 0;position:relative}
+.dock{position:absolute;left:12px;right:12px;bottom:14px;height:62px;border-radius:20px;background:oklch(26% .025 240 / .92);backdrop-filter:blur(12px);display:flex;align-items:center;padding:6px;gap:6px;box-shadow:0 10px 30px -8px #000c;z-index:10}
+.dock b{flex:1;height:50px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:500;color:oklch(92% .01 240 / .75)}
+.dock b.on{background:oklch(72% .16 230 / .18);color:var(--p)}
+.dock b small{font-size:10px;color:oklch(92% .01 240 / .45);max-width:100px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dock b.on small{color:oklch(72% .16 230 / .7)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--b2);border-radius:20px 20px 0 0;box-shadow:0 -14px 40px -8px #000d;display:flex;flex-direction:column;z-index:12;border-top:1px solid var(--b3)}
+.handle{width:40px;height:4px;border-radius:99px;background:oklch(92% .01 240 / .25);margin:8px auto 4px}
+.pchips{display:flex;gap:6px;overflow:hidden;padding:0 12px 8px}
+.pchips b{height:32px;border-radius:99px;background:oklch(100% 0 0 / .06);font-size:12px;font-weight:500;padding:0 12px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:oklch(92% .01 240 / .75)}
+.pchips b.on{background:oklch(72% .16 230 / .2);color:var(--p)}
+.pchips .div{width:1px;background:var(--b4);margin:6px 2px}
+.phone .prow{height:50px}
+.phone .srow{height:50px}
+.scrim{position:absolute;inset:0;background:#0006;z-index:11}
+.lift{position:absolute;z-index:30;left:20px;right:30px;height:52px;border-radius:12px;background:var(--b4);box-shadow:0 16px 30px -6px #000d,0 0 0 1px oklch(72% .16 230 / .6);display:flex;align-items:center;gap:10px;padding:0 12px;transform:rotate(-1.2deg)}
+.finger{position:absolute;z-index:31;width:34px;height:34px;border-radius:99px;background:oklch(92% .01 240 / .25);box-shadow:0 0 0 2px oklch(92% .01 240 / .4)}
+
+/* board */
+.board{padding:28px;display:flex;flex-direction:column;gap:30px}
+.scene{display:flex;flex-direction:column;gap:10px}
+.scene h2{font-size:18px;font-weight:600;letter-spacing:-.02em}
+.scene p{font-size:13px;color:oklch(92% .01 240 / .65);max-width:900px}
+.st{font-size:11px;color:var(--p);font-weight:600}
+</style>
+<style>
+html,body{height:100%;overflow:hidden;background:var(--b1)}
+.cols.two{grid-template-columns:260px minmax(0,1fr)}
+.cols.two.fits{grid-template-columns:260px minmax(0,1fr) 372px}
+.scroll{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--b4) transparent}
+[data-h]{cursor:default}
+.srow[data-drag],.frow[data-drag],.orow[data-drag],.prow[data-drag]{cursor:grab}
+.srow.nodrag{cursor:not-allowed}
+.srow.folder{cursor:pointer}
+.srow .x,.prow .x{opacity:0;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:oklch(92% .01 240 / .5)}
+.prow:hover .x{opacity:1}.prow .x:hover{background:var(--b4);color:var(--bad)}
+.srow:hover .drawer,.orow:hover .drawer{display:flex}
+.drawer{display:none}
+.srow .drawer{top:7px}
+.orow .drawer{top:50%;transform:translateY(-50%)}
+.prev{box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .3)}
+.tgt{box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .6);background:oklch(72% .16 230 / .08)}
+.join[data-h]{cursor:pointer}
+.join.tgt{background:none;box-shadow:none}
+.join.tgt::before{background:oklch(72% .16 230 / .8);height:2px}
+.join.tgt .jc{box-shadow:0 0 0 1px oklch(72% .16 230 / .8),0 0 0 4px var(--b2)}
+.join.prevj::before{background:oklch(72% .16 230 / .45)}
+.jc.u{color:oklch(92% .01 240 / .5)}.jc.u i{background:oklch(92% .01 240 / .35)}
+.ghost{position:fixed;z-index:100;pointer-events:none;width:300px;height:48px;border-radius:10px;background:var(--b4);box-shadow:0 14px 30px -6px #000c,0 0 0 1px oklch(72% .16 230 / .6);display:flex;align-items:center;gap:10px;padding:0 10px;transform:rotate(-1.5deg)}
+.ghost.no{box-shadow:0 14px 30px -6px #000c,0 0 0 1px oklch(68% .19 25 / .7)}
+.ghost .t b{font-size:13px;font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ghost .t small{font-size:11px;color:oklch(92% .01 240 / .55)}
+.ins{animation:open .16s var(--ease)}
+@keyframes open{from{height:0;opacity:0}}
+.ins.no{border-color:oklch(68% .19 25 / .7);background:oklch(68% .19 25 / .07)}
+body.dragging,body.dragging *{cursor:grabbing!important;user-select:none}
+.toast{position:fixed;left:50%;top:76px;transform:translateX(-50%);background:var(--b4);color:var(--tx);border-radius:10px;padding:10px 14px;font-size:13px;box-shadow:0 10px 30px -8px #000c;z-index:90;display:flex;gap:12px;align-items:center}
+.toast button{color:var(--p);font-weight:600}
+.spin{animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.anl:hover{background:oklch(72% .16 230 / .12)}
+.shell{display:flex;flex-direction:column;height:100vh}
+.shell .desk{flex:1;min-height:0;height:auto;width:100vw}
+.decide{flex:none;display:grid;grid-template-columns:1fr 1fr 1fr 150px;gap:18px;padding:12px 16px 14px;background:oklch(22% .025 240);border-top:1px solid var(--b4);font-size:13px}
+.decide.min{display:flex;align-items:center;gap:12px;padding:6px 16px}
+.qq{display:flex;flex-direction:column;gap:6px;min-width:0}
+.qq h4{font-size:12.5px;font-weight:600}.qq h4 small{font-weight:400;color:oklch(92% .01 240 / .5)}
+.opts{display:flex;flex-direction:column;gap:4px}
+.opt{display:flex;gap:8px;align-items:center;text-align:left;border-radius:8px;padding:5px 8px;background:oklch(100% 0 0 / .04);border:1px solid transparent;font-size:12.5px}
+.opt:hover{background:oklch(100% 0 0 / .07)}
+.opt.on{border-color:oklch(72% .16 230 / .6);background:oklch(72% .16 230 / .12);color:var(--p)}
+.opt .l{width:18px;height:18px;border-radius:99px;flex:none;display:grid;place-items:center;font-size:10.5px;font-weight:700;background:var(--b4);color:oklch(92% .01 240 / .7)}
+.opt.on .l{background:var(--p);color:oklch(18% .05 230)}
+.opt b{font-weight:500}
+.desc{font-size:11.5px;color:oklch(92% .01 240 / .6);line-height:1.4}
+.try{font-size:11.5px;color:var(--p)}
+.side{display:flex;flex-direction:column;gap:6px;justify-content:flex-start}
+.wideinfo{font-size:11.5px;color:oklch(92% .01 240 / .5);padding:0 4px}
+.nav-pl{display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;border-radius:9px;font-size:13.5px}
+.nav-pl.on{background:var(--p);color:oklch(18% .05 230)}
+.kbd{font-size:10.5px;border:1px solid var(--b4);border-radius:4px;padding:0 4px;color:oklch(92% .01 240 / .5)}
+</style></head>
+<body>
+<div id="app"></div>
+<script>
+const DATA={"tracks":[{"id":"8684cf32cab32abc","lib":"neuro soundcloud","folder":"","title":"A Taste Of Hope (Emperor Remix)","artist":"","dur":314,"bpm":172,"tonic":"F","mode":"Aeolian","energy":85,"genre":"Drum & Bass"},{"id":"b2826662119f4359","lib":"neuro soundcloud","folder":"","title":"Aurora (Justin Hawkes Remix) [feat. Metrik]","artist":"","dur":231,"bpm":175,"tonic":"F","mode":"Aeolian","energy":92,"genre":"Drum & Bass"},{"id":"519a68cd5c64fa44","lib":"neuro soundcloud","folder":"","title":"Best Of Me ft. Dia Frampton","artist":"","dur":253,"bpm":124,"tonic":"F","mode":"Ionian","energy":75,"genre":"Dubstep"},{"id":"30598f294aef6b45","lib":"neuro soundcloud","folder":"","title":"Black Bloc","artist":"","dur":251,"bpm":172,"tonic":"C#","mode":"Aeolian","energy":88,"genre":"Drum & Bass"},{"id":"023f69c42d4b2dd5","lib":"neuro soundcloud","folder":"","title":"D_Minds & Mefjus  - Systematic V4","artist":"","dur":271,"bpm":172,"tonic":"F","mode":"Dorian","energy":93,"genre":"Drum & Bass"},{"id":"3b80b25cdbcb8607","lib":"neuro soundcloud","folder":"","title":"I'm Back","artist":"Dodge & Fuski","dur":200,"bpm":150,"tonic":"D#","mode":"Aeolian","energy":79,"genre":"Dubstep"},{"id":"edceb5c3825a15b5","lib":"neuro soundcloud","folder":"","title":"Dune","artist":"","dur":127,"bpm":174,"tonic":"F","mode":"Aeolian","energy":92,"genre":"Drum & Bass"},{"id":"9b823ad81dbeb5b0","lib":"neuro soundcloud","folder":"","title":"Hear The Lies [Premiere]","artist":"Eluun","dur":235,"bpm":172,"tonic":"F","mode":"Aeolian","energy":90,"genre":"Drum & Bass"},{"id":"7b11e72abdf18f4c","lib":"neuro soundcloud","folder":"","title":"You left me","artist":"Eluun","dur":213,"bpm":174,"tonic":"F","mode":"Aeolian","energy":92,"genre":"Drum & Bass"},{"id":"7531ae77e443e114","lib":"neuro soundcloud","folder":"","title":"All I Ever Wanted","artist":"Emperor","dur":297,"bpm":172,"tonic":"G","mode":"Aeolian","energy":82,"genre":"Drum & Bass"},{"id":"59f76cc844f8ab48","lib":"neuro soundcloud","folder":"","title":"Sunder","artist":"Emperor","dur":276,"bpm":174,"tonic":"D#","mode":"Phrygian dominant","energy":88,"genre":"Drum & Bass"},{"id":"ecd93d6dba0878ea","lib":"neuro soundcloud","folder":"","title":"These Days","artist":"Emperor","dur":268,"bpm":172,"tonic":"G","mode":"Dorian","energy":86,"genre":"Drum & Bass"},{"id":"ee139a5d32e093f3","lib":"neuro soundcloud","folder":"","title":"Fade Black - Elysium","artist":"Fade Black","dur":247,"bpm":175,"tonic":"D","mode":"Aeolian","energy":93,"genre":"Drum & Bass"},{"id":"1c5d538802fe9f29","lib":"neuro soundcloud","folder":"","title":"Farewell","artist":"","dur":239,"bpm":172,"tonic":"G","mode":"Aeolian","energy":76,"genre":"Ambient"},{"id":"819f8372c3bdaa27","lib":"neuro soundcloud","folder":"","title":"Blej (Fade Black Remix)","artist":"Halogenix","dur":285,"bpm":172,"tonic":"D#","mode":"Phrygian dominant","energy":88,"genre":"Drum & Bass"},{"id":"0796840f8af03c4b","lib":"neuro soundcloud","folder":"","title":"Hear Me","artist":"","dur":249,"bpm":172,"tonic":"B","mode":"Harmonic minor","energy":94,"genre":"Drum & Bass"},{"id":"d58308bd191e32e6","lib":"neuro soundcloud","folder":"","title":"If I Could (OUT NOW)","artist":"","dur":253,"bpm":172,"tonic":"F","mode":"Aeolian","energy":85,"genre":"Drum & Bass"},{"id":"8d06f02771f3e08a","lib":"neuro soundcloud","folder":"","title":"Pure Action","artist":"Kumarion","dur":203,"bpm":174,"tonic":"E","mode":"Aeolian","energy":82,"genre":"Drum & Bass"},{"id":"25f7e06d75a5912f","lib":"neuro soundcloud","folder":"","title":"Wanna","artist":"Kumarion","dur":220,"bpm":172,"tonic":"G","mode":"Aeolian","energy":74,"genre":"Drum & Bass"},{"id":"74a5bf61ca4133ac","lib":"neuro soundcloud","folder":"","title":"Before You","artist":"Maysev & The Caracal Project","dur":224,"bpm":165,"tonic":"C#","mode":"Aeolian","energy":67,"genre":"Drum & Bass"},{"id":"10e6fe52a9d31aa7","lib":"neuro soundcloud","folder":"","title":"Left","artist":"Maysev","dur":192,"bpm":172,"tonic":"D#","mode":"Aeolian","energy":86,"genre":"Drum & Bass"},{"id":"d9e7b31c4c167615","lib":"neuro soundcloud","folder":"","title":"Dopamine Hits","artist":"Mefjus & Maksim MC","dur":190,"bpm":172,"tonic":"D#","mode":"Harmonic minor","energy":96,"genre":"Drum & Bass"},{"id":"02ae589c4a1f3562","lib":"neuro soundcloud","folder":"","title":"No Way Out (feat. Mira Lu Kovacs)","artist":"","dur":245,"bpm":175,"tonic":"G","mode":"Aeolian","energy":91,"genre":"Drum & Bass"},{"id":"9da844295da84516","lib":"neuro soundcloud","folder":"","title":"Concussion (Mefjus Remix)","artist":"Noisia","dur":226,"bpm":172,"tonic":"F","mode":"Phrygian dominant","energy":94,"genre":"Drum & Bass"},{"id":"d7e43aff07df2ab8","lib":"neuro soundcloud","folder":"","title":"Nonplus","artist":"","dur":233,"bpm":172,"tonic":"E","mode":"Harmonic minor","energy":92,"genre":"Drum & Bass"},{"id":"da88dd3d17bd1c45","lib":"neuro soundcloud","folder":"","title":"Perseverance","artist":"","dur":232,"bpm":172,"tonic":"D#","mode":"Aeolian","energy":80,"genre":"Drum & Bass"},{"id":"4b5a7554fc4ea504","lib":"neuro soundcloud","folder":"","title":"Physically","artist":"Mefjus","dur":112,"bpm":172,"tonic":"E","mode":"Aeolian","energy":95,"genre":"Drum & Bass"},{"id":"f6a30cb9ba055119","lib":"neuro soundcloud","folder":"","title":"Pray For Me (feat. Joe Killington)","artist":"","dur":245,"bpm":175,"tonic":"C","mode":"Aeolian","energy":91,"genre":"Drum & Bass"},{"id":"9d535091c7778743","lib":"neuro soundcloud","folder":"","title":"7. Virtual Riot - Scorched Earth","artist":"","dur":281,"bpm":135,"tonic":"D#","mode":"Aeolian","energy":76,"genre":"Dubstep"},{"id":"e454471fd3947ebb","lib":"neuro soundcloud","folder":"","title":"Sh＊t's On F＊re","artist":"","dur":245,"bpm":150,"tonic":"D","mode":"Aeolian","energy":88,"genre":"Dubstep"},{"id":"dc1fd36e0c4b291c","lib":"neuro soundcloud","folder":"","title":"Mefjus & Camo & Krooked","artist":"Sidewinder","dur":207,"bpm":172,"tonic":"G","mode":"Dorian","energy":94,"genre":"Drum & Bass"},{"id":"cb92d83b9ddc391d","lib":"neuro soundcloud","folder":"","title":"Sinkhole (OUT NOW)","artist":"","dur":313,"bpm":172,"tonic":"F","mode":"Phrygian dominant","energy":89,"genre":"Drum & Bass"},{"id":"4f74595973bda4ff","lib":"neuro soundcloud","folder":"","title":"Supersonic (My Existence)","artist":"Skrillex, Noisia, josh pan & Dylan Brady","dur":165,"bpm":172,"tonic":"A","mode":"Harmonic minor","energy":61,"genre":"Drum & Bass"},{"id":"a0bb836f90e376b4","lib":"neuro soundcloud","folder":"","title":"Stargazer","artist":"Skylark","dur":201,"bpm":172,"tonic":"C","mode":"Aeolian","energy":83,"genre":"Drum & Bass"},{"id":"f1f975e3c236a225","lib":"neuro soundcloud","folder":"","title":"Mesmer","artist":"Sota, Circadian, Mila Falls","dur":281,"bpm":174,"tonic":"A#","mode":"Harmonic minor","energy":83,"genre":"Drum & Bass"},{"id":"b0147ac6e08344b0","lib":"neuro soundcloud","folder":"","title":"A - Mefjus - Suicide Bassline VIP [clip]","artist":"","dur":174,"bpm":172,"tonic":"G","mode":"Harmonic minor","energy":84,"genre":"Drum & Bass"},{"id":"bc9f45b034c2bedd","lib":"neuro soundcloud","folder":"","title":"Noir","artist":"Teddy Killerz","dur":226,"bpm":174,"tonic":"G","mode":"Phrygian","energy":87,"genre":"Drum & Bass"},{"id":"2f1ba32e27eee751","lib":"neuro soundcloud","folder":"","title":"The Hole","artist":"","dur":315,"bpm":172,"tonic":"F","mode":"Mixolydian","energy":76,"genre":"Drum & Bass"},{"id":"0946b577e3d1c7fb","lib":"neuro soundcloud","folder":"","title":"Nightmare feat. Splitbreed","artist":"Virtual Riot & Autodrive","dur":254,"bpm":145,"tonic":"E","mode":"Phrygian dominant","energy":80,"genre":"Dubstep"},{"id":"22663ef9591311cc","lib":"neuro soundcloud","folder":"","title":"Damage ft. Shaquille O'Neal","artist":"Virtual Riot & DIESEL","dur":195,"bpm":174,"tonic":"D#","mode":"Phrygian","energy":75,"genre":"Drum & Bass"},{"id":"678763650e65cbe2","lib":"neuro soundcloud","folder":"","title":"So Sorry (RANKZ Remix)","artist":"Virtual Riot","dur":159,"bpm":145,"tonic":"D#","mode":"Phrygian","energy":81,"genre":"Dubstep"},{"id":"25c8f4912aeea937","lib":"neuro soundcloud","folder":"","title":"Statues","artist":"Virtual Riot","dur":243,"bpm":150,"tonic":"D","mode":"Aeolian","energy":88,"genre":"Dubstep"},{"id":"77d8a19c6b96048b","lib":"neuro soundcloud","folder":"","title":"Found You ft. CHROME","artist":"Virtual Riot, Dodge & Fuski","dur":247,"bpm":150,"tonic":"E","mode":"Aeolian","energy":80,"genre":"Dubstep"},{"id":"644640c054ddb031","lib":"neuro soundcloud","folder":"","title":"The First Time","artist":"Virtual Riot, Tokyo Machine","dur":190,"bpm":145,"tonic":"G","mode":"Ionian","energy":82,"genre":"Dubstep"},{"id":"2e069b76f2a482a2","lib":"neuro soundcloud","folder":"","title":"Twerp","artist":"Waeys, Bensley & Hoax","dur":220,"bpm":175,"tonic":"D#","mode":"Aeolian","energy":67,"genre":"Drum & Bass"},{"id":"3469c987755a94f2","lib":"neuro soundcloud","folder":"","title":"Without Them","artist":"","dur":346,"bpm":172,"tonic":"E","mode":"Dorian","energy":95,"genre":"Drum & Bass"},{"id":"e9976e8478227fa4","lib":"Deadmau5","folder":"Random Album Title","title":"Sometimes Things Get, Whatever","artist":"Deadmau5","dur":435,"bpm":128,"tonic":"F#","mode":"Phrygian dominant","energy":59,"genre":"Electronic"},{"id":"d1b012bd063edee5","lib":"Deadmau5","folder":"Random Album Title","title":"Complications","artist":"Deadmau5","dur":331,"bpm":128,"tonic":"B","mode":"Phrygian","energy":42,"genre":"Electronic"},{"id":"dc1ab5aaa493c51e","lib":"Deadmau5","folder":"Random Album Title","title":"Slip","artist":"Deadmau5","dur":404,"bpm":128,"tonic":"F","mode":"Aeolian","energy":50,"genre":"Electronic"},{"id":"d5abe0563adfa1ab","lib":"Deadmau5","folder":"Random Album Title","title":"Some Kind of Blue","artist":"Deadmau5","dur":379,"bpm":128,"tonic":"G","mode":"Aeolian","energy":39,"genre":"Electronic"},{"id":"ce53cc2c0a6b02c8","lib":"Deadmau5","folder":"Random Album Title","title":"Brazil [2nd Edit]","artist":"Deadmau5","dur":333,"bpm":128,"tonic":"G#","mode":"Mixolydian","energy":45,"genre":"Electronic"},{"id":"f89d91b4cbef618e","lib":"Deadmau5","folder":"Random Album Title","title":"Alone with You [Original Mix]","artist":"Deadmau5","dur":450,"bpm":128,"tonic":"D#","mode":"Lydian","energy":50,"genre":"Electronic"},{"id":"8b370c0258506305","lib":"Deadmau5","folder":"Random Album Title","title":"I Remember","artist":"Deadmau5/Kaskade","dur":547,"bpm":128,"tonic":"B","mode":"Aeolian","energy":51,"genre":"Electronic"},{"id":"aeb7233dd2ff1a6d","lib":"Deadmau5","folder":"Random Album Title","title":"Faxing Berlin [Piano Acoustic Version]","artist":"Deadmau5","dur":99,"bpm":128,"tonic":"D","mode":"Aeolian","energy":25,"genre":"Electronic"},{"id":"05bf24d82ac7320b","lib":"Deadmau5","folder":"Random Album Title","title":"Faxing Berlin","artist":"Deadmau5","dur":156,"bpm":128,"tonic":"D","mode":"Aeolian","energy":44,"genre":"Electronic"},{"id":"17a20c2eb1c7fe64","lib":"Deadmau5","folder":"Random Album Title","title":"Not Exactly [Original Version]","artist":"Deadmau5","dur":480,"bpm":128,"tonic":"F","mode":"Mixolydian","energy":43,"genre":"Electronic"},{"id":"05bccfb55dd0a8ca","lib":"Deadmau5","folder":"Random Album Title","title":"Arguru","artist":"Deadmau5","dur":330,"bpm":128,"tonic":"E","mode":"Phrygian","energy":50,"genre":"Electronic"},{"id":"fbbdaf7189ba2593","lib":"Deadmau5","folder":"Random Album Title","title":"So There I Was","artist":"Deadmau5","dur":409,"bpm":128,"tonic":"F#","mode":"Ionian","energy":52,"genre":"Electronic"},{"id":"9316683a82df08d2","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Avaritia","artist":"Deadmau5","dur":403,"bpm":128,"tonic":"D","mode":"Aeolian","energy":58,"genre":"Progressive House"},{"id":"80464071c867d1d7","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Coelacanth I","artist":"Deadmau5","dur":166,"bpm":144,"tonic":"D","mode":"Aeolian","energy":53,"genre":"Electronic"},{"id":"de4291692b382c2a","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Ice Age (Deadmau5 Remix)","artist":"How To Destroy Angels","dur":412,"bpm":146,"tonic":"D","mode":"Ionian","energy":40,"genre":"Electronic"},{"id":"e4d8da98bbf5e12e","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"My Pet Coelacanth","artist":"Deadmau5","dur":495,"bpm":128,"tonic":"F","mode":"Ionian","energy":49,"genre":"Electro House"},{"id":"9432ffdec2a63c31","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Infra Turbo Pigcart Racer","artist":"Deadmau5","dur":576,"bpm":128,"tonic":"D#","mode":"Harmonic minor","energy":43,"genre":"Electro House"},{"id":"940bc090b7ef58a4","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Terrors In My Head","artist":"Deadmau5","dur":518,"bpm":128,"tonic":"E","mode":"Mixolydian","energy":29,"genre":"Electro House"},{"id":"48a0bb2428d60e37","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Creep","artist":"Deadmau5","dur":338,"bpm":131,"tonic":"D#","mode":"Aeolian","energy":37,"genre":"Electronic"},{"id":"2a828b55bda90641","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Somewhere Up Here","artist":"Deadmau5","dur":310,"bpm":128,"tonic":"F","mode":"Mixolydian","energy":34,"genre":"Electronic"},{"id":"90312a3f632b1c69","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Phantoms Can't Hang","artist":"Deadmau5","dur":556,"bpm":128,"tonic":"F","mode":"Aeolian","energy":40,"genre":"Progressive House"},{"id":"ac66293a0a10bf50","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Gula","artist":"Deadmau5","dur":416,"bpm":128,"tonic":"D","mode":"Dorian","energy":45,"genre":"Electronic"},{"id":"1612faaf21d03310","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Acedia","artist":"Deadmau5","dur":386,"bpm":128,"tonic":"D#","mode":"Mixolydian","energy":44,"genre":"Electro House"},{"id":"01d80bd3d5b7c685","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Invidia","artist":"Deadmau5","dur":197,"bpm":128,"tonic":"A","mode":"Lydian","energy":3,"genre":"Electronic"},{"id":"4d5c208d483d68e1","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Errors In My Bread","artist":"Deadmau5","dur":318,"bpm":173,"tonic":"A","mode":"Ionian","energy":28,"genre":"Electronic"},{"id":"2cef08a61c1000a6","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Survivalism (Deadmau5 Remix)","artist":"Nine Inch Nails","dur":218,"bpm":128,"tonic":"A","mode":"Phrygian","energy":46,"genre":"Electronic"},{"id":"6bee7e1ab6c38b75","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Silent Picture","artist":"Deadmau5","dur":218,"bpm":128,"tonic":"C","mode":"Mixolydian","energy":38,"genre":"Electronic"},{"id":"596e0fa8894e77df","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Rlyehs Lament","artist":"Deadmau5","dur":289,"bpm":128,"tonic":"G","mode":"Aeolian","energy":38,"genre":"Electronic"},{"id":"2d2358be49f6e2c1","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Superbia","artist":"Deadmau5","dur":134,"bpm":128,"tonic":"D#","mode":"Ionian","energy":10,"genre":"Electronic"},{"id":"33210875d783d933","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Mercedes","artist":"Deadmau5","dur":578,"bpm":128,"tonic":"C#","mode":"Aeolian","energy":36,"genre":"Progressive House"},{"id":"415b806878ce2c99","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Bleed","artist":"Deadmau5","dur":241,"bpm":128,"tonic":"G#","mode":"Ionian","energy":24,"genre":"Electronic"},{"id":"b876e748f0e05a28","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Ira","artist":"Deadmau5","dur":158,"bpm":128,"tonic":"F","mode":"Harmonic minor","energy":27,"genre":"Electronic"},{"id":"71eb1b27e25fdffd","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Monday","artist":"Deadmau5","dur":226,"bpm":128,"tonic":"F","mode":"Dorian","energy":29,"genre":"Electronic"},{"id":"5fa7c7c0972b937b","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"A Moment To Myself","artist":"Deadmau5","dur":208,"bpm":128,"tonic":"G","mode":"Aeolian","energy":27,"genre":"Electronic"},{"id":"4dff4a342725f0f0","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Pets","artist":"Deadmau5","dur":451,"bpm":128,"tonic":"A#","mode":"Ionian","energy":44,"genre":"Progressive House"},{"id":"b3b460bad29bc0b6","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Coelacanth II","artist":"Deadmau5","dur":156,"bpm":137,"tonic":"G","mode":"Harmonic minor","energy":44,"genre":"Electronic"},{"id":"7b72dafa1b025eee","lib":"Deadmau5","folder":"Deadmau5 - while(1 2)","title":"Seeya","artist":"Deadmau5","dur":400,"bpm":111,"tonic":"B","mode":"Harmonic minor","energy":28,"genre":"Electro House"},{"id":"b9c1c6f1973dbb73","lib":"Deadmau5","folder":"At Play Vol. 4","title":"I Like Your Music","artist":"Billy Newton-Davis vs. Deadmau5","dur":459,"bpm":128,"tonic":"A","mode":"Dorian","energy":73,"genre":"Electro House"},{"id":"d2b91cdae67868ce","lib":"Deadmau5","folder":"At Play Vol. 4","title":"1891","artist":"Deadmau5","dur":365,"bpm":128,"tonic":"G","mode":"Dorian","energy":59,"genre":"Electro House"},{"id":"7fce62c9af7f3e5c","lib":"Deadmau5","folder":"At Play Vol. 4","title":"GH","artist":"Deadmau5","dur":377,"bpm":128,"tonic":"G","mode":"Dorian","energy":64,"genre":"Electro House"},{"id":"0bea4d8e9d19b348","lib":"Deadmau5","folder":"At Play Vol. 4","title":"Tau V1","artist":"Deadmau5","dur":484,"bpm":128,"tonic":"C#","mode":"Phrygian","energy":71,"genre":"Electro House"},{"id":"81467de6c4d74a36","lib":"Deadmau5","folder":"At Play Vol. 4","title":"Point Vanishes","artist":"Deadmau5","dur":433,"bpm":128,"tonic":"A#","mode":"Phrygian dominant","energy":62,"genre":"Electro House"},{"id":"108af9cf20196aee","lib":"Deadmau5","folder":"At Play Vol. 4","title":"Trepid","artist":"Deadmau5","dur":428,"bpm":128,"tonic":"A","mode":"Lydian","energy":55,"genre":"Electro House"},{"id":"5fc8c9fab326cfe7","lib":"Deadmau5","folder":"At Play Vol. 4","title":"Fustercluck","artist":"Deadmau5","dur":294,"bpm":128,"tonic":"G#","mode":"Locrian","energy":63,"genre":"Electro House"},{"id":"c2b61627f16d23a8","lib":"Deadmau5","folder":"At Play Vol. 4","title":"Sex Lies Audiotape (Redux Mix)","artist":"Deadmau5","dur":407,"bpm":128,"tonic":"G#","mode":"Locrian","energy":70,"genre":"Electro House"},{"id":"5195003d15cbd3bb","lib":"Deadmau5","folder":"At Play Vol. 4","title":"Subert","artist":"Deadmau5","dur":353,"bpm":128,"tonic":"B","mode":"Ionian","energy":64,"genre":"Electro House"},{"id":"4ebfa0284a411f7c","lib":"Deadmau5","folder":"At Play Vol. 4","title":"Something Inside Me (Electro Mix)","artist":"Mellefresh vs. Deadmau5","dur":339,"bpm":128,"tonic":"C","mode":"Phrygian","energy":63,"genre":"Electro House"},{"id":"1a3f90d2463e7a70","lib":"Deadmau5","folder":"4x4=12","title":"Some Chords","artist":"Deadmau5","dur":444,"bpm":128,"tonic":"G#","mode":"Locrian","energy":48,"genre":"Electronic"},{"id":"8ec2e204f70e7355","lib":"Deadmau5","folder":"4x4=12","title":"Sofi Needs a Ladder","artist":"Deadmau5","dur":403,"bpm":128,"tonic":"G","mode":"Locrian","energy":48,"genre":"Electronic"},{"id":"7ae88e9e7d298e4e","lib":"Deadmau5","folder":"4x4=12","title":"A City In Florida","artist":"Deadmau5","dur":340,"bpm":128,"tonic":"G#","mode":"Harmonic minor","energy":53,"genre":"Electronic"},{"id":"ccd29b0f0d9f7f80","lib":"Deadmau5","folder":"4x4=12","title":"Bad Selection","artist":"Deadmau5","dur":333,"bpm":128,"tonic":"G","mode":"Locrian","energy":54,"genre":"Electronic"},{"id":"251b7035638ad561","lib":"Deadmau5","folder":"4x4=12","title":"Animal Rights","artist":"Deadmau5 & Wolfgang Gartner","dur":375,"bpm":128,"tonic":"B","mode":"Mixolydian","energy":59,"genre":"Electronic"},{"id":"14b5adaf97fd3bd0","lib":"Deadmau5","folder":"4x4=12","title":"I Said (Michael Woods Remix)","artist":"Deadmau5 & Chris Lake","dur":426,"bpm":127,"tonic":"D","mode":"Phrygian","energy":59,"genre":"Electronic"},{"id":"1bd0f5a9f00ba7c9","lib":"Deadmau5","folder":"4x4=12","title":"Cthulhu Sleeps","artist":"Deadmau5","dur":635,"bpm":128,"tonic":"G","mode":"Aeolian","energy":50,"genre":"Electronic"},{"id":"731dd7bc5874bdbd","lib":"Deadmau5","folder":"4x4=12","title":"Right This Second","artist":"Deadmau5","dur":470,"bpm":128,"tonic":"A#","mode":"Harmonic minor","energy":55,"genre":"Electronic"},{"id":"e5c22e37fa270003","lib":"Deadmau5","folder":"4x4=12","title":"Raise Your Weapon","artist":"Deadmau5","dur":503,"bpm":128,"tonic":"G#","mode":"Dorian","energy":65,"genre":"Electronic"},{"id":"b979852e34bca6cb","lib":"Deadmau5","folder":"4x4=12","title":"One Trick Pony","artist":"Deadmau5","dur":239,"bpm":140,"tonic":"D#","mode":"Lydian","energy":58,"genre":"Electronic"},{"id":"16d518c1d91a9baa","lib":"Deadmau5","folder":"4x4=12","title":"Everything Before","artist":"Deadmau5","dur":397,"bpm":128,"tonic":"A","mode":"Phrygian dominant","energy":43,"genre":"Electronic"},{"id":"b442ebeb0236b973","lib":"Deadmau5","folder":"4x4=12","title":"4x4=12 (Continuous Mix)","artist":"Deadmau5","dur":4195,"bpm":128,"tonic":"G#","mode":"Ionian","energy":55,"genre":"Electronic"},{"id":"a49658f1cd07baa8","lib":"perso","folder":"","title":"11_12_2015","artist":"","dur":38,"bpm":150,"tonic":"G","mode":"Dorian","energy":23,"genre":"Electronic"},{"id":"39851974c3be0304","lib":"perso","folder":"","title":"1212_5","artist":"","dur":301,"bpm":114,"tonic":"A","mode":"Aeolian","energy":29,"genre":"Rock"},{"id":"44bb7f539b9e4879","lib":"perso","folder":"","title":"140220015_3 4 (2)","artist":"","dur":135,"bpm":128,"tonic":"B","mode":"Aeolian","energy":40,"genre":"Downtempo"},{"id":"7d46abdade7d616e","lib":"perso","folder":"","title":"19 fev","artist":"","dur":152,"bpm":126,"tonic":"D#","mode":"Lydian","energy":9,"genre":"House"},{"id":"690ccaca204ea604","lib":"perso","folder":"","title":"23_02_3","artist":"","dur":213,"bpm":180,"tonic":"C","mode":"Aeolian","energy":41,"genre":"Ambient"},{"id":"0cefe47b065b4d29","lib":"perso","folder":"","title":"30 avril","artist":"","dur":85,"bpm":124,"tonic":"C","mode":"Harmonic minor","energy":9,"genre":"House"},{"id":"be14927489d10eb1","lib":"perso","folder":"","title":"5 fev le 9","artist":"","dur":216,"bpm":161,"tonic":"A","mode":"Phrygian","energy":61,"genre":"Dubstep"},{"id":"3de28c8fd68d0ad6","lib":"perso","folder":"","title":"6_05","artist":"","dur":51,"bpm":135,"tonic":"G#","mode":"Phrygian dominant","energy":23,"genre":"Trance"},{"id":"eb3358745a85ab76","lib":"perso","folder":"","title":"7 janvier","artist":"","dur":102,"bpm":132,"tonic":"B","mode":"Dorian","energy":34,"genre":"Trance"},{"id":"288bcb8b79bc5681","lib":"perso","folder":"","title":"8 mai gqffe 1105","artist":"","dur":136,"bpm":113,"tonic":"G","mode":"Dorian","energy":34,"genre":"Downtempo"},{"id":"ff4469a6e593c288","lib":"perso","folder":"","title":"A new ride","artist":"","dur":272,"bpm":132,"tonic":"A","mode":"Aeolian","energy":15,"genre":"Ambient"},{"id":"86c3c28d877f28ec","lib":"perso","folder":"","title":"aerodynamic","artist":"","dur":47,"bpm":123,"tonic":"B","mode":"Ionian","energy":28,"genre":"Techno"},{"id":"007ec21325d19c8f","lib":"perso","folder":"","title":"another1","artist":"","dur":55,"bpm":165,"tonic":"G","mode":"Aeolian","energy":36,"genre":"Electronic"},{"id":"3aa7bdb52c5aec8c","lib":"perso","folder":"","title":"avant","artist":"","dur":58,"bpm":135,"tonic":"A","mode":"Aeolian","energy":27,"genre":"Trance"},{"id":"1e460198b8fb207d","lib":"perso","folder":"","title":"battery","artist":"","dur":17,"bpm":177,"tonic":"E","mode":"Phrygian","energy":30,"genre":"Rock"},{"id":"6655ac1c09a774b5","lib":"perso","folder":"","title":"bouate7","artist":"","dur":178,"bpm":133,"tonic":"A","mode":"Aeolian","energy":36,"genre":"Rock"},{"id":"bf230112e77fe3f8","lib":"perso","folder":"","title":"buried dreams2_4","artist":"","dur":369,"bpm":168,"tonic":"C","mode":"Dorian","energy":26,"genre":"Downtempo"},{"id":"278fe203ed8fba4a","lib":"perso","folder":"","title":"buried dreams2_5","artist":"","dur":365,"bpm":168,"tonic":"C","mode":"Dorian","energy":26,"genre":"Downtempo"},{"id":"3477a80d9289d8dd","lib":"perso","folder":"","title":"burrr","artist":"","dur":53,"bpm":145,"tonic":"F#","mode":"Phrygian","energy":15,"genre":"Electronic"},{"id":"250227e4ac903ff4","lib":"perso","folder":"","title":"c'est pas sorcier","artist":"","dur":48,"bpm":120,"tonic":"B","mode":"Aeolian","energy":36,"genre":"Rock"},{"id":"f99464c688d71266","lib":"perso","folder":"","title":"charmed2","artist":"","dur":40,"bpm":135,"tonic":"A","mode":"Ionian","energy":30,"genre":"Rock"},{"id":"ee51a1bc91e62b86","lib":"perso","folder":"","title":"chill 30052016 2","artist":"","dur":167,"bpm":115,"tonic":"A#","mode":"Ionian","energy":37,"genre":"Ambient"},{"id":"788dea2100f40b01","lib":"perso","folder":"","title":"compo accoustique3_remix.zip","artist":"","dur":242,"bpm":112,"tonic":"E","mode":"Aeolian","energy":21,"genre":"Rock"},{"id":"8192b6ff7ae748ee","lib":"perso","folder":"","title":"compo nouv2","artist":"","dur":64,"bpm":124,"tonic":"D","mode":"Phrygian dominant","energy":11,"genre":"Rock"},{"id":"be27562037c78dbb","lib":"perso","folder":"","title":"compo rentrée2","artist":"","dur":171,"bpm":180,"tonic":"E","mode":"Ionian","energy":19,"genre":"Downtempo"},{"id":"ff21a196d4387961","lib":"perso","folder":"","title":"COMPO2_20170702","artist":"","dur":242,"bpm":112,"tonic":"E","mode":"Aeolian","energy":31,"genre":"Rock"},{"id":"99b3b0928758a7fb","lib":"perso","folder":"","title":"detente majeure_4","artist":"","dur":204,"bpm":170,"tonic":"C","mode":"Mixolydian","energy":41,"genre":"Rock"},{"id":"ebe26fa6daab66d8","lib":"perso","folder":"","title":"dfsqf","artist":"","dur":44,"bpm":121,"tonic":"E","mode":"Aeolian","energy":58,"genre":"Rock"},{"id":"3d3a190a48ad3886","lib":"perso","folder":"","title":"dkospogjsdopgjd","artist":"","dur":148,"bpm":190,"tonic":"A","mode":"Mixolydian","energy":13,"genre":"Ambient"},{"id":"5da1e53a88b46839","lib":"perso","folder":"","title":"douche","artist":"","dur":58,"bpm":135,"tonic":"A","mode":"Aeolian","energy":27,"genre":"Trance"},{"id":"a3b9a8af69c017f4","lib":"perso","folder":"","title":"Copy - Copy - Copy","artist":"drumliine","dur":137,"bpm":141,"tonic":"D#","mode":"Harmonic minor","energy":58,"genre":"Rock"},{"id":"0bf0936d267fb089","lib":"perso","folder":"","title":"Endocrine","artist":"","dur":96,"bpm":120,"tonic":"E","mode":"Aeolian","energy":28,"genre":"Ambient"},{"id":"bfb75ae0f39c5925","lib":"perso","folder":"","title":"Entropy","artist":"","dur":251,"bpm":161,"tonic":"A","mode":"Phrygian","energy":63,"genre":"Dubstep"},{"id":"c6590c8728e44c12","lib":"perso","folder":"","title":"epic2","artist":"","dur":145,"bpm":136,"tonic":"D","mode":"Mixolydian","energy":36,"genre":"Rock"},{"id":"cbc24cfc0b7f3bdd","lib":"perso","folder":"","title":"euphoria","artist":"","dur":12,"bpm":166,"tonic":"A","mode":"Dorian","energy":62,"genre":"Rock"},{"id":"a17f0fa70c081b09","lib":"perso","folder":"","title":"facebook3","artist":"","dur":84,"bpm":118,"tonic":"A#","mode":"Dorian","energy":47,"genre":"House"},{"id":"f896f07219c33f9e","lib":"perso","folder":"","title":"for whom3","artist":"","dur":129,"bpm":124,"tonic":"E","mode":"Mixolydian","energy":48,"genre":"Rock"},{"id":"03326e203e028831","lib":"perso","folder":"","title":"glass1","artist":"","dur":256,"bpm":124,"tonic":"C","mode":"Lydian","energy":45,"genre":"Rock"},{"id":"6d5b5ea05ac6a0a2","lib":"perso","folder":"","title":"grosse cracotte","artist":"","dur":82,"bpm":191,"tonic":"E","mode":"Aeolian","energy":31,"genre":"Ambient"},{"id":"bf85aeaa97694aad","lib":"perso","folder":"","title":"GSJDOIJG","artist":"","dur":58,"bpm":156,"tonic":"D","mode":"Mixolydian","energy":42,"genre":"Rock"},{"id":"6a4116bcd900a8b8","lib":"perso","folder":"","title":"heavy 2 19062016","artist":"","dur":114,"bpm":155,"tonic":"A","mode":"Phrygian dominant","energy":59,"genre":"Rock"},{"id":"3937e88406885cf7","lib":"perso","folder":"","title":"hjgyj","artist":"","dur":131,"bpm":126,"tonic":"G","mode":"Ionian","energy":31,"genre":"House"},{"id":"6836d4e559c5ffe3","lib":"perso","folder":"","title":"hop","artist":"","dur":113,"bpm":140,"tonic":"A","mode":"Ionian","energy":35,"genre":"Ambient"},{"id":"e338db3f7e2feebf","lib":"perso","folder":"","title":"project in progress 4","artist":"Idea","dur":207,"bpm":130,"tonic":"A","mode":"Aeolian","energy":33,"genre":"Ambient"},{"id":"aad8a34212514d8a","lib":"perso","folder":"","title":"idee4.6.1","artist":"","dur":298,"bpm":170,"tonic":"A","mode":"Aeolian","energy":44,"genre":"Rock"},{"id":"e7081e22caec6ce9","lib":"perso","folder":"","title":"ins_2","artist":"","dur":46,"bpm":190,"tonic":"A","mode":"Aeolian","energy":61,"genre":"Rock"},{"id":"07f8737a44fd53fc","lib":"perso","folder":"","title":"ioliyu","artist":"","dur":129,"bpm":118,"tonic":"G","mode":"Aeolian","energy":25,"genre":"Downtempo"},{"id":"35724511a0db9268","lib":"perso","folder":"","title":"japan","artist":"","dur":92,"bpm":134,"tonic":"B","mode":"Aeolian","energy":35,"genre":"Ambient"},{"id":"e3e8b3a3ba5fce81","lib":"perso","folder":"","title":"last 8 mai","artist":"","dur":136,"bpm":113,"tonic":"G","mode":"Dorian","energy":25,"genre":"Downtempo"},{"id":"1259e9be05cc2c8c","lib":"perso","folder":"","title":"lmpdhp2","artist":"","dur":285,"bpm":131,"tonic":"A","mode":"Aeolian","energy":39,"genre":"Rock"},{"id":"41723eb2c92cf5c8","lib":"perso","folder":"","title":"lotr2","artist":"","dur":122,"bpm":182,"tonic":"D#","mode":"Aeolian","energy":8,"genre":"Ambient"},{"id":"9fa59673dd036d6f","lib":"perso","folder":"","title":"majeur","artist":"","dur":126,"bpm":131,"tonic":"F","mode":"Mixolydian","energy":6,"genre":"Ambient"},{"id":"8a4e300268e0d318","lib":"perso","folder":"","title":"majeur2","artist":"","dur":127,"bpm":131,"tonic":"F","mode":"Ionian","energy":11,"genre":"Ambient"},{"id":"4ea8999426673475","lib":"perso","folder":"","title":"metaltrance5","artist":"","dur":137,"bpm":125,"tonic":"A","mode":"Harmonic minor","energy":46,"genre":"Rock"},{"id":"081f3204932ec5e1","lib":"perso","folder":"","title":"metoeralar","artist":"","dur":80,"bpm":160,"tonic":"E","mode":"Aeolian","energy":25,"genre":"Ambient"},{"id":"346de48dafb30687","lib":"perso","folder":"","title":"metoeralar2","artist":"","dur":59,"bpm":160,"tonic":"E","mode":"Aeolian","energy":22,"genre":"Ambient"},{"id":"a887af72857ea675","lib":"perso","folder":"","title":"mirror3","artist":"","dur":214,"bpm":126,"tonic":"E","mode":"Dorian","energy":25,"genre":"Rock"},{"id":"3a68fbd31d35e8a9","lib":"perso","folder":"","title":"new harmony3","artist":"","dur":107,"bpm":120,"tonic":"D","mode":"Ionian","energy":25,"genre":"Ambient"},{"id":"8842086e6fcbf24d","lib":"perso","folder":"","title":"new riff","artist":"","dur":51,"bpm":145,"tonic":"E","mode":"Lydian","energy":57,"genre":"Rock"},{"id":"632e463015d68884","lib":"perso","folder":"","title":"newnewnewnew","artist":"","dur":218,"bpm":140,"tonic":"A#","mode":"Ionian","energy":18,"genre":"Ambient"},{"id":"08ca0936cd3185a4","lib":"perso","folder":"","title":"newnewnewnew2","artist":"","dur":218,"bpm":140,"tonic":"A#","mode":"Ionian","energy":11,"genre":"Ambient"},{"id":"fa8af4a35906aeb8","lib":"perso","folder":"","title":"nouveau projet progressive HQ 26_03 vrai 3","artist":"","dur":118,"bpm":116,"tonic":"A","mode":"Phrygian","energy":19,"genre":"Ambient"},{"id":"1a67f643b0b363c0","lib":"perso","folder":"","title":"oitpr2","artist":"","dur":78,"bpm":132,"tonic":"D","mode":"Aeolian","energy":54,"genre":"Rock"},{"id":"7304c4337dce57c2","lib":"perso","folder":"","title":"ojngb","artist":"","dur":54,"bpm":164,"tonic":"A","mode":"Harmonic minor","energy":21,"genre":"Rock"},{"id":"b2a81d48ee927101","lib":"perso","folder":"","title":"pas sorcier","artist":"","dur":53,"bpm":124,"tonic":"B","mode":"Phrygian","energy":51,"genre":"Rock"},{"id":"f7ed6e3c16d4de94","lib":"perso","folder":"","title":"pas sorcier_1","artist":"","dur":110,"bpm":126,"tonic":"B","mode":"Dorian","energy":66,"genre":"Rock"},{"id":"f24fe83c774f9290","lib":"perso","folder":"","title":"pirates","artist":"","dur":102,"bpm":130,"tonic":"A","mode":"Aeolian","energy":13,"genre":"Ambient"},{"id":"bdcede4c1f9d9ab0","lib":"perso","folder":"","title":"prog 13102015","artist":"","dur":72,"bpm":125,"tonic":"E","mode":"Aeolian","energy":20,"genre":"Electronic"},{"id":"6535b2740db09e57","lib":"perso","folder":"","title":"progressive boulot final","artist":"","dur":217,"bpm":126,"tonic":"G","mode":"Dorian","energy":35,"genre":"House"},{"id":"9cc04bd1e19a8f54","lib":"perso","folder":"","title":"progressive3.mp3_with little mix","artist":"","dur":188,"bpm":124,"tonic":"F#","mode":"Ionian","energy":29,"genre":"Ambient"},{"id":"b9d8b76215481650","lib":"perso","folder":"","title":"qfqgdfd2","artist":"","dur":172,"bpm":156,"tonic":"B","mode":"Aeolian","energy":49,"genre":"Ambient"},{"id":"cb435d95ebf731f6","lib":"perso","folder":"","title":"reggae_mastered","artist":"","dur":70,"bpm":167,"tonic":"E","mode":"Dorian","energy":36,"genre":"Rock"},{"id":"1b7c23293c32d5c8","lib":"perso","folder":"","title":"rewrite","artist":"","dur":55,"bpm":144,"tonic":"E","mode":"Harmonic minor","energy":56,"genre":"Rock"},{"id":"8ea148f8dfa1feb1","lib":"perso","folder":"","title":"ride","artist":"","dur":233,"bpm":132,"tonic":"A","mode":"Aeolian","energy":13,"genre":"Ambient"},{"id":"40fbd29f449cb2df","lib":"perso","folder":"","title":"riff2","artist":"","dur":80,"bpm":148,"tonic":"B","mode":"Harmonic minor","energy":61,"genre":"Rock"},{"id":"a2dbe2ebdd448f85","lib":"perso","folder":"","title":"ritjgeij2","artist":"","dur":131,"bpm":124,"tonic":"C#","mode":"Lydian","energy":45,"genre":"House"},{"id":"cb44778e90def710","lib":"perso","folder":"","title":"rob","artist":"","dur":129,"bpm":120,"tonic":"E","mode":"Dorian","energy":26,"genre":"Ambient"},{"id":"4bc54348db8fe102","lib":"perso","folder":"","title":"serum_phy","artist":"","dur":148,"bpm":108,"tonic":"D#","mode":"Harmonic minor","energy":26,"genre":"Electronic"},{"id":"28ba809b4cf23581","lib":"perso","folder":"","title":"slow","artist":"","dur":83,"bpm":188,"tonic":"A","mode":"Harmonic minor","energy":24,"genre":"Rock"},{"id":"3ee2d7ab3154a127","lib":"perso","folder":"","title":"slow2","artist":"","dur":83,"bpm":188,"tonic":"A","mode":"Harmonic minor","energy":35,"genre":"Rock"},{"id":"cdab3e815404ca72","lib":"perso","folder":"","title":"slow_sonnerie","artist":"","dur":65,"bpm":188,"tonic":"A","mode":"Harmonic minor","energy":38,"genre":"Rock"},{"id":"c706752a00c69c2a","lib":"perso","folder":"","title":"sonnerie telephone david","artist":"","dur":66,"bpm":124,"tonic":"E","mode":"Aeolian","energy":50,"genre":"Rock"},{"id":"702341ccbc98872d","lib":"perso","folder":"","title":"star wars4","artist":"","dur":108,"bpm":162,"tonic":"E","mode":"Harmonic minor","energy":40,"genre":"Rock"},{"id":"7420a51bb948f162","lib":"perso","folder":"","title":"strobe_2 22_01_2015 16h41","artist":"","dur":252,"bpm":128,"tonic":"G#","mode":"Aeolian","energy":24,"genre":"House"},{"id":"9a303a8351a2e882","lib":"perso","folder":"","title":"thysfgh3","artist":"","dur":69,"bpm":132,"tonic":"E","mode":"Aeolian","energy":29,"genre":"Rock"},{"id":"3cbfdce6157822e7","lib":"perso","folder":"","title":"tuto1 23 sept","artist":"","dur":140,"bpm":124,"tonic":"A","mode":"Phrygian","energy":45,"genre":"House"},{"id":"827d38533def9b1c","lib":"perso","folder":"","title":"²²","artist":"","dur":234,"bpm":164,"tonic":"A","mode":"Mixolydian","energy":32,"genre":"Rock"},{"id":"2734a536db0550e3","lib":"perso","folder":"","title":"²²","artist":"","dur":237,"bpm":164,"tonic":"A","mode":"Mixolydian","energy":56,"genre":"Rock"},{"id":"97d15170f248b5ef","lib":"perso","folder":"soundclound/neuro_etc","title":"Aurora (Justin Hawkes Remix) [feat. Metrik]","artist":"","dur":231,"bpm":175,"tonic":"F","mode":"Aeolian","energy":92,"genre":"Drum & Bass"},{"id":"e115e6b1c510e398","lib":"perso","folder":"soundclound/neuro_etc","title":"Hear The Lies [Premiere]","artist":"Eluun","dur":235,"bpm":172,"tonic":"F","mode":"Aeolian","energy":90,"genre":"Drum & Bass"},{"id":"76bb6fc0cdb1bd5c","lib":"perso","folder":"soundclound/neuro_etc","title":"You left me","artist":"Eluun","dur":213,"bpm":174,"tonic":"F","mode":"Aeolian","energy":92,"genre":"Drum & Bass"},{"id":"34f9f768d91debed","lib":"perso","folder":"soundclound/neuro_etc","title":"Fade Black - Elysium","artist":"Fade Black","dur":247,"bpm":175,"tonic":"D","mode":"Aeolian","energy":93,"genre":"Drum & Bass"},{"id":"520eed842908ec04","lib":"perso","folder":"soundclound/neuro_etc","title":"Hear Me","artist":"","dur":249,"bpm":172,"tonic":"B","mode":"Harmonic minor","energy":94,"genre":"Drum & Bass"},{"id":"28bc42cbf02b249c","lib":"perso","folder":"soundclound/neuro_etc","title":"If I Could (OUT NOW)","artist":"","dur":253,"bpm":172,"tonic":"F","mode":"Aeolian","energy":85,"genre":"Drum & Bass"},{"id":"0e41498c9156a838","lib":"perso","folder":"soundclound/neuro_etc","title":"Before You","artist":"Maysev & The Caracal Project","dur":224,"bpm":165,"tonic":"C#","mode":"Aeolian","energy":67,"genre":"Drum & Bass"},{"id":"365b35ec4e7d1e5f","lib":"perso","folder":"soundclound/neuro_etc","title":"Left","artist":"Maysev","dur":192,"bpm":172,"tonic":"D#","mode":"Aeolian","energy":86,"genre":"Drum & Bass"},{"id":"39a7b3e8356dfac7","lib":"perso","folder":"soundclound/neuro_etc","title":"No Way Out (feat. Mira Lu Kovacs)","artist":"","dur":245,"bpm":175,"tonic":"G","mode":"Aeolian","energy":91,"genre":"Drum & Bass"},{"id":"1114a05954a9904b","lib":"perso","folder":"soundclound/neuro_etc","title":"Concussion (Mefjus Remix)","artist":"Noisia","dur":226,"bpm":172,"tonic":"F","mode":"Phrygian dominant","energy":95,"genre":"Drum & Bass"},{"id":"68ea27383f434415","lib":"perso","folder":"soundclound/neuro_etc","title":"Perseverance","artist":"","dur":232,"bpm":172,"tonic":"D#","mode":"Aeolian","energy":80,"genre":"Drum & Bass"},{"id":"b597ce7518527720","lib":"perso","folder":"soundclound/neuro_etc","title":"Physically","artist":"Mefjus","dur":112,"bpm":172,"tonic":"E","mode":"Aeolian","energy":95,"genre":"Drum & Bass"},{"id":"c2e5ee8d2a09b8c4","lib":"perso","folder":"soundclound/neuro_etc","title":"Pray For Me (feat. Joe Killington)","artist":"","dur":245,"bpm":175,"tonic":"C","mode":"Aeolian","energy":92,"genre":"Drum & Bass"},{"id":"188cafbe5921106b","lib":"perso","folder":"soundclound/neuro_etc","title":"7. Virtual Riot - Scorched Earth","artist":"","dur":281,"bpm":135,"tonic":"D#","mode":"Aeolian","energy":76,"genre":"Dubstep"},{"id":"f965cbcab8b83b21","lib":"perso","folder":"soundclound/neuro_etc","title":"Mefjus & Camo & Krooked","artist":"Sidewinder","dur":207,"bpm":172,"tonic":"G","mode":"Dorian","energy":94,"genre":"Drum & Bass"},{"id":"7f4c86b06af77148","lib":"perso","folder":"soundclound/neuro_etc","title":"Sinkhole (OUT NOW)","artist":"","dur":313,"bpm":172,"tonic":"F","mode":"Phrygian dominant","energy":89,"genre":"Drum & Bass"},{"id":"ff347e31d3498ff6","lib":"perso","folder":"soundclound/neuro_etc","title":"Supersonic (My Existence)","artist":"Skrillex, Noisia, josh pan & Dylan Brady","dur":165,"bpm":172,"tonic":"A","mode":"Harmonic minor","energy":61,"genre":"Drum & Bass"},{"id":"9a6c791bebebe825","lib":"perso","folder":"soundclound/neuro_etc","title":"Mesmer","artist":"Sota, Circadian, Mila Falls","dur":281,"bpm":174,"tonic":"A#","mode":"Harmonic minor","energy":84,"genre":"Drum & Bass"},{"id":"4d0ae8307ef50d39","lib":"perso","folder":"soundclound/neuro_etc","title":"A - Mefjus - Suicide Bassline VIP [clip]","artist":"","dur":174,"bpm":172,"tonic":"G","mode":"Harmonic minor","energy":84,"genre":"Drum & Bass"},{"id":"aed551293ff3d1fb","lib":"perso","folder":"soundclound/neuro_etc","title":"Damage ft. Shaquille O'Neal","artist":"Virtual Riot & DIESEL","dur":195,"bpm":174,"tonic":"D#","mode":"Phrygian","energy":75,"genre":"Drum & Bass"},{"id":"8a8b426cc31ae037","lib":"perso","folder":"soundclound/neuro_etc","title":"So Sorry (RANKZ Remix)","artist":"Virtual Riot","dur":159,"bpm":145,"tonic":"D#","mode":"Phrygian","energy":81,"genre":"Dubstep"},{"id":"854058897a293a27","lib":"perso","folder":"soundclound/neuro_etc","title":"Without Them","artist":"","dur":346,"bpm":172,"tonic":"E","mode":"Dorian","energy":95,"genre":"Drum & Bass"},{"id":"dd2d2accd6df5c05","lib":"perso","folder":"soundclound/David Sestu","title":"1212 5","artist":"","dur":301,"bpm":114,"tonic":"A","mode":"Aeolian","energy":31,"genre":"Rock"},{"id":"159687c587038d35","lib":"perso","folder":"soundclound/David Sestu","title":"140220015 ver 4","artist":"","dur":135,"bpm":128,"tonic":"B","mode":"Aeolian","energy":39,"genre":"Downtempo"},{"id":"db19a0d4b806f053","lib":"perso","folder":"soundclound/David Sestu","title":"19 Fev progressive idea project","artist":"","dur":153,"bpm":126,"tonic":"D#","mode":"Lydian","energy":9,"genre":"House"},{"id":"075ed4fedf32f6e9","lib":"perso","folder":"soundclound/David Sestu","title":"23 Sept","artist":"","dur":140,"bpm":124,"tonic":"E","mode":"Locrian","energy":45,"genre":"House"},{"id":"81eb6f7575a11af7","lib":"perso","folder":"soundclound/David Sestu","title":"27022017","artist":"","dur":31,"bpm":127,"tonic":"E","mode":"Aeolian","energy":7,"genre":"Ambient"},{"id":"bc6368b3e500132d","lib":"perso","folder":"soundclound/David Sestu","title":"A new ride","artist":"","dur":272,"bpm":132,"tonic":"A","mode":"Aeolian","energy":15,"genre":"Ambient"},{"id":"308622395f134f69","lib":"perso","folder":"soundclound/David Sestu","title":"[Progressive electronic]","artist":"Ahead(preview)","dur":63,"bpm":123,"tonic":"E","mode":"Aeolian","energy":21,"genre":"House"},{"id":"ad7f42a05bd48fbd","lib":"perso","folder":"soundclound/David Sestu","title":"Allez tant qu'on y est","artist":"","dur":150,"bpm":188,"tonic":"E","mode":"Aeolian","energy":43,"genre":"Rock"},{"id":"6d7bce77c554178f","lib":"perso","folder":"soundclound/David Sestu","title":"Another project in progress","artist":"","dur":159,"bpm":127,"tonic":"G","mode":"Aeolian","energy":24,"genre":"Classical"},{"id":"1d4379a1606e8efa","lib":"perso","folder":"soundclound/David Sestu","title":"Arpegiator [Really Old]","artist":"","dur":111,"bpm":140,"tonic":"B","mode":"Aeolian","energy":14,"genre":"Ambient"},{"id":"be10c26cac9692ac","lib":"perso","folder":"soundclound/David Sestu","title":"blabla_wth_mixing","artist":"","dur":86,"bpm":139,"tonic":"D#","mode":"Harmonic minor","energy":65,"genre":"Rock"},{"id":"17109b7cb9a138ea","lib":"perso","folder":"soundclound/David Sestu","title":"Buried Dreams","artist":"","dur":289,"bpm":180,"tonic":"C","mode":"Aeolian","energy":44,"genre":"Ambient"},{"id":"aea2bed942830772","lib":"perso","folder":"soundclound/David Sestu","title":"Chilled piece of track","artist":"","dur":113,"bpm":140,"tonic":"A","mode":"Ionian","energy":35,"genre":"Ambient"},{"id":"c89483985ef1853f","lib":"perso","folder":"soundclound/David Sestu","title":"en cours ⧸building- Improvisation","artist":"Compo Accoustique","dur":157,"bpm":147,"tonic":"E","mode":"Aeolian","energy":66,"genre":"Downtempo"},{"id":"90c4539f5ab8cda1","lib":"perso","folder":"soundclound/David Sestu","title":"projet le 02⧸07⧸2017","artist":"Composition Accoustique n°2","dur":242,"bpm":112,"tonic":"E","mode":"Aeolian","energy":31,"genre":"Rock"},{"id":"afdba8b2cb8ad237","lib":"perso","folder":"soundclound/David Sestu","title":"Des Bails . [Old]","artist":"","dur":173,"bpm":128,"tonic":"C","mode":"Dorian","energy":22,"genre":"House"},{"id":"c9d06533b7dc22a6","lib":"perso","folder":"soundclound/David Sestu","title":"Dreaming a melody","artist":"","dur":73,"bpm":125,"tonic":"E","mode":"Aeolian","energy":19,"genre":"Ambient"},{"id":"1fd41a474e69f565","lib":"perso","folder":"soundclound/David Sestu","title":"Melodic Dubstep ⧸ DnB - Full Track","artist":"Entropy","dur":251,"bpm":161,"tonic":"A","mode":"Phrygian","energy":61,"genre":"Dubstep"},{"id":"b5963556f9991d19","lib":"perso","folder":"soundclound/David Sestu","title":"For whom the bell tolls -Metallica cover","artist":"","dur":129,"bpm":124,"tonic":"E","mode":"Mixolydian","energy":48,"genre":"Rock"},{"id":"ef6227c56f579de2","lib":"perso","folder":"soundclound/David Sestu","title":"David Sestu - Chill electroacoustic ballad","artist":"Gift","dur":171,"bpm":180,"tonic":"E","mode":"Ionian","energy":19,"genre":"Downtempo"},{"id":"34998e719b71c675","lib":"perso","folder":"soundclound/David Sestu","title":"Gondor fun","artist":"","dur":122,"bpm":182,"tonic":"D#","mode":"Aeolian","energy":7,"genre":"Ambient"},{"id":"1235a371a1ea4cb5","lib":"perso","folder":"soundclound/David Sestu","title":"Unfinished","artist":"Grosse Cracotte","dur":82,"bpm":191,"tonic":"E","mode":"Aeolian","energy":31,"genre":"Ambient"},{"id":"1ef92c724b5d4113","lib":"perso","folder":"soundclound/David Sestu","title":"Idee4.6.1","artist":"","dur":298,"bpm":170,"tonic":"A","mode":"Aeolian","energy":44,"genre":"Rock"},{"id":"c32375d772cc5c73","lib":"perso","folder":"soundclound/David Sestu","title":"Lmpdhp","artist":"","dur":286,"bpm":196,"tonic":"A","mode":"Aeolian","energy":55,"genre":"Rock"},{"id":"10164785b7f1a83b","lib":"perso","folder":"soundclound/David Sestu","title":"Sketch of a song","artist":"Mirror","dur":214,"bpm":126,"tonic":"E","mode":"Dorian","energy":25,"genre":"Rock"},{"id":"bf706abb3a55d403","lib":"perso","folder":"soundclound/David Sestu","title":"Mix test","artist":"","dur":102,"bpm":132,"tonic":"B","mode":"Dorian","energy":32,"genre":"Trance"},{"id":"f1fff1daccc2f02e","lib":"perso","folder":"soundclound/David Sestu","title":"Motivation dose to upload more","artist":"","dur":77,"bpm":156,"tonic":"B","mode":"Dorian","energy":55,"genre":"Rock"},{"id":"4660132fcb146811","lib":"perso","folder":"soundclound/David Sestu","title":"Electronic⧸Acoustic progressive 124bpm track - David Sestu]","artist":"Named  [ Final","dur":188,"bpm":124,"tonic":"F#","mode":"Ionian","energy":32,"genre":"Ambient"},{"id":"908e5c59312a5e79","lib":"perso","folder":"soundclound/David Sestu","title":"premix","artist":"New","dur":218,"bpm":140,"tonic":"A#","mode":"Ionian","energy":11,"genre":"Ambient"},{"id":"e9c34e11f80e6485","lib":"perso","folder":"soundclound/David Sestu","title":"Oitpr no bass","artist":"","dur":78,"bpm":132,"tonic":"D","mode":"Dorian","energy":54,"genre":"Rock"},{"id":"f2987d59705bf0b8","lib":"perso","folder":"soundclound/David Sestu","title":"PatchWork  #2","artist":"","dur":136,"bpm":113,"tonic":"G","mode":"Aeolian","energy":34,"genre":"Downtempo"},{"id":"bc6b9b7d82b00918","lib":"perso","folder":"soundclound/David Sestu","title":"PatchWork #1","artist":"","dur":85,"bpm":124,"tonic":"C","mode":"Harmonic minor","energy":8,"genre":"House"},{"id":"37c3dc0b35bb473c","lib":"perso","folder":"soundclound/David Sestu","title":"Paths [progressive electronic music]","artist":"","dur":274,"bpm":120,"tonic":"E","mode":"Aeolian","energy":27,"genre":"House"},{"id":"65ad512b38b546fc","lib":"perso","folder":"soundclound/David Sestu","title":"Progressive [Really Old]","artist":"","dur":422,"bpm":140,"tonic":"A","mode":"Aeolian","energy":16,"genre":"Ambient"},{"id":"cbc8f229024a81d8","lib":"perso","folder":"soundclound/David Sestu","title":"Serum","artist":"Pétage de cable n°3","dur":38,"bpm":150,"tonic":"G","mode":"Dorian","energy":22,"genre":"Ambient"},{"id":"4f39cf4c7fb69972","lib":"perso","folder":"soundclound/David Sestu","title":"Reggae For Fun","artist":"","dur":70,"bpm":167,"tonic":"E","mode":"Dorian","energy":37,"genre":"Rock"},{"id":"8210741087abe6db","lib":"perso","folder":"soundclound/David Sestu","title":"Electric Guitar Composition","artist":"Ride","dur":143,"bpm":132,"tonic":"A","mode":"Phrygian","energy":39,"genre":"Folk"},{"id":"51e1261ca551316d","lib":"perso","folder":"soundclound/David Sestu","title":"Ritjgeij","artist":"","dur":130,"bpm":124,"tonic":"C#","mode":"Lydian","energy":63,"genre":"House"},{"id":"f0013179e79878a4","lib":"perso","folder":"soundclound/David Sestu","title":"Metal ballad - Finished","artist":"Râ","dur":188,"bpm":124,"tonic":"B","mode":"Aeolian","energy":39,"genre":"Rock"},{"id":"f6f5338e7cbaad99","lib":"perso","folder":"soundclound/David Sestu","title":"Sample from upcoming song","artist":"","dur":57,"bpm":133,"tonic":"E","mode":"Harmonic minor","energy":35,"genre":"Rock"},{"id":"b38a77737de17da8","lib":"perso","folder":"soundclound/David Sestu","title":"David Sestu [Progressive electronic music]","artist":"Sketch of a reborn","dur":217,"bpm":126,"tonic":"G","mode":"Dorian","energy":32,"genre":"House"},{"id":"fb4c3a53871542f3","lib":"perso","folder":"soundclound/David Sestu","title":"Slow metal loop","artist":"","dur":83,"bpm":188,"tonic":"A","mode":"Harmonic minor","energy":35,"genre":"Rock"},{"id":"6cedf5652830e998","lib":"perso","folder":"soundclound/David Sestu","title":"Deadmau5 Small Remix n°2","artist":"Strobe","dur":102,"bpm":128,"tonic":"G#","mode":"Aeolian","energy":24,"genre":"House"},{"id":"957df124d2a98def","lib":"perso","folder":"soundclound/David Sestu","title":"Remix [progressive electro house]","artist":"Strobe Deadmau5","dur":163,"bpm":124,"tonic":"B","mode":"Ionian","energy":35,"genre":"House"},{"id":"103c90ecf1e095ac","lib":"perso","folder":"soundclound/David Sestu","title":"Temp file n°2","artist":"","dur":44,"bpm":178,"tonic":"A","mode":"Aeolian","energy":33,"genre":"Rock"},{"id":"b8cd1d6aaf05191c","lib":"perso","folder":"soundclound/David Sestu","title":"＂Another project in progress＂ rebuild after years","artist":"","dur":129,"bpm":118,"tonic":"G","mode":"Aeolian","energy":27,"genre":"Downtempo"}],"queue":["8684cf32cab32abc","9b823ad81dbeb5b0","edceb5c3825a15b5","b2826662119f4359","d58308bd191e32e6","7b11e72abdf18f4c","f6a30cb9ba055119","bc9f45b034c2bedd","023f69c42d4b2dd5","a0bb836f90e376b4","25f7e06d75a5912f","2f1ba32e27eee751","7531ae77e443e114","02ae589c4a1f3562","1c5d538802fe9f29","b0147ac6e08344b0","dc1fd36e0c4b291c","ecd93d6dba0878ea","ee139a5d32e093f3","e454471fd3947ebb","25c8f4912aeea937","519a68cd5c64fa44","0946b577e3d1c7fb","4f74595973bda4ff","4b5a7554fc4ea504","8d06f02771f3e08a","77d8a19c6b96048b","644640c054ddb031","3469c987755a94f2","0796840f8af03c4b","819f8372c3bdaa27","59f76cc844f8ab48","22663ef9591311cc","678763650e65cbe2","3b80b25cdbcb8607","10e6fe52a9d31aa7","da88dd3d17bd1c45","2e069b76f2a482a2","9d535091c7778743","d9e7b31c4c167615","9da844295da84516","cb92d83b9ddc391d","f1f975e3c236a225","d7e43aff07df2ab8","30598f294aef6b45","74a5bf61ca4133ac"]};
+// ---------- icons ----------
+const I={back:'<path d="M15 18l-6-6 6-6"/>',search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',home:'<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>',media:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M10 9l5 2.5-5 2.5z"/>',disc:'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',heart:'<path d="M12 20s-7-4.4-9-9a5 5 0 019-3 5 5 0 019 3c-2 4.6-9 9-9 9z"/>',set:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',folder:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',drive:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h.01M11 15h6"/>',list:'<path d="M8 6h13M8 12h13M8 18h9M3 6h.01M3 12h.01M3 18h.01"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',chev:'<path d="M9 6l6 6-6 6"/>',grip:'<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',plus:'<path d="M12 5v14M5 12h14"/>',pin:'<path d="M12 17v5M8 3h8l-1 6 3 4H6l3-4z"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',wave:'<path d="M3 12h2l2-6 3 12 3-9 2 5 2-2h4"/>',check:'<path d="M5 12l5 5 9-10"/>',cloud:'<path d="M7 18a5 5 0 01-.6-9.96A6 6 0 0118 9a4 4 0 01-1 9z"/>',next:'<path d="M5 4l10 8-10 8zM19 5v14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',ban:'<circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/>'};
+const ic=(n,c='')=>`<svg class="i ${c}" viewBox="0 0 24 24">${I[n]}</svg>`;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=s=>{s=Math.round(s);return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};
+const fmtLong=s=>{s=Math.round(s);const m=Math.floor(s/60);return `${m}:${String(s%60).padStart(2,'0')}`};
+
+// ---------- music model ----------
+const PC={C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11};
+const OFF={Ionian:0,Dorian:2,Phrygian:4,Lydian:5,Mixolydian:7,Aeolian:9,Locrian:11,'Harmonic minor':9,'Phrygian dominant':2};
+const MOOD={Aeolian:'Dark',Phrygian:'Dark',Locrian:'Dark',Dorian:'Smooth',Mixolydian:'Warm',Ionian:'Bright',Lydian:'Floating','Harmonic minor':'Floating','Phrygian dominant':'Exotic'};
+const MC={Dark:'var(--dark)',Smooth:'var(--smooth)',Floating:'var(--float)',Warm:'var(--warm)',Bright:'oklch(85% .13 95)',Exotic:'oklch(72% .17 140)'};
+const parent=t=>t.tonic==null?null:((PC[t.tonic]-OFF[t.mode])%12+12)%12;
+const known=t=>t&&t.tonic!=null&&t.bpm!=null;
+function rel(a,b){ // join kind a -> b
+  if(!known(a)||!known(b)) return {k:'u',txt:'Not analysed',s:.5};
+  const pa=parent(a),pb=parent(b),d=((pb-pa)%12+12)%12;
+  let r;
+  if(d===0) r=a.tonic===b.tonic&&a.mode===b.mode?{k:'m',txt:'Same key',s:1}:{k:'r',txt:'Relative',s:.85};
+  else if(d===7) r={k:'f',txt:'Up a fifth',s:.8};
+  else if(d===5) r={k:'f',txt:'Down a fifth',s:.8};
+  else if(d===2||d===10) r={k:'c',txt:'Clash',s:.3};
+  else r={k:'x',txt:'Break',s:0};
+  const dt=b.bpm-a.bpm;r.dt=dt;
+  if(Math.abs(dt)/a.bpm>.06){r.tempo=`tempo ${dt>0?'+':''}${dt}`;r.s-=.45}else if(Math.abs(dt)>2) r.tempo=`tempo ${dt>0?'+':''}${dt}`;
+  const de=(b.energy??0)-(a.energy??0);r.de=de;
+  if(de>=6) r.energy=`energy lifts ${a.energy} → ${b.energy}`;else if(de<=-8) r.energy=`energy eases ${a.energy} → ${b.energy}`;
+  return r;
+}
+const KCLS={m:'ok',r:'rel',f:'fifth',c:'warn',x:'bad',u:'u'};
+
+// ---------- data ----------
+const T=new Map();
+DATA.tracks.forEach(t=>T.set(t.id,{...t,src:t.lib}));
+const SC='https://i1.sndcdn.com/',YT='https://i.ytimg.com/vi/';
+const ONLINE={
+ SoundCloud:[
+  {id:'sc1',title:'Stay (feat. Blocksberg)',artist:'Mefjus',dur:271,art:SC+'artworks-0i5Mtek2L0u2-0-t300x300.jpg',an:{bpm:174,tonic:'F',mode:'Aeolian',energy:91}},
+  {id:'sc2',title:'Hear Me',artist:'Mefjus',dur:249,art:SC+'artworks-zwy8qgUB8WJeIGZv-cJTAjg-t300x300.jpg',an:{bpm:172,tonic:'C',mode:'Aeolian',energy:94}},
+  {id:'sc3',title:'Dustup (Mefjus RMX)',artist:'Noisia, The Upbeats',dur:345,art:SC+'artworks-dMkgleZBsqZCjgqx-dQykZQ-t300x300.jpg',an:{bpm:172,tonic:'G',mode:'Phrygian',energy:96}},
+  {id:'sc4',title:'Sientelo',artist:'Mefjus & Camo & Krooked',dur:291,art:SC+'artworks-qGgr8MWzoEfrirJA-6NsiPQ-t300x300.jpg',an:{bpm:174,tonic:'A#',mode:'Aeolian',energy:88}},
+ ],
+ 'YT Music':[
+  {id:'yt1',title:'Systematic',artist:'D-Minds & Mefjus',dur:270,art:YT+'dEhY1fBXqXA/mqdefault.jpg',an:{bpm:172,tonic:'F',mode:'Dorian',energy:93}},
+  {id:'yt2',title:'Volition',artist:'Mefjus',dur:301,art:YT+'K4FG1jWWIUQ/mqdefault.jpg',an:{bpm:174,tonic:'D#',mode:'Aeolian',energy:90}},
+  {id:'yt3',title:'Volition (Former Remix)',artist:'Mefjus',dur:288,art:YT+'pjtXMhnR3Vo/mqdefault.jpg',an:{bpm:174,tonic:'C',mode:'Aeolian',energy:86}},
+  {id:'yt4',title:'Divergence',artist:'Mefjus',dur:312,art:YT+'khar6ZhMu3Q/mqdefault.jpg',an:{bpm:172,tonic:'G',mode:'Aeolian',energy:92}},
+  {id:'yt5',title:'Metaknowledge',artist:'Mefjus',dur:296,art:YT+'3xUiZh4B4c4/mqdefault.jpg',an:{bpm:175,tonic:'E',mode:'Phrygian',energy:89}},
+ ],
+ YouTube:[
+  {id:'yo1',title:'Mefjus - Live from Kasberg, Austria',artist:'UKF On Air',dur:3540,art:YT+'wsXUyc6sl6U/mqdefault.jpg',an:{bpm:174,tonic:'F',mode:'Aeolian',energy:90}},
+ ],
+};
+Object.entries(ONLINE).forEach(([src,list])=>list.forEach(o=>T.set(o.id,{id:o.id,title:o.title,artist:o.artist,dur:o.dur,art:o.art,src,online:true,bpm:null,tonic:null,mode:null,energy:null,an:o.an,state:'none'})));
+// Stay is already analysed
+Object.assign(T.get('sc1'),T.get('sc1').an,{state:'done'});
+
+// library tree
+const LIBS={};
+DATA.tracks.forEach(t=>{const L=LIBS[t.lib]??={name:t.lib,root:{dirs:{},tracks:[]}};let n=L.root;
+  (t.folder?t.folder.split('/'):[]).forEach(p=>{n=n.dirs[p]??={dirs:{},tracks:[]}});n.tracks.push(t.id)});
+const countOf=n=>n.tracks.length+Object.values(n.dirs).reduce((s,d)=>s+countOf(d),0);
+const nodeAt=path=>{if(!path.length) return null;let n=LIBS[path[0]].root;for(const p of path.slice(1)) n=n.dirs[p];return n};
+
+// ---------- state ----------
+const LS='sestudio.mock.pledit';
+const saved=JSON.parse(localStorage.getItem(LS)||'{}');
+const S={
+  q:DATA.queue.slice(),undo:[],
+  editing:false,tab:'lib',path:['perso'],filter:'',src:'SoundCloud',oq:'mefjus',
+  target:null,pinned:false,preview:null,drag:null,fitsOpen:false,mode:'where',
+  opts:{q1:'A',q2:'A',q3:'A',...saved.opts},panelMin:false,toast:null,
+};
+const save=()=>localStorage.setItem(LS,JSON.stringify({opts:S.opts}));
+const wide=()=>innerWidth>=1200;
+const inEdit=()=>S.opts.q2==='B'&&wide()?true:S.editing;
+
+// ---------- fits ----------
+const inQ=id=>S.q.includes(id);
+const inQT=t=>S.q.some(i=>titleKey(T.get(i))===titleKey(t));
+const titleKey=t=>(t.title+'|'+t.artist).toLowerCase();
+function pool(){const seen=new Set(S.q.map(i=>titleKey(T.get(i))));const out=[];
+  for(const t of T.values()){if(!known(t))continue;const k=titleKey(t);if(seen.has(k))continue;seen.add(k);out.push(t)}return out}
+function spotsFor(x){const out=[];
+  for(let g=0;g<=S.q.length;g++){const a=T.get(S.q[g-1]),b=T.get(S.q[g]);if(S.q[g-1]===x.id||S.q[g]===x.id) continue;
+    const ri=a?rel(a,x):null,ro=b?rel(x,b):null,old=a&&b?rel(a,b):null;
+    let v=((ri?ri.s:.6)+(ro?ro.s:.6))/2;
+    if(old&&(old.k==='c'||old.k==='x')&&ri&&ro&&ri.s>=.8&&ro.s>=.8) v+=.15;
+    const ea=a?.energy??x.energy,eb=b?.energy??x.energy;v-=Math.abs(x.energy-(ea+eb)/2)/200;
+    out.push({g,v,ri,ro,old})}
+  return out.sort((p,q)=>q.v-p.v).slice(0,3)}
+function fitsAfter(a,b){return pool().map(x=>{const r1=rel(a,x),r2=b?rel(x,b):null;return {x,r1,r2,v:r1.s+(r2?r2.s:0)-Math.abs(r1.de||0)/120-(r2?Math.abs(r2.de||0)/120:0)}}).sort((p,q)=>q.v-p.v).slice(0,14)}
+const clashes=q=>{let n=0;for(let i=0;i<q.length-1;i++){const r=rel(T.get(q[i]),T.get(q[i+1]));if(r.k==='c'||r.k==='x')n++}return n};
+const total=q=>q.reduce((s,i)=>s+T.get(i).dur,0);
+
+// ---------- rendering pieces ----------
+const keyChip=t=>{if(!known(t)) return t.state==='run'?'':'<span class="na">not analysed</span>';const m=MOOD[t.mode]||'Dark';return `<span class="key" title="${t.tonic} ${t.mode}"><i style="background:${MC[m]}"></i>${m}</span>`};
+const why=(r,pre='')=>`<span class="why"><i style="background:var(--${KCLS[r.k]==='u'?'b4':KCLS[r.k]})"></i><span style="color:var(--${KCLS[r.k]==='u'?'tx':KCLS[r.k]})">${pre}${r.txt}</span>${[r.tempo,r.energy].filter(Boolean).map(s=>`<span class="dimmer">· ${s}</span>`).join('')}</span>`;
+const kc=r=>KCLS[r.k]==='u'?'tx':KCLS[r.k];
+const whyPair=(a,b)=>{const t=[a,b].some(r=>r.tempo&&r.s<.6)?'tempo jump':'';return `<span class="why"><i style="background:var(--${kc(a)})"></i><span style="color:var(--${kc(a)})">${a.txt}</span><span class="dimmer">→</span><i style="background:var(--${kc(b)})"></i><span style="color:var(--${kc(b)})">${b.txt}</span>${t?`<span class="dimmer">· ${t}</span>`:''}</span>`};
+const srcBadge=t=>`<span class="src">${t.online?t.src:t.lib}</span>`;
+function rail(){return `<nav class="rail"><svg class="logo" viewBox="0 0 24 30"><path d="M18 6c-2-2-9-3-11 1s9 6 9 11-7 6-11 3" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
+ <div class="srch">${ic('search')}</div><div class="it"><span class="ic">${ic('home')}</span>Home</div><div class="it"><span class="ic">${ic('media')}</span>Media</div>
+ <div class="it"><span class="ic">${ic('disc')}</span>Discover</div><div class="it on"><span class="ic">${ic('music')}</span>Music</div><div class="it"><span class="ic">${ic('heart')}</span>Library</div><div class="grow"></div><div class="it"><span class="ic">${ic('set')}</span>Settings</div></nav>`}
+function topBar(){const ed=inEdit();const always=S.opts.q2==='B'&&wide();
+ return `<header class="top"><div class="back">${ic('back')}</div><div class="ttl"><b>Queue</b>${ed?'<span class="edtag">Editing</span>':''}<small>Playlist · Music</small></div><div class="sp"></div>
+ ${ed?`<button class="btn gh undo" data-a="undo" ${S.undo.length?'':'style="opacity:.4"'}>${ic('undo','s')} Undo</button>`:''}
+ <button class="btn gh">${ic('spark','s')} Shape ▾</button>
+ ${!ed?`<button class="btn gh" data-a="play">Play</button><button class="btn ${S.fitsOpen?'soft':'gh'}" data-a="fitsnext">Fits next</button><button class="btn pr" data-a="edit">${ic('edit','s')} Edit</button>`:always?'':`<button class="btn pr" data-a="done">Done</button>`}
+ </header>`}
+
+// left column (edit)
+function libCol(){const tabs=`<div class="row1"><span class="h">Add from</span><span style="flex:1"></span><span class="seg"><b class="${S.tab==='lib'?'on':''}" data-a="tab" data-v="lib">${ic('drive','s')}Library</b><b class="${S.tab==='online'?'on':''}" data-a="tab" data-v="online">${ic('cloud','s')}Online</b></span></div>`;
+ return S.tab==='online'?onlineCol(tabs):localCol(tabs)}
+function crumbs(){const p=S.path;let h=p.length?`<a data-a="go" data-v="">Libraries</a>`:`<span class="cur">Libraries</span>`;
+ p.forEach((x,i)=>{h+=`<span class="sep">›</span>`+(i===p.length-1?`<span class="cur">${esc(x)}</span>`:`<a data-a="go" data-v="${esc(JSON.stringify(p.slice(0,i+1)))}">${esc(x)}</a>`)});return h}
+function trackRow(t){const can=dragOk(t);
+ return `<div class="srow ${can?'':'nodrag'} ${hl('track',t.id)}" data-h="track:${t.id}" ${can?`data-drag="${t.id}"`:''}><span class="grip">${ic('grip','s')}</span>
+ <span class="t"><b>${esc(t.title)}</b><small>${esc(t.artist||'Unknown artist')}</small></span>
+ ${inQT(t)?'<span class="inpl">In playlist</span>':''}${keyChip(t)}<span class="bpm num">${t.bpm??''}</span><span class="du num">${fmt(t.dur)}</span>
+ <span class="drawer"><b data-a="next" data-v="${t.id}">${ic('next','s')} Next</b><b class="pr" data-a="add" data-v="${t.id}">${ic('plus','s')} Add</b></span></div>`}
+function localCol(tabs){const f=S.filter.toLowerCase();let body='';
+ if(!S.path.length){
+  if(f){const hits=[...T.values()].filter(t=>!t.online&&(t.title+' '+t.artist).toLowerCase().includes(f)).slice(0,60);body=`<div class="lbl">${hits.length} matches in all libraries</div>`+hits.map(trackRow).join('')}
+  else body=`<div class="lbl">Libraries</div>`+Object.values(LIBS).map(L=>`<div class="srow folder" data-a="go" data-v="${esc(JSON.stringify([L.name]))}"><span class="fold lib">${ic('drive','s')}</span><span class="t"><b>${esc(L.name)}</b><small>${Object.keys(L.root.dirs).length?Object.keys(L.root.dirs).length+' folders':'folder'}</small></span><span class="cnt num">${countOf(L.root)}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')+
+   `<div class="lbl">Jump back in</div>`+[['perso','soundclound','neuro_etc'],['Deadmau5','Deadmau5 - while(1 2)'],['Deadmau5','At Play Vol. 4']].map(p=>`<div class="srow folder" data-a="go" data-v="${esc(JSON.stringify(p))}"><span class="fold">${ic('folder','s')}</span><span class="t"><b>${esc(p.at(-1))}</b><small>${esc(p.slice(0,-1).join(' › '))}</small></span><span class="cnt num">${countOf(nodeAt(p))}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')+
+   `<div class="lbl">Other playlists</div>`+[['perso',88],['New playlist',13]].map(p=>`<div class="srow folder" data-a="soon"><span class="fold">${ic('list','s')}</span><span class="t"><b>${p[0]}</b></span><span class="cnt">${p[1]}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')}
+ else{const n=nodeAt(S.path);const dirs=Object.entries(n.dirs);const tr=n.tracks.map(i=>T.get(i)).filter(t=>!f||(t.title+' '+t.artist).toLowerCase().includes(f));
+  body=dirs.map(([k,d])=>`<div class="srow folder" data-a="go" data-v="${esc(JSON.stringify([...S.path,k]))}"><span class="fold">${ic('folder','s')}</span><span class="t"><b>${esc(k)}</b></span><span class="cnt num">${countOf(d)}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')+
+   (tr.length?`<div class="lbl">${tr.length} tracks</div>`+tr.map(trackRow).join(''):'')}
+ return `<div class="colh">${tabs}<div class="crumbs">${crumbs()}</div><label class="field">${ic('search','s')}<input id="filter" value="${esc(S.filter)}" placeholder="${S.path.length?'Filter this folder':'Search all libraries'}" style="background:none;border:0;outline:0;color:var(--tx);font:inherit;flex:1"></label></div><div class="scroll" id="sc-left">${body}</div>`}
+function stateBits(t){
+ if(t.state==='done') return `<span class="facts">${keyChip(t)}<span class="bpm">${t.bpm} bpm</span><span class="na">energy ${t.energy}</span></span>`;
+ if(t.state==='run') return `<span class="facts prog" style="flex-direction:row;width:auto;gap:9px">${['Tempo','Key','Energy'].map((s,i)=>`<span class="st ${t.step>i?'done':t.step===i?'run':''}">${t.step>i?ic('check','s'):t.step===i?'<span class="spin"></span>':''} ${s}${s==='Tempo'&&t.step>0?' '+t.an.bpm:''}</span>`).join('')}</span>`;
+ return `<span class="facts"><span class="na">Not analysed</span></span>`}
+function onlineCol(tabs){const list=(ONLINE[S.src]||[]).map(o=>T.get(o.id)).filter(t=>(t.title+' '+t.artist).toLowerCase().includes(S.oq.toLowerCase().replace('mefjus',''))||1);
+ const local=[...T.values()].filter(t=>!t.online&&(t.title+' '+t.artist).toLowerCase().includes(S.oq.toLowerCase()));
+ const rows=S.src==='This PC'?local.map(trackRow).join('')||'<div class="tip">No match on this PC.</div>':list.map(t=>{const can=dragOk(t);
+  return `<div class="orow ${hl('track',t.id)}" data-h="track:${t.id}" ${can?`data-drag="${t.id}"`:''} style="${can?'':'cursor:not-allowed'}"><span class="oart" style="background-image:url(${t.art})"></span><span class="t"><b>${esc(t.title)}</b><small>${esc(t.artist)} · ${fmt(t.dur)}${inQ(t.id)?' · <span style="color:var(--ok)">in playlist</span>':''}</small>${stateBits(t)}</span>
+  ${t.state==='none'?`<button class="anl" data-a="analyse" data-v="${t.id}">${ic('wave','s')}Analyse</button>`:''}
+  ${t.state==='done'?`<span class="drawer"><b class="pr" data-a="add" data-v="${t.id}">${ic('plus','s')} Add</b></span>`:''}</div>`}).join('');
+ const n=s=>s==='This PC'?local.length:ONLINE[s].length;
+ return `<div class="colh">${tabs}<label class="field live">${ic('search','s')}<input id="oq" value="${esc(S.oq)}" style="background:none;border:0;outline:0;color:var(--tx);font:inherit;flex:1"></label></div>
+ <div style="display:flex;flex:1;min-height:0"><div class="srail">${['This PC','|',...Object.keys(ONLINE)].map(s=>s==='|'?'<div class="stopdiv">ONLINE</div>':`<div class="stop ${S.src===s?'on':''}" data-a="src" data-v="${s}" style="cursor:pointer"><b>${s}</b><small>${n(s)}</small></div>`).join('')}</div>
+ <div class="scroll" id="sc-left" style="padding:4px">${rows}${S.src!=='This PC'&&list.some(t=>t.state==='none')?`<div style="padding:10px 8px"><button class="btn soft" data-a="analyseAll">${ic('wave','s')} Analyse all shown</button></div>`:''}</div></div>`}
+
+// left column (not editing): like today
+function navCol(){return `<div class="colh"><div class="lbl" style="padding:4px 0">LIBRARIES</div></div><div class="scroll">${Object.values(LIBS).map(L=>`<div class="nav-pl"><span class="ldot"></span><span style="flex:1">${L.name}</span><span class="cnt">${countOf(L.root)}</span></div>`).join('')}
+ <div class="lbl" style="margin-top:8px">PLAYLISTS</div><div class="nav-pl on"><span style="flex:1">Queue</span><span class="num">${S.q.length}</span></div><div class="nav-pl"><span style="flex:1">perso</span><span class="cnt">88</span></div><div class="nav-pl"><span style="flex:1">New playlist</span><span class="cnt">13</span></div></div>`}
+
+// playlist
+function curve(){const e=S.q.map(i=>T.get(i).energy??70);const w=100/Math.max(1,e.length-1);let p='';e.forEach((v,i)=>p+=`${i?'L':'M'}${(i*w).toFixed(2)} ${(44-(v-55)*.95).toFixed(1)} `);
+ let marks='';for(let i=0;i<S.q.length-1;i++){const r=rel(T.get(S.q[i]),T.get(S.q[i+1]));if(r.k==='c'||r.k==='x')marks+=`<line x1="${(i+.5)*w}" x2="${(i+.5)*w}" y1="0" y2="46" stroke="oklch(83% .16 85 / .7)" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>`}
+ return `<div class="curve"><svg viewBox="0 0 100 46" preserveAspectRatio="none" style="width:100%;height:100%"><path d="${p}" fill="none" stroke="oklch(92% .01 240 / .8)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>${marks}</svg><span style="position:absolute;right:10px;top:6px;font-size:10.5px" class="dimmer">energy</span></div>`}
+function hl(kind,v){const key=kind+':'+v;if(S.target&&tk(S.target)===key) return 'tgt';if(S.preview===key) return 'prev';return ''}
+const tk=t=>t?t.k+':'+(t.id??t.i??''):'';
+function joinHTML(i,a,b,pins){const r=rel(a,b);const pend=a.state==='run'||b.state==='run';
+ const pin=pins[i+1]!=null?`<span class="pin ${pins[i+1]?'g':''}">${pins[i+1]+1}</span>`:'';
+ return `<div class="join ${hl('join',i)}" data-h="join:${i}">${pin}<span class="jc ${pend?'u':r.k}">${pend?'<span class="spin" style="width:8px;height:8px"></span> analysing':`<i></i>${r.txt}`}${!pend&&(r.tempo||r.energy)?` <span class="sub">· ${r.tempo||r.energy}</span>`:''}</span>${r.k==='u'&&!pend?`<button class="jc" style="color:var(--p)" data-a="analyseQ" data-v="${i}">${ic('wave','s')} Analyse</button>`:''}</div>`}
+function insHTML(){const d=S.drag,t=T.get(d.id);const ok=dropOk(t);
+ return `<div class="ins ${ok?'':'no'}"><span class="grip" style="color:var(--${ok?'p':'bad'})">${ic(ok?'plus':'ban','s')}</span><span class="t"><b>${esc(t.title)}</b><small>${ok?`drops here as track ${d.gap+1}`:'Analyse it first: this choice keeps unanalysed tracks out'}</small></span><span style="flex:1"></span>${keyChip(t)}<span class="bpm">${t.bpm?t.bpm+' bpm':''}</span></div>`}
+function playlistCol(edit){const pins={};
+ const pinSrc=(S.target?.k==='track'&&!S.drag)?S.target.id:(S.preview?.startsWith('track:')&&S.opts.q1==='C'&&!S.drag?S.preview.slice(6):null);
+ if(edit&&pinSrc&&known(T.get(pinSrc))) spotsFor(T.get(pinSrc)).forEach((s,n)=>pins[s.g]=n);
+ let q=S.q.slice();let dragFrom=-1;
+ if(S.drag?.from!=null){dragFrom=S.drag.from}
+ let h=`<div class="plh"><span class="h" style="font-size:16px">Queue</span><span class="meta num">${S.q.length} tracks · ${fmtLong(total(S.q))}</span>${clashes(S.q)?`<span class="chip warn">${clashes(S.q)} clashes</span>`:''}<span style="flex:1"></span><span class="seg"><b class="on">List</b><b>Map</b></span></div>${curve()}<div class="scroll" id="sc-pl" style="padding:4px 8px 40px">`;
+ const showGap=S.drag&&S.drag.gap!=null;
+ q.forEach((id,i)=>{const t=T.get(id);
+  if(showGap&&S.drag.gap===i) h+=insHTML();
+  else if(edit&&pins[i]!=null&&i>0) {/* pin shown on join */}
+  h+=`<div class="prow ${i===0?'now':''} ${hl('row',i)} ${dragFrom===i?'lifted':''}" data-h="row:${i}" ${edit?`data-drag="${id}" data-from="${i}"`:''}>${edit?`<span class="grip">${ic('grip','s')}</span>`:''}<span class="ix num">${i+1}</span>
+   <span class="t"><b>${esc(t.title)}</b><small>${esc(t.artist||'Unknown artist')}${t.online?` · ${srcBadge(t)}`:''}</small></span>${t.genre?'<span class="gen">DnB</span>':''}${t.state==='run'?'<span class="na">analysing…</span>':keyChip(t)}<span class="bpm num">${t.bpm?t.bpm+' bpm':''}</span><span class="du num">${fmt(t.dur)}</span>${edit?`<button class="x" data-a="remove" data-v="${i}" title="Remove">${ic('x','s')}</button>`:''}</div>`;
+  if(i<q.length-1&&!(showGap&&S.drag.gap===i+1)) h+=joinHTML(i,t,T.get(q[i+1]),edit?pins:{});
+ });
+ if(showGap&&S.drag.gap===q.length) h+=insHTML();
+ if(edit&&pins[q.length]!=null) h+=`<div class="join"><span class="pin ${pins[q.length]?'g':''}">${pins[q.length]+1}</span><span class="jc u">at the end</span></div>`;
+ return h+`</div>`}
+
+// fits column
+function fitsCol(){const t=S.drag?{k:'drop'}:(S.target||{k:'end'});
+ const pinBtn=`<button class="pinb ${S.pinned?'on':''}" data-a="pin">${ic('pin','s')}${S.pinned?'Pinned':'Pin'}</button>`;
+ const follow=S.drag?'Drop preview':S.pinned?'Pinned':S.opts.q1==='C'?'Showing what you clicked':(S.target?'Following your pointer':'Resting · after the last track');
+ const head=(about,extra='')=>`<div class="fh"><div class="follow">${S.pinned?ic('pin','s'):'<span class="dot"></span>'}<span>${follow}</span>${S.drag?'':pinBtn}</div>${about}${extra}</div>`;
+ const list=(rows)=>rows.map(o=>`<div class="frow" data-drag="${o.x.id}">${o.x.online?`<span class="oart" style="width:36px;height:36px;background-image:url(${o.x.art})"></span>`:`<span class="grip" style="color:oklch(92% .01 240 / .25)">${ic('grip','s')}</span>`}<span class="t"><b>${esc(o.x.title)}</b><small>${esc(o.x.artist||'Unknown artist')} · ${srcBadge(o.x)}</small>${o.r2?whyPair(o.r1,o.r2):why(o.r1)}</span><button class="plus" data-a="${o.at!=null?'insert':'add'}" data-v="${o.x.id}" ${o.at!=null?`data-at="${o.at}"`:''}>${ic('plus')}</button></div>`).join('');
+ if(t.k==='drop'){const d=S.drag,x=T.get(d.id);
+  if(d.gap==null) return head(`<div class="about"><span class="t"><b>${esc(x.title)}</b><small>Move over the playlist to pick a slot</small></span></div>`)+`<div class="scroll"><div class="tip">Release outside the playlist to cancel.</div></div>`;
+  if(!dropOk(x)) return head(`<div class="about"><span class="t"><b>${esc(x.title)}</b><small>not analysed</small></span></div>`)+`<div class="scroll"><div class="verdict"><div class="vh" style="color:var(--bad)">Can't drop yet</div><div class="tip" style="padding:0">With "Analyse first", a track joins only once its tempo and key are known. Release, press Analyse, then drag it again.</div></div></div>`;
+  const q2=S.q.filter((_,i)=>i!==d.from);let g=d.gap;if(d.from!=null&&d.from<d.gap) g--;q2.splice(g,0,x.id);
+  const a=T.get(q2[g-1]),b=T.get(q2[g+1]);const ri=a&&rel(a,x),ro=b&&rel(x,b);
+  const good=[ri,ro].filter(Boolean).every(r=>r.s>=.8),unk=[ri,ro].some(r=>r&&r.k==='u');
+  const best=known(x)?spotsFor(x)[0]:null;
+  return head(`<div class="about"><span class="t"><b>${esc(x.title)} → slot ${g+1}</b><small>${a?'after '+esc(a.title):'at the start'}${b?' · before '+esc(b.title):' · at the end'}</small></span></div>`)+
+  `<div class="scroll"><div class="verdict"><div class="vh" style="color:var(--${unk?'tx':good?'ok':'warn'})">${unk?(S.opts.q3==='B'?'Drops now; analysis starts on drop':'Drops now; joins stay grey until you analyse'):good?'Good drop: both joins hold':'This drop makes a rough join'}</div>
+  ${ri?`<div class="vline"><span>In</span>${why(ri)}</div>`:''}${ro?`<div class="vline"><span>Out</span>${why(ro)}</div>`:''}
+  <div class="vline"><span>Clashes</span><span class="num">${clashes(S.q)} → ${clashes(q2)}</span></div><div class="vline"><span>Length</span><span class="num">${fmtLong(total(S.q))} → ${fmtLong(total(q2))}</span></div></div>
+  ${best&&best.g!==d.gap?`<div class="lbl">Better nearby</div><div class="tip">Slot ${best.g+1} scores higher (${best.ri?best.ri.txt.toLowerCase():'start'} in, ${best.ro?best.ro.txt.toLowerCase():'end'} out).</div>`:''}</div>`}
+ if(t.k==='track'){const x=T.get(t.id);
+  const about=`<div class="about">${x.online?`<span class="art" style="background-image:url(${x.art})"></span>`:`<span class="art" style="display:grid;place-items:center">${ic('music')}</span>`}<span class="t"><b>${esc(x.title)}</b><small>${esc(x.artist||'Unknown artist')} · ${x.online?x.src:x.lib}${known(x)?` · ${x.bpm} bpm`:''}</small></span></div>`;
+  if(!known(x)) return head(about)+`<div class="scroll"><div class="verdict"><div class="vh">${x.state==='run'?'Analysing…':'Where would it fit? Analyse it first.'}</div><div class="tip" style="padding:0 0 10px">Tempo, key and energy. About 20 s for a 4 min track (sped up here). It stays analysed and ranks in Fits like your own files.</div>${x.state==='run'?stateBits(x):`<button class="btn pr" data-a="analyse" data-v="${x.id}">${ic('wave','s')} Analyse ${esc(x.title)}</button>`}</div>
+   <div class="lbl">Meanwhile</div><div class="tip">${{A:'You can drop it in now; its joins stay grey with an Analyse button.',B:'You can drop it in now; analysis starts by itself on drop.',C:'It can\'t go in until it is analysed.'}[S.opts.q3]}</div></div>`;
+  const seg=`<span class="seg"><b class="${S.mode==='where'?'on':''}" data-a="mode" data-v="where">Where it fits</b><b class="${S.mode==='after'?'on':''}" data-a="mode" data-v="after">What fits after it</b></span>`;
+  if(S.mode==='after') return head(about,seg)+`<div class="scroll">${list(fitsAfter(x).filter(o=>o.x.id!==x.id))}</div>`;
+  const sp=spotsFor(x);
+  return head(about,seg)+`<div class="scroll"><div class="lbl">Best places in Queue</div>${sp.map((s,n)=>{const a=T.get(S.q[s.g-1]),b=T.get(S.q[s.g]);
+   return `<div class="spot ${n?'':'best'}"><span class="pin ${n?'g':''}">${n+1}</span><span class="t"><b>${a&&b?`Between ${s.g} ${esc(a.title)} and ${s.g+1} ${esc(b.title)}`:a?'At the end':'At the start'}</b><span class="lines">${s.ri?why(s.ri,'In: '):''}${s.ro?why(s.ro,'Out: '):''}</span>${s.old&&(s.old.k==='c'||s.old.k==='x')&&s.v>.9?'<small>Replaces a rough join with two good ones.</small>':''}</span><button class="btn soft" data-a="insert" data-v="${x.id}" data-at="${s.g}" style="height:28px">Put here</button></div>`}).join('')}</div>`}
+ if(t.k==='join'){const a=T.get(S.q[t.i]),b=T.get(S.q[t.i+1]);if(!a||!b){S.target=null;return fitsCol()}const r=rel(a,b);
+  return head(`<div class="about"><span class="t"><b>Between ${t.i+1} ${esc(a.title)} and ${t.i+2} ${esc(b.title)}</b><small>today: <span style="color:var(--${KCLS[r.k]==='u'?'tx':KCLS[r.k]})">${r.txt.toLowerCase()}</span></small></span></div>`)+
+   `<div class="scroll"><div class="lbl">Bridges this join · all sources</div>${list(fitsAfter(a,b).map(o=>({...o,at:t.i+1})))}</div>`}
+ const i=t.k==='row'?t.i:S.q.length-1;const a=T.get(S.q[i]);if(!a){S.target=null;return fitsCol()}
+ return head(`<div class="about"><span class="t"><b>After ${i+1} ${esc(a.title)}</b><small>${keyChip(a)} ${a.bpm??''} bpm · energy ${a.energy??'?'}</small></span></div>`)+
+  `<div class="scroll"><div class="lbl">Fits next</div>${list(fitsAfter(a).map(o=>({...o,at:i+1})))}</div>`}
+
+// decide panel
+const Q=[
+ {k:'q1',h:'1 · When does Fits change?',sub:'hover vs click',try:'Try: sweep the pointer over library rows and joins.',o:[
+  ['A','Follow after 250 ms, stay put','Hover a row or join for a quarter second and Fits switches. Leaving it keeps the last answer, so you can move into Fits to drag from it.'],
+  ['B','Follow at once, fall back on leave','Fits switches the moment you hover and returns to its pin (the end) half a second after you leave.'],
+  ['C','Click to change, hover only previews','Hover shows pins in the playlist but Fits only changes on click. Calm, but one more click each time.']]},
+ {k:'q2',h:'2 · How do you get into edit mode?',sub:'toggle vs always',try:'Try: press Edit / Done, or resize the window.',o:[
+  ['A','A toggle: Edit → Done','The playlist page looks like today; Edit opens the three columns, Done closes them. Same on phones.'],
+  ['B','Always on when the window is wide','From 1200 px wide the three columns are just the playlist page. Narrower windows and phones keep the Edit toggle.']]},
+ {k:'q3',h:'3 · Dropping an online track that is not analysed',sub:'',try:'Try: Online tab → drag "Hear Me" or "Volition" into the playlist.',o:[
+  ['A','Drops now, joins grey until you analyse','It goes in at once; its joins read "Not analysed" with an Analyse button.'],
+  ['B','Drops now, analysis starts on drop','It goes in at once and analysis runs by itself; joins show "analysing" then take their colour.'],
+  ['C','Analyse first','It can\'t be dragged until analysed. The Add button becomes "Analyse & add".']]},
+];
+function decide(){if(S.panelMin) return `<aside class="decide min"><b>Your picks</b><span class="num">1${S.opts.q1} · 2${S.opts.q2} · 3${S.opts.q3}</span><span style="flex:1"></span><button class="btn gh" data-a="panel">Show the choices</button></aside>`;
+ return `<aside class="decide">${Q.map(q=>{const cur=q.o.find(o=>o[0]===S.opts[q.k]);return `<div class="qq"><h4>${q.h} <small>${q.sub}</small></h4>
+ <div class="opts">${q.o.map(([v,b])=>`<button class="opt ${S.opts[q.k]===v?'on':''}" data-a="opt" data-k="${q.k}" data-v="${v}"><span class="l">${v}</span><b>${b}</b></button>`).join('')}</div>
+ <small class="desc">${cur[2]}${q.k==='q2'?` <span class="dimmer">Window now ${innerWidth} px${S.opts.q2==='B'?(wide()?': columns always shown.':': too narrow, the toggle is back.'):'.'}</span>`:''}</small><div class="try">${q.try}</div></div>`}).join('')}
+ <div class="side"><button class="btn pr" data-a="copy">Copy my picks</button><button class="btn gh" data-a="reset">Reset playlist</button><button class="btn gh" data-a="panel">Hide</button></div></aside>`}
+
+// ---------- render ----------
+const app=document.getElementById('app');
+function render(){const sc={};app.querySelectorAll('.scroll[id]').forEach(e=>sc[e.id]=e.scrollTop);
+ const focus=document.activeElement?.id,sel=document.activeElement?.selectionStart;
+ const ed=inEdit();
+ let cols;
+ if(ed) cols=`<div class="cols"><section class="col">${libCol()}</section><section class="col">${playlistCol(true)}</section><section class="col" data-zone="fits">${fitsCol()}</section></div>`;
+ else cols=`<div class="cols two ${S.fitsOpen?'fits':''}"><section class="col">${navCol()}</section><section class="col">${playlistCol(false)}</section>${S.fitsOpen?`<section class="col" data-zone="fits">${fitsCol()}</section>`:''}</div>`;
+ app.innerHTML=`<div class="shell"><div class="desk">${rail()}<div class="main">${topBar()}${cols}</div></div>${decide()}</div>${S.toast?`<div class="toast">${S.toast.text}${S.toast.undo?'<button data-a="undo">Undo</button>':''}</div>`:''}`;
+ app.querySelectorAll('.scroll[id]').forEach(e=>{if(sc[e.id]!=null)e.scrollTop=sc[e.id]});
+ if(focus){const e=document.getElementById(focus);if(e){e.focus();try{e.setSelectionRange(sel,sel)}catch{}}}
+}
+let toastT;function toast(text,undo){S.toast={text,undo};clearTimeout(toastT);toastT=setTimeout(()=>{S.toast=null;render()},3500)}
+
+// ---------- actions ----------
+const snap=()=>{S.undo.push(S.q.slice());if(S.undo.length>50)S.undo.shift()};
+const dragOk=t=>!(S.opts.q3==='C'&&!known(t)&&t.state!=='done');
+const dropOk=t=>dragOk(t);
+function insertAt(id,g,from){snap();if(from!=null){S.q.splice(from,1);if(from<g)g--}else if(inQ(id)){const j=S.q.indexOf(id);S.q.splice(j,1);if(j<g)g--}
+ S.q.splice(g,0,id);const t=T.get(id);if(!known(t)&&S.opts.q3==='B'&&t.state==='none') analyse(id);
+ toast(`${from!=null?'Moved':'Added'} <b>${esc(t.title)}</b> as track ${g+1}`,true)}
+function analyse(id){const t=T.get(id);if(t.state!=='none')return;t.state='run';t.step=0;render();
+ const tick=()=>{t.step++;if(t.step>=3){Object.assign(t,t.an,{state:'done'});if(t.then!=null){const g=t.then==='last'?S.q.length:t.then;delete t.then;insertAt(id,g)}render();return}render();setTimeout(tick,900)};setTimeout(tick,900)}
+function setTarget(tg){if(S.pinned||S.drag)return;if(tk(tg)===tk(S.target))return;S.target=tg;render()}
+
+app.addEventListener('click',e=>{const el=e.target.closest('[data-a]');
+ if(!el){ // click-to-target (Q1 C)
+  if(S.opts.q1==='C'){const h=e.target.closest('[data-h]');if(h&&!h.closest('[data-zone="fits"]')){const [k,v]=h.dataset.h.split(':');S.pinned=false;S.target=k==='track'?{k,id:v}:{k,i:+v};render()}}
+  return}
+ const a=el.dataset.a,v=el.dataset.v;e.stopPropagation();
+ ({
+  tab:()=>{S.tab=v;S.filter=''},go:()=>{S.path=v?JSON.parse(v):[];S.filter=''},src:()=>{S.src=v},
+  add:()=>{const t=T.get(v);if(!dragOk(t)){t.then='last';analyse(v);toast(`Analysing <b>${esc(t.title)}</b>, it goes in when done`);return}insertAt(v,S.q.length)},
+  next:()=>insertAt(v,1),
+  insert:()=>{const t=T.get(v);if(!dragOk(t)){t.then=+el.dataset.at;analyse(v);return}insertAt(v,+el.dataset.at)},
+  remove:()=>{snap();const t=T.get(S.q[+v]);S.q.splice(+v,1);S.target=null;toast(`Removed <b>${esc(t.title)}</b>`,true)},
+  undo:()=>{if(S.undo.length){S.q=S.undo.pop();S.toast=null}},
+  analyse:()=>analyse(v),analyseAll:()=>ONLINE[S.src].forEach(o=>analyse(o.id)),
+  analyseQ:()=>{const i=+v;[S.q[i],S.q[i+1]].forEach(id=>{const t=T.get(id);if(t.state==='none')analyse(id)})},
+  pin:()=>{S.pinned=!S.pinned;if(!S.pinned&&S.opts.q1==='B')S.target=null},
+  mode:()=>{S.mode=v},edit:()=>{S.editing=true;S.fitsOpen=false},done:()=>{S.editing=false;S.target=null;S.pinned=false},
+  fitsnext:()=>{S.fitsOpen=!S.fitsOpen},play:()=>toast('Playback is not part of this prototype'),soon:()=>toast('Other playlists open the same way; not wired in this prototype'),
+  opt:()=>{S.opts[el.dataset.k]=v;save();S.target=null;S.pinned=false;S.preview=null},
+  panel:()=>{S.panelMin=!S.panelMin},
+  copy:()=>{const txt=Q.map(q=>`${q.h}: ${S.opts[q.k]} — ${q.o.find(o=>o[0]===S.opts[q.k])[1]}`).join('\n');navigator.clipboard?.writeText(txt).then(()=>toast('Copied, paste it in the chat'),()=>toast(txt.replace(/\n/g,'<br>')))},
+  reset:()=>{S.q=DATA.queue.slice();S.undo=[];S.target=null},
+ }[a]||(()=>{}))();
+ render()});
+app.addEventListener('input',e=>{if(e.target.id==='filter'){S.filter=e.target.value;render()}if(e.target.id==='oq'){S.oq=e.target.value;render()}});
+
+// hover logic per Q1
+let hT,leaveT,curH=null;
+app.addEventListener('pointerover',e=>{if(S.drag)return;const h=e.target.closest('[data-h]');
+ const inFits=!!e.target.closest('[data-zone="fits"]');if(inFits||e.target.closest('.decide')){clearTimeout(hT);return}
+ const key=h?.dataset.h??null;if(key===curH)return;curH=key;clearTimeout(hT);
+ if(!inEdit()&&!S.fitsOpen)return;
+ const tg=key?(([k,v])=>k==='track'?{k,id:v}:{k,i:+v})(key.split(':')):null;
+ const q1=S.opts.q1;
+ if(q1==='A'){if(tg)hT=setTimeout(()=>setTarget(tg),250)}
+ else if(q1==='B'){clearTimeout(leaveT);if(tg)setTarget(tg);else leaveT=setTimeout(()=>{if(!S.pinned){S.target=null;render()}},500)}
+ else{const p=key;if(p!==S.preview){S.preview=p;render()}}
+});
+
+// ---------- drag (pointer based) ----------
+let down=null,ghost=null,raf=0;
+app.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button,input,[data-a]'))return;const r=e.target.closest('[data-drag]');
+ const blocked=e.target.closest('.srow.nodrag,.orow:not([data-drag])');
+ if(blocked&&!r){const id=blocked.dataset.h?.split(':')[1];down={blocked:id,x:e.clientX,y:e.clientY};return}
+ if(!r||!inEdit())return;down={id:r.dataset.drag,from:r.dataset.from!=null?+r.dataset.from:null,x:e.clientX,y:e.clientY}});
+addEventListener('pointermove',e=>{if(!down)return;
+ if(!S.drag){if(Math.hypot(e.clientX-down.x,e.clientY-down.y)<5)return;
+  if(down.blocked){toast(`Analyse <b>${esc(T.get(down.blocked).title)}</b> first: with pick 3C, only analysed tracks go in`);render();down=null;return}
+  S.drag={id:down.id,from:down.from,gap:null};document.body.classList.add('dragging');clearTimeout(hT);
+  const t=T.get(down.id);ghost=document.createElement('div');ghost.className='ghost';ghost.innerHTML=`<span class="grip" style="color:var(--p)">${ic('grip','s')}</span><span class="t"><b>${esc(t.title)}</b><small>${esc(t.artist||'Unknown artist')}${t.bpm?' · '+t.bpm+' bpm':''}</small></span>`;document.body.appendChild(ghost);
+  const loop=()=>{if(!S.drag)return;const sc=document.getElementById('sc-pl');if(sc&&S.drag.py){const r=sc.getBoundingClientRect();if(S.drag.px>r.left&&S.drag.px<r.right){if(S.drag.py<r.top+50)sc.scrollTop-=10;else if(S.drag.py>r.bottom-50)sc.scrollTop+=10}}raf=requestAnimationFrame(loop)};raf=requestAnimationFrame(loop)}
+ ghost.style.left=e.clientX+12+'px';ghost.style.top=e.clientY-20+'px';S.drag.px=e.clientX;S.drag.py=e.clientY;
+ const sc=document.getElementById('sc-pl');const r=sc.getBoundingClientRect();let gap=null;
+ if(e.clientX>r.left-20&&e.clientX<r.right+20&&e.clientY>r.top-30&&e.clientY<r.bottom+10){const rows=[...sc.querySelectorAll('.prow')];gap=rows.length;
+  for(let i=0;i<rows.length;i++){const b=rows[i].getBoundingClientRect();if(e.clientY<b.top+b.height/2){gap=i;break}}}
+ ghost.classList.toggle('no',gap!=null&&!dropOk(T.get(S.drag.id)));
+ if(gap!==S.drag.gap){S.drag.gap=gap;render()}});
+addEventListener('pointerup',()=>{if(S.drag){const d=S.drag;S.drag=null;cancelAnimationFrame(raf);ghost?.remove();ghost=null;document.body.classList.remove('dragging');
+  if(d.gap!=null&&dropOk(T.get(d.id))&&!(d.from!=null&&(d.gap===d.from||d.gap===d.from+1)))insertAt(d.id,d.gap,d.from);
+  else if(d.gap!=null&&!dropOk(T.get(d.id)))toast('Not dropped: analyse it first (pick 3C)');
+  render()}down=null});
+addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='z'){if(S.undo.length){S.q=S.undo.pop();render()}e.preventDefault()}if(e.key==='Escape'&&S.drag){S.drag.gap=null;dispatchEvent(new Event('pointerup'))}});
+addEventListener('resize',()=>render());
+render();
+</script></body></html>

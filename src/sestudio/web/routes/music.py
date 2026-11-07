@@ -103,6 +103,21 @@ async def music_search(
     return await asyncio.to_thread(search.search, q, source, limit, root)
 
 
+@router.post("/music/tracks/{track_id}/analyse")
+async def analyse_online(track_id: str) -> dict[str, bool]:
+    """Analyse an online track on request (the playlist editor's Analyse button)."""
+    if online.video_id(track_id) is None:
+        raise HTTPException(
+            status_code=400, detail="Only online tracks are analysed on request"
+        )
+    if not runner.enabled():
+        raise HTTPException(
+            status_code=409, detail="Music analysis is off on this server"
+        )
+    online.kick_analysis(track_id)
+    return {"ok": True}
+
+
 class GenreBody(BaseModel):
     genre: str | None = None
 

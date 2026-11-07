@@ -99,7 +99,7 @@ interface Props<T extends string> {
   /** The page's actions, behind the ⋯ button. */
   menu?: ReactNode
   /** The page's one primary action: a plus icon button on the phone card, a labelled button on desktop. */
-  action?: { label: string; onClick: () => void }
+  action?: { label: string; onClick: () => void; icon?: ReactNode }
   tabs?: HeaderTab<T>[]
   tab?: T
   onTab?: (id: T) => void
@@ -127,7 +127,7 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
         <div className="flex items-center gap-2 min-h-11">
           {back}
           <CardTitle title={title} status={status} wrap={wrapTitle} />
-          {action && <button onClick={action.onClick} aria-label={action.label} className={`${GLASS_BUTTON} bg-primary/24 text-primary`}>{plus}</button>}
+          {action && <button onClick={action.onClick} aria-label={action.label} className={`${GLASS_BUTTON} bg-primary/24 text-primary`}>{action.icon ?? plus}</button>}
           {menu && <Menu>{menu}</Menu>}
           {!onBack && <ActivityBell />}
           {!onBack && <SettingsButton />}
@@ -144,7 +144,7 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
       )}
       {(menu || action) && desk.menu && createPortal(
         <>
-          {action && <button onClick={action.onClick} className="btn btn-primary btn-sm gap-1.5 shrink-0">{plus}{action.label}</button>}
+          {action && <button onClick={action.onClick} className="btn btn-primary btn-sm gap-1.5 shrink-0">{action.icon ?? plus}{action.label}</button>}
           {menu && <Menu>{menu}</Menu>}
         </>,
         desk.menu,

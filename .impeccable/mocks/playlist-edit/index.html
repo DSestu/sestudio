@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playlist edit mode — mockups</title>
+<style>
+:root{
+  --b1:oklch(16% .015 240);--b2:oklch(20% .02 240);--b3:oklch(26% .025 240);--b4:oklch(31% .025 240);
+  --tx:oklch(92% .01 240);--p:oklch(72% .16 230);--pink:oklch(80% .07 230 / .9);
+  --ok:oklch(76% .17 155);--warn:oklch(83% .16 85);--bad:oklch(68% .19 25);--rel:oklch(78% .13 300);--fifth:oklch(80% .12 200);
+  --dark:oklch(62% .2 330);--smooth:oklch(70% .12 190);--float:oklch(78% .1 260);--warm:oklch(76% .14 60);
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#05080d;color:var(--tx);font:14px/1.43 ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:oklch(72% .16 230 / .35)}
+.num{font-variant-numeric:tabular-nums}
+.dim{color:oklch(92% .01 240 / .55)}.dimmer{color:oklch(92% .01 240 / .4)}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.s{width:15px;height:15px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ---------- desktop frame ---------- */
+.desk{width:1440px;height:900px;background:var(--b1);position:relative;overflow:hidden;display:flex;gap:16px;padding:12px 16px 12px 12px}
+.rail{width:84px;flex:none;border-radius:16px;background:oklch(20% .02 240 / .6);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:6px}
+.rail .logo{width:28px;height:34px;margin-bottom:10px;color:var(--tx)}
+.rail .srch{width:52px;height:52px;border-radius:12px;background:var(--p);color:var(--b1);display:grid;place-items:center;margin-bottom:8px}
+.rail .it{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:oklch(92% .01 240 / .7);padding:8px 0;width:64px;border-radius:10px}
+.rail .it.on{color:var(--p)}.rail .it.on .ic{background:oklch(72% .16 230 / .18);border-radius:10px;padding:4px 14px}
+.rail .grow{flex:1}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.top{height:56px;border-radius:16px;background:var(--b2);border:1px solid var(--b3);display:flex;align-items:center;gap:12px;padding:0 8px 0 8px}
+.back{width:38px;height:38px;border-radius:10px;background:var(--b3);display:grid;place-items:center}
+.ttl{line-height:1.15}.ttl b{font-size:19px;font-weight:600;letter-spacing:-.02em}.ttl small{display:block;font-size:12px;color:oklch(92% .01 240 / .55)}
+.edtag{font-size:11px;font-weight:600;color:var(--p);background:oklch(72% .16 230 / .14);border-radius:99px;padding:3px 9px;margin-left:6px;vertical-align:3px}
+.top .sp{flex:1}
+.btn{height:32px;border-radius:6px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500}
+.btn.pr{background:var(--p);color:oklch(18% .05 230)}.btn.gh{color:oklch(92% .01 240 / .8)}.btn.gh:hover{background:var(--b3)}
+.btn.soft{background:oklch(72% .16 230 / .14);color:var(--p)}
+.undo{font-size:12px}
+
+.cols{flex:1;min-height:0;display:grid;grid-template-columns:352px minmax(0,1fr) 372px;gap:12px}
+.col{min-height:0;border-radius:16px;background:oklch(20% .02 240 / .55);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.colh{padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid oklch(26% .025 240 / .7)}
+.colh .row1{display:flex;align-items:center;gap:8px}
+.h{font-size:15px;font-weight:600;letter-spacing:-.02em}
+.seg{display:inline-flex;background:oklch(100% 0 0 / .05);border-radius:99px;padding:2px}
+.seg b{font-weight:500;font-size:12px;height:28px;padding:0 13px;border-radius:99px;display:inline-flex;align-items:center;gap:6px;color:oklch(92% .01 240 / .7)}
+.seg b.on{background:oklch(72% .16 230 / .2);color:var(--p)}
+.field{height:34px;border-radius:8px;background:var(--b1);border:1px solid var(--b3);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;color:oklch(92% .01 240 / .45)}
+.field.live{border-color:oklch(72% .16 230 / .8);box-shadow:0 0 0 3px oklch(72% .16 230 / .15);color:var(--tx)}
+.crumbs{display:flex;align-items:center;gap:4px;font-size:12.5px;flex-wrap:wrap}
+.crumbs a{color:oklch(92% .01 240 / .6);padding:2px 5px;border-radius:5px}.crumbs a:hover{background:var(--b3)}
+.crumbs .sep{color:oklch(92% .01 240 / .3)}.crumbs .cur{color:var(--tx);font-weight:600;padding:2px 5px}
+.scroll{flex:1;min-height:0;overflow:hidden;padding:6px}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.02em;color:oklch(92% .01 240 / .45);padding:10px 8px 6px;display:flex;align-items:center;gap:8px}
+.lbl .r{margin-left:auto;font-weight:500;letter-spacing:0}
+
+/* source rows */
+.srow{display:flex;align-items:center;gap:10px;height:44px;padding:0 8px;border-radius:9px;position:relative}
+.srow:hover,.srow.hov{background:oklch(100% 0 0 / .05)}
+.srow.hov{box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .45);background:oklch(72% .16 230 / .08)}
+.srow .grip{color:oklch(92% .01 240 / .25);width:12px}
+.srow .t{flex:1;min-width:0;line-height:1.2}.srow .t b{display:block;font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .du{font-size:12px;color:oklch(92% .01 240 / .5);width:36px;text-align:right}
+.fold{width:30px;height:30px;border-radius:7px;background:var(--b3);display:grid;place-items:center;color:oklch(92% .01 240 / .7);flex:none}
+.fold.lib{background:oklch(72% .16 230 / .14);color:var(--p)}
+.cnt{font-size:12px;color:oklch(92% .01 240 / .45)}
+.chev{color:oklch(92% .01 240 / .3)}
+.inpl{font-size:10.5px;color:var(--ok);background:oklch(76% .17 155 / .12);border-radius:99px;padding:2px 7px;white-space:nowrap}
+.drawer{position:absolute;right:6px;top:7px;display:flex;gap:4px}
+.drawer b{height:30px;border-radius:7px;background:var(--b4);display:inline-flex;align-items:center;gap:5px;padding:0 9px;font-weight:500;font-size:12px}
+.drawer b.pr{background:var(--p);color:oklch(18% .05 230)}
+.ldot{width:8px;height:8px;border-radius:99px;background:var(--ok);flex:none}
+
+.key{display:inline-flex;align-items:center;gap:5px;font-size:11px;border-radius:5px;background:oklch(100% 0 0 / .07);padding:2px 6px;color:oklch(92% .01 240 / .75);white-space:nowrap}
+.key i{width:8px;height:8px;border-radius:99px;display:inline-block}
+.bpm{font-size:11.5px;color:oklch(92% .01 240 / .45);white-space:nowrap}
+.gen{font-size:11px;color:var(--smooth);border:1px solid oklch(70% .12 190 / .45);border-radius:99px;padding:1px 7px;white-space:nowrap}
+.na{font-size:11px;color:oklch(92% .01 240 / .4);font-style:normal;white-space:nowrap}
+
+/* playlist */
+.plh{padding:12px 16px 10px;display:flex;align-items:center;gap:12px;border-bottom:1px solid oklch(26% .025 240 / .7)}
+.plh .meta{font-size:12.5px;color:oklch(92% .01 240 / .55)}
+.chip{font-size:12px;border-radius:99px;padding:2px 9px;white-space:nowrap}
+.chip.warn{background:oklch(83% .16 85 / .14);color:var(--warn)}
+.curve{height:46px;margin:8px 16px 4px;border-radius:10px;background:var(--b1);position:relative;overflow:hidden}
+.prow{display:flex;align-items:center;gap:10px;height:46px;padding:0 10px 0 6px;border-radius:9px;position:relative}
+.prow:hover,.prow.hov{background:oklch(100% 0 0 / .05)}
+.prow.lifted{opacity:.35}
+.prow .ix{width:20px;text-align:right;font-size:11.5px;color:oklch(92% .01 240 / .35)}
+.prow .t{flex:1;min-width:0;line-height:1.2}.prow .t b{display:block;font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.prow .du{font-size:12px;color:oklch(92% .01 240 / .55);width:38px;text-align:right}
+.prow .grip{color:oklch(92% .01 240 / .25)}
+.prow.now .t b{color:var(--p)}
+.join{height:22px;display:flex;align-items:center;gap:8px;padding-left:36px;position:relative}
+.join::before{content:"";position:absolute;left:26px;right:14px;top:50%;height:1px;background:oklch(26% .025 240 / .9)}
+.jc{position:relative;font-size:11px;border-radius:99px;padding:1px 8px;background:var(--b2);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;box-shadow:0 0 0 3px var(--b2)}
+.jc i{width:6px;height:6px;border-radius:99px;display:inline-block}
+.jc.m{color:var(--ok)}.jc.m i{background:var(--ok)}
+.jc.f{color:var(--fifth)}.jc.f i{background:var(--fifth)}
+.jc.r{color:var(--rel)}.jc.r i{background:var(--rel)}
+.jc.c{color:var(--warn)}.jc.c i{background:var(--warn)}
+.jc.x{color:var(--bad)}.jc.x i{background:var(--bad)}
+.jc .sub{color:oklch(92% .01 240 / .45)}
+.join.hov::before{background:oklch(72% .16 230 / .7);height:2px}
+.join.hov .jc{box-shadow:0 0 0 1px oklch(72% .16 230 / .7),0 0 0 4px var(--b2)}
+.pin{position:relative;width:18px;height:18px;border-radius:99px;background:var(--p);color:oklch(18% .05 230);font-size:11px;font-weight:700;display:grid;place-items:center;box-shadow:0 0 0 3px var(--b2)}
+.pin.g{background:oklch(72% .16 230 / .25);color:var(--p)}
+.ghostline{height:0;position:relative;margin:0 14px 0 26px}
+.ins{height:50px;margin:2px 4px;border-radius:10px;border:1.5px dashed oklch(72% .16 230 / .75);background:oklch(72% .16 230 / .07);display:flex;align-items:center;gap:10px;padding:0 10px;position:relative}
+.ins .t b{font-size:13.5px;font-weight:500}.ins .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.dragcard{position:absolute;z-index:20;width:300px;height:48px;border-radius:10px;background:var(--b4);box-shadow:0 14px 30px -6px #000c,0 0 0 1px oklch(72% .16 230 / .6);display:flex;align-items:center;gap:10px;padding:0 10px;transform:rotate(-1.5deg)}
+.dragcard .t b{font-size:13px;font-weight:500;display:block}.dragcard .t small{font-size:11px;color:oklch(92% .01 240 / .55)}
+.cursor{position:absolute;z-index:21;width:18px;height:22px}
+
+/* fits */
+.fh{padding:12px 14px 10px;border-bottom:1px solid oklch(26% .025 240 / .7);display:flex;flex-direction:column;gap:8px}
+.follow{display:flex;align-items:center;gap:7px;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.follow .dot{width:7px;height:7px;border-radius:99px;background:var(--p);box-shadow:0 0 0 3px oklch(72% .16 230 / .2)}
+.follow .pinb{margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:7px;color:oklch(92% .01 240 / .7);background:oklch(100% 0 0 / .05)}
+.follow .pinb.on{color:var(--p);background:oklch(72% .16 230 / .15)}
+.about{display:flex;align-items:center;gap:10px}
+.about .art{width:40px;height:40px;border-radius:7px;background:var(--b3);flex:none;background-size:cover;background-position:center}
+.about .t{min-width:0;flex:1;line-height:1.25}.about .t b{font-size:15px;font-weight:600;letter-spacing:-.015em;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.about .t small{font-size:12px;color:oklch(92% .01 240 / .55)}
+.frow{display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:9px;position:relative}
+.frow:hover{background:oklch(100% 0 0 / .05)}
+.frow .t{flex:1;min-width:0;line-height:1.28}.frow .t b{display:block;font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.why{font-size:11.5px;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.why i{width:7px;height:7px;border-radius:99px;display:inline-block}
+.src{font-size:10.5px;border-radius:4px;padding:1px 5px;background:oklch(100% 0 0 / .07);color:oklch(92% .01 240 / .6)}
+.plus{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;color:var(--p)}
+.spot{border-radius:10px;background:oklch(100% 0 0 / .035);padding:10px 12px;display:flex;gap:10px;align-items:flex-start;margin:0 6px 6px}
+.spot.best{background:oklch(72% .16 230 / .09);box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .35)}
+.spot .t{flex:1;min-width:0}.spot .t b{font-size:13px;font-weight:500;display:block}
+.spot .t small{font-size:12px;color:oklch(92% .01 240 / .55);display:block;margin-top:2px}
+.spot .lines{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.verdict{margin:10px 6px 8px;padding:12px;border-radius:12px;background:oklch(100% 0 0 / .04)}
+.verdict .vh{font-size:13px;font-weight:600;margin-bottom:8px}
+.vline{display:grid;grid-template-columns:86px 1fr;gap:6px;font-size:12.5px;padding:3px 0}
+.vline span:first-child{color:oklch(92% .01 240 / .5)}
+.bar{height:6px;border-radius:99px;background:var(--b3);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--ok);border-radius:99px}
+.tip{font-size:12px;color:oklch(92% .01 240 / .55);padding:4px 10px 10px}
+
+/* online */
+.oart{width:44px;height:44px;border-radius:6px;background:var(--b3) center/cover;flex:none}
+.orow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:9px;position:relative}
+.orow.hov{background:oklch(72% .16 230 / .08);box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .45)}
+.orow .t{flex:1;min-width:0;line-height:1.25}.orow .t b{display:block;font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.orow .facts{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
+.anl{height:28px;border-radius:7px;border:1px solid oklch(72% .16 230 / .5);color:var(--p);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px;padding:0 9px;white-space:nowrap}
+.prog{display:flex;flex-direction:column;gap:3px;font-size:11px;width:118px}
+.prog .st{display:flex;align-items:center;gap:5px;color:oklch(92% .01 240 / .5)}
+.prog .st.done{color:var(--ok)}.prog .st.run{color:var(--p)}
+.spin{width:10px;height:10px;border-radius:99px;border:2px solid oklch(72% .16 230 / .3);border-top-color:var(--p);display:inline-block}
+.srail{width:88px;flex:none;border-right:1px solid oklch(26% .025 240 / .7);padding:6px;display:flex;flex-direction:column;gap:3px}
+.stop{border-radius:9px;padding:8px;font-size:12px;line-height:1.2;color:oklch(92% .01 240 / .7)}
+.stop b{display:block;font-weight:500;font-size:12.5px}.stop small{font-size:11px;color:oklch(92% .01 240 / .45)}
+.stop.on{background:oklch(72% .16 230 / .14);color:var(--p)}.stop.on small{color:oklch(72% .16 230 / .75)}
+.stopdiv{font-size:10px;color:oklch(92% .01 240 / .35);padding:6px 8px 2px;letter-spacing:.04em}
+
+.note{position:absolute;z-index:40;background:oklch(83% .16 85);color:#1a1405;font-size:12px;font-weight:600;border-radius:8px;padding:6px 9px;max-width:230px;line-height:1.3;box-shadow:0 8px 20px -6px #000a}
+.note:before{content:attr(data-n);display:inline-grid;place-items:center;width:17px;height:17px;border-radius:99px;background:#1a1405;color:oklch(83% .16 85);font-size:10.5px;margin-right:6px;vertical-align:1px}
+
+/* ---------- phone ---------- */
+.phone{width:390px;height:844px;background:var(--b1);position:relative;overflow:hidden;display:flex;flex-direction:column}
+.ptop{margin:10px 12px 0;height:56px;border-radius:16px;background:var(--b2);border:1px solid var(--b3);display:flex;align-items:center;gap:10px;padding:0 8px;flex:none}
+.pbody{flex:1;min-height:0;overflow:hidden;padding:8px 8px 0;position:relative}
+.dock{position:absolute;left:12px;right:12px;bottom:14px;height:62px;border-radius:20px;background:oklch(26% .025 240 / .92);backdrop-filter:blur(12px);display:flex;align-items:center;padding:6px;gap:6px;box-shadow:0 10px 30px -8px #000c;z-index:10}
+.dock b{flex:1;height:50px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:500;color:oklch(92% .01 240 / .75)}
+.dock b.on{background:oklch(72% .16 230 / .18);color:var(--p)}
+.dock b small{font-size:10px;color:oklch(92% .01 240 / .45);max-width:100px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dock b.on small{color:oklch(72% .16 230 / .7)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--b2);border-radius:20px 20px 0 0;box-shadow:0 -14px 40px -8px #000d;display:flex;flex-direction:column;z-index:12;border-top:1px solid var(--b3)}
+.handle{width:40px;height:4px;border-radius:99px;background:oklch(92% .01 240 / .25);margin:8px auto 4px}
+.pchips{display:flex;gap:6px;overflow:hidden;padding:0 12px 8px}
+.pchips b{height:32px;border-radius:99px;background:oklch(100% 0 0 / .06);font-size:12px;font-weight:500;padding:0 12px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:oklch(92% .01 240 / .75)}
+.pchips b.on{background:oklch(72% .16 230 / .2);color:var(--p)}
+.pchips .div{width:1px;background:var(--b4);margin:6px 2px}
+.phone .prow{height:50px}
+.phone .srow{height:50px}
+.scrim{position:absolute;inset:0;background:#0006;z-index:11}
+.lift{position:absolute;z-index:30;left:20px;right:30px;height:52px;border-radius:12px;background:var(--b4);box-shadow:0 16px 30px -6px #000d,0 0 0 1px oklch(72% .16 230 / .6);display:flex;align-items:center;gap:10px;padding:0 12px;transform:rotate(-1.2deg)}
+.finger{position:absolute;z-index:31;width:34px;height:34px;border-radius:99px;background:oklch(92% .01 240 / .25);box-shadow:0 0 0 2px oklch(92% .01 240 / .4)}
+
+/* board */
+.board{padding:28px;display:flex;flex-direction:column;gap:30px}
+.scene{display:flex;flex-direction:column;gap:10px}
+.scene h2{font-size:18px;font-weight:600;letter-spacing:-.02em}
+.scene p{font-size:13px;color:oklch(92% .01 240 / .65);max-width:900px}
+.st{font-size:11px;color:var(--p);font-weight:600}
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+const I = {
+ back:'<path d="M15 18l-6-6 6-6"/>', search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+ home:'<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>', media:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M10 9l5 2.5-5 2.5z"/>',
+ disc:'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>', music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+ heart:'<path d="M12 20s-7-4.4-9-9a5 5 0 019-3 5 5 0 019 3c-2 4.6-9 9-9 9z"/>', set:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+ folder:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>', drive:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h.01M11 15h6"/>',
+ list:'<path d="M8 6h13M8 12h13M8 18h9M3 6h.01M3 12h.01M3 18h.01"/>', clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ chev:'<path d="M9 6l6 6-6 6"/>', grip:'<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>', pin:'<path d="M12 17v5M8 3h8l-1 6 3 4H6l3-4z"/>', eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+ x:'<path d="M6 6l12 12M18 6L6 18"/>', wave:'<path d="M3 12h2l2-6 3 12 3-9 2 5 2-2h4"/>', check:'<path d="M5 12l5 5 9-10"/>', cloud:'<path d="M7 18a5 5 0 01-.6-9.96A6 6 0 0118 9a4 4 0 01-1 9z"/>',
+ next:'<path d="M5 4l10 8-10 8zM19 5v14"/>', undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>', spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
+ star:'<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>', target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+};
+const ic=(n,c='')=>`<svg class="i ${c}" viewBox="0 0 24 24">${I[n]}</svg>`;
+const MOOD={Dark:'var(--dark)',Smooth:'var(--smooth)',Floating:'var(--float)',Warm:'var(--warm)'};
+const key=(m)=>`<span class="key"><i style="background:${MOOD[m]}"></i>${m}</span>`;
+const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+
+// real tracks from the live server (Queue playlist, perso › neuro_etc)
+const Q=[
+ ['A Taste Of Hope (Emperor Remix)','Unknown artist',314,172,'Dark'],
+ ['Hear The Lies [Premiere]','Eluun',235,172,'Dark'],
+ ['Dune','Unknown artist',127,174,'Dark'],
+ ['Aurora (Justin Hawkes Remix) [feat. Metrik]','Unknown artist',231,175,'Dark'],
+ ['If I Could (OUT NOW)','Unknown artist',253,172,'Dark'],
+ ['You left me','Eluun',213,174,'Dark'],
+ ['Pray For Me (feat. Joe Killington)','Unknown artist',245,175,'Dark'],
+ ['Noir','Teddy Killerz',226,174,'Floating'],
+ ['D_Minds & Mefjus - Systematic V4','Unknown artist',271,172,'Smooth'],
+ ['Stargazer','Skylark',201,172,'Dark'],
+ ['Wanna','Kumarion',220,172,'Dark'],
+ ['The Hole','Unknown artist',315,172,'Warm'],
+];
+const J=[['m','Same key'],['m','Same key'],['m','Same key'],['m','Same key'],['m','Same key'],['f','Down a fifth'],['c','Clash','2 tempo'],['r','Relative'],['c','Clash'],['f','Up a fifth'],['m','Same key']];
+const NEU=[
+ ['Fade Black - Elysium','Fade Black',247,175,'Dark',0],
+ ['Hear Me','Unknown artist',249,172,'Floating',0],
+ ['Before You','Maysev & The Caracal Project',224,165,'Dark',0],
+ ['Left','Maysev',192,172,'Dark',0],
+ ['No Way Out (feat. Mira Lu Kovacs)','Unknown artist',245,175,'Dark',0],
+ ['Concussion (Mefjus Remix)','Noisia',226,172,'Warm',0],
+ ['Perseverance','Unknown artist',232,172,'Dark',0],
+ ['Physically','Mefjus',112,172,'Dark',0],
+ ['Hear The Lies [Premiere]','Eluun',235,172,'Dark',1],
+ ['You left me','Eluun',213,174,'Dark',1],
+];
+const YT='https://i.ytimg.com/vi/', SC='https://i1.sndcdn.com/';
+
+// ---------- shared desktop chrome ----------
+function rail(){return `<nav class="rail">
+ <svg class="logo" viewBox="0 0 24 30"><path d="M18 6c-2-2-9-3-11 1s9 6 9 11-7 6-11 3" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
+ <div class="srch">${ic('search')}</div>
+ <div class="it"><span class="ic">${ic('home')}</span>Home</div><div class="it"><span class="ic">${ic('media')}</span>Media</div>
+ <div class="it"><span class="ic">${ic('disc')}</span>Discover</div><div class="it on"><span class="ic">${ic('music')}</span>Music</div>
+ <div class="it"><span class="ic">${ic('heart')}</span>Library</div><div class="grow"></div><div class="it"><span class="ic">${ic('set')}</span>Settings</div></nav>`}
+function topBar(){return `<header class="top"><div class="back">${ic('back')}</div>
+ <div class="ttl"><b>Queue</b><span class="edtag">Editing</span><small>Playlist · Music</small></div><div class="sp"></div>
+ <button class="btn gh undo">${ic('undo','s')} Undo</button>
+ <button class="btn gh">${ic('spark','s')} Shape ▾</button>
+ <button class="btn pr">Done</button></header>`}
+function desk(left,mid,right,extra=''){return `<div class="desk">${rail()}<div class="main">${topBar()}<div class="cols">
+ <section class="col">${left}</section><section class="col">${mid}</section><section class="col">${right}</section></div></div>${extra}</div>`}
+
+// ---------- left column: Library ----------
+function libHead(crumbs,filter='Filter this folder'){return `<div class="colh"><div class="row1"><span class="h">Add from</span><span style="flex:1"></span>
+ <span class="seg"><b class="on">${ic('drive','s')}Library</b><b>${ic('cloud','s')}Online</b></span></div>
+ <div class="crumbs">${crumbs}</div><div class="field">${ic('search','s')}${filter}</div></div>`}
+function srow(t,o={}){const [ti,ar,du,bpm,m,inpl]=t;return `<div class="srow ${o.hov?'hov':''}"><span class="grip">${ic('grip','s')}</span>
+ <span class="t"><b>${ti}</b><small>${ar}</small></span>
+ ${o.drawer?`<span class="drawer"><b>${ic('next','s')} Next</b><b class="pr">${ic('plus','s')} Add</b></span>`:`${inpl?'<span class="inpl">In playlist</span>':''}${m?key(m):'<span class="na">not analysed</span>'}<span class="bpm num">${bpm||''}</span><span class="du num">${fmt(du)}</span>`}</div>`}
+function libFolder(hovIdx=-1){return libHead(`<a>Libraries</a><span class="sep">›</span><a>perso</a><span class="sep">›</span><a>soundclound</a><span class="sep">›</span><span class="cur">neuro_etc</span>`)+
+ `<div class="scroll"><div class="lbl">22 tracks · 18 analysed<span class="r">Sort: Name ▾</span></div>
+ ${NEU.map((t,i)=>srow(t,{hov:i===hovIdx,drawer:i===hovIdx})).join('')}</div>`}
+
+// ---------- middle: playlist ----------
+function curve(){let p='';const e=[85,90,92,92,85,92,91,87,93,83,74,76];const w=100/(e.length-1);
+ e.forEach((v,i)=>p+=`${i?'L':'M'}${(i*w).toFixed(1)} ${(46-(v-60)*1.2).toFixed(1)} `);
+ return `<div class="curve"><svg viewBox="0 0 100 46" preserveAspectRatio="none" style="width:100%;height:100%"><path d="${p}" fill="none" stroke="oklch(92% .01 240 / .8)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+ ${[6,8].map(i=>`<line x1="${(i+.5)*w}" x2="${(i+.5)*w}" y1="0" y2="46" stroke="oklch(83% .16 85 / .7)" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>`).join('')}</svg>
+ <span style="position:absolute;right:10px;top:6px;font-size:10.5px" class="dimmer">energy</span></div>`}
+function prow(t,i,o={}){const [ti,ar,du,bpm,m]=t;return `<div class="prow ${o.cls||''}"><span class="grip">${ic('grip','s')}</span><span class="ix num">${i+1}</span>
+ <span class="t"><b>${ti}</b><small>${ar}</small></span><span class="gen">DnB</span>${key(m)}<span class="bpm num">${bpm} bpm</span><span class="du num">${fmt(du)}</span></div>`}
+function joinEl(j,o={}){const [c,txt,sub]=j;return `<div class="join ${o.hov?'hov':''}">${o.pin?`<span class="pin ${o.pinG?'g':''}">${o.pin}</span>`:''}<span class="jc ${c}"><i></i>${txt}${sub?` <span class="sub">· ${sub}</span>`:''}</span>${o.extra||''}</div>`}
+function plHead(){return `<div class="plh"><span class="h" style="font-size:16px">Queue</span><span class="meta num">46 tracks · 179:55</span>
+ <span class="chip warn">7 clashes</span><span style="flex:1"></span><span class="seg"><b class="on">List</b><b>Map</b></span></div>${curve()}`}
+function playlist(opt={}){let h=plHead()+`<div class="scroll" style="padding:4px 8px">`;
+ Q.slice(0,10).forEach((t,i)=>{
+  if(opt.insertAt===i) h+=opt.insertEl;
+  h+=prow(t,i,{cls:(opt.hovRow===i?'hov':'')+(opt.lifted===i?' lifted':'')+(i===0?' now':'')});
+  if(i<9 && !(opt.insertAt===i+1 && opt.hideJoin)) h+=joinEl(J[i],{hov:opt.hovJoin===i,pin:opt.pins?.[i],pinG:opt.pinsG?.includes(i),extra:opt.joinExtra?.[i]});
+ });
+ return h+`</div>`}
+
+// ---------- right: fits ----------
+function fitsHead(mode,aboutHtml,pinned=false){return `<div class="fh"><div class="follow">${pinned?ic('pin','s'):'<span class="dot"></span>'}<span>${mode}</span>
+ <span class="pinb ${pinned?'on':''}">${ic('pin','s')}${pinned?'Pinned':'Pin'}</span></div>${aboutHtml}</div>`}
+function frow(t,why,src,o={}){return `<div class="frow"><span class="grip" style="color:oklch(92% .01 240 / .25)">${ic('grip','s')}</span>
+ ${o.art?`<span class="oart" style="width:36px;height:36px;background-image:url(${o.art})"></span>`:''}
+ <span class="t"><b>${t[0]}</b><small>${t[1]} ${src?`· <span class="src">${src}</span>`:''}</small><span class="why" style="margin-top:3px">${why}</span></span><span class="plus">${ic('plus')}</span></div>`}
+const W=(c,txt,rest='')=>`<i style="background:var(--${c})"></i><span style="color:var(--${c})">${txt}</span>${rest?`<span class="dimmer">· ${rest}</span>`:''}`;
+
+// ======== DESKTOP SCENES ========
+const D={};
+// D1 hover a library track -> where it fits
+D.hoverLib=()=>desk(libFolder(0),
+ playlist({hovRow:-1,pins:{1:'1',4:'2',8:'3'},pinsG:[4,8]}),
+ fitsHead('Following your pointer',`<div class="about"><span class="art" style="display:grid;place-items:center">${ic('music')}</span><span class="t"><b>Fade Black - Elysium</b><small>perso › neuro_etc · ${key('Dark')} 175 bpm · 4:07</small></span></div>
+  <span class="seg"><b class="on">Where it fits</b><b>What fits after it</b></span>`)+
+ `<div class="scroll"><div class="lbl">Best places in Queue</div>
+ <div class="spot best"><span class="pin">1</span><span class="t"><b>Between 2 Hear The Lies and 3 Dune</b>
+  <span class="lines"><span class="why">${W('ok','In: same key','energy lifts 90 → 93')}</span><span class="why">${W('ok','Out: same key','tempo −1')}</span></span>
+  <small>Both joins stay green. Drop it on ① or press Enter.</small></span></div>
+ <div class="spot"><span class="pin g">2</span><span class="t"><b>Between 5 If I Could and 6 You left me</b>
+  <span class="lines"><span class="why">${W('ok','In: same key','energy lifts')}</span><span class="why">${W('fifth','Out: down a fifth')}</span></span></span></div>
+ <div class="spot"><span class="pin g">3</span><span class="t"><b>Fixes the clash after 9 Systematic V4</b>
+  <span class="lines"><span class="why">${W('rel','In: relative')}</span><span class="why">${W('ok','Out: same key')}</span></span>
+  <small>Replaces 1 amber join with 2 good ones.</small></span></div>
+ <div class="lbl">Not a fit</div><div class="tip">After 12 The Hole: warm to dark breaks, energy drops 93 → 76.</div></div>`,
+ `<div class="note" data-n="1" style="left:130px;top:712px;max-width:310px">Hover a track (here Fade Black): Fits answers "where would this go?"</div>
+  <div class="note" data-n="2" style="left:640px;top:310px;max-width:none">The 3 best gaps light up as pins</div>
+  <div class="note" data-n="3" style="left:1066px;top:690px;max-width:330px">The header says what Fits follows; Pin freezes it on the current target</div>`);
+
+// D2 hover a join -> fits between
+D.hoverJoin=()=>desk(libFolder(-1),
+ playlist({hovJoin:6,joinExtra:{6:`<span class="jc" style="color:var(--p)">${ic('target','s')} showing fits between</span>`}}),
+ fitsHead('Following your pointer',`<div class="about"><span class="t"><b>Between 7 Pray For Me and 8 Noir</b><small>${key('Dark')} 175 → ${key('Floating')} 174 · today: <span style="color:var(--warn)">clash</span></small></span></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="seg"><b>Light</b><b class="on">Strong</b><b>Only</b></span><span class="seg"><b class="on">All sources</b><b>This PC</b></span></div>`)+
+ `<div class="scroll"><div class="lbl">Bridges the clash · from your libraries</div>
+ ${frow(['No Way Out (feat. Mira Lu Kovacs)','Unknown artist'],W('ok','Same key → Relative','energy holds'),'perso')}
+ ${frow(['Left','Maysev'],W('ok','Same key → Up a fifth'),'perso')}
+ ${frow(['Perseverance','Unknown artist'],W('fifth','Down a fifth → Same key','energy eases'),'perso')}
+ ${frow(['Hear Me','Unknown artist'],W('rel','Relative → Same key','tempo −3'),'neuro soundcloud')}
+ <div class="lbl">Analysed online tracks</div>
+ ${frow(['Stay (feat. Blocksberg)','Mefjus'],W('ok','Same key → Same key','energy lifts'),'SoundCloud',{art:SC+'artworks-0i5Mtek2L0u2-0-t300x300.jpg'})}
+ ${frow(['Systematic','Mefjus · D-Minds'],W('rel','Relative → Same key'),'YT Music',{art:YT+'dEhY1fBXqXA/mqdefault.jpg'})}
+ <div class="lbl">Or keep it</div><div class="tip">Clashes can be fine. "Keep this join" turns it grey and stops counting it.</div></div>`,
+ `<div class="note" data-n="1" style="left:806px;top:651px;max-width:none">Hover a join → what bridges it</div>
+  <div class="note" data-n="2" style="left:1066px;top:810px;max-width:330px">Online tracks you analysed rank with the local ones</div>`);
+
+// D3 dragging into the playlist
+D.drag=()=>desk(libFolder(-1),
+ playlist({insertAt:2,hideJoin:true,insertEl:`<div class="join" style="height:20px">${joinEl(['m','Same key','energy lifts']).replace('<div class="join ">','').replace(/<\/div>$/,'')}</div>
+  <div class="ins"><span class="grip" style="color:var(--p)">${ic('plus','s')}</span><span class="t"><b>Fade Black - Elysium</b><small>drops here as track 3</small></span><span style="flex:1"></span>${key('Dark')}<span class="bpm">175 bpm</span></div>
+  <div class="join" style="height:20px"><span class="jc m"><i></i>Same key <span class="sub">· tempo −1</span></span></div>`}),
+ fitsHead('Drop preview',`<div class="about"><span class="t"><b>Fade Black - Elysium → slot 3</b><small>between Hear The Lies and Dune</small></span></div>`)+
+ `<div class="scroll"><div class="verdict"><div class="vh" style="color:var(--ok)">Good drop: both joins stay green</div>
+  <div class="vline"><span>In</span><span>${W('ok','Same key','energy 90 → 93')}</span></div>
+  <div class="vline"><span>Out</span><span>${W('ok','Same key','tempo 175 → 174')}</span></div>
+  <div class="vline"><span>Clashes</span><span class="num">7 → 7</span></div>
+  <div class="vline"><span>Length</span><span class="num">179:55 → 184:02</span></div></div>
+  <div class="lbl">Better nearby</div><div class="tip">Slot 2 is also green and keeps the energy climb steadier. Hold <b>Shift</b> to snap to the best slot.</div></div>`,
+ `<div class="dragcard" style="left:610px;top:372px"><span class="grip" style="color:var(--p)">${ic('grip','s')}</span><span class="t"><b>Fade Black - Elysium</b><small>Fade Black · 175 bpm</small></span></div>
+  <svg class="cursor" style="left:730px;top:396px" viewBox="0 0 18 22"><path d="M1 1l15 9-7 1.5L6 20z" fill="#fff" stroke="#000" stroke-width="1.2"/></svg>
+  <div class="note" data-n="1" style="left:130px;top:712px;max-width:310px">Drag from any column: Library, Online or Fits</div>
+  <div class="note" data-n="2" style="left:1066px;top:470px;max-width:330px">While dragging, Fits judges the gap under the pointer, live</div>`);
+
+// D4 online search with analyse
+function online(hov){return `<div class="colh"><div class="row1"><span class="h">Add from</span><span style="flex:1"></span>
+ <span class="seg"><b>${ic('drive','s')}Library</b><b class="on">${ic('cloud','s')}Online</b></span></div>
+ <div class="field live">${ic('search','s')}mefjus<span style="flex:1"></span><span class="dimmer">⏎</span></div></div>
+ <div style="display:flex;flex:1;min-height:0"><div class="srail">
+  <div class="stop"><b>This PC</b><small>3 matches</small></div><div class="stopdiv">ONLINE</div>
+  <div class="stop on"><b>SoundCloud</b><small>24</small></div><div class="stop"><b>YT Music</b><small>18</small></div><div class="stop"><b>YouTube</b><small>30</small></div></div>
+ <div class="scroll" style="padding:4px">
+  <div class="orow"><span class="oart" style="background-image:url(${SC}artworks-0i5Mtek2L0u2-0-t300x300.jpg)"></span><span class="t"><b>Stay (feat. Blocksberg)</b><small>Mefjus · 4:30</small>
+   <span class="facts">${key('Dark')}<span class="bpm">174 bpm</span><span class="gen">DnB</span><span class="na">energy 91</span></span></span></div>
+  <div class="orow ${hov?'hov':''}"><span class="oart" style="background-image:url(${SC}artworks-zwy8qgUB8WJeIGZv-cJTAjg-t300x300.jpg)"></span><span class="t"><b>Hear Me</b><small>Mefjus · 4:09</small>
+   <span class="facts"><span class="na">Not analysed</span></span></span><span class="anl">${ic('wave','s')}Analyse</span></div>
+  <div class="orow"><span class="oart" style="background-image:url(${SC}artworks-dMkgleZBsqZCjgqx-dQykZQ-t300x300.jpg)"></span><span class="t"><b>Dustup (Mefjus RMX)</b><small>Noisia, The Upbeats · 5:44</small><span class="facts prog" style="flex-direction:row;width:auto;gap:9px"><span class="st done">${ic('check','s')} Tempo 172</span><span class="st run"><span class="spin"></span> Key…</span><span class="st">Energy</span></span></span></div>
+  <div class="orow"><span class="oart" style="background-image:url(${SC}artworks-qGgr8MWzoEfrirJA-6NsiPQ-t300x300.jpg)"></span><span class="t"><b>Sientelo</b><small>Mefjus & Camo & Krooked · 4:50</small><span class="facts"><span class="na">Queued · 2nd</span></span></span></div>
+  <div class="orow"><span class="oart" style="background-image:url(${YT}K4FG1jWWIUQ/mqdefault.jpg)"></span><span class="t"><b>Volition</b><small>Mefjus</small><span class="facts"><span class="na">Not analysed</span></span></span><span class="anl">${ic('wave','s')}Analyse</span></div>
+  <div class="orow"><span class="oart" style="background-image:url(${YT}khar6ZhMu3Q/mqdefault.jpg)"></span><span class="t"><b>Divergence</b><small>Mefjus</small><span class="facts"><span class="na">Not analysed</span></span></span><span class="anl">${ic('wave','s')}Analyse</span></div>
+  <div style="padding:10px 8px"><span class="btn soft">${ic('wave','s')} Analyse all 6 shown</span></div>
+ </div></div>`}
+D.online=()=>desk(online(true),playlist({}),
+ fitsHead('Following your pointer',`<div class="about"><span class="art" style="background-image:url(${SC}artworks-zwy8qgUB8WJeIGZv-cJTAjg-t300x300.jpg)"></span><span class="t"><b>Hear Me</b><small>Mefjus · SoundCloud · not analysed</small></span></div>`)+
+ `<div class="scroll"><div class="verdict" style="text-align:left"><div class="vh">Where would it fit? Analyse it first.</div>
+  <div class="tip" style="padding:0 0 10px">Tempo, key, energy and genre take about 20 s for a 4 min track. It stays analysed, so next time it ranks in Fits like your own files.</div>
+  <span class="btn pr">${ic('wave','s')} Analyse Hear Me</span></div>
+  <div class="lbl">Meanwhile</div><div class="tip">You can drop it in now. Its joins show grey until the analysis lands, then turn their colour.</div></div>`,
+ `<div class="note" data-n="1" style="left:130px;top:714px;max-width:310px">One field, sources on a rail: This PC first, online below</div>
+  <div class="note" data-n="2" style="left:130px;top:780px;max-width:310px">Analyse on each row; steps tick off as they finish</div>
+  <div class="note" data-n="3" style="left:1066px;top:460px;max-width:330px">Hovering an unanalysed track offers the same button</div>`);
+
+// D5 library root
+D.root=()=>desk(libHead(`<span class="cur">Libraries</span>`,'Search all libraries')+
+ `<div class="scroll"><div class="lbl">Libraries</div>
+ ${[['This PC','this machine · empty',0,1],['neuro soundcloud','R:\\Musique\\Android\\…',46,1],['Deadmau5','17 albums · indexing 271/272',272,1],['perso','3 folders',156,1]].map(l=>`<div class="srow"><span class="fold lib">${ic('drive','s')}</span><span class="t"><b>${l[0]}</b><small>${l[1]}</small></span><span class="cnt num">${l[2]}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')}
+ <div class="lbl">Jump back in</div>
+ ${[['neuro_etc','perso › soundclound','22'],['Deadmau5 - while(1 2)','Deadmau5','25'],['At Play Vol. 4','Deadmau5','10']].map(l=>`<div class="srow"><span class="fold">${ic('folder','s')}</span><span class="t"><b>${l[0]}</b><small>${l[1]}</small></span><span class="cnt num">${l[2]}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')}
+ <div class="lbl">Other playlists</div>
+ ${[['perso','88'],['New playlist','13'],['Smart list','smart']].map(l=>`<div class="srow"><span class="fold">${ic('list','s')}</span><span class="t"><b>${l[0]}</b></span><span class="cnt">${l[1]}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')}
+ <div class="lbl">Shortcuts</div>
+ <div class="srow"><span class="fold">${ic('clock','s')}</span><span class="t"><b>Added this week</b></span><span class="cnt">31</span><span class="chev">${ic('chev','s')}</span></div>
+ <div class="srow"><span class="fold">${ic('wave','s')}</span><span class="t"><b>Not analysed yet</b></span><span class="cnt">12</span><span class="chev">${ic('chev','s')}</span></div></div>`,
+ playlist({}),
+ fitsHead('Pinned · after the last track',`<div class="about"><span class="t"><b>After 46 Before You</b><small>${key('Dark')} 165 bpm · energy 67</small></span></div>
+  <div style="display:flex;gap:6px"><span class="seg"><b>Light</b><b class="on">Strong</b><b>Only</b></span></div>`,true)+
+ `<div class="scroll">${frow(['Left','Maysev'],W('ok','Same key','tempo +7'),'perso')}${frow(['Perseverance','Unknown artist'],W('ok','Same key','energy lifts'),'perso')}
+ ${frow(['Concussion (Mefjus Remix)','Noisia'],W('fifth','Up a fifth','energy lifts'),'perso')}${frow(['Templar (Original Mix)','Deadmau5'],W('ok','Same key','tempo −37'),'Deadmau5')}
+ ${frow(['Stay (feat. Blocksberg)','Mefjus'],W('ok','Same key'),'SoundCloud',{art:SC+'artworks-0i5Mtek2L0u2-0-t300x300.jpg'})}</div>`,
+ `<div class="note" data-n="1" style="left:214px;top:136px;max-width:none">Root: libraries, recent folders, playlists</div>
+  <div class="note" data-n="2" style="left:1066px;top:600px;max-width:330px">Nothing hovered: Fits rests on its pin (here, after the last track)</div>`);
+
+// ======== PHONE SCENES ========
+const P={};
+function ptop(){return `<div class="ptop"><div class="back">${ic('back')}</div><div class="ttl" style="flex:1"><b style="font-size:17px">Queue</b><span class="edtag">Editing</span><small>46 tracks · 7 clashes</small></div><span class="btn pr">Done</span></div>`}
+function pprow(t,i,cls=''){const [ti,ar,du,bpm,m]=t;return `<div class="prow ${cls}"><span class="ix num">${i+1}</span><span class="t"><b>${ti}</b><small>${ar} · ${bpm} bpm</small></span>${key(m)}<span class="grip" style="padding:0 4px">${ic('grip','s')}</span></div>`}
+function pjoin(j,o={}){const[c,t]=j;return `<div class="join ${o.hov?'hov':''}" style="padding-left:30px">${o.pin?`<span class="pin">${o.pin}</span>`:''}<span class="jc ${c}"><i></i>${t}</span></div>`}
+function plist(n=9,o={}){let h='';Q.slice(0,n).forEach((t,i)=>{if(o.insertAt===i)h+=o.insertEl;h+=pprow(t,i,o.hovRow===i?'hov':'');if(i<n-1)h+=pjoin(J[i],{hov:o.hovJoin===i,pin:o.pins?.[i]})});return h}
+function dock(on,fitsSub){return `<div class="dock"><b class="${on==='lib'?'on':''}">${ic('drive','s')}Library</b><b class="${on==='on'?'on':''}">${ic('cloud','s')}Online</b><b class="${on==='fits'?'on':''}">${ic('target','s')}Fits<small>${fitsSub}</small></b></div>`}
+function phone(body){return `<div class="phone">${ptop()}<div class="pbody">${body}</div></div>`}
+
+P.edit=()=>phone(plist(11)+dock('','after the last track')+`<div class="note" data-n="1" style="left:20px;bottom:88px;max-width:340px">Edit mode on phones: the playlist fills the screen; Library, Online and Fits open as sheets from the dock</div>`);
+P.lib=()=>phone(plist(4,{insertAt:2,insertEl:`<div class="ins" style="height:44px"><span class="t"><b>Fade Black - Elysium</b><small>drops here · both joins green</small></span></div>`})+
+ `<div class="sheet" style="height:470px"><div class="handle"></div>
+ <div style="padding:2px 12px 8px" class="crumbs"><a>Libraries</a><span class="sep">›</span><a>perso</a><span class="sep">›</span><span class="cur">neuro_etc</span></div>
+ <div class="pchips"><b class="on">${ic('drive','s')}Library</b><b>${ic('cloud','s')}Online</b><b>${ic('target','s')}Fits</b></div>
+ <div style="padding:0 6px">${NEU.slice(1,8).map((t,i)=>srow(t,{hov:false})).join('').replace(/<span class="bpm num">\d+<\/span>/g,'')}</div></div>
+ <div class="lift" style="top:268px"><span class="grip" style="color:var(--p)">${ic('grip','s')}</span><span class="t" style="line-height:1.2"><b style="font-size:13.5px;font-weight:500">Fade Black - Elysium</b><small style="display:block;font-size:11px" class="dim">Fade Black · 175 bpm</small></span></div>
+ <div class="finger" style="left:200px;top:280px"></div>
+ <div class="note" data-n="1" style="left:12px;top:336px;max-width:330px">Hold a row to lift it, drag it up out of the sheet: a gap opens in the playlist with its verdict</div>`);
+P.fits=()=>phone(plist(9,{hovJoin:6})+`<div class="scrim"></div><div class="sheet" style="height:520px"><div class="handle"></div>
+ <div class="fh" style="border:0;padding:4px 14px 8px"><div class="about"><span class="t"><b>Between 7 Pray For Me and 8 Noir</b><small>today: <span style="color:var(--warn)">clash</span> · tap a join to change this</small></span></div>
+ <div style="display:flex;gap:6px"><span class="seg"><b>Light</b><b class="on">Strong</b><b>Only</b></span><span class="seg"><b class="on">All</b><b>This PC</b></span></div></div>
+ <div class="scroll">${frow(['No Way Out (feat. Mira Lu Kovacs)','Unknown artist'],W('ok','Same key → Relative'),'perso')}
+ ${frow(['Left','Maysev'],W('ok','Same key → Up a fifth'),'perso')}${frow(['Perseverance','Unknown artist'],W('fifth','Down a fifth → Same key'),'perso')}
+ ${frow(['Stay (feat. Blocksberg)','Mefjus'],W('ok','Same key → Same key'),'SoundCloud',{art:SC+'artworks-0i5Mtek2L0u2-0-t300x300.jpg'})}
+ ${frow(['Hear Me','Unknown artist'],W('rel','Relative → Same key'),'neuro')}</div></div>
+ <div class="note" data-n="1" style="left:14px;top:190px;max-width:330px">No hover on phones: Fits follows the last thing you tapped (a join, a row, a search result)</div>`);
+P.online=()=>phone(plist(5)+`<div class="sheet" style="height:560px"><div class="handle"></div>
+ <div style="padding:2px 12px 8px"><div class="field live">${ic('search','s')}mefjus</div></div>
+ <div class="pchips"><b>This PC 3</b><span class="div"></span><b class="on">SoundCloud 24</b><b>YT Music 18</b><b>YouTube 30</b></div>
+ <div style="padding:0 6px">
+  <div class="orow"><span class="oart" style="background-image:url(${SC}artworks-0i5Mtek2L0u2-0-t300x300.jpg)"></span><span class="t"><b>Stay (feat. Blocksberg)</b><small>Mefjus · 4:30</small><span class="facts">${key('Dark')}<span class="bpm">174 bpm</span><span class="gen">DnB</span></span></span><span class="plus">${ic('plus')}</span></div>
+  <div class="orow"><span class="oart" style="background-image:url(${SC}artworks-zwy8qgUB8WJeIGZv-cJTAjg-t300x300.jpg)"></span><span class="t"><b>Hear Me</b><small>Mefjus · 4:09 · not analysed</small></span><span class="anl" style="height:36px">${ic('wave','s')}Analyse</span></div>
+  <div class="orow"><span class="oart" style="background-image:url(${SC}artworks-dMkgleZBsqZCjgqx-dQykZQ-t300x300.jpg)"></span><span class="t"><b>Dustup (Mefjus RMX)</b><small>Noisia, The Upbeats</small><span class="facts"><span class="prog" style="flex-direction:row;width:auto;gap:8px"><span class="st done">${ic('check','s')}172</span><span class="st run"><span class="spin"></span>Key…</span></span></span></span></div>
+  <div class="orow"><span class="oart" style="background-image:url(${SC}artworks-qGgr8MWzoEfrirJA-6NsiPQ-t300x300.jpg)"></span><span class="t"><b>Sientelo</b><small>Mefjus & Camo & Krooked</small></span><span class="anl" style="height:36px">${ic('wave','s')}Analyse</span></div>
+ </div></div>`);
+
+// ---------- router ----------
+const q=new URLSearchParams(location.search);const s=q.get('s');
+const root=document.getElementById('root');
+if(s==='phones') root.innerHTML=`<div style="display:flex;gap:24px;padding:20px">${Object.keys(P).map(k=>P[k]()).join('')}</div>`; else if(s&&D[s]) root.innerHTML=D[s](); else if(s&&P[s]) root.innerHTML=P[s]();
+else root.innerHTML=`<div class="board">${Object.keys(D).map(k=>`<div class="scene"><h2>${k}</h2>${D[k]()}</div>`).join('')}<div style="display:flex;gap:24px;flex-wrap:wrap">${Object.keys(P).map(k=>`<div class="scene"><h2>${k}</h2>${P[k]()}</div>`).join('')}</div></div>`;
+</script></body></html>
