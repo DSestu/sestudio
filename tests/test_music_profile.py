@@ -159,3 +159,12 @@ def test_one_name_in_a_row_is_one_section_and_nothing_breaks_down_before_a_drop(
     assert "breakdown" not in labels[: labels.index("drop")]
     assert all(a["label"] != b["label"] for a, b in zip(segs, segs[1:]))
     assert segs[0]["start_bar"] == 0 and segs[-1]["end_bar"] == 80
+
+
+def test_the_onnx_network_matches_the_numpy_one():
+    pytest.importorskip("onnxruntime")
+    assert keynet._session() is not None
+    spec = np.random.default_rng(0).random((keynet.KEEP, 600))
+    logits = keynet.chromanet_numpy(spec).astype(np.float64)
+    want = np.exp(logits - logits.max())
+    assert np.allclose(keynet.chromanet(spec), want / want.sum(), atol=1e-5)

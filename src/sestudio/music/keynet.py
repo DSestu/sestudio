@@ -10,6 +10,9 @@ so magnitudes match the 22 kHz original.
 
 GiantSteps key (604 EDM excerpts): 64.4 % exact, 80.5 % Camelot-compatible,
 the same as the torch original; the network's output matches it to 1e-6.
+ChromaNet runs in ONNX Runtime (``skey.onnx``, built from the same weights by
+``scripts/build_skey_onnx.py``) when it is installed, about 3x faster; in
+numpy otherwise. The two agree to 1e-5.
 
 S-KEY code and weights: Copyright (c) 2019-present, Deezer SA. MIT License
 (https://github.com/deezer/skey/blob/main/LICENSE).
@@ -17,13 +20,17 @@ S-KEY code and weights: Copyright (c) 2019-present, Deezer SA. MIT License
 
 from __future__ import annotations
 
+import importlib
+import sys
 from functools import cache
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 WEIGHTS = Path(__file__).with_name("skey.npz")
+MODEL = Path(__file__).with_name("skey.onnx")
 RATE, HOP = 11025, 256  # hop 512 at 22050 Hz
 FMIN, BINS, KEEP = 27.5, 99, 84
 Q = 1 / (2 ** (1 / 12) - 1)
@@ -93,8 +100,44 @@ def _weights() -> dict[str, np.ndarray]:
         return {k: w[k].astype(np.float32) for k in w.files}
 
 
+@cache
+def _session() -> Any | None:
+    """ChromaNet in ONNX Runtime, or None when it is not installed: this never
+    installs it (the genre model and the AI frames do, into the config folder)."""
+    try:
+        import onnxruntime as ort
+    except ImportError:
+        from sestudio import interpolate
+
+        # A worker process does not have the installed runtime on its path yet.
+        for flavour, _ in interpolate._flavours():
+            target = interpolate.runtime_dir(flavour)
+            if (target / ".complete").is_file() and str(target) not in sys.path:
+                sys.path.append(str(target))
+        importlib.invalidate_caches()
+        try:
+            import onnxruntime as ort
+        except ImportError:
+            return None
+    opts = ort.SessionOptions()
+    # One thread: the analysis already runs one worker per track.
+    opts.intra_op_num_threads = opts.inter_op_num_threads = 1
+    return ort.InferenceSession(str(MODEL), opts, providers=["CPUExecutionProvider"])
+
+
 def chromanet(spec: np.ndarray) -> np.ndarray:
     """24 probabilities, S-KEY order: A..G# major, then B..Bb minor."""
+    sess = _session()
+    if sess is None:
+        logits = chromanet_numpy(spec)
+    else:
+        logits = sess.run(None, {"spec": spec[None, None].astype(np.float32)})[0]
+    e = np.exp(logits.astype(np.float64) - logits.max())
+    return e / e.sum()
+
+
+def chromanet_numpy(spec: np.ndarray) -> np.ndarray:
+    """ChromaNet's 24 logits in numpy, for when ONNX Runtime is not installed."""
     w = _weights()
     x = spec[None].astype(np.float32)  # (C, H, W)
     for i in range(7):
@@ -122,8 +165,7 @@ def chromanet(spec: np.ndarray) -> np.ndarray:
     x = (x - w["batch_norm.running_mean"][:, None]) / np.sqrt(
         w["batch_norm.running_var"][:, None] + 1e-5
     )
-    e = np.exp(x.ravel().astype(np.float64) - x.max())
-    return e / e.sum()
+    return x.ravel()
 
 
 def probs(x: np.ndarray) -> np.ndarray | None:
