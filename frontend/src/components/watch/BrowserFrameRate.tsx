@@ -6,11 +6,11 @@ import AiHeldFrames from '../AiHeldFrames'
 import { AiSetupNotice } from '../AiSetupProgress'
 import FrameRateDropdown from '../FrameRateDropdown'
 
-/** The frame rate the browser player plays at, picked beside the cast button
- *  rather than in the player's settings menu — which its small (phone) layout
- *  does not show — as a dropdown, right of the quality's. Hidden for a source
+/** The frame rate the browser player plays at, picked in the watch page's
+ *  Playback controls rather than the player's settings menu — which its small
+ *  (phone) layout does not show — right of the quality. Hidden for a source
  *  that can only play at its own rate. The AI rates' finer settings, the same
- *  as in Settings, fold out below it. */
+ *  as in Settings, sit beside it. */
 export default function BrowserFrameRate({ source, settings, onUpdateSettings }: {
   source: StreamSource | null
   settings: AppSettings
@@ -41,17 +41,17 @@ export default function BrowserFrameRate({ source, settings, onUpdateSettings }:
         <FrameRateDropdown {...pick} />
       </div>
       {setup}
+      {/* Shown directly in the Playback controls, not folded away (docs/SPEC-below-player.md). */}
       {rates.some(rate => isDrawn(rate, options.fps)) && (
-        <details className="basis-full text-sm">
-          <summary className="cursor-pointer text-base-content/60">Advanced AI settings</summary>
-          <div className="mt-2">
-            <AiHeldFrames
-              id="player-ai-max-hold"
-              value={settings.ai_max_hold ?? 0}
-              onChange={hold => void onUpdateSettings({ ai_max_hold: hold })}
-            />
-          </div>
-        </details>
+        <label className="flex items-center gap-2 text-sm" title="Anime: let AI draw smoothly across drawings held for several frames">
+          <span className="text-base-content/60">AI frames</span>
+          <AiHeldFrames
+            id="player-ai-max-hold"
+            className="select select-sm select-bordered w-auto"
+            value={settings.ai_max_hold ?? 0}
+            onChange={hold => void onUpdateSettings({ ai_max_hold: hold })}
+          />
+        </label>
       )}
     </>
   )

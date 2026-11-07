@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en" data-theme="sestudio-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>sestudio · below the player · prototype</title>
+<style>
+:root{
+  --b1:oklch(16% .015 240);--b2:oklch(20% .02 240);--b3:oklch(26% .025 240);--b4:oklch(34% .025 240);
+  --bc:oklch(92% .01 240);--mut:oklch(92% .01 240/.62);--p:oklch(72% .16 230);--pc:oklch(18% .05 230);
+  --good:oklch(76% .17 155);--warn:oklch(83% .16 85);--bad:oklch(68% .19 25);
+  --ease:cubic-bezier(.2,.8,.2,1);--pad:14px;--gap:16px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:oklch(12% .012 240);color:var(--bc);font:14px/1.43 ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;overflow:hidden}
+::selection{background:color-mix(in oklch,var(--p) 45%,transparent)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--p);outline-offset:2px;border-radius:6px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--b3);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.if{fill:currentColor;stroke:none}
+
+/* ---------- stage (the app) ---------- */
+#stage{flex:1;overflow:auto;padding:20px 24px 80px}
+#app{margin:0 auto;max-width:1180px;transition:max-width .3s var(--ease)}
+#app.phone{max-width:390px;background:var(--b1);border-radius:28px;padding:12px 10px 24px;border:1px solid var(--b3);min-height:780px;box-shadow:0 20px 60px oklch(0% 0 0/.5)}
+#app.desk{background:var(--b1);border-radius:18px;padding:16px 20px 28px}
+.hdr{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:16px;background:color-mix(in oklch,var(--b2) 80%,transparent);border:1px solid oklch(92% .01 240/.08);margin-bottom:14px}
+.hdr h2{font-size:18px;font-weight:600;letter-spacing:-.025em;line-height:1.2}
+.hdr p{font-size:12px;color:var(--mut)}
+.player{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000 center/cover}
+.player .shade{position:absolute;inset:0;background:linear-gradient(to top,oklch(0% 0 0/.7),transparent 40%)}
+.player .ctl{position:absolute;left:14px;right:14px;bottom:10px;display:flex;align-items:center;gap:10px;font-size:13px}
+.player .seek{position:absolute;left:14px;right:14px;bottom:40px;height:4px;border-radius:3px;background:oklch(100% 0 0/.25)}
+.player .seek s{position:absolute;inset:0 auto 0 0;background:var(--p);border-radius:3px}
+.player .mid{position:absolute;inset:0;display:grid;place-items:center}
+.bigplay{width:64px;height:64px;border-radius:50%;background:var(--p);color:var(--pc);display:grid;place-items:center}
+.phone .bigplay{width:48px;height:48px}
+.ontv{position:absolute;inset:0;display:grid;place-items:center;text-align:center;background:oklch(14% .015 240/.82);backdrop-filter:blur(6px)}
+.below{margin-top:var(--gap)}
+.row{display:flex;align-items:center;gap:8px}
+.col{display:flex;flex-direction:column}
+.grow{flex:1;min-width:0}
+.h3{font-weight:600;font-size:18px;letter-spacing:-.025em;line-height:1.25}
+.phone .h3{font-size:16px}
+.ttl{font-weight:600;font-size:15px;letter-spacing:-.01em}
+.mut{color:var(--mut)}.sm{font-size:12px}.xs{font-size:11px}
+.trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:6px;font-size:13px;border:1px solid transparent;white-space:nowrap;transition:background .15s,border-color .15s}
+.btn:hover{background:var(--b3)}
+.btn.o{border-color:oklch(92% .01 240/.5)}
+.btn.p{background:var(--p);color:var(--pc);font-weight:600}.btn.p:hover{background:oklch(78% .15 230)}
+.btn.s{background:var(--b3)}.btn.s:hover{background:var(--b4)}
+.btn.ic{width:32px;padding:0}
+.btn.pill{border-radius:99px}
+.btn[aria-pressed=true]{outline:2px solid var(--p);outline-offset:1px}
+.vp{display:inline-flex;align-items:center;gap:2px;height:32px;border-radius:99px;border:1px solid var(--b3);background:var(--b2);padding:2px;font-size:13px}
+.vp:hover{border-color:oklch(92% .01 240/.3)}
+.vp b{background:var(--p);color:var(--pc);border-radius:99px;padding:0 10px;height:100%;display:grid;place-items:center}
+.vp span{padding:0 4px 0 8px;color:var(--mut)}
+.rate{background:var(--good);color:oklch(20% .05 155);font-weight:700;font-size:12px;border-radius:99px;padding:1px 8px;white-space:nowrap}
+.chip{font-size:12px;padding:2px 9px;border-radius:99px;background:var(--b3);white-space:nowrap}
+.av{border-radius:50%;background:var(--b3) center/cover;flex:none}
+.post{border-radius:8px;background:var(--b3) center/cover;aspect-ratio:2/3;position:relative;transition:transform .2s var(--ease)}
+.post:hover{transform:translateY(-2px)}
+.post i{position:absolute;top:6px;right:6px;font:700 10px/1 system-ui;background:var(--good);color:oklch(20% .05 155);border-radius:99px;padding:3px 6px;font-style:normal}
+.seg{display:flex;background:var(--b2);border-radius:10px;padding:3px;gap:2px;position:relative}
+.seg>button{flex:1;text-align:center;padding:7px 10px;border-radius:8px;font-size:13px;color:var(--mut);white-space:nowrap;transition:background .2s var(--ease),color .2s}
+.seg>button:hover{color:var(--bc)}
+.seg>.on{background:color-mix(in oklch,var(--p) 22%,var(--b2));color:var(--bc);font-weight:600}
+.under{display:flex;gap:22px;border-bottom:1px solid var(--b3)}
+.under>button{padding:10px 0;font-size:14px;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px}
+.under>.on{color:var(--bc);border-color:var(--p);font-weight:600}
+.panel{background:var(--b2);border-radius:10px;padding:var(--pad)}
+.glass{background:color-mix(in oklch,var(--b1) 70%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid oklch(92% .01 240/.1);box-shadow:0 10px 30px oklch(0% 0 0/.5)}
+.pop{position:absolute;z-index:20;border-radius:14px;padding:12px;animation:pop .22s var(--ease)}
+@keyframes pop{from{opacity:0;translate:0 -6px;filter:blur(6px)}}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:30;border-radius:20px 20px 0 0;padding:10px 16px 22px;animation:sheet .28s var(--ease)}
+@keyframes sheet{from{translate:0 40px;opacity:0}}
+.scrim{position:absolute;inset:0;z-index:25;background:oklch(0% 0 0/.45);animation:fade .2s}
+@keyframes fade{from{opacity:0}}
+.grab{display:block;margin:0 auto 10px;width:36px;height:4px;border-radius:9px;background:var(--b4)}
+.hr{height:1px;background:var(--b3);margin:var(--gap) 0}
+.ep{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:14px;width:100%;text-align:left}
+.ep:hover{background:var(--b3)}
+.ep .n{font:12px ui-monospace,monospace;color:var(--mut);width:28px}
+.ep.on{background:color-mix(in oklch,var(--p) 22%,var(--b2));color:var(--p)}
+.bar{height:3px;border-radius:2px;background:var(--b4);position:relative;overflow:hidden}
+.bar>s{position:absolute;inset:0 auto 0 0;background:var(--p)}
+.sw{width:32px;height:19px;border-radius:99px;background:var(--b4);position:relative;flex:none;transition:background .2s}
+.sw:after{content:"";position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;background:var(--bc);transition:translate .2s var(--ease),background .2s}
+.sw.on{background:var(--p)}.sw.on:after{translate:13px 0;background:var(--pc)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.sel{display:inline-flex;align-items:center;gap:6px;height:30px;border:1px solid var(--b4);border-radius:6px;padding:0 8px;font-size:13px;background:var(--b1);color:var(--bc)}
+.src{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;width:100%;text-align:left}
+.src:hover{background:var(--b3)}
+.src.on{background:color-mix(in oklch,var(--p) 22%,var(--b2))}
+.src.bad{opacity:.55}
+.hs{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:99px;background:var(--b3);font-size:12px;transition:background .15s}
+.hs:hover{background:var(--b4)}
+.hs.on{background:var(--p);color:var(--pc);font-weight:600}
+.hs.dim{background:transparent;border:1px dashed var(--b4);color:var(--mut)}
+.hs.bad{opacity:.55}
+.hs.try{outline:2px solid var(--warn);animation:pulse 1s infinite alternate}
+@keyframes pulse{to{outline-color:transparent}}
+.lang{display:grid;grid-template-columns:90px 1fr;gap:12px;align-items:center;padding:10px 12px;border-radius:8px;width:100%;text-align:left}
+.lang.on{background:color-mix(in oklch,var(--p) 12%,var(--b2));outline:1px solid color-mix(in oklch,var(--p) 45%,transparent)}
+.lang>b{font-size:15px;letter-spacing:.02em}
+table.board{width:100%;border-collapse:collapse;font-size:13px}
+table.board th{text-align:left;font-weight:500;color:var(--mut);font-size:11px;padding:6px 10px}
+table.board td{padding:8px 10px;border-top:1px solid var(--b3)}
+table.board tr.on td{background:color-mix(in oklch,var(--p) 14%,var(--b2))}
+table.board tr:hover td{background:var(--b3)}
+.out{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;width:100%;text-align:left}
+.out:hover{background:var(--b3)}
+.out.on{background:color-mix(in oklch,var(--p) 22%,var(--b2))}
+.rad{width:14px;height:14px;border-radius:50%;border:2px solid var(--b4);flex:none}
+.out.on .rad{border:4px solid var(--p)}
+.banner{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:13px;background:color-mix(in oklch,var(--warn) 14%,var(--b2));border:1px solid color-mix(in oklch,var(--warn) 40%,transparent)}
+.banner.tv{background:color-mix(in oklch,var(--p) 14%,var(--b2));border-color:color-mix(in oklch,var(--p) 40%,transparent)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--warn);border-right-color:transparent;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{rotate:360deg}}
+.link{color:var(--p)}.link:hover{text-decoration:underline;text-underline-offset:3px}
+.fade-in{animation:fade .25s var(--ease)}
+.stagebg{position:relative;border-radius:14px;overflow:hidden}
+.stagebg>.bg{position:absolute;inset:0;background:center 25%/cover;z-index:0}
+.stagebg>.bg:after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,oklch(16% .015 240/var(--bgk)),var(--b1) 78%)}
+.stagebg>*:not(.bg){position:relative;z-index:1}
+.cards{display:grid;gap:12px}
+
+/* comment mode */
+body.cm [data-fb]{outline:1px dashed color-mix(in oklch,var(--warn) 55%,transparent);outline-offset:2px;cursor:crosshair}
+body.cm [data-fb]:hover{outline:2px solid var(--warn);background-color:color-mix(in oklch,var(--warn) 8%,transparent)}
+.fbpin{position:absolute;z-index:50;width:20px;height:20px;border-radius:50%;background:var(--warn);color:oklch(20% .05 85);font:700 11px/20px system-ui;text-align:center;pointer-events:none;box-shadow:0 2px 6px oklch(0% 0 0/.5)}
+#cbox{position:fixed;z-index:100;width:300px;border-radius:12px;padding:12px;display:none}
+#cbox textarea,.side textarea{width:100%;min-height:72px;resize:vertical;background:var(--b1);color:var(--bc);border:1px solid var(--b4);border-radius:8px;padding:8px;font:13px/1.4 system-ui}
+
+/* ---------- side panel (the prototype's own UI) ---------- */
+.side{width:340px;flex:none;height:100%;overflow:auto;background:oklch(14% .012 240);border-left:1px solid var(--b3);padding:16px 16px 40px;font-size:13px}
+.side h1{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.side h3{font-size:12px;font-weight:600;color:var(--mut);margin:18px 0 8px}
+.side .seg>button{padding:6px 6px;font-size:12px;white-space:normal;min-width:0}
+.dirs{display:flex;flex-direction:column;gap:4px}
+.dirs button{display:flex;gap:10px;align-items:baseline;text-align:left;padding:8px 10px;border-radius:8px;border:1px solid transparent}
+.dirs button:hover{background:var(--b2)}
+.dirs button.on{background:var(--b2);border-color:color-mix(in oklch,var(--p) 50%,transparent)}
+.dirs b{font-size:15px;color:var(--p);width:14px}
+.dirs .v{margin-left:auto;font-size:11px;padding:1px 7px;border-radius:99px;background:var(--b3);white-space:nowrap}
+.tune{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;margin:6px 0}
+.tune>label{color:var(--mut);font-size:12px}
+.tune input[type=range]{width:100%;accent-color:var(--p)}
+.verdict{display:flex;gap:6px}
+.verdict button{flex:1;padding:6px;border-radius:8px;background:var(--b2);font-size:12px}
+.verdict button.on[data-v=keep]{background:color-mix(in oklch,var(--good) 30%,var(--b2))}
+.verdict button.on[data-v=maybe]{background:color-mix(in oklch,var(--warn) 25%,var(--b2))}
+.verdict button.on[data-v=drop]{background:color-mix(in oklch,var(--bad) 30%,var(--b2))}
+.note{display:flex;gap:8px;padding:8px;border-radius:8px;background:var(--b2);margin-bottom:6px;font-size:12px}
+.note .k{color:var(--warn);font-weight:700}
+.toast{position:fixed;left:50%;bottom:24px;translate:-50% 0;padding:10px 16px;border-radius:10px;z-index:200;animation:pop .25s var(--ease)}
+#sideToggle{display:none}
+@media (max-width:820px){
+  body{display:block;overflow:auto}
+  #stage{padding:10px 6px 90px;overflow:visible}
+  #app.phone{border:0;border-radius:0;padding:8px 6px 24px;box-shadow:none;background:transparent}
+  .side{position:fixed;inset:auto 0 0 0;height:78dvh;width:auto;z-index:150;border-left:0;border-top:1px solid var(--b3);border-radius:18px 18px 0 0;translate:0 100%;transition:translate .3s var(--ease)}
+  .side.open{translate:0 0}
+  #sideToggle{display:inline-flex;position:fixed;right:14px;bottom:14px;z-index:160}
+}
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+<symbol id="tv" viewBox="0 0 24 24"><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 12a9 9 0 0 1 8 8"/><path d="M2 16a5 5 0 0 1 4 4"/><path d="M2 20h.01"/></symbol>
+<symbol id="pip" viewBox="0 0 24 24"><path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><rect x="12" y="13" width="10" height="7" rx="2"/></symbol>
+<symbol id="dn" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="rt" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="lt" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+<symbol id="sl" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+<symbol id="play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+<symbol id="pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></symbol>
+<symbol id="ok" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="dl" viewBox="0 0 24 24"><path d="M12 15V3M7 10l5 5 5-5M5 21h14"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+<symbol id="mon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+<symbol id="phn" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+<symbol id="fs" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+</svg>
+
+<main id="stage"><div id="app"></div></main>
+<aside class="side" id="side"></aside>
+<button class="btn p pill" id="sideToggle"><svg class="i"><use href="#sl"/></svg>Choices &amp; feedback</button>
+<div id="cbox" class="glass"></div>
+
+<script>
+// ---------------------------------------------------------------- data
+const T = 'https://image.tmdb.org/t/p/'
+const SERIES = {
+  kind: 'series', title: 'Breaking Bad', sub: '5 seasons · 2008', backdrop: T + 'w1280/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg',
+  rating: 9.0, votes: '18,950', year: 2008, genres: ['Drame', 'Crime'], by: 'Created by', who: 'Vince Gilligan',
+  overview: "Un professeur de chimie atteint d'un cancer s'associe à un ancien élève pour fabriquer et vendre de la méthamphétamine afin d'assurer l'avenir financier de sa famille.",
+  cast: [['7Jahy5LZX2Fo8fGJltMreAI49hC', 'Bryan Cranston', 'Walter White'], ['8Ac9uuoYwZoYVAIJfRLzzLsGGJn', 'Aaron Paul', 'Jesse Pinkman'], ['adppyeu1a4REN3khtgmXusrapFi', 'Anna Gunn', 'Skyler White'], ['sNPA92ZrssYhlaB1UA2pWcLD9db', 'RJ Mitte', 'Walter White Jr.'], ['mKRrEbsxAX3ro700HsViFArRM7l', 'Dean Norris', 'Hank Schrader'], ['xAnuzyjdMbQq9L1c4JNwXL52Wm4', 'Betsy Brandt', 'Marie Schrader'], ['rF0Lb6SBhGSTvjRffmlKRSeI3jE', 'Bob Odenkirk', 'Saul Goodman'], ['bswk26L13PvY4iMTwUTAsepXCLv', 'Jonathan Banks', 'Mike Ehrmantraut']],
+  similar: [['7KyuCBjxsr4sNQga16DcN9ccEyf', 'Better Call Saul', 2015, 8.7], ['wV8Zdy7ADEZAnIXmuSc93ODwMco', 'Narcos : Mexico', 2018, 7.9], ['1d6d7e2srrgI90X90DLVtvwZJdy', 'Snowfall', 2017, 8.4], ['lE81IZv7mCYxbanB4ibDeivB1qs', 'Narcos', 2015, 8.1], ['1pKrWKwatxsF2DhrjX0day8Dfo8', 'Dark Winds', 2022, 7.5], ['hYJXcL7DOtTh8NdxgnpE4mCJ01G', 'Animal Kingdom', 2016, 7.8], ['2qPkzrcImolyRWJsf1mBIsfZlow', 'Reine du Sud', 2016, 7.7]],
+  seasons: [7, 13, 13, 13, 16],
+  eps: ['Pilot', "Cat's in the Bag…", "…And the Bag's in the River", 'Cancer Man', 'Gray Matter', "Crazy Handful of Nothin'", 'A No-Rough-Stuff-Type Deal'],
+  epInfo: {
+    1: ['20 Jan 2008', '58 min', 'Walter White, professeur de chimie, apprend qu\'il a un cancer et décide de fabriquer de la méthamphétamine avec un ancien élève.'],
+    2: ['27 Jan 2008', '48 min', "Walt et Jesse doivent se débarrasser de deux corps, et l'un d'eux respire encore. Skyler commence à douter des absences de son mari."],
+    3: ['10 Feb 2008', '48 min', 'Walt doit décider du sort de Krazy-8, enchaîné dans la cave de Jesse.'],
+  },
+  langs: {
+    VF: [],
+    VOSTFR: [['KissKH', 'vidzy', 'good', ''], ['KissKH', 'filmoon', 'good', '1080p'], ['FStream', 'uqload', 'warn', 'slow last time'], ['FStream', 'voe', 'good', '720p'], ['BFlix', 'netu', 'bad', 'failed 2 h ago']],
+    VO: [['BFlix', 'voe', 'good', ''], ['BFlix', 'luluvid', 'good', '']],
+  },
+  gapNote: 'FStream has VF from season 3 onwards.',
+}
+const FILM = {
+  kind: 'film', title: 'Heat', sub: '1995 · 2 h 50', backdrop: T + 'w1280/uI22JkEMediWyiRqhllNqeeGtW0.jpg',
+  rating: 7.9, votes: '8,867', year: 1995, genres: ['Crime', 'Drame', 'Action'], by: 'Directed by', who: 'Michael Mann',
+  overview: "Neil McCauley est un braqueur qui a de l'expérience. Il veille, au cours de ses vols, à ne pas commettre d'impairs. Lors d'une opération pourtant bien planifiée, l'un de ses complices tire sur deux vigiles. Ce double meurtre intéresse au plus haut point le lieutenant Hanna, qui ne met guère de temps à identifier McCauley comme étant le cerveau de la bande. Un duel s'engage, à la limite de la légalité.",
+  cast: [['m8HAAjq1T75JypKk0v1FFQn4ysZ', 'Al Pacino', 'Lt. Vincent Hanna'], ['cT8htcckIuyI1Lqwt1CvD02ynTh', 'Robert De Niro', 'Neil McCauley'], ['j2bJH6rxZkJJt8tHsBFMOxIVZdE', 'Val Kilmer', 'Chris Shiherlis'], ['oxLsItDwLddXu8YYJCfkddYNejL', 'Jon Voight', 'Nate'], ['soINOuacuiThRb2LyPD4tTWve7C', 'Tom Sizemore', 'Michael Cheritto'], ['mZWVEZ18jMiJuS3A56tejPipdo8', 'Diane Venora', 'Justine'], ['4FJNcWqnYciJzsZRsORZuyxdKfb', 'Amy Brenneman', 'Eady'], ['5771ZxVIs5rQbI1SV8TOlAFcF15', 'Ashley Judd', 'Charlene Shiherlis']],
+  similar: [['h06jDZB4Y9YQJiSGTcUwbhuiUrB', 'Usual Suspects', 1995, 8.2], ['xTfCZTzhgHNAR1pf5D49WH4buI5', 'Sexy Beast', 2001, 7.0], ['3H9yUGR2BRds76yTDKbx1AQYk4P', 'Guet-apens', 1972, 7.2], ['pbqGWYJ37v2xClKYZUROtxFj3px', 'Criminal Squad : Pantera', 2025, 6.6], ['mfvEDnkhFSGrjoL7cNd9zw22UuA', 'En sursis', 2003, 6.1], ['v3VuDClmFZNjfI6YLTkeinae9HK', 'Le Gang des Newton', 1998, 6.1], ['n3pCxunmHrK6AWpLaAThgYiguWK', 'Parker', 2013, 6.1]],
+  langs: {
+    VF: [['FStream', 'uqload', 'good', '1080p'], ['FStream', 'voe', 'good', '720p']],
+    VOSTFR: [['BFlix', 'filmoon', 'good', '']],
+    VO: [['BFlix', 'voe', 'good', '']],
+  },
+}
+const LOCAL = {
+  kind: 'local', title: '99.F.FRENCH.DVDRiP.XViD-NTK', sub: 'Downloaded file', backdrop: '',
+  file: 'D:\\Films\\99.F.FRENCH.DVDRiP.XViD-NTK.avi', size: '1.4 GB',
+  cast: [], similar: [], genres: [],
+  langs: { VF: [['Downloaded', 'on disk', 'good', '']], VOSTFR: [], VO: [] },
+}
+const DEVICES = [['mon', 'This browser', ''], ['tv', 'Salon · LG', 'DLNA'], ['tv', 'Freebox', 'Chromecast']]
+const DIRS = {
+  A: ['One line, one shelf', 'Picked. Playback folds open as a row under the line; About is a split spread.'],
+  B: ['Tabbed deck', 'One tab strip, same on phone and desktop; one panel at a time.'],
+  C: ['Version board', 'Every version and host on show, gaps included; devices beside it.'],
+  D: ['Episode stage', 'Backdrop carries on; this episode, then a big Up next.'],
+}
+const TUNES = {
+  _: [['density', 'Density', ['comfy', 'compact']]],
+  A: [['pbStyle', 'Playback', ['popover', 'inline row']], ['aboutLayout', 'About', ['split', 'stacked']], ['castN', 'Cast shown', ['4', '8']], ['shelf', 'Similar as', ['posters', 'list']], ['phoneTabs', 'Phone tabs', ['Episodes·About', 'Episodes·About·Sources']]],
+  B: [['tabStyle', 'Tab style', ['segmented', 'underline']], ['tvPlace', 'Send to TV', ['on the line', 'in a tab']], ['panelH', 'Panel height', 'range:160:420'], ['defTab', 'Opens on', ['About', 'Cast', 'Sources']]],
+  C: [['board', 'Board as', ['chips', 'table']], ['failing', 'Failed hosts', ['show', 'hide']], ['watchOn', 'Watch on as', ['list', 'chips']], ['aboutC', 'About', ['one line', 'open']]],
+  D: [['bgk', 'Backdrop', 'range:0:100'], ['upNext', 'Up next', ['card', 'row']], ['epCast', 'Episode cast', ['show', 'hide']], ['pillPlace', 'Control pill', ['on the edge', 'below']]],
+}
+const DEFAULT = {
+  dir: 'A', dev: innerWidth < 820 ? 'phone' : 'desk', kind: 'series', play: 'playing', ep: 2, lang: 'VOSTFR', host: 0, device: 0,
+  autoplay: true, tab: { A: 'Episodes', B: 'About' }, pop: null, watchVF: {}, aboutOpen: false, verdict: {}, notes: [], general: '',
+  t: { density: 'compact', pbStyle: 'inline row', aboutLayout: 'split', castN: '8', shelf: 'posters', phoneTabs: 'Episodes·About·Sources', tabStyle: 'segmented', tvPlace: 'on the line', panelH: 240, defTab: 'About', board: 'chips', failing: 'show', watchOn: 'list', aboutC: 'one line', bgk: 55, upNext: 'card', epCast: 'show', pillPlace: 'on the edge' },
+}
+let S = load()
+function load() {
+  try { const s = JSON.parse(localStorage.getItem('wbp') || 'null'); if (s) return { ...DEFAULT, ...s, t: { ...DEFAULT.t, ...s.t }, pop: null } } catch {}
+  return structuredClone(DEFAULT)
+}
+function save() { localStorage.setItem('wbp', JSON.stringify(S)) }
+const M = () => ({ series: SERIES, film: FILM, local: LOCAL })[S.kind]
+const phone = () => S.dev === 'phone'
+const ic = (id, cls = '', st = '') => `<svg class="i ${cls}" style="${st}"><use href="#${id}"/></svg>`
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const hosts = () => M().langs[S.lang] || []
+const cur = () => hosts()[S.host] || hosts()[0]
+const epTitle = n => SERIES.eps[n - 1] || `Episode ${n}`
+const lineTitle = () => S.kind === 'series' ? `E${String(S.ep).padStart(2, '0')} · ${epTitle(S.ep)}` : M().title
+const dev = () => DEVICES[S.device]
+
+// ---------------------------------------------------------------- shared pieces
+function player() {
+  const m = M(), p = S.play
+  let mid = ''
+  if (p === 'idle') mid = `<div class="mid"><button class="bigplay" data-act="start" aria-label="Play">${ic('play', 'if', 'width:26px;height:26px;margin-left:3px')}</button></div>`
+  if (p === 'tv') mid = `<div class="ontv"><div>${ic('tv', '', 'width:28px;height:28px;color:var(--p)')}<div class="ttl" style="margin-top:6px">Playing on ${dev()[1]}</div><div class="sm mut">${lineTitle()} · ${S.lang}</div></div></div>`
+  if (p === 'failed') mid = `<div class="mid"><div class="row glass" style="padding:8px 14px;border-radius:99px"><span class="spin"></span><span class="sm">Finding another host…</span></div></div>`
+  return `<div class="player" data-fb="Player (out of scope)" style="${m.backdrop ? `background-image:url(${m.backdrop})` : 'background:linear-gradient(135deg,oklch(24% .03 250),oklch(12% .01 240))'}">
+    ${p !== 'tv' ? `<div class="shade"></div><div class="seek"><s style="width:${p === 'idle' ? 0 : 4}%"></s></div>
+    <div class="ctl">${ic(p === 'playing' ? 'pause' : 'play', 'if')}<span>${p === 'idle' ? '0:00' : '1:58'} / 48:12</span><span class="mut trunc grow">${S.kind === 'series' ? '· ' + epTitle(S.ep) : ''}</span>${ic('fs')}</div>` : ''}
+    ${mid}</div>`
+}
+function header() {
+  const m = M()
+  return `<div class="hdr">${phone() ? '' : ''}<button class="btn ic">${ic('back')}</button><div class="grow"><h2>${m.title}</h2><p>${m.sub}</p></div>
+  ${phone() ? '' : `<div class="grow sm mut" style="max-width:520px;border:1px solid var(--b4);border-radius:10px;padding:9px 12px">Search titles, or paste a YouTube or Twitch link</div>`}
+  <button class="btn ic">${ic('more')}</button></div>`
+}
+function versionPill(full = true, act = 'pop:src') {
+  const h = cur()
+  return `<button class="vp" data-act="${act}" data-fb="Version pill" aria-expanded="${S.pop === 'src'}"><b>${S.lang}</b>${full && h ? `<span>${h[0]} · ${h[1]}</span>` : ''}${ic('dn', 'mut', 'margin-right:4px')}</button>`
+}
+function tvButton(label = 'Send to TV', cls = 'o') {
+  if (S.play === 'tv') return `<button class="btn s" data-act="bringback" data-fb="Bring back">${ic(phone() ? 'phn' : 'mon')}Bring it back here</button>`
+  return `<button class="btn ${cls}" data-act="pop:tv" data-fb="Send to TV" aria-expanded="${S.pop === 'tv'}">${ic('tv')}${label}</button>`
+}
+function deviceMenu() {
+  return `<div class="col" style="gap:2px;min-width:240px"><div class="xs mut" style="padding:2px 6px 6px">Send ${S.kind === 'series' ? 'E' + String(S.ep).padStart(2, '0') : 'Heat'} from 1:58 to</div>
+  ${DEVICES.slice(1).map((d, i) => `<button class="out" data-act="cast:${i + 1}">${ic(d[0])}${d[1]}<span class="xs mut" style="margin-left:auto">${d[2]}</span></button>`).join('')}</div>`
+}
+function playbackFields() {
+  const f = (l, v) => `<div class="row"><span class="mut sm" style="width:92px">${l}</span><select class="sel">${v.map(x => `<option>${x}</option>`).join('')}</select></div>`
+  return `${f('Quality', ['Source (716p)', 'Auto', '480p', '360p'])}${f('Frame rate', ['23.98 fps', '60 fps (AI)', 'Match display'])}${f('AI frames', ['Held up to 4', 'Held up to 3', 'Held up to 2', 'Off'])}
+  <button class="row" data-act="autoplay" style="width:100%"><span class="sm grow" style="text-align:left">Autoplay next</span><span class="sw ${S.autoplay ? 'on' : ''}"></span></button>
+  <div class="row xs mut" style="border-top:1px solid var(--b3);padding-top:10px"><span class="dot" style="background:var(--good)"></span>Smooth · 23.9 fps shown · 0 dropped<span class="grow"></span><button class="link xs">Details</button></div>`
+}
+function sourcesList() {
+  const L = M().langs
+  return `<div class="col" style="gap:10px">
+   <div class="seg" data-fb="Language switch">${Object.keys(L).map(l => `<button class="${S.lang === l ? 'on' : ''}" data-act="lang:${l}">${l} <span class="xs mut">${L[l].length}</span></button>`).join('')}</div>
+   ${hosts().length ? `<div class="col" style="gap:2px">${hosts().map((h, i) => `<button class="src ${i === S.host ? 'on' : ''} ${h[2] === 'bad' ? 'bad' : ''}" data-act="host:${i}">${i === S.host ? ic('play', 'if', 'width:12px;color:var(--p)') : `<span class="dot" style="background:var(--${h[2]})"></span>`}<b style="font-weight:500;width:72px">${h[0]}</b><span class="mut grow">${h[1]}</span><span class="xs mut">${i === S.host ? 'Playing' : h[3]}</span></button>`).join('')}</div>` : gapBox()}
+  </div>`
+}
+function gapBox(compact, lang = S.lang) {
+  const ep = S.kind === 'series' ? `S1 · E${String(S.ep).padStart(2, '0')}` : 'this film'
+  return `<div class="fade-in" data-fb="Missing version (gap)" style="padding:${compact ? '6px 0' : '20px 16px'};border-radius:10px;${compact ? '' : 'border:1px dashed var(--b4);text-align:center'}">
+   ${compact ? '' : `<div class="ttl">No site has ${lang} for ${ep}</div><p class="sm mut" style="margin:6px auto 14px;max-width:34ch">${SERIES.gapNote} A watcher can check every night and tell you.</p>`}
+   <div class="row" style="${compact ? '' : 'justify-content:center'};gap:8px;flex-wrap:wrap">${compact ? `<span class="hs dim">Not on any site yet</span>` : ''}
+   ${S.watchVF[lang] ? `<span class="btn s">${ic('ok', '', 'color:var(--good)')}Watching for ${lang}</span>` : `<button class="btn ${compact ? 's' : 'p'}" data-act="watch:${lang}" style="${compact ? 'height:30px' : ''}">${ic('bell')}Tell me when ${lang} lands</button>`}
+   ${compact ? '' : `<button class="btn link" data-act="lang:VOSTFR">Keep watching in VOSTFR</button>`}</div></div>`
+}
+function statusBanner() {
+  if (S.play === 'failed') {
+    const next = hosts()[S.host + 1]
+    return `<div class="banner fade-in" data-fb="Stream failed banner"><span class="spin"></span><span class="grow"><b>${cur()?.[1] || 'The host'}</b> didn't answer. Trying ${next ? next[0] + ' · ' + next[1] : 'another site'}…</span><button class="btn s" data-act="pop:src">Pick one</button></div>`
+  }
+  if (S.play === 'tv' && !phone()) return ''
+  return ''
+}
+function aboutBits(m) {
+  return `<div class="row" style="flex-wrap:wrap;margin-bottom:10px"><span class="rate">★ ${m.rating.toFixed(1)}</span><span class="mut sm">${m.votes} votes · ${m.year}</span>${m.genres.map(g => `<span class="chip">${g}</span>`).join('')}</div>`
+}
+function credits(m) { return `<p class="sm mut" style="margin-top:10px">${m.by} <button class="link">${m.who}</button> · <button class="link">▶ Trailer</button></p>` }
+function castGrid(n, size, cols) {
+  return `<div data-fb="Cast" style="display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:12px 14px">${M().cast.slice(0, n).map(([c, nm, r]) => `<button class="row" style="gap:10px;text-align:left"><span class="av" style="width:${size}px;height:${size}px;background-image:url(${T}w185/${c}.jpg)"></span><span class="col" style="min-width:0"><span class="sm trunc" style="font-weight:500">${nm}</span><span class="xs mut trunc">${r}</span></span></button>`).join('')}</div>`
+}
+function castRow(n, size) {
+  return `<div class="row" data-fb="Cast" style="gap:14px;overflow:auto;padding-bottom:4px">${M().cast.slice(0, n).map(([c, nm, r]) => `<button style="width:${size + 20}px;flex:none;text-align:center"><span class="av" style="display:block;margin:0 auto 6px;width:${size}px;height:${size}px;background-image:url(${T}w185/${c}.jpg)"></span><span class="xs trunc" style="display:block;font-weight:500">${nm}</span><span class="xs mut trunc" style="display:block">${r}</span></button>`).join('')}</div>`
+}
+function shelf(n, cols, list) {
+  const sim = M().similar.slice(0, n)
+  if (list) return `<div class="col" data-fb="Similar titles" style="gap:4px">${sim.map(([p, t, y, r]) => `<button class="row" style="padding:6px;border-radius:8px;text-align:left"><span class="post" style="width:38px;flex:none;background-image:url(${T}w342/${p}.jpg)"></span><span class="grow"><span class="sm" style="display:block;font-weight:500">${t}</span><span class="xs mut">${y}</span></span><span class="rate" style="font-size:11px">★ ${r}</span></button>`).join('')}</div>`
+  return `<div data-fb="Similar titles" style="display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:12px">${sim.map(([p, t, y, r]) => `<button style="text-align:left"><span class="post" style="display:block;background-image:url(${T}w342/${p}.jpg)"><i>★ ${r}</i></span><span class="sm trunc" style="display:block;margin-top:6px">${t}</span><span class="xs mut">${y}</span></button>`).join('')}</div>`
+}
+function episodes(max = 7) {
+  if (S.kind !== 'series') return ''
+  return `<div class="panel" data-fb="Episode list" style="padding:8px"><div class="row xs mut" style="padding:4px 6px 8px">Season 1 · 7 ep<span class="grow"></span><span style="color:var(--p)">S1</span><span>S2 S3 S4 S5</span></div>
+  ${SERIES.eps.slice(0, max).map((t, i) => { const n = i + 1; return `<button class="ep ${n === S.ep ? 'on' : ''}" data-act="ep:${n}"><span class="n">E0${n}</span><span class="grow" style="min-width:0"><span class="trunc" style="display:block">${t}</span>${n === S.ep ? `<span class="bar" style="display:block;margin-top:4px"><s style="width:4%"></s></span>` : ''}</span>${n < S.ep ? ic('ok', '', 'color:var(--good);width:14px') : ''}</button>` }).join('')}</div>`
+}
+function popover(id, html, style) { return S.pop === id ? `<div class="pop glass" style="${style}" data-pop>${html}</div>` : '' }
+function sheet(id, title, html) { return S.pop === id ? `<div class="scrim" data-act="close"></div><div class="sheet glass" data-pop><span class="grab"></span><div class="row" style="margin-bottom:12px"><span class="ttl grow">${title}</span><button class="btn ic" data-act="close">${ic('x')}</button></div>${html}</div>` : '' }
+function phoneSheets() {
+  return sheet('src', 'Version', sourcesList()) + sheet('pb', 'Playback', `<div class="col" style="gap:14px">${playbackFields()}</div>`) + sheet('tv', 'Send to TV', deviceMenu())
+}
+function tvBanner() {
+  return S.play === 'tv' ? `<div class="banner tv fade-in" data-fb="Casting banner">${ic('tv', '', 'color:var(--p)')}<span class="grow">On <b>${dev()[1]}</b> · ${S.lang}</span><button class="btn s" data-act="bringback">Bring back</button></div>` : ''
+}
+
+// ---------------------------------------------------------------- A · One line, one shelf
+function A() {
+  const m = M(), t = S.t, inline = t.pbStyle === 'inline row', local = S.kind === 'local', film = S.kind === 'film'
+  // Films and videos keep today's Download on the line; a file on disk says which file instead.
+  const dl = film ? `<button class="btn p" data-act="dl" data-fb="Download"${S.dl ? ' disabled style="opacity:.7"' : ''}>${ic(S.dl ? 'ok' : 'dl')}${S.dl ? 'Queued' : 'Download'}</button>` : ''
+  const dlIcon = film ? `<button class="btn p ic" data-act="dl" data-fb="Download" aria-label="Download">${ic(S.dl ? 'ok' : 'dl')}</button>` : ''
+  const fileLine = local ? `<div class="row panel sm" data-fb="File line" style="padding:10px 12px;gap:12px"><code class="grow trunc xs" style="font-family:ui-monospace,monospace;opacity:.75">${m.file}</code><span>${m.size}</span><span class="mut">Downloaded</span></div>` : ''
+  if (phone()) {
+    const tabs = (t.phoneTabs === 'Episodes·About' ? ['Episodes', 'About'] : ['Episodes', 'About', 'Sources']).filter(x => (S.kind === 'series' || x !== 'Episodes') && !(local && x === 'About'))
+    const tab = tabs.includes(S.tab.A) ? S.tab.A : tabs[0]
+    return `<div class="below col" style="gap:12px">
+     <div class="row" data-fb="Episode line"><span class="ttl grow trunc">${lineTitle()}</span>${versionPill(false)}</div>
+     <div class="row" data-fb="Action row">${tvButton('Send to TV', 'o grow')}<button class="btn s ic" data-fb="Pop out">${ic('pip')}</button><button class="btn s ic" data-act="pop:pb" data-fb="Playback button">${ic('sl')}</button>${dlIcon}</div>
+     ${fileLine}${statusBanner()}${tvBanner()}
+     ${local ? '' : `${tabs.length > 1 ? `<div class="seg" data-fb="Phone tabs">${tabs.map(x => `<button class="${x === tab ? 'on' : ''}" data-act="tab:A:${x}">${x}</button>`).join('')}</div>` : ''}
+     <div class="fade-in" key="${tab}">${tab === 'Episodes' ? episodes() : tab === 'Sources' ? sourcesList() : `
+       <div style="border-radius:10px;height:120px;background:url(${m.backdrop}) center/cover"></div>
+       <div style="padding:12px 2px">${aboutBits(m)}<p>${m.overview}</p>${credits(m)}</div>
+       ${castRow(+t.castN, 54)}<div class="ttl" style="margin:18px 0 10px">More like ${m.title}</div>${shelf(t.shelf === 'list' ? 5 : 6, 3, t.shelf === 'list')}`}</div>`}
+    </div>${phoneSheets()}`
+  }
+  return `<div class="below">
+   <div class="row" style="gap:12px;position:relative;flex-wrap:wrap" data-fb="Episode line">
+    <span class="h3">${lineTitle()}</span>${versionPill()}<span class="grow"></span>
+    ${tvButton()}<button class="btn ic s" title="Pop out" data-fb="Pop out">${ic('pip')}</button>
+    <button class="btn s" data-act="pop:pb" aria-pressed="${S.pop === 'pb'}" data-fb="Playback button">${ic('sl')}Playback</button>${dl}
+    ${inline ? '' : popover('pb', `<div class="col" style="gap:12px;width:320px">${playbackFields()}</div>`, 'right:0;top:42px')}
+    ${popover('src', `<div style="width:360px">${sourcesList()}</div>`, 'left:0;top:42px')}
+    ${popover('tv', deviceMenu(), `right:${film ? 260 : 150}px;top:42px`)}
+   </div>
+   ${inline && S.pop === 'pb' ? `<div class="panel row fade-in" data-fb="Playback inline row" style="margin-top:10px;gap:10px 22px;flex-wrap:wrap">${playbackFields().replace('<button class="row" data-act="autoplay" style="width:100%">', '<button class="row" data-act="autoplay" style="width:auto;gap:10px">').replace('border-top:1px solid var(--b3);padding-top:10px', 'margin-left:auto')}</div>` : ''}
+   <div style="margin-top:10px" class="col">${fileLine}${statusBanner()}${tvBanner()}</div>
+   ${local ? '</div>' : ''}${local ? '' : `<div class="hr"></div>
+   <div data-fb="About" style="display:grid;grid-template-columns:${t.aboutLayout === 'split' ? 'minmax(0,1fr) 400px' : 'minmax(0,1fr)'};gap:36px">
+    <div>${aboutBits(m)}<p style="font-size:15px;line-height:1.55;max-width:66ch">${m.overview}</p>${credits(m)}</div>
+    ${castGrid(+t.castN, 40, t.aboutLayout === 'split' ? 2 : 4)}
+   </div>
+   <div class="ttl" style="margin:28px 0 12px">More like ${m.title}</div>
+   ${shelf(7, t.shelf === 'list' ? 1 : 7, t.shelf === 'list')}
+  </div>`}`
+}
+
+// ---------------------------------------------------------------- B · Tabbed deck
+function B() {
+  const m = M(), t = S.t
+  const tabs = [...(phone() && S.kind === 'series' ? ['Episodes'] : []), 'About', 'Cast', 'More like this', 'Sources', 'Playback', ...(t.tvPlace === 'in a tab' ? ['TV'] : [])]
+  const tab = tabs.includes(S.tab.B) ? S.tab.B : t.defTab
+  const strip = t.tabStyle === 'underline'
+    ? `<div class="under" data-fb="Tab strip" style="overflow:auto">${tabs.map(x => `<button class="${x === tab ? 'on' : ''}" data-act="tab:B:${x}">${x}${x === 'Cast' ? ` <span class="mut">${m.cast.length}</span>` : x === 'Sources' ? ` <span class="mut">${hosts().length}</span>` : ''}</button>`).join('')}</div>`
+    : `<div class="seg" data-fb="Tab strip" style="${phone() ? 'overflow:auto' : 'width:max-content'}">${tabs.map(x => `<button class="${x === tab ? 'on' : ''}" data-act="tab:B:${x}">${x}</button>`).join('')}</div>`
+  let body = ''
+  if (tab === 'Episodes') body = episodes()
+  if (tab === 'About') body = phone()
+    ? `<div style="border-radius:10px;height:110px;background:url(${m.backdrop}) center/cover;margin-bottom:12px"></div>${aboutBits(m)}<p>${m.overview}</p>${credits(m)}`
+    : `<div style="display:grid;grid-template-columns:260px 1fr;gap:24px"><div style="border-radius:10px;background:url(${m.backdrop}) center/cover"></div><div>${aboutBits(m)}<p style="font-size:15px;line-height:1.55;max-width:66ch">${m.overview}</p>${credits(m)}</div></div>`
+  if (tab === 'Cast') body = castGrid(8, phone() ? 44 : 52, phone() ? 2 : 4)
+  if (tab === 'More like this') body = shelf(7, phone() ? 3 : 7)
+  if (tab === 'Sources') body = `<div style="max-width:520px">${sourcesList()}</div>`
+  if (tab === 'Playback') body = `<div class="col" style="gap:12px;max-width:380px">${playbackFields()}</div>`
+  if (tab === 'TV') body = S.play === 'tv' ? tvBanner() : `<div style="max-width:380px">${deviceMenu()}</div>`
+  return `<div class="below col" style="gap:14px">
+   <div class="row" style="gap:12px;position:relative" data-fb="Episode line"><span class="${phone() ? 'ttl' : 'h3'} grow trunc">${lineTitle()}</span>
+    ${phone() ? '' : versionPill(true, 'tab:B:Sources')}
+    ${phone() ? '' : `<button class="row" data-act="autoplay"><span class="mut sm">Autoplay next</span><span class="sw ${S.autoplay ? 'on' : ''}"></span></button>`}
+    ${t.tvPlace === 'on the line' ? tvButton(phone() ? 'TV' : 'Send to TV', phone() ? 'o' : 'p') : ''}
+    ${!phone() ? popover('tv', deviceMenu(), 'right:0;top:42px') : ''}</div>
+   ${statusBanner()}${t.tvPlace === 'on the line' ? tvBanner() : ''}
+   ${strip}
+   <div class="${phone() ? '' : 'panel'} fade-in" data-fb="Tab panel: ${tab}" style="${phone() ? '' : `height:${t.panelH}px;overflow:auto;padding:18px`}">${body}</div>
+  </div>${phone() ? sheet('tv', 'Send to TV', deviceMenu()) : ''}`
+}
+
+// ---------------------------------------------------------------- C · Version board
+function C() {
+  const m = M(), t = S.t, L = m.langs
+  const hidden = h => t.failing === 'hide' && h[2] === 'bad'
+  const chips = (l) => L[l].length ? L[l].map((h, i) => hidden(h) ? '' : `<button class="hs ${l === S.lang && i === S.host ? 'on' : ''} ${h[2] === 'bad' ? 'bad' : ''} ${S.play === 'failed' && l === S.lang && i === S.host + 1 ? 'try' : ''}" data-act="pick:${l}:${i}">${l === S.lang && i === S.host ? ic('play', 'if', 'width:12px') : `<span class="dot" style="background:var(--${h[2]})"></span>`}${h[0]} · ${h[1]}${h[3] ? ` <span class="${l === S.lang && i === S.host ? '' : 'mut'}">${h[3]}</span>` : ''}</button>`).join('') : gapBox(true, l)
+  const board = t.board === 'chips'
+    ? `<div class="panel col" data-fb="Version board" style="padding:6px;gap:4px">${Object.keys(L).map(l => `<div class="lang ${l === S.lang ? 'on' : ''}"><b class="${L[l].length ? '' : 'mut'}">${l}</b><div class="row" style="flex-wrap:wrap;gap:6px">${chips(l)}</div></div>`).join('')}</div>`
+    : `<div class="panel" data-fb="Version board (table)" style="padding:4px 0"><table class="board"><tr><th>Version</th><th>Site</th><th>Host</th><th>Last time</th><th></th></tr>
+       ${Object.keys(L).flatMap(l => L[l].length ? L[l].map((h, i) => hidden(h) ? '' : `<tr class="${l === S.lang && i === S.host ? 'on' : ''}" data-act="pick:${l}:${i}" style="cursor:pointer"><td>${i === 0 ? `<b>${l}</b>` : ''}</td><td>${h[0]}</td><td class="mut">${h[1]}</td><td><span class="row"><span class="dot" style="background:var(--${h[2]})"></span><span class="xs mut">${h[3] || 'fine'}</span></span></td><td class="xs" style="color:var(--p)">${l === S.lang && i === S.host ? 'Playing' : 'Play'}</td></tr>`) : [`<tr><td><b class="mut">${l}</b></td><td colspan="4">${gapBox(true, l)}</td></tr>`]).join('')}</table></div>`
+  const watch = t.watchOn === 'list'
+    ? `<div data-fb="Watch on (devices)"><div class="xs mut" style="margin:2px 0 6px 4px">Watch on</div>${DEVICES.map((d, i) => `<button class="out ${S.device === i && (i === 0 ? S.play !== 'tv' : S.play === 'tv') ? 'on' : ''}" data-act="${i === 0 ? 'bringback' : 'cast:' + i}"><span class="rad"></span>${ic(i === 0 && phone() ? 'phn' : d[0])}${i === 0 && phone() ? 'This phone' : d[1]}<span class="xs mut" style="margin-left:auto">${d[2]}</span></button>`).join('')}</div>`
+    : `<div data-fb="Watch on (devices)"><div class="xs mut" style="margin:2px 0 6px 4px">Watch on</div><div class="row" style="flex-wrap:wrap;gap:6px">${DEVICES.map((d, i) => `<button class="hs ${(i === 0 ? S.play !== 'tv' : S.play === 'tv' && S.device === i) ? 'on' : ''}" data-act="${i === 0 ? 'bringback' : 'cast:' + i}">${ic(i === 0 && phone() ? 'phn' : d[0], '', 'width:13px')}${i === 0 && phone() ? 'This phone' : d[1]}</button>`).join('')}</div></div>`
+  const pbLine = `<div class="row sm" style="margin-top:10px;padding:8px 10px;border-top:1px solid var(--b3);position:relative"><span class="mut grow">Source 716p · 23.98 fps · AI 4</span><button class="btn ic" data-act="pop:pb" data-fb="Playback button">${ic('sl')}</button>${phone() ? '' : popover('pb', `<div class="col" style="gap:12px;width:320px">${playbackFields()}</div>`, 'right:0;bottom:40px')}</div>
+   <button class="row sm" data-act="autoplay" style="padding:2px 10px;width:100%"><span class="grow" style="text-align:left">Autoplay next</span><span class="sw ${S.autoplay ? 'on' : ''}"></span></button>`
+  const open = t.aboutC === 'open' || S.aboutOpen
+  const about = open
+    ? `<div class="panel fade-in" data-fb="About (open)" style="padding:16px"><div class="row" style="margin-bottom:10px"><span class="ttl grow">About ${m.title}</span>${t.aboutC === 'open' ? '' : `<button class="btn ic" data-act="about">${ic('x')}</button>`}</div>${aboutBits(m)}<p style="max-width:66ch">${m.overview}</p>${credits(m)}<div style="margin:16px 0">${castRow(8, 52)}</div>${shelf(7, phone() ? 3 : 7)}</div>`
+    : `<button class="row panel" data-act="about" data-fb="About (one line)" style="width:100%;padding:12px 14px;text-align:left;flex-wrap:wrap"><span class="ttl">About${phone() ? '' : ' ' + m.title}</span><span class="rate">★ ${m.rating.toFixed(1)}</span>${phone() ? '' : `<span class="mut sm">${m.year} · ${m.genres.join(', ')} · ${m.who}</span>`}<span class="grow"></span>${phone() ? '' : m.cast.slice(0, 3).map(([c], i) => `<span class="av" style="width:26px;height:26px;margin-left:${i ? -12 : 0}px;background-image:url(${T}w185/${c}.jpg)"></span>`).join('') + `<span class="mut sm">Cast, synopsis, ${m.similar.length} similar</span>`}${ic(phone() ? 'rt' : 'dn', 'mut')}</button>`
+  if (phone()) {
+    return `<div class="below col" style="gap:12px">
+     <div class="row" data-fb="Episode line"><span class="ttl grow trunc">${lineTitle()}</span><span class="xs mut">${S.kind === 'series' ? 'S1 · 48 min' : '2 h 50'}</span></div>
+     ${statusBanner()}${tvBanner()}
+     ${sourcesList()}
+     ${watch}
+     ${S.kind === 'series' ? `<button class="row panel" style="width:100%;padding:10px 12px" data-act="pop:eps" data-fb="Episodes row"><span class="sm grow" style="text-align:left">Episodes · S1</span><span class="xs mut">2 of 62 watched</span>${ic('rt', 'mut')}</button>` : ''}
+     ${about}
+    </div>${sheet('eps', 'Episodes', episodes()) + sheet('pb', 'Playback', `<div class="col" style="gap:14px">${playbackFields()}</div>`)}`
+  }
+  return `<div class="below col" style="gap:14px">
+   <div class="row" style="gap:12px" data-fb="Episode line"><span class="h3">${lineTitle()}</span><span class="mut sm">${S.kind === 'series' ? 'S1 · 48 min' : m.sub}</span></div>
+   ${statusBanner()}
+   <div style="display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:20px">${board}<div>${watch}${pbLine}</div></div>
+   ${about}
+  </div>`
+}
+
+// ---------------------------------------------------------------- D · Episode stage
+function D() {
+  const m = M(), t = S.t, series = S.kind === 'series'
+  const info = series ? (SERIES.epInfo[S.ep] || ['', '47 min', 'Synopsis from TMDB for this episode.']) : null
+  const pill = `<div class="row" style="justify-content:center;${t.pillPlace === 'on the edge' ? 'margin-top:-20px' : 'margin-top:12px'};position:relative;z-index:5">
+   <div class="glass row" data-fb="Control pill" style="border-radius:99px;padding:5px;gap:4px;position:relative">
+    <button class="btn pill s" data-act="pop:src"><b style="color:var(--p)">${S.lang}</b>${phone() ? '' : `<span class="mut">${cur()?.[0] || ''}</span>`}${ic('dn', 'mut')}</button>
+    ${S.play === 'tv' ? `<button class="btn pill s" data-act="bringback">${ic(phone() ? 'phn' : 'mon')}${phone() ? 'Back' : 'Bring back'}</button>` : `<button class="btn p pill" data-act="pop:tv">${ic('tv')}${phone() ? 'TV' : 'Send to TV'}</button>`}
+    ${phone() ? '' : `<button class="btn ic pill">${ic('pip')}</button>`}
+    <button class="btn ic pill" data-act="pop:pb">${ic('sl')}</button>
+    ${phone() ? '' : popover('src', `<div style="width:360px">${sourcesList()}</div>`, 'left:0;top:46px') + popover('pb', `<div class="col" style="gap:12px;width:320px">${playbackFields()}</div>`, 'right:0;top:46px') + popover('tv', deviceMenu(), 'left:80px;top:46px')}
+   </div></div>`
+  const next = series && S.ep < 7 ? [S.ep + 1, epTitle(S.ep + 1)] : null
+  const upNext = !next ? '' : t.upNext === 'card'
+    ? `<div class="glass" data-fb="Up next" style="border-radius:14px;overflow:hidden;align-self:start"><div style="height:${phone() ? 130 : 160}px;background:url(${m.backdrop}) ${30 + S.ep * 17}% 60%/260% auto;position:relative"><button class="btn p pill" data-act="ep:${next[0]}" style="position:absolute;left:12px;bottom:12px">${ic('play', 'if')}Play next</button></div>
+       <div style="padding:12px 14px"><div class="xs mut">Up next</div><div class="ttl" style="margin:2px 0 8px">E0${next[0]} · ${next[1]}</div><button class="row sm mut" data-act="autoplay" style="width:100%"><span class="grow" style="text-align:left">${S.autoplay ? 'Starts by itself after this one' : 'Autoplay is off'}</span><span class="sw ${S.autoplay ? 'on' : ''}"></span></button></div></div>`
+    : `<button class="row panel" data-act="ep:${next[0]}" data-fb="Up next (row)" style="width:100%;text-align:left;align-self:start"><span class="av" style="border-radius:8px;width:96px;height:54px;background:url(${m.backdrop}) ${30 + S.ep * 17}% 60%/260% auto"></span><span class="grow"><span class="xs mut" style="display:block">Up next${S.autoplay ? ' · autoplay' : ''}</span><span class="sm" style="font-weight:600">E0${next[0]} · ${next[1]}</span></span>${ic('play', 'if', 'color:var(--p)')}</button>`
+  const hero = series
+    ? `<div class="row" style="gap:12px;align-items:baseline"><span style="font:600 ${phone() ? 13 : 15}px ui-monospace,monospace;color:var(--p)">E${String(S.ep).padStart(2, '0')}</span><span style="font-size:${phone() ? 24 : 30}px;font-weight:600;letter-spacing:-.03em;line-height:1.15">${epTitle(S.ep)}</span></div>
+       <div class="mut sm" style="margin:8px 0 12px">Season 1 · ${info[0]} · ${info[1]}</div><p style="font-size:15px;line-height:1.6;max-width:62ch">${info[2]}</p>`
+    : `<div style="font-size:${phone() ? 26 : 34}px;font-weight:600;letter-spacing:-.03em;line-height:1.1">${m.title}</div><div class="row" style="margin:10px 0 12px;flex-wrap:wrap">${aboutBits(m).replace('margin-bottom:10px', '')}</div><p style="font-size:15px;line-height:1.6;max-width:66ch">${m.overview}</p>${credits(m)}`
+  const cast = t.epCast === 'show' ? `<div class="xs mut" style="margin:20px 0 8px">${series ? 'In this episode' : 'Cast'}</div>${phone() ? castRow(6, 48) : castGrid(series ? 3 : 8, 40, series ? 3 : 4)}` : ''
+  return `<div class="stagebg" style="--bgk:${(1 - t.bgk / 100).toFixed(2)};margin:${phone() ? '-4px -4px 0' : '0 -8px'};padding:${phone() ? '4px 4px 16px' : '0 8px 20px'}">
+   <div class="bg" style="background-image:url(${m.backdrop});opacity:${t.bgk / 100}"></div>
+   ${pill}
+   <div style="margin-top:14px">${statusBanner()}${tvBanner()}</div>
+   <div data-fb="Episode stage" style="display:grid;grid-template-columns:${phone() || !upNext ? 'minmax(0,1fr)' : 'minmax(0,1fr) 340px'};gap:${phone() ? 18 : 40}px;margin-top:18px">
+    <div>${hero}${cast}</div>${upNext}
+   </div>
+  </div>
+  <div class="below">
+   ${series ? `<div class="row" data-fb="Series line" style="padding-top:14px;border-top:1px solid var(--b3);flex-wrap:wrap"><span class="ttl">${m.title}</span><span class="rate">★ ${m.rating.toFixed(1)}</span><span class="mut sm">${m.year} · ${m.genres.join(', ')}</span><span class="grow"></span><button class="sm link" data-act="about">About the series</button></div>
+   ${S.aboutOpen ? `<div class="fade-in" style="margin-top:12px"><p style="max-width:66ch">${m.overview}</p>${credits(m)}<div style="margin-top:14px">${castRow(8, 52)}</div></div>` : ''}` : ''}
+   ${phone() && series ? `<button class="row panel" style="width:100%;margin-top:12px" data-act="pop:eps">${'<span class="sm grow" style="text-align:left">All episodes</span><span class="xs mut">S1 · 2 of 7</span>' + ic('rt', 'mut')}</button>` : ''}
+   <div class="ttl" style="margin:18px 0 10px">More like this</div>${shelf(phone() ? 6 : 7, phone() ? 3 : 7)}
+  </div>${phone() ? phoneSheets() + sheet('eps', 'Episodes', episodes()) : ''}`
+}
+
+// ---------------------------------------------------------------- render
+const app = document.getElementById('app')
+function render() {
+  app.className = phone() ? 'phone' : 'desk'
+  document.documentElement.style.setProperty('--gap', S.t.density === 'compact' ? '10px' : '16px')
+  document.documentElement.style.setProperty('--pad', S.t.density === 'compact' ? '10px' : '14px')
+  const body = S.kind === 'local' && S.dir !== 'A' ? `<p class="below mut">The local-file case is only mocked for A.</p>` : { A, B, C, D }[S.dir]()
+  app.style.position = 'relative'
+  app.innerHTML = header() + player() + body + pins()
+  renderSide(); save(); placePins()
+}
+function pins() {
+  return '' // pins are placed after render (need element positions)
+}
+
+// ---------------------------------------------------------------- side panel
+const side = document.getElementById('side')
+function segUI(key, opts, val) { return `<div class="seg">${opts.map(([v, l]) => `<button class="${val === v ? 'on' : ''}" data-set="${key}:${v}">${l}</button>`).join('')}</div>` }
+function renderSide() {
+  const tunes = [...TUNES._, ...TUNES[S.dir]]
+  const notesHere = S.notes.map((n, i) => ({ ...n, i }))
+  side.innerHTML = `
+  <div class="row"><h1 class="grow">Below the player</h1><button class="btn ic" data-ui="closeSide" style="${innerWidth < 820 ? '' : 'display:none'}">${ic('x')}</button></div>
+  <p class="xs mut" style="margin-top:4px">Pick a direction, tune it, leave notes on anything. Everything works: tabs, pills, Send to TV, sources, episodes.</p>
+  <h3>Direction</h3>
+  <div class="dirs">${Object.entries(DIRS).filter(([k]) => k === 'A' || S.showOld).map(([k, [n, d]]) => `<button class="${S.dir === k ? 'on' : ''}" data-set="dir:${k}"><b>${k}</b><span class="grow"><span style="display:block;font-weight:600">${n}</span><span class="xs mut">${d}</span></span>${S.verdict[k] ? `<span class="v">${S.verdict[k]}</span>` : ''}</button>`).join('')}</div>
+  <button class="btn xs mut" data-ui="old" style="margin-top:4px">${S.showOld ? 'Hide' : 'Show'} earlier directions (B, C, D)</button>
+  <h3>Look at it as</h3>
+  ${segUI('dev', [['desk', 'Desktop'], ['phone', 'Phone']], S.dev)}
+  <div style="height:6px"></div>${segUI('kind', [['series', 'Series'], ['film', 'Film'], ['local', 'Local file']], S.kind)}
+  <div style="height:6px"></div>${segUI('play', [['playing', 'Playing'], ['idle', 'Not started'], ['tv', 'On TV'], ['failed', 'Failed']], S.play)}
+  <h3>Tune ${S.dir}</h3>
+  ${tunes.map(([k, l, o]) => typeof o === 'string'
+    ? `<div class="tune"><label>${l}</label><input type="range" min="${o.split(':')[1]}" max="${o.split(':')[2]}" value="${S.t[k]}" data-range="${k}"></div>`
+    : `<div class="tune"><label>${l}</label>${segUI('t.' + k, o.map(v => [v, v]), S.t[k])}</div>`).join('')}
+  <h3>Your verdict on ${S.dir}</h3>
+  <div class="verdict">${[['keep', 'Keep'], ['maybe', 'Maybe'], ['drop', 'Drop']].map(([v, l]) => `<button data-v="${v}" class="${S.verdict[S.dir] === l ? 'on' : ''}" data-verdict="${l}">${l}</button>`).join('')}</div>
+  <h3>Notes</h3>
+  <button class="btn ${document.body.classList.contains('cm') ? 'p' : 's'}" data-ui="cm" style="width:100%">${ic('msg')}${document.body.classList.contains('cm') ? 'Click any outlined part… (Esc to stop)' : 'Comment on a part'}</button>
+  <div style="margin-top:8px">${notesHere.length ? notesHere.map(n => `<div class="note"><span class="k">${n.i + 1}</span><span class="grow"><span class="xs mut" style="display:block">${n.dir} · ${n.dev} · ${n.kind} · ${esc(n.part)}</span>${esc(n.text)}</span><button class="btn ic" data-del="${n.i}" style="width:22px;height:22px">${ic('x', '', 'width:12px')}</button></div>`).join('') : '<p class="xs mut">No notes yet.</p>'}</div>
+  <textarea placeholder="Anything else: mixes you want (e.g. C's board + A's About), what's missing…" data-general>${esc(S.general)}</textarea>
+  <div class="row" style="margin-top:10px"><button class="btn p grow" data-ui="send">Send to Claude</button><button class="btn s" data-ui="copy">Copy</button></div>
+  <button class="btn xs mut" data-ui="reset" style="margin-top:12px">Reset prototype</button>`
+}
+
+// ---------------------------------------------------------------- events
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act],[data-set],[data-ui],[data-verdict],[data-del]')
+  // comment mode: capture clicks on the stage
+  if (document.body.classList.contains('cm') && e.target.closest('#app')) {
+    const fb = e.target.closest('[data-fb]')
+    if (fb) { e.preventDefault(); e.stopPropagation(); openComment(fb, e.clientX, e.clientY) }
+    return
+  }
+  if (!el) { if (S.pop && !e.target.closest('[data-pop]')) { S.pop = null; render() } return }
+  if (el.dataset.set) {
+    const [k, v] = el.dataset.set.split(/:(.*)/)
+    if (k.startsWith('t.')) S.t[k.slice(2)] = v
+    else { S[k] = v; if (k === 'kind') { S.lang = S.kind === 'series' ? 'VOSTFR' : 'VF'; S.host = 0 } }
+    S.pop = null; return render()
+  }
+  if (el.dataset.verdict) { S.verdict[S.dir] = S.verdict[S.dir] === el.dataset.verdict ? undefined : el.dataset.verdict; return render() }
+  if (el.dataset.del) { S.notes.splice(+el.dataset.del, 1); render(); return placePins() }
+  if (el.dataset.ui) return ui(el.dataset.ui)
+  const [a, b, c] = el.dataset.act.split(':')
+  if (a === 'pop') S.pop = S.pop === b ? null : b
+  else if (a === 'close') S.pop = null
+  else if (a === 'lang') { S.lang = b; S.host = 0; if (S.play === 'failed') S.play = 'playing' }
+  else if (a === 'host') { S.host = +b; S.play = S.play === 'tv' ? 'tv' : 'playing'; S.pop = phone() ? S.pop : null }
+  else if (a === 'pick') { S.lang = b; S.host = +c; if (S.play !== 'tv') S.play = 'playing' }
+  else if (a === 'cast') { S.device = +b; S.play = 'tv'; S.pop = null }
+  else if (a === 'bringback') { S.play = 'playing'; S.device = 0 }
+  else if (a === 'start') S.play = 'playing'
+  else if (a === 'autoplay') S.autoplay = !S.autoplay
+  else if (a === 'tab') S.tab[b] = c
+  else if (a === 'ep') { S.ep = +b; S.pop = null; if (S.play === 'idle') S.play = 'playing' }
+  else if (a === 'watch') S.watchVF = { ...S.watchVF, [b]: true }
+  else if (a === 'about') S.aboutOpen = !S.aboutOpen
+  else if (a === 'dl') S.dl = true
+  render(); placePins()
+})
+document.addEventListener('input', e => {
+  if (e.target.dataset.range) { S.t[e.target.dataset.range] = +e.target.value; const y = side.scrollTop; const k = e.target.dataset.range; render(); side.scrollTop = y; side.querySelector(`[data-range=${k}]`)?.focus() }
+  if ('general' in e.target.dataset) { S.general = e.target.value; save() }
+})
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.body.classList.remove('cm'); closeComment(); S.pop = null; render(); placePins() } })
+addEventListener('resize', placePins)
+document.getElementById('sideToggle').onclick = () => side.classList.toggle('open')
+
+function ui(k) {
+  if (k === 'cm') { document.body.classList.toggle('cm'); side.classList.remove('open'); renderSide(); placePins() }
+  if (k === 'old') { S.showOld = !S.showOld; renderSide(); save() }
+  if (k === 'closeSide') side.classList.remove('open')
+  if (k === 'reset' && confirm('Clear all choices and notes?')) { localStorage.removeItem('wbp'); S = structuredClone(DEFAULT); render(); placePins() }
+  if (k === 'copy') navigator.clipboard.writeText(feedbackText()).then(() => toast('Copied. Paste it to Claude.'))
+  if (k === 'send') fetch('/feedback', { method: 'POST', body: JSON.stringify(payload()) })
+    .then(r => { if (!r.ok) throw 0; toast('Sent. Tell Claude "feedback sent".') })
+    .catch(() => navigator.clipboard.writeText(feedbackText()).then(() => toast("Couldn't reach the server; copied instead.")))
+}
+function payload() { return { verdict: S.verdict, notes: S.notes, general: S.general, last: { dir: S.dir, dev: S.dev, kind: S.kind, play: S.play }, tunes: S.t } }
+function feedbackText() {
+  return `Below-player prototype feedback\nVerdicts: ${Object.entries(S.verdict).filter(e => e[1]).map(([k, v]) => k + '=' + v).join(', ') || 'none'}\n` +
+    S.notes.map((n, i) => `${i + 1}. [${n.dir} · ${n.dev} · ${n.kind} · ${n.part}] ${n.text}\n   tunes: ${JSON.stringify(n.tunes)}`).join('\n') + `\nGeneral: ${S.general}\nTunes now: ${JSON.stringify(S.t)}`
+}
+function toast(msg) { const d = document.createElement('div'); d.className = 'toast glass'; d.textContent = msg; document.body.append(d); setTimeout(() => d.remove(), 2600) }
+
+// comments pinned to parts
+const cbox = document.getElementById('cbox')
+let target = null
+function openComment(el, x, y) {
+  target = el
+  cbox.innerHTML = `<div class="xs mut" style="margin-bottom:6px">${S.dir} · ${esc(el.dataset.fb)}</div><textarea placeholder="What should change here?"></textarea><div class="row" style="margin-top:8px;justify-content:flex-end"><button class="btn s" data-c="x">Cancel</button><button class="btn p" data-c="ok">Add note</button></div>`
+  cbox.style.display = 'block'
+  cbox.style.left = Math.min(x, innerWidth - 316) + 'px'; cbox.style.top = Math.min(y + 8, innerHeight - 190) + 'px'
+  cbox.querySelector('textarea').focus()
+}
+function closeComment() { cbox.style.display = 'none'; target = null }
+cbox.addEventListener('click', e => {
+  e.stopPropagation()
+  const c = e.target.closest('[data-c]')?.dataset.c
+  if (c === 'x') closeComment()
+  if (c === 'ok') {
+    const text = cbox.querySelector('textarea').value.trim()
+    if (text) S.notes.push({ dir: S.dir, dev: S.dev, kind: S.kind, play: S.play, part: target.dataset.fb, text, tunes: Object.fromEntries([...TUNES._, ...TUNES[S.dir]].map(([k]) => [k, S.t[k]])) })
+    closeComment(); render(); placePins()
+  }
+})
+cbox.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) cbox.querySelector('[data-c=ok]').click() })
+function placePins() {
+  app.querySelectorAll('.fbpin').forEach(p => p.remove())
+  const base = app.getBoundingClientRect()
+  S.notes.forEach((n, i) => {
+    if (n.dir !== S.dir || n.dev !== S.dev) return
+    const el = [...app.querySelectorAll('[data-fb]')].find(e => e.dataset.fb === n.part)
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const p = document.createElement('div'); p.className = 'fbpin'; p.textContent = i + 1
+    p.style.left = (r.right - base.left - 10) + 'px'; p.style.top = (r.top - base.top - 10) + 'px'
+    app.append(p)
+  })
+}
+render(); placePins()
+</script>
+</body>
+</html>

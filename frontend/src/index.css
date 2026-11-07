@@ -293,6 +293,10 @@
 /* The playlist's episodes fade in one after another when a season opens (docs/SPEC-watch-page.md). */
 @keyframes ep-in { from { opacity: 0; translate: 0 6px; } }
 @keyframes ep-fade { from { opacity: 0; } }
+/* The watch page's phone sheet and desktop sources popover (docs/SPEC-below-player.md). */
+@keyframes sheet-fade { from { opacity: 0; } }
+@keyframes sheet-up { from { opacity: 0; translate: 0 40px; } }
+@keyframes pop-in { from { opacity: 0; translate: 0 -6px; filter: blur(6px); } }
 .ep-in {
   animation: ep-in 240ms var(--ease-smooth) both;
   animation-delay: calc(var(--i, 0) * 30ms);

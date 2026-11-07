@@ -18,11 +18,15 @@ import SaveToggles from '../components/SaveToggles'
 import WatchToggle from '../components/WatchToggle'
 import PageHeader, { Segmented } from '../components/PageHeader'
 import TitleHeader from '../components/season/TitleHeader'
+import BottomSheet from '../components/watch/BottomSheet'
+import MissingVersions from '../components/watch/MissingVersions'
+import SmoothnessReadout from '../components/watch/SmoothnessReadout'
+import { useTvNow } from '../tvNow'
 import EpisodeList from '../components/watch/EpisodeList'
 import PlaylistRail from '../components/watch/PlaylistRail'
 import { useFinePointer } from '../useFinePointer'
 import { useChannelVideos } from '../useChannelVideos'
-import { ChannelVideos, SimilarTitles } from '../components/watch/SideLists'
+import { ChannelVideos } from '../components/watch/SideLists'
 import OutputSwitcher from '../components/watch/OutputSwitcher'
 import BrowserFrameRate from '../components/watch/BrowserFrameRate'
 import BrowserPerformance from '../components/watch/BrowserPerformance'
@@ -59,12 +63,14 @@ const NO_EMBEDS: Record<string, string> = {}
 const NO_SUBTITLES: StreamSubtitle[] = []
 const NO_AUDIO: DownloadedTrack[] = []
 
-// The phone's version of the desktop queue and now-playing line: one job per
-// tab. Details is not among them: the TMDB metadata sits below the player.
-const MOBILE_TABS = ['episodes', 'sources', 'output'] as const
+// The phone's version of what the desktop shows around the player, one job per
+// tab; the playback settings are a sheet (docs/SPEC-below-player.md).
+const MOBILE_TABS = ['episodes', 'about', 'sources'] as const
 type MobileTab = (typeof MOBILE_TABS)[number]
 /** A film or a video has no episodes to list. */
-const SINGLE_TABS = ['sources', 'output'] as const
+const SINGLE_TABS = ['about', 'sources'] as const
+const PLAYBACK_OPEN_KEY = 'watch.playbackOpen'
+const isDesktop = () => matchMedia('(min-width: 64rem)').matches
 
 interface Props {
   pageUrl: string
@@ -164,8 +170,19 @@ export default function WatchView({
   }, [peek])
   const [tab, setTab] = useState<MobileTab>('episodes')
   const [autoplay, setAutoplay] = useState(true)
-  /** The sources panel under the now-playing line (desktop). */
+  /** The sources popover under the version pill (desktop). */
   const [sourcesOpen, setSourcesOpen] = useState(false)
+  /** The Playback controls folded open under the line (desktop), remembered. */
+  const [playbackOpen, setPlaybackOpen] = useState(() => localStorage.getItem(PLAYBACK_OPEN_KEY) === '1')
+  /** The Playback sheet (phone). */
+  const [playbackSheet, setPlaybackSheet] = useState(false)
+  /** The performance graphs under the smoothness readout. */
+  const [perfDetails, setPerfDetails] = useState(false)
+  /** Missing-language cards put away with "Keep watching in …", as "episode:lang". */
+  const [keptLangs, setKeptLangs] = useState<string[]>([])
+  const tv = useTvNow()
+  const pillBox = useRef<HTMLDivElement>(null)
+  const tabsBox = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [pendingItems, setPendingItems] = useState<DownloadItem[] | null>(null)
@@ -223,11 +240,14 @@ export default function WatchView({
 
   // A film or a video is one item: no playlist, and a right column only when
   // there is something real for it (docs/SPEC-watch-page.md, A).
+  // A film's similar titles sit under its About instead (docs/SPEC-below-player.md).
   const isSingle = !!detail?.is_film
-  const similar = !isVideo ? (meta?.recommendations ?? []) : []
   const moreVideos = useChannelVideos(isVideo ? videoLink?.channel_url : undefined, sourceUrl)
-  const side = isSingle ? (similar.length ? 'similar' : moreVideos.length ? 'more' : null) : null
-  const tabs: readonly MobileTab[] = isSingle ? SINGLE_TABS : MOBILE_TABS
+  const side = isSingle && moreVideos.length ? 'more' : null
+  // Something for TitleHeader to show (it renders nothing otherwise).
+  const about = !!meta && !!(meta.backdrop_url || meta.overview || meta.genres.length || meta.cast.length)
+  const tabs: readonly MobileTab[] = (isSingle ? SINGLE_TABS : MOBILE_TABS)
+    .filter(t => t !== 'about' || about || side === 'more')
   const shownTab: MobileTab = tabs.includes(tab) ? tab : tabs[0]
   const openVideo = (v: VideoInfo) => {
     const c = videoSeasonCard(v)
@@ -730,7 +750,25 @@ export default function WatchView({
   // been probed, which disables the control rather than selecting a dead source.
   const streamHost = providers.find(p => p !== DOWNLOADED_PROVIDER && sources[p]) ?? null
 
-  const sourceControl = (
+  // Languages the title has somewhere that no site (nor the disk) has for this
+  // episode: listed under the sources, once every site has answered.
+  const missingLangs = siteSourcesLoading || currentNumber === null ? [] : allLangs.filter(l =>
+    !keptLangs.includes(`${currentNumber}:${l}`)
+    && !downloadedRow?.langs.includes(l)
+    && !listings.some(li => !li.loading && !li.failed && (li.epLangs[currentNumber] || li.langs).includes(l)))
+  // Where a missing language does exist: other episodes of this season, else the
+  // sites that list it for the title.
+  const missingWhere = Object.fromEntries(missingLangs.map(l => {
+    const eps = Object.entries(allEpLangs).filter(([, codes]) => codes.includes(l)).map(([n]) => Number(n)).sort((a, b) => a - b)
+    const label = (n: number) => `E${String(n).padStart(2, '0')}`
+    const sites = listings.filter(li => li.langs.includes(l)).map(li => li.label)
+    return [l, eps.length
+      ? `In this season: ${eps.slice(0, 4).map(label).join(', ')}${eps.length > 4 ? ` and ${eps.length - 4} more` : ''}`
+      : sites.length ? `${sites.join(', ')} ${sites.length > 1 ? 'list' : 'lists'} ${l.toUpperCase()} for other episodes` : null]
+  }))
+
+  const sourcesFor = (picked?: () => void) => (
+    <>
     <SourcesPanel
       listings={listings}
       episodeNumber={currentNumber}
@@ -741,7 +779,7 @@ export default function WatchView({
       currentHosts={providers.filter(p => p !== DOWNLOADED_PROVIDER)}
       hostStatus={status}
       activeHost={active}
-      onSelectHost={select}
+      onSelectHost={host => { select(host); picked?.() }}
       onSelectSource={switchListing}
       onSelectLang={selectLang}
       downloaded={downloadedRow}
@@ -749,7 +787,17 @@ export default function WatchView({
       onPlayDownloaded={playDownloaded}
       onStream={streamHost ? () => select(streamHost) : null}
     />
+    <MissingVersions
+      langs={missingLangs}
+      episode={detail?.is_film ? null : `S${season} · E${String(currentNumber).padStart(2, '0')}`}
+      activeLang={activeLang}
+      where={missingWhere}
+      watch={isVideo ? null : { pageUrl: sourceUrl, source: sourceId, seriesName, posterUrl, isFilm: !!detail?.is_film }}
+      onKeep={lang => setKeptLangs(k => [...k, `${currentNumber}:${lang}`])}
+    />
+    </>
   )
+  const sourceControl = sourcesFor()
 
   // Desktop only: keeps the playlist open as a column (lit), or folds it back into
   // the rail. A click on the list header's empty space does the same.
@@ -898,24 +946,54 @@ export default function WatchView({
     !downloadedActive && active && active !== sourceId ? active : null,
   ].filter(Boolean) as string[]
   const sourceFailed = playing && !probing && !source
-  const sourcesShown = sourcesOpen || sourceFailed
-  // Phone: the same moment opens the Sources tab, so a dead player is never
-  // left without the way out on screen.
+  // A failure opens the sources by itself (the popover on desktop, which closes
+  // again once something plays; the Sources tab on a phone), so a dead player is
+  // never left without the way out on screen.
+  const sourcesShown = sourcesOpen
   // Adjusted during render, as the audio track is above, rather than in an effect.
   const [failedSeen, setFailedSeen] = useState(false)
   if (sourceFailed !== failedSeen) {
     setFailedSeen(sourceFailed)
-    if (sourceFailed && !matchMedia('(min-width: 64rem)').matches) setTab('sources')
+    if (isDesktop()) setSourcesOpen(sourceFailed)
+    else if (sourceFailed) setTab('sources')
+  }
+  // Hosts that failed on this episode, last one last: the banner names it while
+  // the next is tried, and once none is left.
+  const failedHosts = playing ? providers.filter(p => status[p] === 'failed') : []
+  const site = downloadedActive ? 'On disk' : (currentListing?.label ?? sourceId)
+  const retrying = playing && probing && failedHosts.length > 0 && active && status[active] !== 'failed'
+
+  // The sources popover closes on Esc or a press outside the pill and popover.
+  useEffect(() => {
+    if (!sourcesOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSourcesOpen(false) }
+    const onDown = (e: PointerEvent) => {
+      if (!pillBox.current?.contains(e.target as Node)) setSourcesOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onDown)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onDown)
+    }
+  }, [sourcesOpen])
+  /** The version pill: the popover on desktop, the Sources tab on a phone. */
+  const openSources = () => {
+    if (isDesktop()) { setSourcesOpen(o => !o); return }
+    setTab('sources')
+    tabsBox.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+  const togglePlayback = () => {
+    if (!isDesktop()) { setPlaybackSheet(true); return }
+    setPlaybackOpen(o => {
+      localStorage.setItem(PLAYBACK_OPEN_KEY, o ? '0' : '1')
+      return !o
+    })
   }
 
   const episodeLabel = current && !detail?.is_film
     ? `E${String(current.number).padStart(2, '0')} · ${current.title}`
     : seriesName
-
-  // Phone: the language as a chip; the Sources tab does the rest.
-  const langChip = (
-    <span className="badge badge-sm badge-primary font-bold shrink-0">{activeLang.toUpperCase()}</span>
-  )
 
   const autoplayToggle = (
     <label className="flex items-center gap-2 cursor-pointer text-sm text-base-content/70">
@@ -956,19 +1034,68 @@ export default function WatchView({
   // Chromium-only, so hidden elsewhere.
   const popOut = !pipWindow && isDocumentPiPSupported() && (
     <button
-      className="btn btn-sm btn-ghost gap-2"
+      className="btn btn-sm btn-ghost btn-square"
       onClick={() => { void openDocumentPiP() }}
-      title="Play in a floating window that stays on top"
+      title="Pop out: play in a floating window that stays on top"
+      aria-label="Pop out"
     >
       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M19 11h-8v6h8v-6zm4 8V4.98A2 2 0 0 0 21 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2zm-2 .02H3V4.97h18v14.05z" />
       </svg>
-      Pop out
     </button>
   )
 
   const quality = <BrowserQuality source={source} />
   const frameRate = <BrowserFrameRate source={source} settings={settings} onUpdateSettings={onUpdateSettings} />
+  // Everything about how the browser plays: the desktop row and the phone sheet.
+  const playbackControls = (
+    <>
+      {quality}
+      {frameRate}
+      {audioPicker}
+      {!isSingle && autoplayToggle}
+    </>
+  )
+  const closePlaybackSheet = useCallback(() => setPlaybackSheet(false), [])
+
+  // The start of the line: the episode (or the title), then the version pill,
+  // which opens the sources (a popover on desktop, the Sources tab on a phone).
+  const lineLead = (
+    <div className="order-first basis-full lg:basis-auto lg:flex-1 min-w-0 flex items-center gap-3">
+      <h3 className="flex-1 lg:flex-initial min-w-0 truncate font-semibold tracking-tight text-base lg:text-lg">
+        {episodeLabel}
+      </h3>
+      <div className="relative shrink-0" ref={pillBox}>
+        <button
+          type="button"
+          onClick={openSources}
+          aria-expanded={sourcesShown}
+          aria-controls="watch-sources"
+          title="Change language, site or host"
+          className="inline-flex items-center gap-0.5 h-8 rounded-full border border-base-300 bg-base-200 p-0.5 text-sm hover:border-base-content/30 transition-colors"
+        >
+          <span className="px-2.5 h-full grid place-items-center rounded-full bg-primary text-primary-content font-bold">
+            {versionLabel[0]}
+          </span>
+          <span className="hidden lg:inline px-2 text-base-content/75">{versionLabel.slice(1).join(' · ')}</span>
+          <svg
+            className={`w-4 h-4 mx-1 lg:ml-0 lg:mr-1.5 text-base-content/50 transition-transform ${sourcesShown ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {sourcesShown && (
+          <div
+            id="watch-sources"
+            className="hidden lg:block absolute left-0 top-full mt-2 z-40 w-[28rem] max-h-[min(32rem,70dvh)] overflow-y-auto glass rounded-2xl p-3 animate-[pop-in_220ms_var(--ease-smooth)] motion-reduce:animate-none"
+          >
+            {sourcesFor(() => setSourcesOpen(false))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 
   // The phone's top card leaves once the page scrolls, so it never sits over
   // the pinned player. Listens only while this view is the visible one.
@@ -1084,7 +1211,7 @@ export default function WatchView({
         <div
           className={`flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 lg:transition-[grid-template-columns] lg:duration-[360ms] ease-smooth motion-reduce:transition-none ${
             isSingle
-              ? side ? 'lg:grid-cols-[minmax(0,1fr)_20rem] lg:[--col-w:20rem]' : 'lg:grid-cols-[minmax(0,55rem)] lg:justify-center'
+              ? side ? 'lg:grid-cols-[minmax(0,1fr)_20rem] lg:[--col-w:20rem]' : about ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,55rem)] lg:justify-center'
               : collapsed ? 'lg:grid-cols-[minmax(0,1fr)_5.25rem] lg:[--col-w:5.25rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem] lg:[--col-w:24rem]'
           }`}
         >
@@ -1188,36 +1315,97 @@ export default function WatchView({
               </div>
             </div>
 
-            {/* The now-playing line: episode, the version playing, the output. */}
-            <div className="flex flex-col gap-3">
-              <div className={`items-center gap-x-3 gap-y-2 flex-wrap ${playing && current ? 'hidden lg:flex' : 'flex'}`}>
-                <h3 className="font-semibold tracking-tight text-base lg:text-lg min-w-0 break-words max-w-full">
-                  {episodeLabel}
-                </h3>
-                <span className="lg:hidden">{langChip}</span>
-                {/* Desktop: the version as one switch over the sources panel. */}
-                <button
-                  type="button"
-                  onClick={() => setSourcesOpen(o => !o)}
-                  aria-expanded={sourcesShown}
-                  aria-controls="watch-sources"
-                  title="Change language, site or host"
-                  className="hidden lg:inline-flex items-center gap-0.5 h-8 rounded-full border border-base-300 bg-base-200 p-0.5 text-sm hover:border-base-content/30 transition-colors"
+            {/* The line under the player: what plays, its version, then where it
+                goes and how it plays (docs/SPEC-below-player.md). Casting lives in
+                OutputSwitcher, so while playing the whole line is its row. */}
+            <div className="flex flex-col gap-2.5">
+              {playing && current ? (
+                <OutputSwitcher
+                  episodes={playlist}
+                  index={index}
+                  source={source}
+                  autoplay={autoplay}
+                  handoffAt={position}
                 >
-                  <span className="px-2.5 h-full grid place-items-center rounded-full bg-primary text-primary-content font-bold">
-                    {versionLabel[0]}
-                  </span>
-                  <span className="px-2 text-base-content/75">{versionLabel.slice(1).join(' · ')}</span>
-                  <svg
-                    className={`w-4 h-4 mr-1.5 text-base-content/50 transition-transform ${sourcesShown ? 'rotate-180' : ''}`}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"
+                  {lineLead}
+                  {popOut}
+                  <button
+                    type="button"
+                    onClick={togglePlayback}
+                    aria-expanded={playbackOpen}
+                    aria-label="Playback settings"
+                    title="Quality, frame rate, AI frames, autoplay"
+                    className={`btn btn-sm gap-1.5 max-lg:btn-square ${playbackOpen ? 'lg:ring-2 lg:ring-primary/70' : ''}`}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+                      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
+                    </svg>
+                    <span className="hidden lg:inline">Playback</span>
+                  </button>
+                  {isSingle && downloadButton('max-lg:hidden')}
+                  {isSingle && (
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      disabled={checked.size === 0 || submitting || loading}
+                      aria-label="Download"
+                      title="Download"
+                      className="lg:hidden btn btn-sm btn-primary btn-square"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true">
+                        <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+                      </svg>
+                    </button>
+                  )}
+                </OutputSwitcher>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {lineLead}
+                  {isSingle && downloadButton('ml-auto')}
+                </div>
+              )}
+
+              {/* Desktop: the Playback controls fold open under the line. */}
+              {playing && current && playbackOpen && (
+                <div className="hidden lg:flex flex-wrap items-center gap-x-5 gap-y-2.5 rounded-box bg-base-200 px-3 py-2.5">
+                  {playbackControls}
+                  <div className="ml-auto"><SmoothnessReadout details={perfDetails} onDetails={() => setPerfDetails(d => !d)} /></div>
+                  {perfDetails && <div className="basis-full"><BrowserPerformance source={source} /></div>}
+                </div>
+              )}
+
+              {(retrying || sourceFailed) && (
+                <div role="status" className="flex items-center gap-2.5 rounded-box px-3 py-2 text-sm bg-warning/12 border border-warning/40">
+                  {retrying
+                    ? <span className="loading loading-spinner loading-xs text-warning shrink-0" />
+                    : (
+                      <svg className="w-4 h-4 shrink-0 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+                      </svg>
+                    )}
+                  <span className="flex-1 min-w-0">
+                    <b className="font-semibold">{failedHosts.at(-1) ?? site}</b> didn't answer.{' '}
+                    {retrying ? <>Trying <b className="font-semibold">{site} · {active}</b>…</> : 'No other host did either.'}
+                  </span>
+                  <button type="button" className="btn btn-sm" onClick={openSources}>Pick one</button>
+                </div>
+              )}
+
+              {/* This title on a TV: where, in what, and the way back. */}
+              {tv && tv.episode.page_url === current?.page_url && (
+                <div role="status" className="flex items-center gap-2.5 rounded-box px-3 py-2 text-sm bg-primary/12 border border-primary/40">
+                  <svg className="w-4 h-4 shrink-0 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M2 12a9 9 0 0 1 8 8M2 16a5 5 0 0 1 4 4M2 20h.01" />
                   </svg>
-                </button>
-                {isSingle && downloadButton('hidden lg:inline-flex ml-auto')}
-              </div>
-              {isSingle && <div className="lg:hidden flex">{downloadButton('ml-auto')}</div>}
+                  <span className="flex-1 min-w-0 truncate">
+                    On <b className="font-semibold">{tv.device}</b>
+                    {tv.episode.number !== current?.number && !isSingle && ` · E${String(tv.episode.number).padStart(2, '0')}`}
+                    {' · '}{tv.episode.lang.toUpperCase()}
+                  </span>
+                  <button type="button" className="btn btn-sm" onClick={tv.bringBack}>Bring back</button>
+                </div>
+              )}
+
               {diskFile && (
                 <div className="flex items-center gap-3 rounded-box bg-base-200 px-3 py-2.5 text-sm">
                   <code className="flex-1 min-w-0 truncate font-mono text-xs opacity-70">{diskFile.path}</code>
@@ -1225,99 +1413,58 @@ export default function WatchView({
                   <span className="text-base-content/55">Downloaded</span>
                 </div>
               )}
-
-              {/* Where the video goes. Send to TV stays on every breakpoint; the
-                  finer controls sit here on desktop and in the Output tab on a
-                  phone. */}
-              {playing && current && (
-                <div className="flex items-start gap-2 flex-wrap">
-                  <OutputSwitcher
-                    episodes={playlist}
-                    index={index}
-                    source={source}
-                    autoplay={autoplay}
-                    handoffAt={position}
-                  >
-                    {/* Phone: the episode title sits on the Send to TV row, ahead
-                        of the button, so casting is never a scroll away. A film
-                        or video's title is the header's, so it isn't repeated. */}
-                    <div className="lg:hidden order-first flex-1 min-w-0 flex items-center gap-2">
-                      {episodeLabel !== seriesName && (
-                        <h3 className="font-semibold tracking-tight min-w-0 break-words">{episodeLabel}</h3>
-                      )}
-                      {langChip}
-                    </div>
-                    {/* Desktop: one toolbar. Where it goes, then how it plays,
-                        then Autoplay at the end; the AI settings fold below. */}
-                    <div className="hidden lg:contents [&>details]:order-last">
-                      {popOut}
-                      <span aria-hidden="true" className="w-px h-5 bg-base-300 mx-1" />
-                      {quality}
-                      {frameRate}
-                      {audioPicker}
-                      <div className="ml-auto">{autoplayToggle}</div>
-                    </div>
-                  </OutputSwitcher>
-                </div>
-              )}
-
-              {/* Desktop: the sources panel opens in place under the line rather
-                  than over the video, so what follows moves down instead of
-                  being covered. */}
-              {sourcesShown && (
-                <div id="watch-sources" className="hidden lg:block">{sourceControl}</div>
-              )}
-              {playing && current && (
-                <div className="hidden lg:block"><BrowserPerformance source={source} /></div>
-              )}
             </div>
 
-            {/* About the title: right under the controls, on every breakpoint.
-                Renders nothing without a TMDB key or a match. */}
-            <div className="order-last mt-5">
-              <TitleHeader meta={meta} navigate={navigate} similarOnPhoneOnly={side === 'similar'} />
-              {side === 'more' && videoLink && (
-                <div className="lg:hidden mt-4 rounded-box bg-base-200 p-3 flex flex-col gap-3">
-                  <ChannelVideos channel={videoLink.channel} channelLink={channelHref(videoLink.channel_url, sourceId)} videos={moreVideos} onOpen={openVideo} />
-                </div>
-              )}
-            </div>
+            {/* Desktop: about the title, under a hairline. Nothing without a TMDB match. */}
+            {about && (
+              <div className="hidden lg:block border-t border-base-300 pt-4 mt-1">
+                <TitleHeader meta={meta} navigate={navigate} />
+              </div>
+            )}
 
-            {/* Phone: everything the desktop shows alongside, one tab at a time. */}
-            <div className="lg:hidden">
-              <Segmented
-                tabs={tabs.map(id => ({ id, label: id[0].toUpperCase() + id.slice(1) }))}
-                tab={shownTab}
-                onTab={setTab}
-              />
-              <div className="mt-3">
+            {/* Phone: episodes, about and sources, one tab at a time. A title with
+                only its sources (a file with no TMDB match) shows them without tabs. */}
+            <div className="lg:hidden scroll-mt-24" ref={tabsBox}>
+              {tabs.length > 1 && (
+                <Segmented
+                  tabs={tabs.map(id => ({ id, label: id[0].toUpperCase() + id.slice(1) }))}
+                  tab={shownTab}
+                  onTab={setTab}
+                />
+              )}
+              {/* With a single tab (a file with no TMDB match) nothing shows until
+                  the version pill or a failure asks for the sources. */}
+              {(tabs.length > 1 || tab === 'sources') && <div className="mt-3">
                 {shownTab === 'episodes' && (
                   // Bounded to the space between the pinned player and the
                   // dock, so the list scrolls inside itself, opens on the episode
                   // playing, and keeps the download bar in reach.
-                  <div className="h-[calc(100dvh-6rem-var(--dock-clear)-(100vw-2rem)*9/16)] min-h-72 flex flex-col rounded-box bg-base-200 overflow-hidden">
+                  <div className="h-[calc(100dvh-8.75rem-var(--dock-clear)-(100vw-2rem)*9/16)] min-h-72 flex flex-col rounded-box bg-base-200 overflow-hidden">
                     <div className="flex-1 min-h-0">{renderList(false)}</div>
                     {downloadBar}
                   </div>
                 )}
-                {shownTab === 'sources' && sourceControl}
-                {shownTab === 'output' && (
-                  playing && current ? (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-wrap items-center gap-3">
-                        {quality}
-                        {frameRate}
-                        {audioPicker}
+                {shownTab === 'about' && (
+                  <div className="flex flex-col gap-4">
+                    <TitleHeader meta={meta} navigate={navigate} />
+                    {side === 'more' && videoLink && (
+                      <div className="rounded-box bg-base-200 p-3 flex flex-col gap-3">
+                        <ChannelVideos channel={videoLink.channel} channelLink={channelHref(videoLink.channel_url, sourceId)} videos={moreVideos} onOpen={openVideo} />
                       </div>
-                      {autoplayToggle}
-                      <BrowserPerformance source={source} />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-base-content/60">Start an episode to pick the quality and frame rate.</p>
-                  )
+                    )}
+                  </div>
                 )}
-              </div>
+                {shownTab === 'sources' && sourceControl}
+              </div>}
             </div>
+
+            <BottomSheet title="Playback" open={playbackSheet && !!(playing && current)} onClose={closePlaybackSheet}>
+              <div className="flex flex-col gap-4 [&_select]:max-w-[60vw]">
+                {playbackControls}
+                <SmoothnessReadout details={perfDetails} onDetails={() => setPerfDetails(d => !d)} />
+                {perfDetails && <BrowserPerformance source={source} />}
+              </div>
+            </BottomSheet>
           </div>
 
           {/* Desktop queue. Pinned, it is a column with the episode playing and what
@@ -1381,9 +1528,7 @@ export default function WatchView({
           {isSingle && side && (
             <div className="hidden lg:block">
             <aside className="flex flex-col gap-3 rounded-box bg-base-200 p-3 lg:fixed lg:top-24 lg:w-(--col-w) lg:max-h-[calc(100dvh-7.25rem)] overflow-y-auto">
-              {side === 'similar' ? (
-                <SimilarTitles items={similar} onOpen={title => navigate('search', { q: title })} />
-              ) : videoLink && (
+              {videoLink && (
                 <ChannelVideos channel={videoLink.channel} channelLink={channelHref(videoLink.channel_url, sourceId)} videos={moreVideos} onOpen={openVideo} />
               )}
             </aside>
