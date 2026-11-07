@@ -3,7 +3,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
 import { DEFAULT_HUE, sky } from './format'
 import { frameAt, getMode, titleWidth, MODE_MS, ModeMotion, pull, setMode, useMode } from './mode'
-import { closePlayer, closeThen, useTvSound } from './player'
+import { closePlayer, closeThen, dragPlayer, isLayerOpen, playerBar, presence, reducedMotion, releasePlayer, setLayerKick, settled, useLayerOpen, useTvSound } from './player'
+import { speed } from './presence'
 import PlayerSearch from './PlayerSearch'
 import Crate, { LibraryList } from './Crate'
 import { askFits } from './gaps'
@@ -41,6 +42,20 @@ function dim(el: HTMLElement | null, o: number) {
 }
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x))
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+
+/** Where the layer grows from, measured once per motion (SPEC-music-player-motion §3). */
+interface Flight {
+  gen: number
+  /** The bar; null when there is none to land in, and the layer fades instead. */
+  bar: DOMRect | null
+  /** The title's box at presence 0: the big title sits on the bar's title at the bar's font size. */
+  title: { x: number; y: number; s: number } | null
+  /** The transport's play button and the bar's, and where it sits inside the transport. */
+  play: { el: HTMLElement; from: DOMRect; x: number; y: number; w: number } | null
+  /** Inline styles are set and need a reset at rest. */
+  on: boolean
+}
 
 /** The default view's crate: closed, peeking (a pointer at the bottom edge or on Add to queue), open (the pointer on it), or pinned (a click, a key, a tap). */
 type Reveal = 'off' | 'peek' | 'open' | 'pinned'
@@ -60,11 +75,14 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const item = q.items[q.current]
   const track = item && info(item.track_id)
   const analysis = useAnalysis(item?.track_id)
-  const touch = useRef<number | null>(null)
+  // A touch on the stage: undecided for its first 8 px, then a close drag or left alone (a scrub, the queue sheet).
+  const touch = useRef<{ x: number; y: number; mode: 'wait' | 'close' | 'off'; top: number; samples: [number, number][] } | null>(null)
   const [reveal, setReveal] = useState<Reveal>('off')
   const adding = reveal !== 'off'
   const look = useLook()
   useEffect(() => { Object.assign(tlook, look.tl) }, [look.tl])
+  // Where the layer is going: false while it shrinks back into the bar or follows a drag up from it.
+  const open = useLayerOpen() || tv
 
   const [aim, setAim] = useState<number | null>(null)
   // Desktop, expanded: hovering the queue peeks the library column open; the Library button (or A) locks it (`adding`).
@@ -129,6 +147,8 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const card = useRef<HTMLDivElement>(null)
   const raf = useRef(0)
   const rail = useRef<HTMLElement | null>(null)
+  const scrim = useRef<HTMLDivElement>(null)
+  const flight = useRef<Flight>({ gen: -1, bar: null, title: null, play: null, on: false })
 
   // Every part is placed from the one progress value, on the same frame.
   const apply = useCallback((t: number) => {
@@ -193,24 +213,120 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     const short = isShort(W, H)
     fade(topRow.current, short ? 1 : 1 - t, short ? 0 : -14 * t)
     fade(card.current, short ? 0 : t, -20 * (1 - t))
+    const p = tv ? 1 : presence.value(performance.now())
     const rl = rail.current
-    if (rl) {
+    // While the card grows or shrinks over the immersive view, the rail is still the app's, under the scrim.
+    if (rl && p < 1 && t < 1) {
+      Object.assign(rl.style, { zIndex: '', opacity: '', transform: '', visibility: '' })
+      rl.inert = !isLayerOpen()
+    } else if (rl) {
+      rl.style.zIndex = '80'
       rl.style.opacity = t < 1 ? String(t) : ''
       rl.style.transform = t < 1 ? `translateX(${-24 * (1 - t)}px)` : ''
       rl.style.visibility = t < 0.01 ? 'hidden' : ''
       rl.inert = t < 0.5
     }
-  }, [])
+
+    // The presence (SPEC-music-player-motion §3): the card grows out of the bar, the title and the play
+    // button fly from the bar's to their places, and the rest fades in inside the card.
+    const fl = flight.current
+    const rs = r.style
+    const sc = scrim.current
+    if (sc) {
+      sc.style.opacity = String(0.55 * p)
+      sc.style.visibility = p > 0 && p < 1 ? 'visible' : 'hidden'
+    }
+    if (p >= 1) {
+      if (!fl.on) return
+      fl.on = false
+      Object.assign(rs, { clipPath: '', backgroundColor: '', opacity: '', transform: '' })
+      for (const ch of r.children) (ch as HTMLElement).style.filter = ''
+      if (fl.play) fl.play.el.style.transform = ''
+      return
+    }
+    fl.on = true
+    if (fl.gen !== presence.gen) {
+      fl.gen = presence.gen
+      const bar = playerBar()
+      const br = bar?.getBoundingClientRect()
+      fl.bar = br && br.width > 0 ? br : null
+      fl.title = null
+      fl.play = null
+      const bt = bar?.querySelector('b')
+      const h2 = titleEl.current?.querySelector('h2')
+      if (fl.bar && bt && h2) {
+        const tr = bt.getBoundingClientRect()
+        const s = parseFloat(getComputedStyle(bt).fontSize) / parseFloat(getComputedStyle(h2).fontSize)
+        fl.title = { x: tr.left - h2.offsetLeft * s, y: tr.top - h2.offsetTop * s, s }
+      }
+      const from = bar?.querySelector<HTMLElement>('button[aria-label="Pause"], button[aria-label="Play"]')
+      const el = [...transportEl.current!.querySelectorAll<HTMLElement>('[data-play]')].find(e => e.offsetParent !== null)
+      if (fl.bar && from && el) {
+        el.style.transform = ''
+        const a = el.getBoundingClientRect()
+        const tb = transportEl.current!.getBoundingClientRect()
+        fl.play = { el, from: from.getBoundingClientRect(), x: a.left - tb.left, y: a.top - tb.top, w: a.width }
+      }
+    }
+    // No bar to land in, or reduced motion: a fade (with a 4 % step back when there is no bar).
+    const plain = presence.fade || !fl.bar
+    if (plain || !fl.bar) {
+      Object.assign(rs, { clipPath: '', opacity: String(p), transform: presence.fade ? '' : `scale(${0.96 + 0.04 * p})` })
+    } else {
+      const b = fl.bar
+      const k = 1 - p
+      Object.assign(rs, { opacity: '', transform: '', clipPath: `inset(${b.top * k}px ${(W - b.right) * k}px ${(H - b.bottom) * k}px ${b.left * k}px round ${16 * k}px)` })
+    }
+    // The bar shows through the card until the sky is up; the flying parts cross-fade over the middle.
+    const sky = plain ? 1 : clamp01(p / 0.35)
+    // The page's own ground rises with the sky: the expanded view shows it around the stage, so it must not wait for the end.
+    rs.backgroundColor = sky < 1 ? `color-mix(in oklab, var(--color-base-100) ${sky * 100}%, transparent)` : ''
+    const late = plain ? 1 : clamp01((p - 0.3) / 0.4)
+    const rest = plain ? 1 : clamp01((p - 0.15) / 0.5)
+    for (const ch of r.children) {
+      const o = ch === skyEl.current ? sky : ch === titleEl.current || ch === transportEl.current ? late : rest
+      ;(ch as HTMLElement).style.filter = o < 1 ? `opacity(${o})` : ''
+    }
+    if (plain) return
+    if (fl.title) {
+      const s = lerp(fl.title.s, title.scale, p)
+      te.transform = `translate(${lerp(fl.title.x, title.x, p)}px, ${lerp(fl.title.y, title.y, p)}px) scale(${s})`
+    }
+    if (fl.play) {
+      const { el, from } = fl.play
+      const fx = transport.x + fl.play.x
+      const fy = transport.y + fl.play.y
+      el.style.transformOrigin = '0 0'
+      el.style.transform = `translate(${lerp(from.left, fx, p) - fx}px, ${lerp(from.top, fy, p) - fy}px) scale(${lerp(from.width / fl.play.w, 1, p)})`
+    }
+  }, [tv])
 
   const kick = useCallback(() => {
     if (raf.current) return
     const step = () => {
       const now = performance.now()
       apply(motion.current.value(now))
-      raf.current = motion.current.moving(now) || lib.current.moving(now) || rise.current.moving(now) ? requestAnimationFrame(step) : 0
+      const moving = motion.current.moving(now) || lib.current.moving(now) || rise.current.moving(now) || (!tv && presence.moving(now))
+      raf.current = moving ? requestAnimationFrame(step) : 0
+      // At rest: a closed layer leaves the page, an open one covers the bar.
+      if (!moving && !tv) settled(presence.value(now))
     }
     step()
-  }, [apply])
+  }, [apply, tv])
+  useEffect(() => {
+    if (tv) return
+    setLayerKick(kick)
+    return () => setLayerKick(() => {})
+  }, [tv, kick])
+  // A layer opened by a tap starts growing on its first frame, so mounting the stage does not eat the motion.
+  useEffect(() => {
+    if (tv || !isLayerOpen() || presence.target() !== 0 || presence.holding()) return
+    const id = requestAnimationFrame(() => {
+      presence.go(1, performance.now(), false, reducedMotion())
+      kick()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [tv, kick])
 
   useLayoutEffect(() => {
     apply(motion.current.value(performance.now()))
@@ -385,12 +501,13 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
 
   // Desktops: drag up anywhere to open the expanded view, drag the stage down to come back.
   // The parts follow the pointer; a release past 30% of the way switches.
+  // From the immersive view a drag down closes the player: the card shrinks with the pointer (SPEC-music-player-motion §4).
   useEffect(() => {
     if (tv) return
     const el = root.current!
     const m = motion.current
     const SPAN = 240
-    let p: { x: number; y: number; from: number; on: boolean; t: number } | null = null
+    let p: { x: number; y: number; from: number; on: boolean; t: number; close: boolean; top: number; samples: [number, number][] } | null = null
     const down = (e: PointerEvent) => {
       // shortcut: mouse and pen only, as a touch swipe down already closes the layer; give touch screens their own gesture if wanted.
       if (isPhone(innerWidth) || e.pointerType === 'touch' || e.button !== 0 || m.moving(performance.now())) return
@@ -400,7 +517,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
         const { e: s } = rects(el.clientWidth, el.clientHeight)
         if (e.clientX < s.x || e.clientX > s.x + s.w || e.clientY < s.y || e.clientY > s.y + s.h) return
       }
-      p = { x: e.clientX, y: e.clientY, from, on: false, t: from }
+      p = { x: e.clientX, y: e.clientY, from, on: false, t: from, close: false, top: 0, samples: [] }
     }
     const move = (e: PointerEvent) => {
       if (!p) return
@@ -413,16 +530,25 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
         p.on = true
         el.style.userSelect = 'none'
         getSelection()?.removeAllRanges()
+        p.close = p.from === 0 && e.clientY > p.y
+        p.top = playerBar()?.getBoundingClientRect().top ?? innerHeight * 0.85
+      }
+      if (p.close) {
+        // The card's top edge stays under the pointer: top = barTop × (1 − presence).
+        p.samples.push([e.timeStamp, e.clientY])
+        dragPlayer(1 - (e.clientY - p.y) / p.top)
+        return
       }
       p.t = Math.min(1, Math.max(0, p.from + (p.y - e.clientY) / SPAN))
       m.hold(p.t)
       kick()
     }
-    const up = () => {
+    const up = (e: PointerEvent) => {
       const d = p
       p = null
       if (!d?.on) return
       el.style.userSelect = ''
+      if (d.close) { releasePlayer(speed(d.samples, e.timeStamp), e.clientY - d.y); return }
       if (Math.abs(d.t - d.from) > 0.3) setMode(d.from ? 'default' : 'expanded')
       else { m.go(d.from, performance.now()); kick() }
     }
@@ -439,13 +565,13 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   }, [tv, kick])
 
   // Back closes the player instead of navigating the page under it; on a phone, the expanded view first goes back down to the default one.
-  useModalBack(!tv, closePlayer)
-  useModalBack(!tv && expanded && isPhone(vw.W) && !isShort(vw.W, vw.H), toDefault)
+  useModalBack(!tv && open, closePlayer)
+  useModalBack(!tv && open && expanded && isPhone(vw.W) && !isShort(vw.W, vw.H), toDefault)
 
   // A modal: focus moves in, and on close focus goes to the player bar, which takes the layer's place.
   useEffect(() => {
     const el = root.current
-    if (tv || !el) return
+    if (tv || !open || !el) return
     // After the first frame has placed the parts: the close button shown depends on the mode.
     const f = requestAnimationFrame(() => {
       const close = [...el.querySelectorAll<HTMLElement>('[aria-label="Close the player"]')].find(b => b.checkVisibility({ visibilityProperty: true }))
@@ -453,16 +579,16 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     })
     return () => {
       cancelAnimationFrame(f)
-      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="Open the player"]')?.focus({ preventScroll: true }))
+      requestAnimationFrame(() => playerBar()?.focus({ preventScroll: true }))
     }
-  }, [tv])
+  }, [tv, open])
 
   // The app behind is out of reach, except the desktop rail in the expanded view:
   // it shows beside the stage, and a pick there closes the player onto the new page.
   const withRail = expanded && !isPhone(innerWidth)
   useEffect(() => {
     const el = root.current
-    if (tv || !el?.parentElement) return
+    if (tv || !open || !el?.parentElement) return
     const rail = withRail ? document.querySelector<HTMLElement>('[data-rail]') : null
     const shut: HTMLElement[] = []
     const visit = (parent: Element) => {
@@ -487,7 +613,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       shut.forEach(c => { c.inert = false })
       rail?.removeEventListener('click', pick, true)
     }
-  }, [tv, withRail])
+  }, [tv, open, withRail])
 
   // On a desktop the rail rides above the player and moves with the same progress as every part
   // (see `apply`, so a drag moves it too): gone in the default view, beside the stage when expanded.
@@ -505,7 +631,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   }, [tv, apply, progress])
 
   useEffect(() => {
-    if (tv) return
+    if (tv || !open) return
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')
       if (e.key === 'Escape') {
@@ -521,24 +647,51 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tv, adding, closeAdding, toggleAdding])
+  }, [tv, open, adding, closeAdding, toggleAdding])
 
   const closeIcon = <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
 
+  const touchEnd = (y: number | null, at = 0) => {
+    const t = touch.current
+    touch.current = null
+    if (!t) return
+    if (t.mode === 'close') { releasePlayer(y === null ? 0 : speed(t.samples, at), y === null ? 0 : y - t.y); return }
+    // One height at a time: from the expanded view a swipe down goes back to the default one.
+    if (y !== null && getMode() === 'expanded' && !scrubbing() && y - t.y > 90) toDefault()
+  }
+
   return (
+    <>
+    {!tv && <div ref={scrim} aria-hidden="true" className="fixed inset-0 z-69 bg-black pointer-events-none invisible" />}
     <div
       ref={root}
       role="dialog"
       aria-label="Music player"
       aria-modal={!tv || undefined}
-      className={`music-layer fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content select-none ${tv ? 'pointer-events-none cursor-none' : ''}`}
-      // Swipe down closes it on a phone, except from inside the queue (which scrolls).
-      onTouchStart={e => { touch.current = (e.target as HTMLElement).closest('[data-queue], [data-addp]') ? null : e.touches[0].clientY }}
-      onTouchEnd={e => {
-        // One height at a time: from the expanded view a swipe down goes back to the default one.
-        if (touch.current !== null && !scrubbing() && e.changedTouches[0].clientY - touch.current > 90) (getMode() === 'expanded' ? toDefault() : closePlayer())
-        touch.current = null
+      className={`music-layer fixed inset-0 z-70 overflow-hidden bg-base-100 text-base-content select-none ${tv ? 'pointer-events-none cursor-none' : open ? '' : 'pointer-events-none'}`}
+      // Dragging the stage down shrinks it back into the bar under the thumb, except from inside the queue (which scrolls)
+      // or the crate; a sideways drag is a scrub (SPEC-music-player-motion §4).
+      onTouchStart={e => {
+        const c = e.touches[0]
+        touch.current = (e.target as HTMLElement).closest('[data-queue], [data-addp]') ? null : { x: c.clientX, y: c.clientY, mode: 'wait', top: 0, samples: [] }
       }}
+      onTouchMove={e => {
+        const t = touch.current
+        if (!t || t.mode === 'off' || getMode() === 'expanded') return
+        const c = e.touches[0]
+        const dx = c.clientX - t.x
+        const dy = c.clientY - t.y
+        if (t.mode === 'wait') {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return
+          if (scrubbing() || Math.abs(dx) >= Math.abs(dy) || dy < 0) { t.mode = 'off'; return }
+          t.mode = 'close'
+          t.top = playerBar()?.getBoundingClientRect().top ?? innerHeight * 0.85
+        }
+        t.samples.push([e.timeStamp, c.clientY])
+        dragPlayer(1 - dy / t.top)
+      }}
+      onTouchEnd={e => touchEnd(e.changedTouches[0].clientY, e.timeStamp)}
+      onTouchCancel={() => touchEnd(null)}
     >
       {/* The sky and the light, clipped to the stage when expanded. */}
       <div ref={skyEl} aria-hidden="true" className="absolute inset-0 -z-30" style={{ background: sky(analysis?.hue ?? DEFAULT_HUE) }}>
@@ -606,5 +759,6 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       {crateMounted && (adding || crateHeight(vw.W, vw.H) > 0) && !tv && !expanded && <Crate q={q} aim={aimObj} aimTitle={aimTitle} onClose={closeAdding} />}
       {!tv && <ToastBar />}
     </div>
+    </>
   )
 }

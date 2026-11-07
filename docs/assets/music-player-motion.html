@@ -1,0 +1,218 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Music player: gestures and navigation</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font: 14px/1.45 var(--font-sans, system-ui); }
+  .wrap { display: grid; gap: 16px; }
+  .muted { color: var(--muted-foreground, #999); }
+  .box { padding: 16px; border-radius: var(--radius, 12px); background: var(--card, #111a); border: 1px solid var(--border, #333); }
+  h3 { margin: 0 0 8px; font-size: 15px; }
+  ol, ul { margin: 0; padding-left: 20px; } li { margin: 2px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  .col { display: grid; gap: 8px; }
+  .frame { position: relative; overflow: hidden; border-radius: 10px; background: #05070c; box-shadow: 0 0 0 1px #ffffff14; touch-action: none; user-select: none; }
+  .dev { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; }
+  .dev > * { position: absolute; left: 0; top: 0; }
+  .app, .lay { width: 100%; height: 100%; background-size: 100% 100%; transform-origin: 50% 0; }
+  .layw { width: 100%; height: 100%; background: #060a12; }
+  .spr { transform-origin: 0 0; background-repeat: no-repeat; pointer-events: none; }
+  .hint { position: absolute; pointer-events: none; border: 2px dashed #38bdf8; border-radius: 16px; animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25 } }
+  .ctl { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 9px; border: 1px solid var(--border, #333); background: var(--secondary, #222); color: var(--foreground, #eee); cursor: pointer; }
+  .read { font: 12px var(--font-mono, monospace); min-height: 18px; }
+  label { font-size: 13px; display: flex; gap: 6px; align-items: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-top: 1px solid var(--border, #333); }
+  th { color: var(--muted-foreground, #999); font-weight: 600; border-top: 0; }
+  td:first-child { white-space: nowrap; }
+  .new { color: var(--success, #3c8); font-weight: 600; font-size: 11px; margin-left: 4px; }
+  code { font-size: 12px; }
+</style></head>
+<body><div class="wrap">
+
+<div class="box">
+  <h3>Stories</h3>
+  <ol>
+    <li>Phone, couch, browsing while music plays: grab the bar and pull the player up; it follows my thumb, and I can change my mind halfway.</li>
+    <li>Phone: I'm done, so I pull the stage down and it shrinks back into the bar in the dock, or I press Back.</li>
+    <li>Desktop: click the bar or ⌃ to go into the stage; grab the immersive stage and drag it down, or ⌄, Esc, Back, to come out the same way.</li>
+    <li>From inside the player I jump somewhere else (rail, bell, "See all", an artist): the player shrinks into the bar <i>while</i> the new page appears behind it.</li>
+    <li>A quick flick is enough; a short accidental drag springs back.</li>
+    <li>Reduced motion: the same triggers, with a short fade instead of the growing card.</li>
+  </ol>
+</div>
+
+<div class="row">
+  <div class="col">
+    <div class="frame" id="phone"></div>
+    <div class="ctl"><button data-act="back" data-k="phone">◁ Back</button><button data-act="toggle" data-k="phone">Tap bar / ⌄</button></div>
+    <div class="read muted" id="r-phone">Drag the bar up · drag the stage down</div>
+  </div>
+  <div class="col">
+    <div class="frame" id="desk"></div>
+    <div class="ctl"><button data-act="toggle" data-k="desk">Click bar / ⌃ / ⌄</button><button data-act="back" data-k="desk">Esc</button><button data-act="back" data-k="desk">◁ Back</button><button data-act="nav" data-k="desk">Rail → Home</button></div>
+    <div class="read muted" id="r-desk">Click the bar to open · grab the stage and drag down to close</div>
+    <label><input type="checkbox" id="rm"> Reduced motion</label>
+    <label><input type="checkbox" id="slow"> Slow ×4</label>
+  </div>
+</div>
+
+<div class="box">
+  <h3>Gesture and navigation map</h3>
+  <table>
+    <tr><th>Trigger</th><th>Phone</th><th>Desktop</th></tr>
+    <tr><td><b>Open</b></td><td>Tap the bar · <b>drag the bar up, the card follows the thumb</b><span class="new">NEW</span></td><td>Click the bar · ⌃ · Enter or Space on the focused bar</td></tr>
+    <tr><td>Release rule</td><td colspan="2">Past 30% of the way, or a flick faster than 0.5 px/ms, finishes; otherwise it springs back. Same 30% rule as the immersive ↔ expanded drag (#307).<span class="new">NEW</span></td></tr>
+    <tr><td><b>Close</b></td><td>⌄ · Back · <b>drag the stage down, the card shrinks with the thumb</b><span class="new">NEW</span> · from expanded, a swipe goes one height down to default first (as today)</td><td><b>Immersive: grab the stage and drag down, the card shrinks with the pointer</b><span class="new">NEW</span> · ⌄ · Esc (closes the crate first, as today) · Back. In expanded, a drag down goes to immersive first (as today); a second drag closes</td></tr>
+    <tr><td>Leave to a page</td><td colspan="2">Rail, bell, "See all", artist or album link: the page changes behind the player in the same frame, then the card shrinks into the bar on top of the new page. The bar's history entry is popped first, as <code>closeThen</code> does today.<span class="new">CHANGED</span></td></tr>
+    <tr><td>Where it lands</td><td colspan="2">The card opens into the last mode (default or expanded). In expanded on desktop the rail never moves: the card grows into the space to its right.</td></tr>
+    <tr><td>No bar to land in</td><td colspan="2">If Stop or the end of the queue leaves no bar, the card fades and steps back 4% instead. When the casting bar holds the phone strip, the card shrinks into that bar.</td></tr>
+    <tr><td>Interrupt</td><td colspan="2">A new trigger mid-motion turns it around from where it is. Grabbing the card mid-motion catches it under the thumb.</td></tr>
+    <tr><td>Off</td><td colspan="2">Phone: drags that start on the timeline (scrub), the queue (its own pull) or a button. Desktop: buttons, the queue and inputs; a sideways drag is still a scrub, a drag up is still immersive → expanded. The TV station never animates.</td></tr>
+  </table>
+</div>
+
+</div>
+<script>
+const IMG = { desk: { app: 'music-player-motion/desk-app.jpg', lay: 'music-player-motion/desk-layer.jpg' }, phone: { app: 'music-player-motion/phone-app.jpg', lay: 'music-player-motion/phone-layer.jpg' } }
+const G = {
+  desk: { W: 1440, H: 900, s: 0.32, bar: [432, 820, 576, 64], bPlay: [800, 832, 40, 40], lPlay: [283, 397, 64, 64], bTitle: [496, 834, 240, 18], lTitle: [136, 140, 740, 195], close: [32, 18, 40, 40], queue: [896, 72, 524, 430], ms: [380, 300] },
+  phone: { W: 390, H: 844, s: 0.5, bar: [12, 702, 366, 64], bPlay: [222, 714, 40, 40], lPlay: [132, 533, 64, 64], bTitle: [74, 714, 136, 22], lTitle: [22, 418, 290, 72], close: [14, 14, 40, 40], ms: [380, 300] },
+}
+const cl = x => Math.min(1, Math.max(0, x)), L = (a, b, t) => a + (b - a) * t, LR = (a, b, t) => a.map((v, i) => L(v, b[i], t))
+function bez(p1x, p1y, p2x, p2y) {
+  const cx = 3 * p1x, bx = 3 * (p2x - p1x) - cx, ax = 1 - cx - bx, cy = 3 * p1y, by = 3 * (p2y - p1y) - cy, ay = 1 - cy - by
+  const X = t => ((ax * t + bx) * t + cx) * t, Y = t => ((ay * t + by) * t + cy) * t
+  return x => { let lo = 0, hi = 1; for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; X(m) < x ? lo = m : hi = m } return Y((lo + hi) / 2) }
+}
+const std = bez(0.4, 0, 0.2, 1), dec = bez(0, 0, 0.2, 1)
+const rm = document.getElementById('rm'), slow = document.getElementById('slow')
+const S = {}
+
+function sprite(dev, img, crop, g) {
+  const d = document.createElement('div'); d.className = 'spr'
+  Object.assign(d.style, { width: crop[2] + 'px', height: crop[3] + 'px', backgroundImage: `url(${img})`, backgroundSize: `${g.W}px ${g.H}px`, backgroundPosition: `${-crop[0]}px ${-crop[1]}px` })
+  d.crop = crop; dev.appendChild(d); return d
+}
+const place = (el, r, o) => { el.style.transform = `translate(${r[0]}px,${r[1]}px) scale(${r[2] / el.crop[2]},${r[3] / el.crop[3]})`; el.style.opacity = o }
+
+for (const k of ['phone', 'desk']) {
+  const g = G[k], fr = document.getElementById(k)
+  fr.style.width = g.W * g.s + 'px'; fr.style.height = g.H * g.s + 'px'
+  const dev = document.createElement('div'); dev.className = 'dev'
+  Object.assign(dev.style, { width: g.W + 'px', height: g.H + 'px', transform: `scale(${g.s})` }); fr.appendChild(dev)
+  const app = document.createElement('div'); app.className = 'app'; app.style.backgroundImage = `url(${IMG[k].app})`; dev.appendChild(app)
+  const pageLabel = document.createElement('div')
+  Object.assign(pageLabel.style, { inset: '0', display: 'none', placeItems: 'center', background: '#0a0f1a', color: '#cbd5e1', font: '600 64px system-ui' }); pageLabel.textContent = 'Home'; dev.appendChild(pageLabel)
+  const layw = document.createElement('div'); layw.className = 'layw'; dev.appendChild(layw)
+  const lay = document.createElement('div'); lay.className = 'lay'; lay.style.backgroundImage = `url(${IMG[k].lay})`; layw.appendChild(lay)
+  const holes = [g.lPlay, g.lTitle].map(r => { const h = document.createElement('div'); Object.assign(h.style, { left: r[0] - 6 + 'px', top: r[1] - 6 + 'px', width: r[2] + 12 + 'px', height: r[3] + 12 + 'px', background: '#060a12', borderRadius: '12px' }); layw.appendChild(h); return h })
+  const s = { ghost: sprite(dev, IMG[k].app, g.bar, g), playB: sprite(dev, IMG[k].app, g.bPlay, g), playL: sprite(dev, IMG[k].lay, g.lPlay, g), titB: sprite(dev, IMG[k].app, g.bTitle, g), titL: sprite(dev, IMG[k].lay, g.lTitle, g) }
+  const hint = document.createElement('div'); hint.className = 'hint'; dev.appendChild(hint)
+  S[k] = { k, g, fr, app, layw, lay, holes, s, hint, pageLabel, t: 0, run: 0 }
+  draw(S[k])
+}
+
+function draw(st) {
+  const { g, app, layw, lay, s, holes, hint } = st, t = st.t, full = [0, 0, g.W, g.H]
+  const mid = t > 0.001 && t < 0.999 ? 1 : 0, x = cl((t - 0.3) / 0.4)
+  if (st.fade) { // reduced motion: a plain fade, no card
+    app.style.transform = ''; app.style.filter = `brightness(${1 - 0.55 * t})`
+    layw.style.clipPath = ''; layw.style.opacity = t; lay.style.opacity = 1; lay.style.transform = ''
+    holes.forEach(h => h.style.opacity = 0); for (const e of Object.values(s)) e.style.opacity = 0
+  } else {
+    const r = LR(g.bar, full, t)
+    app.style.transform = `scale(${1 - 0.02 * t})`; app.style.filter = `brightness(${1 - 0.55 * t})`
+    layw.style.opacity = 1
+    layw.style.clipPath = `inset(${r[1]}px ${g.W - r[0] - r[2]}px ${g.H - r[1] - r[3]}px ${r[0]}px round ${16 * (1 - t)}px)`
+    lay.style.opacity = cl((t - 0.15) / 0.5); lay.style.transform = `translateY(${24 * (1 - t)}px)`
+    holes.forEach(h => h.style.opacity = mid)
+    place(s.ghost, g.bar, 1 - cl(t / 0.3))
+    const pr = LR(g.bPlay, g.lPlay, t), tr = LR(g.bTitle, g.lTitle, t)
+    place(s.playB, pr, mid * (1 - x)); place(s.playL, pr, mid * x); place(s.titB, tr, mid * (1 - x)); place(s.titL, tr, mid * x)
+  }
+  const h = t < 0.5 ? g.bar : g.close
+  Object.assign(hint.style, { left: h[0] - 4 + 'px', top: h[1] - 4 + 'px', width: h[2] + 8 + 'px', height: h[3] + 8 + 'px', opacity: mid ? 0 : '' , display: mid ? 'none' : '' })
+}
+
+function go(st, to, then) {
+  cancelAnimationFrame(st.run)
+  st.fade = rm.checked
+  const from = st.t, base = rm.checked ? 150 : G[st.k].ms[to > from ? 0 : 1]
+  const d = Math.max(1, base * Math.abs(to - from) * (slow.checked ? 4 : 1)), curve = st.released ? dec : std, t0 = performance.now()
+  st.released = false
+  const step = now => { const p = cl((now - t0) / d); st.t = L(from, to, curve(p)); draw(st); if (p < 1) st.run = requestAnimationFrame(step); else { st.fade = false; then && then() } }
+  st.run = requestAnimationFrame(step)
+}
+const say = (k, m) => document.getElementById('r-' + k).textContent = m
+
+document.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+  const st = S[b.dataset.k], act = b.dataset.act
+  if (act === 'toggle') { go(st, st.t > 0.5 ? 0 : 1); say(st.k, st.t > 0.5 ? 'Close: the card shrinks into the bar' : 'Open: the bar grows into the stage') }
+  if (act === 'back' && st.t > 0.5) { go(st, 0); say(st.k, 'Back / Esc: same path backwards') }
+  if (act === 'nav' && st.t > 0.5) {
+    st.pageLabel.style.display = 'grid'; st.app.style.visibility = 'hidden' // the page changes behind, same frame
+    say(st.k, 'Rail → Home: Home appears behind, the card shrinks onto it')
+    go(st, 0, () => setTimeout(() => { st.pageLabel.style.display = 'none'; st.app.style.visibility = ''; say(st.k, 'Click the bar to open, ⌄ to close') }, 1200))
+  }
+})
+
+// Pointer: the phone drags the bar up and the stage down; desktop clicks the bar and drags the immersive stage down.
+for (const st of Object.values(S)) {
+  const { fr, g } = st
+  const pt = e => { const b = fr.getBoundingClientRect(); return [(e.clientX - b.left) / g.s, (e.clientY - b.top) / g.s] }
+  const inR = (p, r, pad = 0) => p[0] >= r[0] - pad && p[0] <= r[0] + r[2] + pad && p[1] >= r[1] - pad && p[1] <= r[1] + r[3] + pad
+  let drag = null
+  fr.addEventListener('pointerdown', e => {
+    const p = pt(e)
+    const cardTop = L(g.bar[1], 0, st.t)
+    if (st.k === 'desk') {
+      if (st.t < 0.5) { if (inR(p, g.bar)) { go(st, 1); say('desk', 'Open: the bar grows into the stage') } return }
+      if (inR(p, g.close, 8)) { go(st, 0); say('desk', 'Close: the card shrinks into the bar'); return }
+      if (inR(p, g.queue)) { say('desk', 'Starts on the queue: rows drag to reorder, not to close'); return }
+      // Immersive: grab anywhere else on the stage and drag down; the card's top stays under the pointer.
+      cancelAnimationFrame(st.run)
+      drag = { y0: p[1], t0: st.t, top0: cardTop, last: [[performance.now(), p[1]]], moved: false }
+      fr.setPointerCapture(e.pointerId)
+      return
+    }
+    if (st.t > 0.5 && inR(p, g.close, 8)) { go(st, 0); say('phone', '⌄: the card shrinks into the bar'); return }
+    if (st.t < 0.5 && !inR(p, g.bar, 6)) return
+    if (st.t > 0.5 && (p[1] > 330 && p[1] < 400)) { say('phone', 'Starts on the timeline: that drag scrubs, it does not close'); return }
+    cancelAnimationFrame(st.run) // catch the card mid-motion
+    drag = { y0: p[1], t0: st.t, top0: cardTop, last: [[performance.now(), p[1]]], moved: false }
+    fr.setPointerCapture(e.pointerId)
+  })
+  fr.addEventListener('pointermove', e => {
+    if (!drag) return
+    const p = pt(e)
+    if (Math.abs(p[1] - drag.y0) > 6) drag.moved = true
+    // The card's top edge sits under the thumb: top = bar.y × (1 − t).
+    let t = 1 - (drag.top0 + p[1] - drag.y0) / g.bar[1]
+    if (t > 1) t = 1 + (t - 1) * 0.15; if (t < 0) t = t * 0.15 // rubber band past the ends
+    st.t = t; draw(st)
+    drag.last.push([performance.now(), p[1]]); if (drag.last.length > 6) drag.last.shift()
+    if (st.k === 'desk' && t > 1) { say('desk', 'Drag up: switches to expanded (as today, #307)'); return }
+    say(st.k, `progress ${Math.round(cl(t) * 100)}% · release ${(drag.t0 > 0.5 ? cl(t) < 0.7 : cl(t) > 0.3) ? 'now finishes' : 'now springs back'}`)
+  })
+  const up = () => {
+    if (!drag) return
+    const d = drag; drag = null
+    if (!d.moved) { go(st, d.t0 > 0.5 ? d.t0 : 1); if (d.t0 < 0.5) say(st.k, 'Tap: the bar grows into the stage'); return }
+    // Speed over the last 100 ms only, so a drag that stops before release is not a flick.
+    const now = performance.now(), recent = d.last.filter(s => now - s[0] < 100)
+    const v = recent.length < 2 ? 0 : (recent.at(-1)[1] - recent[0][1]) / Math.max(1, recent.at(-1)[0] - recent[0][0]) // px/ms, + is down
+    const opening = d.t0 < 0.5
+    const flick = opening ? v < -0.5 : v > 0.5, back = opening ? v > 0.5 : v < -0.5
+    const pastHalfway = opening ? st.t > 0.3 : st.t < 0.7
+    const to = back ? d.t0 : flick || pastHalfway ? (opening ? 1 : 0) : d.t0
+    st.released = true
+    if (st.k === 'desk' && st.t > 1) { st.released = true; go(st, 1); return }
+    say(st.k, (flick ? 'Flick' : pastHalfway ? 'Past 30%' : 'Short drag') + (to === d.t0 ? ': springs back' : opening ? ': opens' : ': closes into the bar'))
+    go(st, to)
+  }
+  fr.addEventListener('pointerup', up); fr.addEventListener('pointercancel', up)
+}
+</script>
+</body></html>
