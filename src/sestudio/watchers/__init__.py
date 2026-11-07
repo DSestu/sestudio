@@ -15,7 +15,7 @@ The split across modules follows what each layer is allowed to touch:
 
 from sestudio.watchers.engine import TransientEmptyResult, poll_once
 from sestudio.watchers.models import (
-    DEFAULT_INTERVALS,
+    INTERVAL_SOURCES,
     WATCHER_KINDS,
     Hit,
     Watcher,
@@ -23,7 +23,7 @@ from sestudio.watchers.models import (
 )
 
 __all__ = [
-    "DEFAULT_INTERVALS",
+    "INTERVAL_SOURCES",
     "WATCHER_KINDS",
     "Hit",
     "TransientEmptyResult",

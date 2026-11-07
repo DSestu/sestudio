@@ -11,12 +11,13 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from sestudio import downloaded, interpolate, restart
+from sestudio import downloaded, interpolate, library, restart
 from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.config import DEFAULT_DOWNLOAD_ORDER, load_config, save_config, tmdb_key
 from sestudio.dlna import _local_ipv4s
 from sestudio.downloader import js_runtime
 from sestudio.logging_config import LOG_BUFFER
+from sestudio.watchers.models import interval_source
 
 router = APIRouter()
 
@@ -35,6 +36,9 @@ class SettingsBody(BaseModel):
     preferred_sites: list[str] | None = None
     collapse_seasons: bool | None = None
     watcher_max_concurrent: int | None = None
+    watcher_interval_twitch: int | None = Field(default=None, ge=300, le=604800)
+    watcher_interval_youtube: int | None = Field(default=None, ge=300, le=604800)
+    watcher_interval_other: int | None = Field(default=None, ge=300, le=604800)
     notifications_enabled: bool | None = None
     callmebot_phone: str | None = None
     callmebot_apikey: str | None = None
@@ -91,6 +95,17 @@ def _public(cfg, request: Request) -> dict[str, Any]:
     return data
 
 
+def _pull_forward(source: str, latest: int) -> None:
+    """Bring forward the next check of watchers following *source*'s default."""
+    for w in library.watcher_list():
+        if (
+            not w["interval_seconds"]
+            and w["next_poll_at"] > latest
+            and interval_source(w["kind"], w["config"]) == source
+        ):
+            library.watcher_update(w["id"], next_poll_at=latest)
+
+
 @router.get("/settings")
 async def get_settings(request: Request) -> dict[str, Any]:
     return _public(load_config(), request)
@@ -142,6 +157,12 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         # instead of at the next restart.
         cfg.watcher_max_concurrent = max(1, min(8, body.watcher_max_concurrent))
         request.app.state.job_store.set_lane_limit(cfg.watcher_max_concurrent)
+    for source in ("twitch", "youtube", "other"):
+        seconds = getattr(body, f"watcher_interval_{source}")
+        if seconds is not None:
+            setattr(cfg, f"watcher_interval_{source}", seconds)
+            # A shorter default applies now, not after the old interval runs out.
+            await asyncio.to_thread(_pull_forward, source, int(time.time()) + seconds)
     if body.notifications_enabled is not None:
         cfg.notifications_enabled = body.notifications_enabled
     if body.callmebot_phone is not None:
