@@ -262,6 +262,18 @@ CREATE TABLE IF NOT EXISTS music_mixes (
 """
 
 
+# Watchers left on their kind's old built-in interval now follow the source
+# default from Settings (interval_seconds = 0). A user-picked interval that
+# happens to equal the old default is indistinguishable and follows it too.
+_MIGRATION_8_SOURCE_INTERVALS = """
+UPDATE watchers SET interval_seconds = 0 WHERE
+    (kind IN ('series_episodes', 'title_lang', 'film_available') AND interval_seconds = 3600)
+    OR (kind = 'saved_search' AND interval_seconds = 21600)
+    OR (kind = 'tmdb_criteria' AND interval_seconds = 86400)
+    OR (kind = 'channel' AND interval_seconds = 300);
+"""
+
+
 # A migration is SQL (run as a script) or a function of the connection.
 _MIGRATIONS: tuple[str | Callable[[sqlite3.Connection], None], ...] = (
     _MIGRATION_1_WATCHERS,
@@ -271,6 +283,7 @@ _MIGRATIONS: tuple[str | Callable[[sqlite3.Connection], None], ...] = (
     _MIGRATION_5_MUSIC_FLOWS,
     _migration_6_flows_to_playlists,
     _MIGRATION_7_FLOWS_AND_MIXES,
+    _MIGRATION_8_SOURCE_INTERVALS,
 )
 
 _conn: sqlite3.Connection | None = None
@@ -643,7 +656,7 @@ def watcher_create(
     *,
     label: str = "",
     auto_download: bool = False,
-    interval_seconds: int = 3600,
+    interval_seconds: int = 0,
     next_poll_at: int = 0,
 ) -> dict[str, Any]:
     """Create a watcher. Callers must validate *kind* and *config* first."""

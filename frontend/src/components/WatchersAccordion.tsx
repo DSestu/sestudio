@@ -4,14 +4,8 @@ import { refreshNotifications, timeAgo } from '../notifications'
 import { refreshWatchers, removeWatcher, updateWatcher, useWatchers } from '../watchers'
 import CriteriaWatcherForm from './CriteriaWatcherForm'
 import WatcherKindBadge from './WatcherKindBadge'
-import { kindMeta } from '../watcherKinds'
-
-const INTERVALS = [
-  { value: 1800, label: 'Every 30 minutes' },
-  { value: 3600, label: 'Hourly' },
-  { value: 21600, label: 'Every 6 hours' },
-  { value: 86400, label: 'Daily' },
-]
+import { INTERVALS, intervalLabel, intervalSetting, kindMeta } from '../watcherKinds'
+import { useSettings } from '../useSettings'
 
 /**
  * What is being watched, above the timeline it feeds.
@@ -31,6 +25,7 @@ interface Props {
 
 export default function WatchersAccordion({ tmdbConfigured = false }: Props) {
   const watchers = useWatchers()
+  const [settings] = useSettings()
   const [busy, setBusy] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -171,9 +166,15 @@ export default function WatchersAccordion({ tmdbConfigured = false }: Props) {
                       )
                     }}
                   >
-                    {INTERVALS.some(i => i.value === watcher.interval_seconds) ? null : (
+                    <option value={0}>
+                      {(() => {
+                        const def = settings[intervalSetting(watcher.kind, watcher.config)]
+                        return def ? `Default (${intervalLabel(def).toLowerCase()})` : 'Default'
+                      })()}
+                    </option>
+                    {watcher.interval_seconds === 0 || INTERVALS.some(i => i.value === watcher.interval_seconds) ? null : (
                       <option value={watcher.interval_seconds}>
-                        Every {Math.round(watcher.interval_seconds / 60)} minutes
+                        {intervalLabel(watcher.interval_seconds)}
                       </option>
                     )}
                     {INTERVALS.map(i => (

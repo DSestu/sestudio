@@ -78,6 +78,7 @@ class ScriptedSite(ContentSite):
 def site(tmp_path, monkeypatch):
     monkeypatch.setenv("SESTUDIO_DB", str(tmp_path / "library.db"))
     monkeypatch.setenv("SESTUDIO_WATCHERS", "0")
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
     library.reset_connection()
     yield ScriptedSite()
     library.reset_connection()
@@ -101,6 +102,7 @@ def _make_watcher(kind: str = "title_lang", **config) -> Watcher:
             **config,
         },
         label="Naruto",
+        interval_seconds=3600,
     )
     return Watcher.from_row(row)
 
@@ -500,6 +502,29 @@ def test_interval_is_clamped_to_a_polite_minimum(client):
         },
     )
     assert created.json()["interval_seconds"] == 300
+
+
+def test_interval_defaults_follow_the_source_setting(client):
+    page = {"page_url": "https://scripted.example/n", "source": "scripted"}
+    created = client.post(
+        "/api/watchers", json={"kind": "title_lang", "config": page}
+    ).json()
+    assert created["interval_seconds"] == 0
+    watcher = Watcher.from_row(library.watcher_get(created["id"]))
+    assert poller._interval(watcher) == 86400
+
+    twitch = Watcher.from_row(
+        library.watcher_create(
+            "channel", {"channel_url": "https://twitch.tv/x", "source": "twitch"}
+        )
+    )
+    assert poller._interval(twitch) == 300
+
+    # Shortening a default pulls already-scheduled checks forward.
+    library.watcher_update(watcher.id, next_poll_at=2**40)
+    client.put("/api/settings", json={"watcher_interval_other": 3600})
+    assert poller._interval(watcher) == 3600
+    assert library.watcher_get(watcher.id)["next_poll_at"] < 2**40
 
 
 def test_manual_poll_baselines_then_reports(client, site):
