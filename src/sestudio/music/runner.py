@@ -163,6 +163,14 @@ def _read_modes(base: Path, files: list, workers: int) -> None:
                 _modes_done += 1
 
 
+def _genre_of(path: Path, raw: analysis.RawAnalysis) -> dict[str, Any]:
+    """*raw*'s profile with its genre decided from the analysis' own decode."""
+    tag = genres.normalise(downloaded.audio_genre(path))
+    return genres.decide(
+        raw.extra, str(path), raw.duration, tag, patches=raw.genre_patches
+    )
+
+
 def _decide_genres(base: Path, files: list, workers: int) -> None:
     """Pick each track's genre: its file tag, else the model, else the rules (SPEC-music §9)."""
     todo = store.pending_genre(genres.model_enabled())
@@ -243,7 +251,10 @@ def run_once(
             for future in as_completed(futures):
                 f = futures[future]
                 try:
-                    store.save(f.track_id, f.mtime, f.size, future.result())
+                    raw = future.result()
+                    if genres.ready():  # else the genre pass decodes its windows
+                        raw.extra = _genre_of(base / f.path, raw)
+                    store.save(f.track_id, f.mtime, f.size, raw)
                     ok += 1
                 except Exception:
                     logger.warning("Could not analyse %s", f.path, exc_info=True)

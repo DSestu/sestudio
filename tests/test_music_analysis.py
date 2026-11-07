@@ -357,3 +357,18 @@ def test_an_untagged_track_gets_the_models_genre_else_the_rules(
     got = store.get([tid])[tid]
     assert (got["genre"], got["genreSource"]) == ("Jungle", "model")
     assert tid not in store.pending_genre(True)
+
+
+def test_the_genre_windows_come_from_the_analysis_decode(tmp_path):
+    f = tmp_path / "long.flac"
+    _write_wav(f, sine(220, 30) + 0.3 * sine(55, 30))
+    a = analysis.analyse_file(str(f))
+    decoded = genres.audio_patches(str(f), a.duration)
+    assert a.genre_patches is not None
+    assert (
+        a.genre_patches.shape
+        == decoded.shape
+        == (genres.WINDOWS, genres.PATCH, genres.BANDS)
+    )
+    # The resampler starts afresh at each decoded window: log-mel values up to ~5 move by 0.01.
+    assert np.allclose(a.genre_patches, decoded, atol=0.05)

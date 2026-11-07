@@ -27,7 +27,7 @@ from typing import Any  # noqa: E402
 import numpy as np  # noqa: E402
 
 from sestudio.media import ffmpeg_binary  # noqa: E402
-from sestudio.music import keynet, modes, profile  # noqa: E402
+from sestudio.music import genres, keynet, modes, profile  # noqa: E402
 
 CENTERS = (60, 120, 250, 500, 1000, 2000, 4000)
 
@@ -51,6 +51,8 @@ class RawAnalysis:
     bpm_conf: float | None
     #: Key, genre, energy, structure (:mod:`sestudio.music.profile`).
     extra: dict[str, Any] = field(default_factory=dict)
+    #: The genre model's input (:func:`genres.audio_patches`), cut from the analysis' decode; not stored.
+    genre_patches: np.ndarray | None = None
 
 
 def decode(path: str, rate: int, af: str | None = None) -> np.ndarray:
@@ -115,13 +117,14 @@ def _bands(
     path: str,
     on_bands: Callable[[np.ndarray, float], None] | None = None,
     also: dict[int, Path] | None = None,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """8 band RMS envelopes at 10 Hz from one decode: each 0.1 s frame's power spectrum weighted by the filters' |H|².
 
     Was 8 ffmpeg decodes, one per filter (about 5x slower); same filters, so the values match within a few percent.
     Read from ffmpeg as it decodes, ``BAND_STEP`` seconds at a time, and *on_bands* gets the envelopes so far after
     each, with the duration in the file's header (0 without one). The same decode writes the mono signal at each
     rate of *also* (rate -> file, s16le): one decode instead of one per rate.
+    Returns the envelopes and the 16 kHz signal (the genre model's rate).
     """
     win = 1600
     # shortcut: the filters ran at the source rate (usually 44.1 kHz) before the resample; this assumes 44.1 kHz.
@@ -133,6 +136,7 @@ def _bands(
     cmd += ["-ac", "1", "-ar", "16000", "-f", "s16le", "-"]
     step = win * 10 * BAND_STEP * 2  # whole frames of s16le
     parts: list[np.ndarray] = []
+    chunks: list[bytes] = []
     duration: float | None = None
     with (
         tempfile.TemporaryDirectory() as tmp,
@@ -141,6 +145,7 @@ def _bands(
     ):
         assert proc.stdout is not None
         while chunk := proc.stdout.read(step):
+            chunks.append(chunk)
             parts.append(_band_frames(_s16(chunk), gain2, win))
             if on_bands:
                 if duration is None:
@@ -148,7 +153,8 @@ def _bands(
                         Path(tmp, "log").read_text("utf-8", "replace")
                     )
                 on_bands(np.concatenate(parts, axis=1), duration)
-    return np.concatenate(parts, axis=1) if parts else np.zeros((8, 0))
+    bands = np.concatenate(parts, axis=1) if parts else np.zeros((8, 0))
+    return bands, _s16(b"".join(chunks))
 
 
 def _header_duration(log: str) -> float:
@@ -242,7 +248,7 @@ def analyse_file(
     """
     with tempfile.TemporaryDirectory() as tmp:
         also = {4000: Path(tmp, "low"), TEMPO_SR: Path(tmp, "tempo")}
-        bands = _bands(path, on_bands, also)
+        bands, signal = _bands(path, on_bands, also)
         low, x = (
             _s16(f.read_bytes()) if f.exists() else _s16(b"") for f in also.values()
         )
@@ -262,7 +268,10 @@ def analyse_file(
     if on_notes and duration >= MIN_TEMPO_SECONDS:
         on_notes(modes.profile_steps(x, f=notes))
     extra = _profile(x, bands, loud, bpm, bar0, notes)
-    return RawAnalysis(duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra)
+    patches = genres.audio_patches(path, duration, signal)
+    return RawAnalysis(
+        duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra, patches
+    )
 
 
 def _profile(

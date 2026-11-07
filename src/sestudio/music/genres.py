@@ -263,22 +263,44 @@ def _window(path: str, start: float) -> np.ndarray:
     )
 
 
-def audio_patches(path: str, duration: float) -> np.ndarray:
-    """WINDOWS patches spread over the middle 80 % of the track (silent ones dropped)."""
+def audio_patches(
+    path: str, duration: float, signal: np.ndarray | None = None
+) -> np.ndarray:
+    """WINDOWS patches spread over the middle 80 % of the track (silent ones dropped).
+
+    Cut from *signal* (the whole track, mono at ``RATE``) when the caller has it:
+    a decode per window was most of the time the model took.
+    """
     span = PATCH_SAMPLES / RATE
     centres = duration * np.linspace(0.1, 0.9, WINDOWS)
     starts = np.clip(centres - span / 2, 0, max(duration - span, 0))
-    out = [(x, patches(x)) for x in (_window(path, float(s)) for s in starts) if len(x)]
+
+    def window(start: float) -> np.ndarray:
+        if signal is None:
+            return _window(path, start)
+        i = int(round(start, 2) * RATE)  # _window seeks to 1/100 s
+        return signal[i : i + int(2.2 * RATE)]
+
+    out = [(x, patches(x)) for x in (window(float(s)) for s in starts) if len(x)]
     loud = [p for x, p in out if float(np.sqrt(np.mean(x**2))) > _SILENT]
     return np.stack(loud or [p for _, p in out]) if out else np.zeros((0, PATCH, BANDS))
 
 
-def classify(path: str, duration: float) -> dict[str, Any] | None:
-    """The model's genre of an audio file, or None when the model is not usable."""
+def ready() -> bool:
+    """Whether the model is loaded: :func:`decide` will not fetch or build it."""
+    return _session is not None
+
+
+def classify(
+    path: str, duration: float, batch: np.ndarray | None = None
+) -> dict[str, Any] | None:
+    """The model's genre of an audio file (from its :func:`audio_patches` *batch*
+    when the caller has them), or None when the model is not usable."""
     sess = _get_session()
     if sess is None:
         return None
-    batch = audio_patches(path, duration)
+    if batch is None:
+        batch = audio_patches(path, duration)
     if not len(batch):
         return None
     name = sess.get_inputs()[0].name
@@ -382,6 +404,7 @@ def decide(
     duration: float,
     tag: str | None,
     tag_source: str = "tag",
+    patches: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """*extra* (a v2 profile, rules genre included) with its genre chosen: tag
     or source, else the model, else what the rules said. ``genreV`` marks the
@@ -398,7 +421,7 @@ def decide(
     found = None
     if model_enabled():
         try:
-            found = classify(path, duration)
+            found = classify(path, duration, patches)
         except Exception:
             logger.warning("Genre model failed on %s", path, exc_info=True)
         if found is None:
