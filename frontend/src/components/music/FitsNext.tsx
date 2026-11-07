@@ -94,6 +94,8 @@ interface Props {
   action: { label: string; onPick: (t: MusicTrack) => void }
   /** With it, a row can be dragged into the queue like a library row. */
   drag?: (t: MusicTrack) => DragSource
+  /** Or the props of a row dragged with HTML drag and drop (the playlist editor). */
+  dragRow?: (t: MusicTrack) => object
   /** Leave "between" and rank after the anchor again. */
   onAfter?: () => void
   onClose?: () => void
@@ -103,7 +105,7 @@ interface Props {
 }
 
 /** The ranked list of what plays well after a track (or between two), with why each fits. */
-export default function FitsNext({ anchor, then, where, library, exclude = [], action, drag, onAfter, onClose, footer, dense }: Props) {
+export default function FitsNext({ anchor, then, where, library, exclude = [], action, drag, dragRow, onAfter, onClose, footer, dense }: Props) {
   const theory = useTheory()
   const deep = theory.level === 'theory'
   const [settings] = useSettings()
@@ -149,8 +151,8 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
     }
     return rankByPull(fitOf(anchor), library.map(fitOf), look, PULL[pull]).filter(r => !skip.has(r.id) && once(r.id)).slice(0, SHOWN)
   }, [flowMode, anchor.id, library, v, exKey, look, pull]) // eslint-disable-line react-hooks/exhaustive-deps
-  const rowProps = (t: MusicTrack) => drag ? { 'data-row': '', onPointerDown: (e: PointerEvent) => armRowDrag(e, drag(t)) } : {}
-  const rowCls = `flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-white/5${drag ? ' select-none touch-pan-y cursor-grab' : ''}`
+  const rowProps = (t: MusicTrack) => drag ? { 'data-row': '', onPointerDown: (e: PointerEvent) => armRowDrag(e, drag(t)) } : dragRow ? dragRow(t) : {}
+  const rowCls = `flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-white/5${drag ? ' select-none touch-pan-y cursor-grab' : dragRow ? ' cursor-grab' : ''}`
   const moreOn = MORE.filter(m => f[m.key] !== filtersOf({}, settings.music_harmony_rule)[m.key]).length
 
   const empty = analysing && !known

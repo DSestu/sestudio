@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playlist edit mode — decide</title>
+<!--STYLE-->
+<style>
+html,body{height:100%;overflow:hidden;background:var(--b1)}
+.cols.two{grid-template-columns:260px minmax(0,1fr)}
+.cols.two.fits{grid-template-columns:260px minmax(0,1fr) 372px}
+.scroll{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--b4) transparent}
+[data-h]{cursor:default}
+.srow[data-drag],.frow[data-drag],.orow[data-drag],.prow[data-drag]{cursor:grab}
+.srow.nodrag{cursor:not-allowed}
+.srow.folder{cursor:pointer}
+.srow .x,.prow .x{opacity:0;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:oklch(92% .01 240 / .5)}
+.prow:hover .x{opacity:1}.prow .x:hover{background:var(--b4);color:var(--bad)}
+.srow:hover .drawer,.orow:hover .drawer{display:flex}
+.drawer{display:none}
+.srow .drawer{top:7px}
+.orow .drawer{top:50%;transform:translateY(-50%)}
+.prev{box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .3)}
+.tgt{box-shadow:inset 0 0 0 1px oklch(72% .16 230 / .6);background:oklch(72% .16 230 / .08)}
+.join[data-h]{cursor:pointer}
+.join.tgt{background:none;box-shadow:none}
+.join.tgt::before{background:oklch(72% .16 230 / .8);height:2px}
+.join.tgt .jc{box-shadow:0 0 0 1px oklch(72% .16 230 / .8),0 0 0 4px var(--b2)}
+.join.prevj::before{background:oklch(72% .16 230 / .45)}
+.jc.u{color:oklch(92% .01 240 / .5)}.jc.u i{background:oklch(92% .01 240 / .35)}
+.ghost{position:fixed;z-index:100;pointer-events:none;width:300px;height:48px;border-radius:10px;background:var(--b4);box-shadow:0 14px 30px -6px #000c,0 0 0 1px oklch(72% .16 230 / .6);display:flex;align-items:center;gap:10px;padding:0 10px;transform:rotate(-1.5deg)}
+.ghost.no{box-shadow:0 14px 30px -6px #000c,0 0 0 1px oklch(68% .19 25 / .7)}
+.ghost .t b{font-size:13px;font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ghost .t small{font-size:11px;color:oklch(92% .01 240 / .55)}
+.ins{animation:open .16s var(--ease)}
+@keyframes open{from{height:0;opacity:0}}
+.ins.no{border-color:oklch(68% .19 25 / .7);background:oklch(68% .19 25 / .07)}
+body.dragging,body.dragging *{cursor:grabbing!important;user-select:none}
+.toast{position:fixed;left:50%;top:76px;transform:translateX(-50%);background:var(--b4);color:var(--tx);border-radius:10px;padding:10px 14px;font-size:13px;box-shadow:0 10px 30px -8px #000c;z-index:90;display:flex;gap:12px;align-items:center}
+.toast button{color:var(--p);font-weight:600}
+.spin{animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.anl:hover{background:oklch(72% .16 230 / .12)}
+.shell{display:flex;flex-direction:column;height:100vh}
+.shell .desk{flex:1;min-height:0;height:auto;width:100vw}
+.decide{flex:none;display:grid;grid-template-columns:1fr 1fr 1fr 150px;gap:18px;padding:12px 16px 14px;background:oklch(22% .025 240);border-top:1px solid var(--b4);font-size:13px}
+.decide.min{display:flex;align-items:center;gap:12px;padding:6px 16px}
+.qq{display:flex;flex-direction:column;gap:6px;min-width:0}
+.qq h4{font-size:12.5px;font-weight:600}.qq h4 small{font-weight:400;color:oklch(92% .01 240 / .5)}
+.opts{display:flex;flex-direction:column;gap:4px}
+.opt{display:flex;gap:8px;align-items:center;text-align:left;border-radius:8px;padding:5px 8px;background:oklch(100% 0 0 / .04);border:1px solid transparent;font-size:12.5px}
+.opt:hover{background:oklch(100% 0 0 / .07)}
+.opt.on{border-color:oklch(72% .16 230 / .6);background:oklch(72% .16 230 / .12);color:var(--p)}
+.opt .l{width:18px;height:18px;border-radius:99px;flex:none;display:grid;place-items:center;font-size:10.5px;font-weight:700;background:var(--b4);color:oklch(92% .01 240 / .7)}
+.opt.on .l{background:var(--p);color:oklch(18% .05 230)}
+.opt b{font-weight:500}
+.desc{font-size:11.5px;color:oklch(92% .01 240 / .6);line-height:1.4}
+.try{font-size:11.5px;color:var(--p)}
+.side{display:flex;flex-direction:column;gap:6px;justify-content:flex-start}
+.wideinfo{font-size:11.5px;color:oklch(92% .01 240 / .5);padding:0 4px}
+.nav-pl{display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;border-radius:9px;font-size:13.5px}
+.nav-pl.on{background:var(--p);color:oklch(18% .05 230)}
+.kbd{font-size:10.5px;border:1px solid var(--b4);border-radius:4px;padding:0 4px;color:oklch(92% .01 240 / .5)}
+</style></head>
+<body>
+<div id="app"></div>
+<script>
+const DATA=/*DATA*/;
+// ---------- icons ----------
+const I={back:'<path d="M15 18l-6-6 6-6"/>',search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',home:'<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>',media:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M10 9l5 2.5-5 2.5z"/>',disc:'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',heart:'<path d="M12 20s-7-4.4-9-9a5 5 0 019-3 5 5 0 019 3c-2 4.6-9 9-9 9z"/>',set:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',folder:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',drive:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h.01M11 15h6"/>',list:'<path d="M8 6h13M8 12h13M8 18h9M3 6h.01M3 12h.01M3 18h.01"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',chev:'<path d="M9 6l6 6-6 6"/>',grip:'<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',plus:'<path d="M12 5v14M5 12h14"/>',pin:'<path d="M12 17v5M8 3h8l-1 6 3 4H6l3-4z"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',wave:'<path d="M3 12h2l2-6 3 12 3-9 2 5 2-2h4"/>',check:'<path d="M5 12l5 5 9-10"/>',cloud:'<path d="M7 18a5 5 0 01-.6-9.96A6 6 0 0118 9a4 4 0 01-1 9z"/>',next:'<path d="M5 4l10 8-10 8zM19 5v14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',ban:'<circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/>'};
+const ic=(n,c='')=>`<svg class="i ${c}" viewBox="0 0 24 24">${I[n]}</svg>`;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=s=>{s=Math.round(s);return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};
+const fmtLong=s=>{s=Math.round(s);const m=Math.floor(s/60);return `${m}:${String(s%60).padStart(2,'0')}`};
+
+// ---------- music model ----------
+const PC={C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11};
+const OFF={Ionian:0,Dorian:2,Phrygian:4,Lydian:5,Mixolydian:7,Aeolian:9,Locrian:11,'Harmonic minor':9,'Phrygian dominant':2};
+const MOOD={Aeolian:'Dark',Phrygian:'Dark',Locrian:'Dark',Dorian:'Smooth',Mixolydian:'Warm',Ionian:'Bright',Lydian:'Floating','Harmonic minor':'Floating','Phrygian dominant':'Exotic'};
+const MC={Dark:'var(--dark)',Smooth:'var(--smooth)',Floating:'var(--float)',Warm:'var(--warm)',Bright:'oklch(85% .13 95)',Exotic:'oklch(72% .17 140)'};
+const parent=t=>t.tonic==null?null:((PC[t.tonic]-OFF[t.mode])%12+12)%12;
+const known=t=>t&&t.tonic!=null&&t.bpm!=null;
+function rel(a,b){ // join kind a -> b
+  if(!known(a)||!known(b)) return {k:'u',txt:'Not analysed',s:.5};
+  const pa=parent(a),pb=parent(b),d=((pb-pa)%12+12)%12;
+  let r;
+  if(d===0) r=a.tonic===b.tonic&&a.mode===b.mode?{k:'m',txt:'Same key',s:1}:{k:'r',txt:'Relative',s:.85};
+  else if(d===7) r={k:'f',txt:'Up a fifth',s:.8};
+  else if(d===5) r={k:'f',txt:'Down a fifth',s:.8};
+  else if(d===2||d===10) r={k:'c',txt:'Clash',s:.3};
+  else r={k:'x',txt:'Break',s:0};
+  const dt=b.bpm-a.bpm;r.dt=dt;
+  if(Math.abs(dt)/a.bpm>.06){r.tempo=`tempo ${dt>0?'+':''}${dt}`;r.s-=.45}else if(Math.abs(dt)>2) r.tempo=`tempo ${dt>0?'+':''}${dt}`;
+  const de=(b.energy??0)-(a.energy??0);r.de=de;
+  if(de>=6) r.energy=`energy lifts ${a.energy} → ${b.energy}`;else if(de<=-8) r.energy=`energy eases ${a.energy} → ${b.energy}`;
+  return r;
+}
+const KCLS={m:'ok',r:'rel',f:'fifth',c:'warn',x:'bad',u:'u'};
+
+// ---------- data ----------
+const T=new Map();
+DATA.tracks.forEach(t=>T.set(t.id,{...t,src:t.lib}));
+const SC='https://i1.sndcdn.com/',YT='https://i.ytimg.com/vi/';
+const ONLINE={
+ SoundCloud:[
+  {id:'sc1',title:'Stay (feat. Blocksberg)',artist:'Mefjus',dur:271,art:SC+'artworks-0i5Mtek2L0u2-0-t300x300.jpg',an:{bpm:174,tonic:'F',mode:'Aeolian',energy:91}},
+  {id:'sc2',title:'Hear Me',artist:'Mefjus',dur:249,art:SC+'artworks-zwy8qgUB8WJeIGZv-cJTAjg-t300x300.jpg',an:{bpm:172,tonic:'C',mode:'Aeolian',energy:94}},
+  {id:'sc3',title:'Dustup (Mefjus RMX)',artist:'Noisia, The Upbeats',dur:345,art:SC+'artworks-dMkgleZBsqZCjgqx-dQykZQ-t300x300.jpg',an:{bpm:172,tonic:'G',mode:'Phrygian',energy:96}},
+  {id:'sc4',title:'Sientelo',artist:'Mefjus & Camo & Krooked',dur:291,art:SC+'artworks-qGgr8MWzoEfrirJA-6NsiPQ-t300x300.jpg',an:{bpm:174,tonic:'A#',mode:'Aeolian',energy:88}},
+ ],
+ 'YT Music':[
+  {id:'yt1',title:'Systematic',artist:'D-Minds & Mefjus',dur:270,art:YT+'dEhY1fBXqXA/mqdefault.jpg',an:{bpm:172,tonic:'F',mode:'Dorian',energy:93}},
+  {id:'yt2',title:'Volition',artist:'Mefjus',dur:301,art:YT+'K4FG1jWWIUQ/mqdefault.jpg',an:{bpm:174,tonic:'D#',mode:'Aeolian',energy:90}},
+  {id:'yt3',title:'Volition (Former Remix)',artist:'Mefjus',dur:288,art:YT+'pjtXMhnR3Vo/mqdefault.jpg',an:{bpm:174,tonic:'C',mode:'Aeolian',energy:86}},
+  {id:'yt4',title:'Divergence',artist:'Mefjus',dur:312,art:YT+'khar6ZhMu3Q/mqdefault.jpg',an:{bpm:172,tonic:'G',mode:'Aeolian',energy:92}},
+  {id:'yt5',title:'Metaknowledge',artist:'Mefjus',dur:296,art:YT+'3xUiZh4B4c4/mqdefault.jpg',an:{bpm:175,tonic:'E',mode:'Phrygian',energy:89}},
+ ],
+ YouTube:[
+  {id:'yo1',title:'Mefjus - Live from Kasberg, Austria',artist:'UKF On Air',dur:3540,art:YT+'wsXUyc6sl6U/mqdefault.jpg',an:{bpm:174,tonic:'F',mode:'Aeolian',energy:90}},
+ ],
+};
+Object.entries(ONLINE).forEach(([src,list])=>list.forEach(o=>T.set(o.id,{id:o.id,title:o.title,artist:o.artist,dur:o.dur,art:o.art,src,online:true,bpm:null,tonic:null,mode:null,energy:null,an:o.an,state:'none'})));
+// Stay is already analysed
+Object.assign(T.get('sc1'),T.get('sc1').an,{state:'done'});
+
+// library tree
+const LIBS={};
+DATA.tracks.forEach(t=>{const L=LIBS[t.lib]??={name:t.lib,root:{dirs:{},tracks:[]}};let n=L.root;
+  (t.folder?t.folder.split('/'):[]).forEach(p=>{n=n.dirs[p]??={dirs:{},tracks:[]}});n.tracks.push(t.id)});
+const countOf=n=>n.tracks.length+Object.values(n.dirs).reduce((s,d)=>s+countOf(d),0);
+const nodeAt=path=>{if(!path.length) return null;let n=LIBS[path[0]].root;for(const p of path.slice(1)) n=n.dirs[p];return n};
+
+// ---------- state ----------
+const LS='sestudio.mock.pledit';
+const saved=JSON.parse(localStorage.getItem(LS)||'{}');
+const S={
+  q:DATA.queue.slice(),undo:[],
+  editing:false,tab:'lib',path:['perso'],filter:'',src:'SoundCloud',oq:'mefjus',
+  target:null,pinned:false,preview:null,drag:null,fitsOpen:false,mode:'where',
+  opts:{q1:'A',q2:'A',q3:'A',...saved.opts},panelMin:false,toast:null,
+};
+const save=()=>localStorage.setItem(LS,JSON.stringify({opts:S.opts}));
+const wide=()=>innerWidth>=1200;
+const inEdit=()=>S.opts.q2==='B'&&wide()?true:S.editing;
+
+// ---------- fits ----------
+const inQ=id=>S.q.includes(id);
+const inQT=t=>S.q.some(i=>titleKey(T.get(i))===titleKey(t));
+const titleKey=t=>(t.title+'|'+t.artist).toLowerCase();
+function pool(){const seen=new Set(S.q.map(i=>titleKey(T.get(i))));const out=[];
+  for(const t of T.values()){if(!known(t))continue;const k=titleKey(t);if(seen.has(k))continue;seen.add(k);out.push(t)}return out}
+function spotsFor(x){const out=[];
+  for(let g=0;g<=S.q.length;g++){const a=T.get(S.q[g-1]),b=T.get(S.q[g]);if(S.q[g-1]===x.id||S.q[g]===x.id) continue;
+    const ri=a?rel(a,x):null,ro=b?rel(x,b):null,old=a&&b?rel(a,b):null;
+    let v=((ri?ri.s:.6)+(ro?ro.s:.6))/2;
+    if(old&&(old.k==='c'||old.k==='x')&&ri&&ro&&ri.s>=.8&&ro.s>=.8) v+=.15;
+    const ea=a?.energy??x.energy,eb=b?.energy??x.energy;v-=Math.abs(x.energy-(ea+eb)/2)/200;
+    out.push({g,v,ri,ro,old})}
+  return out.sort((p,q)=>q.v-p.v).slice(0,3)}
+function fitsAfter(a,b){return pool().map(x=>{const r1=rel(a,x),r2=b?rel(x,b):null;return {x,r1,r2,v:r1.s+(r2?r2.s:0)-Math.abs(r1.de||0)/120-(r2?Math.abs(r2.de||0)/120:0)}}).sort((p,q)=>q.v-p.v).slice(0,14)}
+const clashes=q=>{let n=0;for(let i=0;i<q.length-1;i++){const r=rel(T.get(q[i]),T.get(q[i+1]));if(r.k==='c'||r.k==='x')n++}return n};
+const total=q=>q.reduce((s,i)=>s+T.get(i).dur,0);
+
+// ---------- rendering pieces ----------
+const keyChip=t=>{if(!known(t)) return t.state==='run'?'':'<span class="na">not analysed</span>';const m=MOOD[t.mode]||'Dark';return `<span class="key" title="${t.tonic} ${t.mode}"><i style="background:${MC[m]}"></i>${m}</span>`};
+const why=(r,pre='')=>`<span class="why"><i style="background:var(--${KCLS[r.k]==='u'?'b4':KCLS[r.k]})"></i><span style="color:var(--${KCLS[r.k]==='u'?'tx':KCLS[r.k]})">${pre}${r.txt}</span>${[r.tempo,r.energy].filter(Boolean).map(s=>`<span class="dimmer">· ${s}</span>`).join('')}</span>`;
+const kc=r=>KCLS[r.k]==='u'?'tx':KCLS[r.k];
+const whyPair=(a,b)=>{const t=[a,b].some(r=>r.tempo&&r.s<.6)?'tempo jump':'';return `<span class="why"><i style="background:var(--${kc(a)})"></i><span style="color:var(--${kc(a)})">${a.txt}</span><span class="dimmer">→</span><i style="background:var(--${kc(b)})"></i><span style="color:var(--${kc(b)})">${b.txt}</span>${t?`<span class="dimmer">· ${t}</span>`:''}</span>`};
+const srcBadge=t=>`<span class="src">${t.online?t.src:t.lib}</span>`;
+function rail(){return `<nav class="rail"><svg class="logo" viewBox="0 0 24 30"><path d="M18 6c-2-2-9-3-11 1s9 6 9 11-7 6-11 3" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
+ <div class="srch">${ic('search')}</div><div class="it"><span class="ic">${ic('home')}</span>Home</div><div class="it"><span class="ic">${ic('media')}</span>Media</div>
+ <div class="it"><span class="ic">${ic('disc')}</span>Discover</div><div class="it on"><span class="ic">${ic('music')}</span>Music</div><div class="it"><span class="ic">${ic('heart')}</span>Library</div><div class="grow"></div><div class="it"><span class="ic">${ic('set')}</span>Settings</div></nav>`}
+function topBar(){const ed=inEdit();const always=S.opts.q2==='B'&&wide();
+ return `<header class="top"><div class="back">${ic('back')}</div><div class="ttl"><b>Queue</b>${ed?'<span class="edtag">Editing</span>':''}<small>Playlist · Music</small></div><div class="sp"></div>
+ ${ed?`<button class="btn gh undo" data-a="undo" ${S.undo.length?'':'style="opacity:.4"'}>${ic('undo','s')} Undo</button>`:''}
+ <button class="btn gh">${ic('spark','s')} Shape ▾</button>
+ ${!ed?`<button class="btn gh" data-a="play">Play</button><button class="btn ${S.fitsOpen?'soft':'gh'}" data-a="fitsnext">Fits next</button><button class="btn pr" data-a="edit">${ic('edit','s')} Edit</button>`:always?'':`<button class="btn pr" data-a="done">Done</button>`}
+ </header>`}
+
+// left column (edit)
+function libCol(){const tabs=`<div class="row1"><span class="h">Add from</span><span style="flex:1"></span><span class="seg"><b class="${S.tab==='lib'?'on':''}" data-a="tab" data-v="lib">${ic('drive','s')}Library</b><b class="${S.tab==='online'?'on':''}" data-a="tab" data-v="online">${ic('cloud','s')}Online</b></span></div>`;
+ return S.tab==='online'?onlineCol(tabs):localCol(tabs)}
+function crumbs(){const p=S.path;let h=p.length?`<a data-a="go" data-v="">Libraries</a>`:`<span class="cur">Libraries</span>`;
+ p.forEach((x,i)=>{h+=`<span class="sep">›</span>`+(i===p.length-1?`<span class="cur">${esc(x)}</span>`:`<a data-a="go" data-v="${esc(JSON.stringify(p.slice(0,i+1)))}">${esc(x)}</a>`)});return h}
+function trackRow(t){const can=dragOk(t);
+ return `<div class="srow ${can?'':'nodrag'} ${hl('track',t.id)}" data-h="track:${t.id}" ${can?`data-drag="${t.id}"`:''}><span class="grip">${ic('grip','s')}</span>
+ <span class="t"><b>${esc(t.title)}</b><small>${esc(t.artist||'Unknown artist')}</small></span>
+ ${inQT(t)?'<span class="inpl">In playlist</span>':''}${keyChip(t)}<span class="bpm num">${t.bpm??''}</span><span class="du num">${fmt(t.dur)}</span>
+ <span class="drawer"><b data-a="next" data-v="${t.id}">${ic('next','s')} Next</b><b class="pr" data-a="add" data-v="${t.id}">${ic('plus','s')} Add</b></span></div>`}
+function localCol(tabs){const f=S.filter.toLowerCase();let body='';
+ if(!S.path.length){
+  if(f){const hits=[...T.values()].filter(t=>!t.online&&(t.title+' '+t.artist).toLowerCase().includes(f)).slice(0,60);body=`<div class="lbl">${hits.length} matches in all libraries</div>`+hits.map(trackRow).join('')}
+  else body=`<div class="lbl">Libraries</div>`+Object.values(LIBS).map(L=>`<div class="srow folder" data-a="go" data-v="${esc(JSON.stringify([L.name]))}"><span class="fold lib">${ic('drive','s')}</span><span class="t"><b>${esc(L.name)}</b><small>${Object.keys(L.root.dirs).length?Object.keys(L.root.dirs).length+' folders':'folder'}</small></span><span class="cnt num">${countOf(L.root)}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')+
+   `<div class="lbl">Jump back in</div>`+[['perso','soundclound','neuro_etc'],['Deadmau5','Deadmau5 - while(1 2)'],['Deadmau5','At Play Vol. 4']].map(p=>`<div class="srow folder" data-a="go" data-v="${esc(JSON.stringify(p))}"><span class="fold">${ic('folder','s')}</span><span class="t"><b>${esc(p.at(-1))}</b><small>${esc(p.slice(0,-1).join(' › '))}</small></span><span class="cnt num">${countOf(nodeAt(p))}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')+
+   `<div class="lbl">Other playlists</div>`+[['perso',88],['New playlist',13]].map(p=>`<div class="srow folder" data-a="soon"><span class="fold">${ic('list','s')}</span><span class="t"><b>${p[0]}</b></span><span class="cnt">${p[1]}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')}
+ else{const n=nodeAt(S.path);const dirs=Object.entries(n.dirs);const tr=n.tracks.map(i=>T.get(i)).filter(t=>!f||(t.title+' '+t.artist).toLowerCase().includes(f));
+  body=dirs.map(([k,d])=>`<div class="srow folder" data-a="go" data-v="${esc(JSON.stringify([...S.path,k]))}"><span class="fold">${ic('folder','s')}</span><span class="t"><b>${esc(k)}</b></span><span class="cnt num">${countOf(d)}</span><span class="chev">${ic('chev','s')}</span></div>`).join('')+
+   (tr.length?`<div class="lbl">${tr.length} tracks</div>`+tr.map(trackRow).join(''):'')}
+ return `<div class="colh">${tabs}<div class="crumbs">${crumbs()}</div><label class="field">${ic('search','s')}<input id="filter" value="${esc(S.filter)}" placeholder="${S.path.length?'Filter this folder':'Search all libraries'}" style="background:none;border:0;outline:0;color:var(--tx);font:inherit;flex:1"></label></div><div class="scroll" id="sc-left">${body}</div>`}
+function stateBits(t){
+ if(t.state==='done') return `<span class="facts">${keyChip(t)}<span class="bpm">${t.bpm} bpm</span><span class="na">energy ${t.energy}</span></span>`;
+ if(t.state==='run') return `<span class="facts prog" style="flex-direction:row;width:auto;gap:9px">${['Tempo','Key','Energy'].map((s,i)=>`<span class="st ${t.step>i?'done':t.step===i?'run':''}">${t.step>i?ic('check','s'):t.step===i?'<span class="spin"></span>':''} ${s}${s==='Tempo'&&t.step>0?' '+t.an.bpm:''}</span>`).join('')}</span>`;
+ return `<span class="facts"><span class="na">Not analysed</span></span>`}
+function onlineCol(tabs){const list=(ONLINE[S.src]||[]).map(o=>T.get(o.id)).filter(t=>(t.title+' '+t.artist).toLowerCase().includes(S.oq.toLowerCase().replace('mefjus',''))||1);
+ const local=[...T.values()].filter(t=>!t.online&&(t.title+' '+t.artist).toLowerCase().includes(S.oq.toLowerCase()));
+ const rows=S.src==='This PC'?local.map(trackRow).join('')||'<div class="tip">No match on this PC.</div>':list.map(t=>{const can=dragOk(t);
+  return `<div class="orow ${hl('track',t.id)}" data-h="track:${t.id}" ${can?`data-drag="${t.id}"`:''} style="${can?'':'cursor:not-allowed'}"><span class="oart" style="background-image:url(${t.art})"></span><span class="t"><b>${esc(t.title)}</b><small>${esc(t.artist)} · ${fmt(t.dur)}${inQ(t.id)?' · <span style="color:var(--ok)">in playlist</span>':''}</small>${stateBits(t)}</span>
+  ${t.state==='none'?`<button class="anl" data-a="analyse" data-v="${t.id}">${ic('wave','s')}Analyse</button>`:''}
+  ${t.state==='done'?`<span class="drawer"><b class="pr" data-a="add" data-v="${t.id}">${ic('plus','s')} Add</b></span>`:''}</div>`}).join('');
+ const n=s=>s==='This PC'?local.length:ONLINE[s].length;
+ return `<div class="colh">${tabs}<label class="field live">${ic('search','s')}<input id="oq" value="${esc(S.oq)}" style="background:none;border:0;outline:0;color:var(--tx);font:inherit;flex:1"></label></div>
+ <div style="display:flex;flex:1;min-height:0"><div class="srail">${['This PC','|',...Object.keys(ONLINE)].map(s=>s==='|'?'<div class="stopdiv">ONLINE</div>':`<div class="stop ${S.src===s?'on':''}" data-a="src" data-v="${s}" style="cursor:pointer"><b>${s}</b><small>${n(s)}</small></div>`).join('')}</div>
+ <div class="scroll" id="sc-left" style="padding:4px">${rows}${S.src!=='This PC'&&list.some(t=>t.state==='none')?`<div style="padding:10px 8px"><button class="btn soft" data-a="analyseAll">${ic('wave','s')} Analyse all shown</button></div>`:''}</div></div>`}
+
+// left column (not editing): like today
+function navCol(){return `<div class="colh"><div class="lbl" style="padding:4px 0">LIBRARIES</div></div><div class="scroll">${Object.values(LIBS).map(L=>`<div class="nav-pl"><span class="ldot"></span><span style="flex:1">${L.name}</span><span class="cnt">${countOf(L.root)}</span></div>`).join('')}
+ <div class="lbl" style="margin-top:8px">PLAYLISTS</div><div class="nav-pl on"><span style="flex:1">Queue</span><span class="num">${S.q.length}</span></div><div class="nav-pl"><span style="flex:1">perso</span><span class="cnt">88</span></div><div class="nav-pl"><span style="flex:1">New playlist</span><span class="cnt">13</span></div></div>`}
+
+// playlist
+function curve(){const e=S.q.map(i=>T.get(i).energy??70);const w=100/Math.max(1,e.length-1);let p='';e.forEach((v,i)=>p+=`${i?'L':'M'}${(i*w).toFixed(2)} ${(44-(v-55)*.95).toFixed(1)} `);
+ let marks='';for(let i=0;i<S.q.length-1;i++){const r=rel(T.get(S.q[i]),T.get(S.q[i+1]));if(r.k==='c'||r.k==='x')marks+=`<line x1="${(i+.5)*w}" x2="${(i+.5)*w}" y1="0" y2="46" stroke="oklch(83% .16 85 / .7)" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>`}
+ return `<div class="curve"><svg viewBox="0 0 100 46" preserveAspectRatio="none" style="width:100%;height:100%"><path d="${p}" fill="none" stroke="oklch(92% .01 240 / .8)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>${marks}</svg><span style="position:absolute;right:10px;top:6px;font-size:10.5px" class="dimmer">energy</span></div>`}
+function hl(kind,v){const key=kind+':'+v;if(S.target&&tk(S.target)===key) return 'tgt';if(S.preview===key) return 'prev';return ''}
+const tk=t=>t?t.k+':'+(t.id??t.i??''):'';
+function joinHTML(i,a,b,pins){const r=rel(a,b);const pend=a.state==='run'||b.state==='run';
+ const pin=pins[i+1]!=null?`<span class="pin ${pins[i+1]?'g':''}">${pins[i+1]+1}</span>`:'';
+ return `<div class="join ${hl('join',i)}" data-h="join:${i}">${pin}<span class="jc ${pend?'u':r.k}">${pend?'<span class="spin" style="width:8px;height:8px"></span> analysing':`<i></i>${r.txt}`}${!pend&&(r.tempo||r.energy)?` <span class="sub">· ${r.tempo||r.energy}</span>`:''}</span>${r.k==='u'&&!pend?`<button class="jc" style="color:var(--p)" data-a="analyseQ" data-v="${i}">${ic('wave','s')} Analyse</button>`:''}</div>`}
+function insHTML(){const d=S.drag,t=T.get(d.id);const ok=dropOk(t);
+ return `<div class="ins ${ok?'':'no'}"><span class="grip" style="color:var(--${ok?'p':'bad'})">${ic(ok?'plus':'ban','s')}</span><span class="t"><b>${esc(t.title)}</b><small>${ok?`drops here as track ${d.gap+1}`:'Analyse it first: this choice keeps unanalysed tracks out'}</small></span><span style="flex:1"></span>${keyChip(t)}<span class="bpm">${t.bpm?t.bpm+' bpm':''}</span></div>`}
+function playlistCol(edit){const pins={};
+ const pinSrc=(S.target?.k==='track'&&!S.drag)?S.target.id:(S.preview?.startsWith('track:')&&S.opts.q1==='C'&&!S.drag?S.preview.slice(6):null);
+ if(edit&&pinSrc&&known(T.get(pinSrc))) spotsFor(T.get(pinSrc)).forEach((s,n)=>pins[s.g]=n);
+ let q=S.q.slice();let dragFrom=-1;
+ if(S.drag?.from!=null){dragFrom=S.drag.from}
+ let h=`<div class="plh"><span class="h" style="font-size:16px">Queue</span><span class="meta num">${S.q.length} tracks · ${fmtLong(total(S.q))}</span>${clashes(S.q)?`<span class="chip warn">${clashes(S.q)} clashes</span>`:''}<span style="flex:1"></span><span class="seg"><b class="on">List</b><b>Map</b></span></div>${curve()}<div class="scroll" id="sc-pl" style="padding:4px 8px 40px">`;
+ const showGap=S.drag&&S.drag.gap!=null;
+ q.forEach((id,i)=>{const t=T.get(id);
+  if(showGap&&S.drag.gap===i) h+=insHTML();
+  else if(edit&&pins[i]!=null&&i>0) {/* pin shown on join */}
+  h+=`<div class="prow ${i===0?'now':''} ${hl('row',i)} ${dragFrom===i?'lifted':''}" data-h="row:${i}" ${edit?`data-drag="${id}" data-from="${i}"`:''}>${edit?`<span class="grip">${ic('grip','s')}</span>`:''}<span class="ix num">${i+1}</span>
+   <span class="t"><b>${esc(t.title)}</b><small>${esc(t.artist||'Unknown artist')}${t.online?` · ${srcBadge(t)}`:''}</small></span>${t.genre?'<span class="gen">DnB</span>':''}${t.state==='run'?'<span class="na">analysing…</span>':keyChip(t)}<span class="bpm num">${t.bpm?t.bpm+' bpm':''}</span><span class="du num">${fmt(t.dur)}</span>${edit?`<button class="x" data-a="remove" data-v="${i}" title="Remove">${ic('x','s')}</button>`:''}</div>`;
+  if(i<q.length-1&&!(showGap&&S.drag.gap===i+1)) h+=joinHTML(i,t,T.get(q[i+1]),edit?pins:{});
+ });
+ if(showGap&&S.drag.gap===q.length) h+=insHTML();
+ if(edit&&pins[q.length]!=null) h+=`<div class="join"><span class="pin ${pins[q.length]?'g':''}">${pins[q.length]+1}</span><span class="jc u">at the end</span></div>`;
+ return h+`</div>`}
+
+// fits column
+function fitsCol(){const t=S.drag?{k:'drop'}:(S.target||{k:'end'});
+ const pinBtn=`<button class="pinb ${S.pinned?'on':''}" data-a="pin">${ic('pin','s')}${S.pinned?'Pinned':'Pin'}</button>`;
+ const follow=S.drag?'Drop preview':S.pinned?'Pinned':S.opts.q1==='C'?'Showing what you clicked':(S.target?'Following your pointer':'Resting · after the last track');
+ const head=(about,extra='')=>`<div class="fh"><div class="follow">${S.pinned?ic('pin','s'):'<span class="dot"></span>'}<span>${follow}</span>${S.drag?'':pinBtn}</div>${about}${extra}</div>`;
+ const list=(rows)=>rows.map(o=>`<div class="frow" data-drag="${o.x.id}">${o.x.online?`<span class="oart" style="width:36px;height:36px;background-image:url(${o.x.art})"></span>`:`<span class="grip" style="color:oklch(92% .01 240 / .25)">${ic('grip','s')}</span>`}<span class="t"><b>${esc(o.x.title)}</b><small>${esc(o.x.artist||'Unknown artist')} · ${srcBadge(o.x)}</small>${o.r2?whyPair(o.r1,o.r2):why(o.r1)}</span><button class="plus" data-a="${o.at!=null?'insert':'add'}" data-v="${o.x.id}" ${o.at!=null?`data-at="${o.at}"`:''}>${ic('plus')}</button></div>`).join('');
+ if(t.k==='drop'){const d=S.drag,x=T.get(d.id);
+  if(d.gap==null) return head(`<div class="about"><span class="t"><b>${esc(x.title)}</b><small>Move over the playlist to pick a slot</small></span></div>`)+`<div class="scroll"><div class="tip">Release outside the playlist to cancel.</div></div>`;
+  if(!dropOk(x)) return head(`<div class="about"><span class="t"><b>${esc(x.title)}</b><small>not analysed</small></span></div>`)+`<div class="scroll"><div class="verdict"><div class="vh" style="color:var(--bad)">Can't drop yet</div><div class="tip" style="padding:0">With "Analyse first", a track joins only once its tempo and key are known. Release, press Analyse, then drag it again.</div></div></div>`;
+  const q2=S.q.filter((_,i)=>i!==d.from);let g=d.gap;if(d.from!=null&&d.from<d.gap) g--;q2.splice(g,0,x.id);
+  const a=T.get(q2[g-1]),b=T.get(q2[g+1]);const ri=a&&rel(a,x),ro=b&&rel(x,b);
+  const good=[ri,ro].filter(Boolean).every(r=>r.s>=.8),unk=[ri,ro].some(r=>r&&r.k==='u');
+  const best=known(x)?spotsFor(x)[0]:null;
+  return head(`<div class="about"><span class="t"><b>${esc(x.title)} → slot ${g+1}</b><small>${a?'after '+esc(a.title):'at the start'}${b?' · before '+esc(b.title):' · at the end'}</small></span></div>`)+
+  `<div class="scroll"><div class="verdict"><div class="vh" style="color:var(--${unk?'tx':good?'ok':'warn'})">${unk?(S.opts.q3==='B'?'Drops now; analysis starts on drop':'Drops now; joins stay grey until you analyse'):good?'Good drop: both joins hold':'This drop makes a rough join'}</div>
+  ${ri?`<div class="vline"><span>In</span>${why(ri)}</div>`:''}${ro?`<div class="vline"><span>Out</span>${why(ro)}</div>`:''}
+  <div class="vline"><span>Clashes</span><span class="num">${clashes(S.q)} → ${clashes(q2)}</span></div><div class="vline"><span>Length</span><span class="num">${fmtLong(total(S.q))} → ${fmtLong(total(q2))}</span></div></div>
+  ${best&&best.g!==d.gap?`<div class="lbl">Better nearby</div><div class="tip">Slot ${best.g+1} scores higher (${best.ri?best.ri.txt.toLowerCase():'start'} in, ${best.ro?best.ro.txt.toLowerCase():'end'} out).</div>`:''}</div>`}
+ if(t.k==='track'){const x=T.get(t.id);
+  const about=`<div class="about">${x.online?`<span class="art" style="background-image:url(${x.art})"></span>`:`<span class="art" style="display:grid;place-items:center">${ic('music')}</span>`}<span class="t"><b>${esc(x.title)}</b><small>${esc(x.artist||'Unknown artist')} · ${x.online?x.src:x.lib}${known(x)?` · ${x.bpm} bpm`:''}</small></span></div>`;
+  if(!known(x)) return head(about)+`<div class="scroll"><div class="verdict"><div class="vh">${x.state==='run'?'Analysing…':'Where would it fit? Analyse it first.'}</div><div class="tip" style="padding:0 0 10px">Tempo, key and energy. About 20 s for a 4 min track (sped up here). It stays analysed and ranks in Fits like your own files.</div>${x.state==='run'?stateBits(x):`<button class="btn pr" data-a="analyse" data-v="${x.id}">${ic('wave','s')} Analyse ${esc(x.title)}</button>`}</div>
+   <div class="lbl">Meanwhile</div><div class="tip">${{A:'You can drop it in now; its joins stay grey with an Analyse button.',B:'You can drop it in now; analysis starts by itself on drop.',C:'It can\'t go in until it is analysed.'}[S.opts.q3]}</div></div>`;
+  const seg=`<span class="seg"><b class="${S.mode==='where'?'on':''}" data-a="mode" data-v="where">Where it fits</b><b class="${S.mode==='after'?'on':''}" data-a="mode" data-v="after">What fits after it</b></span>`;
+  if(S.mode==='after') return head(about,seg)+`<div class="scroll">${list(fitsAfter(x).filter(o=>o.x.id!==x.id))}</div>`;
+  const sp=spotsFor(x);
+  return head(about,seg)+`<div class="scroll"><div class="lbl">Best places in Queue</div>${sp.map((s,n)=>{const a=T.get(S.q[s.g-1]),b=T.get(S.q[s.g]);
+   return `<div class="spot ${n?'':'best'}"><span class="pin ${n?'g':''}">${n+1}</span><span class="t"><b>${a&&b?`Between ${s.g} ${esc(a.title)} and ${s.g+1} ${esc(b.title)}`:a?'At the end':'At the start'}</b><span class="lines">${s.ri?why(s.ri,'In: '):''}${s.ro?why(s.ro,'Out: '):''}</span>${s.old&&(s.old.k==='c'||s.old.k==='x')&&s.v>.9?'<small>Replaces a rough join with two good ones.</small>':''}</span><button class="btn soft" data-a="insert" data-v="${x.id}" data-at="${s.g}" style="height:28px">Put here</button></div>`}).join('')}</div>`}
+ if(t.k==='join'){const a=T.get(S.q[t.i]),b=T.get(S.q[t.i+1]);if(!a||!b){S.target=null;return fitsCol()}const r=rel(a,b);
+  return head(`<div class="about"><span class="t"><b>Between ${t.i+1} ${esc(a.title)} and ${t.i+2} ${esc(b.title)}</b><small>today: <span style="color:var(--${KCLS[r.k]==='u'?'tx':KCLS[r.k]})">${r.txt.toLowerCase()}</span></small></span></div>`)+
+   `<div class="scroll"><div class="lbl">Bridges this join · all sources</div>${list(fitsAfter(a,b).map(o=>({...o,at:t.i+1})))}</div>`}
+ const i=t.k==='row'?t.i:S.q.length-1;const a=T.get(S.q[i]);if(!a){S.target=null;return fitsCol()}
+ return head(`<div class="about"><span class="t"><b>After ${i+1} ${esc(a.title)}</b><small>${keyChip(a)} ${a.bpm??''} bpm · energy ${a.energy??'?'}</small></span></div>`)+
+  `<div class="scroll"><div class="lbl">Fits next</div>${list(fitsAfter(a).map(o=>({...o,at:i+1})))}</div>`}
+
+// decide panel
+const Q=[
+ {k:'q1',h:'1 · When does Fits change?',sub:'hover vs click',try:'Try: sweep the pointer over library rows and joins.',o:[
+  ['A','Follow after 250 ms, stay put','Hover a row or join for a quarter second and Fits switches. Leaving it keeps the last answer, so you can move into Fits to drag from it.'],
+  ['B','Follow at once, fall back on leave','Fits switches the moment you hover and returns to its pin (the end) half a second after you leave.'],
+  ['C','Click to change, hover only previews','Hover shows pins in the playlist but Fits only changes on click. Calm, but one more click each time.']]},
+ {k:'q2',h:'2 · How do you get into edit mode?',sub:'toggle vs always',try:'Try: press Edit / Done, or resize the window.',o:[
+  ['A','A toggle: Edit → Done','The playlist page looks like today; Edit opens the three columns, Done closes them. Same on phones.'],
+  ['B','Always on when the window is wide','From 1200 px wide the three columns are just the playlist page. Narrower windows and phones keep the Edit toggle.']]},
+ {k:'q3',h:'3 · Dropping an online track that is not analysed',sub:'',try:'Try: Online tab → drag "Hear Me" or "Volition" into the playlist.',o:[
+  ['A','Drops now, joins grey until you analyse','It goes in at once; its joins read "Not analysed" with an Analyse button.'],
+  ['B','Drops now, analysis starts on drop','It goes in at once and analysis runs by itself; joins show "analysing" then take their colour.'],
+  ['C','Analyse first','It can\'t be dragged until analysed. The Add button becomes "Analyse & add".']]},
+];
+function decide(){if(S.panelMin) return `<aside class="decide min"><b>Your picks</b><span class="num">1${S.opts.q1} · 2${S.opts.q2} · 3${S.opts.q3}</span><span style="flex:1"></span><button class="btn gh" data-a="panel">Show the choices</button></aside>`;
+ return `<aside class="decide">${Q.map(q=>{const cur=q.o.find(o=>o[0]===S.opts[q.k]);return `<div class="qq"><h4>${q.h} <small>${q.sub}</small></h4>
+ <div class="opts">${q.o.map(([v,b])=>`<button class="opt ${S.opts[q.k]===v?'on':''}" data-a="opt" data-k="${q.k}" data-v="${v}"><span class="l">${v}</span><b>${b}</b></button>`).join('')}</div>
+ <small class="desc">${cur[2]}${q.k==='q2'?` <span class="dimmer">Window now ${innerWidth} px${S.opts.q2==='B'?(wide()?': columns always shown.':': too narrow, the toggle is back.'):'.'}</span>`:''}</small><div class="try">${q.try}</div></div>`}).join('')}
+ <div class="side"><button class="btn pr" data-a="copy">Copy my picks</button><button class="btn gh" data-a="reset">Reset playlist</button><button class="btn gh" data-a="panel">Hide</button></div></aside>`}
+
+// ---------- render ----------
+const app=document.getElementById('app');
+function render(){const sc={};app.querySelectorAll('.scroll[id]').forEach(e=>sc[e.id]=e.scrollTop);
+ const focus=document.activeElement?.id,sel=document.activeElement?.selectionStart;
+ const ed=inEdit();
+ let cols;
+ if(ed) cols=`<div class="cols"><section class="col">${libCol()}</section><section class="col">${playlistCol(true)}</section><section class="col" data-zone="fits">${fitsCol()}</section></div>`;
+ else cols=`<div class="cols two ${S.fitsOpen?'fits':''}"><section class="col">${navCol()}</section><section class="col">${playlistCol(false)}</section>${S.fitsOpen?`<section class="col" data-zone="fits">${fitsCol()}</section>`:''}</div>`;
+ app.innerHTML=`<div class="shell"><div class="desk">${rail()}<div class="main">${topBar()}${cols}</div></div>${decide()}</div>${S.toast?`<div class="toast">${S.toast.text}${S.toast.undo?'<button data-a="undo">Undo</button>':''}</div>`:''}`;
+ app.querySelectorAll('.scroll[id]').forEach(e=>{if(sc[e.id]!=null)e.scrollTop=sc[e.id]});
+ if(focus){const e=document.getElementById(focus);if(e){e.focus();try{e.setSelectionRange(sel,sel)}catch{}}}
+}
+let toastT;function toast(text,undo){S.toast={text,undo};clearTimeout(toastT);toastT=setTimeout(()=>{S.toast=null;render()},3500)}
+
+// ---------- actions ----------
+const snap=()=>{S.undo.push(S.q.slice());if(S.undo.length>50)S.undo.shift()};
+const dragOk=t=>!(S.opts.q3==='C'&&!known(t)&&t.state!=='done');
+const dropOk=t=>dragOk(t);
+function insertAt(id,g,from){snap();if(from!=null){S.q.splice(from,1);if(from<g)g--}else if(inQ(id)){const j=S.q.indexOf(id);S.q.splice(j,1);if(j<g)g--}
+ S.q.splice(g,0,id);const t=T.get(id);if(!known(t)&&S.opts.q3==='B'&&t.state==='none') analyse(id);
+ toast(`${from!=null?'Moved':'Added'} <b>${esc(t.title)}</b> as track ${g+1}`,true)}
+function analyse(id){const t=T.get(id);if(t.state!=='none')return;t.state='run';t.step=0;render();
+ const tick=()=>{t.step++;if(t.step>=3){Object.assign(t,t.an,{state:'done'});if(t.then!=null){const g=t.then==='last'?S.q.length:t.then;delete t.then;insertAt(id,g)}render();return}render();setTimeout(tick,900)};setTimeout(tick,900)}
+function setTarget(tg){if(S.pinned||S.drag)return;if(tk(tg)===tk(S.target))return;S.target=tg;render()}
+
+app.addEventListener('click',e=>{const el=e.target.closest('[data-a]');
+ if(!el){ // click-to-target (Q1 C)
+  if(S.opts.q1==='C'){const h=e.target.closest('[data-h]');if(h&&!h.closest('[data-zone="fits"]')){const [k,v]=h.dataset.h.split(':');S.pinned=false;S.target=k==='track'?{k,id:v}:{k,i:+v};render()}}
+  return}
+ const a=el.dataset.a,v=el.dataset.v;e.stopPropagation();
+ ({
+  tab:()=>{S.tab=v;S.filter=''},go:()=>{S.path=v?JSON.parse(v):[];S.filter=''},src:()=>{S.src=v},
+  add:()=>{const t=T.get(v);if(!dragOk(t)){t.then='last';analyse(v);toast(`Analysing <b>${esc(t.title)}</b>, it goes in when done`);return}insertAt(v,S.q.length)},
+  next:()=>insertAt(v,1),
+  insert:()=>{const t=T.get(v);if(!dragOk(t)){t.then=+el.dataset.at;analyse(v);return}insertAt(v,+el.dataset.at)},
+  remove:()=>{snap();const t=T.get(S.q[+v]);S.q.splice(+v,1);S.target=null;toast(`Removed <b>${esc(t.title)}</b>`,true)},
+  undo:()=>{if(S.undo.length){S.q=S.undo.pop();S.toast=null}},
+  analyse:()=>analyse(v),analyseAll:()=>ONLINE[S.src].forEach(o=>analyse(o.id)),
+  analyseQ:()=>{const i=+v;[S.q[i],S.q[i+1]].forEach(id=>{const t=T.get(id);if(t.state==='none')analyse(id)})},
+  pin:()=>{S.pinned=!S.pinned;if(!S.pinned&&S.opts.q1==='B')S.target=null},
+  mode:()=>{S.mode=v},edit:()=>{S.editing=true;S.fitsOpen=false},done:()=>{S.editing=false;S.target=null;S.pinned=false},
+  fitsnext:()=>{S.fitsOpen=!S.fitsOpen},play:()=>toast('Playback is not part of this prototype'),soon:()=>toast('Other playlists open the same way; not wired in this prototype'),
+  opt:()=>{S.opts[el.dataset.k]=v;save();S.target=null;S.pinned=false;S.preview=null},
+  panel:()=>{S.panelMin=!S.panelMin},
+  copy:()=>{const txt=Q.map(q=>`${q.h}: ${S.opts[q.k]} — ${q.o.find(o=>o[0]===S.opts[q.k])[1]}`).join('\n');navigator.clipboard?.writeText(txt).then(()=>toast('Copied, paste it in the chat'),()=>toast(txt.replace(/\n/g,'<br>')))},
+  reset:()=>{S.q=DATA.queue.slice();S.undo=[];S.target=null},
+ }[a]||(()=>{}))();
+ render()});
+app.addEventListener('input',e=>{if(e.target.id==='filter'){S.filter=e.target.value;render()}if(e.target.id==='oq'){S.oq=e.target.value;render()}});
+
+// hover logic per Q1
+let hT,leaveT,curH=null;
+app.addEventListener('pointerover',e=>{if(S.drag)return;const h=e.target.closest('[data-h]');
+ const inFits=!!e.target.closest('[data-zone="fits"]');if(inFits||e.target.closest('.decide')){clearTimeout(hT);return}
+ const key=h?.dataset.h??null;if(key===curH)return;curH=key;clearTimeout(hT);
+ if(!inEdit()&&!S.fitsOpen)return;
+ const tg=key?(([k,v])=>k==='track'?{k,id:v}:{k,i:+v})(key.split(':')):null;
+ const q1=S.opts.q1;
+ if(q1==='A'){if(tg)hT=setTimeout(()=>setTarget(tg),250)}
+ else if(q1==='B'){clearTimeout(leaveT);if(tg)setTarget(tg);else leaveT=setTimeout(()=>{if(!S.pinned){S.target=null;render()}},500)}
+ else{const p=key;if(p!==S.preview){S.preview=p;render()}}
+});
+
+// ---------- drag (pointer based) ----------
+let down=null,ghost=null,raf=0;
+app.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button,input,[data-a]'))return;const r=e.target.closest('[data-drag]');
+ const blocked=e.target.closest('.srow.nodrag,.orow:not([data-drag])');
+ if(blocked&&!r){const id=blocked.dataset.h?.split(':')[1];down={blocked:id,x:e.clientX,y:e.clientY};return}
+ if(!r||!inEdit())return;down={id:r.dataset.drag,from:r.dataset.from!=null?+r.dataset.from:null,x:e.clientX,y:e.clientY}});
+addEventListener('pointermove',e=>{if(!down)return;
+ if(!S.drag){if(Math.hypot(e.clientX-down.x,e.clientY-down.y)<5)return;
+  if(down.blocked){toast(`Analyse <b>${esc(T.get(down.blocked).title)}</b> first: with pick 3C, only analysed tracks go in`);render();down=null;return}
+  S.drag={id:down.id,from:down.from,gap:null};document.body.classList.add('dragging');clearTimeout(hT);
+  const t=T.get(down.id);ghost=document.createElement('div');ghost.className='ghost';ghost.innerHTML=`<span class="grip" style="color:var(--p)">${ic('grip','s')}</span><span class="t"><b>${esc(t.title)}</b><small>${esc(t.artist||'Unknown artist')}${t.bpm?' · '+t.bpm+' bpm':''}</small></span>`;document.body.appendChild(ghost);
+  const loop=()=>{if(!S.drag)return;const sc=document.getElementById('sc-pl');if(sc&&S.drag.py){const r=sc.getBoundingClientRect();if(S.drag.px>r.left&&S.drag.px<r.right){if(S.drag.py<r.top+50)sc.scrollTop-=10;else if(S.drag.py>r.bottom-50)sc.scrollTop+=10}}raf=requestAnimationFrame(loop)};raf=requestAnimationFrame(loop)}
+ ghost.style.left=e.clientX+12+'px';ghost.style.top=e.clientY-20+'px';S.drag.px=e.clientX;S.drag.py=e.clientY;
+ const sc=document.getElementById('sc-pl');const r=sc.getBoundingClientRect();let gap=null;
+ if(e.clientX>r.left-20&&e.clientX<r.right+20&&e.clientY>r.top-30&&e.clientY<r.bottom+10){const rows=[...sc.querySelectorAll('.prow')];gap=rows.length;
+  for(let i=0;i<rows.length;i++){const b=rows[i].getBoundingClientRect();if(e.clientY<b.top+b.height/2){gap=i;break}}}
+ ghost.classList.toggle('no',gap!=null&&!dropOk(T.get(S.drag.id)));
+ if(gap!==S.drag.gap){S.drag.gap=gap;render()}});
+addEventListener('pointerup',()=>{if(S.drag){const d=S.drag;S.drag=null;cancelAnimationFrame(raf);ghost?.remove();ghost=null;document.body.classList.remove('dragging');
+  if(d.gap!=null&&dropOk(T.get(d.id))&&!(d.from!=null&&(d.gap===d.from||d.gap===d.from+1)))insertAt(d.id,d.gap,d.from);
+  else if(d.gap!=null&&!dropOk(T.get(d.id)))toast('Not dropped: analyse it first (pick 3C)');
+  render()}down=null});
+addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='z'){if(S.undo.length){S.q=S.undo.pop();render()}e.preventDefault()}if(e.key==='Escape'&&S.drag){S.drag.gap=null;dispatchEvent(new Event('pointerup'))}});
+addEventListener('resize',()=>render());
+render();
+</script></body></html>
