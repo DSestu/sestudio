@@ -27,7 +27,6 @@ import SaveAsPlaylist from '../components/music/SaveAsPlaylist'
 import { closeFits, openFitsFor, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, replaceParams, type Navigate } from '../nav'
-import { useSettings } from '../useSettings'
 import FlowsHome from '../components/music/flows/FlowsHome'
 import MixesList from '../components/music/flows/MixesList'
 import FlowLanes from '../components/music/flows/FlowLanes'
@@ -35,13 +34,14 @@ import MixView from '../components/music/flows/MixView'
 import { useFlows } from '../musicFlows'
 
 const TABS = [
+  // Flows and mixes (SPEC-music-flows) first: they sit beside the old lists until those go (§12 PR 11).
+  { id: 'flows', label: 'Flows' },
+  { id: 'mixes', label: 'Mixes' },
   { id: 'albums', label: 'Albums' },
   { id: 'artists', label: 'Artists' },
   { id: 'tracks', label: 'Tracks' },
 ] as const
-// Flows and mixes (SPEC-music-flows), behind the lab flag until the old lists go (§12 PR 11).
-const LAB_TABS = [{ id: 'flows', label: 'Flows' }, { id: 'mixes', label: 'Mixes' }, ...TABS] as const
-type MusicTab = (typeof LAB_TABS)[number]['id']
+type MusicTab = (typeof TABS)[number]['id']
 
 const DOT: Record<LibraryStatus['state'], string> = {
   online: 'bg-success',
@@ -228,7 +228,7 @@ const KIND_LABEL = { folder: 'Folder', playlist: 'Playlist', smart: 'Smart list'
 const last = { tab: 'albums' as MusicTab, lib: '', genre: '' }
 const initial = () => {
   const p = currentParams()
-  const tab = LAB_TABS.find(t => t.id === p.get('tab'))?.id
+  const tab = TABS.find(t => t.id === p.get('tab'))?.id
   // A tab that no longer exists (?tab=explore) opens Albums.
   return { tab: tab ?? (p.get('tab') ? 'albums' : last.tab), lib: p.get('lib') ?? last.lib, genre: p.get('genre') ?? last.genre }
 }
@@ -237,10 +237,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const titles = useDownloadedLibrary()
   const [start] = useState(initial)
   const [picked, setTab] = useState<MusicTab>(start.tab)
-  const [settings] = useSettings()
-  const lab = !!settings.lab
-  const tabs = lab ? LAB_TABS : TABS
-  const tab: MusicTab = !lab && (picked === 'flows' || picked === 'mixes') ? 'albums' : picked
+  const tab = picked
   const flowsTab = tab === 'flows' || tab === 'mixes'
   const [library, setLibrary] = useState(start.lib)
   const query = useMusicQuery()
@@ -325,7 +322,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   // A page shows the whole album or artist, whatever the library, genre or search.
   const album = albumId ? allAlbums.find(a => albumKey(a) === albumId) : undefined
   const artist = useMemo(() => artistName ? artistsOf(all).find(a => a.name === artistName) : undefined, [all, artistName])
-  const page = (node ?? album ?? artist ?? drafting) || (lab && (!!flowEdit || !!mixOpen))
+  const page = (node ?? album ?? artist ?? drafting) || !!flowEdit || !!mixOpen
 
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
@@ -341,9 +338,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     />
   )
   const searching = !page && query.trim() !== '' && !LINK_RE.test(query.trim())
-  const body = lab && flowEdit ? (
+  const body = flowEdit ? (
     <FlowLanes key={flowEdit} flowId={flowEdit} byId={byId} onOpen={id => go({ fl: id })} />
-  ) : lab && mixOpen ? (
+  ) : mixOpen ? (
     <MixView key={mixOpen} mixId={mixOpen} byId={byId} onEditFlow={id => go({ fl: id })} />
   ) : drafting ? (
     <NewPlaylist key={params.get('seed') ?? ''} byId={byId} seed={params.get('seed') ?? undefined} onCreated={opened} />
@@ -398,9 +395,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
 
   return (
     <div className="flex flex-col gap-4">
-      {lab && flowEdit ? (
+      {flowEdit ? (
         <PageHeader title={allFlows.find(f => f.id === flowEdit)?.name ?? 'Flow'} status="Flow · Music" onBack={() => go({})} />
-      ) : lab && mixOpen ? (
+      ) : mixOpen ? (
         <PageHeader title={allMixes.find(m => m.id === mixOpen)?.name ?? 'Mix'} status="Mix · Music" onBack={() => go({})} />
       ) : drafting ? (
         <PageHeader title="New playlist" status="Music" onBack={() => go({})} />
@@ -415,7 +412,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           title="Music"
           status={<><em>{tracks.length}</em> tracks{library && ` in ${activeLabel}`}{genre && ` · ${genre}`}</>}
           action={{ label: 'New playlist', onClick: () => newPlaylist() }}
-          tabs={[...tabs]}
+          tabs={[...TABS]}
           tab={tab}
           onTab={setTab}
         />
