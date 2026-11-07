@@ -217,7 +217,12 @@ def _analyse(tid: str, vid: str) -> None:
         with _lock:
             info = (_resolved.get(vid) or (0, {}))[1].get("info") or {}
         a.extra = genres.decide(
-            a.extra, str(file), a.duration, genres.source_genre(info), "source"
+            a.extra,
+            str(file),
+            a.duration,
+            genres.source_genre(info),
+            "source",
+            a.genre_patches,
         )
         store.save(tid, 0.0, file.stat().st_size, a)
         store.renormalise_if_needed()
