@@ -133,8 +133,17 @@ def _bands(
 def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
     """(bpm, beat0, bar0, confidence) of a mono signal at ``TEMPO_SR``; see SPEC-music-player §6.12."""
     n = int((len(x) - FFT_N) / HOP)
-    idx = (np.arange(n) * HOP).astype(int)[:, None] + np.arange(FFT_N)[None, :]
-    spec = np.abs(np.fft.rfft(x[idx] * np.hanning(FFT_N), axis=1))
+    starts = (np.arange(n) * HOP).astype(int)[:, None]
+    win = np.hanning(FFT_N)
+    # In chunks: all frames at once took 550 MB (indices and samples) for a 5 min track.
+    spec = np.concatenate(
+        [
+            np.abs(
+                np.fft.rfft(x[starts[i : i + 2048] + np.arange(FFT_N)] * win, axis=1)
+            )
+            for i in range(0, n, 2048)
+        ]
+    )
     flux = np.maximum(0, np.diff(np.log1p(1000 * spec), axis=0))
     freqs = np.fft.rfftfreq(FFT_N, 1 / TEMPO_SR)
     kick = flux[:, (freqs > 30) & (freqs < 150)].sum(1)
@@ -142,14 +151,17 @@ def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
     onset = np.maximum(onset - np.convolve(onset, np.ones(50) / 50, "same"), 0)
     fps = TEMPO_SR / HOP
 
-    score = []
-    for bpm in np.arange(70, 200.01, 0.1):
-        p = 60 * fps / bpm
-        lags = np.arange(1, 9) * p
-        s = sum(
-            np.dot(onset[: -int(lag) - 1], onset[int(lag) : -1]) for lag in lags
-        ) / len(lags)
-        score.append((s * np.exp(-0.5 * (np.log2(bpm / 140) / 0.6) ** 2), bpm))
+    # The comb only reads whole-frame lags: each lag's autocorrelation once, not per tempo.
+    bpms = np.arange(70, 200.01, 0.1)
+    lags = (np.arange(1, 9)[None, :] * (60 * fps / bpms)[:, None]).astype(int)
+    ac = np.array(
+        [np.dot(onset[: -lag - 1], onset[lag:-1]) for lag in range(lags.max() + 1)]
+    )
+    combs = ac[lags].sum(1) / lags.shape[1]
+    score = [
+        (s * np.exp(-0.5 * (np.log2(bpm / 140) / 0.6) ** 2), bpm)
+        for s, bpm in zip(combs, bpms)
+    ]
     score.sort(reverse=True)
     bpm = score[0][1]
     conf = score[0][0] / (np.mean([s for s, _ in score]) + 1e-9)
@@ -166,7 +178,7 @@ def tempo(x: np.ndarray) -> tuple[float, float, float, float]:
     def fit(b: float) -> float:
         p = 60 * fps / b
         ph, k = phases(b)
-        return max(np.interp(o + k * p, t, onset).sum() for o in ph)
+        return np.interp(ph[:, None] + k * p, t, onset).sum(1).max()
 
     cands = np.arange(bpm - 1.5, bpm + 1.501, 0.02)
     bpm = float(cands[int(np.argmax([fit(b) for b in cands]))])
