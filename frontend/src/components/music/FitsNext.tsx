@@ -105,8 +105,8 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
   const [settings] = useSettings()
   const f = filtersOf(useFitsPrefs(), settings.music_harmony_rule)
   const [more, setMore] = useState(false)
-  // In the lab, "after" ranks by the flow model: the pull and what the playing flow looks for next.
-  const flowMode = !!settings.lab && !then
+  // "After" ranks by the flow model: the pull and what the playing flow looks for next.
+  const flowMode = !then
   const q = useMusicQueue()
   const { flows } = useFlows()
   const playing = q.source?.flow ? flows.find(x => x.id === q.source!.flow) : undefined
