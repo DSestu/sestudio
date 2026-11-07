@@ -8,7 +8,8 @@ import { useSelectionActive } from '../selectionMode'
 import { closeDiscoverMenuThen, toggleDiscoverMenu, useDiscoverMenuOpen } from '../discoverMenu'
 import SourceIcon from './SourceIcon'
 import CreatorLinks from './CreatorLinks'
-import { ActivityBell, SettingsButton, TopCard } from './PageHeader'
+import { ActivityBell, SettingsButton, TopCard, ViaChip } from './PageHeader'
+import ServerDown from './ServerDown'
 import { deskSlotRef, setBell, usePageHeaderMounted } from '../pageHeader'
 import { usePhoneStripShown } from '../phoneStrip'
 import { AWAY, setBarsHidden, useBarsHidden } from '../barsHidden'
@@ -203,6 +204,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
               {view === 'home' && unreadBadge > 0 && (
                 <p className="mt-0.5 text-xs text-base-content/60"><span className="text-primary font-semibold">{unreadBadge}</span> new for you</p>
               )}
+              <ViaChip className="mt-1" />
             </div>
             <ActivityBell />
             <SettingsButton />
@@ -236,6 +238,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
                 <div ref={TITLE_SLOT} className="contents" />
                 <div className="flex-1 min-w-0">{searchBar}</div>
                 <div ref={MENU_SLOT} className="contents" />
+                <ViaChip />
                 <ActivityBell />
               </div>
               <div ref={TABS_SLOT} />
@@ -243,6 +246,7 @@ export default function AppShell({ view, onNavigate, downloadBadge = 0, unreadBa
           </div>
         )}
         {/* Every view uses the full width; the gutter grows with the window. */}
+        <ServerDown />
         <div className="w-full">{children}</div>
       </main>
 

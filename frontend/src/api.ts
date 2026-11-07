@@ -1567,3 +1567,73 @@ export async function searchChannels(q: string, source: 'twitch' | 'youtube' = '
   }
   return res.json()
 }
+
+// --- other sestudio servers (docs/SPEC-remote-servers.md) --------------------
+
+export interface ServerRow {
+  id: string
+  name: string
+  url: string
+  in_use: boolean
+  /** null before its first check. */
+  reachable: boolean | null
+  version: string
+  rtt_ms: number | null
+  /** Unix seconds, kept across restarts. */
+  last_seen: number | null
+  /** SHA-256 hex of the certificate it presented, '' over http. */
+  fingerprint: string
+  /** Pinned and matching (always true over http). */
+  trusted: boolean
+  error: string
+}
+
+export interface ServersList {
+  active: string | null
+  servers: ServerRow[]
+  /** What another sestudio needs to add this one. */
+  self: { addresses: string[]; fingerprint: string; version: string }
+}
+
+export async function getServers(check = false): Promise<ServersList> {
+  const res = await fetch(`${BASE}/servers${check ? '?check=true' : ''}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(await errorDetail(res))
+  return res.json()
+}
+
+export async function addServer(name: string, url: string): Promise<ServerRow> {
+  const res = await fetch(`${BASE}/servers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, url }),
+  })
+  if (!res.ok) throw new Error(await errorDetail(res))
+  return res.json()
+}
+
+export async function removeServer(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/servers/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(await errorDetail(res))
+}
+
+export async function checkServer(id: string): Promise<ServerRow> {
+  const res = await fetch(`${BASE}/servers/${id}/check`, { method: 'POST' })
+  if (!res.ok) throw new Error(await errorDetail(res))
+  return res.json()
+}
+
+export async function trustServer(id: string): Promise<ServerRow> {
+  const res = await fetch(`${BASE}/servers/${id}/trust`, { method: 'POST' })
+  if (!res.ok) throw new Error(await errorDetail(res))
+  return res.json()
+}
+
+/** Switch to a server, or back to this machine with null. */
+export async function setActiveServer(id: string | null): Promise<void> {
+  const res = await fetch(`${BASE}/servers/active`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  })
+  if (!res.ok) throw new Error(await errorDetail(res))
+}

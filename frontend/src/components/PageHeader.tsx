@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { GLASS_BUTTON, pageHeaderMounted, useBell, useDeskSlots } from '../pageHeader'
 import { AWAY, useBarsHidden } from '../barsHidden'
 import { useDiscoverTall } from '../discoverMenu'
+import { useActiveServer } from '../servers'
 
 // The phone's top card (docs/SPEC-nav-redesign.md §4.2): one floating glass
 // card per page with its name, a status line, a ⋯ menu of the page's actions
@@ -74,12 +75,34 @@ export function TopCard({ children, away: forced = false }: {
   )
 }
 
+/** "via <server>" while another sestudio is in use (docs/SPEC-remote-servers.md
+ *  §4 C): the one place that says where the data comes from. A link to the
+ *  Servers page. Nothing while this machine serves itself. */
+export function ViaChip({ className = '' }: { className?: string }) {
+  const active = useActiveServer()
+  if (!active) return null
+  return (
+    <a
+      href="#/settings?s=servers"
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium max-w-full ${
+        active.down ? 'bg-error/15 text-error' : 'bg-primary/18 text-primary'
+      } ${className}`}
+    >
+      <svg className="size-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 8h14l-3-3M20 16H6l3 3" />
+      </svg>
+      <span className="truncate">{active.down ? `${active.name} not answering` : `via ${active.name}`}</span>
+    </a>
+  )
+}
+
 /** Name and status line, the left of the card's first row. */
 export function CardTitle({ title, status, wrap = false }: { title: ReactNode; status?: ReactNode; wrap?: boolean }) {
   return (
     <div className="min-w-0 flex-1 flex flex-col justify-center leading-tight">
       <h2 className={`text-xl font-semibold tracking-tight ${wrap ? "line-clamp-2 break-words" : "truncate"}`}>{title}</h2>
       {status && <p className="mt-0.5 text-xs text-base-content/60 truncate">{status}</p>}
+      <ViaChip className="mt-1 self-start" />
     </div>
   )
 }
