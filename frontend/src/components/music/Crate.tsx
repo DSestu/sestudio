@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useDownloadedLibrary } from '../../downloadedLibrary'
-import { useLibraryTracks } from '../../musicLibraries'
-import { albumsOf, type MusicTrack } from '../../musicLibrary'
+import type { MusicTrack } from '../../musicLibrary'
+import { useLibraryPool } from './libraryPool'
 import { metaLine, useSummaries, useSummary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import { resolveLink, type OnlineLink, type QueueState } from '../../musicQueue'
@@ -13,7 +12,8 @@ import Meter from './Meter'
 import { armRowDrag, justDragged, type DragSource } from './rowDrag'
 import { armSwipe, justSwiped } from './swipe'
 import AutopilotFill from './AutopilotFill'
-import FitsNext from './FitsNext'
+import FitsGap from './FitsGap'
+import { useFitsAsk } from './gaps'
 import { crateHeight, isPhone, isShort, shortCols } from './timeline/mapping'
 
 // Adding to the queue (SPEC-music-player §5.5). In the default view the stage rises to uncover the crate
@@ -67,14 +67,13 @@ const SHOWN = 60
 
 /** Every library's tracks, as MusicView lists them: this PC's, then the other libraries'. */
 function useEntries(): Entry[] {
-  const titles = useDownloadedLibrary()
-  const others = useLibraryTracks()
+  const pool = useLibraryPool()
   return useMemo(
-    () => [...albumsOf(titles).flatMap(a => a.tracks), ...others].map(t => ({
+    () => pool.map(t => ({
       key: `${t.library}/${t.id}`, title: t.title, artist: t.artist, duration: t.duration, bpm: t.bpm, analysisId: t.id,
       ref: { library: t.library, track_id: t.id }, library: t.library, libraryLabel: t.libraryLabel, track: t,
     })),
-    [titles, others],
+    [pool],
   )
 }
 
@@ -88,33 +87,10 @@ function useViewport() {
   return { W: innerWidth, H: innerHeight }
 }
 
-/** Fits next, anchored to the queue's last track (else the playing one): the shared list, with Autopilot under it. */
-function FitsTab({ all, q, dense }: { all: Entry[]; q: QueueState; dense?: boolean }) {
+/** Fits next: what fits the focus gap (or after the last track), or each track at its best place; Autopilot under it. */
+function FitsTab({ all, q, aim, dense }: { all: Entry[]; q: QueueState; aim: Aim; dense?: boolean }) {
   const library = useMemo(() => all.flatMap(e => e.track ?? []), [all])
-  const byId = useMemo(() => new Map(library.map(t => [t.id, t])), [library])
-  const ids = useMemo(() => q.items.map(i => i.track_id), [q.items])
-  const lastId = [...ids].reverse().find(id => byId.has(id)) ?? ids[q.current]
-  const anchor = lastId ? byId.get(lastId) : undefined
-  const footer = <AutopilotFill compact={dense} />
-  if (!anchor) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <p className="px-4 py-6 text-center text-sm text-base-content/60">Play or queue a track and what fits after it shows here.</p>
-        <div className="px-4 pb-3">{footer}</div>
-      </div>
-    )
-  }
-  return (
-    <FitsNext
-      anchor={anchor} where={lastId === ids.at(-1) ? 'last in the queue' : undefined} library={library} exclude={ids} dense={dense} footer={footer}
-      action={{ label: 'Add to queue', onPick: t => void addTracks([{ library: t.library, track_id: t.id }], undefined, `Added ${t.title}`) }}
-      drag={t => ({
-        from: null,
-        cur: () => q.current,
-        onDrop: at => void addTracks([{ library: t.library, track_id: t.id }], at, at === q.current + 1 ? `${t.title} plays next` : `Added ${t.title}`),
-      })}
-    />
-  )
+  return <FitsGap library={library} q={q} aim={aim} dense={dense} footer={<AutopilotFill compact={dense} />} />
 }
 
 /** The list's state: which library, the search (here and online), the stop shown, and whether a pasted link is shown instead. */
@@ -123,6 +99,10 @@ function useFinder(all: Entry[]) {
   const [query, setQuery] = useState('')
   const [lib, setLib] = useState('')
   const [paste, setPaste] = useState(false)
+  // "More in Fits next" switches to Fits next, also when it is what mounted this list.
+  const asked = useFitsAsk()
+  const [seenAsk, setSeenAsk] = useState(() => (asked && performance.now() - asked < 1000 ? -1 : asked))
+  if (asked !== seenAsk) { setSeenAsk(asked); setPaste(false); setTab('fits') }
   const [pick, setPick] = useState<Stop | null>(null)
   const libs = useMemo(() => [...new Map(all.map(e => [e.library, e.libraryLabel])).entries()], [all])
   const ids = useMemo(() => all.map(e => e.analysisId).filter(Boolean), [all])
@@ -496,7 +476,7 @@ export function LibraryList({ q, aim, aimTitle, head, onClose, rail = false }: {
   const all = useEntries()
   const f = useFinder(all)
   const queued = useMemo(() => new Set(q.items.map(i => i.track_id)), [q.items])
-  const list = f.tab === 'fits' ? <FitsTab all={all} q={q} /> : (
+  const list = f.tab === 'fits' ? <FitsTab all={all} q={q} aim={aim} /> : (
     <div data-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
       <Rows f={f} q={q} aim={aim} queued={queued} />
     </div>
@@ -581,7 +561,7 @@ export default function Crate({ q, aim, aimTitle, onClose }: { q: QueueState; ai
     >
       {isPhone(W)
         ? <div className="flex min-h-0 flex-1 flex-col pt-2"><LibraryList q={q} aim={aim} aimTitle={aimTitle} head={<h3 className="shrink-0 text-[15px] font-semibold">Add to queue</h3>} onClose={onClose} /></div>
-        : <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-3.5 pt-3.5">{head}{f.tab === 'fits' ? <FitsTab all={all} q={q} dense /> : cards(f.paste ? 'flex items-stretch' : 'grid grid-flow-col grid-rows-2 auto-cols-max [&>[data-row]]:max-h-none')}</div>}
+        : <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-3.5 pt-3.5">{head}{f.tab === 'fits' ? <FitsTab all={all} q={q} aim={aim} dense /> : cards(f.paste ? 'flex items-stretch' : 'grid grid-flow-col grid-rows-2 auto-cols-max [&>[data-row]]:max-h-none')}</div>}
     </aside>
   )
 }

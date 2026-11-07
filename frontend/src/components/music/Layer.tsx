@@ -6,6 +6,7 @@ import { frameAt, getMode, titleWidth, MODE_MS, ModeMotion, pull, setMode, useMo
 import { closePlayer, closeThen, useTvSound } from './player'
 import PlayerSearch from './PlayerSearch'
 import Crate, { LibraryList } from './Crate'
+import { askFits } from './gaps'
 import { wake } from './idle'
 import { joins } from './joins'
 import ToastBar from './ToastBar'
@@ -591,6 +592,8 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
           expanded={expanded}
           onPin={toggle}
           tv={tv}
+          aim={aim}
+          onAim={(at, more) => { setAim(at); if (more) { askFits(); setReveal('pinned') } }}
           library={tabs ? <LibraryList q={q} aim={aimObj} aimTitle={aimTitle} /> : undefined}
         />
       </div>
