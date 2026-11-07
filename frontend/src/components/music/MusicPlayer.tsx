@@ -1,9 +1,15 @@
 import Layer from './Layer'
 import PlayerBar from './PlayerBar'
-import { useLayerOpen, useMusicHost } from './player'
+import { useLayerMounted, useMusicHost } from './player'
 
-/** Everything the music player adds to the app shell: the sound, the bar and the layer. */
+/** Everything the music player adds to the app shell: the sound, the bar and the layer. The bar stays under the layer: it grows out of it and shrinks back into it. */
 export default function MusicPlayer({ onMusicPage }: { onMusicPage: boolean }) {
   useMusicHost()
-  return useLayerOpen() ? <Layer /> : <PlayerBar onMusicPage={onMusicPage} />
+  const layer = useLayerMounted()
+  return (
+    <>
+      <PlayerBar onMusicPage={onMusicPage} />
+      {layer && <Layer />}
+    </>
+  )
 }
