@@ -19,6 +19,8 @@ export interface BrowserPlayerControls {
   height: () => number
   /** Heights the source plays at, best first; empty when it has one. */
   qualities: number[]
+  /** Frames the video has shown and dropped so far, null where the browser can't say. */
+  frames: () => { total: number; dropped: number } | null
 }
 
 let state: BrowserPlayerControls | null = null

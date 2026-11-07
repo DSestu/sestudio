@@ -29,6 +29,8 @@ export interface BrowserSession {
 export interface CastSession {
   episode: PlayableEpisode
   target: CastTarget
+  /** The TV's name as picked ("Salon · LG"), when known. */
+  device?: string
 }
 
 let browser: BrowserSession | null = null
@@ -74,8 +76,8 @@ export function useCastSession(): CastSession | null {
 }
 export function getCastSession(): CastSession | null { return cast }
 
-export function startCastSession(episode: PlayableEpisode, target: CastTarget): void {
-  cast = { episode, target }
+export function startCastSession(episode: PlayableEpisode, target: CastTarget, device?: string): void {
+  cast = { episode, target, device }
   emitCast()
 }
 /** Advance the casting episode (autoplay-next) without changing the target. */

@@ -9,7 +9,6 @@ import {
   dlnaVolumeBy, useDlnaState,
 } from '../../dlnaControl'
 import { useBrowserPlayerControls } from '../../browserPlayerControls'
-import { getCastQueue } from '../../castQueue'
 import { useBarsHidden } from '../../barsHidden'
 import { castLive } from '../../api'
 import { loadPlayerPrefs } from '../../playerPrefs'
@@ -19,8 +18,7 @@ import CastQuality from './CastQuality'
 import CastTracks from './CastTracks'
 import type { Navigate } from '../../nav'
 import { sameEpisode, useBrowserSession, useCastSession } from '../../playbackSession'
-import { requestPullback } from '../../pullback'
-import { saveProgress } from '../../watchState'
+import { pullBackEpisode } from '../../pullback'
 import { usePhoneStrip } from '../../phoneStrip'
 import { pullBackFromTv, useMusicCasting } from '../../musicCast'
 import { queueActions, useMusicQueue, useTrackInfo } from '../../musicQueue'
@@ -191,9 +189,7 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   function watchHere() {
     if (music) return void pullBackFromTv(music)
     if (!ep) return
-    saveProgress(ep, live.position, live.duration)
-    requestPullback(getCastQueue() ?? { episodes: [ep], index: 0 })
-    live.stop()
+    pullBackEpisode(ep, live.position, live.duration, live.stop)
   }
 
   return (

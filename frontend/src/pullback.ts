@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { PlayableEpisode } from './providers'
+import { getCastQueue } from './castQueue'
+import { saveProgress } from './watchState'
 
 // TV → browser handoff ("watch here"): a cast controller requests that the
 // app open the in-browser player on a playlist. App renders the PlayerModal;
@@ -32,4 +34,12 @@ export function requestPullback(r: PullbackRequest): void {
 export function clearPullback(): void {
   request = null
   emit()
+}
+
+/** Hand an episode on the TV back to this browser, resuming where the TV is:
+ *  "Watch here" in the Now Casting bar, "Bring it back here" on the watch page. */
+export function pullBackEpisode(ep: PlayableEpisode, position: number, duration: number, stop: () => unknown): void {
+  saveProgress(ep, position, duration)
+  requestPullback(getCastQueue() ?? { episodes: [ep], index: 0 })
+  void stop()
 }

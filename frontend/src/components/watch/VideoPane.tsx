@@ -246,6 +246,10 @@ export default function VideoPane({
         return p ? bufferedAhead(p.state.buffered, p.state.currentTime) : 0
       },
       height: () => playerRef.current?.state.quality?.height ?? 0,
+      frames: () => {
+        const q = playerRef.current?.el?.querySelector('video')?.getVideoPlaybackQuality?.()
+        return q ? { total: q.totalVideoFrames, dropped: q.droppedVideoFrames } : null
+      },
     })
   }, [paused, qualities])
   useEffect(() => () => setBrowserPlayerControls(null), [])

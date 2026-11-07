@@ -8,7 +8,8 @@ import { fileFor, downloadedSnapshot } from '../../downloadedLibrary'
 import { castSeek, castToChromecast, describeCastError, loadCast, useCastState } from '../../cast'
 import { dlnaSeek, dlnaStarted, useDlnaState } from '../../dlnaControl'
 import { startCastQueue } from '../../castQueue'
-import { startCastSession } from '../../playbackSession'
+import { sameEpisode, startCastSession } from '../../playbackSession'
+import { useTvNow } from '../../tvNow'
 import { isLanHost, isLoopback } from '../../serverLan'
 import { loadPlayerPrefs } from '../../playerPrefs'
 import type { PlayableEpisode } from '../../providers'
@@ -72,6 +73,9 @@ export default function OutputSwitcher({
   const dlna = useDlnaState()
   const casting = cast.connected || dlna.connected
   const ep = episodes[index]
+  // This very episode is on the TV: the button brings it back instead.
+  const tv = useTvNow()
+  const onTv = tv && sameEpisode(tv.episode, ep) ? tv : null
 
   useEffect(() => {
     let cancelled = false
@@ -176,7 +180,7 @@ export default function OutputSwitcher({
       } else {
         await sendTo(source.proxy_url, source.kind, ep.title, mode, udn, source.subtitles, step)
       }
-      startCastSession(ep, mode)
+      startCastSession(ep, mode, label)
       // Handoff: continue on the TV from where the browser player was.
       if (handoffAt > 5) {
         step(`Jumping to ${Math.floor(handoffAt / 60)}:${String(Math.floor(handoffAt % 60)).padStart(2, '0')} on the TV…`)
@@ -223,17 +227,26 @@ export default function OutputSwitcher({
 
   return (
     // min-w-0: a long title on the phone row must truncate, not widen the page.
-    <div className="flex flex-col gap-3 min-w-0 flex-1 lg:flex-initial">
+    <div className="flex flex-col gap-3 min-w-0 w-full">
       <div className="flex items-center gap-2 flex-wrap">
-        <button onClick={() => setPicking(p => !p)} className="btn btn-sm btn-outline gap-1" aria-expanded={picking}>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d={CAST_ICON} />
-          </svg>
-          {casting ? 'Cast this episode' : 'Send to TV'}
-        </button>
+        {onTv ? (
+          <button onClick={onTv.bringBack} className="btn btn-sm gap-1.5 flex-1 lg:flex-none" title={`Stop ${onTv.device} and play here from where it is`}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
+            </svg>
+            Bring it back here
+          </button>
+        ) : (
+          <button onClick={() => setPicking(p => !p)} className="btn btn-sm btn-outline gap-1 flex-1 lg:flex-none" aria-expanded={picking}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d={CAST_ICON} />
+            </svg>
+            {casting ? 'Cast this episode' : 'Send to TV'}
+          </button>
+        )}
         {children}
         {casting && (
-          <span className="text-xs text-base-content/50">
+          <span className="basis-full order-last text-xs text-base-content/50">
             Casting continues below — this swaps what’s on the TV.
           </span>
         )}
