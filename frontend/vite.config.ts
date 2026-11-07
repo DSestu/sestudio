@@ -8,8 +8,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
+      // SESTUDIO_API: the live-preview skill points a worktree's dev server at
+      // the live server (https, self-signed) or at the worktree's own backend.
+      '/api': { target: process.env.SESTUDIO_API ?? 'http://localhost:8080', secure: false, changeOrigin: true },
     },
+    // /mnt/* (drvfs) sends no inotify events to WSL, so edits there need polling.
+    watch: process.env.VITE_POLL ? { usePolling: true } : undefined,
   },
   test: {
     // The suite covers the pure store logic, so the default node environment is
