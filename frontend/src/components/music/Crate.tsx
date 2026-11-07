@@ -108,6 +108,11 @@ function FitsTab({ all, q, dense }: { all: Entry[]; q: QueueState; dense?: boole
     <FitsNext
       anchor={anchor} where={lastId === ids.at(-1) ? 'last in the queue' : undefined} library={library} exclude={ids} dense={dense} footer={footer}
       action={{ label: 'Add to queue', onPick: t => void addTracks([{ library: t.library, track_id: t.id }], undefined, `Added ${t.title}`) }}
+      drag={t => ({
+        from: null,
+        cur: () => q.current,
+        onDrop: at => void addTracks([{ library: t.library, track_id: t.id }], at, at === q.current + 1 ? `${t.title} plays next` : `Added ${t.title}`),
+      })}
     />
   )
 }
