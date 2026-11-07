@@ -105,7 +105,8 @@ def _sustained(mag: np.ndarray) -> np.ndarray:
         view = np.lib.stride_tricks.sliding_window_view(
             padded[:, i : i + 200 + k - 1], k, axis=1
         )
-        out[:, i : i + 200] = np.median(view, axis=-1)
+        # The middle of a partition: np.median does the same plus NaN checks, 4x slower.
+        out[:, i : i + 200] = np.partition(view, k // 2, axis=-1)[..., k // 2]
     return out
 
 
