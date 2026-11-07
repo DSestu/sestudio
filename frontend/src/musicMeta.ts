@@ -137,6 +137,12 @@ export const metaLine = (s: Summary | undefined, bpm?: number, theory: Theory = 
   [(s?.bpm || bpm) && fmtBpm((s?.bpm || bpm)!), keyDisplay(theory, s)?.text, s?.genre && genreShort(s.genre)].filter(Boolean).join(' · ')
 
 /** Summaries of many tracks (a library view): the getter, and a number that changes as more arrive. */
+/** A track's summary if known; asks for it otherwise (outside React, e.g. a frame loop). */
+export function summaryOf(id: string): Summary | undefined {
+  requestSummary(id)
+  return known.get(id)
+}
+
 export function useSummaries(ids: string[]): { get: (id: string) => Summary | undefined; v: number } {
   const v = useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => version)
   useEffect(() => {

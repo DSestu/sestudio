@@ -99,7 +99,7 @@ export function GapBox({ q, at, gap, info, onClose, onMore, onKeep }: {
     void addTracks([{ library: t.library, track_id: t.id }], where, where === at ? `${t.title} goes between ${ta} and ${tb}` : `Added ${t.title}`)
     if (where === at) onClose()
   }
-  const src = (t: MusicTrack): DragSource => ({ from: null, cur: () => getQueue().current, onDrop: to => insert(t, to) })
+  const src = (t: MusicTrack): DragSource => ({ from: null, id: t.id, cur: () => getQueue().current, onDrop: to => insert(t, to) })
   return (
     <div
       ref={el}

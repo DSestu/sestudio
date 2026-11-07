@@ -1,9 +1,10 @@
 import ResponsiveModal from '../../ResponsiveModal'
 import { useModalBack } from '../../../useModalBack'
-import Keyboard from '../harmony/Keyboard'
+import { playChange } from '../harmony/audio'
+import { JoinSpans } from '../harmony/KeySpans'
 import { NOTE, parseReading } from '../harmony/scales'
 import { openHarmonyBasics } from '../harmony/store'
-import { join } from './proximity'
+import { join, joinColor } from './proximity'
 import { isClash, type SetTrack } from './setBuilder'
 
 const read = (t: SetTrack) => {
@@ -48,17 +49,22 @@ export default function JoinDialog({ a, b, titleA, titleB, kept, onFix, onClose 
       </div>
       <div>
         <div className={`text-xl font-semibold tracking-tight ${clash ? 'text-warning' : ''}`}>{j.kindLabel ?? 'Key not known yet'}</div>
-        {j.shared !== null && (
+        {j.semitones !== null ? (
+          <p className="text-sm text-base-content/60">The same scale, {j.semitones > 0 ? 'up' : 'down'} {Math.abs(j.semitones)} semitone{Math.abs(j.semitones) === 1 ? '' : 's'}: a {j.semitones > 0 ? 'lift' : 'drop'} that works in any mix.</p>
+        ) : j.shared !== null && (
           <p className="text-sm text-base-content/60">
             {j.shared} of 7 notes shared
             {onlyA.length > 0 && ` · ${list(onlyA)} in ${titleA} becomes ${list(onlyB)}`}
           </p>
         )}
       </div>
-      {x && y && (
+      {x && y && a.harmony?.track && b.harmony?.track && (
         <div className="flex flex-col gap-2">
-          <Keyboard notes={x.notes} home={x.home} other={y.notes} otherHome={y.home} />
-          <p className="text-xs text-base-content/50">Solid: in both. A: only in {titleA}. B: only in {titleB}.</p>
+          <JoinSpans a={a.harmony.track} b={b.harmony.track} verdict={{ label: j.kindLabel ?? '', color: joinColor(j) }} s={1.7} />
+          <p className="text-xs text-base-content/50">Notes in the order of fifths: {titleA} on top, {titleB} below, slid to its place. The lines are the notes they share.</p>
+          <button onClick={() => playChange(x.notes, x.home, y.notes, y.home)} className="btn btn-sm btn-primary btn-soft gap-1.5 self-start">
+            <span aria-hidden="true">▶</span>Hear A, then B
+          </button>
         </div>
       )}
       <dl className="grid gap-3 text-sm">

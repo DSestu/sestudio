@@ -6,7 +6,8 @@ import { filtersOf, plainKind, proxOf, rankFits, relaxations, type FitsFilters }
 import { setFitsPref as setPref, useFitsPrefs } from '../../fitsPrefs'
 import { useTheory } from '../../musicTheory'
 import { useSettings } from '../../useSettings'
-import { joinColor, type Join } from './crates/proximity'
+import { joinColor, type Join, type Reading } from './crates/proximity'
+import { PairSpans } from './harmony/KeySpans'
 import { gapBridges } from './gaps'
 import { openHarmonyBasics } from './harmony/store'
 import { openKeyCard } from './harmony/keyCardStore'
@@ -31,7 +32,7 @@ const MORE: { key: keyof FitsFilters; label: string; options: [string, string][]
 ]
 const ENERGY: [FitsFilters['energy'], string][] = [['any', 'Any energy'], ['lift', 'Lift'], ['hold', 'Hold'], ['ease', 'Ease off']]
 const PULLS: [Flow['pull'], string][] = [['light', 'Light'], ['strong', 'Strong'], ['only', 'Only']]
-const LOOK: [string, string][] = [['match', 'Match'], ...['up', 'down', 'mode+', 'mode-', 'relative', 'break'].map(k => [k, KINDS[k]] as [string, string])]
+const LOOK: [string, string][] = [['match', 'Match'], ...['up', 'down', 'mode+', 'mode-', 'relative', 'lift', 'lower', 'break'].map(k => [k, KINDS[k]] as [string, string])]
 
 /** Why a row ranks where it does, in the flow's words: the join, its fit, and what tempo or energy cost. */
 function FlowWhy({ join, fit, tempo, energy }: { join: string | null; fit: number; tempo: number | null; energy: number | null }) {
@@ -62,15 +63,15 @@ function Choice<T extends string>({ label, value, options, onPick }: { label: st
   )
 }
 
-/** Why a row fits: the kind of join in its colour, the energy step and any tempo jump; notes shared at the theory level. */
-function Why({ j, then, theory }: { j: Join; then?: Join; theory: boolean }) {
+/** Why a row fits: the kind of join in its colour (with both keys known, as the small pair of runs), the energy step and any tempo jump; notes shared at the theory level. */
+function Why({ j, then, theory, pair }: { j: Join; then?: Join; theory: boolean; pair?: { a?: Reading; b?: Reading; replay?: number } }) {
   const kind = (x: Join) => theory ? (x.kindLabel ?? 'Key not known') : plainKind(x.kind)
   const tempo = j.tempoJump || then?.tempoJump
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs">
-      <i className="inline-block size-2 shrink-0 rounded-full" style={{ background: joinColor(j) }} aria-hidden="true" />
+      {pair?.a && pair.b ? <PairSpans a={pair.a} b={pair.b} replay={pair.replay} /> : <i className="inline-block size-2 shrink-0 rounded-full" style={{ background: joinColor(j) }} aria-hidden="true" />}
       <span style={{ color: joinColor(j) }}>{kind(j)}</span>
-      {theory && j.shared != null && <span className="text-base-content/50">· {j.shared} of 7 notes</span>}
+      {theory && j.semitones !== null ? <span className="text-base-content/50">· same scale</span> : theory && j.shared != null && <span className="text-base-content/50">· {j.shared} of 7 notes</span>}
       {then
         ? <span className="text-base-content/50">· then {kind(then)}</span>
         : j.energy.step && <span className="text-base-content/50">· {j.energy.step}</span>}
@@ -111,6 +112,8 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
   const [settings] = useSettings()
   const f = filtersOf(useFitsPrefs(), settings.music_harmony_rule)
   const [more, setMore] = useState(false)
+  /** Row id -> times the pointer came onto it: each one replays the row's slide. */
+  const [enters, setEnters] = useState<Record<string, number>>({})
   // "After" ranks by the flow model: the pull and what the playing flow looks for next.
   const flowMode = !then
   const q = useMusicQueue()
@@ -191,8 +194,8 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
     <div className={`flex flex-wrap items-center gap-1.5 ${dense ? '' : 'px-4 pb-2'}`}>
           <Choice
             label="Harmony"
-            value={deep ? f.harmony : f.harmony === 'any' ? 'any' : 'fits'}
-            options={deep ? [['same', 'Same notes'], ['close', 'Close'], ['any', 'Any']] : [['fits', 'Smooth only'], ['any', 'Anything']]}
+            value={deep || f.harmony === 'lift' || f.harmony === 'drop' ? f.harmony : f.harmony === 'any' ? 'any' : 'fits'}
+            options={deep ? [['same', 'Same notes'], ['close', 'Close'], ['lift', 'Lift'], ['drop', 'Drop'], ['any', 'Any']] : [['fits', 'Smooth only'], ['lift', 'Lift'], ['drop', 'Drop'], ['any', 'Anything']]}
             onPick={h => setPref({ harmony: h === 'fits' ? (settings.music_harmony_rule === 'any' ? 'close' : settings.music_harmony_rule ?? 'close') : h as FitsFilters['harmony'] })}
           />
           <Choice label="Energy" value={f.energy} options={ENERGY} onPick={e => setPref({ energy: e })} />
@@ -249,9 +252,9 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
           const t = byId.get(r.id)!
           const k = keyDisplay(theory, get(r.id))
           const bpm = get(r.id)?.bpm || t.bpm
-          const why = <Why j={r.join} then={r.then} theory={deep} />
+          const why = <Why j={r.join} then={r.then} theory={deep} pair={{ a: get(anchor.id)?.harmony?.track, b: get(r.id)?.harmony?.track, replay: enters[r.id] ?? 0 }} />
           return (
-            <li key={r.id} className={rowCls} {...rowProps(t)}>
+            <li key={r.id} className={rowCls} {...rowProps(t)} onPointerEnter={() => setEnters(e => ({ ...e, [r.id]: (e[r.id] ?? 0) + 1 }))}>
               <span className="min-w-0 flex-1 leading-tight">
                 <span className="block truncate text-sm font-medium">{t.title}</span>
                 <span className="flex items-center gap-1.5 truncate text-xs text-base-content/60">

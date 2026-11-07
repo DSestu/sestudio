@@ -2,14 +2,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useDownloadedLibrary } from '../../../downloadedLibrary'
 import { moodOf } from '../../../harmony'
 import { albumsOf, type MusicTrack } from '../../../musicLibrary'
-import { useSummary, type Summary } from '../../../musicMeta'
+import { useSummaries, useSummary, type Summary } from '../../../musicMeta'
 import { queueActions, type MixSettings } from '../../../musicQueue'
 import { fetchFitsAfter } from '../crates/harmonyApi'
 import JoinChip from '../crates/JoinChip'
-import { join as joinOf, type Join, type ProxTrack } from '../crates/proximity'
+import { join as joinOf, joinColor, type Join, type ProxTrack } from '../crates/proximity'
 import type { SyncStatus } from '../engine'
 import { fmtBpm } from '../format'
-import Keyboard from '../harmony/Keyboard'
+import { playChange } from '../harmony/audio'
+import { JoinSpans } from '../harmony/KeySpans'
 import { parseReading } from '../harmony/scales'
 import type { Plan, Track } from '../timeline/sampling'
 
@@ -98,11 +99,12 @@ function Harmony({ a, b, queued, onUse }: { a: string; b: string; queued: string
   }, [a, j.safe, j.kind, key, byId])
   const ra = reading(sa)
   const rb = reading(sb)
+  const alt = useSummaries(useMemo(() => alts.map(x => x.t.id), [alts]))
   const wa = moodOf(sa?.harmony?.track?.mode)?.word
   const wb = moodOf(sb?.harmony?.track?.mode)?.word
   if (!j.kind) return <div className="pt-1.5 border-t border-white/10 text-base-content/55">No key for one of the tracks yet, so no harmony.</div>
   const facts = [
-    j.shared !== null && `${j.shared} of 7 notes`,
+    j.semitones !== null ? `same scale, ${j.semitones > 0 ? 'up' : 'down'} ${Math.abs(j.semitones)} semitone${Math.abs(j.semitones) === 1 ? '' : 's'}` : j.shared !== null && `${j.shared} of 7 notes`,
     wa && wb && `${wa} → ${wb}`,
     j.energy.step && `energy ${j.energy.step}`,
     j.tempoJump && 'tempo jump',
@@ -114,7 +116,12 @@ function Harmony({ a, b, queued, onUse }: { a: string; b: string; queued: string
         <JoinChip join={j} className="font-semibold text-[13px]" />
         <div className="text-base-content/60">{facts}</div>
       </div>
-      {ra && rb && <Keyboard notes={ra.notes} home={ra.home} other={rb.notes} otherHome={rb.home} width={250} />}
+      {sa?.harmony?.track && sb?.harmony?.track && <JoinSpans a={sa.harmony.track} b={sb.harmony.track} verdict={{ label: j.kindLabel ?? '', color: joinColor(j) }} />}
+      {ra && rb && (
+        <button type="button" onClick={() => playChange(ra.notes, ra.home, rb.notes, rb.home)} className="self-start px-2.5 py-1 rounded-lg bg-primary/15 text-primary font-medium hover:bg-primary/25">
+          <span aria-hidden="true">▶ </span>Hear A, then B
+        </button>
+      )}
       {!j.safe && alts.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <div className="text-base-content/60">Smoother next tracks</div>
@@ -122,7 +129,7 @@ function Harmony({ a, b, queued, onUse }: { a: string; b: string; queued: string
             <div key={t.id} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <b className="block truncate font-medium">{t.title}</b>
-                <JoinChip join={join} className="text-[11px] text-base-content/60" />
+                <JoinChip join={join} pair={{ a: sa?.harmony?.track, b: alt.get(t.id)?.harmony?.track }} className="text-[11px] text-base-content/60" />
               </div>
               <button type="button" onClick={() => onUse(t)} className="px-2.5 py-1 rounded-lg bg-primary/25 text-primary font-medium hover:bg-primary/35">Use instead</button>
             </div>

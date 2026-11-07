@@ -62,7 +62,7 @@ function Anywhere({ library, q }: { library: MusicTrack[]; q: QueueState }) {
     return out.sort((x, y) => y.g.gain - x.g.gain).slice(0, 30)
   }, [library, q.items, q.current, v]) // eslint-disable-line react-hooks/exhaustive-deps
   const light = (at: number | null) => document.querySelectorAll<HTMLElement>('[data-gap]').forEach(el => { el.dataset.hl = String(+el.dataset.gap! === at ? 1 : 0) })
-  const src = (t: MusicTrack): DragSource => ({ from: null, cur: () => getQueue().current, onDrop: at => void addTracks([ref(t)], at, `Added ${t.title}`) })
+  const src = (t: MusicTrack): DragSource => ({ from: null, id: t.id, cur: () => getQueue().current, onDrop: at => void addTracks([ref(t)], at, `Added ${t.title}`) })
   if (!rows.length) return <p className="px-4 py-8 text-center text-sm text-base-content/60">Nothing analysed to place yet.</p>
   return (
     <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" onMouseLeave={() => light(null)}>
@@ -162,7 +162,7 @@ export default function FitsGap({ library, q, aim, dense, footer }: { library: M
         where={at === null && lastId === ids.at(-1) ? 'last in the queue' : undefined}
         onAfter={() => { aim.set(null); setPin(null); setFollow(false) }}
         action={{ label: at !== null ? 'Insert' : 'Add to queue', onPick: insert }}
-        drag={t => ({ from: null, cur: () => getQueue().current, onDrop: to => void addTracks([ref(t)], to, `Added ${t.title}`) })}
+        drag={t => ({ from: null, id: t.id, cur: () => getQueue().current, onDrop: to => void addTracks([ref(t)], to, `Added ${t.title}`) })}
       />
     </div>
   )

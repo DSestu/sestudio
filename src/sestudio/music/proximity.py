@@ -21,6 +21,7 @@ KINDS: Final = {
     "pivot": "Same notes",
     "modal-shift": "One note changes",
     "next-door": "Next door",
+    "transposed": "Transposed",
     "clash": "Clash",
 }
 #: Shared notes (of 7) from which a join counts as safe.
@@ -37,12 +38,22 @@ Track = dict[str, Any]
 Join = dict[str, Any]
 
 
-def _notes(t: Track) -> tuple[int, int] | None:
-    """(tonic, note mask) of the whole track's reading."""
+def _notes(t: Track) -> tuple[int, int, str] | None:
+    """(tonic, note mask, mode) of the whole track's reading."""
     h = (t.get("harmony") or {}).get("track")
     if not h or h.get("tonic") not in NAMES:
         return None
-    return NAMES.index(h["tonic"]), sum(1 << NAMES.index(n) for n in h["notes"])
+    return (
+        NAMES.index(h["tonic"]),
+        sum(1 << NAMES.index(n) for n in h["notes"]),
+        h.get("mode") or "",
+    )
+
+
+def semitones(a: int, b: int) -> int:
+    """From tonic *a* to tonic *b*, the short way: -5..6 semitones."""
+    d = (b - a) % 12
+    return d - 12 if d > 6 else d
 
 
 def _wheel(camelot: str | None) -> tuple[int, str] | None:
@@ -58,12 +69,35 @@ def _kind(shared: int, same_tonic: bool) -> str:
     return "clash"
 
 
+def transposition(a: Track, b: Track) -> int | None:
+    """Semitones from *a*'s key to *b*'s when *b* is the same scale moved (same mode, another tonic, fewer than
+    6 notes shared: 5 and 7 semitones share 6 and stay next door); None otherwise. Every one is a good join,
+    in any mix. Camelot stands in when a track has no harmony yet: same letter, 2 to 6 steps (each a fifth)."""
+    x, y = _notes(a), _notes(b)
+    if x and y:
+        if (
+            x[2]
+            and x[2] == y[2]
+            and x[0] != y[0]
+            and (x[1] & y[1]).bit_count() < SAFE_NOTES
+        ):
+            return semitones(x[0], y[0])
+        return None
+    p, q = _wheel(a.get("camelot")), _wheel(b.get("camelot"))
+    if not (p and q) or p[1] != q[1]:
+        return None
+    d = semitones(0, (q[0] - p[0]) * 7 % 12)
+    return d if abs(d) not in (0, 5) else None
+
+
 def harmony(a: Track, b: Track) -> tuple[int | None, str | None]:
     """(shared notes, move kind) from the note sets; Camelot stands in when a track has no harmony yet."""
     x, y = _notes(a), _notes(b)
     if x and y:
         n = (x[1] & y[1]).bit_count()
-        return n, _kind(n, x[0] == y[0])
+        return n, "transposed" if transposition(a, b) is not None else _kind(
+            n, x[0] == y[0]
+        )
     p, q = _wheel(a.get("camelot")), _wheel(b.get("camelot"))
     if not (p and q):
         return None, None
@@ -73,7 +107,7 @@ def harmony(a: Track, b: Track) -> tuple[int | None, str | None]:
         return 7, "same-key" if p[1] == q[1] else "pivot"
     if d == 1 and p[1] == q[1]:
         return SAFE_NOTES, "next-door"
-    return None, "clash"
+    return None, "transposed" if transposition(a, b) is not None else "clash"
 
 
 def _edge(t: Track, which: str) -> float | None:
@@ -112,7 +146,8 @@ def join(a: Track, b: Track) -> Join:
         "shared": shared,
         "kind": kind,
         "kindLabel": KINDS.get(kind or ""),
-        "safe": shared is not None and shared >= SAFE_NOTES,
+        "safe": kind == "transposed" or (shared is not None and shared >= SAFE_NOTES),
+        "semitones": transposition(a, b) if kind == "transposed" else None,
         "mood": mood,
         "energy": {"step": step, "delta": delta},
         "genreChange": bool(ga and gb and ga != gb),
@@ -128,7 +163,14 @@ def tempo_ok(j: Join) -> bool:
 
 def cost(j: Join) -> float:
     """Lower is a better follow-up: notes first, then the tempo gap and the energy step."""
-    notes = 7 - j["shared"] if j["shared"] is not None else 4
+    # A transposition ranks with the 6-shared moves.
+    notes = (
+        1
+        if j["kind"] == "transposed"
+        else 7 - j["shared"]
+        if j["shared"] is not None
+        else 4
+    )
     return (
         notes * 3
         + min(abs(j["bpmDelta"] or 0) / 10, 2)

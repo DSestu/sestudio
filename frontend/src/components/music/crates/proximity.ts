@@ -28,17 +28,20 @@ export interface ProxTrack {
   energyScale?: { track?: number; intro?: number; outro?: number }
 }
 
-export type Kind = 'same-key' | 'pivot' | 'modal-shift' | 'next-door' | 'clash'
+export type Kind = 'same-key' | 'pivot' | 'modal-shift' | 'next-door' | 'transposed' | 'clash'
 export const KINDS: Record<Kind, string> = {
   'same-key': 'Same key',
   pivot: 'Same notes',
   'modal-shift': 'One note changes',
   'next-door': 'Next door',
+  transposed: 'Transposed',
   clash: 'Clash',
 }
-/** One colour per kind of join: flows (green), next door (blue), clash (amber). Literal colours, for the timeline's canvas too. */
+/** The same scale moved up or down: its own colour. */
+export const TRANSPOSED_COLOR = 'oklch(82% .12 200)'
+/** One colour per kind of join: flows (green), next door (blue), the same scale moved (cyan), clash (amber). Literal colours, for the timeline's canvas too. */
 export const joinColor = (j: { kind: Kind | null }) =>
-  j.kind === 'clash' ? 'oklch(80% .16 80)' : j.kind === 'modal-shift' || j.kind === 'next-door' ? 'oklch(72% .16 230)' : j.kind ? 'oklch(76% .17 150)' : 'oklch(75% .02 265)'
+  j.kind === 'transposed' ? TRANSPOSED_COLOR : j.kind === 'clash' ? 'oklch(80% .16 80)' : j.kind === 'modal-shift' || j.kind === 'next-door' ? 'oklch(72% .16 230)' : j.kind ? 'oklch(76% .17 150)' : 'oklch(75% .02 265)'
 /** Shared notes (of 7) from which a join counts as safe. */
 export const SAFE_NOTES = 6
 /** Largest tempo change inside one genre, as a share of A's tempo. */
@@ -53,6 +56,8 @@ export interface Join {
   kind: Kind | null
   kindLabel: string | null
   safe: boolean
+  /** A transposition's distance, -5..6 semitones (up is positive); null for any other join. */
+  semitones: number | null
   mood: 'brighter' | 'darker' | 'same' | null
   energy: { step: 'lifts' | 'holds' | 'eases off' | null; delta: number | null }
   genreChange: boolean
@@ -79,7 +84,24 @@ export function keyDistance(a?: string, b?: string): number {
 const reading = (t: ProxTrack) => {
   const h = t.harmony?.track
   const tonic = h ? NAMES.indexOf(h.tonic) : -1
-  return h && tonic >= 0 ? { tonic, mask: h.notes.reduce((m, n) => m | (1 << NAMES.indexOf(n)), 0), brightness: h.brightness ?? null } : null
+  return h && tonic >= 0 ? { tonic, mask: h.notes.reduce((m, n) => m | (1 << NAMES.indexOf(n)), 0), brightness: h.brightness ?? null, mode: h.mode } : null
+}
+
+/** From tonic a to tonic b, the short way: -5..6 semitones. */
+export const semitonesBetween = (a: number, b: number) => { const d = (((b - a) % 12) + 12) % 12; return d > 6 ? d - 12 : d }
+
+/** Semitones from a's key to b's when b is the same scale moved (same mode, another tonic, fewer than 6 notes shared:
+ *  5 and 7 semitones share 6 and stay next door); null otherwise. Every one is a good join, in any mix. Camelot stands
+ *  in when a key has no harmony yet: same letter, 2 to 6 steps (each a fifth). */
+export function transposition(a: ProxTrack, b: ProxTrack): number | null {
+  const x = reading(a)
+  const y = reading(b)
+  if (x && y) return x.mode && x.mode === y.mode && x.tonic !== y.tonic && popcount(x.mask & y.mask) < SAFE_NOTES ? semitonesBetween(x.tonic, y.tonic) : null
+  const p = parseKey(a.camelot)
+  const q = parseKey(b.camelot)
+  if (!p || !q || p.l !== q.l) return null
+  const d = semitonesBetween(0, (((q.n - p.n) * 7) % 12 + 12) % 12)
+  return d !== 0 && Math.abs(d) !== 5 ? d : null
 }
 
 const popcount = (n: number) => { let c = 0; for (; n; n &= n - 1) c++; return c }
@@ -93,7 +115,7 @@ export function harmonyOf(a: ProxTrack, b: ProxTrack): { shared: number | null; 
   const y = reading(b)
   if (x && y) {
     const shared = popcount(x.mask & y.mask)
-    return { shared, kind: kindOf(shared, x.tonic === y.tonic) }
+    return { shared, kind: transposition(a, b) !== null ? 'transposed' : kindOf(shared, x.tonic === y.tonic) }
   }
   const p = parseKey(a.camelot)
   const q = parseKey(b.camelot)
@@ -101,7 +123,7 @@ export function harmonyOf(a: ProxTrack, b: ProxTrack): { shared: number | null; 
   const d = Math.min(Math.abs(p.n - q.n), 12 - Math.abs(p.n - q.n))
   if (d === 0) return { shared: 7, kind: p.l === q.l ? 'same-key' : 'pivot' }
   if (d === 1 && p.l === q.l) return { shared: SAFE_NOTES, kind: 'next-door' }
-  return { shared: null, kind: 'clash' }
+  return { shared: null, kind: transposition(a, b) !== null ? 'transposed' : 'clash' }
 }
 
 const edge = (t: ProxTrack, which: 'intro' | 'outro' | 'track') => t.energyScale?.[which] ?? t.energyScale?.track ?? null
@@ -119,8 +141,9 @@ export function join(a: ProxTrack, b: ProxTrack): Join {
   return {
     shared,
     kind,
-    kindLabel: kind ? KINDS[kind] : null,
-    safe: shared !== null && shared >= SAFE_NOTES,
+    kindLabel: kind === 'transposed' ? stepLabel(transposition(a, b)!) : kind ? KINDS[kind] : null,
+    safe: kind === 'transposed' || (shared !== null && shared >= SAFE_NOTES),
+    semitones: kind === 'transposed' ? transposition(a, b) : null,
     mood: ba === null || bb === null ? null : bb > ba ? 'brighter' : bb < ba ? 'darker' : 'same',
     energy: { step: delta === null ? null : delta > ENERGY_HOLD ? 'lifts' : delta < -ENERGY_HOLD ? 'eases off' : 'holds', delta },
     genreChange: !!(ga && gb && ga !== gb),
@@ -132,9 +155,12 @@ export function join(a: ProxTrack, b: ProxTrack): Join {
 /** A tempo jump is only fine across a genre change. */
 export const tempoOk = (j: Join) => !j.tempoJump || j.genreChange
 
-/** Lower is a better follow-up: notes first, then the tempo gap and the energy step. */
+/** "Up 2", "Down 1": a transposition in words. */
+export const stepLabel = (n: number) => `${n > 0 ? 'Up' : 'Down'} ${Math.abs(n)}`
+
+/** Lower is a better follow-up: notes first (a transposition ranks with the 6-shared moves), then the tempo gap and the energy step. */
 export const cost = (j: Join) =>
-  (j.shared === null ? 4 : 7 - j.shared) * 3 + Math.min(Math.abs(j.bpmDelta ?? 0) / 10, 2) + Math.abs(j.energy.delta ?? 0) / 50
+  (j.kind === 'transposed' ? 1 : j.shared === null ? 4 : 7 - j.shared) * 3 + Math.min(Math.abs(j.bpmDelta ?? 0) / 10, 2) + Math.abs(j.energy.delta ?? 0) / 50
 
 export interface Filters {
   harmony?: 'safe' | 'any'

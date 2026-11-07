@@ -148,6 +148,7 @@ function put(e: Entry, where: 'last' | 'next', aim: Aim) {
 
 const dragOf = (q: QueueState, e: Entry): DragSource => ({
   from: null,
+  id: e.analysisId,
   cur: () => q.current,
   onDrop: at => void addTracks([e.ref], at, at === q.current + 1 ? `${e.title} plays next` : `Added ${e.title}`),
 })
