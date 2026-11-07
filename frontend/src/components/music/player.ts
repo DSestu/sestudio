@@ -5,21 +5,85 @@ import { BLEND, claimSound, engine, isSoundTab } from './engine'
 import { glideToItem, takeBlend } from './scrub'
 import { useMusicCastSync } from '../../musicCast'
 import { loadAnalyses, RETRY_MS } from './mix/analysis'
+import { Presence, settle } from './presence'
 
 // Whether the full-screen player layer is up, and the entry points that start
 // playback: they claim the sound for this tab and wake the audio engine
 // (browsers allow it only inside a press). They leave the layer as it is, so
 // playing from a list keeps you browsing; the player bar opens it.
 
+// The layer grows out of the bar and shrinks back into it (SPEC-music-player-motion): `open` is where it is
+// going, `mounted` whether it is in the page (also while it closes or follows a drag from the bar), and
+// `covered` whether it has settled open over the bar.
 let open = false
+let mounted = false
+let covered = false
+export const presence = new Presence(0)
 const listeners = new Set<() => void>()
-const set = (v: boolean) => {
-  open = v
-  listeners.forEach(l => l())
-}
+const notify = () => listeners.forEach(l => l())
+// The mounted layer's frame loop; every change to the presence wakes it.
+let kickLayer = () => {}
+export const setLayerKick = (f: () => void) => { kickLayer = f }
+export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+/** The player bar while it shows: where the layer grows from and lands. */
+export const playerBar = () => document.querySelector<HTMLElement>('[aria-label="Open the player"]')
 
-export const openPlayer = () => set(true)
-export const closePlayer = () => set(false)
+/** Opens the layer. A closing layer turns around; a new one starts growing on its first frame (Layer). */
+export function openPlayer() {
+  if (open) return
+  open = true
+  if (mounted) presence.go(1, performance.now(), false, reducedMotion())
+  mounted = true
+  notify()
+  kickLayer()
+}
+export function closePlayer() {
+  if (!open) return
+  open = false
+  covered = false
+  presence.go(0, performance.now(), false, reducedMotion())
+  notify()
+  kickLayer()
+}
+/** A drag holds the presence; from the bar it puts the layer in the page without opening it yet. */
+export function dragPlayer(p: number) {
+  presence.hold(p)
+  if (!mounted || covered) {
+    mounted = true
+    covered = false
+    notify()
+  }
+  kickLayer()
+}
+/** A drag lets go with vertical speed `v` (px/ms, positive is down) after `travel` px: it finishes or springs back. */
+export function releasePlayer(v: number, travel?: number) {
+  if (!presence.holding()) return
+  const now = performance.now()
+  open = settle(presence.value(now), v, !open, travel)
+  presence.go(open ? 1 : 0, now, true)
+  notify()
+  kickLayer()
+}
+/** A touch on the bar puts the layer in the page at once, invisible, so a drag that follows does not wait for the
+ *  stage to mount. A tap's click then opens it; with no click and no drag, it leaves again. */
+export function primePlayer() {
+  if (mounted) return
+  dragPlayer(0)
+}
+export function unprimePlayer() {
+  setTimeout(() => { if (!open && presence.holding()) releasePlayer(0, 0) }, 350)
+}
+/** The layer reports a motion that has come to rest: closed at 0 it leaves the page, open at 1 it covers the bar. */
+export function settled(p: number) {
+  if (presence.holding()) return
+  if (p === 0 && !open && mounted) {
+    mounted = false
+    notify()
+  } else if (p === 1 && open && !covered) {
+    covered = true
+    notify()
+  }
+}
 /** Closes the player, then runs `f` once the layer's Back entry is gone, so a navigation in `f` is not undone by it. */
 export function closeThen(f: () => void) {
   let done = false
@@ -33,7 +97,11 @@ export function closeThen(f: () => void) {
   setTimeout(go, 400)
   closePlayer()
 }
-export const useLayerOpen = () => useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => open)
+const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
+export const useLayerOpen = () => useSyncExternalStore(subscribe, () => open)
+export const useLayerMounted = () => useSyncExternalStore(subscribe, () => mounted)
+export const useLayerCovered = () => useSyncExternalStore(subscribe, () => covered)
+export const isLayerOpen = () => open
 
 // The player bar's memory of this visit. The queue lives on the server, so a
 // paused track is still current on every load: the bar keeps a paused track
