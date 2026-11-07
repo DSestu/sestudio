@@ -205,10 +205,11 @@ def _decide(
     return pa / max(pa + pb, 1e-12), pa + pb, names
 
 
-def read(x: np.ndarray, skey: np.ndarray, f: Frames = None) -> Mode:
-    """Tonic and mode of an 11025 Hz passage, given S-KEY's 24 outputs for it (and :func:`notes` of it)."""
+def read(x: np.ndarray, skey: np.ndarray, f: Frames = None, low: Frames = None) -> Mode:
+    """Tonic and mode of an 11025 Hz passage, given S-KEY's 24 outputs for it (and its
+    :func:`notes` and bass frames, when the caller has them)."""
     prof = _profile_of(*f) if f else profile(x)
-    bass = profile(x, *BASS_HZ)
+    bass = _profile_of(*low) if low else profile(x, *BASS_HZ)
     ws, wb, wo = TONIC_WEIGHTS
     t = ws * skey_mass(skey) + wb * bass + wo * prof
     first, second = (int(i) for i in np.argsort(-t)[:2])
@@ -243,25 +244,49 @@ def edges(samples: int) -> dict[str, slice]:
     return {
         "track": slice(None),
         "intro": slice(0, n),
-        "outro": slice(samples - n, None),
+        # On a whole frame, so the outro reads its frames from the track's (<0.1 s more).
+        "outro": slice((samples - n) // FFT_HOP * FFT_HOP, None),
     }
 
 
+def _cut(f: Frames, cut: slice, samples: int) -> Frames:
+    """The frames of *f* (a whole track's) within *cut*, which starts on a whole frame."""
+    if f is None:
+        return None
+    per, total = f
+    j0 = (cut.start or 0) // FFT_HOP
+    j1 = ((cut.stop or samples) - FFT_N) // FFT_HOP + 1
+    return per[:, j0:j1], total[j0:j1]
+
+
 def analyse(
-    x: np.ndarray, skey: np.ndarray | None = None, f: Frames = None
+    x: np.ndarray,
+    skey: np.ndarray | None = None,
+    f: Frames = None,
+    mag: np.ndarray | None = None,
 ) -> dict[str, Any] | None:
     """Readings of an 11025 Hz signal for the whole track, intro and outro; None when too short.
 
-    *skey* is S-KEY's answer and *f* :func:`notes` for the whole of *x* when the caller already has them.
+    *skey* is S-KEY's answer, *f* :func:`notes` and *mag* :func:`keynet.magnitude`
+    for the whole of *x* when the caller already has them. The intro and the outro
+    read their part of the track's passes rather than making their own.
     """
+    if len(x) < MIN_SAMPLES:
+        return None
+    f = f or notes(x)
+    low = _frames(x, *BASS_HZ)
+    mag = keynet.magnitude(x) if mag is None else mag
     out: dict[str, Any] = {}
     for name, cut in edges(len(x)).items():
         part = x[cut]
         if len(part) < MIN_SAMPLES:
             continue
-        p = skey if name == "track" and skey is not None else keynet.probs(part)
+        if name == "track":
+            p = skey if skey is not None else keynet.probs_of(mag)
+        else:
+            p = keynet.probs_of(keynet.part_magnitude(mag, x, cut))
         if p is not None:
-            m = read(part, p, f if name == "track" else None)
+            m = read(part, p, _cut(f, cut, len(x)), _cut(low, cut, len(x)))
             out[name] = {**asdict(m), "label": m.label, "skey": skey_label(p)}
     return out or None
 
@@ -300,14 +325,17 @@ def served(
 
 
 def fields(
-    x: np.ndarray, skey: np.ndarray | None = None, f: Frames = None
+    x: np.ndarray,
+    skey: np.ndarray | None = None,
+    f: Frames = None,
+    mag: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """What a track's stored analysis gets: ``harmony`` (track, intro, outro) and ``modesV``.
 
     Each passage keeps tonic, mode, notes, brightness, contrast, tonic share,
     unsure, alt and reason; S-KEY's label is already the track's ``key``.
     """
-    found = analyse(x, skey, f)
+    found = analyse(x, skey, f, mag)
     out: dict[str, Any] = {"modesV": VERSION}
     if found:
         out["harmony"] = {

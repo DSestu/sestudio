@@ -283,9 +283,10 @@ def _profile(
     notes: modes.Frames = None,
 ) -> dict[str, Any]:
     """Key, energy, structure and genre, then tonic and mode, sharing S-KEY's pass (and *notes*)."""
-    p = keynet.probs(x)
+    mag = keynet.magnitude(x) if len(x) >= keynet.HOP * 128 else None
+    p = None if mag is None else keynet.probs_of(mag)
     key = None if p is None else keynet.top(p)
-    return profile.profile(key, bands, loud, bpm, bar0) | modes.fields(x, p, notes)
+    return profile.profile(key, bands, loud, bpm, bar0) | modes.fields(x, p, notes, mag)
 
 
 def upgrade(path: str, a: RawAnalysis) -> dict[str, Any]:

@@ -59,6 +59,14 @@ def _kernels() -> tuple[int, list[tuple[int, np.ndarray]], np.ndarray]:
 
 def vqt(x: np.ndarray) -> np.ndarray:
     """(84, frames) log-magnitude CQT of an 11025 Hz signal, scaled as S-KEY expects (0..1)."""
+    return _scaled(magnitude(x))
+
+
+def magnitude(x: np.ndarray) -> np.ndarray:
+    """(99, frames) linear CQT magnitude of *x* peak-normalised: :func:`vqt` before its dB scale.
+
+    Frame j is centred on sample j * ``HOP``.
+    """
     n, kernels, scale = _kernels()
     x = x.astype(np.float64) / max(float(np.abs(x).max()), 1e-9)
     padded = np.pad(x, n // 2, mode="reflect")
@@ -68,7 +76,23 @@ def vqt(x: np.ndarray) -> np.ndarray:
         spec = np.fft.rfft(frames[i : i + CHUNK], axis=1)
         for b, (lo, k) in enumerate(kernels):
             mag[b, i : i + CHUNK] = np.abs(spec[:, lo : lo + len(k)] @ k)
-    db = 10 * np.log10(np.maximum(mag * scale[:, None], 1e-10))
+    return mag * scale[:, None]
+
+
+def part_magnitude(mag: np.ndarray, x: np.ndarray, cut: slice) -> np.ndarray:
+    """:func:`magnitude` of ``x[cut]`` read from *mag*, that of *x*: same frames, its own peak.
+
+    *cut* starts on a multiple of ``HOP``; the frames whose window reaches past the
+    passage hear the music there instead of its reflection.
+    """
+    part = x[cut]
+    j = (cut.start or 0) // HOP
+    peak = max(float(np.abs(x).max()), 1e-9) / max(float(np.abs(part).max()), 1e-9)
+    return mag[:, j : j - (-(len(part) + 1) // HOP)] * peak
+
+
+def _scaled(mag: np.ndarray) -> np.ndarray:
+    db = 10 * np.log10(np.maximum(mag, 1e-10))
     db = np.maximum(db, db.max() - 80)
     return (db / 80 + 1)[:KEEP]
 
@@ -173,6 +197,11 @@ def probs(x: np.ndarray) -> np.ndarray | None:
     if len(x) < HOP * 128:  # seven halvings of the time axis need 128 frames
         return None
     return chromanet(vqt(x))
+
+
+def probs_of(mag: np.ndarray) -> np.ndarray | None:
+    """:func:`probs` from a :func:`magnitude`; None when too short."""
+    return chromanet(_scaled(mag)) if mag.shape[1] >= 128 else None
 
 
 def key(x: np.ndarray) -> tuple[int, bool, float] | None:
