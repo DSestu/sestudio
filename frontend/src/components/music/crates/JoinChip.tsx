@@ -1,10 +1,11 @@
-import { joinColor, KINDS, type Join } from './proximity'
+import { PairSpans } from '../harmony/KeySpans'
+import { joinColor, KINDS, type Join, type Reading } from './proximity'
 
-/** A join as a coloured dot and its name ("Same notes"). */
-export default function JoinChip({ join, className = '' }: { join: Join; className?: string }) {
+/** A join as a coloured dot and its name ("Same notes"); with both keys, the dot is the small pair of runs. */
+export default function JoinChip({ join, pair, className = '' }: { join: Join; pair?: { a?: Reading; b?: Reading }; className?: string }) {
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
-      <i className="size-2 shrink-0 rounded-full" style={{ background: joinColor(join) }} />
+      {pair?.a && pair.b ? <PairSpans a={pair.a} b={pair.b} /> : <i className="size-2 shrink-0 rounded-full" style={{ background: joinColor(join) }} />}
       <span className="truncate">{join.kind ? KINDS[join.kind] : 'Unknown key'}</span>
     </span>
   )

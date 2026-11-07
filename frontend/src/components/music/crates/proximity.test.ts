@@ -62,11 +62,28 @@ describe('fitsAfter, bridges, bridgePath', () => {
   })
   it('bridges and chains', () => {
     const x = trk('x', 'A', 'Aeolian', 174, 'Drum & Bass', [10, 10, 10])
-    const y = trk('y', 'B', 'Aeolian', 174, 'Drum & Bass', [90, 90, 90])
+    const y = trk('y', 'D', 'Ionian', 174, 'Drum & Bass', [90, 90, 90])  // 5 notes shared, another mode: a clash
     const mid = trk('mid', 'E', 'Aeolian', 174, 'Drum & Bass', [50, 50, 50])
     expect(bridges(x, y, [x, y, mid, trk('other', 'G', 'Ionian', 174, 'Drum & Bass', [20, 20, 20])])[0].id).toBe('mid')
     expect(bridgePath(x, y, [x, y, mid])).toEqual(['mid'])
     expect(bridgePath(x, trk('c', 'A', 'Aeolian'), [mid])).toEqual([])
     expect(bridgePath(x, y, [x, y])).toBeNull()
+  })
+})
+
+describe('transposition', () => {
+  const a = trk('a', 'A', 'Aeolian')
+  it('is the same scale moved: a good join with its distance, ranked with the 6-shared moves', () => {
+    const j = join(a, trk('b', 'A#', 'Aeolian'))
+    expect([j.kind, j.shared, j.safe, j.semitones, j.kindLabel]).toEqual(['transposed', 2, true, 1, 'Up 1'])
+    expect(join(a, trk('b', 'G', 'Aeolian')).kindLabel).toBe('Down 2')
+    expect(join(a, trk('b', 'D', 'Aeolian')).kind).toBe('next-door')
+    expect(join(a, trk('b', 'A#', 'Ionian')).kind).toBe('clash')
+  })
+  it('falls back on Camelot: same letter, 2 to 6 steps', () => {
+    const c = (x: string, y: string) => join(trk('a', undefined, undefined, 174, 'Drum & Bass', [50, 50, 50], x), trk('b', undefined, undefined, 174, 'Drum & Bass', [50, 50, 50], y))
+    expect(c('8A', '3A').semitones).toBe(1)
+    expect(c('8A', '10A').semitones).toBe(2)
+    expect(c('8A', '3B').kind).toBe('clash')
   })
 })

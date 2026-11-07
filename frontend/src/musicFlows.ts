@@ -47,7 +47,7 @@ export interface Mix {
 
 export const KINDS: Record<string, string> = {
   match: 'Match', relative: 'Relative', up: 'Up a fifth', down: 'Down a fifth',
-  'mode+': 'Brighter mode', 'mode-': 'Darker mode', shift: 'Shift', break: 'Break',
+  'mode+': 'Brighter mode', 'mode-': 'Darker mode', shift: 'Shift', lift: 'Lift', lower: 'Drop', break: 'Break',
 }
 export const LENGTHS: { id: Flow['length']; label: string }[] = [
   { id: '30', label: '30 min' }, { id: '60', label: '1 h' }, { id: '120', label: '2 h' }, { id: 'endless', label: 'Endless' },

@@ -18,6 +18,8 @@ export interface DragSource {
   onDrop: (at: number) => void
   /** A queue row that can leave: a mouse dropping it outside the queue removes it. */
   onRemove?: () => void
+  /** The track's id where its analysis is keyed: held over a timeline join, the join shows how its key fits. */
+  id?: string
 }
 
 interface Active {
@@ -135,6 +137,7 @@ function end(cancel: boolean) {
   showLine(null)
   joins.dragging = false
   joins.slot = null
+  joins.track = null
   delete document.documentElement.dataset.libdrag
   wake()
   const tabs = document.querySelector<HTMLElement>('[data-droptab]')?.parentElement
@@ -174,6 +177,7 @@ function lift(row: HTMLElement, src: DragSource, x: number, y: number, pointer: 
   document.body.append(ghost)
   row.style.opacity = '.3'
   joins.dragging = src.from === null
+  joins.track = src.from === null ? src.id ?? null : null
   // The phone's crate sheet steps aside so the queue and the timeline under it can take the drop.
   if (src.from === null) document.documentElement.dataset.libdrag = '1'
   wake()

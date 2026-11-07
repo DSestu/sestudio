@@ -94,7 +94,9 @@ def _score(
         j = proximity.join(prev, t)
         if not proximity.tempo_ok(j):
             return None
-        if j["shared"] is None:
+        if j["kind"] == "transposed":
+            cost += 1  # the same scale moved: as good as a 6-shared move
+        elif j["shared"] is None:
             cost += UNKNOWN_KEY
         elif not j["safe"]:
             cost += CLASH

@@ -20,6 +20,9 @@ describe('joins, as the server reads them', () => {
     expect(joinKind(F, r('F', 'Phrygian'))).toBe('mode-')
     expect(joinKind(F, r('F', 'Harmonic minor'))).toBe('mode+')
     expect(joinKind(F, r('B', 'Ionian'))).toBe('break')
+    expect(joinKind(F, r('F#', 'Aeolian'))).toBe('lift')  // the same scale moved, as the server
+    expect(joinKind(F, r('D#', 'Aeolian'))).toBe('lower')
+    expect(joinKind(F, r('B', 'Aeolian'))).toBe('lift')
     expect(joinKind(F, undefined)).toBeNull()
   })
   it('fit is a score, not a gate', () => {

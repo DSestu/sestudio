@@ -1,4 +1,5 @@
-import { join } from './proximity'
+import { PairSpans } from '../harmony/KeySpans'
+import { join, TRANSPOSED_COLOR } from './proximity'
 import { isClash, type SetTrack } from './setBuilder'
 
 const chip = (warn: boolean) => `rounded-full px-2 py-0.5 text-[11px] leading-none ${warn ? 'bg-warning/15 text-warning' : 'bg-white/5 text-base-content/60'}`
@@ -24,7 +25,13 @@ export default function JoinLine({ a, b, theory, kept, onOpen, onFix, onInsert }
   const keys = theory && name(a) && name(b) ? `${name(a)} → ${name(b)} · ` : ''
   return (
     <>
-      {j.kindLabel && <button onClick={onOpen} aria-label="Open this join" className={`${chip(clash)} cursor-pointer hover:brightness-125`}>{keys}{j.kindLabel}{isClash(j) && kept ? ' · kept' : ''}{theory && j.shared !== null ? ` · ${j.shared} of 7 notes` : ''}</button>}
+      {j.kindLabel && j.semitones !== null && a.harmony?.track && b.harmony?.track && (
+        // The same scale moved: the small Step and "Up 2", in the transposition's colour.
+        <button onClick={onOpen} aria-label="Open this join" className="inline-flex items-center gap-1.5 rounded-full py-0.5 pl-1 pr-2 text-[11px] leading-none cursor-pointer hover:brightness-125" style={{ color: TRANSPOSED_COLOR, background: 'color-mix(in oklch, currentColor 14%, transparent)' }}>
+          <PairSpans a={a.harmony.track} b={b.harmony.track} />{keys}{j.kindLabel}
+        </button>
+      )}
+      {j.kindLabel && j.semitones === null && <button onClick={onOpen} aria-label="Open this join" className={`${chip(clash)} cursor-pointer hover:brightness-125`}>{keys}{j.kindLabel}{isClash(j) && kept ? ' · kept' : ''}{theory && j.shared !== null ? ` · ${j.shared} of 7 notes` : ''}</button>}
       {j.energy.step && <span className={chip(false)}>Energy {j.energy.step}</span>}
       {j.genreChange && <span className={chip(false)}>{a.genre} → {b.genre}</span>}
       {j.tempoJump && <span className={chip(true)}>Tempo {Math.round(a.bpm!)} → {Math.round(b.bpm!)}</span>}

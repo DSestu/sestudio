@@ -39,9 +39,20 @@ KINDS: Final = {
     "mode+": "Brighter mode",
     "mode-": "Darker mode",
     "shift": "Shift",
+    "lift": "Lift",
+    "lower": "Drop",
     "break": "Break",
 }
-MODULATIONS: Final = ("up", "down", "mode+", "mode-", "relative", "break")
+MODULATIONS: Final = (
+    "up",
+    "down",
+    "mode+",
+    "mode-",
+    "relative",
+    "lift",
+    "lower",
+    "break",
+)
 #: Scores within this of the best are a tie the seed decides.
 TIE: Final = 0.15
 
@@ -67,7 +78,8 @@ def join(a: Track, b: Track) -> str | None:
     """What the join a -> b is (§4.2), None when a key is unread.
 
     A modulation is a one-note swap between the two 7-note sets: sharpward is
-    brighter (up a fifth, or a brighter mode on the same tonic).
+    brighter (up a fifth, or a brighter mode on the same tonic). The same scale moved
+    further (same mode, another tonic) is a lift (up to 6 semitones up) or a drop.
     """
     sa, sb = scale(a), scale(b)
     if not (sa and sb):
@@ -77,6 +89,9 @@ def join(a: Track, b: Track) -> str | None:
     if shared == 7:
         return "match" if sa[0] == sb[0] else "relative"
     if shared < SAFE_NOTES:
+        # The same scale moved up or down (any distance): a lift or a drop, never a break.
+        if sa[1] == sb[1] and sa[0] != sb[0]:
+            return "lift" if (sb[0] - sa[0]) % 12 <= 6 else "lower"
         return "break"
     dropped, added = next(iter(na - nb)), next(iter(nb - na))
     if (added - dropped) % 12 == 1:

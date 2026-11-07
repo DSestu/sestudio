@@ -7,7 +7,7 @@ const trk = (id: string, camelot: string, bpm = 174, genre = 'Drum & Bass'): Pro
 describe('isRough', () => {
   it('flags a clash and a tempo jump inside one genre', () => {
     expect(isRough(join(trk('a', '8A'), trk('b', '8A')))).toBe(false)
-    const clash = join(trk('a', '8A'), trk('b', '2A'))
+    const clash = join(trk('a', '8A'), trk('b', '2B'))  // 2A would be the same scale a tritone up: no clash
     expect([isRough(clash), roughLabel(clash)]).toEqual([true, 'Clash'])
     const jump = join(trk('a', '8A', 174), trk('b', '8A', 150))
     expect([isRough(jump), roughLabel(jump)]).toEqual([true, 'Tempo jump'])
@@ -30,7 +30,7 @@ describe('gapBridges', () => {
 
 describe('bestGap', () => {
   it('picks the gap the track fixes', () => {
-    const list = [trk('p', '8A'), trk('q', '8A'), trk('r', '10A'), trk('s', '10A')]
+    const list = [trk('p', '8A'), trk('q', '8A'), trk('r', '9B'), trk('s', '9B')]  // 8A → 9B clashes, 9A joins both
     expect(bestGap(trk('t', '9A'), list, 0)?.at).toBe(2)
     expect(bestGap(trk('t', '9A'), list, 0)!.gain).toBeGreaterThan(0)
   })

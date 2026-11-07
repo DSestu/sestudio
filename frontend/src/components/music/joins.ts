@@ -15,6 +15,8 @@ export const joins = {
   slot: null as number | null,
   /** A library row is being dragged: the timeline shows its joins. */
   dragging: false,
+  /** The dragged library row's track id (where its analysis is keyed): the join it is held over shows how its key fits. */
+  track: null as string | null,
 }
 
 /** The join a drop at (x, y) lands on: the nearest within 90 px, inside the band. */

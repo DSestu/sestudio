@@ -36,6 +36,25 @@ def test_move_kinds():
     assert (j["kind"], j["safe"]) == ("clash", False)
 
 
+def test_transposition_is_a_good_join():
+    a = trk("a", "A", "Aeolian")
+    j = proximity.join(a, trk("b", "A#", "Aeolian"))
+    assert (j["kind"], j["shared"], j["safe"], j["semitones"]) == (
+        "transposed",
+        2,
+        True,
+        1,
+    )
+    assert proximity.join(a, trk("b", "G", "Aeolian"))["semitones"] == -2
+    assert proximity.join(a, trk("b", "D#", "Aeolian"))["semitones"] == 6
+    # 5 and 7 semitones share 6 notes: still next door; another mode is no transposition
+    assert proximity.join(a, trk("b", "D", "Aeolian"))["kind"] == "next-door"
+    assert proximity.join(a, trk("b", "A#", "Ionian"))["kind"] == "clash"
+    assert proximity.cost(
+        proximity.join(a, trk("b", "A#", "Aeolian"))
+    ) < proximity.cost(proximity.join(a, trk("b", "C#", "Ionian")))
+
+
 def test_camelot_fallback_without_harmony():
     j = proximity.join(trk("a", camelot="8A"), trk("b", camelot="8B"))
     assert (j["kind"], j["shared"]) == ("pivot", 7)
@@ -43,8 +62,12 @@ def test_camelot_fallback_without_harmony():
         proximity.join(trk("a", camelot="8A"), trk("b", camelot="9A"))["kind"]
         == "next-door"
     )
+    j = proximity.join(
+        trk("a", camelot="8A"), trk("b", camelot="3A")
+    )  # 7 fifths up: a semitone up
+    assert (j["kind"], j["safe"], j["semitones"]) == ("transposed", True, 1)
     assert (
-        proximity.join(trk("a", camelot="8A"), trk("b", camelot="3A"))["safe"] is False
+        proximity.join(trk("a", camelot="8A"), trk("b", camelot="3B"))["safe"] is False
     )
     assert proximity.join(trk("a"), trk("b"))["kind"] is None
 
@@ -93,7 +116,9 @@ def test_fits_after_ranks_and_filters():
 def test_bridges_and_path():
     a, b = (
         trk("a", "A", "Aeolian", e=(10, 10, 10)),
-        trk("b", "B", "Aeolian", e=(90, 90, 90)),
+        trk(
+            "b", "D", "Ionian", e=(90, 90, 90)
+        ),  # 5 notes shared, another mode: a clash
     )
     mid = trk("mid", "E", "Aeolian", e=(50, 50, 50))  # shares 6 notes with each
     other = trk("other", "G", "Ionian", e=(20, 20, 20))

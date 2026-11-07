@@ -109,6 +109,8 @@ export interface LabelItem extends DrawItem {
   harm?: Phase | null
   /** The join's panel opened by a tap on its diamond. */
   open?: boolean
+  /** Seconds since the join's panel last opened (the join came near, or a tap): its slide plays from then. */
+  near?: number
 }
 
 // When a track's tempo arrives: its ticks are laid by a front (count-in), ghosts show where its
@@ -138,6 +140,8 @@ export interface Frame {
   avoid: { left: number; right: number; top: number; bottom: number } | null
   /** Layout index of the label under the pointer. */
   hover?: number
+  /** A library row held over a join: the outgoing key, the held track's, and seconds since it got there. */
+  drop?: { x: number; a: Reading; b: Reading; verdict: { label: string; color: string } | null; t: number } | null
 }
 
 export function mixLabel(p?: Plan): string {
@@ -427,22 +431,41 @@ export class TimelineRenderer {
 
     this.labels(f, y0, amp)
 
-    // A join's notes: while a key lands (then folding into the diamond), or opened by a tap.
+    // A join's notes: while a key lands (then folding into the diamond), and on the next join
+    // (or its diamond is tapped) until the mix is over, the slide playing each time it opens.
     const s = isPhone(W) ? 0.9 : 1.15
     items.forEach((it, i) => {
       const prev = items[i - 1]
       if (!it.plan || !it.prevReading || !prev) return
-      const ph = it.harm ?? null
-      const show = it.open ? 1 : ph ? (ph.t < FOLD_AT ? 1 : Math.max(0, 1 - (ph.t - FOLD_AT) / 0.35)) : 0
+      const near = it.near !== undefined && it.reading ? { heard: [], land: 1, t: it.near } : null
+      const ph = it.harm ?? near
+      const show = it.harm ? (it.harm.t < FOLD_AT || near ? 1 : Math.max(0, 1 - (it.harm.t - FOLD_AT) / 0.35)) : near ? smooth(near.t / 0.3) : it.open ? 1 : 0
       if (show <= 0) return
       const jx = X(it.a + it.span.i0 + it.span.il / 2)
       const pw = PANEL_W * s
       const x0 = Math.max(R.x + 12, Math.min(jx - pw / 2, R.x + R.w - pw - 4))
       t2.save()
       t2.globalAlpha = show
-      drawJoin(t2, x0, y0 + amp * 0.42, s, it.prevReading, ph && ph.land <= 0 ? undefined : it.reading, it.open ? null : ph, it.verdict ?? null, false)
+      drawJoin(t2, x0, y0 + amp * 0.42, s, it.prevReading, ph && ph.land <= 0 ? undefined : it.reading, ph, it.verdict ?? null, false)
       t2.restore()
     })
+    // A library row held over a join: how its key would follow the outgoing track's, over that join's own panel.
+    const hd = f.drop
+    if (hd) {
+      const pw = PANEL_W * s
+      // Beside the drop slot (36 px wide, DOM, over the canvas): right of it, or left near the right edge.
+      const x0 = hd.x + 26 + pw <= R.x + R.w ? hd.x + 26 : hd.x - 26 - pw + 16 * s
+      const y = y0 + amp * 0.42
+      t2.save()
+      t2.globalAlpha = smooth(hd.t / 0.2)
+      t2.fillStyle = 'rgba(7,11,16,.9)'
+      // Opaque under it, so the join's own panel (nearness) doesn't show through.
+      t2.beginPath()
+      t2.roundRect(x0 - 8 * s, y - 8 * s, pw, 50 * s, 8 * s)
+      t2.fill()
+      drawJoin(t2, x0, y, s, hd.a, hd.b, { heard: [], land: 1, t: hd.t }, hd.verdict, false)
+      t2.restore()
+    }
 
     // Axis ticks fade through the switch.
     t2.font = '500 11px ui-sans-serif,system-ui'

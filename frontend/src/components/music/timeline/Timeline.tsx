@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSummaries, type Summary } from '../../../musicMeta'
+import { summaryOf, useSummaries, type Summary } from '../../../musicMeta'
 import { clockSkew, getQueue, onQueueEvent, positionNow, queueActions, type QueueState, type TrackInfo } from '../../../musicQueue'
 import { addTracks } from '../adding'
 import { claimSound, engine, useSyncStatus } from '../engine'
@@ -13,8 +13,8 @@ import { plan } from '../mix/plan'
 import MixPopover from '../mix/Popover'
 import { barPos, registerScrubber, Scrubber } from '../scrub'
 import { PALETTES, TIMELINE_PALETTE, type PaletteName } from './palette'
-import { phaseOf } from '../harmonyListen'
-import { COUNT_IN, DOCK, LOCK_END, quint, SEEN, TimelineRenderer, type LabelItem } from './render'
+import { phaseOf, VERDICT_AT } from '../harmonyListen'
+import { COUNT_IN, DOCK, LOCK_END, quint, SEEN, TimelineRenderer, type Frame, type LabelItem } from './render'
 import { layoutQueue, trackAt, type Span, type Track } from './sampling'
 
 // The whole queue as one bass, mids and highs timeline (SPEC-music-player §6).
@@ -203,6 +203,8 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     const landed = new Map<string, number>()
     /** Item ids of the joins whose notes panel is open (a tap on the diamond). */
     const opened = new Set<string>()
+    /** Item id -> when its join's panel opened (ms): the join became the next one, or a tap. */
+    const nearAt = new Map<string, number>()
     const scrub = new Scrubber({
       root: (cv.closest('[role="dialog"]') as HTMLElement | null) ?? document.body,
       r,
@@ -235,9 +237,14 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         const b = cv.getBoundingClientRect()
         const j = r.joinAt(e.clientX - b.left, e.clientY - b.top)
         const id = j === null ? undefined : live.current.model.ids[j]
+        // A tap replays the slide; a second tap closes a panel the join's nearness doesn't hold open.
         const was = id !== undefined && opened.has(id)
+        const held = id !== undefined && nearAt.has(id) && !was
         opened.clear()
-        if (id !== undefined && !was) opened.add(id)
+        if (id !== undefined && (!was || held)) {
+          opened.add(id)
+          nearAt.set(id, performance.now())
+        } else if (id !== undefined) nearAt.delete(id)
         wake()
         if (j !== null) return
       }
@@ -253,6 +260,10 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
 
     // The joins after the playing track: drop targets for the row drag, and the marks while adding.
     const times: number[] = []
+    /** A library row held over a join: that join's panel, comparing the outgoing key with the held track's. */
+    let drop: Frame['drop'] = null
+    let dropKey = ''
+    let dropAt = 0
     const placeJoins = (m: Model, G: number): boolean => {
       const M = r.M
       const list: Join[] = []
@@ -305,6 +316,17 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
           slotLabel.current!.textContent = `${j.at === m.q.current + 1 ? 'Plays next' : `After ${after.title || 'the track before'}`} · in ${fmtTime(when)}`
         }
       }
+      const held = k >= 0 ? joins.track : null
+      const key = held ? `${held}@${list[k].at}` : ''
+      if (key !== dropKey) { dropKey = key; dropAt = performance.now() }
+      const out = held ? m.items[times[k] - 1] : undefined
+      const sa = out && summaryOf(out.track.id)
+      const sb = held ? summaryOf(held) : undefined
+      const ra = sa?.harmony?.track
+      const rb = sb?.harmony?.track
+      drop = held && out && ra && rb
+        ? { x: list[k].x, a: ra, b: rb, verdict: joinVerdict(proxOf(out.track.id, sa), proxOf(held, sb)), t: Math.min((performance.now() - dropAt) / 1000, VERDICT_AT + 0.5) }
+        : null
       return show
     }
 
@@ -391,6 +413,8 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       if (lastG !== null) flash(m.items, crossed(shown.ts, lastG, G))
       lastG = G
       const me = morph ? bez(Math.min(1, (now - morph.t0) / MORPH_MS)) : 1
+      // The next join (the first whose blend isn't over) keeps its panel open; the slide plays when it becomes the next.
+      const next = m.items.findIndex((it, i) => i > 0 && shown.ts[i] - G + it.span.i0 + it.span.il > 0)
       m.items.forEach((it, i) => {
         const id = m.ids[i]
         it.a = shown.ts[i] - G + (morph ? (morph.off.get(id) ?? 0) * (1 - me) : 0)
@@ -399,6 +423,12 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         it.front = stepFront(it.track, dt)
         it.harm = phaseOf(it.track.id, it.reading, now)
         it.open = opened.has(id)
+        const near = i === next
+        if (near && !nearAt.has(id)) nearAt.set(id, now)
+        if (!near && !it.open) nearAt.delete(id)
+        const since = nearAt.get(id)
+        // Held at the slide's end, so a still panel doesn't redraw every frame.
+        it.near = since === undefined ? undefined : Math.min((now - since) / 1000, VERDICT_AT + 0.5)
         const at = landed.get(it.track.id)
         it.lock = at === undefined ? undefined : (now - at) / 1000
         if (it.lock !== undefined && it.lock > LOCK_END) {
@@ -426,12 +456,12 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         avoid = queueEl?.getBoundingClientRect() ?? null
       }
       paintRows(queueEl, m, k)
-      r.draw({ items, G, t, level, palette: PALETTES[pal], avoid, hover: scrub.hovered })
+      r.draw({ items, G, t, level, palette: PALETTES[pal], avoid, hover: scrub.hovered, drop })
       const show = placeJoins(m, G)
       // Nothing to draw next frame when this one matches the last (and nothing plays).
       let sum = 0
-      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol + (it.front ?? 0) + (it.lock ?? 0) + (it.harm ? it.harm.t + it.harm.land : 0) + (it.open ? 1 : 0)
-      const sig = `${G.toFixed(3)}|${t.toFixed(3)}|${level.toFixed(3)}|${scrub.hovered}|${sum.toFixed(3)}|${items.length}|${show}|${joins.slot}|${live.current.aim}`
+      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol + (it.front ?? 0) + (it.lock ?? 0) + (it.harm ? it.harm.t + it.harm.land : 0) + (it.open ? 1 : 0) + (it.near ?? -1)
+      const sig = `${G.toFixed(3)}|${t.toFixed(3)}|${level.toFixed(3)}|${scrub.hovered}|${sum.toFixed(3)}|${items.length}|${show}|${joins.slot}|${drop?.t ?? -1}|${live.current.aim}`
       const moved = sig !== lastSig || getQueue().playing
       lastSig = sig
       return moved

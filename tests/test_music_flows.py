@@ -33,6 +33,11 @@ def test_join_kinds():
     assert J(("F", "Aeolian"), ("F", "Phrygian")) == "mode-"
     assert J(("F", "Aeolian"), ("D#", "Ionian")) == "up"  # the relative of the dominant
     assert J(("F", "Aeolian"), ("B", "Ionian")) == "break"
+    assert (
+        J(("F", "Aeolian"), ("F#", "Aeolian")) == "lift"
+    )  # the same scale, up a semitone
+    assert J(("F", "Aeolian"), ("D#", "Aeolian")) == "lower"  # down two
+    assert J(("F", "Aeolian"), ("B", "Aeolian")) == "lift"  # the tritone counts as up
     assert J(("F", "Aeolian"), ("F", "Harmonic minor")) == "mode+"  # a raised seventh
     assert flows.join(trk(1, tonic=None), trk(2)) is None
 
@@ -65,7 +70,11 @@ def test_match_by_default_and_events_realised_once():
             },
         }
     ]
-    mix = flows.render(chunk, LIB, minutes=30, seed=1)
+    # Major keys too: between minor keys alone every far move is the same scale moved (a lift or a drop).
+    lib = LIB + [
+        trk(100 + i, bpm=172, tonic=NAMES[i], mode="Ionian", e=60) for i in range(12)
+    ]
+    mix = flows.render(chunk, lib, minutes=30, seed=1)
     kinds = [m["join"] for m in mix]
     assert kinds[1] == "match" and "up" in kinds and "break" in kinds
     assert sum(1 for m in mix if m["event"] and m["event"]["realised"]) == 2
@@ -205,7 +214,7 @@ def test_presets_seed_once_and_documents_round_trip(db):
             "bad",
             {
                 "chunks": [
-                    {"id": "a", "layers": {"harmony": [{"at": 0, "kind": "lift"}]}}
+                    {"id": "a", "layers": {"harmony": [{"at": 0, "kind": "soar"}]}}
                 ]
             },
         )

@@ -13,12 +13,14 @@ export const PULL: Record<Flow['pull'], number> = { light: 1, strong: 2, only: 6
 
 export interface FitTrack { id: string; bpm?: number; energy?: number; reading?: Reading }
 
-/** What the join a → b is: match, relative, up, down, mode+, mode-, shift or break; null when a key is unread. */
+/** What the join a → b is: match, relative, up, down, mode+, mode-, shift, lift, lower or break; null when a key is unread. */
 export function joinKind(a?: Reading, b?: Reading): string | null {
   if (!a?.notes?.length || !b?.notes?.length) return null
   const na = new Set(a.notes.map(pc)), nb = new Set(b.notes.map(pc))
   const shared = [...na].filter(n => nb.has(n)).length
   if (shared === 7) return a.tonic === b.tonic ? 'match' : 'relative'
+  // The same scale moved up or down (any distance): a lift or a drop, never a break.
+  if (shared < 6 && a.mode === b.mode && pc(a.tonic) !== pc(b.tonic)) return (pc(b.tonic) - pc(a.tonic) + 12) % 12 <= 6 ? 'lift' : 'lower'
   if (shared < 6) return 'break'
   const dropped = [...na].find(n => !nb.has(n))!, added = [...nb].find(n => !na.has(n))!
   const dir = (added - dropped + 12) % 12 === 1 ? '+' : (dropped - added + 12) % 12 === 1 ? '-' : null
