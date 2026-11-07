@@ -58,11 +58,14 @@ def test_structure_of_quiet_loud_quiet(db, tmp_path):  # noqa: F811
         parts.append(x)
     f = tmp_path / "arr.wav"
     _write_wav(f, np.concatenate(parts))
-    got = analysis.analyse_file(str(f)).extra
+    raw = analysis.analyse_file(str(f))
+    got, ph = raw.extra, profile.phrase_phase(raw.bpm, raw.bar0)
     segs = got["structure"]
     assert [s["label"] for s in segs] == ["intro", "drop", "outro"]
-    assert all(s["start_bar"] % 4 == 0 for s in segs)
-    assert segs[1]["start_bar"] in (12, 16, 20) and segs[2]["start_bar"] in (44, 48, 52)
+    assert all((s["start_bar"] - ph) % 4 == 0 for s in segs[1:])  # on the phrase grid
+    assert segs[1]["start_bar"] in range(11, 21) and segs[2]["start_bar"] in range(
+        43, 53
+    )
     assert max(got["energy"][:10]) < min(got["energy"][20:44])
 
 
@@ -122,3 +125,37 @@ def test_genre_rules():
     assert profile.genre(145, bass, en)["genre"] == "Dubstep"
     assert profile.genre(95, bass, en)["genre"] == "Hip-hop"
     assert profile.genre(None, bass, en) is None
+
+
+def test_phrases_start_on_the_musics_first_bar():
+    # 172 BPM: a bar is 1.395 s. A first whole bar at 1.37 s means the music began on a
+    # downbeat near 0 s that bars() skipped, so its phrases fall on bars 3, 7, 11…
+    assert profile.phrase_phase(172, 1.367) == 3
+    assert profile.phrase_phase(172, 0.025) == 0
+    assert profile.phrase_phase(172, 0.6) == 0
+    # The grid follows the phase: the drop that starts on music bar 16 is cut at bar 15.
+    groups = np.full((3, 64), 0.1)
+    loud = np.full(64, 0.1)
+    loud[15:47] = 1
+    groups[:, 15:47] = 1
+    segs = profile.structure(groups, profile.energy(groups, loud), phase=3)
+    assert [(s["label"], s["start_bar"]) for s in segs] == [
+        ("intro", 0),
+        ("drop", 15),
+        ("outro", 47),
+    ]
+
+
+def test_one_name_in_a_row_is_one_section_and_nothing_breaks_down_before_a_drop():
+    # quiet, a step up that is still quiet, a drop whose bass changes halfway, quiet
+    loud = np.concatenate(
+        [np.full(16, 0.1), np.full(16, 0.3), np.ones(32), np.full(16, 0.1)]
+    )
+    groups = np.stack([loud] * 3)
+    groups[0, 48:64] = 0.4  # the switch-up: less bass, same energy
+    segs = profile.structure(groups, profile.energy(groups, loud))
+    labels = [s["label"] for s in segs]
+    assert labels.count("drop") == 1
+    assert "breakdown" not in labels[: labels.index("drop")]
+    assert all(a["label"] != b["label"] for a, b in zip(segs, segs[1:]))
+    assert segs[0]["start_bar"] == 0 and segs[-1]["end_bar"] == 80
