@@ -13,6 +13,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from sestudio import dlna, downloaded, interpolate, metrics
+from sestudio.web import forward
 from sestudio.web.routes import downloaded as downloaded_route
 from sestudio.web.routes.downloaded import _resolved, check_fps, offered_rung
 from sestudio.web.proxy import master_variants
@@ -105,16 +106,19 @@ def _other_rate(fps: int, source_fps: float) -> bool:
     return bool(fps and source_fps and abs(fps - source_fps) > 0.5)
 
 
-@router.post("/cast/dlna/play")
-async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
-    """Push a (proxied) stream URL to a previously discovered renderer."""
-    renderers: dict[str, str] = getattr(request.app.state, "dlna_renderers", {})
-    location = renderers.get(body.renderer_udn)
-    if location is None:
-        raise HTTPException(
-            status_code=404, detail="Unknown renderer — re-scan and try again"
-        )
+class CastPlan(BaseModel):
+    """What a TV is sent for a stream (see ``plan_cast``)."""
 
+    proxy_url: str
+    mime_type: str
+    duration: float | None = None
+
+
+async def plan_cast(body: DlnaPlayRequest, request: Request) -> CastPlan:
+    """The path, type and length a TV is sent for ``body``: the file as it is,
+    or re-encoded (a caption to burn, a lighter quality, another frame rate,
+    another voice, a format a TV cannot read). Runs where the files are: on
+    the server in use, through ``/api/cast/plan``, when another is in use."""
     check_fps(body.fps)
     mime_type = _MIME_BY_KIND.get(body.kind, "video/mp4")
     proxy_url = body.proxy_url
@@ -205,6 +209,49 @@ async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
             mime_type = downloaded.TV_MEDIA_TYPE
             duration = probe.duration if probe else None
         proxy_url = proxy_url.replace(token, short_token(token))
+    return CastPlan(proxy_url=proxy_url, mime_type=mime_type, duration=duration)
+
+
+@router.post("/cast/plan")
+async def cast_plan(body: DlnaPlayRequest, request: Request) -> CastPlan:
+    return await plan_cast(body, request)
+
+
+@router.post("/cast/dlna/play")
+async def dlna_play(body: DlnaPlayRequest, request: Request) -> dict[str, Any]:
+    """Push a (proxied) stream URL to a previously discovered renderer."""
+    renderers: dict[str, str] = getattr(request.app.state, "dlna_renderers", {})
+    location = renderers.get(body.renderer_udn)
+    if location is None:
+        raise HTTPException(
+            status_code=404, detail="Unknown renderer — re-scan and try again"
+        )
+
+    upstream = getattr(request.app.state, "upstream", None)
+    if upstream:
+        # The files are over there: it decides what the TV is sent; the TV
+        # fetches it from here, and the forwarder streams it from there.
+        try:
+            r = await forward.request(
+                upstream, "POST", "/api/cast/plan", body.model_dump()
+            )
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, f"{upstream['name']} is not answering") from exc
+        if r.status_code >= 400:
+            detail = (
+                r.json().get("detail")
+                if "json" in r.headers.get("content-type", "")
+                else r.text
+            )
+            raise HTTPException(r.status_code, detail)
+        planned = CastPlan(**r.json())
+    else:
+        planned = await plan_cast(body, request)
+    proxy_url, mime_type, duration = (
+        planned.proxy_url,
+        planned.mime_type,
+        planned.duration,
+    )
 
     # The renderer fetches the stream itself, so build an absolute HTTP URL on
     # our LAN IP facing the renderer (browsing via localhost would otherwise
