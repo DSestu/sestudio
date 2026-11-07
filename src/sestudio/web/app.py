@@ -42,6 +42,7 @@ from sestudio.web.routes import (
     music_libraries,
     search,
     seasons,
+    servers,
     settings,
     sites,
     stream,
@@ -49,6 +50,7 @@ from sestudio.web.routes import (
     watchers,
 )
 from sestudio.watchers.poller import run_poller, watchers_enabled
+from sestudio.web import forward
 from sestudio.web.routes.stream import _proxy_url
 from sestudio.web.worker import JobStore
 
@@ -204,6 +206,10 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(music_libraries.router, prefix="/api")
     app.include_router(music_libraries.share, prefix="/api")
     app.include_router(health.router, prefix="/api")
+    app.include_router(servers.router, prefix="/api")
+    servers.restore(app)
+    # Switched to another server: /api goes there (web/forward.py).
+    app.middleware("http")(forward.middleware)
 
     # Serve built frontend if available (installed static dir or source dist)
     dist = _frontend_dist()

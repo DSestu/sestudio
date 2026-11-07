@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from sestudio import library
 from sestudio.config import load_config
 from sestudio.http_client import BROWSER_UA, new_client
+from sestudio.web.routes import servers
 
 router = APIRouter()
 
@@ -172,6 +173,8 @@ async def get_health(request: Request) -> dict[str, Any]:
     return {
         "ok": not issues,
         "checked_at": _iso(time.time()),
+        # Another sestudio reads this to show what this one runs (routes/servers.py).
+        "version": servers.version(),
         "sites": sites,
         "watchers": watchers,
         "disk": disk,

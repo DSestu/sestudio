@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Remote servers: mockups</title>
+<style>
+  :root { --bg: oklch(0.16 0.015 240); --card: rgba(14,39,58,.66); --fg: oklch(0.92 0.01 240); --mut: oklab(0.92 -0.005 -0.009 / .5); --acc: oklch(0.72 0.16 230); --ok: oklch(0.78 0.18 150); --warn: oklch(0.8 0.16 80); --bad: oklch(0.68 0.19 25); --line: rgba(255,255,255,.08); }
+  body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--fg); }
+  h1.t { font-size: 15px; font-weight: 600; margin: 18px 0 8px; opacity: .8 }
+  .row2 { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap }
+  .phone { width: 390px; background: var(--bg); border-radius: 28px; padding: 10px; box-sizing: border-box; border: 1px solid var(--line) }
+  .desk { width: 1280px; transform: scale(.555); transform-origin: top left; background: var(--bg); border-radius: 12px; padding: 20px; box-sizing: border-box; display: flex; gap: 20px; border: 1px solid var(--line) }
+  .deskwrap { width: 712px; overflow: hidden } .deskwrap.a { height: 424px } .deskwrap.c { height: 86px }
+  .top { background: var(--card); border-radius: 18px; padding: 12px 20px; display: flex; align-items: center; gap: 12px; min-height: 46px }
+  .top .back { width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,.06); display: grid; place-items: center; font-size: 18px }
+  .top h2 { margin: 0; font-size: 24px; font-weight: 500 }
+  .top .sub { font-size: 13px; color: var(--mut) }
+  .card { background: var(--card); border-radius: 16px; padding: 12px; margin-top: 10px }
+  .g { font-size: 13px; color: var(--mut); margin: 18px 4px 6px }
+  .srv { display: flex; align-items: center; gap: 12px; padding: 12px 8px }
+  .srv + .srv { border-top: 1px solid var(--line) }
+  .srv .n { font-size: 17px }
+  .srv .u { font-size: 13px; color: var(--mut); font-family: ui-monospace, monospace }
+  .srv .s { font-size: 13px; margin-top: 2px }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle }
+  .ok { color: var(--ok) } .ok .dot { background: var(--ok) }
+  .bad { color: var(--bad) } .bad .dot { background: var(--bad) }
+  .warn { color: var(--warn) } .warn .dot { background: var(--warn) }
+  .mut { color: var(--mut) }
+  .sp { flex: 1 }
+  .btn { border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; font-size: 14px; white-space: nowrap }
+  .btn.pri { background: var(--acc); color: #04131d; border-color: transparent; font-weight: 500 }
+  .btn.ghost { border-color: transparent; color: var(--mut) }
+  .btn.danger { border-color: var(--bad); color: var(--bad) }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 12px; font-size: 13px; background: rgba(255,255,255,.07) }
+  .pill.acc { background: color-mix(in oklab, var(--acc) 22%, transparent); color: var(--acc) }
+  .foot { font-size: 13px; color: var(--mut); margin: 6px 6px 0 }
+  .sheet { background: oklch(0.2 0.02 240); border-radius: 20px 20px 0 0; padding: 16px 16px 20px; margin-top: 60px; border-top: 1px solid var(--line) }
+  .sheet h2 { margin: 0 0 12px; font-size: 18px; font-weight: 500 }
+  .f { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px }
+  .f label { font-size: 13px; color: var(--mut) }
+  .f .in { background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 15px }
+  .in.mono { font-family: ui-monospace, monospace; font-size: 14px }
+  .fp { background: rgba(0,0,0,.35); border-radius: 10px; padding: 10px 12px; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; color: var(--mut) }
+  .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px }
+  .tabs { background: var(--card); border-radius: 22px; margin-top: 14px; padding: 8px 14px; display: flex; justify-content: space-between; font-size: 13px; color: var(--mut) }
+  .tabs b { color: var(--fg); font-weight: 400 }
+  .tabs .q { background: var(--acc); color: #04131d; border-radius: 16px; padding: 10px 18px }
+  .rail { width: 84px; background: var(--card); border-radius: 22px; padding: 14px 0; display: flex; flex-direction: column; align-items: center; gap: 26px; font-size: 12px; color: var(--mut); height: 740px; box-sizing: border-box }
+  .rail .q { width: 50px; height: 50px; background: var(--acc); border-radius: 16px }
+  .deskmain { flex: 1 }
+  .dtop { background: var(--card); border-radius: 18px; padding: 10px 20px; display: flex; align-items: center; gap: 24px; min-height: 44px }
+  .dtop .search { flex: 1; background: rgba(0,0,0,.4); border: 2px solid var(--acc); border-radius: 14px; padding: 10px 16px; color: var(--mut); font-size: 15px }
+  .cols { display: flex; gap: 40px; margin-top: 24px }
+  .cats { width: 236px; font-size: 15px }
+  .cats .h { font-size: 12px; color: var(--mut); margin: 14px 6px 8px }
+  .cats .i { padding: 8px 12px; border-radius: 10px }
+  .cats .i.on { background: color-mix(in oklab, var(--acc) 18%, transparent); color: var(--acc) }
+  .page { width: 640px }
+  .page h2 { margin: 0 0 16px; font-size: 24px; font-weight: 500 }
+  .err { text-align: center; padding: 48px 20px; }
+  .err .ic { font-size: 40px; margin-bottom: 8px }
+  .err p { color: var(--mut); margin: 6px 0 16px }
+  .cap { font-size: 12px; color: var(--mut); margin-top: 6px }
+</style>
+
+<h1 class="t">A · Settings › Servers (phone, left) and the same page on desktop (right)</h1>
+<div class="row2">
+  <div class="phone">
+    <div class="top"><div class="back">‹</div><div><h2>Servers</h2><div class="sub">Settings</div></div></div>
+
+    <div class="g">Using</div>
+    <div class="card">
+      <div class="srv">
+        <div><div class="n">This phone</div><div class="s mut">Its own library and downloads</div></div>
+        <div class="sp"></div><span class="pill">In use</span>
+      </div>
+      <div class="srv">
+        <div><div class="n">PC maison</div><div class="u">https://100.101.7.42:8443</div>
+          <div class="s ok"><span class="dot"></span>Reachable · 1.6.3 · 48 ms</div></div>
+        <div class="sp"></div><span class="btn pri">Use</span>
+      </div>
+      <div class="srv">
+        <div><div class="n">Laptop</div><div class="u">https://100.101.7.9:8443</div>
+          <div class="s bad"><span class="dot"></span>Not answering · last seen Tue 22:10</div></div>
+        <div class="sp"></div><span class="btn ghost">Check</span>
+      </div>
+    </div>
+    <div class="foot">Checked when this page opens. Pick one and every page shows its library, downloads and music; casts go to the TV next to this phone.</div>
+
+    <div class="acts" style="justify-content:flex-start"><span class="btn">+ Add server</span></div>
+
+    <div class="g">This phone</div>
+    <div class="card">
+      <div class="srv"><div><div class="n">Address</div><div class="u">https://192.168.0.119:8443</div></div><div class="sp"></div><span class="btn ghost">Copy</span></div>
+    </div>
+    <div class="foot">What another sestudio needs to add this one.</div>
+
+    <div class="tabs"><span><b>Home</b></span><span>Media</span><span class="q">Q</span><span>Music</span><span>Library</span></div>
+  </div>
+
+  <div class="deskwrap a"><div class="desk" style="height:760px">
+    <div class="rail"><div style="color:var(--acc);font-weight:700;font-size:22px">S</div><div class="q"></div><span>Home</span><span>Media</span><span>Discover</span><span>Music</span><span>Library</span><div class="sp"></div><span style="color:var(--acc)">Settings</span></div>
+    <div class="deskmain">
+      <div class="dtop"><span style="font-size:22px">‹ &nbsp;Settings</span><div class="search">Search titles, or paste a YouTube or Twitch link</div><span class="mut" style="font-size:13px">on 5 sources + TMDB</span><span class="pill">67</span></div>
+      <div class="cols">
+        <div class="cats">
+          <div class="h">Watching</div><div class="i">▶ Playback</div><div class="i">▭ Subtitles</div>
+          <div class="h">Finding &amp; keeping</div><div class="i">⊕ Sources &amp; search</div><div class="i">⤓ Downloads</div><div class="i">♫ Music</div><div class="i">🔔 Notifications</div>
+          <div class="h">This server</div><div class="i">▤ Server</div><div class="i on">⇄ Servers</div><div class="i">⇪ Share sestudio</div>
+        </div>
+        <div class="page">
+          <h2>Servers</h2>
+          <div class="g" style="margin-top:0">Using</div>
+          <div class="card">
+            <div class="srv"><div><div class="n">This machine</div><div class="s mut">Its own library and downloads</div></div><div class="sp"></div><span class="pill">In use</span></div>
+            <div class="srv"><div><div class="n">PC maison</div><div class="u">https://100.101.7.42:8443</div><div class="s ok"><span class="dot"></span>Reachable · 1.6.3 · 48 ms</div></div><div class="sp"></div><span class="btn ghost">Check</span><span class="btn ghost">Remove</span><span class="btn pri">Use</span></div>
+            <div class="srv"><div><div class="n">Laptop</div><div class="u">https://100.101.7.9:8443</div><div class="s warn"><span class="dot"></span>Reachable · 1.5.0, older than this one · 210 ms</div></div><div class="sp"></div><span class="btn ghost">Check</span><span class="btn ghost">Remove</span><span class="btn pri">Use</span></div>
+          </div>
+          <div class="foot">Checked when this page opens. Pick one and every page shows its library, downloads and music; casts go to the TV next to this machine.</div>
+          <div class="acts" style="justify-content:flex-start"><span class="btn">+ Add server</span></div>
+          <div class="g">This machine</div>
+          <div class="card"><div class="srv"><div><div class="n">Address</div><div class="u">https://192.168.0.22:8443 &nbsp;·&nbsp; https://100.101.7.42:8443</div></div><div class="sp"></div><span class="btn ghost">Copy</span></div></div>
+          <div class="foot">What another sestudio needs to add this one. Tailscale addresses are listed when Tailscale is up.</div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<h1 class="t">B · Add server, then the trust prompt after the first check (phone sheet; desktop uses the same content in a dialog)</h1>
+<div class="row2">
+  <div class="phone" style="padding-top:0">
+    <div class="sheet">
+      <h2>Add server</h2>
+      <div class="f"><label>Name</label><div class="in">PC maison</div></div>
+      <div class="f"><label>Address</label><div class="in mono">https://100.101.7.42:8443</div></div>
+      <div class="foot" style="margin:0 2px 4px">Its Settings › Servers page shows the address. Over Tailscale, use the 100.x address.</div>
+      <div class="acts"><span class="btn">Cancel</span><span class="btn pri">Check and add</span></div>
+    </div>
+  </div>
+  <div class="phone" style="padding-top:0">
+    <div class="sheet">
+      <h2>Trust PC maison?</h2>
+      <div class="s ok" style="margin-bottom:10px"><span class="dot"></span>Reachable · sestudio 1.6.3 · 48 ms</div>
+      <div class="foot" style="margin:0 0 6px">It uses a self-signed certificate. Compare with Settings › Servers on that machine:</div>
+      <div class="fp">SHA-256 9F:3C:A1:…:7E:0B</div>
+      <div class="foot" style="margin:8px 0 0">If it changes later, the server is blocked until you accept again.</div>
+      <div class="acts"><span class="btn">Not now</span><span class="btn pri">Trust and use</span></div>
+    </div>
+  </div>
+</div>
+<div class="cap">A server added with "Not now" stays in the list as "Not trusted" with a Trust button.</div>
+
+<h1 class="t">C · While switched: the top card says so, on every page (phone Home; desktop Media)</h1>
+<div class="row2">
+  <div class="phone">
+    <div class="top"><div><h2><span style="color:#8ab">se</span><span style="color:var(--acc)">studio</span></h2><div class="sub">67 new for you</div><div style="margin-top:6px"><span class="pill acc">⇄ via PC maison</span></div></div><div class="sp"></div><span class="pill">67</span><span class="pill">≡</span></div>
+    <div class="card" style="margin-top:14px;padding:16px"><div style="font-size:18px">Continue watching <span class="mut">54</span></div><div class="mut" style="font-size:14px;margin-top:6px">(PC maison's list, posters and play all through this phone)</div></div>
+  </div>
+  <div class="deskwrap c"><div class="desk" style="height:150px">
+    <div class="rail" style="height:110px;gap:8px"><div style="color:var(--acc);font-weight:700;font-size:22px">S</div><div class="q"></div></div>
+    <div class="deskmain"><div class="dtop"><span style="font-size:22px">Media</span><div class="search">Search titles, or paste a YouTube or Twitch link</div><span class="pill acc">⇄ via PC maison</span><span class="mut" style="font-size:13px">on 5 sources + TMDB</span><span class="pill">67</span></div></div>
+  </div></div>
+</div>
+<div class="cap">Tapping the chip opens Settings › Servers. The chip is the only place that says where the data comes from; pages are otherwise unchanged.</div>
+
+<h1 class="t">D · The switched server stops answering</h1>
+<div class="row2">
+  <div class="phone">
+    <div class="top"><div><h2>Media</h2><div class="sub"><span class="pill acc">⇄ via PC maison</span></div></div></div>
+    <div class="card err">
+      <div class="ic">⇄</div>
+      <div style="font-size:18px">PC maison is not answering</div>
+      <p>Last seen 2 min ago. Is Tailscale on? Playing and casting from it stopped.</p>
+      <div style="display:flex;gap:8px;justify-content:center"><span class="btn">Check again</span><span class="btn pri">Use this phone</span></div>
+    </div>
+  </div>
+</div>
+<div class="cap">Same card on desktop, in the page column. The chip stays until "Use this phone" is tapped, so a short Tailscale drop recovers by itself.</div>
+</html>

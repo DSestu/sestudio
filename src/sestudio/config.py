@@ -121,6 +121,12 @@ class AppConfig:
     music_harmony_rule: str = "same"
     music_mood_words: bool = True
     music_autopilot_arc: str = "warmup"
+    # Other sestudio servers this one can stand in front of (SPEC-remote-servers):
+    # `{id, name, url, fingerprint}`, fingerprint being the SHA-256 of the
+    # certificate the user accepted ("" for http). active_server: the id in
+    # use, "" for this machine.
+    servers: list[dict] = field(default_factory=list)
+    active_server: str = ""
 
 
 THEORY_LEVELS = ("plain", "tap", "theory")
@@ -192,6 +198,8 @@ def load_config() -> AppConfig:
             music_harmony_rule=_choice(data, "music_harmony_rule", HARMONY_RULES),
             music_mood_words=bool(data.get("music_mood_words", True)),
             music_autopilot_arc=_choice(data, "music_autopilot_arc", AUTOPILOT_ARCS),
+            servers=[d for d in data.get("servers", []) or [] if isinstance(d, dict)],
+            active_server=str(data.get("active_server", "")),
         )
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)
