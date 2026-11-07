@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type PointerEvent, type ReactNode } from 'react'
 import { keyDisplay } from '../../harmony'
 import { formatDuration, type MusicTrack } from '../../musicLibrary'
 import { useAnalysing, useSummaries } from '../../musicMeta'
@@ -12,6 +12,7 @@ import { openKeyCard } from './harmony/keyCardStore'
 import { PULL, rankByPull } from '../../flowFits'
 import { KINDS, useFlows, type Flow } from '../../musicFlows'
 import { useMusicQueue } from '../../musicQueue'
+import { armRowDrag, type DragSource } from './rowDrag'
 
 // "What plays well next", the same list wherever it shows: beside a playlist, in the
 // player's Add to queue, or for any track. The filters are shared too, so a choice made
@@ -90,6 +91,8 @@ interface Props {
   exclude?: readonly string[]
   /** What the + on a row does, and its name for screen readers ("Insert", "Add to queue"). */
   action: { label: string; onPick: (t: MusicTrack) => void }
+  /** With it, a row can be dragged into the queue like a library row. */
+  drag?: (t: MusicTrack) => DragSource
   /** Leave "between" and rank after the anchor again. */
   onAfter?: () => void
   onClose?: () => void
@@ -99,7 +102,7 @@ interface Props {
 }
 
 /** The ranked list of what plays well after a track (or between two), with why each fits. */
-export default function FitsNext({ anchor, then, where, library, exclude = [], action, onAfter, onClose, footer, dense }: Props) {
+export default function FitsNext({ anchor, then, where, library, exclude = [], action, drag, onAfter, onClose, footer, dense }: Props) {
   const theory = useTheory()
   const deep = theory.level === 'theory'
   const [settings] = useSettings()
@@ -145,6 +148,8 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
     }
     return rankByPull(fitOf(anchor), library.map(fitOf), look, PULL[pull]).filter(r => !skip.has(r.id) && once(r.id)).slice(0, SHOWN)
   }, [flowMode, anchor.id, library, v, exKey, look, pull]) // eslint-disable-line react-hooks/exhaustive-deps
+  const rowProps = (t: MusicTrack) => drag ? { 'data-row': '', onPointerDown: (e: PointerEvent) => armRowDrag(e, drag(t)) } : {}
+  const rowCls = `flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-white/5${drag ? ' select-none touch-pan-y cursor-grab' : ''}`
   const moreOn = MORE.filter(m => f[m.key] !== filtersOf({}, settings.music_harmony_rule)[m.key]).length
 
   const empty = analysing && !known
@@ -222,7 +227,7 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
           const t = byId.get(r.id)!
           const k = keyDisplay(theory, get(r.id))
           return (
-            <li key={r.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-white/5">
+            <li key={r.id} className={rowCls} {...rowProps(t)}>
               <span className="min-w-0 flex-1 leading-tight">
                 <span className="block truncate text-sm font-medium">{t.title}</span>
                 <span className="flex items-center gap-1.5 truncate text-xs text-base-content/60">
@@ -243,7 +248,7 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
           const bpm = get(r.id)?.bpm || t.bpm
           const why = <Why j={r.join} then={r.then} theory={deep} />
           return (
-            <li key={r.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-white/5">
+            <li key={r.id} className={rowCls} {...rowProps(t)}>
               <span className="min-w-0 flex-1 leading-tight">
                 <span className="block truncate text-sm font-medium">{t.title}</span>
                 <span className="flex items-center gap-1.5 truncate text-xs text-base-content/60">
