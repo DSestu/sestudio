@@ -13,6 +13,7 @@ import { plan } from '../mix/plan'
 import MixPopover from '../mix/Popover'
 import { barPos, registerScrubber, Scrubber } from '../scrub'
 import { PALETTES, TIMELINE_PALETTE, type PaletteName } from './palette'
+import { phaseOf } from '../harmonyListen'
 import { COUNT_IN, DOCK, LOCK_END, quint, SEEN, TimelineRenderer, type LabelItem } from './render'
 import { layoutQueue, trackAt, type Span, type Track } from './sampling'
 
@@ -41,6 +42,12 @@ const joinTone = (a: ProxTrack, b: ProxTrack) => {
   return j.kind ? joinColor(j) : undefined
 }
 
+/** The join's kind and colour, for its notes panel. */
+const joinVerdict = (a: ProxTrack, b: ProxTrack) => {
+  const j = joinOf(a, b)
+  return j.kind && j.kindLabel ? { label: j.kindLabel, color: joinColor(j) } : null
+}
+
 function buildModel(q: QueueState, info: (id: string) => TrackInfo | undefined, summary: (id: string) => Summary | undefined): Model {
   const tracks: Track[] = []
   const rows: number[] = []
@@ -56,6 +63,9 @@ function buildModel(q: QueueState, info: (id: string) => TrackInfo | undefined, 
   const items = tracks.map((track, i): LabelItem => ({
     track, span: spans[i], a: 0, sc: 1, hl: 0, title: info(track.id)?.title ?? '', plan: plans[i - 1],
     tone: i && summary(track.id) && summary(tracks[i - 1].id) ? joinTone(proxOf(tracks[i - 1].id, summary(tracks[i - 1].id)), proxOf(track.id, summary(track.id))) : undefined,
+    reading: summary(track.id)?.harmony?.track,
+    prevReading: i ? summary(tracks[i - 1].id)?.harmony?.track : undefined,
+    verdict: i && summary(track.id) && summary(tracks[i - 1].id) ? joinVerdict(proxOf(tracks[i - 1].id, summary(tracks[i - 1].id)), proxOf(track.id, summary(track.id))) : null,
   }))
   const last = tracks.length - 1
   return { q, items, TS, spans, rows, ids, end: last < 0 ? 0 : TS[last] + tracks[last].dur - 0.5, cur: rows.indexOf(q.current) }
@@ -191,6 +201,8 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     let tween: { t0: number; ts: number[]; spans: Span[]; ms: number; ease: (x: number) => number } | null = null
     /** Track id -> when its tempo arrived while shown (ms): its count-in, dock and lock play from then. */
     const landed = new Map<string, number>()
+    /** Item ids of the joins whose notes panel is open (a tap on the diamond). */
+    const opened = new Set<string>()
     const scrub = new Scrubber({
       root: (cv.closest('[role="dialog"]') as HTMLElement | null) ?? document.body,
       r,
@@ -218,6 +230,17 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
     }
     const down = (e: PointerEvent) => {
       if ((e.target as HTMLElement).closest('[data-mix-popover]')) return
+      // A tap on a join's diamond opens (or closes) what the two keys share.
+      if (!(e.target as HTMLElement).closest('button, input, [role=slider], [data-queue]')) {
+        const b = cv.getBoundingClientRect()
+        const j = r.joinAt(e.clientX - b.left, e.clientY - b.top)
+        const id = j === null ? undefined : live.current.model.ids[j]
+        const was = id !== undefined && opened.has(id)
+        opened.clear()
+        if (id !== undefined && !was) opened.add(id)
+        wake()
+        if (j !== null) return
+      }
       const h = labelAt(e)
       const m = live.current.model
       if (h && m.items[h.i]) {
@@ -374,6 +397,8 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
         it.sc = morph ? (morph.grow.has(id) ? me : id === morph.moved ? dipScale(me) : 1) : 1
         it.hl = stepHl(it.hl, i === k ? 1 : 0, dt)
         it.front = stepFront(it.track, dt)
+        it.harm = phaseOf(it.track.id, it.reading, now)
+        it.open = opened.has(id)
         const at = landed.get(it.track.id)
         it.lock = at === undefined ? undefined : (now - at) / 1000
         if (it.lock !== undefined && it.lock > LOCK_END) {
@@ -405,7 +430,7 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       const show = placeJoins(m, G)
       // Nothing to draw next frame when this one matches the last (and nothing plays).
       let sum = 0
-      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol + (it.front ?? 0) + (it.lock ?? 0)
+      for (const it of items) sum += it.a + it.hl + it.sc + it.span.i0 + it.span.il + it.span.o0 + it.span.ol + (it.front ?? 0) + (it.lock ?? 0) + (it.harm ? it.harm.t + it.harm.land : 0) + (it.open ? 1 : 0)
       const sig = `${G.toFixed(3)}|${t.toFixed(3)}|${level.toFixed(3)}|${scrub.hovered}|${sum.toFixed(3)}|${items.length}|${show}|${joins.slot}|${live.current.aim}`
       const moved = sig !== lastSig || getQueue().playing
       lastSig = sig

@@ -30,6 +30,8 @@ export interface RawAnalysis {
   energyScale?: { track?: number; intro?: number; outro?: number }
   /** Still being analysed: `bands` are the part measured so far. */
   partial?: boolean
+  /** While analysed: the notes heard by each tenth of the track (12 each, C first), sent before the key. */
+  notes?: number[][]
 }
 
 /** A structure segment (intro, buildup, drop, breakdown, outro) in the track's own seconds. */

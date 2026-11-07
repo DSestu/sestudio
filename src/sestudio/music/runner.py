@@ -195,6 +195,7 @@ def run_once(
             str(base / f.path),
             lambda bands, dur: store.set_partial(f.track_id, bands, dur),
             lambda bpm, bar0: store.set_partial_tempo(f.track_id, bpm, bar0),
+            lambda steps: store.set_partial_notes(f.track_id, steps),
         )
 
     with ThreadPoolExecutor(workers, thread_name_prefix="analyse") as ex:

@@ -109,28 +109,56 @@ def _sustained(mag: np.ndarray) -> np.ndarray:
     return out
 
 
-def profile(x: np.ndarray, lo: float = 50.0, hi: float = 2500.0) -> np.ndarray:
-    """12-bin pitch-class profile (C = 0, sums to 1) of an 11025 Hz signal.
+def _frames(
+    x: np.ndarray, lo: float, hi: float
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Per frame, its 12-bin pitch-class weights (each frame sums to 1) and its loudness.
 
     Spectral peaks of the sustained part within ``PEAK_FLOOR`` of each frame's
-    loudest, on their nearest semitone (cos² of the detuning); every frame
-    louder than ``SILENT`` of the loud ones counts the same.
+    loudest, on their nearest semitone (cos² of the detuning). None when too short.
     """
     mag, freqs = _stft(x, lo, hi)
     if not mag.size:
-        return np.full(12, 1 / 12)
+        return None
     s = _sustained(mag)
     peak = np.zeros_like(s, bool)
     peak[1:-1] = (s[1:-1] > s[:-2]) & (s[1:-1] >= s[2:])
     s = np.where(peak & (s >= PEAK_FLOOR * s.max(0, keepdims=True)), s, 0)
     total = s.sum(0)
-    s = s[:, total >= SILENT * np.percentile(total, 95)]
-    s = s / np.maximum(s.sum(0, keepdims=True), 1e-12)
     midi = 69 + 12 * np.log2(freqs / 440)
     near = np.round(midi)
-    weight = np.cos(np.pi * (midi - near)) ** 2
-    out = np.bincount(near.astype(int) % 12, weights=s.sum(1) * weight, minlength=12)
+    fold = np.zeros((12, len(freqs)), np.float32)
+    fold[near.astype(int) % 12, np.arange(len(freqs))] = (
+        np.cos(np.pi * (midi - near)) ** 2
+    )
+    return fold @ (s / np.maximum(total, 1e-12)), total
+
+
+def _profile_of(per: np.ndarray, total: np.ndarray) -> np.ndarray:
+    """Every frame louder than ``SILENT`` of the loud ones counts the same; sums to 1."""
+    if not total.size:
+        return np.full(12, 1 / 12)
+    out = per[:, total >= SILENT * np.percentile(total, 95)].sum(1)
     return out / max(float(out.sum()), 1e-12)
+
+
+def profile(x: np.ndarray, lo: float = 50.0, hi: float = 2500.0) -> np.ndarray:
+    """12-bin pitch-class profile (C = 0, sums to 1) of an 11025 Hz signal."""
+    f = _frames(x, lo, hi)
+    return np.full(12, 1 / 12) if f is None else _profile_of(*f)
+
+
+def profile_steps(x: np.ndarray, steps: int = 10) -> list[np.ndarray]:
+    """The profile of the first tenth, first two tenths... of *x*: the notes heard so far, from one pass."""
+    f = _frames(x, 50.0, 2500.0)
+    if f is None:
+        return []
+    per, total = f
+    n = total.size
+    return [
+        _profile_of(per[:, : -(-n * i // steps)], total[: -(-n * i // steps)])
+        for i in range(1, steps + 1)
+    ]
 
 
 def skey_mass(p: np.ndarray) -> np.ndarray:

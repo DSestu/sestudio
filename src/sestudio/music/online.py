@@ -212,6 +212,7 @@ def _analyse(tid: str, vid: str) -> None:
             str(file),
             lambda bands, dur: store.set_partial(tid, bands, dur),
             lambda bpm, bar0: store.set_partial_tempo(tid, bpm, bar0),
+            lambda steps: store.set_partial_notes(tid, steps),
         )
         with _lock:
             info = (_resolved.get(vid) or (0, {}))[1].get("info") or {}

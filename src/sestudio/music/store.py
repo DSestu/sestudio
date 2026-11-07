@@ -376,6 +376,8 @@ _partial: dict[str, tuple[np.ndarray, float]] = {}
 _partial_lock = threading.Lock()
 #: Track id -> (bpm, bar0) once the tempo is measured, before the key is.
 _partial_tempo: dict[str, tuple[float | None, float | None]] = {}
+#: Track id -> the notes heard by each tenth of the track, while the key is measured.
+_partial_notes: dict[str, list[list[float]]] = {}
 
 
 def set_partial(
@@ -392,10 +394,17 @@ def set_partial_tempo(track_id: str, bpm: float | None, bar0: float | None) -> N
         _partial_tempo[track_id] = (bpm, bar0)
 
 
+def set_partial_notes(track_id: str, steps: list[np.ndarray]) -> None:
+    """The 12-note profile of a track still being analysed, by tenths (C first, each sums to 1)."""
+    with _partial_lock:
+        _partial_notes[track_id] = [[round(float(v), 3) for v in p] for p in steps]
+
+
 def drop_partial(track_id: str) -> None:
     with _partial_lock:
         _partial.pop(track_id, None)
         _partial_tempo.pop(track_id, None)
+        _partial_notes.pop(track_id, None)
 
 
 def partial(ids: list[str]) -> dict[str, dict[str, Any]]:
@@ -403,6 +412,7 @@ def partial(ids: list[str]) -> dict[str, dict[str, Any]]:
     with _partial_lock:
         found = {i: _partial[i] for i in ids if i in _partial}
         tempos = {i: _partial_tempo[i] for i in found if i in _partial_tempo}
+        notes = {i: _partial_notes[i] for i in found if i in _partial_notes}
     if not found:
         return {}
     norm = (_get_state() or renormalise())["norm"]
@@ -418,6 +428,8 @@ def partial(ids: list[str]) -> dict[str, dict[str, Any]]:
         }
         if tid in tempos:
             out[tid]["bpm"], out[tid]["bar0"] = tempos[tid]
+        if tid in notes:
+            out[tid]["notes"] = notes[tid]
     return out
 
 

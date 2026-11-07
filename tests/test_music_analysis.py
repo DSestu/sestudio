@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from sestudio import downloaded, library
 from sestudio.media import ffmpeg_binary
-from sestudio.music import analysis, genres, runner, store
+from sestudio.music import analysis, genres, modes, runner, store
 from sestudio.web.app import create_app
 
 SR = 22050
@@ -230,12 +230,21 @@ def test_the_bands_are_reported_as_they_are_decoded(tmp_path):
     _write_wav(f, sine(60, 13))
     seen: list[tuple[int, float]] = []
     tempos: list[tuple[float | None, float | None]] = []
+    notes: list[list[np.ndarray]] = []
     a = analysis.analyse_file(
-        str(f), lambda b, d: seen.append((b.shape[1], d)), lambda *t: tempos.append(t)
+        str(f),
+        lambda b, d: seen.append((b.shape[1], d)),
+        lambda *t: tempos.append(t),
+        notes.append,
     )
     # 13 s in 5 s steps: 50, 100, then the rest.
     assert [n for n, _ in seen] == [50, 100, a.bands.shape[1]]
     assert tempos == [(a.bpm, a.bar0)]
+    # One profile per tenth, the last one the whole track's.
+    assert len(notes) == 1 and len(notes[0]) == 10
+    assert np.allclose(
+        notes[0][-1], modes.profile(analysis.decode(str(f), analysis.TEMPO_SR))
+    )
     assert all(d == pytest.approx(a.duration) for _, d in seen)
 
 
@@ -263,6 +272,10 @@ def test_a_track_being_analysed_is_served_as_partial(db, root, tmp_path, monkeyp
     store.set_partial_tempo("yt:abc", 174.5, 1.25)
     got = c.get("/api/music/tracks/analysis", params={"ids": "yt:abc"}).json()["yt:abc"]
     assert (got["bpm"], got["bar0"], got["partial"]) == (174.5, 1.25, True)
+    # Then the notes heard by each tenth, while the key is measured.
+    store.set_partial_notes("yt:abc", [np.eye(12)[3]] * 10)
+    got = c.get("/api/music/tracks/analysis", params={"ids": "yt:abc"}).json()["yt:abc"]
+    assert len(got["notes"]) == 10 and got["notes"][0][3] == 1.0
     # The summary (track rows) leaves it out until it is done.
     assert c.get("/api/music/tracks/summary", params={"ids": "yt:abc"}).json() == {}
     store.drop_partial("yt:abc")
