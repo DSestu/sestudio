@@ -40,6 +40,7 @@ import SettingsView from './views/settings/SettingsView'
 import WatchView from './views/WatchView'
 import LanWarningModal from './components/LanWarningModal'
 import { isLoopback, useServerLan } from './serverLan'
+import { useActiveServerWatch } from './servers'
 
 type WatchFields = Record<string, string | number | undefined>
 
@@ -69,6 +70,8 @@ export default function App() {
   // Opened on localhost because phones and TVs can't reach the server: say why,
   // once per problem and session.
   const [serverLan, recheckLan] = useServerLan()
+  // The other sestudio in use, if any, for the "via" chip and its down card.
+  useActiveServerWatch()
   const [lanDismissed, setLanDismissed] = useState(() => sessionStorage.getItem('lanWarning'))
   const lanProblem = serverLan?.lan?.problem
   const showLanWarning = !!lanProblem && isLoopback(window.location.hostname) && lanDismissed !== lanProblem

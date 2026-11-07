@@ -8,6 +8,7 @@ import Music from './Music'
 import Notifications from './Notifications'
 import Playback from './Playback'
 import Server from './Server'
+import Servers from './Servers'
 import Share from './Share'
 import Sources from './Sources'
 import Subtitles from './Subtitles'
@@ -38,6 +39,7 @@ const CATEGORIES: Category[] = [
   { id: 'music', name: 'Music', group: 'Finding & keeping', icon: 'M9 18V6l11-2v12M6.5 15.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM17.5 13.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z', page: p => <Music {...p} /> },
   { id: 'notifications', name: 'Notifications', group: 'Finding & keeping', icon: 'M6 16v-5a6 6 0 1112 0v5l1.5 2h-15zM10 20.5h4', page: p => <Notifications {...p} /> },
   { id: 'server', name: 'Server', group: 'This server', icon: 'M6 4h12a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2zM6 13h12a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2v-3a2 2 0 012-2zM8 7.5h.01M8 16.5h.01', page: p => <Server {...p} /> },
+  { id: 'servers', name: 'Servers', group: 'This server', icon: 'M4 8h14l-3-3M20 16H6l3 3', page: () => <Servers /> },
   { id: 'share', name: 'Share sestudio', group: 'This server', icon: 'M12 15V4M8 8l4-4 4 4M5 13v6h14v-6', page: () => <Share /> },
 ]
 

@@ -3,11 +3,13 @@ import { createPortal } from 'react-dom'
 
 /** A glass sheet from the bottom of the screen, over a scrim (phone). Closes on
  *  the scrim, the ✕, or Esc. */
-export default function BottomSheet({ title, open, onClose, children }: {
+export default function BottomSheet({ title, open, onClose, children, className = '' }: {
   title: string
   open: boolean
   onClose: () => void
   children: ReactNode
+  /** Extra classes on the sheet, e.g. to make it a centred dialog on desktop. */
+  className?: string
 }) {
   useEffect(() => {
     if (!open) return
@@ -23,7 +25,7 @@ export default function BottomSheet({ title, open, onClose, children }: {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="glass absolute inset-x-0 bottom-0 rounded-t-[20px] px-4 pt-2.5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] max-h-[85dvh] overflow-y-auto animate-[sheet-up_280ms_var(--ease-smooth)] motion-reduce:animate-none"
+        className={`glass absolute inset-x-0 bottom-0 rounded-t-[20px] px-4 pt-2.5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] max-h-[85dvh] overflow-y-auto animate-[sheet-up_280ms_var(--ease-smooth)] motion-reduce:animate-none ${className}`}
       >
         <span aria-hidden="true" className="block mx-auto mb-2.5 w-9 h-1 rounded-full bg-base-content/25" />
         <div className="flex items-center mb-3">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AppSettings } from '../../api'
 import { getServerLog } from '../../api'
 import { useLibraries } from '../../musicLibraries'
+import { thisMachine, useActiveServer } from '../../servers'
 import { loadPlayerPrefs, qualityValue } from '../../playerPrefs'
 import { loadSubtitleStyle } from '../../subtitleStyle'
 import { useAiSetup } from '../../useAiSetup'
@@ -26,6 +27,7 @@ export function uptime(started: number): string {
  */
 export function useSettingsStatus(settings: AppSettings): { summary: Record<string, string>; problems: Problem[] } {
   const libraries = useLibraries()
+  const active = useActiveServer()
   const [setup] = useAiSetup()
   const [server, setServer] = useState<{ started: number } | null | undefined>()
 
@@ -50,6 +52,7 @@ export function useSettingsStatus(settings: AppSettings): { summary: Record<stri
     notifications: !settings.notifications_enabled ? 'Off'
       : settings.callmebot_configured ? 'WhatsApp on' : 'WhatsApp on · number or key missing',
     server: server === undefined ? '' : server ? `Running · up ${uptime(server.started)}` : 'Not answering',
+    servers: active ? `Using ${active.name}${active.down ? ' · not answering' : ''}` : thisMachine(),
     share: 'Android app · Google Colab',
   }
 
