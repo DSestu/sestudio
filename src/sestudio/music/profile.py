@@ -13,13 +13,16 @@ from typing import Any
 import numpy as np
 
 #: Bump to have every stored track re-profiled.
-VERSION = 2
+VERSION = 3
 
 NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 MIN_BARS = 8
-GRID = 4  # boundaries sit on multiples of this many bars
+GRID = 4  # boundaries sit on multiples of this many bars, counted from the phrase phase
 MIN_SEGMENT = 8
 NOVELTY = 0.15
+#: A first whole bar starting this late (share of a bar) means the music began on a downbeat
+#: near 0 s that :func:`bars` skips as partial, so its phrases start on bar 3, 7, 11…
+LATE_BAR0 = 0.65
 
 
 def camelot(pc: int, minor: bool) -> str:
@@ -125,16 +128,25 @@ def energy_scale(
     }
 
 
-def structure(groups: np.ndarray, en: np.ndarray) -> list[dict[str, Any]]:
-    """Segments on the 4/8/16-bar grid, cut where band balance and energy change most, then labelled."""
+def phrase_phase(bpm: float, bar0: float) -> int:
+    """The bar of :func:`bars` on which the music's 4-bar phrases start (0 or 3)."""
+    length = 240 / bpm
+    return GRID - 1 if bar0 % length >= LATE_BAR0 * length else 0
+
+
+def structure(
+    groups: np.ndarray, en: np.ndarray, phase: int = 0
+) -> list[dict[str, Any]]:
+    """Segments on the 4/8/16-bar grid from bar *phase*, cut where band balance and energy change most, then labelled."""
     nb = len(en)
     feats = np.stack([*(_norm(g) for g in groups), en], axis=1)
     cands = []
-    for b in range(MIN_SEGMENT, nb - MIN_SEGMENT + 1, GRID):
-        w = 8 if b % 16 == 0 else 4
+    for b in range(phase + MIN_SEGMENT, nb - MIN_SEGMENT + 1, GRID):
+        k = b - phase
+        w = 8 if k % 16 == 0 else 4
         d = np.linalg.norm(feats[max(b - w, 0) : b].mean(0) - feats[b : b + w].mean(0))
         if d / 2 >= NOVELTY:
-            cands.append((d * (1 + 0.3 * (b % 16 == 0) + 0.15 * (b % 8 == 0)), b))
+            cands.append((d * (1 + 0.3 * (k % 16 == 0) + 0.15 * (k % 8 == 0)), b))
     cuts: list[int] = []
     for _, b in sorted(cands, reverse=True):
         if all(abs(b - c) >= MIN_SEGMENT for c in cuts):
@@ -158,7 +170,14 @@ def structure(groups: np.ndarray, en: np.ndarray) -> list[dict[str, Any]]:
             label = "buildup"
         else:
             label = "breakdown"
-        out.append({"label": label, "start_bar": a, "end_bar": b})
+        # Nothing breaks down before the first drop: that's still the intro.
+        if label == "breakdown" and not any(high[:i]):
+            label = "intro"
+        # Two parts in a row with one name are one section (a drop's switch-up is not a new drop).
+        if out and out[-1]["label"] == label:
+            out[-1]["end_bar"] = b
+        else:
+            out.append({"label": label, "start_bar": a, "end_bar": b})
     return out
 
 
@@ -220,7 +239,7 @@ def profile(
         if len(loud_bar) >= MIN_BARS:
             en = energy(groups, loud_bar)
             out["energy"] = np.rint(en * 100).astype(int).tolist()
-            out["structure"] = structure(groups, en)
+            out["structure"] = structure(groups, en, phrase_phase(bpm, bar0))
     if g := genre(bpm, groups, en):
         out |= g
     return out
