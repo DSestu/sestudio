@@ -201,7 +201,8 @@ def run_once(
     ]  # fmt: skip
     with _lock:
         _total, _done = len(files), len(files) - len(pending)
-    workers = workers or max(1, min(4, (os.cpu_count() or 2) // 2))
+    # Half the cores, at most 6: 14 tracks took 23.6 s on 4, 18.3 s on 6, 17.7 s on 8.
+    workers = workers or max(1, min(6, (os.cpu_count() or 2) // 2))
     ok = _upgrade_v2(base, files, workers)
     if not pending:
         _decide_genres(base, files, workers)
