@@ -48,7 +48,7 @@ export default function JoinDialog({ a, b, titleA, titleB, kept, onFix, onClose 
         <button onClick={onClose} aria-label="Close" className="btn btn-ghost btn-sm btn-circle">✕</button>
       </div>
       <div>
-        <div className={`text-xl font-semibold tracking-tight ${clash ? 'text-warning' : ''}`}>{j.kindLabel ?? 'Key not known yet'}</div>
+        <div className={`text-xl font-semibold tracking-tight ${clash ? 'text-warning' : ''}`} style={j.semitones !== null ? { color: joinColor(j) } : undefined}>{j.kindLabel ?? 'Key not known yet'}</div>
         {j.semitones !== null ? (
           <p className="text-sm text-base-content/60">The same scale, {j.semitones > 0 ? 'up' : 'down'} {Math.abs(j.semitones)} semitone{Math.abs(j.semitones) === 1 ? '' : 's'}: a {j.semitones > 0 ? 'lift' : 'drop'} that works in any mix.</p>
         ) : j.shared !== null && (
@@ -61,7 +61,7 @@ export default function JoinDialog({ a, b, titleA, titleB, kept, onFix, onClose 
       {x && y && a.harmony?.track && b.harmony?.track && (
         <div className="flex flex-col gap-2">
           <JoinSpans a={a.harmony.track} b={b.harmony.track} verdict={{ label: j.kindLabel ?? '', color: joinColor(j) }} s={1.7} />
-          <p className="text-xs text-base-content/50">Notes in the order of fifths: {titleA} on top, {titleB} below, slid to its place. The lines are the notes they share.</p>
+          {j.semitones === null && <p className="text-xs text-base-content/50">Notes in the order of fifths: {titleA} on top, {titleB} below, slid to its place. The lines are the notes they share.</p>}
           <button onClick={() => playChange(x.notes, x.home, y.notes, y.home)} className="btn btn-sm btn-primary btn-soft gap-1.5 self-start">
             <span aria-hidden="true">▶</span>Hear A, then B
           </button>

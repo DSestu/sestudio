@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { Reading } from '../crates/proximity'
-import { drawJoin, drawPair, PAIR_SLOTS, PANEL_W, VERDICT_AT } from '../harmonyListen'
+import { drawJoin, drawPair, PAIR_SLOTS, PANEL_W, stepOf, VERDICT_AT } from '../harmonyListen'
 
 /** Seconds a slide takes to settle (shared notes lit, verdict shown). */
 const SETTLE = VERDICT_AT + 0.5
@@ -42,7 +42,7 @@ function useSlide(paint: (x: CanvasRenderingContext2D, t: number, w: number) => 
  *  into place, the shared notes, the verdict. Plays its slide when it mounts; as wide as its container (the verdict runs past the cells). */
 export function JoinSpans({ a, b, verdict, s = 1.4 }: { a: Reading; b: Reading; verdict: { label: string; color: string } | null; s?: number }) {
   const cv = useSlide((x, t) => drawJoin(x, 8 * s, 16 * s, s, a, b, { heard: [], land: 1, t }, verdict, true, false), `${a.tonic} ${a.mode}>${b.tonic} ${b.mode}`, false)
-  return <canvas ref={cv} role="img" aria-label={`${a.tonic} ${a.mode} into ${b.tonic} ${b.mode}: the notes they share`} style={{ minWidth: PANEL_W * s, height: 54 * s }} className="block w-full" />
+  return <canvas ref={cv} role="img" aria-label={`${a.tonic} ${a.mode} into ${b.tonic} ${b.mode}: the notes they share`} style={{ minWidth: PANEL_W * s, height: (stepOf(a, b) === null ? 54 : 64) * s }} className="block w-full" />
 }
 
 /** A small pair of runs (cell `cw` px): how far the incoming key moves from the outgoing one. Slides when it mounts and each time
