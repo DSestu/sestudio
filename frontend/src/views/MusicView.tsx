@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import AddToPlaylist from '../components/music/crates/AddToPlaylist'
 import AddLibrary from '../components/music/crates/AddLibrary'
 import Crates, { type Crate } from '../components/music/crates/Crates'
-import NewPlaylist from '../components/music/crates/NewPlaylist'
 import PlaylistView from '../components/music/crates/PlaylistView'
 import EmptyState from '../components/EmptyState'
 import PageHeader from '../components/PageHeader'
@@ -34,7 +33,7 @@ import { useFlows } from '../musicFlows'
 import Sources, { type SourceTab } from '../components/music/edit/Sources'
 import { refOf, resetFocus, setSheet as setEditSheet, songKey, useFocus } from '../components/music/edit/focus'
 import { toast } from '../components/music/toast'
-import { itemsOf, playlistApi, usePlaylists } from '../musicPlaylists'
+import { createWithTracks, freshName, itemsOf, playlistApi, usePlaylists } from '../musicPlaylists'
 
 const TABS = [
   // Flows and mixes (SPEC-music-flows) first: they sit beside the old lists until those go (§12 PR 11).
@@ -260,9 +259,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const go = (open: { pl?: string; al?: string; ar?: string; seed?: string; fl?: string; mx?: string }) =>
     navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, al: undefined, ar: undefined, seed: undefined, fl: undefined, mx: undefined, edit: undefined, ...open })
   const newPlaylist = (seed?: string) => { setSheet(false); go({ pl: 'new', seed }) }
-  /** The draft became a playlist: its page replaces the draft's history entry. */
+  /** The new playlist exists: its editor replaces the `pl=new` history entry. */
   const opened = (id: string) => {
-    const next = { ...Object.fromEntries(currentParams()), pl: id, seed: undefined }
+    const next = { ...Object.fromEntries(currentParams()), pl: id, seed: undefined, edit: '1' }
     replaceParams('music', next)
     navigate('music', next)
   }
@@ -335,6 +334,16 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const page = (node ?? album ?? artist ?? drafting) || !!flowEdit || !!mixOpen
 
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
+  // `pl=new` makes the playlist at once (empty, or with the track of "New playlist from this") and opens its editor.
+  const making = useRef(false)
+  useEffect(() => {
+    if (!drafting || making.current) return
+    making.current = true
+    const seed = byId.get(params.get('seed') ?? '')
+    const made = seed ? createWithTracks([refOf(seed)]) : playlistApi.create('playlist', freshName(playlists.map(n => n.name)))
+    made.then(n => opened(n.id), (e: Error) => { toast(e.message); go({}) }).finally(() => { making.current = false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per `pl=new`, with the state of that moment
+  }, [drafting])
   const activeLabel = crates.find(c => c.id === library)?.label ?? 'All'
   const pick = (id: string) => { setLibrary(id); setSheet(false); if (nodeId || albumId || artistName) go({}) }
   const pickNode = (id: string) => { setSheet(false); if (id !== nodeId) openNode(id) }
@@ -359,10 +368,8 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     <FlowLanes key={flowEdit} flowId={flowEdit} byId={byId} onOpen={id => go({ fl: id })} />
   ) : mixOpen ? (
     <MixView key={mixOpen} mixId={mixOpen} byId={byId} onEditFlow={id => go({ fl: id })} />
-  ) : drafting ? (
-    <NewPlaylist key={params.get('seed') ?? ''} byId={byId} seed={params.get('seed') ?? undefined} onCreated={opened} />
-  ) : node ? (
-    <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} edit={editing} onEdit={node.kind === 'playlist' ? () => setEditing(true) : undefined} />
+  ) : drafting ? null : node ? (
+    <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} edit={editing} onEdit={node.kind === 'playlist' ? () => setEditing(true) : undefined} onSource={t => { setSourceTab(t); setEditSheet(t) }} />
   ) : album ? (
     <Detail name={album.name} tracks={album.tracks} get={get} onPlaylist={setPickFor} />
   ) : artist ? (
@@ -481,7 +488,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           {editing && !wide && (
             <div role="group" aria-label="Add and fits" className="sticky top-2 z-20 grid grid-cols-3 gap-1.5 rounded-2xl bg-base-300/90 p-1.5 backdrop-blur">
               {([['lib', 'Library'], ['online', 'Online'], ['fits', 'Fits']] as const).map(([v, label]) => (
-                <button key={v} onClick={() => { if (v !== 'fits') setSourceTab(v); setEditSheet(v) }} aria-pressed={focus.sheet === v} className={`btn h-11 min-h-0 border-0 text-sm font-medium ${focus.sheet === v ? 'bg-primary/20 text-primary' : 'btn-ghost'}`}>
+                <button key={v} onClick={() => { if (v !== 'fits') setSourceTab(v); setEditSheet(v) }} disabled={v === 'fits' && !!node && !itemsOf(node).length} aria-pressed={focus.sheet === v} className={`btn h-11 min-h-0 border-0 text-sm font-medium disabled:bg-transparent disabled:opacity-40 ${focus.sheet === v ? 'bg-primary/20 text-primary' : 'btn-ghost'}`}>
                   {label}
                   {v === 'fits' && focus.target?.k === 'track' && <span className="max-w-20 truncate text-[11px] font-normal text-base-content/55">{focus.target.track.title}</span>}
                 </button>

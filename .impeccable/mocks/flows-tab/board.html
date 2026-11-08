@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flows tab redesign · board</title>
+<style>
+:root{
+  --house:oklch(16% .015 240);--aisle:oklch(20% .02 240);--row:oklch(26% .025 240);--slate:oklch(30% .02 240);
+  --ink:oklch(92% .01 240);--mut:oklch(92% .01 240 / .62);--dim:oklch(92% .01 240 / .45);--line:oklch(92% .01 240 / .08);
+  --blue:oklch(72% .16 230);--blueink:oklch(18% .05 230);--energy:oklch(82% .11 75);--ok:oklch(76% .17 155);--warn:oklch(83% .16 85);
+  --card:oklch(19% .03 235);--z:.547;--zp:.5;
+}
+@media (min-width:1400px){:root{--z:1;--zp:.9}}
+*{box-sizing:border-box;margin:0}
+body{font:14px/1.43 ui-sans-serif,system-ui,sans-serif;color:var(--ink);background:transparent}
+.board{display:flex;flex-direction:column;gap:28px;padding:4px 0 16px}
+h1{font-size:1.25rem;font-weight:600;letter-spacing:-.02em}
+.lead{color:var(--mut);max-width:70ch;font-size:13px}
+.stories{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 18px;font-size:12.5px;color:var(--mut)}
+.stories b{color:var(--ink);font-weight:600;margin-right:4px}
+.dir h2{font-size:1.05rem;font-weight:600;letter-spacing:-.02em;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.dir h2 small{font-size:12px;font-weight:500;color:var(--blue)}
+.dir p.why{color:var(--mut);font-size:12.5px;margin:4px 0 10px;max-width:72ch}
+.shots{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.cap{font-size:11px;color:var(--dim);margin-top:4px}
+/* frames */
+.desk{width:1280px;height:800px;zoom:var(--z);position:relative;overflow:hidden;border-radius:14px;background:var(--house);outline:1px solid var(--line)}
+.phone{width:390px;height:844px;zoom:var(--zp);position:relative;overflow:hidden;border-radius:34px;background:var(--house);outline:1px solid var(--line)}
+@media (max-width:1399px){.phone{zoom:.55}}
+/* chrome */
+.rail{position:absolute;left:12px;top:12px;bottom:12px;width:72px;border-radius:14px;background:var(--card);display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:16px}
+.rail .logo{width:26px;height:30px;border-radius:8px;background:linear-gradient(var(--blue),oklch(60% .14 230))}
+.rail .srch{width:46px;height:46px;border-radius:12px;background:var(--blue)}
+.rail i{width:52px;height:46px;border-radius:10px;display:grid;place-items:center;font:500 10px/1 system-ui;color:var(--mut);font-style:normal}
+.rail i.on{background:oklch(40% .08 230 / .5);color:var(--ink)}
+.topc{position:absolute;left:104px;right:20px;top:16px;height:88px;border-radius:16px;background:linear-gradient(90deg,oklch(22% .04 235),oklch(19% .03 235));outline:1px solid oklch(72% .16 230 / .14)}
+.topc .t{position:absolute;left:18px;top:8px;font-size:19px}
+.topc .t small{display:block;font-size:11px;color:var(--mut);font-style:italic}
+.topc .s{position:absolute;left:96px;right:300px;top:6px;height:38px;border-radius:9px;border:2px solid oklch(72% .16 230 / .8);background:var(--house);color:var(--dim);font-size:13px;padding:8px 36px}
+.topc .np{position:absolute;right:70px;top:9px;height:30px;padding:0 14px;border-radius:5px;background:var(--blue);color:var(--blueink);font-size:12px;line-height:30px}
+.tabs{position:absolute;left:18px;top:46px;display:flex;gap:2px;background:oklch(16% .02 240 / .7);border-radius:12px;padding:3px}
+.tabs span{padding:6px 16px;border-radius:9px;font-size:12.5px;color:var(--mut)}
+.tabs span.on{background:oklch(40% .1 230 / .45);color:var(--ink)}
+.libs{position:absolute;left:104px;top:120px;width:226px;font-size:13px}
+.libs h5{font-size:10.5px;letter-spacing:.06em;color:var(--dim);font-weight:500;margin:0 0 8px 10px}
+.libs div{display:flex;justify-content:space-between;padding:8px 10px;border-radius:9px;color:var(--ink)}
+.libs div.on{background:oklch(40% .1 230 / .35)}
+.libs div em{font-style:normal;color:var(--dim);font-size:11.5px}
+.bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:510px;height:56px;border-radius:14px;background:oklch(20% .03 225);outline:1px solid oklch(80% .1 170 / .45);display:flex;align-items:center;gap:12px;padding:0 12px;font-size:13px}
+.bar .art{width:34px;height:34px;border-radius:8px;background:var(--slate)}
+.bar .p{width:34px;height:34px;border-radius:9px;background:var(--blue);margin-left:auto}
+.bar small{display:block;color:var(--mut);font-size:11px}
+.bar small b{color:oklch(70% .15 330);font-weight:500}
+.main{position:absolute;left:352px;right:20px;top:120px;bottom:84px}
+/* phone chrome */
+.ptop{position:absolute;left:12px;right:12px;top:10px;border-radius:18px;background:linear-gradient(90deg,oklch(22% .04 235),oklch(19% .03 235));padding:12px 14px 10px}
+.ptop .t{font-size:19px;font-weight:500}
+.ptop .t small{font-size:11px;color:var(--mut);font-style:italic;margin-left:6px}
+.ptop .tabs{position:static;margin-top:8px;width:max-content}
+.ptop .tabs span{padding:5px 11px;font-size:12px}
+.pdock{position:absolute;left:12px;right:12px;bottom:12px;height:122px;border-radius:20px;background:oklch(20% .03 225);outline:1px solid oklch(80% .1 170 / .4)}
+.pdock .bar{position:static;transform:none;width:auto;background:none;outline:0;height:60px;border-bottom:1px solid var(--line)}
+.pdock nav{display:flex;justify-content:space-around;align-items:center;height:62px;font-size:11px;color:var(--mut)}
+.pdock nav i{font-style:normal}.pdock nav .q{width:50px;height:50px;border-radius:14px;background:var(--blue)}
+.pdock nav .on{color:var(--ink);background:oklch(40% .1 230 / .45);padding:6px 12px;border-radius:9px}
+.pmain{position:absolute;left:12px;right:12px;top:112px;bottom:142px;overflow:hidden}
+/* shared bits */
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:5px;font-size:12.5px;font-weight:500;background:oklch(92% .01 240 / .07);color:var(--ink);white-space:nowrap}
+.btn.pri{background:var(--blue);color:var(--blueink)}
+.play{width:34px;height:34px;border-radius:50%;background:var(--blue);display:grid;place-items:center;flex:none}
+.play::after{content:"";border-left:10px solid var(--blueink);border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:3px}
+.play.sm{width:30px;height:30px}
+.dots{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--dim);flex:none}
+.dots::after{content:"";width:3px;height:3px;border-radius:50%;background:currentColor;box-shadow:-6px 0 currentColor,6px 0 currentColor}
+.hd{font-size:15px;font-weight:600;letter-spacing:-.015em;display:flex;align-items:center;gap:10px}
+.hd span{font-size:12px;font-weight:400;color:var(--dim)}
+.tag{font-size:11px;padding:1px 7px;border-radius:99px;background:oklch(92% .01 240 / .07);color:var(--mut);white-space:nowrap}
+.tag.k{color:var(--ok);background:oklch(76% .17 155 / .1)}
+.tag.m{color:var(--energy);background:oklch(82% .11 75 / .12)}
+.tag.b{color:oklch(72% .16 25);background:oklch(68% .19 25 / .12)}
+.seg{display:inline-flex;background:var(--house);border-radius:8px;padding:2px;outline:1px solid var(--line)}
+.seg span{padding:4px 10px;border-radius:6px;font-size:12px;color:var(--mut)}
+.seg span.on{background:var(--row);color:var(--ink)}
+.trk{display:flex;align-items:center;gap:8px;min-width:0;font-size:12.5px;padding:4px 0}
+.trk .n{color:var(--dim);font-variant-numeric:tabular-nums;width:30px;flex:none;font-size:11px}
+.trk .ti{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trk .ti em{font-style:normal;color:var(--dim);margin-left:6px}
+.note{position:absolute;font-size:11px;color:var(--ink);background:oklch(72% .16 230 / .18);outline:1px solid oklch(72% .16 230 / .5);padding:3px 8px;border-radius:6px;white-space:nowrap}
+svg.cv{display:block}
+</style>
+</head>
+<body>
+<div class="board" id="board"></div>
+<script>
+// ---------- data: the live server's flows and what /flows/{id}/render plays for them today ----------
+const J={match:['In key','k'],up:['Up a fifth','m'],down:['Down a fifth','m'],'mode+':['Brighter','m'],'mode-':['Darker','m'],relative:['Relative','m'],lift:['Lift','m'],lower:['Lower','m'],break:['Break','b']};
+const F={
+ now:{name:'Right now'},
+ nf:{name:'New flow',mine:1,len:'1 h',when:'made today',sum:'Easy, up to all out, holds high, eases out',pts:[[0,.3],[.28,.86],[.36,.7],[.8,.7],[.87,.88],[1,.3]],ev:[],tempo:'any tempo',
+   tr:[['hjgyj','',131],['epic2','',145,'relative'],['GSJDOIJG','',58,'match'],['glass1','',256,'relative'],['Clockwork (Cosmic Gate Remix)','Deadmau5',495,'relative'],['The First Time','Virtual Riot, Tokyo Machine',190,'relative'],['Found You ft. CHROME','Virtual Riot, Dodge & Fuski',247,'relative'],['en cours ⧸building- Improvisation','Compo Accoustique',157,'match']],who:'Deadmau5, Virtual Riot, your sketches'},
+ pl:{name:'Plateau',mine:1,len:'1 h',when:'made yesterday',sum:'Lively all the way · Progressive House only',pts:[[0,.5],[1,.5]],ev:[],tempo:'any tempo',
+   tr:[['1981','Deadmau5',405],['Complications (Original Mix)','Deadmau5',591,'relative'],['Arguru (EDX’s 5un5hine Remix)','Deadmau5',432,'up'],['Hi Friend (Instrumental Mix)','Deadmau5',394,'lift'],['Some Kind of Blue (Original Mix)','Deadmau5',479,'mode-'],['Plus','Deadmau5',450,'relative'],['Hi Friend!','Deadmau5',315,'relative'],['Sex Lies Audiotape','Deadmau5',356,'match']],who:'Deadmau5'},
+ wu:{name:'Warm-up',len:'Endless',sum:'Easy, rising to lively',pts:[[0,.2],[1,.5]],ev:[],tempo:'170 → 172 bpm',
+   tr:[['Tricky','Deadmau5',87],['buried dreams2_5','',365,'break'],['detente majeure_4','',204,'mode+'],['idee4.6.1','',298,'up'],['Go Ahead And Say it','Deadmau5',47,'up'],['Errors In My Bread','Deadmau5',318,'break']],who:'Deadmau5, your sketches'},
+ pk:{name:'Peak',len:'Endless',sum:'Lively to all out · up a fifth halfway',pts:[[0,.65],[1,.95]],ev:[[.5,'Up a fifth']],tempo:'172 → 175 bpm',
+   tr:[['Supersonic (My Existence)','Skrillex, Noisia, josh pan & Dylan Brady',165],['Suicide Bassline VIP','Mefjus',174,'lower'],['Farewell','',239,'mode-'],['Wanna','Kumarion',220,'match'],['The Hole','',315,'relative'],['All I Ever Wanted','Emperor',297,'relative']],who:'Skrillex, Noisia, Mefjus, Kumarion, Emperor'},
+ pt:{name:'Plateau',len:'Endless',sum:'Lively, steady',pts:[[0,.55],[1,.55]],ev:[],tempo:'172 bpm',
+   tr:[['Supersonic (My Existence)','Skrillex, Noisia, josh pan & Dylan Brady',165],['idee4.6.1','',298,'mode-'],['Go Ahead And Say it','Deadmau5',47,'up'],['Damage ft. Shaquille O’Neal','Virtual Riot & DIESEL',195,'lift'],['Twerp','Waeys, Bensley & Hoax',220,'mode+']],who:'Skrillex, Virtual Riot, Deadmau5'},
+ dp:{name:'Deep',len:'Endless',sum:'Easy and steady · turns darker halfway',pts:[[0,.35],[1,.45]],ev:[[.5,'Darker']],tempo:'any tempo',
+   tr:[['Chilled piece of track','',113],['The Veldt (8 Minute Edit)','deadmau5',522,'match'],['hop','',113,'match'],['7 janvier','',102,'relative'],['We Fail (Original Mix)','Deadmau5',390,'relative']],who:'deadmau5, your sketches'},
+ cd:{name:'Come-down',len:'Endless',sum:'Lively down to calm · slows to 145',pts:[[0,.6],[1,.15]],ev:[[0,'Break'],[.5,'Relative']],tempo:'172 → 145 bpm',
+   tr:[['Supersonic (My Existence)','Skrillex, Noisia, josh pan & Dylan Brady',165],['Go Ahead And Say it','Deadmau5',47,'break'],['idee4.6.1','',298,'down'],['Papers','Deadmau5',26,'relative'],['euphoria','',12,'mode+']],who:'Skrillex, Deadmau5, your sketches'},
+};
+const MINE=['nf','pl'],START=['wu','pt','pk','dp','cd'];
+
+// ---------- drawing helpers ----------
+let gid=0;
+function curve(f,w,h,o={}){
+  const id='g'+(gid++),pad=o.pad??3,ys=v=>h-pad-v*(h-pad*2-(o.top??4));
+  const P=f.pts.map(([x,v])=>[x*w,ys(v)]);
+  let d=`M${P[0][0]} ${P[0][1]}`;
+  for(let i=1;i<P.length;i++){const[a,b]=P[i-1],[c,e]=P[i],m=(c-a)/2;d+=` C${a+m} ${b} ${c-m} ${e} ${c} ${e}`}
+  const at=x=>{for(let i=1;i<P.length;i++)if(P[i][0]>=x*w){const[a,b]=P[i-1],[c,e]=P[i];return b+(e-b)*((x*w-a)/((c-a)||1))}return P[P.length-1][1]};
+  let s=`<svg class="cv" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="oklch(82% .11 75)" stop-opacity="${o.fill??.3}"/><stop offset="1" stop-color="oklch(82% .11 75)" stop-opacity="0"/></linearGradient></defs>`;
+  if(o.grid)for(let g=1;g<o.grid;g++)s+=`<line x1="${g*w/o.grid}" x2="${g*w/o.grid}" y1="0" y2="${h}" stroke="oklch(92% .01 240 / .07)"/>`;
+  s+=`<path d="${d} L${w} ${h} L0 ${h}Z" fill="url(#${id})"/><path d="${d}" fill="none" stroke="oklch(82% .11 75)" stroke-width="${o.sw??2}" stroke-linecap="round"/>`;
+  if(o.now!=null){const x=o.now*w;s+=`<path d="${d} L${w} ${h} L0 ${h}Z" fill="oklch(16% .015 240 / .55)" clip-path="inset(0 0 0 ${x}px)"/><line x1="${x}" x2="${x}" y1="0" y2="${h}" stroke="var(--ink)" stroke-width="1.5"/><circle cx="${x}" cy="${at(o.now)}" r="4.5" fill="var(--ink)"/>`}
+  for(const[x,l] of (o.ev===false?[]:f.ev)){const cx=Math.max(4,x*w);s+=`<circle cx="${cx}" cy="${at(x)}" r="${o.er??3.5}" fill="${l==='Break'?'oklch(68% .19 25)':'var(--blue)'}" stroke="var(--house)" stroke-width="1.5"/>`;if(o.lab)s+=`<text x="${cx+7}" y="${at(x)-8}" fill="var(--ink)" font-size="11.5">${l}</text>`}
+  return s+'</svg>';
+}
+const jt=k=>k?`<span class="tag ${J[k][1]}">${J[k][0]}</span>`:'<span class="tag">Opens</span>';
+const ti=t=>`<span class="ti">${t[0]}${t[1]?`<em>${t[1]}</em>`:''}</span>`;
+const mm=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+function times(f){let a=0;return f.tr.map(t=>{const r=a;a+=t[2];return r})}
+const clock=s=>`${Math.floor(s/60)}′`;
+
+// ---------- chrome ----------
+const rail=()=>`<div class="rail"><div class="logo"></div><div class="srch"></div><i>Home</i><i>Media</i><i>Discover</i><i class="on">Music</i><i>Library</i></div>`;
+const topc=()=>`<div class="topc"><div class="t">Music<small>474 tracks</small></div><div class="s">Search your libraries and online, or paste a link</div><div class="np">+ New playlist</div><div class="tabs"><span class="on">Flows</span><span>Mixes</span><span>Albums</span><span>Artists</span><span>Tracks</span></div></div>`;
+const libs=()=>`<div class="libs"><h5>LIBRARIES</h5><div class="on">All<em>474</em></div><div>This PC<em>0</em></div><div>neuro soundcloud<em>46</em></div><div>Deadmau5<em>272</em></div><div>perso<em>156</em></div><h5 style="margin-top:16px">PLAYLISTS</h5><div>Queue<em>46</em></div><div>perso<em>2 parts</em></div><div>New playlist<em>13</em></div></div>`;
+const bar=(t='Black Bloc',s='<b>· Dark</b> · 172 BPM')=>`<div class="bar"><div class="art"></div><div>${t}<small>${s}</small></div><div class="p"></div></div>`;
+const desk=inner=>`<div class="desk">${rail()}${topc()}${libs()}<div class="main">${inner}</div>${bar()}</div>`;
+const phone=(inner,b)=>`<div class="phone"><div class="ptop"><div class="t">Music<small>474 tracks</small></div><div class="tabs"><span class="on">Flows</span><span>Mixes</span><span>Albums</span><span>Artists</span></div></div><div class="pmain">${inner}</div><div class="pdock">${b??bar()}<nav><i>Home</i><i>Media</i><span class="q"></span><i class="on">Music</i><i>Library</i></nav></div></div>`;
+
+// ---------- A · Shelf ----------
+const ENERGY=['Calm','Easy','Lively','High','All out'];
+function nowRow(compact){
+  return `<div style="display:flex;align-items:center;gap:${compact?8:14}px;flex-wrap:wrap;padding:${compact?'12px':'14px 16px'};border-radius:12px;background:var(--aisle)">
+   <div style="font-weight:600;font-size:14px;${compact?'width:100%':''}">Right now</div>
+   <div class="seg">${ENERGY.map((e,i)=>`<span class="${i===2?'on':''}">${e}</span>`).join('')}</div>
+   <div class="seg"><span>−</span><span class="on" style="font-variant-numeric:tabular-nums">172 bpm</span><span>+</span></div>
+   ${compact?'':'<span class="dim" style="color:var(--dim);font-size:12px">until you stop</span>'}
+   <span class="btn pri" style="margin-left:auto">▶&nbsp;Play</span></div>`;
+}
+function aRow(k,o={}){
+  const f=F[k],w=o.cw??150;
+  return `<div style="display:flex;align-items:center;gap:14px;padding:${o.ph?'10px 4px':'10px 12px'};border-radius:10px;${o.open?'background:var(--aisle)':''}">
+    ${curve(f,w,o.ch??40,{sw:1.75})}
+    <div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${f.name}${f.mine&&!o.ph?` <span style="font-weight:400;color:var(--dim);font-size:11.5px;margin-left:6px">${f.when}</span>`:''}</div>
+      <div style="color:var(--mut);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.sum}</div>
+      ${o.ph?'':`<div style="color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.who}</div>`}</div>
+    ${o.ph?'':`<span class="tag">${f.len}</span>`}<span class="play ${o.ph?'sm':''}"></span>${o.ph?'':'<span class="dots"></span>'}</div>
+   ${o.open?`<div style="padding:2px 12px 12px ${o.ph?4:176}px;margin-top:-6px;background:var(--aisle);border-radius:0 0 10px 10px">
+     <div style="font-size:11.5px;color:var(--dim);margin:2px 0 4px">Starts with</div>
+     <div style="display:grid;grid-template-columns:${o.ph?'1fr':'1fr 1fr'};gap:0 24px">${f.tr.slice(0,o.ph?4:6).map(t=>`<div class="trk">${ti(t)}${jt(t[3])}</div>`).join('')}</div>
+     <div style="display:flex;gap:6px;margin-top:8px"><span class="btn">Another take</span><span class="btn">Edit flow</span></div></div>`:''}`;
+}
+function playingA(ph){
+  const f=F.pk;
+  return `<div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;outline:1px solid oklch(72% .16 230 / .5);background:oklch(72% .16 230 / .07)">
+    ${curve(f,ph?96:220,ph?38:46,{now:.38,sw:1.75})}
+    <div style="min-width:0;flex:1"><div style="font-size:11.5px;color:var(--blue)">Playing</div><div style="font-weight:600">Peak</div>
+    <div style="color:var(--mut);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wanna · Kumarion${ph?'':' — next: The Hole, then up a fifth'}</div></div>
+    ${ph?'':'<span class="btn">Open player</span>'}</div>`;
+}
+const A_desk=desk(`<div style="max-width:860px;display:flex;flex-direction:column;gap:14px">
+  ${playingA()}
+  ${nowRow()}
+  <div class="hd" style="margin-top:6px">Your flows <span>2</span><span class="btn" style="margin-left:auto">+ New flow</span></div>
+  <div>${aRow('nf',{open:1})}${aRow('pl')}</div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 12px"><span class="hd" style="margin-right:6px">Starters</span>
+   ${START.map(k=>`<span style="display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px 0 8px;border-radius:9px;background:var(--aisle);font-size:13px">${curve(F[k],44,22,{sw:1.5,er:2.5,ev:false})}${F[k].name}</span>`).join('')}
+   <span style="color:var(--dim);font-size:12px">click to preview · ⋯ Copy makes one yours</span></div></div>`);
+const A_ph1=phone(`<div style="display:flex;flex-direction:column;gap:10px">${playingA(1)}${nowRow(1)}
+  <div class="hd" style="margin-top:4px">Your flows<span class="btn" style="margin-left:auto;height:28px">+ New</span></div>
+  <div>${aRow('nf',{ph:1,cw:70,ch:34})}${aRow('pl',{ph:1,cw:70,ch:34})}</div>
+  <div class="hd">Starters</div><div>${aRow('wu',{ph:1,cw:70,ch:34})}</div></div>`);
+const A_ph2=phone(`<div style="display:flex;flex-direction:column;gap:6px"><div class="hd">Your flows</div>
+  ${aRow('nf',{ph:1,cw:70,ch:34,open:1})}${aRow('pl',{ph:1,cw:70,ch:34})}
+  <div class="hd" style="margin-top:6px">Starters</div>${aRow('wu',{ph:1,cw:70,ch:34})}${aRow('pt',{ph:1,cw:70,ch:34})}${aRow('pk',{ph:1,cw:70,ch:34})}</div>`);
+
+// ---------- B · List and preview ----------
+function bList(sel,ph){
+  const row=(k)=>{const f=F[k];return `<div style="display:flex;align-items:center;gap:10px;padding:${ph?'11px 8px':'8px 10px'};border-radius:9px;${k===sel?'background:var(--row)':''}">
+     <div style="min-width:0;flex:1"><div style="font-weight:${k===sel?600:500};font-size:13.5px">${f.name}</div><div style="color:var(--dim);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.len} · ${f.who.split(',')[0]}${ph?' and more':''}</div></div>
+     ${curve(f,ph?84:64,26,{sw:1.5,er:2.5})}${ph?'<span class="play sm"></span>':''}</div>`};
+  return `<div style="display:flex;flex-direction:column;gap:2px">
+    <div style="display:flex;align-items:center;gap:10px;padding:${ph?'11px 8px':'8px 10px'};border-radius:9px;${sel==='now'?'background:var(--row)':''}"><div style="flex:1"><div style="font-weight:600;font-size:13.5px">Right now</div><div style="color:var(--dim);font-size:11.5px">Lively · 172 bpm · until you stop</div></div><span class="tag">set the feel</span></div>
+    <div style="font-size:11.5px;color:var(--dim);margin:10px 10px 2px;display:flex">Yours<span style="margin-left:auto;color:var(--blue)">+ New flow</span></div>
+    ${MINE.map(row).join('')}
+    <div style="font-size:11.5px;color:var(--dim);margin:10px 10px 2px">Starters</div>
+    ${START.map(row).join('')}</div>`;
+}
+function bPane(k,ph){
+  const f=F[k],T=times(f),W=ph?342:560,tot=f.tr.reduce((s,t)=>s+t[2],0),span=Math.max(tot,1800);
+  return `<div style="display:flex;flex-direction:column;gap:${ph?10:12}px">
+   <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:${ph?20:22}px;font-weight:600;letter-spacing:-.02em">${f.name}</div>
+     <div style="color:var(--mut);font-size:13px">${f.sum}</div><div style="color:var(--dim);font-size:12px">${f.len} · ${f.tempo}${f.mine?'':' · starter'}</div></div>
+     ${ph?'':'<span class="btn">Another take</span><span class="btn">'+(f.mine?'Edit flow':'Copy and edit')+'</span><span class="btn pri">▶&nbsp;Play</span>'}</div>
+   <div style="position:relative;border-radius:10px;background:var(--aisle);padding:12px 12px 8px">
+     ${curve(f,W,ph?96:128,{grid:6,lab:1,fill:.34,er:4.5,top:14})}
+     <div style="position:relative;height:22px;margin-top:6px">${f.tr.map((t,i)=>`<div title="${t[0]}" style="position:absolute;top:0;height:22px;left:${T[i]/span*W}px;width:${Math.max(3,t[2]/span*W-2)}px;border-radius:4px;background:oklch(72% .16 230 / ${i%2?.22:.32});font-size:10.5px;line-height:22px;padding:0 5px;overflow:hidden;white-space:nowrap;text-overflow:clip">${t[2]/span*W>46?t[0]:''}</div>`).join('')}</div>
+     <div style="display:flex;justify-content:space-between;color:var(--dim);font-size:10.5px;margin-top:4px;font-variant-numeric:tabular-nums"><span>0′</span><span>${clock(span/2)}</span><span>${clock(span)}${f.len==='Endless'?' · keeps going':''}</span></div>
+   </div>
+   <div><div style="font-size:11.5px;color:var(--dim);margin-bottom:2px">What it would play now</div>
+     ${f.tr.slice(0,ph?5:6).map((t,i)=>`<div class="trk"><span class="n">${clock(T[i])}</span>${ti(t)}${jt(t[3])}</div>`).join('')}</div>
+   ${ph?'<div style="display:flex;gap:6px"><span class="btn">Another take</span><span class="btn">'+(f.mine?'Edit':'Copy and edit')+'</span><span class="btn pri" style="margin-left:auto">▶&nbsp;Play</span></div>':''}</div>`;
+}
+const B_desk=desk(`<div style="display:grid;grid-template-columns:270px 1fr;gap:20px;height:100%">
+  <div style="border-right:1px solid var(--line);padding-right:12px">${bList('pk')}</div><div>${bPane('pk')}</div></div>`);
+const B_ph1=phone(bList(null,1));
+const B_ph2=`<div class="phone"><div style="position:absolute;inset:0;background:oklch(10% .01 240 / .6)"></div>
+  <div style="position:absolute;left:0;right:0;bottom:0;top:70px;border-radius:22px 22px 0 0;background:var(--house);outline:1px solid var(--line);padding:10px 12px">
+  <div style="width:40px;height:4px;border-radius:2px;background:var(--slate);margin:0 auto 12px"></div>${bPane('pk',1)}</div></div>`;
+
+// ---------- C · Shapes first ----------
+function tile(k,o={}){
+  const f=F[k];
+  return `<div style="position:relative;flex:none;width:${o.w??170}px;height:${o.h??168}px;border-radius:14px;background:var(--aisle);overflow:hidden;${o.sel?'outline:1.5px solid var(--blue)':''}">
+    <div style="position:absolute;left:0;right:0;bottom:0">${curve(f,o.w??170,o.ch??80,{fill:.42,sw:2.25,pad:6,er:4})}</div>
+    <div style="position:absolute;left:12px;top:10px;right:46px"><div style="font-weight:600;font-size:15px">${f.name}</div><div style="color:var(--mut);font-size:11.5px;line-height:1.35">${f.sum.split(' · ')[0]}</div></div>
+    <span class="play sm" style="position:absolute;right:10px;top:10px"></span>
+    <div style="position:absolute;left:12px;bottom:8px;font-size:11px;color:var(--ink);text-shadow:0 1px 3px var(--house)">${f.tempo}</div></div>`;
+}
+function cRow(k,ph){
+  const f=F[k];
+  return `<div style="display:flex;align-items:center;gap:12px;padding:10px ${ph?4:12}px;border-bottom:1px solid var(--line)">
+    ${curve(f,ph?64:110,ph?32:36,{sw:1.6})}
+    <div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${f.name} <span style="font-weight:400;color:var(--dim);font-size:11.5px;margin-left:4px">${f.len}</span></div>
+    <div style="color:var(--mut);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Starts with ${f.tr.slice(0,ph?2:3).map(t=>t[0]).join(', ')}…</div></div>
+    <span class="play sm"></span>${ph?'':'<span class="dots"></span>'}</div>`;
+}
+const C_desk=desk(`<div style="display:flex;flex-direction:column;gap:14px">
+  <div class="hd">Start from a shape <span>plays your library along the line, tempo and key follow</span></div>
+  <div style="display:flex;gap:12px">${START.map((k,i)=>tile(k,{sel:i===2})).join('')}</div>
+  <div style="position:relative;margin-left:${2*182}px;width:300px;padding:10px 12px;border-radius:10px;background:var(--aisle);outline:1px solid var(--line);display:flex;flex-direction:column;gap:6px;font-size:12.5px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="width:52px;color:var(--dim)">Tempo</span><span class="seg"><span>−</span><span class="on">172</span><span>+</span></span><span style="color:var(--dim)">bpm</span></div>
+    <div style="display:flex;align-items:center;gap:8px"><span style="width:52px;color:var(--dim)">Length</span><span class="seg"><span>30′</span><span>1 h</span><span>2 h</span><span class="on">Endless</span></span></div>
+    <div style="color:var(--dim)">Opens with Supersonic · Skrillex, Noisia</div></div>
+  <div class="hd" style="margin-top:4px">Your flows<span class="btn" style="margin-left:auto">+ New flow</span></div>
+  <div style="max-width:860px">${MINE.map(k=>cRow(k)).join('')}</div></div>`);
+const C_ph1=phone(`<div style="display:flex;flex-direction:column;gap:10px"><div class="hd">Start from a shape</div>
+  <div style="display:flex;gap:10px;margin-right:-12px">${START.slice(0,3).map(k=>tile(k,{w:150,h:150,ch:72})).join('')}</div>
+  <div class="hd" style="margin-top:6px">Your flows<span class="btn" style="margin-left:auto;height:28px">+ New</span></div>
+  <div>${MINE.map(k=>cRow(k,1)).join('')}</div></div>`);
+const C_ph2=`<div class="phone"><div style="position:absolute;inset:0;background:oklch(10% .01 240 / .6)"></div>
+  <div style="position:absolute;left:0;right:0;bottom:0;height:520px;border-radius:22px 22px 0 0;background:var(--house);outline:1px solid var(--line);padding:10px 14px;display:flex;flex-direction:column;gap:12px">
+  <div style="width:40px;height:4px;border-radius:2px;background:var(--slate);margin:0 auto"></div>
+  <div><div style="font-size:20px;font-weight:600">Peak</div><div style="color:var(--mut);font-size:13px">${F.pk.sum}</div></div>
+  ${curve(F.pk,362,90,{lab:1,fill:.38,er:4.5,top:14})}
+  <div style="display:flex;flex-direction:column;gap:8px;font-size:13px"><div style="display:flex;align-items:center;gap:8px"><span style="width:56px;color:var(--dim)">Tempo</span><span class="seg"><span>−</span><span class="on">172 bpm</span><span>+</span></span></div>
+  <div style="display:flex;align-items:center;gap:8px"><span style="width:56px;color:var(--dim)">Length</span><span class="seg"><span>30′</span><span>1 h</span><span>2 h</span><span class="on">Endless</span></span></div></div>
+  <div><div style="font-size:11.5px;color:var(--dim)">Opens with</div>${F.pk.tr.slice(0,3).map(t=>`<div class="trk">${ti(t)}${jt(t[3])}</div>`).join('')}</div>
+  <div style="display:flex;gap:6px;margin-top:auto;margin-bottom:8px"><span class="btn">Copy and edit</span><span class="btn pri" style="margin-left:auto;height:40px;padding:0 22px">▶&nbsp;Play Peak</span></div></div></div>`;
+
+// ---------- board ----------
+const dir=(id,title,tag,why,d,p1,p2,c1,c2)=>`<section class="dir" id="${id}"><h2>${title}<small>${tag}</small></h2><p class="why">${why}</p>
+  <div><div class="desk-wrap">${d}</div><div class="cap">Desktop 1280</div></div>
+  <div class="shots" style="margin-top:12px"><div>${p1}<div class="cap">${c1}</div></div><div>${p2}<div class="cap">${c2}</div></div></div></section>`;
+document.getElementById('board').innerHTML=`
+<div><h1>Flows tab · three directions</h1><p class="lead">Built from the stories below, on the app's real chrome and on what each flow on the live server renders today (/flows/{id}/render). Every flow says in words what it does and shows the tracks it would open with.</p></div>
+<div class="stories">
+ <div><b>S1</b>Couch, evening: put on something for how I feel now, one tap.</div>
+ <div><b>S2</b>Tell my flows apart at a glance: shape, length, what it sounds like.</div>
+ <div><b>S3</b>Before pressing play, see which tracks it would pick.</div>
+ <div><b>S4</b>A flow is playing: where am I in it, what comes next.</div>
+ <div><b>S5</b>Make my own: new, or copy a starter.</div>
+ <div><b>S6</b>Rename, copy, delete (rare, behind ⋯).</div>
+</div>
+${dir('A','A · Shelf','S1 S2 S3 S4 S5','One column of rows. Playing flow pinned on top with the now line. The sliders become one "Right now" row (five energy words, tempo, Play). Each row: shape, one plain sentence, the artists. Click a row to open it in place: the first tracks with the join each makes, Another take, Edit flow.',A_desk,A_ph1,A_ph2,'Phone · list, playing on top','Phone · a flow opened in place')}
+${dir('B','B · List and preview','S2 S3 S5','Desktop is master-detail: the list on the left, the selected flow on the right with its shape over the clock, the tracks laid along it by length, the key changes labelled, and the track list with start times. "Right now" is the first item; selecting it puts the feel controls in the pane. Phone: the list, tap opens the preview as a sheet.',B_desk,B_ph1,B_ph2,'Phone · list','Phone · preview sheet')}
+${dir('C','C · Shapes first','S1 S2 S5','The five starters become the quick start: big tiles where the shape is the picture, played in one tap; tempo and length sit under the chosen tile. The sliders go away. Your own flows below as rows that say how they open. Phone: tiles scroll sideways, a tap opens a sheet with tempo, length and the first tracks.',C_desk,C_ph1,C_ph2,'Phone · shapes rail + yours','Phone · a shape tapped')}
+`;
+</script>
+</body>
+</html>

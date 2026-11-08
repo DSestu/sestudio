@@ -16,7 +16,7 @@ Run from anywhere inside the worktree:
 .claude/skills/live-preview/preview.sh --backend  # also this worktree's backend, on copies
 ```
 
-It prints the desktop URL, the phone URL (LAN, WSL is in mirrored networking) and the log paths. Post both URLs in your reply straight away, then keep working: frontend edits hot-reload by themselves.
+It prints the desktop URL, the phone URL (LAN, WSL is in mirrored networking), the Tailscale URL (the user often works remotely) and the log paths. Post all three URLs in your reply straight away, then keep working: frontend edits hot-reload by themselves.
 
 Pick the mode:
 

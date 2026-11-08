@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flows from a source · board</title>
+<style>
+:root{
+  --house:oklch(16% .015 240);--aisle:oklch(20% .02 240);--row:oklch(26% .025 240);--slate:oklch(30% .02 240);
+  --ink:oklch(92% .01 240);--mut:oklch(92% .01 240 / .62);--dim:oklch(92% .01 240 / .45);--line:oklch(92% .01 240 / .08);
+  --blue:oklch(72% .16 230);--blueink:oklch(18% .05 230);--energy:oklch(82% .11 75);--ok:oklch(76% .17 155);--warn:oklch(83% .16 85);
+  --card:oklch(19% .03 235);--z:.547;--zp:.55;
+}
+@media (min-width:1400px){:root{--z:1;--zp:.9}}
+*{box-sizing:border-box;margin:0}
+body{font:14px/1.43 ui-sans-serif,system-ui,sans-serif;color:var(--ink);background:transparent}
+.board{display:flex;flex-direction:column;gap:28px;padding:4px 0 16px}
+h1{font-size:1.25rem;font-weight:600;letter-spacing:-.02em}
+.lead{color:var(--mut);max-width:72ch;font-size:13px}
+.stories{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 18px;font-size:12.5px;color:var(--mut)}
+.stories b{color:var(--ink);font-weight:600;margin-right:4px}
+.dir h2{font-size:1.05rem;font-weight:600;letter-spacing:-.02em;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.dir h2 small{font-size:12px;font-weight:500;color:var(--blue)}
+.dir p.why{color:var(--mut);font-size:12.5px;margin:4px 0 10px;max-width:72ch}
+.shots{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.cap{font-size:11px;color:var(--dim);margin-top:4px}
+.desk{width:1280px;height:800px;zoom:var(--z);position:relative;overflow:hidden;border-radius:14px;background:var(--house);outline:1px solid var(--line)}
+.strip{width:1280px;height:300px;zoom:var(--z);position:relative;overflow:hidden;border-radius:14px;background:var(--house);outline:1px solid var(--line)}
+.phone{width:390px;height:844px;zoom:var(--zp);position:relative;overflow:hidden;border-radius:34px;background:var(--house);outline:1px solid var(--line)}
+@media (max-width:1399px){.phone{zoom:.38}}
+.rail{position:absolute;left:12px;top:12px;bottom:12px;width:72px;border-radius:14px;background:var(--card);display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:16px}
+.rail .logo{width:26px;height:30px;border-radius:8px;background:linear-gradient(var(--blue),oklch(60% .14 230))}
+.rail .srch{width:46px;height:46px;border-radius:12px;background:var(--blue)}
+.rail i{width:52px;height:46px;border-radius:10px;display:grid;place-items:center;font:500 10px/1 system-ui;color:var(--mut);font-style:normal}
+.rail i.on{background:oklch(40% .08 230 / .5);color:var(--ink)}
+.topc{position:absolute;left:104px;right:20px;top:16px;height:88px;border-radius:16px;background:linear-gradient(90deg,oklch(22% .04 235),oklch(19% .03 235));outline:1px solid oklch(72% .16 230 / .14)}
+.topc .t{position:absolute;left:18px;top:8px;font-size:19px}
+.topc .t small{display:block;font-size:11px;color:var(--mut);font-style:italic}
+.topc .s{position:absolute;left:96px;right:300px;top:6px;height:38px;border-radius:9px;border:2px solid oklch(72% .16 230 / .8);background:var(--house);color:var(--dim);font-size:13px;padding:8px 36px}
+.topc .np{position:absolute;right:70px;top:9px;height:30px;padding:0 14px;border-radius:5px;background:var(--blue);color:var(--blueink);font-size:12px;line-height:30px}
+.tabs{position:absolute;left:18px;top:46px;display:flex;gap:2px;background:oklch(16% .02 240 / .7);border-radius:12px;padding:3px}
+.tabs span{padding:6px 16px;border-radius:9px;font-size:12.5px;color:var(--mut)}
+.tabs span.on{background:oklch(40% .1 230 / .45);color:var(--ink)}
+.libs{position:absolute;left:104px;top:120px;width:226px;font-size:13px}
+.libs h5{font-size:10.5px;letter-spacing:.06em;color:var(--dim);font-weight:500;margin:0 0 8px 10px}
+.libs div{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:9px;color:var(--ink)}
+.libs div.on{background:oklch(40% .1 230 / .35)}
+.libs div.hov{background:var(--aisle)}
+.libs div em{font-style:normal;color:var(--dim);font-size:11.5px}
+.bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:510px;height:56px;border-radius:14px;background:oklch(20% .03 225);outline:1px solid oklch(80% .1 170 / .45);display:flex;align-items:center;gap:12px;padding:0 12px;font-size:13px}
+.bar .art{width:34px;height:34px;border-radius:8px;background:var(--slate)}
+.bar .p{width:34px;height:34px;border-radius:9px;background:var(--blue);margin-left:auto}
+.bar small{display:block;color:var(--mut);font-size:11px}
+.bar small b{color:oklch(70% .15 330);font-weight:500}
+.main{position:absolute;left:352px;right:20px;top:120px;bottom:84px}
+.ptop{position:absolute;left:12px;right:12px;top:10px;border-radius:18px;background:linear-gradient(90deg,oklch(22% .04 235),oklch(19% .03 235));padding:12px 14px 10px}
+.ptop .t{font-size:19px;font-weight:500}
+.ptop .t small{font-size:11px;color:var(--mut);font-style:italic;margin-left:6px}
+.ptop .tabs{position:static;margin-top:8px;width:max-content}
+.ptop .tabs span{padding:5px 11px;font-size:12px}
+.pdock{position:absolute;left:12px;right:12px;bottom:12px;height:122px;border-radius:20px;background:oklch(20% .03 225);outline:1px solid oklch(80% .1 170 / .4)}
+.pdock .bar{position:static;transform:none;width:auto;background:none;outline:0;height:60px;border-bottom:1px solid var(--line)}
+.pdock nav{display:flex;justify-content:space-around;align-items:center;height:62px;font-size:11px;color:var(--mut)}
+.pdock nav i{font-style:normal}.pdock nav .q{width:50px;height:50px;border-radius:14px;background:var(--blue)}
+.pdock nav .on{color:var(--ink);background:oklch(40% .1 230 / .45);padding:6px 12px;border-radius:9px}
+.pmain{position:absolute;left:12px;right:12px;top:112px;bottom:142px;overflow:hidden}
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:5px;font-size:12.5px;font-weight:500;background:oklch(92% .01 240 / .07);color:var(--ink);white-space:nowrap}
+.btn.pri{background:var(--blue);color:var(--blueink)}
+.btn.xl{height:40px;border-radius:12px;padding:0 16px;font-size:13.5px}
+.btn.on{outline:1.5px solid var(--blue);background:oklch(72% .16 230 / .14)}
+.play{width:34px;height:34px;border-radius:50%;background:var(--blue);display:grid;place-items:center;flex:none}
+.play::after{content:"";border-left:10px solid var(--blueink);border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:3px}
+.play.sm{width:30px;height:30px}
+.dots{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--dim);flex:none}
+.dots::after{content:"";width:3px;height:3px;border-radius:50%;background:currentColor;box-shadow:-6px 0 currentColor,6px 0 currentColor}
+.hd{font-size:15px;font-weight:600;letter-spacing:-.015em;display:flex;align-items:center;gap:10px}
+.hd span{font-size:12px;font-weight:400;color:var(--dim)}
+.tag{font-size:11px;padding:1px 7px;border-radius:99px;background:oklch(92% .01 240 / .07);color:var(--mut);white-space:nowrap}
+.tag.k{color:var(--ok);background:oklch(76% .17 155 / .1)}
+.tag.m{color:var(--energy);background:oklch(82% .11 75 / .12)}
+.seg{display:inline-flex;background:var(--house);border-radius:8px;padding:2px;outline:1px solid var(--line)}
+.seg span{padding:4px 10px;border-radius:6px;font-size:12px;color:var(--mut)}
+.seg span.on{background:var(--row);color:var(--ink)}
+.trk{display:flex;align-items:center;gap:8px;min-width:0;font-size:12.5px;padding:4px 0}
+.trk .ti{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trk .ti em{font-style:normal;color:var(--dim);margin-left:6px}
+/* the source chip: Only = solid edge, Lean = dashed edge */
+.src{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 6px 0 10px;border-radius:9px;font-size:12.5px;white-space:nowrap;background:var(--aisle)}
+.src.only{outline:1.5px solid oklch(72% .16 230 / .85)}
+.src.lean{outline:1.5px dashed oklch(92% .01 240 / .4)}
+.src small{color:var(--dim);font-size:11px}
+.src .r{font-size:11px;padding:2px 7px;border-radius:6px;background:var(--row);color:var(--ink)}
+.src.only .r{background:oklch(72% .16 230 / .22);color:oklch(85% .1 230)}
+.src .x{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;color:var(--dim);font-size:13px}
+.add{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:9px;font-size:12.5px;color:var(--mut);outline:1px dashed oklch(92% .01 240 / .2)}
+.pop{position:absolute;border-radius:14px;background:oklch(21% .025 240);outline:1px solid oklch(92% .01 240 / .12);box-shadow:0 18px 40px -8px oklch(5% .01 240 / .7);padding:12px}
+.cover{border-radius:22px;background:linear-gradient(135deg,oklch(72% .16 230),oklch(52% .2 280));display:grid;place-items:center;font-size:44px;color:oklch(98% 0 0)}
+.mark{position:absolute;font-size:11px;font-weight:600;color:var(--blueink);background:var(--warn);border-radius:99px;width:20px;height:20px;display:grid;place-items:center}
+svg.cv{display:block}
+</style>
+</head>
+<body>
+<div class="board" id="board"></div>
+<script>
+const F={
+ wu:{name:'Warm-up',pts:[[0,.2],[1,.5]],ev:[]},
+ pt:{name:'Plateau',pts:[[0,.55],[1,.55]],ev:[]},
+ pk:{name:'Peak',pts:[[0,.65],[1,.95]],ev:[[.5,'Up a fifth']]},
+ dp:{name:'Deep',pts:[[0,.35],[1,.45]],ev:[[.5,'Darker']]},
+ cd:{name:'Come-down',pts:[[0,.6],[1,.15]],ev:[[0,'Break'],[.5,'Relative']]},
+ nf:{name:'New flow',pts:[[0,.3],[.28,.86],[.36,.7],[.8,.7],[.87,.88],[1,.3]],ev:[]},
+ pl:{name:'Plateau',pts:[[0,.5],[1,.5]],ev:[]},
+};
+let gid=0;
+function curve(f,w,h,o={}){
+  const id='g'+(gid++),pad=o.pad??3,ys=v=>h-pad-v*(h-pad*2-(o.top??4));
+  const P=f.pts.map(([x,v])=>[x*w,ys(v)]);
+  let d=`M${P[0][0]} ${P[0][1]}`;
+  for(let i=1;i<P.length;i++){const[a,b]=P[i-1],[c,e]=P[i],m=(c-a)/2;d+=` C${a+m} ${b} ${c-m} ${e} ${c} ${e}`}
+  const at=x=>{for(let i=1;i<P.length;i++)if(P[i][0]>=x*w){const[a,b]=P[i-1],[c,e]=P[i];return b+(e-b)*((x*w-a)/((c-a)||1))}return P[P.length-1][1]};
+  let s=`<svg class="cv" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="oklch(82% .11 75)" stop-opacity="${o.fill??.3}"/><stop offset="1" stop-color="oklch(82% .11 75)" stop-opacity="0"/></linearGradient></defs>`;
+  s+=`<path d="${d} L${w} ${h} L0 ${h}Z" fill="url(#${id})"/><path d="${d}" fill="none" stroke="oklch(82% .11 75)" stroke-width="${o.sw??2}" stroke-linecap="round"/>`;
+  for(const[x] of (o.ev===false?[]:f.ev)){s+=`<circle cx="${Math.max(4,x*w)}" cy="${at(x)}" r="${o.er??3}" fill="var(--blue)" stroke="var(--house)" stroke-width="1.5"/>`}
+  return s+'</svg>';
+}
+const ti=t=>`<span class="ti">${t[0]}${t[1]?`<em>${t[1]}</em>`:''}</span>`;
+const src=(kind,val,rule,o={})=>`<span class="src ${rule}"><small>${kind}</small>${val}<span class="r">${rule==='only'?'Only':'Lean on it'}</span>${o.nox?'':'<span class="x">×</span>'}</span>`;
+
+const rail=()=>`<div class="rail"><div class="logo"></div><div class="srch"></div><i>Home</i><i>Media</i><i>Discover</i><i class="on">Music</i><i>Library</i></div>`;
+const topc=(tab='Flows',title='Music<small>474 tracks</small>')=>`<div class="topc"><div class="t">${title}</div><div class="s" style="left:${title.length>40?250:96}px">Search your libraries and online, or paste a link</div><div class="np">+ New playlist</div><div class="tabs">${['Flows','Mixes','Albums','Artists','Tracks'].map(t=>`<span class="${t===tab?'on':''}">${t}</span>`).join('')}</div></div>`;
+const libs=(hov)=>`<div class="libs"><h5>LIBRARIES</h5><div class="on">All<em>474</em></div><div>This PC<em>0</em></div><div>neuro soundcloud<em>46</em></div><div class="${hov?'hov':''}">Deadmau5${hov?'<span class="btn" style="height:24px;padding:0 8px;font-size:11.5px">▶ Flow</span>':'<em>272</em>'}</div><div>perso<em>156</em></div><h5 style="margin-top:16px">PLAYLISTS</h5><div>Queue<em>46</em></div><div>perso<em>2 parts</em></div><div>New playlist<em>13</em></div></div>`;
+const bar=()=>`<div class="bar"><div class="art"></div><div>Black Bloc<small><b>· Dark</b> · 172 BPM</small></div><div class="p"></div></div>`;
+const desk=(inner,o={})=>`<div class="desk">${rail()}${topc(o.tab,o.title)}${libs(o.hov)}<div class="main">${inner}</div>${bar()}${o.over??''}</div>`;
+const phone=(inner,o={})=>`<div class="phone"><div class="ptop"><div class="t">${o.title??'Music<small>474 tracks</small>'}</div>${o.notabs?'':'<div class="tabs"><span class="on">Flows</span><span>Mixes</span><span>Albums</span><span>Artists</span></div>'}</div><div class="pmain" style="${o.top?`top:${o.top}px`:''}">${inner}</div><div class="pdock">${bar()}<nav><i>Home</i><i>Media</i><span class="q"></span><i class="on">Music</i><i>Library</i></nav></div>${o.over??''}</div>`;
+const sheet=(h,inner)=>`<div style="position:absolute;inset:0;background:oklch(8% .01 240 / .6)"></div><div style="position:absolute;left:0;right:0;bottom:0;height:${h}px;border-radius:22px 22px 0 0;background:oklch(19% .022 240);outline:1px solid var(--line);padding:10px 14px 16px;display:flex;flex-direction:column;gap:12px"><div style="width:40px;height:4px;border-radius:2px;background:var(--slate);margin:0 auto"></div>${inner}</div>`;
+
+// the real tracks Plateau (Progressive House) renders over the Deadmau5 library
+const DM=[['1981','Deadmau5'],['Complications (Original Mix)','Deadmau5'],['Arguru (EDX’s 5un5hine Remix)','Deadmau5'],['Hi Friend (Instrumental Mix)','Deadmau5'],['Some Kind of Blue (Original Mix)','Deadmau5'],['Plus','Deadmau5']];
+const RA=[['Faxing Berlin [Piano Acoustic Version]','1:39'],['Alone with You [Original Mix]','7:30'],['Sometimes Things Get, Whatever','7:15'],['Slip','6:44'],['Complications','5:31'],['Arguru','5:30'],['Not Exactly [Original Version]','8:00'],['I Remember','9:07']];
+const shapes=(sel,w=96,h=34)=>['wu','pt','pk','dp','cd'].map(k=>`<div style="flex:none;width:${w+20}px;padding:8px 10px;border-radius:10px;background:var(--aisle);${k===sel?'outline:1.5px solid var(--blue)':''}"><div style="font-size:12.5px;font-weight:${k===sel?600:500};margin-bottom:4px">${F[k].name}</div>${curve(F[k],w,h,{sw:1.6,er:2.5})}</div>`).join('');
+
+// ---------- 1 · Flows tab with a From bar ----------
+const fromBar=(ph)=>`<div style="display:flex;flex-direction:column;gap:${ph?8:8}px;padding:${ph?'12px':'14px 16px'};border-radius:12px;background:var(--aisle)">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:${ph?'nowrap':'wrap'};${ph?'overflow:hidden;margin-right:-12px':''}"><span style="font-weight:600;font-size:14px;margin-right:4px">From</span>
+   ${src('Library','Deadmau5','only',{nox:ph})}${src('Genre','Progressive House','lean',{nox:ph})}<span class="add">+ ${ph?'Add':'Add a source'}</span></div>
+  <div style="color:var(--mut);font-size:12.5px">${ph?'Only Deadmau5, mostly Progressive House · 272 tracks, 22 h':'Only the Deadmau5 library, mostly Progressive House when it fits the shape · 272 tracks, 75 of them Progressive House · enough for 22 h'}</div></div>`;
+const row=(k,sum,trk,o={})=>`<div style="display:flex;align-items:center;gap:14px;padding:10px ${o.ph?4:12}px;border-radius:10px">
+   ${curve(F[k],o.ph?70:150,o.ph?34:40,{sw:1.75})}
+   <div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${F[k].name}</div>
+   <div style="color:var(--mut);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sum}</div>
+   ${o.ph?'':`<div style="color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Opens with ${trk}</div>`}</div>
+   <span class="play ${o.ph?'sm':''}"></span>${o.ph?'':'<span class="dots"></span>'}</div>`;
+const addPop=`<div class="pop" style="left:690px;top:176px;width:380px">
+  <div class="seg" style="width:100%;display:flex">${['Genre','Library','Artist','Album'].map(t=>`<span class="${t==='Album'?'on':''}" style="flex:1;text-align:center">${t}</span>`).join('')}</div>
+  <div style="margin:10px 0 6px;height:34px;border-radius:8px;background:var(--house);outline:1px solid var(--line);color:var(--dim);font-size:12.5px;padding:8px 12px">Search 41 albums</div>
+  ${[['Mixed','Deadmau5 & Jelo',60],['Project 56','Deadmau5',32],['while(1<2)','Deadmau5',25],['It Sounds Like','Deadmau5',19],['Random Album Title','Deadmau5',12,1],['Vexillology','Deadmau5',10]].map(([a,b,n,s])=>`<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;${s?'background:var(--row)':''}"><span style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,oklch(72% .16 230),oklch(52% .2 280));flex:none"></span><span style="flex:1;min-width:0;font-size:13px">${a}<span style="color:var(--dim);font-size:11.5px;margin-left:6px">${b}</span></span><span style="color:var(--dim);font-size:11.5px">${n}</span></div>`).join('')}
+  <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:10px;display:flex;flex-direction:column;gap:8px">
+   <div style="display:flex;align-items:center;gap:8px;font-size:12.5px"><span style="color:var(--dim);width:70px">How strictly</span><span class="seg"><span class="on">Only</span><span>Lean on it</span></span></div>
+   <div style="color:var(--dim);font-size:11.5px;line-height:1.4"><b style="color:var(--ink);font-weight:500">Only</b>: nothing from outside it. <b style="color:var(--ink);font-weight:500">Lean on it</b>: picked first when it fits the shape, others fill in.</div>
+   <div style="display:flex;justify-content:flex-end"><span class="btn pri">Add Random Album Title</span></div></div></div>`;
+const T_desk=desk(`<div style="max-width:860px;display:flex;flex-direction:column;gap:14px">
+  ${fromBar()}
+  <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;background:var(--aisle)"><span style="font-weight:600">Right now</span><span class="seg"><span>Calm</span><span>Easy</span><span class="on">Lively</span><span>High</span><span>All out</span></span><span class="seg"><span>−</span><span class="on">128 bpm</span><span>+</span></span><span class="btn pri" style="margin-left:auto">▶&nbsp;Play</span></div>
+  <div class="hd" style="margin-top:4px">Your flows<span class="btn" style="margin-left:auto">+ New flow</span></div>
+  <div>${row('nf','Easy, up to all out, holds high, eases out','Hi Friend (Instrumental Mix), Arguru, Plus')}${row('pl','Lively all the way','1981, Complications (Original Mix), Arguru')}${row('pk','Lively to all out · up a fifth halfway','Some Kind of Blue, Hi Friend!, Sex Lies Audiotape')}</div></div>`,{over:addPop});
+const T_ph1=phone(`<div style="display:flex;flex-direction:column;gap:10px">${fromBar(1)}
+  <div style="display:flex;align-items:center;gap:8px;padding:12px;border-radius:12px;background:var(--aisle);flex-wrap:wrap"><span style="font-weight:600;width:100%">Right now</span><span class="seg"><span>Easy</span><span class="on">Lively</span><span>High</span></span><span class="btn pri" style="margin-left:auto">▶&nbsp;Play</span></div>
+  <div class="hd" style="margin-top:2px">Your flows</div>
+  ${row('nf','Easy, up to all out, eases out','',{ph:1})}${row('pl','Lively all the way','',{ph:1})}${row('pk','Lively to all out','',{ph:1})}</div>`);
+const T_ph2=phone('',{over:sheet(600,`<div style="font-size:17px;font-weight:600">Add a source</div>
+  <div class="seg" style="display:flex">${['Genre','Library','Artist','Album'].map(t=>`<span class="${t==='Genre'?'on':''}" style="flex:1;text-align:center">${t}</span>`).join('')}</div>
+  <div style="height:38px;border-radius:9px;background:var(--house);outline:1px solid var(--line);color:var(--dim);font-size:13px;padding:10px 12px">Search 16 genres</div>
+  <div>${[['Electronic',107],['Progressive House',75,1],['Drum & Bass',57],['Rock',53],['Electronica & Dance',50],['Ambient',39]].map(([g,n,s])=>`<div style="display:flex;justify-content:space-between;padding:10px 8px;border-radius:9px;font-size:14px;${s?'background:var(--row)':''}">${g}<span style="color:var(--dim);font-size:12.5px">${n}</span></div>`).join('')}</div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="color:var(--dim)">How strictly</span><span class="seg" style="margin-left:auto"><span>Only</span><span class="on">Lean on it</span></span></div>
+  <span class="btn pri xl" style="justify-content:center">Add Progressive House</span>`)});
+
+// ---------- 2 · Album page: Play as a flow ----------
+const albumHead=(pop)=>`<div style="display:flex;align-items:flex-end;gap:20px"><div class="cover" style="width:168px;height:168px">RA</div>
+  <div style="display:flex;flex-direction:column;gap:12px"><div><b>12 tracks · 1 h 13</b><div style="color:var(--mut);font-size:12px">Deadmau5 · 128 BPM · Electronic</div></div>
+  <div style="display:flex;gap:8px"><span class="btn pri xl">▶&nbsp;Play</span><span class="btn xl${pop?' on':''}">${curve(F.pk,22,14,{sw:1.5,ev:false,pad:2})}Play as a flow</span><span class="btn xl">Shuffle</span><span class="btn xl">Add to queue</span><span class="btn xl">Save as playlist</span></div></div></div>`;
+const flowPop=`<div class="pop" style="left:540px;top:322px;width:560px;display:flex;flex-direction:column;gap:12px">
+  <div style="font-weight:600;font-size:14.5px">Play Random Album Title as a flow</div>
+  <div style="display:flex;gap:8px">${shapes('pk',72,28)}</div>
+  <div style="font-size:11.5px;color:var(--dim);margin-top:-4px">or one of yours: New flow · Plateau</div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="color:var(--dim);font-size:12.5px;width:46px">From</span>${src('Album','Random Album Title','only')}<span class="add">+ Add</span></div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap"><span style="color:var(--dim);width:46px">Then</span><span class="seg"><span class="on">Stop after 1 h 13</span><span>Carry on with similar</span></span></div>
+  <div style="border-top:1px solid var(--line);padding-top:10px"><div style="font-size:11.5px;color:var(--dim);margin-bottom:2px">The album in Peak order</div>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">${RA.slice(0,6).map(t=>`<div class="trk">${ti(t)}</div>`).join('')}</div></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><span class="btn">Open in Flows</span><span class="btn pri">▶&nbsp;Play as Peak</span></div></div>`;
+const A_desk=desk(`<div style="display:flex;flex-direction:column;gap:18px">${albumHead(1)}
+  <div>${RA.map((t,i)=>`<div style="display:flex;gap:14px;padding:9px 10px;font-size:13px;border-radius:8px"><span style="color:var(--dim);width:18px;text-align:right">${i+1}</span><span style="flex:1">${t[0]}</span><span style="color:var(--dim)">${t[1]}</span></div>`).join('')}</div></div>`,{tab:'Albums',title:'Random Album Title<small>Album · Music</small>',over:flowPop});
+const A_ph=phone(`<div style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;gap:14px;align-items:flex-end"><div class="cover" style="width:120px;height:120px;font-size:32px">RA</div><div><b>12 tracks · 1 h 13</b><div style="color:var(--mut);font-size:12px">Deadmau5 · 128 BPM</div></div></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="btn pri xl">▶&nbsp;Play</span><span class="btn xl on">Flow</span><span class="btn xl">Shuffle</span><span class="btn xl">⋯</span></div></div>`,{title:'Random Album Title',notabs:1,top:80,over:sheet(560,`<div style="font-size:17px;font-weight:600">Play as a flow</div>
+  <div style="display:flex;gap:8px;overflow:hidden;margin-right:-14px">${shapes('pk',80,30)}</div>
+  <div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;gap:8px"><span style="color:var(--dim);font-size:12.5px;width:42px">From</span>${src('Album','Random Album Title','only',{nox:1})}</div>
+   <div style="display:flex;align-items:center;gap:8px"><span style="color:var(--dim);font-size:12.5px;width:42px">+</span><span class="add">Add a genre, artist…</span></div>
+   <div style="display:flex;align-items:center;gap:8px;font-size:12.5px"><span style="color:var(--dim);width:42px">Then</span><span class="seg"><span class="on">Stop · 1 h 13</span><span>Carry on</span></span></div></div>
+  <div><div style="font-size:11.5px;color:var(--dim)">Opens with</div>${RA.slice(0,3).map(t=>`<div class="trk">${ti(t)}</div>`).join('')}</div>
+  <span class="btn pri xl" style="justify-content:center;margin-top:auto">▶&nbsp;Play as Peak</span>`)});
+
+// ---------- 3 · Other doors: genre chips, library rows, artist pages ----------
+const S_strip=`<div class="strip">${rail()}${topc('Albums')}${libs(1)}
+  <div style="position:absolute;left:352px;right:20px;top:120px;display:flex;gap:8px;flex-wrap:nowrap">
+   <span class="tag" style="font-size:12.5px;padding:6px 12px;background:oklch(40% .1 230 / .35);color:var(--ink)">All 474</span>
+   <span class="tag" style="font-size:12.5px;padding:6px 12px">Electronic 107</span>
+   <span style="position:relative"><span class="tag" style="font-size:12.5px;padding:6px 12px;background:var(--row);color:var(--ink)">Progressive House 75</span>
+     <span class="pop" style="left:0;top:34px;width:230px;padding:6px">${['Show these albums','Play as a flow…','Add to Flows › From'].map((t,i)=>`<div style="padding:8px 10px;border-radius:7px;font-size:13px;${i===1?'background:var(--row)':''}">${t}</div>`).join('')}</span></span>
+   <span class="tag" style="font-size:12.5px;padding:6px 12px">Drum & Bass 57</span><span class="tag" style="font-size:12.5px;padding:6px 12px">Rock 53</span><span class="tag" style="font-size:12.5px;padding:6px 12px">Ambient 39</span></div>
+  <div class="mark" style="left:340px;top:250px">1</div><div class="mark" style="left:478px;top:98px">2</div></div>`;
+
+const dir=(id,title,tag,why,body)=>`<section class="dir" id="${id}"><h2>${title}<small>${tag}</small></h2><p class="why">${why}</p>${body}</section>`;
+const shot=(h,c)=>`<div>${h}<div class="cap">${c}</div></div>`;
+document.getElementById('board').innerHTML=`
+<div><h1>Flows from a genre, library, artist or album</h1><p class="lead">On top of direction A (Shelf); the same pieces drop into B or C. A flow is a shape; a source says which tracks it may draw from. Each source carries its own rule, so a library can be Only while a genre is Lean on it. Only = solid edge, Lean on it = dashed edge, everywhere.</p></div>
+<div class="stories">
+ <div><b>S7</b>On an album, artist or library: play it as a flow, in one shape, without leaving the page.</div>
+ <div><b>S8</b>On the Flows tab: narrow everything (Right now, my flows, starters) to a source.</div>
+ <div><b>S9</b>Per source, choose how hard it holds: Only (strict) or Lean on it (preferred).</div>
+ <div><b>S10</b>Before playing, know if the source is big enough, and what happens when it runs out.</div>
+</div>
+${dir('T','1 · Flows tab: a From bar','S8 S9 S10','Sources sit above everything and apply to all of it: Right now and every flow open with tracks from them, so the "Opens with" lines change. One sentence reads the rules back with the track count and how long it lasts. "+ Add a source" opens a picker with four tabs (Genre, Library, Artist, Album) and the strictness choice. Tapping a chip flips Only / Lean on it; × removes it. Sources of the same kind add up (two albums); different kinds narrow each other.',
+  shot(T_desk,'Desktop · Library Deadmau5 Only + Genre Progressive House Lean, adding an album')+`<div class="shots" style="margin-top:12px">${shot(T_ph1,'Phone · From bar, chips scroll sideways')}${shot(T_ph2,'Phone · Add a source sheet')}</div>`)}
+${dir('P','2 · Play as a flow, from the album page','S7 S9 S10','A button beside Play and Shuffle: same idea as Shuffle, but ordered by a shape. It opens the five starters (and yours), From prefilled with this album as Only, and what happens when the album runs out: Stop (the flow squeezes into the album) or Carry on with similar. Artist and library pages get the same button and popover. "Open in Flows" takes the sources to the Flows tab From bar.',
+  shot(A_desk,'Desktop · album page, Play as a flow open (track order illustrative)')+`<div class="shots" style="margin-top:12px">${shot(A_ph,'Phone · album page, flow sheet')}</div>`)}
+${dir('D','3 · The other doors','S7','(1) Library rows in the sidebar show "▶ Flow" on hover (phone: in the row\'s ⋯ menu). (2) Genre chips get a menu: Play as a flow… opens the same popover with the genre as Lean on it; "Add to Flows › From" sends it to the From bar. The artist page gets the album page button.',shot(S_strip,'Desktop · library row hover and genre chip menu'))}
+`;
+</script>
+</body>
+</html>
