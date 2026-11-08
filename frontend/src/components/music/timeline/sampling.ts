@@ -14,6 +14,8 @@ export interface RawAnalysis {
   /** The first beat and the first downbeat, seconds. */
   beat0?: number | null
   bar0?: number | null
+  /** dB that bring the track to the library's target loudness (−14 LUFS); playback applies it. */
+  gain?: number
   /** Loudness envelope, whole percents at 10 Hz. */
   loudness?: number[]
   /** 8 band envelopes, whole percents at 10 Hz. */

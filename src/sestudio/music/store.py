@@ -22,6 +22,30 @@ from sestudio.music.analysis import RawAnalysis
 #: Renormalise when the analysed set has grown by more than this since the last time.
 GROWTH = 0.10
 
+#: Every track plays, draws and is ranked at this integrated loudness (EBU R128)...
+TARGET_LUFS = -14.0
+#: ...unless that would push its true peak over this: a quiet track is raised only so far.
+CEILING_DBTP = -1.0
+
+
+def gain_db(extra: dict[str, Any]) -> float:
+    """dB that bring a track to ``TARGET_LUFS`` (0 until its loudness is measured, or when it is silent)."""
+    lufs = extra.get("lufs")
+    if lufs is None or lufs <= -70:
+        return 0.0
+    gain = TARGET_LUFS - lufs
+    # Only a raise is capped: hot masters peak over 0 dBTP already (all 46 test tracks, up to +9.5)
+    # and capping their cut too left some 2.7 dB under the target.
+    if gain > 0:
+        gain = min(gain, max(0.0, CEILING_DBTP - extra.get("tp", 0.0)))
+    return round(gain, 2)
+
+
+def _scale(extra: dict[str, Any]) -> float:
+    """The linear factor of :func:`gain_db`, for the raw RMS envelopes."""
+    return float(10 ** (gain_db(extra) / 20))
+
+
 #: What v2 adds to a track's analysis response.
 V2_FIELDS = (
     "key",
@@ -114,6 +138,15 @@ def pending_v2() -> list[str]:
             for r in rows
             if json.loads(r["extra"]).get("v2") != profile.VERSION
         ]
+
+
+def pending_loudness() -> list[str]:
+    """Ids of tracks analysed before their loudness was measured."""
+    with library._lock:
+        rows = library._connect().execute(
+            "SELECT track_id FROM music_analysis WHERE json_extract(extra, '$.lufs') IS NULL"
+        )
+        return [r["track_id"] for r in rows]
 
 
 def pending_modes() -> list[str]:
@@ -250,15 +283,22 @@ def renormalise() -> dict[str, Any]:
     with library._lock:
         rows = (
             library._connect()
-            .execute("SELECT zcr, n, bands, loudness FROM music_analysis")
+            .execute("SELECT zcr, n, bands, loudness, extra FROM music_analysis")
             .fetchall()
         )
+    gains = [_scale(json.loads(r["extra"])) for r in rows]
     shaped = [
-        np.frombuffer(r["bands"], dtype=np.float16).reshape(8, r["n"]) for r in rows
+        np.frombuffer(r["bands"], dtype=np.float16)
+        .reshape(8, r["n"])
+        .astype(np.float32)
+        * g
+        for r, g in zip(rows, gains)
     ]
     raws = [
         e["track"]
         for b, r in zip(shaped, rows)
+        # shortcut: energy is ranked on the mastered loudness, as before; on the normalised one it ranks
+        # how compressed a master is. Moves to normalised levels with the energy rework.
         if "track" in (e := profile.energy_raw(b, _loudness(r)))
     ]
     loud, highs = sorted(v[0] for v in raws), sorted(v[1] for v in raws)
@@ -326,12 +366,20 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     spelling = _spellings()
     for r in rows:
-        bands = np.frombuffer(r["bands"], dtype=np.float16).reshape(8, r["n"])
-        loud = _loudness(r)
-        energy = profile.energy_scale(profile.energy_raw(bands, loud), state["energy"])
-        bands = bands.astype(np.float32)
-        p = np.searchsorted(zcr, r["zcr"]) / (len(zcr) - 1) if len(zcr) > 1 else 0.5
         extra = json.loads(r["extra"])
+        # Levels as heard: at the track's normalised loudness, not as it was mastered.
+        g = _scale(extra)
+        bands = (
+            np.frombuffer(r["bands"], dtype=np.float16)
+            .reshape(8, r["n"])
+            .astype(np.float32)
+            * g
+        )
+        loud = _loudness(r) * g
+        energy = profile.energy_scale(
+            profile.energy_raw(bands, _loudness(r)), state["energy"]
+        )  # mastered loudness, as in renormalise
+        p = np.searchsorted(zcr, r["zcr"]) / (len(zcr) - 1) if len(zcr) > 1 else 0.5
         mean = [float(np.mean(np.minimum(bands[i] / norm[i], 1))) for i in range(8)]
         loud_norm = float(np.sort(loud)[int(len(loud) * 0.98)]) if len(loud) else 1.0
         out[r["track_id"]] = {
@@ -341,6 +389,8 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
             "beat0": r["beat0"],
             "bar0": r["bar0"],
             "bpmConf": r["bpm_conf"],
+            # dB to play it at: what playback applies so every track sounds at TARGET_LUFS.
+            "gain": gain_db(extra),
             "hue": round(195 + float(p) * 125),
             "bands": [_percent(bands[i], norm[i]) for i in range(8)],
             "loudness": _percent(loud, loud_norm or 1.0),

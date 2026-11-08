@@ -163,6 +163,27 @@ def _read_modes(base: Path, files: list, workers: int) -> None:
                 _modes_done += 1
 
 
+def _measure_loudness(base: Path, files: list, workers: int) -> None:
+    """Integrated loudness and true peak of tracks analysed before they were measured, then renormalise."""
+    todo = set(store.pending_loudness())
+    mine = [f for f in files if f.track_id in todo]
+    if not mine:
+        return
+
+    def one(f) -> None:
+        if found := analysis.loudness(str(base / f.path)):
+            store.merge_extra(f.track_id, found)
+
+    with ThreadPoolExecutor(workers, thread_name_prefix="loudness") as ex:
+        for future in as_completed([ex.submit(one, f) for f in mine]):
+            try:
+                future.result()
+            except Exception:
+                logger.warning("Could not measure a track's loudness", exc_info=True)
+    # Every level the library is ranked by moved with the gains.
+    store.renormalise()
+
+
 def _genre_of(path: Path, raw: analysis.RawAnalysis) -> dict[str, Any]:
     """*raw*'s profile with its genre decided from the analysis' own decode."""
     tag = genres.normalise(downloaded.audio_genre(path))
@@ -212,6 +233,8 @@ def run_once(
     # Half the cores, at most 6: 14 tracks took 23.6 s on 4, 18.3 s on 6, 17.7 s on 8.
     workers = workers or max(1, min(6, (os.cpu_count() or 2) // 2))
     ok = _upgrade_v2(base, files, workers)
+    redo = {f.track_id for f in pending}  # measured by their analysis
+    _measure_loudness(base, [f for f in files if f.track_id not in redo], workers)
     if not pending:
         _decide_genres(base, files, workers)
         _read_modes(base, files, workers)

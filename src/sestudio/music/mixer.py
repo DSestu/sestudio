@@ -97,10 +97,10 @@ def _run(args: list[str], data: bytes | None = None) -> np.ndarray:
     return np.frombuffer(raw[: len(raw) // 4 * 4], dtype=np.int16).reshape(-1, 2)
 
 
-def decode(src: str) -> np.ndarray:
-    """The whole file as 44.1 kHz stereo int16."""
+def decode(src: str, gain: float = 0.0) -> np.ndarray:
+    """The whole file as 44.1 kHz stereo int16, *gain* dB louder (its loudness normalisation)."""
     try:
-        out = _run(["-nostdin", "-i", src, "-vn"])
+        out = _run(["-nostdin", "-i", src, "-vn", "-af", f"volume={gain:.2f}dB"])
     except subprocess.CalledProcessError as exc:
         raise Unplayable(exc.stderr.decode(errors="replace")[-200:]) from exc
     if not len(out):
@@ -392,7 +392,7 @@ class Mixer:
                 self._cache.move_to_end(tid)
                 return self._cache[tid]
         src, analysis = self.sources.audio(item)
-        full = decode(src)
+        full = decode(src, (analysis or {}).get("gain", 0.0))
         got = Loaded(full, mixplan.prep_track(len(full) / SR, analysis))
         with self._cache_lock:
             self._cache[tid] = got

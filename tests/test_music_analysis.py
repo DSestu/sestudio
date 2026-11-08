@@ -372,3 +372,38 @@ def test_the_genre_windows_come_from_the_analysis_decode(tmp_path):
     )
     # The resampler starts afresh at each decoded window: log-mel values up to ~5 move by 0.01.
     assert np.allclose(a.genre_patches, decoded, atol=0.05)
+
+
+def test_gain_brings_a_track_to_the_target_unless_its_peak_would_clip():
+    assert store.gain_db({}) == 0.0  # not measured yet
+    assert store.gain_db({"lufs": -70.0, "tp": float("-inf")}) == 0.0  # silent
+    assert store.gain_db({"lufs": -8.0, "tp": 0.5}) == -6.0
+    assert store.gain_db({"lufs": -20.0, "tp": -10.0}) == 6.0
+    assert store.gain_db({"lufs": -24.0, "tp": -4.0}) == 3.0  # raised only to -1 dBTP
+    assert store.gain_db({"lufs": -24.0, "tp": 0.2}) == 0.0  # no room to raise at all
+    assert store.gain_db({"lufs": -5.1, "tp": 9.5}) == -8.9  # a cut is never capped
+
+
+def test_a_quiet_and_a_loud_master_play_and_draw_alike(db, tmp_path):
+    for name, level in (("loud", 1.0), ("quiet", 0.1)):  # 20 dB apart
+        f = tmp_path / f"{name}.wav"
+        _write_wav(f, sine(1000) * level)
+        raw = analysis.analyse_file(str(f))
+        assert raw.extra == raw.extra | analysis.loudness(str(f))
+        store.save(name, 1.0, 10, raw)
+    store.renormalise()
+    got = store.get(["loud", "quiet"])
+    loud, quiet = got["loud"], got["quiet"]
+    assert quiet["gain"] - loud["gain"] == pytest.approx(20, abs=0.3)
+    assert loud["gain"] < 0 < quiet["gain"]
+    for a, b in zip(loud["bands"], quiet["bands"]):
+        assert np.mean(a) == pytest.approx(np.mean(b), abs=2)
+
+
+def test_the_station_decodes_at_the_gain(tmp_path):
+    from sestudio.music import mixer
+
+    f = tmp_path / "s.wav"
+    _write_wav(f, sine(440, 1))
+    plain, quieter = mixer.decode(str(f)), mixer.decode(str(f), -6.02)
+    assert np.abs(quieter).max() == pytest.approx(np.abs(plain).max() / 2, rel=0.01)

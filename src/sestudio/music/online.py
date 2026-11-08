@@ -187,7 +187,10 @@ def kick_analysis(tid: str) -> None:
     if vid is None or not runner.enabled():
         return
     with _lock:
-        if tid in _busy or tid in store.stamps():
+        # Analysed before loudness was measured: again, since its file is gone.
+        if tid in _busy or (
+            tid in store.stamps() and tid not in store.pending_loudness()
+        ):
             return
         _busy.add(tid)
     store.set_partial(tid)

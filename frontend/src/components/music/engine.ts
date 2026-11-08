@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { clockSkew, positionNow, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
-import { planBetween } from './mix/analysis'
+import { planBetween, rawOf } from './mix/analysis'
 import { lockPhase } from './mix/lock'
 import type { Plan } from './timeline/sampling'
 import { TV } from './tv'
@@ -108,6 +108,9 @@ class AudioEngine {
   private els: HTMLAudioElement[] = []
   private gains: GainNode[] = []
   private shelves: BiquadFilterNode[] = []
+  /** Each element's loudness normalisation: its track's analysed `gain` (dB), 0 until known. */
+  private trims: GainNode[] = []
+  private trimWant: number[] = [1, 1]
   private glide: { el: number; from: number; t0: number; dur: number } | null = null
   private master!: GainNode
   private volume!: GainNode
@@ -157,12 +160,15 @@ class AudioEngine {
         const shelf = ctx.createBiquadFilter()
         shelf.type = 'lowshelf'
         shelf.frequency.value = SHELF_HZ
-        ctx.createMediaElementSource(el).connect(shelf)
+        const trim = ctx.createGain()
+        ctx.createMediaElementSource(el).connect(trim)
+        trim.connect(shelf)
         shelf.connect(g)
         g.connect(this.master)
         this.els.push(el)
         this.gains.push(g)
         this.shelves.push(shelf)
+        this.trims.push(trim)
       }
       window.setInterval(() => this.tick(), 40)
     }
@@ -259,7 +265,9 @@ class AudioEngine {
     if (el.dataset.src !== info.url) {
       el.src = info.url
       el.dataset.src = info.url
+      el.dataset.id = info.id
     }
+    this.retrim(i, true)
     el.currentTime = Math.max(0, offset)
     el.playbackRate = 1
   }
@@ -336,10 +344,23 @@ class AudioEngine {
     if (info && idle.dataset.src !== info.url) {
       idle.src = info.url
       idle.dataset.src = info.url
+      idle.dataset.id = info.id
     }
   }
 
+  /** Set element *i*'s trim to its track's gain: at once on a load, else glided (the analysis came while it played). */
+  private retrim(i: number, now = false) {
+    const t = this.trims[i]
+    const want = 10 ** ((rawOf(this.els[i].dataset.id ?? '')?.gain ?? 0) / 20)
+    if (want === this.trimWant[i]) return
+    this.trimWant[i] = want
+    t.gain.cancelScheduledValues(0)
+    if (now) t.gain.setValueAtTime(want, this.ctx!.currentTime)
+    else t.gain.setTargetAtTime(want, this.ctx!.currentTime, 0.5)
+  }
+
   private tick() {
+    this.trims.forEach((_, i) => this.retrim(i))
     const q = this.queue
     const f = this.fade
     if (f && this.ctx!.currentTime >= f.end) {
