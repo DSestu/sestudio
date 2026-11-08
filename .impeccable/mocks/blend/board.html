@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Blend · board</title>
+<style>
+:root{
+  --house:oklch(16% .015 240);--aisle:oklch(20% .02 240);--row:oklch(26% .025 240);--slate:oklch(30% .02 240);
+  --ink:oklch(92% .01 240);--mut:oklch(92% .01 240 / .62);--dim:oklch(92% .01 240 / .45);--line:oklch(92% .01 240 / .08);
+  --blue:oklch(72% .16 230);--blueink:oklch(18% .05 230);--energy:oklch(82% .11 75);--ok:oklch(76% .17 155);--warn:oklch(83% .16 85);
+  --card:oklch(19% .03 235);--z:.547;--zp:.5;
+}
+@media (min-width:1400px){:root{--z:1;--zp:.9}}
+*{box-sizing:border-box;margin:0}
+body{font:14px/1.43 ui-sans-serif,system-ui,sans-serif;color:var(--ink);background:transparent}
+.board{display:flex;flex-direction:column;gap:28px;padding:4px 0 16px}
+h1{font-size:1.25rem;font-weight:600;letter-spacing:-.02em}
+.lead{color:var(--mut);max-width:70ch;font-size:13px}
+.stories{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 18px;font-size:12.5px;color:var(--mut)}
+.stories b{color:var(--ink);font-weight:600;margin-right:4px}
+.dir h2{font-size:1.05rem;font-weight:600;letter-spacing:-.02em;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.dir h2 small{font-size:12px;font-weight:500;color:var(--blue)}
+.dir p.why{color:var(--mut);font-size:12.5px;margin:4px 0 10px;max-width:72ch}
+.shots{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.cap{font-size:11px;color:var(--dim);margin-top:4px}
+/* frames */
+.desk{width:1280px;height:800px;zoom:var(--z);position:relative;overflow:hidden;border-radius:14px;background:var(--house);outline:1px solid var(--line)}
+.phone{width:390px;height:844px;zoom:var(--zp);position:relative;overflow:hidden;border-radius:34px;background:var(--house);outline:1px solid var(--line)}
+@media (max-width:1399px){.phone{zoom:.55}}
+/* chrome */
+.rail{position:absolute;left:12px;top:12px;bottom:12px;width:72px;border-radius:14px;background:var(--card);display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:16px}
+.rail .logo{width:26px;height:30px;border-radius:8px;background:linear-gradient(var(--blue),oklch(60% .14 230))}
+.rail .srch{width:46px;height:46px;border-radius:12px;background:var(--blue)}
+.rail i{width:52px;height:46px;border-radius:10px;display:grid;place-items:center;font:500 10px/1 system-ui;color:var(--mut);font-style:normal}
+.rail i.on{background:oklch(40% .08 230 / .5);color:var(--ink)}
+.topc{position:absolute;left:104px;right:20px;top:16px;height:88px;border-radius:16px;background:linear-gradient(90deg,oklch(22% .04 235),oklch(19% .03 235));outline:1px solid oklch(72% .16 230 / .14)}
+.topc .t{position:absolute;left:18px;top:8px;font-size:19px}
+.topc .t small{display:block;font-size:11px;color:var(--mut);font-style:italic}
+.topc .s{position:absolute;left:96px;right:300px;top:6px;height:38px;border-radius:9px;border:2px solid oklch(72% .16 230 / .8);background:var(--house);color:var(--dim);font-size:13px;padding:8px 36px}
+.topc .np{position:absolute;right:70px;top:9px;height:30px;padding:0 14px;border-radius:5px;background:var(--blue);color:var(--blueink);font-size:12px;line-height:30px}
+.tabs{position:absolute;left:18px;top:46px;display:flex;gap:2px;background:oklch(16% .02 240 / .7);border-radius:12px;padding:3px}
+.tabs span{padding:6px 16px;border-radius:9px;font-size:12.5px;color:var(--mut)}
+.tabs span.on{background:oklch(40% .1 230 / .45);color:var(--ink)}
+.libs{position:absolute;left:104px;top:120px;width:226px;font-size:13px}
+.libs h5{font-size:10.5px;letter-spacing:.06em;color:var(--dim);font-weight:500;margin:0 0 8px 10px}
+.libs div{display:flex;justify-content:space-between;padding:8px 10px;border-radius:9px;color:var(--ink)}
+.libs div.on{background:oklch(40% .1 230 / .35)}
+.libs div em{font-style:normal;color:var(--dim);font-size:11.5px}
+.bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:510px;height:56px;border-radius:14px;background:oklch(20% .03 225);outline:1px solid oklch(80% .1 170 / .45);display:flex;align-items:center;gap:12px;padding:0 12px;font-size:13px}
+.bar .art{width:34px;height:34px;border-radius:8px;background:var(--slate)}
+.bar .p{width:34px;height:34px;border-radius:9px;background:var(--blue);margin-left:auto}
+.bar small{display:block;color:var(--mut);font-size:11px}
+.bar small b{color:oklch(70% .15 330);font-weight:500}
+.main{position:absolute;left:352px;right:20px;top:120px;bottom:84px}
+/* phone chrome */
+.ptop{position:absolute;left:12px;right:12px;top:10px;border-radius:18px;background:linear-gradient(90deg,oklch(22% .04 235),oklch(19% .03 235));padding:12px 14px 10px}
+.ptop .t{font-size:19px;font-weight:500}
+.ptop .t small{font-size:11px;color:var(--mut);font-style:italic;margin-left:6px}
+.ptop .tabs{position:static;margin-top:8px;width:max-content}
+.ptop .tabs span{padding:5px 11px;font-size:12px}
+.pdock{position:absolute;left:12px;right:12px;bottom:12px;height:122px;border-radius:20px;background:oklch(20% .03 225);outline:1px solid oklch(80% .1 170 / .4)}
+.pdock .bar{position:static;transform:none;width:auto;background:none;outline:0;height:60px;border-bottom:1px solid var(--line)}
+.pdock nav{display:flex;justify-content:space-around;align-items:center;height:62px;font-size:11px;color:var(--mut)}
+.pdock nav i{font-style:normal}.pdock nav .q{width:50px;height:50px;border-radius:14px;background:var(--blue)}
+.pdock nav .on{color:var(--ink);background:oklch(40% .1 230 / .45);padding:6px 12px;border-radius:9px}
+.pmain{position:absolute;left:12px;right:12px;top:112px;bottom:142px;overflow:hidden}
+/* shared bits */
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:5px;font-size:12.5px;font-weight:500;background:oklch(92% .01 240 / .07);color:var(--ink);white-space:nowrap}
+.btn.pri{background:var(--blue);color:var(--blueink)}
+.play{width:34px;height:34px;border-radius:50%;background:var(--blue);display:grid;place-items:center;flex:none}
+.play::after{content:"";border-left:10px solid var(--blueink);border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:3px}
+.play.sm{width:30px;height:30px}
+.dots{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--dim);flex:none}
+.dots::after{content:"";width:3px;height:3px;border-radius:50%;background:currentColor;box-shadow:-6px 0 currentColor,6px 0 currentColor}
+.hd{font-size:15px;font-weight:600;letter-spacing:-.015em;display:flex;align-items:center;gap:10px}
+.hd span{font-size:12px;font-weight:400;color:var(--dim)}
+.tag{font-size:11px;padding:1px 7px;border-radius:99px;background:oklch(92% .01 240 / .07);color:var(--mut);white-space:nowrap}
+.tag.k{color:var(--ok);background:oklch(76% .17 155 / .1)}
+.tag.m{color:var(--energy);background:oklch(82% .11 75 / .12)}
+.tag.b{color:oklch(72% .16 25);background:oklch(68% .19 25 / .12)}
+.seg{display:inline-flex;background:var(--house);border-radius:8px;padding:2px;outline:1px solid var(--line)}
+.seg span{padding:4px 10px;border-radius:6px;font-size:12px;color:var(--mut)}
+.seg span.on{background:var(--row);color:var(--ink)}
+.trk{display:flex;align-items:center;gap:8px;min-width:0;font-size:12.5px;padding:4px 0}
+.trk .n{color:var(--dim);font-variant-numeric:tabular-nums;width:30px;flex:none;font-size:11px}
+.trk .ti{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trk .ti em{font-style:normal;color:var(--dim);margin-left:6px}
+.note{position:absolute;font-size:11px;color:var(--ink);background:oklch(72% .16 230 / .18);outline:1px solid oklch(72% .16 230 / .5);padding:3px 8px;border-radius:6px;white-space:nowrap}
+svg.cv{display:block}
+/* ---- blend additions ---- */
+.strip{width:908px;zoom:var(--z);position:relative;border-radius:14px;background:var(--house);outline:1px solid var(--line);padding:18px}
+@media (max-width:1399px){.strip{zoom:.75}}
+.panel{background:var(--card);border-radius:14px;padding:14px 16px}
+.lvl{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}
+.lvl i{display:block;width:44px;height:6px;border-radius:3px;background:oklch(92% .01 240 / .1);position:relative;overflow:hidden}
+.lvl i b{position:absolute;inset:0 auto 0 0;background:var(--energy);border-radius:3px}
+.lvl em{font-style:normal;font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+.ring{width:18px;height:18px;border-radius:50%;flex:none;display:inline-block;vertical-align:middle}
+.mset{display:inline-flex;gap:1px;background:var(--house);border-radius:7px;padding:2px;outline:1px solid var(--line)}
+.mset span{font-size:10.5px;padding:2px 7px;border-radius:5px;color:var(--dim)}
+.mset span.on{background:var(--row);color:var(--ink)}
+.mset span.must.on{background:oklch(72% .16 230 / .25);color:var(--ink)}
+.lane{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:stretch;border-top:1px solid var(--line);padding:8px 0}
+.lane .lb{font-size:13px;display:flex;flex-direction:column;gap:5px}
+.lane .lb small{color:var(--dim);font-size:11px;line-height:1.3}
+.bricks{display:flex;gap:4px;position:relative;min-height:46px}
+.brick{border-radius:9px;background:var(--row);padding:6px 10px;font-size:12.5px;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:center}
+.brick small{color:var(--dim);font-size:10.5px}
+.brick.e{background:oklch(82% .11 75 / .1);outline:1px solid oklch(82% .11 75 / .3)}
+.brick.sel{outline:2px solid var(--blue)}
+.pal .it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;font-size:13.5px}
+.pal .it small{margin-left:auto;color:var(--dim);font-size:11px}
+.pal .it.on{background:oklch(40% .1 230 / .3)}
+.bd{position:absolute;width:300px;background:oklch(23% .03 235);border-radius:12px;outline:1px solid oklch(92% .01 240 / .12);box-shadow:0 18px 40px oklch(0% 0 0 / .45);padding:12px 14px;font-size:12.5px}
+.bd h6{font-size:13px;font-weight:600;margin-bottom:2px;display:flex;align-items:center;gap:8px}
+.bd .r{display:grid;grid-template-columns:70px 1fr 64px;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--line)}
+.bd .r span:first-child{color:var(--mut)}
+.bd .r .pt{height:5px;border-radius:3px;background:oklch(92% .01 240 / .1);position:relative}
+.bd .r .pt b{position:absolute;inset:0 auto 0 0;border-radius:3px}
+.bd .r em{font-style:normal;text-align:right;color:var(--dim);font-size:11px}
+.qrow{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;font-size:13px}
+.qrow .art{width:34px;height:34px;border-radius:7px;background:var(--slate);flex:none}
+.qrow .ti{flex:1;min-width:0}.qrow .ti small{display:block;color:var(--dim);font-size:11.5px}
+.qrow.now{background:oklch(40% .1 230 / .25)}
+.join{display:flex;align-items:center;gap:8px;padding:1px 0 1px 54px;font-size:11px;color:var(--dim);position:relative}
+.join::before{content:"";position:absolute;left:26px;top:-6px;bottom:-6px;width:1px;background:var(--line)}
+.opt{font:600 12px/1 system-ui;color:var(--blue);letter-spacing:.04em;margin-bottom:6px}
+.sheet{position:absolute;left:0;right:0;bottom:0;border-radius:22px 22px 0 0;background:oklch(22% .03 235);outline:1px solid oklch(92% .01 240 / .12);padding:10px 16px 22px}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:oklch(92% .01 240 / .25);margin:0 auto 12px}
+.sl{position:relative;height:28px;display:flex;align-items:center}
+.sl .tr{flex:1;height:6px;border-radius:3px;background:linear-gradient(90deg,oklch(82% .11 75 / .15),oklch(82% .11 75 / .9))}
+.sl .th{position:absolute;width:20px;height:20px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px oklch(82% .11 75 / .35)}
+.before{opacity:.55}
+</style>
+</head>
+<body>
+<div class="board" id="board"></div>
+<script>
+let gid=0;
+const rail=()=>`<div class="rail"><div class="logo"></div><div class="srch"></div><i>Home</i><i>Media</i><i>Discover</i><i class="on">Music</i><i>Library</i></div>`;
+const topc=(tab='Flows')=>`<div class="topc"><div class="t">Music<small>474 tracks</small></div><div class="s">Search your libraries and online, or paste a link</div><div class="np">+ New playlist</div><div class="tabs">${['Flows','Mixes','Albums','Artists','Tracks'].map(t=>`<span class="${t===tab?'on':''}">${t}</span>`).join('')}</div></div>`;
+const libs=()=>`<div class="libs"><h5>LIBRARIES</h5><div class="on">All<em>474</em></div><div>This PC<em>0</em></div><div>neuro soundcloud<em>46</em></div><div>Deadmau5<em>272</em></div><div>perso<em>156</em></div><h5 style="margin-top:16px">PLAYLISTS</h5><div>Queue<em>46</em></div><div>perso<em>2 parts</em></div><div>New playlist<em>13</em></div></div>`;
+const bar=()=>`<div class="bar"><div class="art"></div><div>Black Bloc<small><b>Dark</b> · 172 BPM</small></div><div class="p"></div></div>`;
+const pdock=()=>`<div class="pdock"><div class="bar"><div class="art"></div><div>Black Bloc<small><b>Dark</b> · 172 BPM</small></div><div class="p"></div></div><nav><i>Home</i><i>Media</i><span class="q"></span><i class="on">Music</i><i>Library</i></nav></div>`;
+const ptop=(t='Music',tab='Flows')=>`<div class="ptop"><div class="t">${t}<small>474 tracks</small></div><div class="tabs">${['Flows','Mixes','Albums','Tracks'].map(x=>`<span class="${x===tab?'on':''}">${x}</span>`).join('')}</div></div>`;
+const desk=(main,o={})=>`<div class="desk">${rail()}${o.top??topc()}${o.nolibs?'':libs()}<div class="main" style="${o.nolibs?'left:104px':''}">${main}</div>${bar()}</div>`;
+const phone=(main,o={})=>`<div class="phone">${o.top??ptop()}<div class="pmain" style="${o.pm??''}">${main}</div>${o.nodock?'':pdock()}${o.over??''}</div>`;
+// energy level (absolute 0..100), no name
+const lvl=v=>`<span class="lvl" title="energy ${v}"><i><b style="width:${v}%"></b></i><em>${v}</em></span>`;
+// Blend mark: ring filled to the score; colour by how well it blends
+const gc=s=>s>=.75?'var(--ok)':s>=.5?'var(--energy)':'oklch(70% .17 25)';
+const ring=(s,sz=18)=>{const r=sz/2-2.5,c=2*Math.PI*r;return `<svg class="ring" width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="oklch(92% .01 240 / .14)" stroke-width="3"/><circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${gc(s)}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${s*c} ${c}" transform="rotate(-90 ${sz/2} ${sz/2})"/></svg>`};
+const J={match:['In key','k'],relative:['Relative','m'],'mode-':['Darker','m'],lower:['Drop','m'],up:['Up a fifth','m'],break:['Break','b']};
+const jt=k=>`<span class="tag ${J[k][1]}">${J[k][0]}</span>`;
+// a Peak render from the live server (titles real; energy on the new absolute scale)
+const T=[
+ {t:'Supersonic (My Existence)',a:'Skrillex, Noisia, josh pan & Dylan Brady',bpm:174,e:81},
+ {t:'Suicide Bassline VIP',a:'Mefjus',bpm:174,e:86,j:'lower',s:.82,d:{e:'+5',t:'0',h:'Drop',c:'dark → dark',g:'Drum & Bass'}},
+ {t:'Farewell',a:'',bpm:172,e:78,j:'mode-',s:.58,d:{e:'−8',t:'−2',h:'Darker',c:'dark → dark',g:'Drum & Bass'}},
+ {t:'Wanna',a:'Kumarion',bpm:174,e:83,j:'match',s:.91,d:{e:'+5',t:'+2',h:'In key',c:'dark → dark',g:'Drum & Bass'}},
+ {t:'The Hole',a:'',bpm:174,e:80,j:'relative',s:.79,d:{e:'−3',t:'0',h:'Relative',c:'dark → warm',g:'Dubstep'}},
+ {t:'All I Ever Wanted',a:'Emperor',bpm:175,e:84,j:'relative',s:.77,d:{e:'+4',t:'+1',h:'Relative',c:'warm → warm',g:'Drum & Bass'}},
+ {t:'Perseverance',a:'',bpm:175,e:88,j:'lower',s:.71,d:{e:'+4',t:'0',h:'Drop',c:'warm → dark',g:'Drum & Bass'}},
+];
+// breakdown rows: [label, value, share of the score 0..1, setting]
+function breakdown(x,o={}){
+  const parts=[['Energy',`${x.d.e} (${x.d.e.startsWith('−')?'against the lift':'with the lift'})`,x.d.e.startsWith('−')?.35:.9,'Prefer'],['Tempo',`${x.d.t} BPM`,1,'Prefer'],['Harmony',x.d.h,x.j==='match'?1:x.j==='relative'?.8:.55,'Prefer'],['Colour',x.d.c,x.d.c.split(' → ')[0]===x.d.c.split(' → ')[1]?1:.5,'Prefer'],['Genre',x.d.g,x.d.g==='Drum & Bass'?1:.4,'Ignore']];
+  return `<h6>${ring(x.s,20)} Blends ${x.s>=.75?'well':x.s>=.5?'fairly':'roughly'} <span style="margin-left:auto;font-weight:400;color:var(--dim);font-size:11.5px">${Math.round(x.s*100)}</span></h6><div style="color:var(--dim);font-size:11.5px;margin-bottom:6px">into ${x.t}</div>`+
+   parts.map(([l,v,s,m])=>`<div class="r" style="${m==='Ignore'?'opacity:.45':''}"><span>${l}</span><span style="display:flex;flex-direction:column;gap:3px"><span>${v}</span><span class="pt"><b style="width:${m==='Ignore'?0:s*100}%;background:${gc(s)}"></b></span></span><em>${m==='Ignore'?'ignored':m}</em></div>`).join('')+
+   (o.foot??`<div style="color:var(--dim);font-size:11px;margin-top:6px">This stretch leans <b style="color:var(--ink);font-weight:500">Lift</b>: a step up in energy counts in its favour.</div>`);
+}
+
+const S=[]; // sections
+const sec=(id,title,tag,why,shots)=>S.push(`<section class="dir" id="${id}"><h2>${title}<small>${tag}</small></h2><p class="why">${why}</p><div class="shots">${shots}</div></section>`);
+const shot=(html,cap)=>`<div>${html}<div class="cap">${cap}</div></div>`;
+
+/* ===== 1. Lanes editor: leans + Must/Prefer/Ignore (stories 5, 6, 7) ===== */
+const mset=(on,o={})=>`<span class="mset">${['Must','Prefer','Ignore'].map(m=>`<span class="${m===on?'on':''} ${m==='Must'?'must':''}">${m}</span>`).join('')}</span>`;
+function leanBrick(kind,w,o={}){
+  const path={Lift:'M0 30 L100 8',Hold:'M0 19 L100 19',Ease:'M0 8 L100 30'}[kind];
+  return `<div class="brick e ${o.sel?'sel':''}" style="flex:${w}"><svg viewBox="0 0 100 38" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;opacity:.5"><path d="${path}" stroke="oklch(82% .11 75)" stroke-width="2" fill="none" vector-effect="non-scaling-stroke" stroke-dasharray="4 4"/></svg><span style="position:relative">${kind}</span><small style="position:relative">${o.sub??''}</small></div>`;
+}
+// the rendered result drawn through the energy lane: real picks, each a dot at its level
+function result(w,h,vals){const n=vals.length;let d='',dots='';vals.forEach((v,i)=>{const x=(i+.5)/n*w,y=h-4-(v/100)*(h-8);d+=(i?'L':'M')+x+' '+y;dots+=`<circle cx="${x}" cy="${y}" r="2.6" fill="oklch(82% .11 75)"/>`});return `<svg width="${w}" height="${h}" style="position:absolute;left:0;top:0;pointer-events:none"><path d="${d}" stroke="oklch(82% .11 75)" stroke-width="1.6" fill="none"/>${dots}</svg>`}
+const EV=[42,47,51,55,58,63,66,70,74,77,78,79,78,80,79,81,78,79,74,69,63,58,52,47];
+const lanesDesk=desk(`
+ <div class="panel" style="display:flex;align-items:center;gap:14px;padding:10px 14px"><span style="background:var(--house);padding:6px 12px;border-radius:7px;outline:1px solid var(--line);font-size:13px">Warm-up to peak</span><span style="color:var(--mut)">1 h · about 13 tracks</span><span style="margin-left:auto;font-size:12px;color:var(--dim)">Converted from your saved curve</span><span class="btn">Save</span><span class="btn pri">Play</span></div>
+ <div style="display:grid;grid-template-columns:200px 1fr;gap:14px;margin-top:14px">
+  <div class="panel pal" style="padding:10px">
+   <div class="seg" style="margin-bottom:8px"><span class="on">Energy</span><span>Genre</span><span>Harmony</span></div>
+   <div class="it on"><svg width="22" height="12"><path d="M1 11 L21 1" stroke="oklch(82% .11 75)" stroke-width="2"/></svg>Lift<small>steps up</small></div>
+   <div class="it"><svg width="22" height="12"><path d="M1 6 L21 6" stroke="oklch(82% .11 75)" stroke-width="2"/></svg>Hold<small>stays close</small></div>
+   <div class="it"><svg width="22" height="12"><path d="M1 1 L21 11" stroke="oklch(82% .11 75)" stroke-width="2"/></svg>Ease<small>steps down</small></div>
+   <div style="border-top:1px solid var(--line);margin:10px 4px 0;padding-top:10px;font-size:11.5px;color:var(--dim);line-height:1.45">A lean nudges each pick a little up, level or down from the track before. There is no level to hit.</div>
+  </div>
+  <div class="panel" style="padding:12px 16px">
+   <div style="display:grid;grid-template-columns:150px 1fr;font-size:11px;color:var(--dim);margin-bottom:4px"><span></span><span style="display:flex;justify-content:space-between"><span>start</span><span>15m</span><span>30m</span><span>45m</span><span>1h</span></span></div>
+   <div class="lane"><div class="lb">Energy${mset('Prefer')}<small>Must only blocks big jumps</small></div>
+    <div class="bricks" style="min-height:74px">${leanBrick('Lift',2,{sub:'20 min',sel:1})}${leanBrick('Hold',3,{sub:'30 min'})}${leanBrick('Ease',1.2,{sub:'12 min'})}<div style="position:absolute;inset:0;pointer-events:none">${result(502,74,EV)}</div></div></div>
+   <div class="lane"><div class="lb">Tempo${mset('Prefer')}<small>leans with energy</small></div>
+    <div class="bricks"><div class="brick" style="flex:1;flex-direction:row;align-items:center;gap:10px">Close to the track before <small>steps of a few BPM; Must blocks more than 8</small></div></div></div>
+   <div class="lane"><div class="lb">Genre${mset('Ignore')}<small>any genre</small></div>
+    <div class="bricks"><div class="brick" style="flex:1;opacity:.55">● Any</div></div></div>
+   <div class="lane"><div class="lb">Harmony${mset('Prefer')}<small>colour of the keys</small></div>
+    <div class="bricks"><div class="brick" style="flex:3">● Dark</div><div class="brick" style="flex:3.2">● Any</div></div></div>
+   <div class="lane" style="border-bottom:0"><div class="lb">Blend<small>how well each join sits</small></div>
+    <div class="bricks" style="min-height:24px;align-items:center;justify-content:space-around">${[.9,.82,.77,.88,.6,.92,.81,.79,.85,.7,.9,.83].map(ring).join('')}</div></div>
+  </div>
+ </div>
+ <div class="note" style="left:570px;top:-4px">dots = what a real render picks; the line has no target</div>
+`);
+const lanesPhone=phone(`
+ <div class="panel" style="padding:10px 12px;display:flex;align-items:center;gap:8px"><b style="font-weight:500">Warm-up to peak</b><span style="color:var(--dim);font-size:12px">1 h</span><span class="btn pri" style="margin-left:auto">Play</span></div>
+ <div class="panel" style="margin-top:10px;padding:12px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-weight:500">Energy</b>${mset('Prefer')}</div>
+  <div class="bricks" style="min-height:70px">${leanBrick('Lift',2,{sub:'20m',sel:1})}${leanBrick('Hold',3,{sub:'30m'})}${leanBrick('Ease',1.2,{sub:'12m'})}<div style="position:absolute;inset:0">${result(342,70,EV)}</div></div>
+  <div style="font-size:11px;color:var(--dim);margin-top:6px">Must only blocks big jumps</div>
+ </div>
+ ${[['Tempo','Prefer','leans with energy'],['Genre','Ignore','any genre'],['Harmony','Prefer','Dark, then any']].map(([l,m,s])=>`<div class="panel" style="margin-top:8px;padding:10px 12px;display:flex;align-items:center;gap:8px"><span style="flex:1"><b style="font-weight:500">${l}</b><small style="display:block;color:var(--dim);font-size:11px">${s}</small></span>${mset(m)}</div>`).join('')}
+`,{top:`<div class="ptop"><div class="t">‹ Flow<small>editing</small></div></div>`,pm:'top:74px',over:`<div class="sheet" style="bottom:134px;left:12px;right:12px;border-radius:18px;padding:12px 14px"><div style="font-size:12px;color:var(--dim);margin-bottom:6px">Lift · 20 min</div><div class="seg"><span class="on">Lift</span><span>Hold</span><span>Ease</span></div><span class="btn" style="margin-left:8px">Split</span><span class="btn">Remove</span></div>`});
+sec('lanes','1 · Lanes say direction','stories 5, 6, 7','The energy lane holds Lift / Hold / Ease, not Calm…Peak. Each lane carries Must / Prefer / Ignore. The amber dots are what a real render picks, so you see where the flow actually goes; the dashed slope inside a brick is only the lean. A Blend row under the lanes shows every join. Saved curves open already converted.',
+ shot(lanesDesk,'Desktop · flow editor')+shot(lanesPhone,'Phone · lanes stacked; tap a brick for its sheet'));
+
+/* ===== 2. Blend mark on joins + breakdown (story 8) ===== */
+const qlist=(n0,o={})=>T.map((x,i)=>(i?`<div class="join">${ring(x.s)}${jt(x.j)}<span>${x.d.e} energy · ${x.d.t==='0'?'same':x.d.t} BPM</span></div>`:'')+`<div class="qrow ${i===o.now?'now':''}"><div class="art"></div><div class="ti">${x.t}<small>${x.a||'—'} · ${x.bpm} BPM · ${lvl(x.e)}</small></div><span style="color:var(--dim);font-size:11.5px">${n0+i}</span></div>`).join('');
+const blendDesk=desk(`
+ <div class="panel" style="padding:12px 10px;height:100%;overflow:hidden;width:560px">
+  <div class="hd" style="padding:0 10px 8px">Queue <span>Peak · leaning Lift</span></div>
+  ${qlist(1,{now:1})}
+ </div>
+ <div class="bd" style="left:330px;top:250px">${breakdown(T[2],{foot:`<div style="color:var(--dim);font-size:11px;margin-top:6px">Energy steps down in a Lift stretch, so it scores lower. Still the best fit in key.</div>`})}</div>
+ <div class="note" style="left:600px;top:4px">hover a ring (desktop) · tap (phone)</div>
+`);
+const blendPhone=phone(`<div class="hd" style="padding:4px 4px 8px">Queue <span>Peak · Lift</span></div>${qlist(1,{now:1}).replace(/<span style="color:var\(--dim\);font-size:11.5px">\d+<\/span>/g,'')}`,{top:`<div class="ptop"><div class="t">Up next<small>Peak</small></div></div>`,pm:'top:70px',nodock:1,
+ over:`<div class="sheet"><div class="grab"></div><div class="bd" style="position:static;width:auto;box-shadow:none;outline:0;background:none;padding:0">${breakdown(T[4])}</div><div style="display:flex;gap:8px;margin-top:12px"><span class="btn">Swap this track</span><span class="btn">Fits here…</span></div></div>`});
+sec('blend','2 · One Blend mark per join','story 8','Each join gets one ring: how full = how well the two tracks blend overall; green / amber / red = well / fairly / roughly. Beside it, the harmony move as today and the energy and tempo steps in plain numbers. The breakdown shows each layer\'s part; ignored layers are greyed, not hidden.',
+ shot(blendDesk,'Desktop · queue, breakdown on hover')+shot(blendPhone,'Phone · tap a ring, breakdown in a sheet'));
+
+/* ===== 3. Energy as a level (story 9) ===== */
+const strip=(h)=>`<div class="strip">${h}</div>`;
+const lvRow=(before,after)=>`<div style="display:grid;grid-template-columns:120px 1fr 1fr;gap:14px;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:13px">${before}</div>`;
+const energyStrip=strip(`
+ <div style="display:grid;grid-template-columns:120px 1fr 1fr;gap:14px;font-size:11px;color:var(--dim)"><span></span><span>Today</span><span>Blend</span></div>
+ ${[['Track meta',`Supersonic · 174 BPM · <span class="tag">Intense</span>`,`Supersonic · 174 BPM · ${lvl(81)}`],
+    ['Same, close',`Farewell · 172 BPM · <span class="tag">Driving</span>`,`Farewell · 172 BPM · ${lvl(78)}`],
+    ['Key card','<span class="tag">Intense</span> · intro and outro are where mixes overlap',`${lvl(81)} <span style="color:var(--dim);font-size:12px">intro ${lvl(64)} outro ${lvl(70)}</span>`],
+    ['Explore dot','· Intense 74','· '+lvl(81)],
+    ['Search','typing “intense” finds it','“energy 80+” or “energy 70–85”']]
+   .map(([l,a,b])=>`<div style="display:grid;grid-template-columns:120px 1fr 1fr;gap:14px;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:13px"><span style="color:var(--mut);font-size:12px">${l}</span><span class="before">${a}</span><span>${b}</span></div>`).join('')}
+ <div style="font-size:11.5px;color:var(--dim);margin-top:8px">Farewell and Supersonic sound alike. Today they get different words (Driving / Intense). On the absolute scale they read 78 and 81.</div>`);
+sec('energy','3 · Energy as a level, no words','story 9','One small amber bar and a number, on a fixed scale measured from loudness, highs and density, so it means the same thing whatever else is in the library. Calm / Steady / Driving / Intense go everywhere.',shot(energyStrip,'Desktop and phone use the same component'));
+
+/* ===== 4. Open point 1: Right now ===== */
+const rnHead=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><b style="font-weight:500;font-size:14px">Right now</b>`;
+const R1=`<div class="panel">${rnHead}<span style="color:var(--dim);font-size:12px">start at</span><div class="sl" style="width:260px"><div class="tr"></div><div class="th" style="left:68%"></div></div>${lvl(72).replace('<i>','<i style="display:none">')}<span style="color:var(--dim);font-size:12px">then Hold</span><span style="margin-left:auto;display:flex;gap:10px;align-items:center"><span class="seg"><span>−</span><span class="on">172 bpm</span><span>+</span></span><span class="btn pri">Play</span></span></div></div>`;
+const R2=`<div class="panel">${rnHead}<span class="seg"><span>Ease</span><span class="on">Hold</span><span>Lift</span></span><span style="color:var(--dim);font-size:12px">from</span><span class="btn" style="gap:8px"><span class="art" style="width:18px;height:18px;border-radius:4px;background:var(--slate)"></span>Black Bloc · now playing ▾</span><span style="margin-left:auto"><span class="btn pri">Play</span></span></div></div>`;
+const R3=`<div class="panel">${rnHead}<span style="color:var(--dim);font-size:12px">start at</span><div class="sl" style="width:200px"><div class="tr"></div><div class="th" style="left:68%"></div></div><span class="seg"><span>Ease</span><span class="on">Hold</span><span>Lift</span></span><span style="margin-left:auto;display:flex;gap:10px;align-items:center"><span class="seg"><span>−</span><span class="on">172 bpm</span><span>+</span></span><span class="btn pri">Play</span></span></div></div>`;
+const rnStrip=strip(`<div class="opt">R1 · LEVEL, THEN HOLD (proposed)</div>${R1}<div style="font-size:11.5px;color:var(--dim);margin:6px 0 16px">One slider picks how hard the first track hits; after that every pick stays close. Fewest controls.</div>
+<div class="opt">R2 · FROM A TRACK</div>${R2}<div style="font-size:11.5px;color:var(--dim);margin:6px 0 16px">No level at all: start from the playing track (or any track) and lean. Purest neighbour flow; needs a track to start from.</div>
+<div class="opt">R3 · LEVEL + LEAN</div>${R3}<div style="font-size:11.5px;color:var(--dim);margin:6px 0 0">R1 plus a lean, so “start calm and lift” is one tap. One more control.</div>`);
+const rnPhone=phone(`
+ <div class="panel" style="padding:12px"><div style="font-size:12px;color:var(--dim)">From <span style="color:var(--ink)">your whole library</span></div></div>
+ <div class="panel" style="margin-top:10px"><div style="display:flex;align-items:center;margin-bottom:10px"><b style="font-weight:500">Right now</b><span style="margin-left:auto" class="opt">R1</span></div>
+  <div style="font-size:12px;color:var(--dim);margin-bottom:2px">start at, then hold</div><div class="sl"><div class="tr"></div><div class="th" style="left:66%"></div></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-top:10px"><span class="seg"><span>−</span><span class="on">172 bpm</span><span>+</span></span><span class="btn pri" style="margin-left:auto">Play</span></div></div>
+ <div class="panel" style="margin-top:10px"><div style="display:flex;align-items:center;margin-bottom:10px"><b style="font-weight:500">Right now</b><span style="margin-left:auto" class="opt">R2</span></div>
+  <div class="seg" style="display:flex"><span style="flex:1;text-align:center">Ease</span><span class="on" style="flex:1;text-align:center">Hold</span><span style="flex:1;text-align:center">Lift</span></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-top:10px"><span class="btn" style="flex:1;min-width:0;overflow:hidden">from Black Bloc ▾</span><span class="btn pri">Play</span></div></div>
+`);
+sec('rightnow','4 · Open point: Right now','Flows tab','Today: five energy words and a tempo stepper. With no words and no target, three ways to start an endless mix. R1 is the proposal.',shot(rnStrip,'Desktop · the Right now row, three options')+shot(rnPhone,'Phone · R1 and R2 stacked for comparison'));
+
+/* ===== 5. Open point 2: the plain sentence on flow rows ===== */
+function shape(pts,w=150,h=44){let d='';pts.forEach(([x,v],i)=>{d+=(i?'L':'M')+(x*w)+' '+(h-4-v*(h-10))});return `<svg width="${w}" height="${h}"><path d="${d} L${w} ${h} L0 ${h}Z" fill="oklch(82% .11 75 / .14)"/><path d="${d}" stroke="oklch(82% .11 75)" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>`}
+const rows=[{n:'Warm-up to peak',w:'made today',p:[[0,.25],[.33,.75],[.8,.78],[1,.45]],s1:'Lifts, holds, then eases out',s2:'Lifts for 20 min, holds 30, eases out',a:'Deadmau5, Virtual Riot',l:'1 h'},
+ {n:'Plateau',w:'made yesterday',p:[[0,.5],[1,.5]],s1:'Holds all the way · Progressive House only',s2:'Holds close the whole hour · Progressive House only',a:'Deadmau5',l:'1 h'},
+ {n:'Come-down',w:'starter',p:[[0,.62],[.2,.6],[1,.2]],s1:'Holds, then eases out · slows down · a break first',s2:'Holds 10 min, eases out for 50 · slows down · a break first',a:'Skrillex, Deadmau5',l:'Endless'}];
+const frow=(r,k)=>`<div style="display:flex;align-items:center;gap:14px;padding:8px 0">${shape(r.p)}<div style="flex:1;min-width:0"><div>${r.n} <span style="color:var(--dim);font-size:12px">${r.w}</span></div><div style="color:var(--mut);font-size:13px">${r[k]}</div><div style="color:var(--dim);font-size:11.5px">opens with ${r.a}</div></div><span class="tag">${r.l}</span><div class="play sm"></div><div class="dots"></div></div>`;
+const sStrip=strip(`<div class="opt">S1 · MOVES ONLY (proposed)</div>${rows.map(r=>frow(r,'s1')).join('')}
+<div class="opt" style="margin-top:14px">S2 · MOVES + HOW LONG</div>${rows.map(r=>frow(r,'s2')).join('')}
+<div style="font-size:11.5px;color:var(--dim);margin-top:8px">The shape stays: it is drawn from a real render (the energy of the picks), not from a target. Today’s line: “Easy, up to all out, down to high, up to all out, down to easy”.</div>`);
+const sPhone=phone(`<div class="hd" style="padding:2px 2px 6px">Your flows <span>3</span></div>${rows.map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line)">${shape(r.p,86,40)}<div style="flex:1;min-width:0"><div style="font-size:13.5px">${r.n}</div><div style="color:var(--mut);font-size:12px">${r.s1}</div></div><div class="play sm"></div></div>`).join('')}
+<div class="hd" style="padding:14px 2px 6px">Starters</div><div style="display:flex;gap:6px;flex-wrap:wrap">${['Warm-up','Peak','Plateau','Deep','Come-down'].map(s=>`<span class="tag" style="padding:5px 10px;font-size:12px">${s}</span>`).join('')}</div>`);
+sec('sentence','5 · Open point: what a flow row says','Flows tab','No more energy words in the row. S1 says the moves; S2 adds how long each lasts. S1 is the proposal.',shot(sStrip,'Desktop · Your flows rows, S1 vs S2')+shot(sPhone,'Phone · S1'));
+
+document.getElementById('board').innerHTML=`<header><h1>Blend · energy as one soft score</h1><p class="lead">Mockups for SPEC-blend.md, built on the live Flows tab and lanes editor. Each track is picked for how well it blends with the one before (energy, tempo, harmony, colour, genre), nudged by Lift / Hold / Ease. Pick R1–R3 and S1–S2 for the two open points.</p></header>`+S.join('');
+</script>
+</body>
+</html>
