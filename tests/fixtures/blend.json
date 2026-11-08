@@ -1,0 +1,1044 @@
+[
+ {
+  "name": "close in every way",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 82,
+    "intro": 81,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {},
+  "expect": {
+   "score": 0.999,
+   "parts": {
+    "energy": 0.996,
+    "tempo": 1.0,
+    "harmony": 1.0,
+    "colour": 1.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -1,
+    "tempo": 0
+   },
+   "join": "match",
+   "blocked": false
+  }
+ },
+ {
+  "name": "relative key, small lift",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 175,
+   "energyScale": {
+    "track": 86,
+    "intro": 86,
+    "outro": 86
+   },
+   "harmony": {
+    "track": {
+     "tonic": "A#",
+     "mode": "Ionian",
+     "notes": [
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F",
+      "G",
+      "A"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {
+   "lean": "lift"
+  },
+  "expect": {
+   "score": 0.863,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 1.0,
+    "harmony": 0.8,
+    "colour": 0.4,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": 4,
+    "tempo": 1
+   },
+   "join": "relative",
+   "blocked": false
+  }
+ },
+ {
+  "name": "step down against a lift",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 172,
+   "energyScale": {
+    "track": 74,
+    "intro": 74,
+    "outro": 74
+   },
+   "harmony": {
+    "track": {
+     "tonic": "D",
+     "mode": "Aeolian",
+     "notes": [
+      "D",
+      "E",
+      "F",
+      "G",
+      "A",
+      "A#",
+      "C"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {
+   "lean": "lift"
+  },
+  "expect": {
+   "score": 0.67,
+   "parts": {
+    "energy": 0.418,
+    "tempo": 0.698,
+    "harmony": 0.6,
+    "colour": 1.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -8,
+    "tempo": -2
+   },
+   "join": "up",
+   "blocked": false
+  }
+ },
+ {
+  "name": "ease wants the step down",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 172,
+   "energyScale": {
+    "track": 74,
+    "intro": 74,
+    "outro": 74
+   },
+   "harmony": {
+    "track": {
+     "tonic": "D",
+     "mode": "Aeolian",
+     "notes": [
+      "D",
+      "E",
+      "F",
+      "G",
+      "A",
+      "A#",
+      "C"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {
+   "lean": "ease"
+  },
+  "expect": {
+   "score": 0.854,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 0.961,
+    "harmony": 0.6,
+    "colour": 1.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -8,
+    "tempo": -2
+   },
+   "join": "up",
+   "blocked": false
+  }
+ },
+ {
+  "name": "big energy jump blocked by must",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 30,
+    "intro": 30,
+    "outro": 30
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {
+   "settings": {
+    "energy": "must"
+   }
+  },
+  "expect": {
+   "score": 0.538,
+   "parts": {
+    "energy": 0.0,
+    "tempo": 1.0,
+    "harmony": 1.0,
+    "colour": 1.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -52,
+    "tempo": 0
+   },
+   "join": "match",
+   "blocked": true
+  }
+ },
+ {
+  "name": "big energy jump only scores low at prefer",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 30,
+    "intro": 30,
+    "outro": 30
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {},
+  "expect": {
+   "score": 0.778,
+   "parts": {
+    "energy": 0.0,
+    "tempo": 1.0,
+    "harmony": 1.0,
+    "colour": 1.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -52,
+    "tempo": 0
+   },
+   "join": "match",
+   "blocked": false
+  }
+ },
+ {
+  "name": "tempo jump blocked by must",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 140,
+   "energyScale": {
+    "track": 80,
+    "intro": 80,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {
+   "settings": {
+    "tempo": "must"
+   }
+  },
+  "expect": {
+   "score": 0.536,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 0.0,
+    "harmony": 1.0,
+    "colour": 1.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -2,
+    "tempo": -34
+   },
+   "join": "match",
+   "blocked": true
+  }
+ },
+ {
+  "name": "genre ignored",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 80,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Dubstep"
+  },
+  "opts": {
+   "settings": {
+    "genre": "ignore"
+   }
+  },
+  "expect": {
+   "score": 0.996,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 1.0,
+    "harmony": 1.0,
+    "colour": 1.0,
+    "genre": null
+   },
+   "steps": {
+    "energy": -2,
+    "tempo": 0
+   },
+   "join": "match",
+   "blocked": false
+  }
+ },
+ {
+  "name": "genre block must, mismatch",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 80,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Dubstep"
+  },
+  "opts": {
+   "settings": {
+    "genre": "must"
+   },
+   "genres": [
+    "Drum & Bass"
+   ]
+  },
+  "expect": {
+   "score": 0.724,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 1.0,
+    "harmony": 1.0,
+    "colour": 1.0,
+    "genre": 0.0
+   },
+   "steps": {
+    "energy": -2,
+    "tempo": 0
+   },
+   "join": "match",
+   "blocked": true
+  }
+ },
+ {
+  "name": "colour block, bright wanted",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 80,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "C",
+     "mode": "Ionian",
+     "notes": [
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "A",
+      "B"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {
+   "colour": "bright"
+  },
+  "expect": {
+   "score": 0.663,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 1.0,
+    "harmony": 0.0,
+    "colour": 1.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -2,
+    "tempo": 0
+   },
+   "join": "break",
+   "blocked": false
+  }
+ },
+ {
+  "name": "colour must, mismatch",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 80,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {
+   "colour": "bright",
+   "settings": {
+    "colour": "must"
+   }
+  },
+  "expect": {
+   "score": 0.724,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 1.0,
+    "harmony": 1.0,
+    "colour": 0.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -2,
+    "tempo": 0
+   },
+   "join": "match",
+   "blocked": true
+  }
+ },
+ {
+  "name": "unread key and no energy",
+  "a": {
+   "id": "a",
+   "bpm": 128
+  },
+  "b": {
+   "id": "b",
+   "bpm": 128
+  },
+  "opts": {},
+  "expect": {
+   "score": 0.64,
+   "parts": {
+    "energy": null,
+    "tempo": 1.0,
+    "harmony": 0.4,
+    "colour": null,
+    "genre": null
+   },
+   "steps": {
+    "energy": null,
+    "tempo": 0
+   },
+   "join": null,
+   "blocked": false
+  }
+ },
+ {
+  "name": "event wanted: up a fifth",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 80,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "D",
+     "mode": "Aeolian",
+     "notes": [
+      "D",
+      "E",
+      "F",
+      "G",
+      "A",
+      "A#",
+      "C"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {
+   "want": "up"
+  },
+  "expect": {
+   "score": 0.996,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 1.0,
+    "harmony": 1.0,
+    "colour": 1.0,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -2,
+    "tempo": 0
+   },
+   "join": "up",
+   "blocked": false
+  }
+ },
+ {
+  "name": "a break",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 80,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "C#",
+     "mode": "Ionian",
+     "notes": [
+      "C#",
+      "D#",
+      "F",
+      "F#",
+      "G#",
+      "A#",
+      "C"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {},
+  "expect": {
+   "score": 0.596,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 1.0,
+    "harmony": 0.0,
+    "colour": 0.4,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -2,
+    "tempo": 0
+   },
+   "join": "break",
+   "blocked": false
+  }
+ },
+ {
+  "name": "exotic mode",
+  "a": {
+   "id": "a",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 78,
+    "outro": 82
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Aeolian",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "b": {
+   "id": "b",
+   "bpm": 174,
+   "energyScale": {
+    "track": 80,
+    "intro": 80,
+    "outro": 80
+   },
+   "harmony": {
+    "track": {
+     "tonic": "G",
+     "mode": "Harmonic minor",
+     "notes": [
+      "G",
+      "A",
+      "A#",
+      "C",
+      "D",
+      "D#",
+      "F#"
+     ]
+    }
+   },
+   "genre": "Drum & Bass"
+  },
+  "opts": {},
+  "expect": {
+   "score": 0.796,
+   "parts": {
+    "energy": 0.982,
+    "tempo": 1.0,
+    "harmony": 0.6,
+    "colour": 0.4,
+    "genre": 1.0
+   },
+   "steps": {
+    "energy": -2,
+    "tempo": 0
+   },
+   "join": "mode+",
+   "blocked": false
+  }
+ }
+]
