@@ -1,5 +1,5 @@
 import type { Flow, GenreBlock } from '../../../musicFlows'
-import { firstPath } from '../../../musicFlows'
+import { energyPoints, firstPath } from '../../../musicFlows'
 
 // The lanes editor's model (docs/proto/flows/lanes.html): three lanes of bricks over minutes.
 // A flow it saves is one chunk; its layers are read back into the same bricks.
@@ -116,7 +116,7 @@ export function fromFlow(flow: Pick<Flow, 'chunks' | 'length'>): { lanes: Lanes;
   for (const c of path) {
     const w = c.share / shares
     const L = c.layers as Record<string, unknown> & typeof c.layers
-    for (const [f, v] of L.energy ?? []) energy.push([at + f * w, v])
+    for (const [f, v] of energyPoints(L)) energy.push([at + f * w, v])
     for (const g of L.genre ?? []) if (g.genres?.length) genre.push({ from: at + g.from * w, to: at + g.to * w, v: g.genres.join('|') })
     for (const k of (L.colour as { from: number; to: number; colour: string }[] | undefined) ?? []) colour.push({ from: at + k.from * w, to: at + k.to * w, v: k.colour })
     at += w

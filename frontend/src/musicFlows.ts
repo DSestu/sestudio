@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { startPlayback } from './components/music/player'
+import type { Lean, Layer, Setting } from './blend'
 import type { QueueState } from './musicQueue'
 
 // Flows and mixes (docs/SPEC-music-flows.md): the server's documents, the calls
@@ -10,11 +11,36 @@ const BASE = '/api/music'
 export type Curve = [number, number][]
 export interface HarmonyEvent { at: number; kind: string }
 export interface GenreBlock { from: number; to: number; genres: string[]; strict?: 'must' | 'prefer' }
+/** A stretch of a chunk leaning up, level or down (SPEC-blend). */
+export interface LeanBlock { from: number; to: number; lean: Lean }
 export interface Layers {
+  /** Older flows only: the server reads it as a start tempo. */
   tempo?: Curve
-  energy?: Curve
+  /** Leans; older flows have a curve, which the server reads as leans and a start. */
+  energy?: Curve | LeanBlock[]
+  /** What the first track is near: energy 0..1, tempo in BPM. */
+  start?: { energy?: number; tempo?: number }
+  settings?: Partial<Record<Layer, Setting>>
   harmony?: HarmonyEvent[]
   genre?: GenreBlock[]
+}
+
+const isCurve = (e: Layers['energy']): e is Curve => Array.isArray(e?.[0])
+/** How far a lean moves over a whole chunk, on the 0..1 axis: only to draw it. */
+const LEAN_RISE = 0.3
+
+/** A chunk's energy as [0..1 position, 0..1 energy] points: a curve as it is, leans drawn from the start. */
+export function energyPoints(layers: Layers): Curve {
+  const e = layers.energy
+  if (!e?.length) return []
+  if (isCurve(e)) return e
+  let v = layers.start?.energy ?? 0.5
+  const out: Curve = [[e[0].from, v]]
+  for (const b of e as LeanBlock[]) {
+    v = Math.max(0.05, Math.min(0.95, v + (b.lean === 'lift' ? 1 : b.lean === 'ease' ? -1 : 0) * LEAN_RISE * (b.to - b.from)))
+    out.push([b.to, v])
+  }
+  return out
 }
 /** What a fork may wait for (SPEC §5): skips in the last tracks, minutes into the mix, a clock time. */
 export type Condition =
@@ -165,7 +191,7 @@ export function energyShape(flow: Pick<Flow, 'chunks'>): Curve | null {
   let at = 0
   for (const c of path) {
     const w = c.share / total
-    for (const [f, v] of c.layers.energy ?? []) out.push([at + f * w, v])
+    for (const [f, v] of energyPoints(c.layers)) out.push([at + f * w, v])
     at += w
   }
   return out.length >= 2 ? out : null

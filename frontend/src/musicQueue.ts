@@ -1,3 +1,4 @@
+import type { Layer, Lean } from './blend'
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { downloadedFileUrl, getDownloadedLibrary } from './api'
 import { fetchLibraryTracks, libraryAudioUrl } from './musicLibraries'
@@ -24,13 +25,24 @@ export interface QueueItem extends TrackRef {
   /** What this item's join did, when the queue plays a flow (SPEC-music-flows §6). */
   flow?: FlowSlot
 }
+/** How well a slot's track blends with the one before (SPEC-blend; the first is scored against the flow's start). */
+export interface SlotBlend {
+  score: number
+  parts: Record<Layer, number | null>
+  steps: { energy: number | null; tempo: number | null }
+  /** A Must would have kept it out: it played because nothing else was left. */
+  blocked: boolean
+}
 /** One rendered slot of a flow: its chunk, the join from the previous track, how well it served the flow. */
 export interface FlowSlot {
   chunk: string
   join: string | null
   fit: number | null
   event: { at: number; kind: string; index: number; realised: boolean } | null
-  relaxed: string[]
+  /** Absent on items queued before Blend. */
+  blend?: SlotBlend | null
+  lean?: Lean
+  pinned?: boolean
 }
 /** The flow or mix the queue plays (SPEC-music-flows §7). */
 export interface QueueSource {

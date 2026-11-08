@@ -58,6 +58,8 @@ def test_fit_is_a_score_not_a_gate():
 
 
 LIB = [trk(i, bpm=170 + i % 6, tonic=NAMES[i % 12], e=i * 3) for i in range(30)]
+#: The same, every track close in energy: harmony decides.
+NEAR = [trk(i, bpm=170 + i % 6, tonic=NAMES[i % 12], e=50 + i % 5) for i in range(30)]
 
 
 def test_match_by_default_and_events_realised_once():
@@ -71,45 +73,44 @@ def test_match_by_default_and_events_realised_once():
         }
     ]
     # Major keys too: between minor keys alone every far move is the same scale moved (a lift or a drop).
-    lib = LIB + [
-        trk(100 + i, bpm=172, tonic=NAMES[i], mode="Ionian", e=60) for i in range(12)
+    lib = NEAR + [
+        trk(100 + i, bpm=172, tonic=NAMES[i], mode="Ionian", e=52) for i in range(12)
     ]
     mix = flows.render(chunk, lib, minutes=30, seed=1)
     kinds = [m["join"] for m in mix]
     assert kinds[1] == "match" and "up" in kinds and "break" in kinds
     assert sum(1 for m in mix if m["event"] and m["event"]["realised"]) == 2
-    assert all(not m["relaxed"] for m in mix)
+    assert not any(m["blend"]["blocked"] for m in mix)
 
 
-def test_pull_never_excludes_a_track():
+def test_only_a_must_keeps_a_track_out():
     narrow = [trk(1, 172, "F"), trk(2, 172, "B", "Ionian"), trk(3, 150, "F")]
-    band = [
+    soft = [{"id": "p", "share": 1, "layers": {"harmony": []}}]
+    # A 22 BPM jump in key still blends better than a clash at the same tempo...
+    assert (
+        flows.render(soft, narrow, minutes=9, seed=1, pins={0: "1"})[1]["track_id"]
+        == "3"
+    )
+    # ...until tempo is a Must: then the big jump is out and the clash plays.
+    firm = [
         {
             "id": "p",
             "share": 1,
-            "layers": {"tempo": [[0, 172], [1, 172]], "harmony": []},
+            "layers": {"harmony": [], "settings": {"tempo": "must"}},
         }
     ]
-    mix = flows.render(band, narrow, minutes=9, seed=1, pins={0: "1"})
-    assert (
-        mix[1]["track_id"] == "2"
-        and mix[1]["join"] == "break"
-        and not mix[1]["relaxed"]
-    )
-    free = [{"id": "p", "share": 1, "layers": {"harmony": []}}]
-    assert (
-        flows.render(free, narrow, minutes=9, seed=1, pins={0: "1"})[1]["track_id"]
-        == "3"
-    )
+    mix = flows.render(firm, narrow, minutes=9, seed=1, pins={0: "1"})
+    assert mix[1]["track_id"] == "2" and mix[1]["join"] == "break"
+    assert not mix[1]["blend"]["blocked"]
 
 
-def test_seed_pins_and_relaxation():
+def test_seed_and_pins():
     flow = [
         {
             "id": "x",
             "share": 1,
             "layers": {
-                "tempo": [[0, 172], [1, 172]],
+                "start": {"tempo": 172},
                 "genre": [{"from": 0, "to": 1, "genres": ["Drum & Bass"]}],
             },
         }
@@ -118,34 +119,101 @@ def test_seed_pins_and_relaxation():
     m1 = flows.render(flow, LIB, minutes=30, seed=7)
     assert ids(m1) == ids(flows.render(flow, LIB, minutes=30, seed=7))
     assert len(set(ids(m1))) == len(m1)
-    assert (
-        flows.render(flow, LIB, minutes=30, seed=7, pins={2: "29"})[2]["track_id"]
-        == "29"
+    pinned = flows.render(flow, LIB, minutes=30, seed=7, pins={2: "29"})
+    assert pinned[2]["track_id"] == "29" and pinned[2]["pinned"]
+
+
+ALBUM = [
+    trk(
+        i,
+        bpm=174 + (i % 3) - 1,
+        tonic=NAMES[(i * 7) % 12],
+        e=40 + (i * 37) % 50,
+        dur=240,
     )
-    far = [
-        {"id": "y", "share": 1, "layers": {"tempo": [[0, 164], [1, 164]]}}
-    ]  # 6 off: tempo alone reaches
-    mf = flows.render(far, LIB, minutes=10, seed=1)
-    assert len(mf) >= 2 and all(m["relaxed"] for m in mf)
-    assert mf[0]["relaxed"] == ["tempo"]  # one layer alone, not the whole ladder
+    for i in range(40)
+]
+
+
+def test_a_small_album_fills_the_whole_flow():
+    # Story 1: energies all over a 40-track album, a flow asking for a hold never stops short.
+    flow = [
+        {"id": "a", "share": 1, "layers": {"start": {"energy": 0.6}, "harmony": []}}
+    ]
+    # 160 minutes is longer than the album (40 × 220 s): it plays every track, none left out.
+    mix = flows.render(flow, ALBUM, minutes=160, seed=3)
+    assert len(mix) == 40
+    assert "relaxed" not in mix[0]
+
+
+def test_lift_climbs_and_ease_falls_in_small_steps():
+    # Story 3: the set goes somewhere without a level to hit.
+    lib = [trk(i, bpm=174, tonic="F", e=e) for i, e in enumerate(range(10, 100, 2))]
+    flow = [
+        {
+            "id": "up",
+            "share": 1,
+            "layers": {
+                "start": {"energy": 0.3},
+                "energy": [{"from": 0, "to": 1, "lean": "lift"}],
+            },
+        },
+    ]
+    up = [
+        m["blend"]["steps"]["energy"]
+        for m in flows.render(flow, lib, minutes=40, seed=1)[1:]
+    ]
+    assert sum(up) / len(up) > 2 and max(abs(d) for d in up) <= 12
+    flow[0]["layers"] = {
+        "start": {"energy": 0.8},
+        "energy": [{"from": 0, "to": 1, "lean": "ease"}],
+    }
+    down = [
+        m["blend"]["steps"]["energy"]
+        for m in flows.render(flow, lib, minutes=40, seed=1)[1:]
+    ]
+    assert sum(down) / len(down) < -2
+
+
+def test_must_keeps_every_join_under_the_big_jump():
+    # Story 4: with energy and tempo as Must, no join jumps further than the limits.
+    flow = [
+        {
+            "id": "a",
+            "share": 1,
+            "layers": {"settings": {"energy": "must", "tempo": "must"}},
+        }
+    ]
+    lib = [trk(i, bpm=140 + i * 3, tonic="F", e=(i * 23) % 100) for i in range(24)]
+    for m in flows.render(flow, lib, minutes=60, seed=2)[1:]:
+        if not m["blend"]["blocked"]:
+            assert abs(m["blend"]["steps"]["energy"]) <= 33
+            assert abs(m["blend"]["steps"]["tempo"]) <= 8
+
+
+def test_old_curves_read_as_leans_and_a_start():
+    old = {
+        "tempo": [[0, 172], [1, 145]],
+        "energy": [[0, 0.3], [0.33, 0.8], [0.8, 0.8], [1, 0.4]],
+        "colour": [{"from": 0, "to": 1, "colour": "dark"}],
+    }
+    new = flows.upgrade(old)
+    assert new["start"] == {"energy": 0.3, "tempo": 172}
+    assert [b["lean"] for b in new["energy"]] == ["lift", "hold", "ease"]
+    assert "tempo" not in new
+    assert new["settings"] == {"harmony": "ignore", "colour": "must"}
+    assert flows.upgrade(new) == new
 
 
 def test_fork_resolution():
+    # The generator takes the future it fills best: one whose genre Must nothing in the library meets loses.
+    techno = [{"from": 0, "to": 1, "genres": ["Techno"], "strict": "must"}]
+    dnb = [{"from": 0, "to": 1, "genres": ["Drum & Bass"], "strict": "must"}]
     fork = {
         "chunks": [
             {"id": "a", "share": 1, "next": ["b", "c"], "layers": {}},
-            {
-                "id": "b",
-                "share": 1,
-                "next": [],
-                "layers": {"tempo": [[0, 124], [1, 124]]},
-            },
-            {
-                "id": "c",
-                "share": 1,
-                "next": [],
-                "layers": {"tempo": [[0, 172], [1, 172]]},
-            },
+            {"id": "b", "share": 1, "next": [], "layers": {"genre": techno}},
+            {"id": "c", "share": 1, "next": [], "layers": {"genre": dnb}},
         ]
     }
     path, auto = flows.resolve(fork, {}, LIB, minutes=30, seed=1)
@@ -163,7 +231,8 @@ def test_read_a_hand_list_as_a_flow():
     ]
     flow = flows.read(tracks)
     layers = flow["chunks"][0]["layers"]
-    assert layers["tempo"][0] == [0, 170] and layers["tempo"][-1] == [1, 174]
+    assert layers["start"] == {"tempo": 170.0, "energy": 0.2}
+    assert layers["energy"] == [{"from": 0.0, "to": 1.0, "lean": "lift"}]
     assert layers["harmony"] == [{"at": round(2 / 3, 3), "kind": "up"}]
 
 
@@ -300,13 +369,13 @@ def test_a_condition_takes_the_fork_before_the_generator_but_not_before_a_choice
                 "id": "b",
                 "share": 1,
                 "next": [],
-                "layers": {"tempo": [[0, 124], [1, 124]]},
+                "layers": {"genre": [{"from": 0, "to": 1, "genres": ["Techno"]}]},
             },
             {
                 "id": "c",
                 "share": 1,
                 "next": [],
-                "layers": {"tempo": [[0, 172], [1, 172]]},
+                "layers": {"genre": [{"from": 0, "to": 1, "genres": ["Drum & Bass"]}]},
             },
         ]
     }
@@ -366,7 +435,7 @@ def test_conditions_are_validated(db):
         )
 
 
-def test_colour_blocks_keep_the_key_colour_and_relax_like_genre():
+def test_colour_blocks_keep_the_key_colour_and_never_stop_short():
     assert [
         flows.colour(trk(1, mode=m))
         for m in ("Lydian", "Dorian", "Phrygian", "Harmonic minor")
@@ -382,7 +451,7 @@ def test_colour_blocks_keep_the_key_colour_and_relax_like_genre():
     # A stretch keeps its colour; an unread key is not left out; outside the block anything goes.
     assert [t["id"] for t in flows.fits(layers, 0, 0.5, lib)] == ["1", "3"]
     assert len(flows.fits(layers, 0.5, 1, lib)) == 3
-    # Rendering never stops short: with no bright track left the colour relaxes.
+    # Rendering never stops short: with no bright track left a blocked one plays, and says so.
     mix = flows.render(
         [
             {
@@ -395,7 +464,7 @@ def test_colour_blocks_keep_the_key_colour_and_relax_like_genre():
         lib[1:2],
         minutes=5,
     )
-    assert mix and mix[0]["relaxed"] == ["colour"]
+    assert mix and mix[0]["blend"]["blocked"]
 
 
 def test_a_flow_keeps_its_length_in_minutes(db):

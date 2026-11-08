@@ -7,17 +7,17 @@ import type { FlowSlot, QueueState } from '../../../musicQueue'
 
 const run = (p: Promise<unknown>) => { p.catch(() => {}) }
 
-/** One word for what a row's join did, and what it gave up. */
+/** One word for what a row's join did, and whether it went past a Must. */
 export function SlotChip({ slot }: { slot: FlowSlot }) {
-  const relaxed = slot.relaxed.filter(r => r !== 'pin' && r !== 'frozen')
-  if (!slot.join && !relaxed.length) return null
+  const blocked = !!slot.blend?.blocked && !slot.pinned
+  if (!slot.join && !blocked) return null
   const good = slot.fit !== null && slot.fit >= 0.8
   const tone = slot.join === 'break' ? 'text-error' : good ? 'text-success' : 'text-base-content/70'
   const served = slot.event?.realised ? ' ✓' : ''
   return (
     <span className="relative flex shrink-0 items-center gap-1 text-[11px]" title={slot.fit !== null ? `fit ${slot.fit.toFixed(1)}` : undefined}>
       {slot.join && <span className={`rounded bg-white/7 px-1.5 py-px ${tone}`}>{KINDS[slot.join] ?? slot.join}{served}</span>}
-      {relaxed.map(r => <span key={r} className="rounded-full bg-error/15 px-1.5 py-px text-error">{r}</span>)}
+      {blocked && <span className="rounded-full bg-error/15 px-1.5 py-px text-error" title="Nothing left met every Must">past a Must</span>}
     </span>
   )
 }

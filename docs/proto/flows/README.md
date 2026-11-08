@@ -1,5 +1,7 @@
 # Flow lab
 
+> Frozen before SPEC-blend: this lab still scores against curves with hard bands and a relax ladder. The app now picks by Blend (`src/sestudio/music/blend.py`, `frontend/src/blend.ts`).
+
 Interactive prototype of docs/SPEC-music-flows.md: edit a flow, watch the mix it renders, play it with real audio.
 
 ```sh

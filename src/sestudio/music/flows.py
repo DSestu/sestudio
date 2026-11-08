@@ -1,16 +1,20 @@
-"""Flow → mix generator (SPEC-music-flows §4–§6), pure functions.
+"""Flow → mix generator (SPEC-music-flows §4–§6, SPEC-blend), pure functions.
 
 A flow is ``chunks``, each with a ``share`` of the length, ``next`` chunk ids (two
-or more = a fork) and ``layers``: ``tempo`` and ``energy`` as ``[[fraction,
-value], ...]`` curves (energy 0..1 on the library's scale), ``harmony`` as a list
-of events ``{"at": fraction, "kind": up|down|mode+|mode-|relative|break}`` (every
-other join wants a match; no ``harmony`` key = free), ``genre`` as blocks
+or more = a fork) and ``layers``: ``energy`` as leans ``{"from", "to", "lean":
+lift|hold|ease}``, ``start`` ``{"energy": 0..1, "tempo": bpm}`` (what the first track
+is near), ``settings`` (``must|prefer|ignore`` per layer, see :mod:`blend`),
+``harmony`` as a list of events ``{"at": fraction, "kind": up|down|mode+|mode-|relative|break}``
+(every other join wants a match; no ``harmony`` key = free), ``genre`` as blocks
 ``{"from", "to", "genres", "strict": must|prefer}``, ``colour`` as blocks
 ``{"from", "to", "colour"}``: the key's colour a stretch keeps (bright, warm, dark, exotic).
+Each track is picked for how well it blends with the one before (:func:`blend.blend`);
+older flows with ``tempo`` / ``energy`` curves are read through :func:`upgrade`.
 
 Tracks are the dicts of :func:`sestudio.music.store.get` (``id``, ``duration``,
-``bpm``, ``genre``, ``harmony.track``, ``energyScale.track``). The same rules
-live in ``docs/proto/flows/flowgen.js`` for the lab: keep them in step.
+``bpm``, ``genre``, ``harmony.track``, ``energyScale.track``). The scoring rules
+live in :mod:`sestudio.music.blend`, mirrored in ``frontend/src/blend.ts``; the lab
+in ``docs/proto/flows`` keeps the rules from before Blend.
 """
 
 from __future__ import annotations
@@ -18,15 +22,14 @@ from __future__ import annotations
 import random
 from typing import Any, Final
 
+from sestudio.music import blend as _blend
 from sestudio.music.modes import BRIGHTNESS, NAMES, SCALES
 
 BLEND_S: Final = 20.0  # shortcut: fixed overlap, the real plan() varies per pair
-TEMPO_BAND: Final = 3.0
-ENERGY_BAND: Final = 0.2  # one step of five
 SAFE_NOTES: Final = 6
-#: Relaxation order (§6.4): one layer alone, then cumulative; ``any`` makes the
-#: curves preferences so a mix never stops short. Harmony is never relaxed.
-LADDER: Final = ("tempo", "energy", "colour", "genre", "any")
+LEANS: Final = ("lift", "hold", "ease")
+#: An old energy curve stretch rising more than this (0..1 scale) is a Lift, falling more an Ease.
+SLOPE: Final = 0.1
 #: A key's colour from its mode's brightness; the harmonic-minor modes have none and are exotic.
 COLOURS: Final = ("bright", "warm", "dark", "exotic")
 #: How much the harmony fit weighs against tempo and energy closeness (1 each).
@@ -53,12 +56,12 @@ MODULATIONS: Final = (
     "lower",
     "break",
 )
-#: Scores within this of the best are a tie the seed decides.
-TIE: Final = 0.15
+#: Blend scores within this of the best are a tie the seed decides.
+TIE: Final = 0.03
 #: What a play may draw from (SPEC-flows-tab §2): ``{"kind", "value", "rule": only|lean}``.
 SOURCE_KINDS: Final = ("library", "artist", "album", "genre")
-#: What a Lean-on-it source adds to a slot score: as much as a genre block that prefers.
-LEAN: Final = 1.0
+#: What a Lean-on-it source adds to a slot's Blend score: about a genre match's share.
+LEAN: Final = 0.12
 
 Track = dict[str, Any]
 
@@ -165,15 +168,6 @@ def fit(kind: str | None, want: str = "match") -> float:
 # --- layers ----------------------------------------------------------------------
 
 
-def curve(points: list[list[float]], f: float) -> float:
-    if f <= points[0][0]:
-        return points[0][1]
-    for (x0, y0), (x1, y1) in zip(points, points[1:]):
-        if f <= x1:
-            return y0 + (y1 - y0) * (f - x0) / ((x1 - x0) or 1)
-    return points[-1][1]
-
-
 def block(blocks: list[dict[str, Any]] | None, f: float) -> dict[str, Any] | None:
     return next((b for b in blocks or [] if b["from"] <= f < b["to"]), None)
 
@@ -194,47 +188,88 @@ def energy(t: Track) -> float | None:
     return None if e is None else e / 100
 
 
+def _leans(points: list[list[float]]) -> list[dict[str, Any]]:
+    """An old energy curve as leans: each stretch by its slope, neighbours with the same lean merged."""
+    out: list[dict[str, Any]] = []
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        if x1 <= x0:
+            continue
+        lean = "lift" if y1 - y0 > SLOPE else "ease" if y0 - y1 > SLOPE else "hold"
+        if out and out[-1]["lean"] == lean:
+            out[-1]["to"] = x1
+        else:
+            out.append({"from": x0, "to": x1, "lean": lean})
+    return out
+
+
+def _is_curve(v: Any) -> bool:
+    return isinstance(v, list) and bool(v) and isinstance(v[0], list)
+
+
+def upgrade(layers: dict[str, Any]) -> dict[str, Any]:
+    """*layers* in the Blend shape; older curves become leans and a start (SPEC-blend §5). Idempotent."""
+    out = dict(layers or {})
+    start = dict(out.get("start") or {})
+    if _is_curve(out.get("energy")):
+        pts = out["energy"]
+        start.setdefault("energy", pts[0][1])
+        out["energy"] = _leans(pts)
+    if _is_curve(out.get("tempo")):
+        start.setdefault("tempo", out["tempo"][0][1])
+    out.pop("tempo", None)
+    if start:
+        out["start"] = start
+    settings = dict(out.get("settings") or {})
+    if "harmony" not in out:
+        settings.setdefault("harmony", "ignore")  # no harmony layer: free, as before
+    if out.get("colour"):
+        settings.setdefault("colour", "must")  # a colour block kept its colour strictly
+    g = next((b for b in out.get("genre") or [] if b.get("genres")), None)
+    if g:
+        settings.setdefault("genre", g.get("strict", "must"))
+    if settings:
+        out["settings"] = settings
+    return out
+
+
+def upgrade_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{**c, "layers": upgrade(c.get("layers") or {})} for c in chunks]
+
+
 def score(
     t: Track,
     prev: Track | None,
     layers: dict[str, Any],
     f: float,
-    relax: set[str],
     event: str | None,
-    pull: float,
-) -> float | None:
-    """The slot score of *t*, or None when it fails a must."""
-    s = 0.0
-    anything = "any" in relax
-    if layers.get("tempo"):
-        band = TEMPO_BAND * (8 / 3 if "tempo" in relax else 1)
-        d = abs((t.get("bpm") or 0) - curve(layers["tempo"], f))
-        if d > band and not anything:
-            return None
-        s += 1 - d / band
-    if layers.get("energy"):
-        band = ENERGY_BAND * (2 if "energy" in relax else 1)
-        e = energy(t)
-        d = abs((e if e is not None else 0.5) - curve(layers["energy"], f))
-        if d > band and not anything:
-            return None
-        s += 1 - d / band
-    if prev is not None and "harmony" in layers:
-        s += pull * fit(join(prev, t), event or "match")
+    pull: float = 0.0,
+) -> dict[str, Any]:
+    """The Blend of *t* after *prev* at *f* in a chunk (*layers* in the Blend shape).
+
+    The first track has no *prev*: it is scored against the chunk's ``start`` (energy, tempo).
+    *pull* at PULL["only"] or more makes harmony a Must.
+    """
+    settings = dict(layers.get("settings") or {})
+    if pull >= PULL["only"]:
+        settings.setdefault("harmony", "must")
+    lean = (block(layers.get("energy"), f) or {}).get("lean", "hold")
     k = block(layers.get("colour"), f)
-    if k and "colour" not in relax:
-        c = colour(t)
-        if c == k.get("colour"):
-            s += 1
-        elif c is not None:  # an unread key is no reason to leave a track out
-            return None
     g = block(layers.get("genre"), f)
-    if g and g.get("genres") and "genre" not in relax:
-        if t.get("genre") in g["genres"]:
-            s += 1
-        elif g.get("strict", "must") == "must":
-            return None
-    return s
+    if prev is None:
+        st = layers.get("start") or {}
+        prev = {"id": "", "bpm": st.get("tempo")}
+        if st.get("energy") is not None:
+            prev["energyScale"] = {"track": 100 * st["energy"]}
+        lean = "hold"
+    return _blend.blend(
+        prev,
+        t,
+        lean=lean,
+        settings=settings,
+        want=event or "match",
+        colour=(k or {}).get("colour"),
+        genres=(g or {}).get("genres") or None,
+    )
 
 
 # --- paths -------------------------------------------------------------------------
@@ -295,10 +330,10 @@ def resolve(
     At a fork: the listener's choice, else the first future whose condition holds
     (``when`` on the forking chunk, §5), else the future the generator fills best.
     """
-    by = {c["id"]: c for c in flow["chunks"]}
+    by = {c["id"]: c for c in upgrade_chunks(flow["chunks"])}
     out: list[dict[str, Any]] = []
     auto: dict[str, str] = {}
-    c: dict[str, Any] | None = flow["chunks"][0] if flow["chunks"] else None
+    c: dict[str, Any] | None = by[flow["chunks"][0]["id"]] if flow["chunks"] else None
     while c and c not in out:
         out.append(c)
         nxt = [n for n in c.get("next") or [] if n in by]
@@ -331,7 +366,7 @@ def resolve(
                 trial = out + [by[cid]] + _first_path(by, by[cid])
                 mix = render(trial, lib, **{**opts, "pins": {}})
                 return (
-                    sum(len(m["relaxed"]) for m in mix),
+                    sum(m["blend"]["blocked"] for m in mix),
                     -sum(m["score"] for m in mix),
                 )
 
@@ -350,14 +385,15 @@ def render(
     pull: float = PULL["strong"],
     lean: dict[str, float] | None = None,
 ) -> list[dict[str, Any]]:
-    """The mix: one entry per slot with the track, the join, the event served and what was relaxed.
+    """The mix: one entry per slot with the track, its Blend, the join and the event served.
 
     *lean*: a score bonus per track id (Lean-on-it sources). A song is never played twice,
-    even from two files.
+    even from two files. A track a Must blocks is only played when nothing else is left,
+    so a mix never stops short while the library has tracks.
     """
     pins = {int(k): v for k, v in (pins or {}).items()}
     lean = lean or {}
-    sp = spans(chunks)
+    sp = spans(upgrade_chunks(chunks))
     rng = random.Random(seed)
     by_id = {t["id"]: t for t in lib}
     used = set(pins.values())
@@ -382,34 +418,25 @@ def render(
         )
         ev = events[ev_i] if ev_i >= 0 else None
         kind = ev["kind"] if ev else None
-        if i in pins and pins[i] in by_id:
+        pinned = i in pins and pins[i] in by_id
+        if pinned:
             pick = by_id[pins[i]]
-            relaxed = ["pin"]
-            got = score(pick, prev, layers, local, set(LADDER), kind, pull) or 0.0
+            bl = score(pick, prev, layers, local, kind, pull)
+            got = bl["score"]
         else:
-            have = {k for k, v in layers.items() if v} | {"any"}
-            steps = [x for x in LADDER if x in have]
-            singles = [[x] for x in steps if x != "any"]
-            prefixes = [steps[: k + 1] for k in range(len(steps))]
-            pool: list[tuple[Track, float]] = []
-            relaxed = []
-            for rset in [[]] + singles + prefixes:
-                relaxed = rset
-                r = set(rset)
-                pool = [
-                    (x, sc + lean.get(x["id"], 0.0))
-                    for x in lib
-                    if x["id"] not in used
-                    and song(x) not in songs
-                    and (sc := score(x, prev, layers, local, r, kind, pull)) is not None
-                ]
-                if pool:
-                    break
-            if not pool:
+            scored = [
+                (x, bl, bl["score"] + lean.get(x["id"], 0.0))
+                for x in lib
+                if x["id"] not in used
+                and song(x) not in songs
+                and (bl := score(x, prev, layers, local, kind, pull))
+            ]
+            if not scored:
                 break  # library exhausted
-            pool.sort(key=lambda p: -p[1])
-            top = [p for p in pool if p[1] >= pool[0][1] - TIE]
-            pick, got = top[rng.randrange(len(top))]
+            pool = [p for p in scored if not p[1]["blocked"]] or scored
+            pool.sort(key=lambda p: -p[2])
+            top = [p for p in pool if p[2] >= pool[0][2] - TIE]
+            pick, bl, got = top[rng.randrange(len(top))]
             used.add(pick["id"])
             songs.add(song(pick))
         k = join(prev, pick) if prev else None
@@ -427,13 +454,12 @@ def render(
                 if prev and "harmony" in layers
                 else None,
                 "event": {**ev, "index": ev_i, "realised": realised} if ev else None,
-                "relaxed": relaxed,
-                "tempoT": round(curve(layers["tempo"], local), 1)
-                if layers.get("tempo")
-                else None,
-                "energyT": round(curve(layers["energy"], local), 2)
-                if layers.get("energy")
-                else None,
+                # The first track is scored against the chunk's start: no join, but blocked still says.
+                "blend": {
+                    key: bl[key] for key in ("score", "parts", "steps", "blocked")
+                },
+                "lean": (block(layers.get("energy"), local) or {}).get("lean", "hold"),
+                **({"pinned": True} if pinned else {}),
             }
         )
         t += max(60.0, (pick.get("duration") or 240) - BLEND_S)
@@ -443,12 +469,13 @@ def render(
 
 
 def fits(layers: dict[str, Any], a: float, b: float, lib: list[Track]) -> list[Track]:
-    """The tracks that meet every layer somewhere in [a, b) with nothing relaxed: what a stretch can draw on."""
+    """The tracks no Must keeps out somewhere in [a, b) (a colour or genre block): what a stretch can draw on."""
+    layers = upgrade(layers)
     probe = [a + (b - a) * x for x in (0.02, 0.5, 0.98)]
     return [
         t
         for t in lib
-        if any(score(t, None, layers, f, set(), None, 1.0) is not None for f in probe)
+        if any(not score(t, None, layers, f, None)["blocked"] for f in probe)
     ]
 
 
@@ -471,4 +498,6 @@ def read(tracks: list[Track]) -> dict[str, Any]:
         layers["tempo"] = tempo
     if len(en) >= 2:
         layers["energy"] = en
-    return {"chunks": [{"id": "all", "share": 1, "next": [], "layers": layers}]}
+    return {
+        "chunks": [{"id": "all", "share": 1, "next": [], "layers": upgrade(layers)}]
+    }
