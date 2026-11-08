@@ -2,8 +2,9 @@
 
 Each slot takes the unused track closest to the arcs at that point in the set.
 Genre is the strongest target, harmony (6 of 7 notes or more, see
-:mod:`sestudio.music.proximity`) bends only when nothing else is left, and
-energy and mood are targets. Inside one genre the tempo stays within
+:mod:`sestudio.music.proximity`) bends only when nothing else is left, mood is a
+target, and energy leans (SPEC-blend): the first track near ``start``, then each
+step from the track before scored as a Blend under the lean of that stretch. Inside one genre the tempo stays within
 ``TEMPO_TOL``; a genre change may jump tempo and is flagged by its join. The
 same seed gives the same set; another seed gives another valid one.
 """
@@ -13,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import Any, Final
 
-from sestudio.music import proximity
+from sestudio.music import blend, flows, proximity
 
 #: Cost of a track off the target genre, of a clash and of an unknown key.
 GENRE_MISS: Final = 6
@@ -26,21 +27,26 @@ MAX_TRACKS: Final = 60
 #: A slot's target is read this far ahead (seconds): the track starts then, plays through its middle.
 LOOKAHEAD: Final = 90
 
-#: Arcs as the wizard draws them: ``energy`` 0..1 and ``mood`` -3..3 are evenly spaced
-#: points over the set, ``genre`` is segments ``{"g", "x1"}`` ending at x1 (0..1).
+#: Arcs as the wizard draws them: ``start`` 0..1 is where the energy opens, ``energy`` is
+#: lean segments ``{"lean", "x1"}`` ending at x1 (0..1), ``mood`` -3..3 is evenly spaced
+#: points over the set, ``genre`` is segments ``{"g", "x1"}``. Older arcs with energy
+#: points are read through :func:`upgrade`.
 PRESETS: Final[dict[str, dict[str, Any]]] = {
     "Warm-up, peak, cool-down": {
-        "energy": [0.35, 0.5, 0.7, 0.9, 0.95, 0.7, 0.4],
+        "start": 0.35,
+        "energy": [{"lean": "lift", "x1": 0.67}, {"lean": "ease", "x1": 1}],
         "mood": [0, -1, -1, -2, -2, -1, 0],
         "genre": [{"g": "Drum & Bass", "x1": 1}],
     },
     "Slow burn": {
-        "energy": [0.3, 0.38, 0.48, 0.58, 0.7, 0.82, 0.92],
+        "start": 0.3,
+        "energy": [{"lean": "lift", "x1": 1}],
         "mood": [0, 0, -1, -1, -1, -2, -2],
         "genre": [{"g": "Drum & Bass", "x1": 1}],
     },
     "Dubstep interlude": {
-        "energy": [0.6, 0.75, 0.85, 0.9, 0.85, 0.8, 0.7],
+        "start": 0.6,
+        "energy": [{"lean": "lift", "x1": 0.5}, {"lean": "hold", "x1": 1}],
         "mood": [-1, -1, -2, -2, -2, -1, -1],
         "genre": [
             {"g": "Drum & Bass", "x1": 0.4},
@@ -49,7 +55,8 @@ PRESETS: Final[dict[str, dict[str, Any]]] = {
         ],
     },
     "Flat out": {
-        "energy": [0.9, 0.9, 0.92, 0.92, 0.92, 0.9, 0.9],
+        "start": 0.9,
+        "energy": [{"lean": "hold", "x1": 1}],
         "mood": [-2, -2, -2, -2, -2, -2, -2],
         "genre": [{"g": "Dubstep", "x1": 0.5}, {"g": "Drum & Bass", "x1": 1}],
     },
@@ -68,6 +75,26 @@ def _genre_at(segments: list[dict[str, Any]], x: float) -> str:
     return next((s["g"] for s in segments if x <= s["x1"]), segments[-1]["g"])
 
 
+def _lean_at(segments: list[dict[str, Any]], x: float) -> str:
+    return next((s["lean"] for s in segments if x <= s["x1"]), segments[-1]["lean"])
+
+
+def upgrade(arc: dict[str, Any]) -> dict[str, Any]:
+    """*arc* with a start and lean segments; older energy points read by their slopes (flows.SLOPE)."""
+    e = arc.get("energy") or [0.5]
+    if e and isinstance(e[0], dict):
+        return {**arc, "start": arc.get("start", 0.5)}
+    n = max(1, len(e) - 1)
+    leans = flows._leans([[i / n, v] for i, v in enumerate(e)]) or [
+        {"from": 0, "to": 1, "lean": "hold"}
+    ]
+    return {
+        **arc,
+        "start": e[0],
+        "energy": [{"lean": b["lean"], "x1": b["to"]} for b in leans],
+    }
+
+
 def _song(t: dict[str, Any]) -> tuple[Any, ...]:
     """What copies of one recording share; a track without a length is only itself."""
     return (t["duration"], t.get("bpm")) if t.get("duration") else (t["id"],)
@@ -84,7 +111,8 @@ def jitter(track_id: str, seed: int) -> float:
 def _score(
     t: dict[str, Any],
     prev: dict[str, Any] | None,
-    energy: float,
+    lean: str,
+    start: float,
     mood: float,
     genre: str,
     seed: int,
@@ -103,9 +131,17 @@ def _score(
             cost += CLASH
         else:
             cost += 7 - j["shared"]
-    e = (t.get("energyScale") or {}).get("track")
     b = ((t.get("harmony") or {}).get("track") or {}).get("brightness")
-    cost += 2 * abs(e / 100 - energy) if e is not None else 1
+    if prev:
+        ea, eb = blend.edge(prev, "outro"), blend.edge(t, "intro")
+        cost += (
+            2 * (1 - blend.energy_part(eb - ea, lean))
+            if ea is not None and eb is not None
+            else 1
+        )
+    else:
+        e = (t.get("energyScale") or {}).get("track")
+        cost += 2 * abs(e / 100 - start) if e is not None else 1
     cost += abs(b - mood) / 3 if b is not None else 0.5
     return cost + JITTER * jitter(t["id"], seed)
 
@@ -118,13 +154,14 @@ def build_arc(
     start: dict[str, Any] | None = None,
     skip: Collection[str] = (),
 ) -> dict[str, Any]:
-    """A set of about *length* seconds following *arc* (``energy``, ``mood``, ``genre``).
+    """A set of about *length* seconds following *arc* (``start``, ``energy`` leans, ``mood``, ``genre``).
 
     *start* is the track the set opens with (it counts toward the length and is
     not in *pool*'s ranking). Returns ``{"slots", "duration", "genreChanges",
     "clashes", "tempoJumps"}``; each slot is ``{"id", "join"}`` (the join from the
     previous slot, None for the first) so screens can draw and flag the set.
     """
+    arc = upgrade(arc)
     used = {*skip, *([start["id"]] if start else [])}
     out = [start] if start else []
     # One file in two libraries or folders has two ids but the same decoded length and tempo.
@@ -134,7 +171,8 @@ def build_arc(
     while elapsed < length and len(out) < MAX_TRACKS:
         x = min(1.0, (elapsed + LOOKAHEAD) / length)
         at = (
-            _lerp(arc["energy"], x),
+            _lean_at(arc["energy"], x),
+            arc["start"],
             _lerp(arc["mood"], x),
             _genre_at(arc["genre"], x),
         )

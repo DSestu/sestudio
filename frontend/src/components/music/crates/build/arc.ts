@@ -2,6 +2,8 @@ import { GENRES } from '../setBuilder'
 import type { Arc } from '../harmonyApi'
 
 type Segments = Arc['genre']
+type Seg = { x1: number }
+const LEAN_ORDER: Arc['energy'][number]['lean'][] = ['lift', 'hold', 'ease']
 
 /** Closest a genre change may get to its neighbours or the ends (share of the set). */
 export const MIN_BLOCK = 0.05
@@ -19,8 +21,8 @@ export function resample(points: number[], n: number): number[] {
   })
 }
 
-/** Move the change between block `k` and `k + 1` to `x`, never past its neighbours. */
-export function moveChange(segs: Segments, k: number, x: number): Segments {
+/** Move the change between block `k` and `k + 1` to `x`, never past its neighbours (genre or energy segments). */
+export function moveChange<S extends Seg>(segs: S[], k: number, x: number): S[] {
   const lo = (k ? segs[k - 1].x1 : 0) + MIN_BLOCK
   const hi = segs[k + 1].x1 - MIN_BLOCK
   return segs.map((s, i) => (i === k ? { ...s, x1: Math.max(lo, Math.min(hi, x)) } : s))
@@ -35,8 +37,19 @@ export function addChange(segs: Segments): Segments {
   return [...segs.slice(0, k), { g: segs[k].g, x1: mid }, { g: next, x1: segs[k].x1 }, ...segs.slice(k + 1)]
 }
 
+/** Split the widest energy stretch in two; the new right half takes the next lean (Lift, Hold, Ease). */
+export function addLeanChange(segs: Arc['energy']): Arc['energy'] {
+  const start = (i: number) => (i ? segs[i - 1].x1 : 0)
+  const k = segs.reduce((best, s, i) => (s.x1 - start(i) > segs[best].x1 - start(best) ? i : best), 0)
+  const mid = (start(k) + segs[k].x1) / 2
+  const next = LEAN_ORDER[(LEAN_ORDER.indexOf(segs[k].lean) + 1) % LEAN_ORDER.length]
+  return [...segs.slice(0, k), { lean: segs[k].lean, x1: mid }, { lean: next, x1: segs[k].x1 }, ...segs.slice(k + 1)]
+}
+
+export const setBlockLean = (segs: Arc['energy'], k: number, lean: Arc['energy'][number]['lean']): Arc['energy'] => segs.map((s, i) => (i === k ? { ...s, lean } : s))
+
 /** Drop block `k`: its neighbour grows over it (the last block's takes it from the one before). */
-export function removeBlock(segs: Segments, k: number): Segments {
+export function removeBlock<S extends Seg>(segs: S[], k: number): S[] {
   if (segs.length < 2) return segs
   if (k === segs.length - 1) return [...segs.slice(0, k - 1), { ...segs[k - 1], x1: 1 }]
   return segs.filter((_, i) => i !== k)

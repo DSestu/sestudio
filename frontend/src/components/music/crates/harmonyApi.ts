@@ -1,12 +1,15 @@
+import type { Lean } from '../../../blend'
 import type { Filters, Join } from './proximity'
 
 // The server's proximity and set-builder endpoints (src/sestudio/music/proximity.py,
 // builder.py). Screens that already hold the tracks' analyses can rank locally with
 // proximity.ts instead; these rank over the whole library (or a `pool` of ids).
 
-/** Mood arc -3..3, energy arc 0..1: evenly spaced points over the set; genre: segments ending at x1 (0..1). */
+/** Energy: where it opens (0..1), then lean segments ending at x1 (SPEC-blend); mood -3..3: evenly spaced points
+ *  over the set; genre: segments ending at x1 (0..1). */
 export interface Arc {
-  energy: number[]
+  start: number
+  energy: { lean: Lean; x1: number }[]
   mood: number[]
   genre: { g: string; x1: number }[]
 }
