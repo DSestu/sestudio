@@ -21,6 +21,9 @@ export default function AddSource({ onAdd, onClose, start = 'genre' }: {
   const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => { load().then(setLists, () => setFailed(true)) }, [])
+  // Focus goes back to whatever opened this when it closes.
+  const [back] = useState(() => document.activeElement as HTMLElement | null)
+  useEffect(() => () => back?.focus?.(), [back])
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     const down = (e: PointerEvent) => { const t = e.target as Element
