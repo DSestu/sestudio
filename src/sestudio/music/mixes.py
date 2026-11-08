@@ -13,7 +13,7 @@ import uuid
 from typing import Any
 
 from sestudio import library
-from sestudio.music import flows
+from sestudio.music import blend, flows
 
 
 class Invalid(ValueError):
@@ -30,8 +30,8 @@ PRESETS: tuple[dict[str, Any], ...] = (
                 "share": 1,
                 "next": [],
                 "layers": {
-                    "tempo": [[0, 170], [1, 172]],
-                    "energy": [[0, 0.2], [1, 0.5]],
+                    "start": {"energy": 0.2, "tempo": 170},
+                    "energy": [{"from": 0, "to": 1, "lean": "lift"}],
                     "harmony": [],
                 },
             }
@@ -45,8 +45,8 @@ PRESETS: tuple[dict[str, Any], ...] = (
                 "share": 1,
                 "next": [],
                 "layers": {
-                    "tempo": [[0, 172], [1, 175]],
-                    "energy": [[0, 0.65], [1, 0.95]],
+                    "start": {"energy": 0.65, "tempo": 172},
+                    "energy": [{"from": 0, "to": 1, "lean": "lift"}],
                     "harmony": [{"at": 0.5, "kind": "up"}],
                 },
             }
@@ -60,8 +60,8 @@ PRESETS: tuple[dict[str, Any], ...] = (
                 "share": 1,
                 "next": [],
                 "layers": {
-                    "tempo": [[0, 172], [1, 172]],
-                    "energy": [[0, 0.55], [1, 0.55]],
+                    "start": {"energy": 0.55, "tempo": 172},
+                    "energy": [{"from": 0, "to": 1, "lean": "hold"}],
                     "harmony": [],
                 },
             }
@@ -75,7 +75,8 @@ PRESETS: tuple[dict[str, Any], ...] = (
                 "share": 1,
                 "next": [],
                 "layers": {
-                    "energy": [[0, 0.35], [1, 0.45]],
+                    "start": {"energy": 0.35},
+                    "energy": [{"from": 0, "to": 1, "lean": "hold"}],
                     "harmony": [{"at": 0.5, "kind": "mode-"}],
                 },
             }
@@ -89,8 +90,8 @@ PRESETS: tuple[dict[str, Any], ...] = (
                 "share": 1,
                 "next": [],
                 "layers": {
-                    "tempo": [[0, 172], [1, 145]],
-                    "energy": [[0, 0.6], [1, 0.15]],
+                    "start": {"energy": 0.6, "tempo": 172},
+                    "energy": [{"from": 0, "to": 1, "lean": "ease"}],
                     "harmony": [
                         {"at": 0, "kind": "break"},
                         {"at": 0.5, "kind": "relative"},
@@ -103,6 +104,13 @@ PRESETS: tuple[dict[str, Any], ...] = (
 LENGTHS = {"30": 30, "60": 60, "120": 120, "endless": None}
 #: What a fork may wait for (§5): skips in the last tracks, minutes into the mix, a clock time.
 CONDITIONS = ("skips", "session", "time")
+SETTINGS = ("must", "prefer", "ignore")
+
+
+def _leans_ok(v: Any) -> bool:
+    return isinstance(v, list) and all(
+        isinstance(b, dict) and b.get("lean") in flows.LEANS for b in v
+    )
 
 
 def _new_id() -> str:
@@ -144,14 +152,19 @@ def clean_flow(raw: dict[str, Any]) -> dict[str, Any]:
             raise Invalid(f"chunk {cid}: layers must be an object")
         for k in ("tempo", "energy"):
             pts = layers.get(k)
-            if pts is not None and not (
+            if pts is None or (k == "energy" and _leans_ok(pts)):
+                continue
+            if not (  # an older curve: flows.upgrade reads it
                 isinstance(pts, list)
                 and len(pts) >= 2
                 and all(isinstance(p, list) and len(p) == 2 for p in pts)
             ):
                 raise Invalid(
-                    f"chunk {cid}: {k} must be two or more [fraction, value] points"
+                    f"chunk {cid}: {k} must be leans or two or more [fraction, value] points"
                 )
+        for k, v in (layers.get("settings") or {}).items():
+            if k not in blend.LAYERS or v not in SETTINGS:
+                raise Invalid(f"chunk {cid}: unknown setting {k}={v!r}")
         for b in layers.get("colour") or []:
             if b.get("colour") not in flows.COLOURS:
                 raise Invalid(f"chunk {cid}: unknown colour {b.get('colour')!r}")
@@ -392,7 +405,7 @@ def render_mix(
             "auto": {},
             "minutes": mix.get("minutes"),
             "frozen": True,
-            "mix": [{"track_id": t, "relaxed": ["frozen"]} for t in mix["frozen"]],
+            "mix": [{"track_id": t, "frozen": True} for t in mix["frozen"]],
         }
     flow = flow_get(mix["flow"])
     return render_flow(

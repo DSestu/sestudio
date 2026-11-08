@@ -94,7 +94,7 @@ def _pool() -> list[dict[str, Any]]:
     ]
 
 
-FLOW_FIELDS = ("chunk", "join", "fit", "event", "relaxed")
+FLOW_FIELDS = ("chunk", "join", "fit", "event", "blend", "lean", "pinned")
 
 
 def _items(

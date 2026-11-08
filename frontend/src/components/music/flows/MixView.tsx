@@ -8,7 +8,7 @@ import { useSummaries } from '../../../musicMeta'
 
 const run = (p: Promise<unknown>) => { p.catch(() => {}) }
 
-interface Slot { track_id: string; chunk?: string; join?: string | null; relaxed: string[] }
+interface Slot { track_id: string; chunk?: string; join?: string | null; blend?: { blocked: boolean } | null; pinned?: boolean; frozen?: boolean }
 
 async function call(path: string, method = 'POST', body?: unknown) {
   const res = await fetch(`/api/music/mixes/${path}`, {
@@ -86,7 +86,7 @@ export default function MixView({ mixId, byId, onEditFlow }: { mixId: string; by
           const t = byId.get(s.track_id)
           const sum = get(s.track_id)
           const pin = pinned(i)
-          const relaxed = s.relaxed.filter(r => r !== 'pin' && r !== 'frozen')
+          const blocked = !!s.blend?.blocked && !s.pinned
           return (
             <li
               key={`${s.track_id}${i}`}
@@ -104,7 +104,7 @@ export default function MixView({ mixId, byId, onEditFlow }: { mixId: string; by
                 </span>
               </span>
               {s.join && <span className={`rounded bg-white/7 px-1.5 text-[11px] ${s.join === 'break' ? 'text-error' : 'text-base-content/75'}`}>{KINDS[s.join] ?? s.join}</span>}
-              {relaxed.map(r => <span key={r} className="rounded-full bg-error/15 px-1.5 text-[11px] text-error">{r}</span>)}
+              {blocked && <span className="rounded-full bg-error/15 px-1.5 text-[11px] text-error" title="Nothing left met every Must">past a Must</span>}
               {!frozen && (
                 <button onClick={() => togglePin(i)} aria-pressed={pin} className={`btn btn-ghost btn-xs ${pin ? 'text-primary' : 'text-base-content/60'}`}>
                   {pin ? 'Unpin' : 'Pin'}

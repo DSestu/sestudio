@@ -76,6 +76,8 @@ def test_playing_a_flow_fills_the_queue_with_its_joins(client):
         "down",
         "mode+",
         "mode-",
+        "lift",
+        "lower",
         "break",
     )
 
