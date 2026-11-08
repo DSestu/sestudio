@@ -26,7 +26,7 @@ function JoinText({ j, label }: { j: Join; label: string }) {
 }
 
 const where = (gap: number, n: number, titleOf: (i: number) => string) =>
-  gap === 0 ? `At the start, before ${titleOf(0)}` : gap === n ? `At the end, after ${titleOf(n - 1)}` : `Between ${gap} ${titleOf(gap - 1)} and ${gap + 1} ${titleOf(gap)}`
+  n === 0 ? 'As the first track' : gap === 0 ? `At the start, before ${titleOf(0)}` : gap === n ? `At the end, after ${titleOf(n - 1)}` : `Between ${gap} ${titleOf(gap - 1)} and ${gap + 1} ${titleOf(gap)}`
 
 /** What a hovered, picked or tapped track would do in the playlist. */
 export function WhereItFits({ track, flat, titleOf, onPut }: { track: MusicTrack; flat: SetTrack[]; titleOf: (i: number) => string; onPut: (gap: number) => void }) {
