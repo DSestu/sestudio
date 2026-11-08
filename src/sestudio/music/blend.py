@@ -54,6 +54,17 @@ def _near(step: float, best: float, spread: float) -> float:
     return math.exp(-(((step - best) / spread) ** 2))
 
 
+#: An energy step "holds" while the Hold part stays this high (about 8 points either way).
+HOLD_PART: Final = 0.75
+
+
+def energy_lean(delta: float) -> str:
+    """What an energy step does, from the Blend energy part: ``hold`` while Hold scores HOLD_PART or more, else ``lift`` or ``ease``."""
+    if _near(delta, LEAN["hold"]["energy"], SPREAD["energy"]) >= HOLD_PART:
+        return "hold"
+    return "lift" if delta > 0 else "ease"
+
+
 def blend(
     a: Track,
     b: Track,
@@ -62,12 +73,14 @@ def blend(
     want: str = "match",
     colour: str | None = None,
     genres: list[str] | None = None,
+    harmony: float | None = None,
 ) -> dict[str, Any]:
     """How well *b* follows *a*: ``score`` 0..1, ``parts`` per layer, ``steps`` (energy, tempo), ``join``, ``blocked``.
 
     *want*: the harmony event this join should serve (``match`` when none). *colour* and
     *genres*: what a flow's colour or genre block asks for here; without them a change
-    from *a* scores lower and a match scores full.
+    from *a* scores lower and a match scores full. *harmony*: the harmony part when the
+    caller reads joins its own way (proximity, with its Camelot fallback).
     """
     cfg = {k: (settings or {}).get(k, "prefer") for k in LAYERS}
     best = LEAN.get(lean, LEAN["hold"])
@@ -87,7 +100,7 @@ def blend(
         blocked |= cfg["tempo"] == "must" and abs(dt) > LIMITS["tempo"]
 
     kind = flows.join(a, b)
-    parts["harmony"] = flows.fit(kind, want)
+    parts["harmony"] = flows.fit(kind, want) if harmony is None else harmony
 
     ca, cb = flows.colour(a), flows.colour(b)
     if colour:

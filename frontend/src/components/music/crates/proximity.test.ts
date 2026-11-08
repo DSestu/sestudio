@@ -55,10 +55,12 @@ describe('fitsAfter, bridges, bridgePath', () => {
   ]
   const ids = (f = {}) => fitsAfter(a, pool, f).map(r => r.id)
   it('ranks and filters like the server', () => {
-    expect(ids()).toEqual(['same', 'dub', 'next'])
+    // Blend ranks: a next-door key at the same tempo and energy before the same key 34 BPM and 40 points away.
+    expect(ids()).toEqual(['same', 'next', 'dub'])
     expect(ids({ harmony: 'any' })).toContain('clash')
     expect(ids({ genre: 'Dubstep' })).toEqual(['dub'])
-    expect(ids({ energy: 'lift' })).toEqual(['dub'])
+    // An energy lean ranks, it never leaves a track out.
+    expect(new Set(ids({ energy: 'lift' }))).toEqual(new Set(ids()))
   })
   it('bridges and chains', () => {
     const x = trk('x', 'A', 'Aeolian', 174, 'Drum & Bass', [10, 10, 10])

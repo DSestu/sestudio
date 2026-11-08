@@ -1,3 +1,4 @@
+import { blend } from './blend'
 import type { Reading } from './components/music/crates/proximity'
 import type { Flow } from './musicFlows'
 
@@ -42,16 +43,17 @@ export function fit(kind: string | null, want = 'match'): number {
 
 export interface Ranked { id: string; join: string | null; fit: number; score: number; tempo: number | null; energy: number | null }
 
-/** Every candidate, best first: pull × fit, plus closeness in tempo (±8 BPM) and energy (±0.4). */
+const asBlend = (t: FitTrack) => ({ id: t.id, bpm: t.bpm, energyScale: t.energy === undefined ? undefined : { track: t.energy * 100 }, harmony: { track: t.reading } })
+
+/** Every candidate, best first, by Blend with the wanted join; the Only pull makes harmony a Must (as flows.score does). */
 export function rankByPull(anchor: FitTrack, pool: FitTrack[], want: string, pull: number): Ranked[] {
+  const a = asBlend(anchor)
   return pool
     .map(t => {
-      const join = joinKind(anchor.reading, t.reading)
-      const f = fit(join, want)
+      const b = blend(a, asBlend(t), { want, settings: { harmony: pull >= PULL.only ? 'must' : 'prefer' } })
       const tempo = anchor.bpm && t.bpm ? t.bpm - anchor.bpm : null
       const energy = anchor.energy !== undefined && t.energy !== undefined ? t.energy - anchor.energy : null
-      const score = pull * f + (tempo === null ? 0.5 : 1 - Math.min(2, Math.abs(tempo) / 8)) + (energy === null ? 0.5 : 1 - Math.min(2, Math.abs(energy) / 0.4))
-      return { id: t.id, join, fit: f, score, tempo, energy }
+      return { id: t.id, join: b.join, fit: fit(b.join, want), score: b.score, tempo, energy }
     })
     .sort((a, b) => b.score - a.score)
 }

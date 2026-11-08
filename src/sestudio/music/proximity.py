@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import Any, Final
 
+from sestudio.music import blend as _blend
 from sestudio.music.modes import NAMES
 
 #: Move kinds by id, with the label screens show.
@@ -28,8 +29,19 @@ KINDS: Final = {
 SAFE_NOTES: Final = 6
 #: Largest tempo change inside one genre, as a share of A's tempo.
 TEMPO_TOL: Final = 0.06
-#: Energy points (0..100) within which an energy step "holds".
-ENERGY_HOLD: Final = 8
+#: An energy step's word, by the lean it serves best (blend.energy_lean).
+STEP_WORD: Final = {"lift": "lifts", "hold": "holds", "ease": "eases off"}
+#: Each move kind's harmony part in a Blend: a transposition after every shared-notes move, ahead of a clash.
+HARMONY_PART: Final = {
+    "same-key": 1.0,
+    "pivot": 0.8,
+    "modal-shift": 0.6,
+    "next-door": 0.6,
+    "transposed": 0.5,
+    "clash": 0.0,
+}
+#: Blend 0..1 to a cost on the old scale (0 best, about 20 for a clash), which the gap finders add up.
+COST_SCALE: Final = 20.0
 #: Candidates tried at each step of a path; a search over the whole library
 #: would be quadratic. shortcut: raise it if a bridge is missed in a big library.
 BEAM: Final = 30
@@ -115,8 +127,8 @@ def _edge(t: Track, which: str) -> float | None:
     return s.get(which, s.get("track"))
 
 
-def join(a: Track, b: Track) -> Join:
-    """Everything worth saying about the move from *a* to *b* (unknown facts are None)."""
+def join(a: Track, b: Track, lean: str = "hold") -> Join:
+    """Everything worth saying about the move from *a* to *b* (unknown facts are None), with its Blend (SPEC-blend)."""
     shared, kind = harmony(a, b)
     ba = ((a.get("harmony") or {}).get("track") or {}).get("brightness")
     bb = ((b.get("harmony") or {}).get("track") or {}).get("brightness")
@@ -131,15 +143,7 @@ def join(a: Track, b: Track) -> Join:
     )
     ea, eb = _edge(a, "outro"), _edge(b, "intro")
     delta = None if ea is None or eb is None else eb - ea
-    step = (
-        None
-        if delta is None
-        else "lifts"
-        if delta > ENERGY_HOLD
-        else "eases off"
-        if delta < -ENERGY_HOLD
-        else "holds"
-    )
+    step = None if delta is None else STEP_WORD[_blend.energy_lean(delta)]
     ga, gb = (a.get("genre") or "").lower(), (b.get("genre") or "").lower()
     pa, pb = a.get("bpm"), b.get("bpm")
     return {
@@ -153,6 +157,9 @@ def join(a: Track, b: Track) -> Join:
         "genreChange": bool(ga and gb and ga != gb),
         "bpmDelta": round(pb - pa, 1) if pa and pb else None,
         "tempoJump": bool(pa and pb and abs(pb - pa) > pa * TEMPO_TOL),
+        "blend": _blend.blend(
+            a, b, lean=lean, harmony=HARMONY_PART.get(kind or "", 0.4)
+        )["score"],
     }
 
 
@@ -162,20 +169,8 @@ def tempo_ok(j: Join) -> bool:
 
 
 def cost(j: Join) -> float:
-    """Lower is a better follow-up: notes first, then the tempo gap and the energy step."""
-    # A transposition is a last resort: after every shared-notes move, just ahead of a clash.
-    notes = (
-        1.75
-        if j["kind"] == "transposed"
-        else 7 - j["shared"]
-        if j["shared"] is not None
-        else 4
-    )
-    return (
-        notes * 3
-        + min(abs(j["bpmDelta"] or 0) / 10, 2)
-        + abs(j["energy"]["delta"] or 0) / 50
-    )
+    """Lower is a better follow-up: how far from blending well (SPEC-blend), on a 0..20 scale."""
+    return (1 - j["blend"]) * COST_SCALE
 
 
 def _passes(j: Join, t: Track, f: dict[str, Any]) -> bool:
@@ -188,12 +183,6 @@ def _passes(j: Join, t: Track, f: dict[str, Any]) -> bool:
         "down": "darker",
         "same": "same",
     }[m]:
-        return False
-    if (e := f.get("energy")) and j["energy"]["step"] != {
-        "lift": "lifts",
-        "hold": "holds",
-        "ease": "eases off",
-    }[e]:
         return False
     g = (f.get("genre") or "any").lower()
     return (
@@ -213,15 +202,16 @@ def fits_after(
     """Tracks of *pool* that follow *track*, best first, each as ``{"id", "join"}``.
 
     Filters: ``harmony`` (``safe`` default, or ``any``), ``tempo`` (``near`` default,
-    or ``any``), ``mood`` (``up``/``down``/``same``), ``energy`` (``lift``/``hold``/
-    ``ease``), ``genre`` (``any`` default, ``same``, or a genre name).
+    or ``any``), ``mood`` (``up``/``down``/``same``), ``genre`` (``any`` default, ``same``,
+    or a genre name). ``energy`` (``lift``/``hold``/``ease``) is a lean: it ranks, never leaves out.
     """
     f = filters or {}
+    lean = f.get("energy") or "hold"
     out = []
     for t in pool:
         if t["id"] == track["id"] or t["id"] in exclude:
             continue
-        j = join(track, t)
+        j = join(track, t, lean)
         if _passes(j, t, f):
             out.append((cost(j), t["id"], j))
     out.sort(key=lambda r: r[:2])

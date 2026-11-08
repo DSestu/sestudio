@@ -1,5 +1,7 @@
-// How well one track follows another (harmony master plan E0.5). The same rules,
-// thresholds and move names as src/sestudio/music/proximity.py: keep both in step.
+import { blend, energyLean, type Lean } from '../../../blend'
+
+// How well one track follows another (harmony master plan E0.5), ranked by Blend (SPEC-blend). The same
+// rules, thresholds and move names as src/sestudio/music/proximity.py: keep both in step.
 
 /** One reading of a track's scale (the analysis' `harmony.track`). */
 export interface Reading {
@@ -46,8 +48,12 @@ export const joinColor = (j: { kind: Kind | null }) =>
 export const SAFE_NOTES = 6
 /** Largest tempo change inside one genre, as a share of A's tempo. */
 export const TEMPO_TOL = 0.06
-/** Energy points (0..100) within which an energy step "holds". */
-export const ENERGY_HOLD = 8
+/** An energy step's word, by the lean it serves best. */
+const STEP_WORD = { lift: 'lifts', hold: 'holds', ease: 'eases off' } as const
+/** Each move kind's harmony part in a Blend: a transposition after every shared-notes move, ahead of a clash. */
+const HARMONY_PART: Record<Kind, number> = { 'same-key': 1, pivot: 0.8, 'modal-shift': 0.6, 'next-door': 0.6, transposed: 0.5, clash: 0 }
+/** Blend 0..1 to a cost on the old scale (0 best, about 20 for a clash), which the gap finders add up. */
+export const COST_SCALE = 20
 /** Candidates tried at each step of a path. */
 export const BEAM = 30
 
@@ -63,6 +69,8 @@ export interface Join {
   genreChange: boolean
   bpmDelta: number | null
   tempoJump: boolean
+  /** How well b follows a overall, 0..1 (SPEC-blend). */
+  blend: number
 }
 
 const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -128,8 +136,8 @@ export function harmonyOf(a: ProxTrack, b: ProxTrack): { shared: number | null; 
 
 const edge = (t: ProxTrack, which: 'intro' | 'outro' | 'track') => t.energyScale?.[which] ?? t.energyScale?.track ?? null
 
-/** Everything worth saying about the move from a to b (unknown facts are null). */
-export function join(a: ProxTrack, b: ProxTrack): Join {
+/** Everything worth saying about the move from a to b (unknown facts are null), with its Blend. */
+export function join(a: ProxTrack, b: ProxTrack, lean: Lean = 'hold'): Join {
   const { shared, kind } = harmonyOf(a, b)
   const ba = reading(a)?.brightness ?? null
   const bb = reading(b)?.brightness ?? null
@@ -145,10 +153,11 @@ export function join(a: ProxTrack, b: ProxTrack): Join {
     safe: kind === 'transposed' || (shared !== null && shared >= SAFE_NOTES),
     semitones: kind === 'transposed' ? transposition(a, b) : null,
     mood: ba === null || bb === null ? null : bb > ba ? 'brighter' : bb < ba ? 'darker' : 'same',
-    energy: { step: delta === null ? null : delta > ENERGY_HOLD ? 'lifts' : delta < -ENERGY_HOLD ? 'eases off' : 'holds', delta },
+    energy: { step: delta === null ? null : STEP_WORD[energyLean(delta)], delta },
     genreChange: !!(ga && gb && ga !== gb),
     bpmDelta: a.bpm && b.bpm ? Math.round((b.bpm - a.bpm) * 10) / 10 : null,
     tempoJump: !!(a.bpm && b.bpm && Math.abs(b.bpm - a.bpm) > a.bpm * TEMPO_TOL),
+    blend: blend(a, b, { lean, harmony: kind ? HARMONY_PART[kind] : 0.4 }).score,
   }
 }
 
@@ -158,28 +167,25 @@ export const tempoOk = (j: Join) => !j.tempoJump || j.genreChange
 /** "Up 2", "Down 1": a transposition in words. */
 export const stepLabel = (n: number) => `${n > 0 ? 'Up' : 'Down'} ${Math.abs(n)}`
 
-/** Lower is a better follow-up: notes first (a transposition is a last resort: after every shared-notes move, just ahead
- *  of a clash), then the tempo gap and the energy step. */
-export const cost = (j: Join) =>
-  (j.kind === 'transposed' ? 1.75 : j.shared === null ? 4 : 7 - j.shared) * 3 + Math.min(Math.abs(j.bpmDelta ?? 0) / 10, 2) + Math.abs(j.energy.delta ?? 0) / 50
+/** Lower is a better follow-up: how far from blending well, on a 0..20 scale. */
+export const cost = (j: Join) => (1 - j.blend) * COST_SCALE
 
 export interface Filters {
   harmony?: 'safe' | 'any'
   tempo?: 'near' | 'any'
   mood?: 'up' | 'down' | 'same'
+  /** A lean: it ranks, never leaves a track out. */
   energy?: 'lift' | 'hold' | 'ease'
   /** 'any', 'same' or a genre name. */
   genre?: string
 }
 
 const MOOD = { up: 'brighter', down: 'darker', same: 'same' } as const
-const STEP = { lift: 'lifts', hold: 'holds', ease: 'eases off' } as const
 
 function passes(j: Join, t: ProxTrack, f: Filters) {
   if ((f.harmony ?? 'safe') === 'safe' && !j.safe) return false
   if ((f.tempo ?? 'near') === 'near' && !tempoOk(j)) return false
   if (f.mood && j.mood !== MOOD[f.mood]) return false
-  if (f.energy && j.energy.step !== STEP[f.energy]) return false
   const g = (f.genre ?? 'any').toLowerCase()
   return g === 'any' || (g === 'same' && !j.genreChange) || g === (t.genre ?? '').toLowerCase()
 }
@@ -196,7 +202,7 @@ export function fitsAfter(track: ProxTrack, pool: ProxTrack[], filters: Filters 
   const out: { k: (number | string)[]; id: string; join: Join }[] = []
   for (const t of pool) {
     if (t.id === track.id || skip.has(t.id)) continue
-    const j = join(track, t)
+    const j = join(track, t, filters.energy ?? 'hold')
     if (passes(j, t, filters)) out.push({ k: [cost(j), t.id], id: t.id, join: j })
   }
   return out.sort(byKey).slice(0, limit).map(({ id, join: j }) => ({ id, join: j }))

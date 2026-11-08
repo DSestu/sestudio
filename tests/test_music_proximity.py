@@ -50,12 +50,12 @@ def test_transposition_is_a_good_join():
     # 5 and 7 semitones share 6 notes: still next door; another mode is no transposition
     assert proximity.join(a, trk("b", "D", "Aeolian"))["kind"] == "next-door"
     assert proximity.join(a, trk("b", "A#", "Ionian"))["kind"] == "clash"
-    # a last resort: after a shared-notes move, before a clash
+    # a good join: as good as a fifth when a key match is wanted, well ahead of a clash
     cost = [
         proximity.cost(proximity.join(a, trk("b", k, m)))
         for k, m in (("D", "Aeolian"), ("A#", "Aeolian"), ("C#", "Ionian"))
     ]
-    assert cost == sorted(cost) and len(set(cost)) == 3
+    assert cost[0] <= cost[1] < cost[2]
 
 
 def test_camelot_fallback_without_harmony():
@@ -109,11 +109,13 @@ def test_fits_after_ranks_and_filters():
     def ids(f=None):
         return [r["id"] for r in proximity.fits_after(a, pool, f)]
 
-    assert ids() == ["same", "dub", "next"]
+    # Blend ranks: a next-door key at the same tempo and energy before the same key 34 BPM and 40 points away.
+    assert ids() == ["same", "next", "dub"]
     assert "clash" in ids({"harmony": "any"}) and "fast" in ids({"tempo": "any"})
     assert ids({"genre": "Dubstep"}) == ["dub"]
-    assert ids({"genre": "same", "energy": "lift"}) == []
-    assert ids({"energy": "lift"}) == ["dub"]
+    # An energy lean ranks, it never leaves a track out.
+    assert ids({"genre": "same", "energy": "lift"}) == ["same", "next"]
+    assert set(ids({"energy": "lift"})) == set(ids())
 
 
 def test_bridges_and_path():

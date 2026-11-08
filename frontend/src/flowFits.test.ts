@@ -48,10 +48,8 @@ describe('rankByPull', () => {
   it('looks for the wanted modulation', () => {
     expect(rankByPull(anchor, pool, 'up', 2)[0].id).toBe('up-close')
   })
-  it('a light pull lets tempo win over the key', () => {
-    const light = rankByPull(anchor, pool, 'match', 1).map(x => x.id)
+  it('the Only pull makes harmony a Must: the key wins over tempo', () => {
     const only = rankByPull(anchor, pool, 'match', 6).map(x => x.id)
-    expect(light.indexOf('break-close')).toBeLessThan(light.indexOf('match-far-tempo'))
     expect(only.indexOf('match-far-tempo')).toBeLessThan(only.indexOf('break-close'))
   })
 })
