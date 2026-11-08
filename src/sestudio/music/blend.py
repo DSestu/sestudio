@@ -20,7 +20,7 @@ from sestudio.music import flows
 LAYERS: Final = ("energy", "tempo", "harmony", "colour", "genre")
 #: How much each layer counts at Prefer.
 WEIGHTS: Final = {
-    "energy": 1.0,
+    "energy": 1.5,
     "tempo": 1.0,
     "harmony": 1.5,
     "colour": 0.5,
@@ -31,12 +31,12 @@ MUST: Final = 3.0
 #: A step over this (energy points, BPM) is a big jump: what Must blocks.
 LIMITS: Final = {"energy": 33.0, "tempo": 8.0}
 #: How fast a part falls off with the distance from the best step: at this distance it is 0.37.
-SPREAD: Final = {"energy": 15.0, "tempo": 5.0}
+SPREAD: Final = {"energy": 12.0, "tempo": 5.0}
 #: The step each lean scores best on (energy points, BPM).
 LEAN: Final = {
-    "lift": {"energy": 6.0, "tempo": 1.0},
+    "lift": {"energy": 10.0, "tempo": 1.0},
     "hold": {"energy": 0.0, "tempo": 0.0},
-    "ease": {"energy": -6.0, "tempo": -1.0},
+    "ease": {"energy": -10.0, "tempo": -1.0},
 }
 #: Part of a genre or colour change when nothing asks for one.
 CHANGE: Final = 0.4
@@ -60,7 +60,7 @@ def energy_part(delta: float, lean: str = "hold") -> float:
 
 
 #: An energy step "holds" while the Hold part stays this high (about 8 points either way).
-HOLD_PART: Final = 0.75
+HOLD_PART: Final = 0.64
 
 
 def energy_lean(delta: float) -> str:

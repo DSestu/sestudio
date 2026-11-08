@@ -53,9 +53,9 @@
   },
   "opts": {},
   "expect": {
-   "score": 0.999,
+   "score": 0.998,
    "parts": {
-    "energy": 0.996,
+    "energy": 0.993,
     "tempo": 1.0,
     "harmony": 1.0,
     "colour": 1.0,
@@ -125,9 +125,9 @@
    "lean": "lift"
   },
   "expect": {
-   "score": 0.863,
+   "score": 0.814,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.779,
     "tempo": 1.0,
     "harmony": 0.8,
     "colour": 0.4,
@@ -197,9 +197,9 @@
    "lean": "lift"
   },
   "expect": {
-   "score": 0.67,
+   "score": 0.551,
    "parts": {
-    "energy": 0.418,
+    "energy": 0.105,
     "tempo": 0.698,
     "harmony": 0.6,
     "colour": 1.0,
@@ -269,9 +269,9 @@
    "lean": "ease"
   },
   "expect": {
-   "score": 0.854,
+   "score": 0.864,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 0.961,
     "harmony": 0.6,
     "colour": 1.0,
@@ -343,7 +343,7 @@
    }
   },
   "expect": {
-   "score": 0.538,
+   "score": 0.438,
    "parts": {
     "energy": 0.0,
     "tempo": 1.0,
@@ -413,7 +413,7 @@
   },
   "opts": {},
   "expect": {
-   "score": 0.778,
+   "score": 0.7,
    "parts": {
     "energy": 0.0,
     "tempo": 1.0,
@@ -487,9 +487,9 @@
    }
   },
   "expect": {
-   "score": 0.536,
+   "score": 0.566,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 0.0,
     "harmony": 1.0,
     "colour": 1.0,
@@ -561,9 +561,9 @@
    }
   },
   "expect": {
-   "score": 0.996,
+   "score": 0.991,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 1.0,
     "harmony": 1.0,
     "colour": 1.0,
@@ -638,9 +638,9 @@
    ]
   },
   "expect": {
-   "score": 0.724,
+   "score": 0.743,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 1.0,
     "harmony": 1.0,
     "colour": 1.0,
@@ -710,9 +710,9 @@
    "colour": "bright"
   },
   "expect": {
-   "score": 0.663,
+   "score": 0.692,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 1.0,
     "harmony": 0.0,
     "colour": 1.0,
@@ -785,9 +785,9 @@
    }
   },
   "expect": {
-   "score": 0.724,
+   "score": 0.743,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 1.0,
     "harmony": 1.0,
     "colour": 0.0,
@@ -885,9 +885,9 @@
    "want": "up"
   },
   "expect": {
-   "score": 0.996,
+   "score": 0.992,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 1.0,
     "harmony": 1.0,
     "colour": 1.0,
@@ -955,9 +955,9 @@
   },
   "opts": {},
   "expect": {
-   "score": 0.596,
+   "score": 0.632,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 1.0,
     "harmony": 0.0,
     "colour": 0.4,
@@ -1025,9 +1025,9 @@
   },
   "opts": {},
   "expect": {
-   "score": 0.796,
+   "score": 0.812,
    "parts": {
-    "energy": 0.982,
+    "energy": 0.973,
     "tempo": 1.0,
     "harmony": 0.6,
     "colour": 0.4,

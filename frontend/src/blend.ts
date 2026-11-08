@@ -9,12 +9,12 @@ export type Layer = (typeof LAYERS)[number]
 export type Setting = 'must' | 'prefer' | 'ignore'
 export type Lean = 'lift' | 'hold' | 'ease'
 
-export const WEIGHTS: Record<Layer, number> = { energy: 1, tempo: 1, harmony: 1.5, colour: 0.5, genre: 0.5 }
+export const WEIGHTS: Record<Layer, number> = { energy: 1.5, tempo: 1, harmony: 1.5, colour: 0.5, genre: 0.5 }
 export const MUST = 3
 export const LIMITS = { energy: 33, tempo: 8 }
-export const SPREAD = { energy: 15, tempo: 5 }
+export const SPREAD = { energy: 12, tempo: 5 }
 export const LEAN: Record<Lean, { energy: number; tempo: number }> = {
-  lift: { energy: 6, tempo: 1 }, hold: { energy: 0, tempo: 0 }, ease: { energy: -6, tempo: -1 },
+  lift: { energy: 10, tempo: 1 }, hold: { energy: 0, tempo: 0 }, ease: { energy: -10, tempo: -1 },
 }
 export const CHANGE = 0.4
 
@@ -57,7 +57,7 @@ export const edge = (t: BlendTrack, which: 'intro' | 'outro' | 'track'): number 
 const near = (step: number, best: number, spread: number) => Math.exp(-(((step - best) / spread) ** 2))
 
 /** An energy step "holds" while the Hold part stays this high (about 8 points either way). */
-export const HOLD_PART = 0.75
+export const HOLD_PART = 0.64
 /** What an energy step does, from the Blend energy part: hold while Hold scores HOLD_PART or more, else lift or ease. */
 export const energyLean = (delta: number): Lean => (near(delta, LEAN.hold.energy, SPREAD.energy) >= HOLD_PART ? 'hold' : delta > 0 ? 'lift' : 'ease')
 const norm = (s?: string | null) => (s ?? '').trim().toLowerCase()

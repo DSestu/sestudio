@@ -134,11 +134,14 @@ def _score(
     b = ((t.get("harmony") or {}).get("track") or {}).get("brightness")
     if prev:
         ea, eb = blend.edge(prev, "outro"), blend.edge(t, "intro")
-        cost += (
-            2 * (1 - blend.energy_part(eb - ea, lean))
-            if ea is not None and eb is not None
-            else 1
-        )
+        if ea is not None and eb is not None:
+            # The Blend part, plus the distance itself so that of two far steps the nearer still wins.
+            best = blend.LEAN[lean]["energy"]
+            cost += (
+                2 * (1 - blend.energy_part(eb - ea, lean)) + abs(eb - ea - best) / 50
+            )
+        else:
+            cost += 1
     else:
         e = (t.get("energyScale") or {}).get("track")
         cost += 2 * abs(e / 100 - start) if e is not None else 1

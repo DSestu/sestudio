@@ -95,7 +95,8 @@ Each story names who does what and what tells them it worked. The screens come f
 | Right now | **R1**: one slider sets the level of the *first* track, then the mix holds (every pick stays close to the one before). The tempo stepper stays. Endless, as today. |
 | Flow row sentence | **S1**: the moves only, from the leans and layers: "Lifts, holds, then eases out", "Holds all the way · Progressive House only", "Holds, then eases out · slows down · a break first". No energy words, no durations. |
 | Row shape | Drawn from a real render (the energy of the picks), not from a target curve. |
-| Big-jump limits | Start at 33 energy points and 8 BPM; tuned by ear in PR 9. |
+| Big-jump limits | 33 energy points and 8 BPM (what Must blocks). |
+| Tuned values (PR 9) | Weights: energy 1.5, tempo 1, harmony 1.5, colour 0.5, genre 0.5; Must ×3. Energy spread 12 points, tempo spread 5 BPM. Lean step ±10 energy points and ±1 BPM. "Holds" while the Hold part is 0.64 or more (about ±8 points). Set by a numeric pass over the 482-track library (every preset, 3 seeds): Lift stretches climb about +10 points over an hour, Ease falls about −14, the mean step is 10 points (largest 43), key matches stay near 60 %. Not yet checked by ear. |
 | Half / double tempo | Not close for now (87 vs 174 is a big jump). |
 
 ## 5. Building blocks and traps
