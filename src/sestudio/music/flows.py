@@ -55,8 +55,48 @@ MODULATIONS: Final = (
 )
 #: Scores within this of the best are a tie the seed decides.
 TIE: Final = 0.15
+#: What a play may draw from (SPEC-flows-tab §2): ``{"kind", "value", "rule": only|lean}``.
+SOURCE_KINDS: Final = ("library", "artist", "album", "genre")
+#: What a Lean-on-it source adds to a slot score: as much as a genre block that prefers.
+LEAN: Final = 1.0
 
 Track = dict[str, Any]
+
+
+def _norm(v: Any) -> str:
+    return str(v or "").casefold().strip()
+
+
+def matches(t: Track, src: dict[str, Any]) -> bool:
+    return _norm(t.get(src["kind"])) == _norm(src.get("value"))
+
+
+def scope(
+    lib: list[Track], sources: list[dict[str, Any]] | None
+) -> tuple[list[Track], dict[str, float], bool]:
+    """What a play draws from: Only sources filter *lib* (same kind adds up, kinds narrow
+    each other), Lean ones become a score bonus per track id. The flag says whether any
+    Only source narrowed it."""
+    srcs = [s for s in sources or [] if s.get("kind") in SOURCE_KINDS]
+    only: dict[str, list[dict[str, Any]]] = {}
+    for s in srcs:
+        if s.get("rule", "only") == "only":
+            only.setdefault(s["kind"], []).append(s)
+    leans = [s for s in srcs if s.get("rule") == "lean"]
+    out = [t for t in lib if all(any(matches(t, s) for s in g) for g in only.values())]
+    lean = {t["id"]: n * LEAN for t in lib if (n := sum(matches(t, s) for s in leans))}
+    return out, lean, bool(only)
+
+
+def capacity(tracks: list[Track]) -> float:
+    """Seconds of mix *tracks* can fill, each blended into the next as :func:`render` does."""
+    return sum(max(60.0, (t.get("duration") or 240) - BLEND_S) for t in tracks)
+
+
+def song(t: Track) -> tuple[str, str]:
+    """The same song in two files (two ids) is one song: title + artist, case-folded."""
+    title = _norm(t.get("title"))
+    return (title, _norm(t.get("artist"))) if title else (t["id"], "")
 
 
 # --- scales and joins ----------------------------------------------------------
@@ -306,13 +346,20 @@ def render(
     seed: int = 1,
     pins: dict[int, str] | None = None,
     pull: float = PULL["strong"],
+    lean: dict[str, float] | None = None,
 ) -> list[dict[str, Any]]:
-    """The mix: one entry per slot with the track, the join, the event served and what was relaxed."""
+    """The mix: one entry per slot with the track, the join, the event served and what was relaxed.
+
+    *lean*: a score bonus per track id (Lean-on-it sources). A song is never played twice,
+    even from two files.
+    """
     pins = {int(k): v for k, v in (pins or {}).items()}
+    lean = lean or {}
     sp = spans(chunks)
     rng = random.Random(seed)
     by_id = {t["id"]: t for t in lib}
     used = set(pins.values())
+    songs = {song(by_id[p]) for p in used if p in by_id}
     done: set[str] = set()  # realised events, chunk id + index
     mix: list[dict[str, Any]] = []
     t, prev, i = 0.0, None, 0
@@ -348,9 +395,10 @@ def render(
                 relaxed = rset
                 r = set(rset)
                 pool = [
-                    (x, sc)
+                    (x, sc + lean.get(x["id"], 0.0))
                     for x in lib
                     if x["id"] not in used
+                    and song(x) not in songs
                     and (sc := score(x, prev, layers, local, r, kind, pull)) is not None
                 ]
                 if pool:
@@ -361,6 +409,7 @@ def render(
             top = [p for p in pool if p[1] >= pool[0][1] - TIE]
             pick, got = top[rng.randrange(len(top))]
             used.add(pick["id"])
+            songs.add(song(pick))
         k = join(prev, pick) if prev else None
         realised = bool(ev) and k == kind
         if realised:

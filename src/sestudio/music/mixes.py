@@ -352,21 +352,39 @@ def render_flow(
     seed: int = 1,
     pins: dict[str, str] | None = None,
     context: dict[str, Any] | None = None,
+    sources: list[dict[str, Any]] | None = None,
+    then: str = "similar",
 ) -> dict[str, Any]:
     """The path and the mix of *flow* over *lib* (§6). Endless renders two hours.
 
     *context* (skips, clock) lets a fork's conditions decide; without it they are ignored.
+    *sources* narrow (Only) or lean the pool (SPEC-flows-tab §2). When the Only sources run
+    out, *then* ``stop`` squeezes the flow into what they hold, ``similar`` fills the rest
+    from the whole library.
     """
     mins = minutes or length_minutes(flow) or 120
     pull = flows.PULL[flow.get("pull") or "strong"]
+    scoped, lean, narrowed = flows.scope(lib, sources)
+    if narrowed:
+        # Pinned tracks (the part already played) stay, wherever they came from.
+        keep = set((pins or {}).values()) - {t["id"] for t in scoped}
+        scoped = scoped + [t for t in lib if t["id"] in keep]
+        if then == "stop":
+            mins = min(mins, flows.capacity(scoped) / 60)
+    opts: dict[str, Any] = {"seed": seed, "pull": pull, "lean": lean}
     path, auto = flows.resolve(
-        flow, choices or {}, lib, context, minutes=mins, seed=seed, pull=pull
+        flow, choices or {}, scoped, context, minutes=mins, **opts
     )
-    mix = flows.render(path, lib, minutes=mins, seed=seed, pins=pins, pull=pull)
+    mix = flows.render(path, scoped, minutes=mins, pins=pins, **opts)
+    if narrowed and then != "stop":
+        held = {i: m["track_id"] for i, m in enumerate(mix)}
+        mix += flows.render(path, lib, minutes=mins, pins=held, **opts)[len(mix) :]
     return {"path": [c["id"] for c in path], "auto": auto, "minutes": mins, "mix": mix}
 
 
-def render_mix(mix: dict[str, Any], lib: list[dict[str, Any]]) -> dict[str, Any]:
+def render_mix(
+    mix: dict[str, Any], lib: list[dict[str, Any]], **scope: Any
+) -> dict[str, Any]:
     """A frozen mix is its tracks; a live one is rendered from its flow with its pins."""
     if mix.get("frozen") is not None:
         return {
@@ -384,6 +402,7 @@ def render_mix(mix: dict[str, Any], lib: list[dict[str, Any]]) -> dict[str, Any]
         mix.get("minutes"),
         mix.get("seed", 1),
         mix.get("pins"),
+        **scope,
     )
 
 
