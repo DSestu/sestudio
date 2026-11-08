@@ -16,6 +16,7 @@ import { setBrowserPlayerControls } from '../../browserPlayerControls'
 import { loadPlayerPrefs, savePlayerPrefs } from '../../playerPrefs'
 import { applySubtitleStyle } from '../../subtitleStyle'
 import { usePiPWindow } from '../../pipSession'
+import { useActiveServer } from '../../servers'
 import BufferingInfo, { bufferedAhead } from './BufferingInfo'
 
 /** Persist progress at most every SAVE_INTERVAL ms of playback. */
@@ -124,7 +125,12 @@ export default function VideoPane({
   // host's stream, or the file — when there is such a thing: nothing to encode.
   // Anything else, AI frames on the source's quality included, is the server's
   // re-encoding; moving between the two reloads the player where it was.
-  const quality = useBrowserQuality()
+  const pref = useBrowserQuality()
+  // Through another server the link is not the LAN: "Source" would load the
+  // heaviest rendition (a 4K file at 40 Mbit/s over a 20 Mbit/s tunnel never
+  // starts). Auto lets the player fit the link, and the server re-encodes.
+  const remote = useActiveServer() !== null
+  const quality = remote && pref === undefined ? 0 : pref
   const direct = displaySource?.direct
   const untouched = Boolean(direct) && quality === undefined && !playingFps
   const [loaded, setLoaded] = useState(() => ({
@@ -400,7 +406,8 @@ export default function VideoPane({
    *  this never reads back as the user picking. */
   function handleQualitiesChange(list: VideoQuality[]) {
     setQualities([...new Set(list.map(q => q.height))].sort((a, b) => b - a))
-    const wanted = loadPlayerPrefs().quality
+    const saved = loadPlayerPrefs().quality
+    const wanted = remote && saved === undefined ? 0 : saved
     // The source's own picture unless Auto (0) was picked: its best rendition.
     if (wanted !== 0 && list.length > 1) pickQuality(list, wanted ?? Infinity)
   }
@@ -434,7 +441,13 @@ export default function VideoPane({
           ref={playerRef}
           onProviderChange={provider => {
             if (isHLSProvider(provider)) {
-              provider.config = { ...provider.config, ...readAheadLimits(readAheadRef.current) }
+              provider.config = {
+                ...provider.config,
+                ...readAheadLimits(readAheadRef.current),
+                // hls.js otherwise starts on the manifest's first (best) rendition
+                // even in Auto; -1 starts from its bandwidth estimate and climbs.
+                ...(remote ? { startLevel: -1 } : {}),
+              }
             }
           }}
           className="w-full h-full"
