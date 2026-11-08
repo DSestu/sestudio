@@ -1,158 +1,137 @@
 import { useState } from 'react'
-import {
-  DIAL_NAME, LENGTHS, dialFlow, energyShape, eventDots, eventsLine, futures, outline, playFlow, saveFlow, useFlows,
-  type Flow,
-} from '../../../musicFlows'
+import { DIAL_NAME, KINDS, dialFlow, playFlow, saveFlow, useFlows, type Flow } from '../../../musicFlows'
+import { UNKNOWN_ARTIST, type MusicTrack } from '../../../musicLibrary'
+import { useMusicQueue } from '../../../musicQueue'
+import { openPlayer } from '../player'
+import FlowRow, { Shape } from './FlowRow'
+import { ENERGY_WORDS } from './flowWords'
 import { fresh, toFlow } from './lanes'
 
-// The Music tab's entry (SPEC-music-flows §9, board 1): the dial on top, the flows under it.
+// The Music tab's Flows (SPEC-flows-tab §2, board A · Shelf): the flow playing, Right now,
+// your flows, the starters. One column; a row opens in place on what it would play.
 
 const run = (p: Promise<unknown>) => { p.catch(() => {}) }
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
+/** The energy each word plays at, mid-band of the generator's fifths. */
+const LEVEL = [0.1, 0.3, 0.5, 0.7, 0.9]
 
-function PlayButton({ label, onClick }: { label: string; onClick: () => void }) {
+/** The flow the queue plays, with where it is in it and what comes next. */
+function Playing({ flow, byId }: { flow: Flow; byId: Map<string, MusicTrack> }) {
+  const q = useMusicQueue()
+  const cur = byId.get(q.items[q.current]?.track_id ?? '')
+  const next = byId.get(q.items[q.current + 1]?.track_id ?? '')
+  const event = q.items.slice(q.current + 1).find(i => i.flow?.event && !i.flow.event.realised)?.flow?.event
+  const now = q.items.length ? (q.current + 0.5) / q.items.length : 0
   return (
-    <button onClick={onClick} aria-label={label} className="btn btn-primary btn-circle btn-sm shrink-0">
-      <svg className="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
-    </button>
-  )
-}
-
-/** The energy curve and the harmony events along the flow's first path. */
-function Shape({ flow }: { flow: Flow }) {
-  const pts = energyShape(flow)
-  const dots = eventDots(flow)
-  const y = (v: number) => 30 - v * 26
-  const at = (f: number) => {
-    if (!pts) return 18
-    const i = pts.findIndex(p => p[0] >= f)
-    if (i <= 0) return y(pts[Math.max(0, i)][1])
-    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]
-    return y(y0 + ((y1 - y0) * (f - x0)) / (x1 - x0 || 1))
-  }
-  return (
-    <svg viewBox="0 0 200 34" className="block h-9 w-full" aria-hidden="true" preserveAspectRatio="none">
-      <line x1="0" x2="200" y1="32" y2="32" className="stroke-base-300" strokeWidth="1" />
-      {pts && <polyline points={pts.map(([f, v]) => `${f * 200},${y(v)}`).join(' ')} fill="none" className="stroke-primary" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
-      {dots.map((d, i) => (
-        <circle key={i} cx={d.at * 200} cy={at(d.at)} r="3" className={d.kind === 'break' ? 'fill-error' : 'fill-primary'} />
-      ))}
-    </svg>
-  )
-}
-
-function FlowCard({ flow, onOpen }: { flow: Flow; onOpen: () => void }) {
-  const n = futures(flow)
-  const length = LENGTHS.find(l => l.id === flow.length)?.label ?? (/^\d+$/.test(flow.length) ? `${flow.length} min` : 'Endless')
-  return (
-    <li className="flex flex-col gap-1 rounded-box bg-base-200 p-3">
-      <div className="flex items-start gap-2">
-        <button onClick={onOpen} className="min-w-0 flex-1 text-left leading-tight hover:text-primary" title="Edit this flow">
-          <p className="truncate text-sm font-semibold">{flow.name}</p>
-          {flow.chunks.length > 1 && <p className="truncate text-xs text-base-content/60">{outline(flow)}</p>}
-        </button>
-        <PlayButton label={`Play ${flow.name}`} onClick={() => run(playFlow(flow.id))} />
+    <section aria-label={`Playing ${flow.name}`} className="flex items-center gap-3.5 rounded-xl bg-primary/7 px-3.5 py-3 outline-1 outline-primary/50">
+      <span className="hidden sm:block"><Shape flow={flow} w={220} h={46} now={now} /></span>
+      <span className="sm:hidden"><Shape flow={flow} w={96} h={38} now={now} /></span>
+      <div className="min-w-0 flex-1 leading-tight">
+        <p className="text-xs text-primary">Playing</p>
+        <p className="truncate font-semibold">{flow.name}</p>
+        <p className="truncate text-[13px] text-base-content/65">
+          {cur ? `${cur.title}${cur.artist && cur.artist !== UNKNOWN_ARTIST ? ` · ${cur.artist}` : ''}` : ''}
+          <span className="max-sm:hidden">{next ? ` — next: ${next.title}` : ''}{event ? `, then ${(KINDS[event.kind] ?? event.kind).toLowerCase()}` : ''}</span>
+        </p>
       </div>
-      <Shape flow={flow} />
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        {n > 1 && <span className="rounded-full bg-primary/15 px-2 py-0.5 font-medium text-primary">{n} futures</span>}
-        <span className="rounded-full bg-base-300 px-2 py-0.5 font-medium text-base-content/80">{length}</span>
-        {flow.preset && <span className="rounded-full bg-base-300 px-2 py-0.5 font-medium text-base-content/60">preset</span>}
-        <span className="truncate text-base-content/50">{eventsLine(flow)}</span>
-      </div>
-    </li>
+      <button onClick={openPlayer} className="btn btn-sm max-sm:hidden">Open player</button>
+    </section>
   )
 }
 
-const ENERGY_WORDS = ['calm', 'easy', 'lively', 'high', 'all out']
-const MOOD_WORDS = ['dark', 'dusky', 'neutral', 'warm', 'bright']
-const word = (words: string[], v: number) => words[Math.min(words.length - 1, Math.floor(v * words.length))]
-
-function Slider({ label, value, min, max, step, shown, onChange, disabled, hint }: {
-  label: string; value: number; min: number; max: number; step: number; shown: string
-  onChange: (v: number) => void; disabled?: boolean; hint?: string
-}) {
-  return (
-    <label className="grid grid-cols-[4.5rem_1fr_3.5rem] items-center gap-3 text-sm" title={hint}>
-      <span className={disabled ? 'text-base-content/50' : ''}>{label}</span>
-      <input
-        type="range" min={min} max={max} step={step} value={value} disabled={disabled}
-        onChange={e => onChange(Number(e.target.value))}
-        className="range range-primary range-xs"
-      />
-      <span className="text-right text-xs tabular-nums text-base-content/60">{shown}</span>
-    </label>
-  )
-}
-
-/** One gesture, a flow plays: three values become a one-chunk flow ("Now"), rewritten on every play. */
-function Dial({ flows }: { flows: Flow[] }) {
-  const [energy, setEnergy] = useState(0.6)
-  const [mood, setMood] = useState(0.3)
+/** One gesture, a flow plays: an energy word and a tempo become the one-chunk "Now" flow. */
+function RightNow({ flows }: { flows: Flow[] }) {
+  const [level, setLevel] = useState(2)
   const [tempo, setTempo] = useState(172)
-  const [length, setLength] = useState<Flow['length']>('endless')
   const [busy, setBusy] = useState(false)
   const play = async () => {
     setBusy(true)
     try {
       const mine = flows.find(f => f.name === DIAL_NAME && !f.preset)
-      const flow = await saveFlow(DIAL_NAME, dialFlow(energy, tempo, length), mine?.id)
+      const flow = await saveFlow(DIAL_NAME, dialFlow(LEVEL[level], tempo, 'endless'), mine?.id)
       await playFlow(flow.id)
     } finally {
       setBusy(false)
     }
   }
   return (
-    <section aria-label="Play a feeling" className="flex flex-col gap-2.5 rounded-box bg-base-200 p-4 lg:w-90 lg:shrink-0 lg:self-start">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-base-content/60">How should it feel now</h2>
-      <Slider label="Energy" value={energy} min={0} max={1} step={0.05} shown={word(ENERGY_WORDS, energy)} onChange={setEnergy} />
-      <Slider
-        label="Mood" value={mood} min={0} max={1} step={0.05} shown={word(MOOD_WORDS, mood)} onChange={setMood}
-        disabled hint="Mood shapes the flow once tracks have a mood reading"
-      />
-      <Slider label="Tempo" value={tempo} min={80} max={180} step={1} shown={`${tempo}`} onChange={setTempo} />
-      <div className="mt-1 flex items-center gap-2">
-        <button onClick={() => run(play())} disabled={busy} className="btn btn-primary btn-sm flex-1 lg:flex-none">
-          {busy ? <span className="loading loading-spinner loading-xs" /> : 'Play'}
-        </button>
-        <select
-          aria-label="Length" value={length} onChange={e => setLength(e.target.value as Flow['length'])}
-          className="select select-sm w-auto"
-        >
-          {LENGTHS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
+    <section aria-label="Right now" className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-xl bg-base-200 p-3 sm:px-4 sm:py-3.5">
+      <h2 className="w-full text-sm font-semibold sm:w-auto">Right now</h2>
+      <div role="radiogroup" aria-label="Energy" className="flex rounded-lg bg-base-100 p-0.5 outline-1 outline-white/8">
+        {ENERGY_WORDS.map((w, i) => (
+          <button key={w} role="radio" aria-checked={level === i} onClick={() => setLevel(i)}
+            className={`rounded-md px-2.5 py-1 text-xs ${level === i ? 'bg-base-300 text-base-content' : 'text-base-content/60 hover:text-base-content'}`}>
+            {cap(w)}
+          </button>
+        ))}
       </div>
+      <div className="flex items-center rounded-lg bg-base-100 p-0.5 text-xs outline-1 outline-white/8">
+        <button aria-label="Slower" onClick={() => setTempo(t => Math.max(60, t - 2))} className="rounded-md px-2.5 py-1 text-base-content/60 hover:text-base-content">−</button>
+        <span className="rounded-md bg-base-300 px-2.5 py-1 tabular-nums">{tempo} bpm</span>
+        <button aria-label="Faster" onClick={() => setTempo(t => Math.min(200, t + 2))} className="rounded-md px-2.5 py-1 text-base-content/60 hover:text-base-content">+</button>
+      </div>
+      <span className="text-xs text-base-content/45 max-sm:hidden">until you stop</span>
+      <button onClick={() => run(play())} disabled={busy} className="btn btn-primary btn-sm ml-auto">
+        {busy ? <span className="loading loading-spinner loading-xs" /> : 'Play'}
+      </button>
     </section>
   )
 }
 
-export default function FlowsHome({ onOpen }: { onOpen: (id: string) => void }) {
+export default function FlowsHome({ onOpen, byId }: { onOpen: (id: string) => void; byId: Map<string, MusicTrack> }) {
+  const { flows, loaded } = useFlows()
+  const q = useMusicQueue()
+  const [open, setOpen] = useState<string | null>(null)
+  const toggle = (id: string) => setOpen(o => (o === id ? null : id))
   const create = async () => {
     const f = await saveFlow('New flow', { ...toFlow(fresh()), pull: 'strong' })
     onOpen(f.id)
   }
-  const { flows, loaded } = useFlows()
-  // Yours first (newest first, as the server sends them), then the presets; the dial's own flow is the dial.
-  // Presets in the order of a night: they were seeded together, so oldest first is their own order.
-  const shown = [...flows.filter(f => !f.preset && f.name !== DIAL_NAME), ...flows.filter(f => f.preset).reverse()]
+  // Yours newest first, as the server sends them; the starters in the order of a night (oldest first).
+  const mine = flows.filter(f => !f.preset && f.name !== DIAL_NAME)
+  const starters = flows.filter(f => f.preset).reverse()
+  const playing = q.source?.flow ? flows.find(f => f.id === q.source!.flow && f.name !== DIAL_NAME) : undefined
+  const starter = starters.find(f => f.id === open)
+  const row = (f: Flow) => <FlowRow key={f.id} flow={f} open={open === f.id} onToggle={() => toggle(f.id)} onOpen={onOpen} byId={byId} />
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <Dial flows={flows} />
-      <section aria-label="Your flows" className="flex min-w-0 flex-1 flex-col gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-base-content/60">Your flows</h2>
+    <div className="flex max-w-[860px] flex-col gap-3.5">
+      {playing && <Playing flow={playing} byId={byId} />}
+      <RightNow flows={flows} />
+      <section aria-label="Your flows" className="mt-1.5">
+        <div className="mb-1 flex items-center gap-2.5 px-1 sm:px-3">
+          <h2 className="text-[15px] font-semibold tracking-tight">Your flows</h2>
+          {mine.length > 0 && <span className="text-xs text-base-content/45">{mine.length}</span>}
+          <button onClick={() => run(create())} className="btn btn-sm ml-auto">
+            <span aria-hidden="true">+</span> New flow
+          </button>
+        </div>
         {!loaded ? (
-          <span className="loading loading-dots loading-sm text-base-content/40" />
+          <span className="loading loading-dots loading-sm ml-3 text-base-content/40" />
+        ) : mine.length ? (
+          <ul>{mine.map(row)}</ul>
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map(f => <FlowCard key={f.id} flow={f} onOpen={() => onOpen(f.id)} />)}
-            <li>
-              <button onClick={() => run(create())} className="flex h-full min-h-24 w-full flex-col items-start justify-center gap-0.5 rounded-box border border-dashed border-base-300 p-3 text-left hover:bg-white/4">
-                <span className="text-sm font-semibold text-base-content/80">New flow</span>
-                <span className="text-xs text-base-content/50">from scratch; presets drop into it</span>
-              </button>
-            </li>
-          </ul>
+          <p className="px-1 py-2 text-sm text-base-content/55 sm:px-3">None yet. Start from a starter below, or make a new one.</p>
         )}
       </section>
+      {starters.length > 0 && (
+        <section aria-label="Starters">
+          <div className="flex flex-wrap items-center gap-2 px-1 max-sm:hidden sm:px-3">
+            <h2 className="mr-1.5 text-[15px] font-semibold tracking-tight">Starters</h2>
+            {starters.map(f => (
+              <button key={f.id} aria-pressed={open === f.id} onClick={() => toggle(f.id)}
+                className={`flex h-9 items-center gap-2 rounded-lg pl-2 pr-3 text-[13px] ${open === f.id ? 'bg-base-300 outline-1 outline-primary' : 'bg-base-200 hover:bg-base-300'}`}>
+                <Shape flow={f} w={44} h={22} dots={false} />{f.name}
+              </button>
+            ))}
+            <span className="text-xs text-base-content/45">click to preview · ⋯ Copy makes one yours</span>
+          </div>
+          {starter && <ul className="mt-2 max-sm:hidden">{row(starter)}</ul>}
+          <div className="sm:hidden">
+            <h2 className="mb-1 px-1 text-[15px] font-semibold tracking-tight">Starters</h2>
+            <ul>{starters.map(row)}</ul>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
