@@ -50,9 +50,12 @@ def test_transposition_is_a_good_join():
     # 5 and 7 semitones share 6 notes: still next door; another mode is no transposition
     assert proximity.join(a, trk("b", "D", "Aeolian"))["kind"] == "next-door"
     assert proximity.join(a, trk("b", "A#", "Ionian"))["kind"] == "clash"
-    assert proximity.cost(
-        proximity.join(a, trk("b", "A#", "Aeolian"))
-    ) < proximity.cost(proximity.join(a, trk("b", "C#", "Ionian")))
+    # a last resort: after a shared-notes move, before a clash
+    cost = [
+        proximity.cost(proximity.join(a, trk("b", k, m)))
+        for k, m in (("D", "Aeolian"), ("A#", "Aeolian"), ("C#", "Ionian"))
+    ]
+    assert cost == sorted(cost) and len(set(cost)) == 3
 
 
 def test_camelot_fallback_without_harmony():

@@ -158,9 +158,10 @@ export const tempoOk = (j: Join) => !j.tempoJump || j.genreChange
 /** "Up 2", "Down 1": a transposition in words. */
 export const stepLabel = (n: number) => `${n > 0 ? 'Up' : 'Down'} ${Math.abs(n)}`
 
-/** Lower is a better follow-up: notes first (a transposition ranks with the 6-shared moves), then the tempo gap and the energy step. */
+/** Lower is a better follow-up: notes first (a transposition is a last resort: after every shared-notes move, just ahead
+ *  of a clash), then the tempo gap and the energy step. */
 export const cost = (j: Join) =>
-  (j.kind === 'transposed' ? 1 : j.shared === null ? 4 : 7 - j.shared) * 3 + Math.min(Math.abs(j.bpmDelta ?? 0) / 10, 2) + Math.abs(j.energy.delta ?? 0) / 50
+  (j.kind === 'transposed' ? 1.75 : j.shared === null ? 4 : 7 - j.shared) * 3 + Math.min(Math.abs(j.bpmDelta ?? 0) / 10, 2) + Math.abs(j.energy.delta ?? 0) / 50
 
 export interface Filters {
   harmony?: 'safe' | 'any'

@@ -19,6 +19,7 @@ from sestudio.music import proximity
 GENRE_MISS: Final = 6
 CLASH: Final = 9
 UNKNOWN_KEY: Final = 3
+TRANSPOSED: Final = 4
 #: Largest random nudge between near-equal tracks; what a seed changes.
 JITTER: Final = 0.3
 MAX_TRACKS: Final = 60
@@ -95,7 +96,7 @@ def _score(
         if not proximity.tempo_ok(j):
             return None
         if j["kind"] == "transposed":
-            cost += 1  # the same scale moved: as good as a 6-shared move
+            cost += TRANSPOSED  # the same scale moved: a last resort, after shared notes and unread keys
         elif j["shared"] is None:
             cost += UNKNOWN_KEY
         elif not j["safe"]:

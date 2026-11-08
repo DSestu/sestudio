@@ -36,6 +36,7 @@ export function fit(kind: string | null, want = 'match'): number {
   if (kind === 'break') return 0
   if (want === 'match') return kind === 'relative' ? 0.8 : 0.6
   if (want === 'break') return 0.2
+  if (kind === 'lift' || kind === 'lower') return 0.3 // a transposition nobody asked for: a last resort, short of a break
   return kind === 'match' ? 0.5 : 0.6
 }
 
