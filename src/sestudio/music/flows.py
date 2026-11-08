@@ -157,6 +157,8 @@ def fit(kind: str | None, want: str = "match") -> float:
         return 0.8 if kind == "relative" else 0.6
     if want == "break":
         return 0.2
+    if kind in ("lift", "lower"):
+        return 0.3  # a transposition nobody asked for: a last resort, short of a break
     return 0.5 if kind == "match" else 0.6  # an event is pending
 
 

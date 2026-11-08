@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bridgePath, bridges, fitsAfter, join, type ProxTrack } from './proximity'
+import { bridgePath, bridges, cost, fitsAfter, join, type ProxTrack } from './proximity'
 
 const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 const STEPS: Record<string, [number[], number]> = {
@@ -73,12 +73,17 @@ describe('fitsAfter, bridges, bridgePath', () => {
 
 describe('transposition', () => {
   const a = trk('a', 'A', 'Aeolian')
-  it('is the same scale moved: a good join with its distance, ranked with the 6-shared moves', () => {
+  it('is the same scale moved: a good join with its distance', () => {
     const j = join(a, trk('b', 'A#', 'Aeolian'))
     expect([j.kind, j.shared, j.safe, j.semitones, j.kindLabel]).toEqual(['transposed', 2, true, 1, 'Up 1'])
     expect(join(a, trk('b', 'G', 'Aeolian')).kindLabel).toBe('Down 2')
     expect(join(a, trk('b', 'D', 'Aeolian')).kind).toBe('next-door')
     expect(join(a, trk('b', 'A#', 'Ionian')).kind).toBe('clash')
+  })
+  it('ranks as a last resort: after a shared-notes move, before a clash', () => {
+    const c = (k: string, m: string) => cost(join(a, trk('b', k, m)))
+    expect(c('D', 'Aeolian')).toBeLessThan(c('A#', 'Aeolian'))
+    expect(c('A#', 'Aeolian')).toBeLessThan(c('C#', 'Ionian'))
   })
   it('falls back on Camelot: same letter, 2 to 6 steps', () => {
     const c = (x: string, y: string) => join(trk('a', undefined, undefined, 174, 'Drum & Bass', [50, 50, 50], x), trk('b', undefined, undefined, 174, 'Drum & Bass', [50, 50, 50], y))

@@ -22,8 +22,8 @@ Every harmony judgement in the app counts the notes two keys share (`proximity.p
 - **Name:** kind `transposed`, shown as "Up 2" / "Down 1" (Plain) or "Transposed +2" (Theory), with "lift" for up and "drop" for down in the reason line.
 - **Colour:** its own verdict colour, distinct from flows (green), next door (blue) and clash (amber). *(Picked in the mockups.)*
 - **Camelot fallback** (a key without its harmony pass yet): same letter and 2 to 6 steps apart on the wheel (one step is a fifth: 2 steps = 2 semitones, 3 = 3, 4 = 4, 5 = 1, 6 = the tritone).
-- **Ranking:** Fits next, the set builder (`setBuilder.ts`, its clash count and fixes) and the fits API rank a good transposition with the 6-shared moves (Next door, One note changes). Fits next gets a "Lift" choice next to the other moves.
-- **Flows:** new modulation kinds `lift` and `lower` (same mode, up or down) beside up, down, mode+, mode-, relative, break; `fit()` scores them like the other modulations.
+- **Ranking (revised 2026-11-08):** a transposition is a last resort, used to fix a clash, not a recommendation like shared keys. Fits next, the set builder and the fits API rank it after every shared-notes move and just ahead of a clash (notes cost 1.75: Next door is 1, a 5-shared clash 2; builder slot cost 4, after an unread key's 3, before a clash's 9). It stays a safe join, so it still counts as a clash fix. Asking for it (Fits next "Lift"/"Drop", a flow join that wants `lift`/`lower`) still puts it first. Fits next gets a "Lift" choice next to the other moves.
+- **Flows:** new modulation kinds `lift` and `lower` (same mode, up or down) beside up, down, mode+, mode-, relative, break; `fit()` scores them 1 when the join wants them, 0.3 otherwise (other modulations 0.6, a break 0).
 - **Drawing (picked T2 "Step", 2026-11-07):** for a transposition the panel shows two plain bars, no notes: the incoming one steps up one level per semitone (down for a drop), joined by a riser with "+N" on it, the key names under the bars, and "Same scale" over "up N semitone(s) · Lift" (or "down N · Drop"). Board: `.impeccable/mocks/key-transposition-r2/`.
 
 ## Scope

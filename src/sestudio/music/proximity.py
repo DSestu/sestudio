@@ -163,9 +163,9 @@ def tempo_ok(j: Join) -> bool:
 
 def cost(j: Join) -> float:
     """Lower is a better follow-up: notes first, then the tempo gap and the energy step."""
-    # A transposition ranks with the 6-shared moves.
+    # A transposition is a last resort: after every shared-notes move, just ahead of a clash.
     notes = (
-        1
+        1.75
         if j["kind"] == "transposed"
         else 7 - j["shared"]
         if j["shared"] is not None
