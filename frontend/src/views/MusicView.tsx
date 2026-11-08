@@ -30,8 +30,9 @@ import MixesList from '../components/music/flows/MixesList'
 import FlowLanes from '../components/music/flows/FlowLanes'
 import MixView from '../components/music/flows/MixView'
 import { useFlows } from '../musicFlows'
-import PlayAsFlow from '../components/music/flows/PlayAsFlow'
-import type { Source } from '../flowSources'
+import PlayAsFlow, { PlayAsFlowAt } from '../components/music/flows/PlayAsFlow'
+import GenreMenu from '../components/music/flows/GenreMenu'
+import { addSource, type Source } from '../flowSources'
 import Sources, { type SourceTab } from '../components/music/edit/Sources'
 import { refOf, resetFocus, setSheet as setEditSheet, songKey, useFocus } from '../components/music/edit/focus'
 import { toast } from '../components/music/toast'
@@ -275,6 +276,13 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const openNode = (id: string) => go({ pl: id || undefined })
   /** "Open in Flows": the sources are already set; show them on the Flows tab. */
   const toFlows = () => { setTab('flows'); go({}) }
+  // The other doors (SPEC-flows-tab PR 5): a library row or a genre chip opens Play as a flow.
+  const [door, setDoor] = useState<{ name: string; source: Source; at: DOMRect } | null>(null)
+  const [chip, setChip] = useState<{ genre: string; at: DOMRect } | null>(null)
+  const libraryFlow = (c: Crate, at: DOMRect) => {
+    setSheet(false)
+    setDoor({ name: c.label, source: { kind: 'library', value: c.id, label: c.label, rule: 'only' }, at })
+  }
   const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(sheet, () => setSheet(false))
   useModalBack(adding, () => setAdding(false))
@@ -465,7 +473,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           </aside>
         ) : (
           <aside className={`${editing ? 'hidden' : 'hidden md:block'} w-62.5 shrink-0 sticky top-24`}>
-            <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} />
+            <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} onFlow={libraryFlow} />
           </aside>
         )}
         <div className="flex-1 min-w-0 flex flex-col gap-4">
@@ -485,7 +493,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
                 <button
                   key={g}
                   aria-pressed={genre === g}
-                  onClick={() => setGenre(g)}
+                  data-flow-toggle={g ? '' : undefined}
+                  aria-haspopup={g ? 'menu' : undefined}
+                  onClick={e => (g ? setChip({ genre: g, at: e.currentTarget.getBoundingClientRect() }) : setGenre(''))}
                   className={`relative hit shrink-0 rounded-full px-3 h-8 text-xs font-medium ${genre === g ? 'bg-primary/20 text-primary' : 'bg-white/6 text-base-content/70 hover:bg-white/10'}`}
                 >
                   {g || 'All'} <span className="tabular-nums opacity-60">{n}</span>
@@ -517,10 +527,19 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       )}
       {sheet && (
         <ResponsiveModal onClose={() => setSheet(false)}>
-          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} />
+          <Crates crates={crates} active={library} onPick={pick} onAdd={() => { setSheet(false); setAdding(true) }} node={nodeId} onNode={pickNode} onNew={() => newPlaylist()} onFlow={libraryFlow} />
         </ResponsiveModal>
       )}
       {adding && <AddLibrary onClose={() => setAdding(false)} />}
+      {chip && (
+        <GenreMenu
+          at={chip.at} genre={chip.genre} onClose={() => setChip(null)}
+          onShow={() => setGenre(chip.genre)}
+          onFlow={() => setDoor({ name: chip.genre, source: { kind: 'genre', value: chip.genre, rule: 'lean' }, at: chip.at })}
+          onAdd={() => { addSource({ kind: 'genre', value: chip.genre, rule: 'lean' }); toast(`${chip.genre} is in Flows › From`) }}
+        />
+      )}
+      {door && <PlayAsFlowAt at={door.at} name={door.name} source={door.source} byId={byId} onClose={() => setDoor(null)} onFlows={toFlows} />}
       {pickFor && <AddToPlaylist track={pickFor} onClose={() => setPickFor(undefined)} />}
     </div>
   )

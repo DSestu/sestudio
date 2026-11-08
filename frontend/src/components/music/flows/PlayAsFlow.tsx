@@ -26,6 +26,8 @@ function Panel({ name, start, byId, onClose, onFlows }: {
   const [adding, setAdding] = useState(false)
   const [got, setGot] = useState<{ key: string; slots: Slot[] } | null>(null)
   const box = useRef<HTMLDivElement>(null)
+  // Focus goes back to whatever opened this when it closes.
+  useEffect(() => { const back = document.activeElement as HTMLElement | null; return () => back?.focus?.() }, [])
   const scope = { sources: sources.map(({ kind, value, rule }) => ({ kind, value, rule })), then }
   const key = `${flow?.id}:${JSON.stringify(scope)}`
 
@@ -133,5 +135,19 @@ export default function PlayAsFlow({ name, source, byId, onFlows, className = ''
       </button>
       {open && <Panel name={name} start={source} byId={byId} onClose={() => setOpen(false)} onFlows={() => { setOpen(false); onFlows() }} />}
     </span>
+  )
+}
+
+/** The panel opened from a door that is not a button row (a library row, a genre chip): pinned under *at*. */
+export function PlayAsFlowAt({ at, name, source, byId, onClose, onFlows }: {
+  at: DOMRect; name: string; source: Source; byId?: Map<string, MusicTrack>; onClose: () => void; onFlows: () => void
+}) {
+  const left = Math.max(8, Math.min(at.left, window.innerWidth - 552))
+  return (
+    <div className="fixed z-50 max-sm:inset-0 max-sm:pointer-events-none" style={window.innerWidth >= 640 ? { left, top: at.bottom } : undefined}>
+      <div className="relative max-sm:pointer-events-auto">
+        <Panel name={name} start={source} byId={byId} onClose={onClose} onFlows={() => { onClose(); onFlows() }} />
+      </div>
+    </div>
   )
 }
