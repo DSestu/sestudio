@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Empty playlist in the editor — mockups</title>
+<style>
+:root{
+  --b1:oklch(16% .015 240);--b2:oklch(20% .02 240);--b3:oklch(26% .025 240);--b4:oklch(31% .025 240);
+  --tx:oklch(92% .01 240);--p:oklch(72% .16 230);--ok:oklch(76% .17 155);
+  --dark:oklch(62% .2 330);--menace:oklch(62% .17 300);--bright:oklch(80% .14 80);--warm:oklch(74% .14 50);--exotic:oklch(72% .13 190);
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#05080d;color:var(--tx);font:14px/1.43 ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.dim{color:oklch(92% .01 240 / .55)}.dimmer{color:oklch(92% .01 240 / .58)}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.s{width:15px;height:15px}svg.l{width:28px;height:28px;stroke-width:1.6}
+
+/* page */
+.page{max-width:1720px;margin:0 auto;padding:40px 32px 80px}
+.page>h1{font-size:26px;font-weight:600;letter-spacing:-.025em}
+.lead{max-width:760px;margin-top:6px;color:oklch(92% .01 240 / .65)}
+.stories{margin:18px 0 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:1200px}
+.stories li{list-style:none;background:var(--b2);border-radius:12px;padding:12px 14px;font-size:13px}
+.stories b{display:block;font-size:11px;letter-spacing:.06em;color:var(--p);margin-bottom:4px}
+.opt{margin-top:56px}
+.opt h2{font-size:20px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.opt h2 .tag{font-size:12px;font-weight:600;background:oklch(72% .16 230 / .16);color:var(--p);border-radius:99px;padding:2px 10px}
+.opt .why{max-width:820px;margin:4px 0 16px;color:oklch(92% .01 240 / .65)}
+.scenes{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.cap{font-size:12px;color:oklch(92% .01 240 / .62);margin:0 0 8px 2px;letter-spacing:.02em}
+
+/* desktop frame (the three editing columns only) */
+.desk{width:1040px;height:600px;background:var(--b1);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:12px;overflow:hidden;box-shadow:0 0 0 1px var(--b3)}
+.top{height:50px;flex:none;border-radius:14px;background:var(--b2);border:1px solid var(--b3);display:flex;align-items:center;gap:12px;padding:0 8px}
+.back{width:36px;height:36px;border-radius:10px;background:var(--b3);display:grid;place-items:center}
+.ttl{line-height:1.15}.ttl b{font-size:17px;font-weight:600;letter-spacing:-.02em}.ttl small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .55)}
+.top .sp{flex:1}
+.btn{height:32px;border-radius:6px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;white-space:nowrap}
+.btn.pr{background:var(--p);color:oklch(18% .05 230)}
+.btn.soft{background:oklch(72% .16 230 / .14);color:var(--p)}
+.cols{flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr) 280px;gap:12px}
+.col{min-height:0;border-radius:14px;background:oklch(20% .02 240 / .7);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.colh{padding:12px 12px 8px;display:flex;flex-direction:column;gap:9px}
+.row1{display:flex;align-items:center;gap:8px}
+.h{font-size:15px;font-weight:600;letter-spacing:-.02em;flex:1}
+.seg{display:inline-flex;background:oklch(100% 0 0 / .06);border-radius:99px;padding:2px}
+.seg b{font-weight:500;font-size:12px;height:28px;padding:0 12px;border-radius:99px;display:inline-flex;align-items:center;color:oklch(92% .01 240 / .7)}
+.seg b.on{background:oklch(72% .16 230 / .2);color:var(--p)}
+.field{height:32px;border-radius:8px;background:var(--b1);border:1px solid var(--b3);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.05em;color:oklch(92% .01 240 / .58);padding:8px 12px 4px}
+.srow{display:flex;align-items:center;gap:8px;height:44px;margin:0 6px;padding:0 8px;border-radius:9px;position:relative}
+.srow .t{flex:1;min-width:0;line-height:1.2}.srow .t b{display:block;font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .t small{display:block;font-size:11.5px;color:oklch(92% .01 240 / .5)}
+.srow .du{font-size:12px;color:oklch(92% .01 240 / .5);width:30px;text-align:right}
+.srow .plus{width:26px;height:26px;display:grid;place-items:center;color:var(--p);opacity:0}
+.srow.hov{background:oklch(100% 0 0 / .05)}.srow.hov .plus{opacity:1}
+.srow.lift{opacity:.35}
+.srow .grip{color:oklch(92% .01 240 / .3);width:10px;display:none}
+.srow.hov .grip{display:block}
+.key{display:inline-flex;align-items:center;gap:5px;font-size:11px;border-radius:5px;background:oklch(100% 0 0 / .07);padding:2px 6px;color:oklch(92% .01 240 / .75);white-space:nowrap}
+.key i{width:7px;height:7px;border-radius:99px;display:inline-block}
+.bpm{font-size:11px;color:oklch(92% .01 240 / .45);width:22px;text-align:right}
+.mid{padding:12px}
+.midh{display:flex;align-items:center;gap:10px;padding:2px 2px 10px}
+.midh .n{flex:1;font-size:14px;color:oklch(92% .01 240 / .6)}
+.fitsh{padding:12px;display:flex;align-items:center;gap:8px;font-size:12px;color:oklch(92% .01 240 / .55)}
+.fitsh i{width:7px;height:7px;border-radius:99px;background:var(--p)}
+.fitsh .pin{margin-left:auto;font-size:11.5px;background:var(--b3);border-radius:6px;padding:4px 8px}
+.fitsb{padding:0 12px;font-size:13px;color:oklch(92% .01 240 / .55)}
+
+/* the dragged ghost */
+.ghost{position:absolute;z-index:5;width:250px;height:46px;border-radius:10px;background:var(--b3);box-shadow:0 12px 30px #000a,0 0 0 1px oklch(72% .16 230 / .6);display:flex;align-items:center;gap:8px;padding:0 10px;transform:rotate(-2deg);pointer-events:none}
+.ghost .t b{font-size:13px;font-weight:500;display:block}.ghost .t small{font-size:11.5px;color:oklch(92% .01 240 / .55)}
+.cursor{position:absolute;z-index:6;width:18px;height:18px}
+
+/* ---------- A: drop well ---------- */
+.well{flex:1;margin:0 2px 2px;border-radius:14px;border:1.5px dashed oklch(92% .01 240 / .18);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;transition:all .2s var(--ease)}
+.well .ic{color:var(--p);display:grid;place-items:center}
+.well h3{font-size:17px;font-weight:600;letter-spacing:-.02em}
+.well p{font-size:13px;color:oklch(92% .01 240 / .6);max-width:300px}
+.well .or{display:flex;gap:8px;margin-top:6px}
+.well.hot{border-color:var(--p);border-style:solid;background:oklch(72% .16 230 / .08);box-shadow:inset 0 0 0 4px oklch(72% .16 230 / .08)}
+.well.hot .ic{color:var(--p)}
+.arrowcue{position:absolute;left:-7px;top:50%;width:14px;height:14px;transform:translateY(-50%) rotate(45deg);background:var(--b1);border-left:1.5px dashed oklch(92% .01 240 / .18);border-bottom:1.5px dashed oklch(92% .01 240 / .18)}
+
+/* ---------- B: numbered slots ---------- */
+.slots{display:flex;flex-direction:column;gap:8px;padding:2px}
+.slot{height:54px;border-radius:11px;border:1.5px dashed oklch(92% .01 240 / .16);display:flex;align-items:center;gap:12px;padding:0 14px;color:oklch(92% .01 240 / .62);font-size:13px}
+.slot .no{width:24px;height:24px;border-radius:99px;display:grid;place-items:center;font-size:12px;font-weight:600;background:oklch(100% 0 0 / .06);color:oklch(92% .01 240 / .55)}
+.slot:nth-child(2){opacity:.6}.slot:nth-child(3){opacity:.35}.slot:nth-child(4){opacity:.18}
+.slot.first{border-color:oklch(72% .16 230 / .55);color:var(--tx)}
+.slot.first .no{background:oklch(72% .16 230 / .2);color:var(--p)}
+.slot.hot{border-style:solid;border-color:var(--p);background:oklch(72% .16 230 / .1)}
+.slot.hot .no{background:var(--p);color:oklch(18% .05 230)}
+.slot .hint{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:oklch(92% .01 240 / .5)}
+.kbd{font-size:11px;border-radius:5px;background:var(--b3);padding:1px 6px;color:oklch(92% .01 240 / .8)}
+.fitpane{margin:6px 12px;border-radius:11px;background:oklch(76% .17 155 / .08);padding:12px;font-size:13px}
+.fitpane b{display:block;color:var(--ok);font-size:13px;margin-bottom:2px}
+
+/* ---------- C: guided first row ---------- */
+.coach{position:absolute;z-index:4;left:20px;right:20px;border-radius:12px;background:oklch(26% .04 230);box-shadow:0 10px 30px #0009,0 0 0 1px oklch(72% .16 230 / .5);padding:12px 14px;font-size:13px}
+.coach b{display:block;font-size:13.5px;margin-bottom:2px}
+.coach .tip{position:absolute;top:-6px;left:28px;width:12px;height:12px;background:oklch(26% .04 230);transform:rotate(45deg);box-shadow:-1px -1px 0 oklch(72% .16 230 / .5)}
+.coach .acts{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.pulse{box-shadow:inset 0 0 0 1.5px var(--p);background:oklch(72% .16 230 / .1)}
+.flight{position:absolute;z-index:3;height:2px;border-top:2px dashed oklch(72% .16 230 / .6)}
+.flight:after{content:"";position:absolute;right:-2px;top:-7px;border:6px solid transparent;border-left:9px solid oklch(72% .16 230 / .8)}
+.landing{margin:2px;height:56px;border-radius:11px;border:1.5px dashed oklch(72% .16 230 / .55);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--p)}
+.midempty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:oklch(92% .01 240 / .5);font-size:13px;text-align:center}
+
+/* phone frame */
+.phone{width:390px;height:780px;background:var(--b1);border-radius:36px;box-shadow:0 0 0 1px var(--b3),0 0 0 8px #0b0f16;overflow:hidden;position:relative;display:flex;flex-direction:column;padding:12px 10px 0}
+.ptop{height:58px;border-radius:16px;background:var(--b2);border:1px solid var(--b3);display:flex;align-items:center;gap:10px;padding:0 8px;flex:none}
+.ptop .ok{width:40px;height:40px;border-radius:12px;background:var(--b3);display:grid;place-items:center;color:var(--p);margin-left:auto}
+.strip{margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--b2);border-radius:14px;padding:4px;flex:none}
+.strip b{height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:500;font-size:14px;color:oklch(92% .01 240 / .7)}
+.strip b.on{background:oklch(72% .16 230 / .18);color:var(--p)}
+.strip b.off{opacity:.4}
+.pbody{flex:1;display:flex;flex-direction:column;padding:14px 4px 0;min-height:0}
+.pfoot{height:72px;flex:none;margin:0 -10px;background:oklch(20% .02 240 / .9);border-top:1px solid var(--b3);display:flex;align-items:center;justify-content:space-around;font-size:10.5px;color:oklch(92% .01 240 / .55)}
+.pfoot span{display:flex;flex-direction:column;align-items:center;gap:3px}.pfoot .on{color:var(--p)}
+.bigadd{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.bigadd button{all:unset;display:flex;align-items:center;gap:12px;height:64px;border-radius:14px;background:var(--b2);padding:0 14px;font-size:15px;font-weight:500}
+.bigadd button small{display:block;font-size:12px;font-weight:400;color:oklch(92% .01 240 / .55)}
+.bigadd .ic{width:40px;height:40px;border-radius:11px;background:oklch(72% .16 230 / .14);color:var(--p);display:grid;place-items:center;flex:none}
+.bigadd .chev{margin-left:auto;color:oklch(92% .01 240 / .3)}
+.pempty{text-align:center;padding:24px 16px 14px}
+.pempty h3{font-size:18px;font-weight:600;letter-spacing:-.02em;margin-top:10px}
+.pempty p{font-size:13.5px;color:oklch(92% .01 240 / .6);margin-top:4px}
+.pempty .ic{margin:0 auto;color:var(--p);display:grid;place-items:center}
+.sheet{position:absolute;left:0;right:0;bottom:0;height:470px;background:var(--b2);border-radius:22px 22px 0 0;box-shadow:0 -20px 40px #000a;padding:8px 0 0;display:flex;flex-direction:column}
+.sheet .grab{width:40px;height:5px;border-radius:9px;background:var(--b4);margin:0 auto 10px}
+.scrim{position:absolute;inset:0;background:#0009}
+.toast{position:absolute;left:50%;transform:translateX(-50%);bottom:486px;background:var(--b4);border-radius:10px;padding:8px 12px;font-size:12.5px;white-space:nowrap;box-shadow:0 6px 20px #0008}
+.toast b{color:var(--ok)}
+.notes{margin-top:14px;max-width:1040px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px;font-size:13px;color:oklch(92% .01 240 / .7)}
+.notes li{margin-left:16px}
+</style></head>
+<body><div class="page">
+
+<h1>An empty playlist in the editor</h1>
+<p class="lead">"New playlist" now opens the editor on an empty playlist. Today the middle column says "Empty. Add tracks…" in small grey text, and dropping there only works on that one line. These options make the first move obvious: drag on desktop, tap on phones.</p>
+<ul class="stories">
+  <li><b>STORY 1</b>I just made a playlist. Without reading anything, I can see how the first track gets in.</li>
+  <li><b>STORY 2</b>I'm dragging a track. Before I let go, I know where it lands and that it will work.</li>
+  <li><b>STORY 3</b>On my phone I can't drag. I can still add the first track in one or two taps.</li>
+</ul>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="drag" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="lib" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+  <symbol id="back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="grip" viewBox="0 0 24 24"><path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01"/></symbol>
+  <symbol id="cur" viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z" fill="#fff" stroke="#000" stroke-width="1.2"/></symbol>
+  <symbol id="spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></symbol>
+  <symbol id="home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></symbol>
+  <symbol id="music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+</defs></svg>
+
+<template id="addfrom">
+  <div class="colh">
+    <div class="row1"><span class="h">Add from</span><span class="seg"><b class="on">Library</b><b>Online</b></span></div>
+    <div class="dim" style="font-size:12.5px;padding-left:2px">Libraries › <b style="color:var(--tx)">Deadmau5</b></div>
+    <div class="field">deadmau</div>
+  </div>
+  <div class="lbl">268 TRACKS</div>
+  <div class="srow SR1"><svg class="i s grip"><use href="#grip"/></svg><span class="t"><b>Superliminal</b><small>deadmau5</small></span><span class="key"><i style="background:var(--menace)"></i>Menacing</span><span class="bpm">128</span><span class="du">6:33</span><span class="plus"><svg class="i s"><use href="#plus"/></svg></span></div>
+  <div class="srow"><span class="t"><b>Channel 42</b><small>deadmau5</small></span><span class="key"><i style="background:var(--dark)"></i>Dark</span><span class="bpm">128</span><span class="du">4:52</span><span class="plus"></span></div>
+  <div class="srow"><span class="t"><b>The Veldt (8 Minute Edit)</b><small>deadmau5</small></span><span class="key"><i style="background:var(--bright)"></i>Bright</span><span class="bpm">128</span><span class="du">8:42</span><span class="plus"></span></div>
+  <div class="srow"><span class="t"><b>Fn Pig</b><small>deadmau5</small></span><span class="key"><i style="background:var(--warm)"></i>Warm</span><span class="bpm">128</span><span class="du">8:52</span><span class="plus"></span></div>
+  <div class="srow"><span class="t"><b>Professional Griefers</b><small>deadmau5</small></span><span class="key"><i style="background:var(--exotic)"></i>Exotic</span><span class="bpm">128</span><span class="du">4:06</span><span class="plus"></span></div>
+  <div class="srow"><span class="t"><b>Maths</b><small>deadmau5</small></span><span class="key"><i style="background:var(--exotic)"></i>Exotic</span><span class="bpm">128</span><span class="du">6:55</span><span class="plus"></span></div>
+  <div class="srow"><span class="t"><b>There Might Be Coffee</b><small>deadmau5</small></span><span class="key"><i style="background:var(--dark)"></i>Dark</span><span class="bpm">128</span><span class="du">7:03</span><span class="plus"></span></div>
+  <div class="srow"><span class="t"><b>Closer</b><small>deadmau5</small></span><span class="key"><i style="background:var(--bright)"></i>Bright</span><span class="bpm">128</span><span class="du">7:12</span><span class="plus"></span></div>
+</template>
+<template id="topbar">
+  <div class="top"><span class="back"><svg class="i"><use href="#back"/></svg></span><span class="ttl"><b>New playlist</b><small>Editing · Playlist</small></span><span class="sp"></span><span class="btn pr"><svg class="i s"><use href="#check"/></svg>Done</span></div>
+</template>
+
+<!-- ================= A ================= -->
+<section class="opt">
+  <h2><span class="tag">A</span>Drop well</h2>
+  <p class="why">The whole middle column becomes a large dashed area with one instruction: drag tracks here. It lights up while you drag over it, and anywhere inside counts. It's the simplest option and the most familiar pattern (an upload box).</p>
+  <div class="scenes">
+    <div><p class="cap">DESKTOP · AT REST</p>
+      <div class="desk" data-top><div class="cols">
+        <div class="col" data-add></div>
+        <div class="col mid" style="display:flex;flex-direction:column">
+          <div class="midh"><span class="n">0 tracks</span><span class="seg"><b class="on">List</b><b>Map</b></span></div>
+          <div class="well" style="position:relative">
+            <span class="ic"><svg class="i l"><use href="#drag"/></svg></span>
+            <h3>Drag tracks here</h3>
+            <p>From your libraries or online, on the left. Or press <b style="color:var(--p)">+</b> on a track to add it at the end.</p>
+          </div>
+        </div>
+        <div class="col"><div class="fitsh"><i></i>Resting<span class="pin">Pin</span></div><div class="fitsb">Point at a track to see where it fits. Once the playlist has a track, this shows what fits next.</div></div>
+      </div></div>
+    </div>
+    <div><p class="cap">DESKTOP · DRAGGING OVER</p>
+      <div class="desk" data-top style="position:relative"><div class="cols">
+        <div class="col" data-add data-lift></div>
+        <div class="col mid" style="display:flex;flex-direction:column">
+          <div class="midh"><span class="n">0 tracks</span><span class="seg"><b class="on">List</b><b>Map</b></span></div>
+          <div class="well hot">
+            <span class="ic"><svg class="i l"><use href="#plus"/></svg></span>
+            <h3>Drop to add as track 1</h3>
+            <p>Superliminal · 6:33</p>
+          </div>
+        </div>
+        <div class="col"><div class="fitsh"><i></i>Drop preview</div><div class="fitsb"><b style="color:var(--tx);font-size:14px">Superliminal → place 1</b><br>The first track has no joins yet. Fits shows what comes next once it's in.</div></div>
+      </div>
+      <div class="ghost" style="left:440px;top:420px"><span class="t"><b>Superliminal</b><small>deadmau5 · 6:33</small></span></div>
+      <svg class="cursor" style="left:450px;top:434px"><use href="#cur"/></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= B ================= -->
+<section class="opt">
+  <h2><span class="tag">B</span>Numbered slots</h2>
+  <p class="why">The playlist shows empty, numbered places that fade out going down. It reads as "a list waiting to be filled" and teaches the drop gesture you'll use later: during a drag, the gap opens where the track would land. Slot 1 carries the hint.</p>
+  <div class="scenes">
+    <div><p class="cap">DESKTOP · AT REST</p>
+      <div class="desk" data-top><div class="cols">
+        <div class="col" data-add></div>
+        <div class="col mid">
+          <div class="midh"><span class="n">0 tracks</span><span class="seg"><b class="on">List</b><b>Map</b></span></div>
+          <div class="slots">
+            <div class="slot first"><span class="no">1</span>Drag a track here to start<span class="hint">or <span class="kbd">+</span> on any row</span></div>
+            <div class="slot"><span class="no">2</span></div>
+            <div class="slot"><span class="no">3</span></div>
+            <div class="slot"><span class="no">4</span></div>
+          </div>
+        </div>
+        <div class="col"><div class="fitsh"><i></i>Resting<span class="pin">Pin</span></div><div class="fitsb">Point at a track to see where it fits.</div></div>
+      </div></div>
+    </div>
+    <div><p class="cap">DESKTOP · DRAGGING OVER SLOT 1</p>
+      <div class="desk" data-top style="position:relative"><div class="cols">
+        <div class="col" data-add data-lift></div>
+        <div class="col mid">
+          <div class="midh"><span class="n">0 tracks</span><span class="seg"><b class="on">List</b><b>Map</b></span></div>
+          <div class="slots">
+            <div class="slot first hot"><span class="no">1</span><b style="font-weight:500">Superliminal</b></div>
+            <div class="slot"><span class="no">2</span></div>
+            <div class="slot"><span class="no">3</span></div>
+            <div class="slot"><span class="no">4</span></div>
+          </div>
+        </div>
+        <div class="col"><div class="fitsh"><i></i>Drop preview</div><div class="fitsb"><b style="color:var(--tx);font-size:14px">Superliminal → place 1</b></div>
+          <div class="fitpane"><b>Good start</b>Menacing · 128 BPM. Fits will suggest track 2 from here.</div></div>
+      </div>
+      <div class="ghost" style="left:600px;top:176px"><span class="t"><b>Superliminal</b><small>deadmau5 · 6:33</small></span></div>
+      <svg class="cursor" style="left:610px;top:168px"><use href="#cur"/></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= C ================= -->
+<section class="opt">
+  <h2><span class="tag">C</span>Show the move once</h2>
+  <p class="why">A short card next to the first track explains the move, with a dashed path to the landing spot. It shows only on your first empty playlist and goes away for good with "Got it" or your first drop. After that, the empty state is option A's well, smaller.</p>
+  <div class="scenes">
+    <div><p class="cap">DESKTOP · FIRST TIME ONLY</p>
+      <div class="desk" data-top style="position:relative"><div class="cols">
+        <div class="col" data-add data-pulse></div>
+        <div class="col mid" style="display:flex;flex-direction:column">
+          <div class="midh"><span class="n">0 tracks</span><span class="seg"><b class="on">List</b><b>Map</b></span></div>
+          <div class="landing">Track 1 lands here</div>
+          <div class="midempty">Fill the playlist from the left.<br>Fits on the right picks up once there's a track.</div>
+        </div>
+        <div class="col"><div class="fitsh"><i></i>Resting<span class="pin">Pin</span></div><div class="fitsb">Point at a track to see where it fits.</div></div>
+      </div>
+      <div class="flight" style="left:300px;top:196px;width:96px"></div>
+      <div class="coach" style="top:252px;width:268px;left:24px"><span class="tip"></span><b>Drag a track into the playlist</b><span class="dim">Grab any row and drop it in the middle. On a phone, tap <b style="color:var(--p);display:inline">+</b> instead.</span><div class="acts"><span class="dimmer" style="font-size:12px">1 of 1</span><span class="btn soft" style="height:28px">Got it</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Phone ================= -->
+<section class="opt">
+  <h2><span class="tag">Phone</span>No drag on phones</h2>
+  <p class="why">HTML drag and drop doesn't work on touch, so whichever desktop option you pick, the phone version can't ask you to drag. P1 puts the two sources as big buttons in the empty playlist, which open the same sheets as the strip. P2 shows what happens next: the sheet opens, + adds the track, and a toast confirms it went in as track 1.</p>
+  <div class="scenes">
+    <div><p class="cap">P1 · EMPTY</p>
+      <div class="phone">
+        <div class="ptop"><span class="back"><svg class="i"><use href="#back"/></svg></span><span class="ttl"><b>New playlist</b><small>Editing · Playlist</small></span><span class="ok"><svg class="i"><use href="#check"/></svg></span></div>
+        <div class="strip"><b>Library</b><b>Online</b><b class="off">Fits</b></div>
+        <div class="pbody">
+          <div class="pempty"><span class="ic"><svg class="i l"><use href="#music"/></svg></span><h3>Add the first track</h3><p>Pick where it comes from.</p></div>
+          <div class="bigadd">
+            <button><span class="ic"><svg class="i"><use href="#lib"/></svg></span><span>Your libraries<small>474 tracks in 4 libraries</small></span><svg class="i chev"><use href="#chev"/></svg></button>
+            <button><span class="ic"><svg class="i"><use href="#globe"/></svg></span><span>Online<small>YouTube Music, SoundCloud, YouTube</small></span><svg class="i chev"><use href="#chev"/></svg></button>
+          </div>
+          <p class="dimmer" style="text-align:center;font-size:12.5px;margin-top:16px">Fits opens once there's a track.</p>
+        </div>
+        <div class="pfoot"><span><svg class="i"><use href="#home"/></svg>Home</span><span><svg class="i"><use href="#search"/></svg>Search</span><span class="on"><svg class="i"><use href="#music"/></svg>Music</span></div>
+      </div>
+    </div>
+    <div><p class="cap">P2 · AFTER TAPPING + IN THE LIBRARY SHEET</p>
+      <div class="phone">
+        <div class="ptop"><span class="back"><svg class="i"><use href="#back"/></svg></span><span class="ttl"><b>New playlist</b><small>Editing · Playlist</small></span><span class="ok"><svg class="i"><use href="#check"/></svg></span></div>
+        <div class="strip"><b class="on">Library</b><b>Online</b><b>Fits</b></div>
+        <div class="pbody"><div class="slot first" style="border-style:solid;background:var(--b2)"><span class="no">1</span><b style="font-weight:500;color:var(--tx)">Superliminal</b><span class="hint">6:33</span></div></div>
+        <div class="scrim"></div>
+        <div class="toast"><b>✓</b> Superliminal added as track 1</div>
+        <div class="sheet"><span class="grab"></span>
+          <div class="colh" style="padding-top:0"><div class="row1"><span class="h">Add from</span><span class="seg"><b class="on">Library</b><b>Online</b></span></div><div class="field">deadmau</div></div>
+          <div class="lbl">268 TRACKS</div>
+          <div class="srow" style="height:52px"><span class="t"><b>Superliminal</b><small>deadmau5 · <span style="color:var(--ok)">in playlist</span></small></span><span class="key"><i style="background:var(--menace)"></i>Menacing</span><span class="du">6:33</span></div>
+          <div class="srow" style="height:52px"><span class="t"><b>Channel 42</b><small>deadmau5</small></span><span class="key"><i style="background:var(--dark)"></i>Dark</span><span class="du">4:52</span><span class="plus" style="opacity:1;width:40px;height:40px"><svg class="i"><use href="#plus"/></svg></span></div>
+          <div class="srow" style="height:52px"><span class="t"><b>The Veldt (8 Minute Edit)</b><small>deadmau5</small></span><span class="key"><i style="background:var(--bright)"></i>Bright</span><span class="du">8:42</span><span class="plus" style="opacity:1;width:40px;height:40px"><svg class="i"><use href="#plus"/></svg></span></div>
+          <div class="srow" style="height:52px"><span class="t"><b>Fn Pig</b><small>deadmau5</small></span><span class="key"><i style="background:var(--warm)"></i>Warm</span><span class="du">8:52</span><span class="plus" style="opacity:1;width:40px;height:40px"><svg class="i"><use href="#plus"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li>Desktop under 64rem (the narrow layout) follows the phone version: the strip and sheets, no drag.</li>
+    <li>In every option, any part of the empty middle column accepts a drop, not only the text.</li>
+    <li>Fits is greyed on the phone strip until there's a track: it has nothing to rank against.</li>
+    <li>The well or slots disappear as soon as track 1 is in; from then on, drops open a gap between rows as today.</li>
+  </ul>
+</section>
+
+</div>
+<script>
+const add = document.getElementById('addfrom').content, bar = document.getElementById('topbar').content
+document.querySelectorAll('[data-top]').forEach(d => d.prepend(bar.cloneNode(true)))
+document.querySelectorAll('[data-add]').forEach(c => {
+  c.append(add.cloneNode(true))
+  const r = c.querySelector('.SR1')
+  if (c.hasAttribute('data-lift')) r.classList.add('lift')
+  else if (c.hasAttribute('data-pulse')) r.classList.add('hov', 'pulse')
+  else r.classList.add('hov')
+})
+</script>
+</body></html>

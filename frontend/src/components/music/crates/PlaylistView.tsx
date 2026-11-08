@@ -34,6 +34,8 @@ import { aim, dragGap, dragProps, endDrag, getFocus, hover, refOf, setSheet, sta
 import { analyseOnline, useRun, useSeenOnline } from '../edit/onlineAnalysis'
 import { DropPreview, FocusBar, WhereItFits } from '../edit/EditFits'
 import { spotsFor } from '../edit/spots'
+import EmptyEdit from '../edit/EmptyEdit'
+import type { SourceTab } from '../edit/Sources'
 import { useSummary } from '../../../musicMeta'
 import { proxOf } from '../../../musicFits'
 
@@ -191,7 +193,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
 }
 
 /** A playlist's tracks (grouped by part for a set) or a smart list's matches. */
-export default function PlaylistView({ node, byId, onPlaylist, edit = false, onEdit }: {
+export default function PlaylistView({ node, byId, onPlaylist, edit = false, onEdit, onSource }: {
   node: PlaylistNode
   byId: ReadonlyMap<string, MusicTrack>
   onPlaylist: (t: MusicTrack) => void
@@ -199,6 +201,8 @@ export default function PlaylistView({ node, byId, onPlaylist, edit = false, onE
   edit?: boolean
   /** Open the editor. */
   onEdit?: () => void
+  /** Open an Add from sheet (phones, from the empty editor). */
+  onSource?: (tab: SourceTab) => void
 }) {
   const [matches, setMatches] = useState<{ id: string; list: PlaylistItem[] }>()
   const [editing, setEditing] = useState(false)
@@ -548,6 +552,8 @@ export default function PlaylistView({ node, byId, onPlaylist, edit = false, onE
           action={{ label: anchor ? `Insert after ${anchor.title}` : 'Add to this playlist', onPick: insertAfterTarget }}
           onPlaylist={onPlaylist}
         />
+      ) : !items.length && !parts.length && edit && onSource ? (
+        <EmptyEdit wide={wide} drag={focus.drag} byId={byId} onDrop={() => dropAt(0)} onSource={onSource} />
       ) : !items.length && !parts.length ? (
         <p className="px-3 py-8 text-center text-sm text-base-content/60">
           {smart ? 'No track matches these rules yet.' : 'Empty. Add tracks with the + on any track row.'}
