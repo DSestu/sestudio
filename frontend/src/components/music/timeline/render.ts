@@ -98,6 +98,8 @@ export interface LabelItem extends DrawItem {
   plan?: Plan
   /** CSS colour of that join's kind (green flows, blue next door, amber clash); the signal blue when unknown. */
   tone?: string
+  /** The join's Blend colour (SPEC-blend): the diamond's, once the keys are compared. */
+  blendTone?: string
   /** Seconds since this track's tempo arrived, while that plays out (count-in, dock, lock). */
   lock?: number
   /** This track's key and mode, and the outgoing track's, once known. */
@@ -389,7 +391,8 @@ export class TimelineRenderer {
         const at = (f: number) => (f < 0.35 ? f / 0.35 : f > 0.62 ? (1 - f) / 0.38 : 1)
         for (let y = 0; y < h; y += 6) T.rect(x - 0.5, top + y, 1, Math.min(3, h - y), pm(c, 0.85 * k * at((y + 1.5) / h)))
       } else T.vgrad(x - 0.5, top, 1, h, [[0, NONE], [0.35, pm(c, 0.85 * k)], [0.62, pm(c, 0.85 * k)], [1, NONE]])
-      T.diamond(x, y0, 4, pm(c, 0.95 * k))
+      const bt = it.blendTone ? rgb(it.blendTone) : to
+      T.diamond(x, y0, 4, pm([0, 1, 2].map(j => sig[j] + (bt[j] - sig[j]) * e) as unknown as typeof sig, 0.95 * k))
     })
 
     // The rest of a track being analysed: a dotted horizon from its front to its end (2 px on, 5 off).

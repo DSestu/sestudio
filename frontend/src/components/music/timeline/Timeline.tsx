@@ -5,7 +5,9 @@ import { addTracks } from '../adding'
 import { claimSound, engine, useSyncStatus } from '../engine'
 import { fmtTime } from '../format'
 import { frameLoop, wake } from '../idle'
-import { join as joinOf, joinColor, type ProxTrack } from '../crates/proximity'
+import { blendWord } from '../../../blend'
+import { blendColor } from '../BlendRing'
+import { blendOf, join as joinOf, joinColor, type ProxTrack } from '../crates/proximity'
 import { joins, type Join } from '../joins'
 import { bez, crossed, dipScale, flash, MORPH_MS, morphOffsets, stepHl } from '../interact'
 import { analysing, loadAnalyses, mixOf, PARTIAL_MS, rawOf, RETRY_MS, trackOf } from '../mix/analysis'
@@ -42,11 +44,13 @@ const joinTone = (a: ProxTrack, b: ProxTrack) => {
   return j.kind ? joinColor(j) : undefined
 }
 
-/** The join's kind and colour, for its notes panel. */
+/** The join's kind and colour, and how well it blends, for its notes panel. */
 const joinVerdict = (a: ProxTrack, b: ProxTrack) => {
   const j = joinOf(a, b)
-  return j.kind && j.kindLabel ? { label: j.kindLabel, color: joinColor(j) } : null
+  return j.kind && j.kindLabel ? { label: `${j.kindLabel} · blends ${blendWord(j.blend)}`, color: joinColor(j) } : null
 }
+
+const joinBlendTone = (a: ProxTrack, b: ProxTrack) => blendColor(blendOf(a, b).score)
 
 function buildModel(q: QueueState, info: (id: string) => TrackInfo | undefined, summary: (id: string) => Summary | undefined): Model {
   const tracks: Track[] = []
@@ -63,6 +67,7 @@ function buildModel(q: QueueState, info: (id: string) => TrackInfo | undefined, 
   const items = tracks.map((track, i): LabelItem => ({
     track, span: spans[i], a: 0, sc: 1, hl: 0, title: info(track.id)?.title ?? '', plan: plans[i - 1],
     tone: i && summary(track.id) && summary(tracks[i - 1].id) ? joinTone(proxOf(tracks[i - 1].id, summary(tracks[i - 1].id)), proxOf(track.id, summary(track.id))) : undefined,
+    blendTone: i && summary(track.id) && summary(tracks[i - 1].id) ? joinBlendTone(proxOf(tracks[i - 1].id, summary(tracks[i - 1].id)), proxOf(track.id, summary(track.id))) : undefined,
     reading: summary(track.id)?.harmony?.track,
     prevReading: i ? summary(tracks[i - 1].id)?.harmony?.track : undefined,
     verdict: i && summary(track.id) && summary(tracks[i - 1].id) ? joinVerdict(proxOf(tracks[i - 1].id, summary(tracks[i - 1].id)), proxOf(track.id, summary(track.id))) : null,

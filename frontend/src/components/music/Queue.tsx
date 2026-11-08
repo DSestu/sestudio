@@ -19,7 +19,8 @@ import RowThread from './RowThread'
 import FlowStrip, { SlotChip } from './flows/FlowStrip'
 import { rangeOf, type Range } from './thread'
 import { ComingUp, GapBox, GapMark, GapRail } from './QueueGap'
-import { useQueueGaps } from './queueGaps'
+import { useQueueGaps, type Gap } from './queueGaps'
+import { BlendMark } from './BlendMark'
 
 const EASE = 'cubic-bezier(.2,.7,.2,1)'
 /** More changes than this at once (a replaced queue, a playlist) just appear. */
@@ -37,11 +38,15 @@ interface RowProps {
   range: Range | null
   /** Bumps when analyses arrive: the thread reads them at render. */
   v: number
+  /** The join into this row, with its Blend; null for the first row or while a side is unread. */
+  gap?: Gap | null
+  /** Swap this track / Fits here… from the phone's breakdown sheet. */
+  onFits?: (at: number, swap: boolean) => void
 }
 
 // Memoised: the Layer re-renders on every mode change and queue tick, and a long queue re-rendering all its rows
 // stalls the frame. `source` is rebuilt each render but reads the queue through a ref, so only its index counts.
-const Row = memo(function Row({ item, info, playing, source, leaving, tv, range }: RowProps) {
+const Row = memo(function Row({ item, info, playing, source, leaving, tv, range, gap, onFits }: RowProps) {
   const theory = useTheory()
   const analysis = useSummary(item.library === 'online' ? undefined : item.track_id)
   const el = useRef<HTMLDivElement>(null)
@@ -108,6 +113,11 @@ const Row = memo(function Row({ item, info, playing, source, leaving, tv, range 
           </span>
         </div>
         {item.flow && <SlotChip slot={item.flow} />}
+        {gap && (
+          <BlendMark b={gap.blend} a={gap.a} t={gap.b} into={info?.title} lean={item.flow?.lean} harmony={gap.join.kindLabel} size={15}
+            label={gap.blend.steps.energy != null && <span className="max-md:hidden">{gap.blend.steps.energy > 0 ? '+' : gap.blend.steps.energy < 0 ? '−' : ''}{Math.abs(Math.round(gap.blend.steps.energy))}</span>}
+            actions={onFits ? [{ label: 'Swap this track', run: () => onFits(gap.at, true) }, { label: 'Fits here…', run: () => onFits(gap.at, false) }] : undefined} />
+        )}
         {/* While its key is measured the row shows the notes heard so far, then the key's run (harmonyListen). */}
         <KeyListen id={item.track_id} reading={analysis?.harmony?.track} fallback={analysis?.balance && <Meter balance={analysis.balance} />} />
         {info?.duration ? <RowThread id={item.track_id} dur={info.duration} range={range} playing={playing} /> : null}
@@ -115,7 +125,7 @@ const Row = memo(function Row({ item, info, playing, source, leaving, tv, range 
       </div>
     </div>
   )
-}, (a, b) => a.item === b.item && a.info === b.info && a.playing === b.playing && a.tv === b.tv && a.range === b.range && a.v === b.v && a.source.from === b.source.from && !a.leaving === !b.leaving)
+}, (a, b) => a.item === b.item && a.info === b.info && a.playing === b.playing && a.tv === b.tv && a.range === b.range && a.v === b.v && a.source.from === b.source.from && !a.leaving === !b.leaving && a.gap === b.gap && !a.onFits === !b.onFits)
 
 interface Leaving {
   item: QueueItem
@@ -225,6 +235,14 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
     if (aim !== null) list.current?.querySelector('[data-gapbox]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [aim])
   const titleAt = (at: number) => info(q.items[at]?.track_id ?? '')?.title ?? 'the track'
+  // From a join's breakdown: Fits for that gap, or take the track out first (undo in its toast) and fill the gap.
+  const fits = (at: number, swap: boolean) => {
+    // The live queue: a memoised row may hold an older render's callback.
+    const it = getQueue().items[at]
+    if (swap && it) removeItem(it, info(it.track_id)?.title ?? 'the track')
+    if (adding) onAdd()
+    onAim!(at, true)
+  }
 
   const pilot = useAutopilot(q, !tv)
   const left = q.items.slice(q.current + 1)
@@ -325,6 +343,8 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             tv={tv}
             range={range}
             v={v}
+            gap={gone || i < 1 ? null : gaps.gap(i)}
+            onFits={editable ? fits : undefined}
             leaving={gone ? () => setLeaving(l => l.filter(x => x.item.item_id !== item.item_id)) : undefined}
           />
           {editable && expanded && !gone && i >= q.current && i < q.items.length - 1 && (aim === i + 1

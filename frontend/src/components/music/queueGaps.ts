@@ -1,7 +1,8 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import type { QueueItem, QueueState } from '../../musicQueue'
 import { useSummaries, type Summary } from '../../musicMeta'
-import { join, joinColor, type Join, type ProxTrack } from './crates/proximity'
+import type { Blend } from '../../blend'
+import { blendOf, join, joinColor, type Join, type ProxTrack } from './crates/proximity'
 import { isRough, roughLabel } from './gaps'
 
 // The queue's transitions (SPEC-fits-between): each one read from the two tracks' summaries, which are rough, and the ones kept.
@@ -11,6 +12,10 @@ export interface Gap {
   at: number
   join: Join
   rough: boolean
+  /** How the two blend (SPEC-blend): the flow's own reading when the queue plays one, else read here. */
+  blend: Blend
+  a: ProxTrack
+  b: ProxTrack
 }
 
 export const proxOfId = (id: string, s?: Summary): ProxTrack => ({ id, bpm: s?.bpm, camelot: s?.camelot, genre: s?.genre, harmony: s?.harmony, energyScale: s?.energyScale })
@@ -43,9 +48,12 @@ export function useQueueGaps(q: QueueState) {
     const sa = get(a.track_id)
     const sb = get(b.track_id)
     if (!sa || !sb) return null
-    const j = join(proxOfId(a.track_id, sa), proxOfId(b.track_id, sb))
+    const pa = proxOfId(a.track_id, sa), pb = proxOfId(b.track_id, sb)
+    const j = join(pa, pb)
     if (j.kind === null && j.bpmDelta === null) return null
-    return { at: i + 1, join: j, rough: isRough(j) && !keptNow.has(pairKey(a, b)) }
+    const lean = b.flow?.lean ?? 'hold'
+    const blend = b.flow?.blend && b.flow.blend.parts ? { ...b.flow.blend, join: b.flow.join } : blendOf(pa, pb, lean)
+    return { at: i + 1, join: j, rough: isRough(j) && !keptNow.has(pairKey(a, b)), blend, a: pa, b: pb }
   }), [q.items, v, keptNow]) // eslint-disable-line react-hooks/exhaustive-deps
   const cur = q.current
   const rough = useMemo(() => gaps.filter((g): g is Gap => !!g && g.rough && g.at > cur), [gaps, cur])
