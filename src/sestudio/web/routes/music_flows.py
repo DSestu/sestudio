@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -15,12 +15,33 @@ from sestudio.music import flows, libraries, mixes, queue, store
 router = APIRouter(prefix="/music")
 
 
+class Source(BaseModel):
+    """What a play may draw from (SPEC-flows-tab §2)."""
+
+    kind: Literal["library", "artist", "album", "genre"]
+    value: str
+    rule: Literal["only", "lean"] = "only"
+
+
+class Scoped(BaseModel):
+    """The sources of a play, and what happens when its Only sources run out."""
+
+    sources: list[Source] | None = None
+    then: Literal["stop", "similar"] = "similar"
+
+    def scope(self) -> dict[str, Any]:
+        return {
+            "sources": [s.model_dump() for s in self.sources or []],
+            "then": self.then,
+        }
+
+
 class FlowBody(BaseModel):
     name: str | None = None
     flow: dict[str, Any] | None = None
 
 
-class RenderBody(BaseModel):
+class RenderBody(Scoped):
     choices: dict[str, str] | None = None
     minutes: float | None = None
     seed: int = 1
@@ -54,12 +75,23 @@ def _pool() -> list[dict[str, Any]]:
     Each carries its ``library`` so a rendered mix can go into the queue.
     """
     where = {
-        f.track_id: lib
+        f.track_id: (lib, f)
         for lib, root in libraries.folder_roots()
         for f in downloaded.audio_files(root, lib)
     }
     found = store.get(list(where))
-    return [{**a, "library": where[tid]} for tid, a in found.items()]
+    # Title, artist and album come from the file: sources filter on them, and a song in
+    # two files is played once.
+    return [
+        {
+            **a,
+            "library": where[tid][0],
+            "title": where[tid][1].title,
+            "artist": where[tid][1].artist,
+            "album": where[tid][1].album,
+        }
+        for tid, a in found.items()
+    ]
 
 
 FLOW_FIELDS = ("chunk", "join", "fit", "event", "relaxed")
@@ -139,11 +171,11 @@ def delete_flow(flow_id: str) -> dict[str, bool]:
 def render_flow(flow_id: str, body: RenderBody) -> dict[str, Any]:
     flow = _run(mixes.flow_get, flow_id)
     return mixes.render_flow(
-        flow, _pool(), body.choices, body.minutes, body.seed, body.pins
+        flow, _pool(), body.choices, body.minutes, body.seed, body.pins, **body.scope()
     )
 
 
-class DraftBody(BaseModel):
+class DraftBody(Scoped):
     flow: dict[str, Any]
     choices: dict[str, str] | None = None
     minutes: float | None = None
@@ -161,6 +193,7 @@ def render_draft(body: DraftBody) -> dict[str, Any]:
         body.minutes,
         body.seed,
         context=_context(time.time()),
+        **body.scope(),
     )
 
 
@@ -251,7 +284,7 @@ def read_mix(mix_id: str, body: ReadBody) -> dict[str, Any]:
     return _run(mixes.read_as_flow, mix_id, body.name, _pool())
 
 
-class PlayBody(BaseModel):
+class PlayBody(Scoped):
     choices: dict[str, str] | None = None
     minutes: float | None = None
     seed: int = 1
@@ -263,25 +296,38 @@ def play_flow(flow_id: str, body: PlayBody) -> dict[str, Any]:
     flow = _run(mixes.flow_get, flow_id)
     pool = _pool()
     rendered = mixes.render_flow(
-        flow, pool, body.choices, body.minutes, body.seed, context=_context(time.time())
+        flow,
+        pool,
+        body.choices,
+        body.minutes,
+        body.seed,
+        context=_context(time.time()),
+        **body.scope(),
     )
     source = _source(
-        rendered, flow=flow_id, mix=None, choices=body.choices or {}, seed=body.seed
+        rendered,
+        flow=flow_id,
+        mix=None,
+        choices=body.choices or {},
+        seed=body.seed,
+        **body.scope(),
     )
     return _queue_run(queue.add, _items(rendered, pool), replace=True, source=source)
 
 
 @router.post("/mixes/{mix_id}/play")
-def play_mix(mix_id: str) -> dict[str, Any]:
+def play_mix(mix_id: str, body: Scoped | None = None) -> dict[str, Any]:
     mix = _run(mixes.mix_get, mix_id)
     pool = _pool()
-    rendered = _run(mixes.render_mix, mix, pool)
+    scope = (body or Scoped()).scope()
+    rendered = _run(mixes.render_mix, mix, pool, **scope)
     source = _source(
         rendered,
         flow=mix.get("flow"),
         mix=mix_id,
         choices=mix.get("choices") or {},
         seed=mix.get("seed", 1),
+        **scope,
     )
     if mix.get("frozen") is not None:
         source["frozen"] = True
@@ -317,11 +363,19 @@ def reroute(body: RerouteBody) -> dict[str, Any]:
         seed,
         pins,
         context=_context(started, state.get("skips")),
+        sources=src.get("sources"),
+        then=src.get("then", "similar"),
     )
     items = _items(rendered, pool)[len(played) :]
     source = {
         **_source(
-            rendered, flow=src["flow"], mix=src.get("mix"), choices=choices, seed=seed
+            rendered,
+            flow=src["flow"],
+            mix=src.get("mix"),
+            choices=choices,
+            seed=seed,
+            sources=src.get("sources") or [],
+            then=src.get("then", "similar"),
         ),
         "started": started,
     }

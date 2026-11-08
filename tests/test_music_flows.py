@@ -428,3 +428,107 @@ def test_a_flow_keeps_its_length_in_minutes(db):
                 ]
             },
         )
+
+
+# --- sources (SPEC-flows-tab §2) ---------------------------------------------------
+
+
+def tagged(i, **kw):
+    t = trk(i, bpm=172, tonic="F", e=50)
+    t.update(title=f"song {i}", **kw)
+    return t
+
+
+SRC_LIB = (
+    [tagged(i, library="dm", artist="Deadmau5", album="RAT") for i in range(4)]
+    + [tagged(10 + i, library="dm", artist="Deadmau5", album="P56") for i in range(4)]
+    + [tagged(20 + i, library="neuro", artist="Noisia", album="X") for i in range(6)]
+)
+ONE = {"chunks": [{"id": "a", "share": 1, "next": [], "layers": {}}]}
+
+
+def ids(rendered):
+    return [m["track_id"] for m in rendered["mix"]]
+
+
+def test_scope_same_kind_adds_up_kinds_narrow():
+    def only(*s):
+        return [{"kind": k, "value": v, "rule": "only"} for k, v in s]
+
+    got, _, narrowed = flows.scope(SRC_LIB, only(("album", "RAT"), ("album", "p56")))
+    assert narrowed and {t["id"] for t in got} == {
+        str(i) for i in [0, 1, 2, 3, 10, 11, 12, 13]
+    }
+    got, _, _ = flows.scope(SRC_LIB, only(("library", "dm"), ("album", "RAT")))
+    assert {t["id"] for t in got} == {"0", "1", "2", "3"}
+    got, lean, narrowed = flows.scope(
+        SRC_LIB, [{"kind": "artist", "value": "noisia", "rule": "lean"}]
+    )
+    assert not narrowed and len(got) == len(SRC_LIB)
+    assert set(lean) == {str(20 + i) for i in range(6)}
+
+
+def test_lean_ranks_first_without_removing():
+    lean = [{"kind": "artist", "value": "Noisia", "rule": "lean"}]
+    out = ids(mixes.render_flow(ONE, SRC_LIB, minutes=120, sources=lean))
+    assert out[:6] == [x for x in out if int(x) >= 20][:6]  # Noisia first
+    assert len(out) == len(SRC_LIB)  # the rest still plays
+
+
+def test_only_then_stop_squeezes_the_flow():
+    only = [{"kind": "album", "value": "RAT", "rule": "only"}]
+    r = mixes.render_flow(ONE, SRC_LIB, minutes=120, sources=only, then="stop")
+    assert sorted(ids(r)) == ["0", "1", "2", "3"]
+    assert r["minutes"] == pytest.approx(4 * (300 - flows.BLEND_S) / 60)
+
+
+def test_only_then_similar_fills_from_the_library():
+    only = [{"kind": "album", "value": "RAT", "rule": "only"}]
+    out = ids(mixes.render_flow(ONE, SRC_LIB, minutes=60, sources=only))
+    assert sorted(out[:4]) == ["0", "1", "2", "3"] and len(out) > 4
+
+
+def test_pinned_tracks_stay_outside_the_sources():
+    only = [{"kind": "album", "value": "X", "rule": "only"}]
+    r = mixes.render_flow(
+        ONE, SRC_LIB, minutes=60, pins={"0": "0"}, sources=only, then="stop"
+    )
+    assert ids(r)[0] == "0" and set(ids(r)[1:]) <= {str(20 + i) for i in range(6)}
+
+
+def test_a_song_in_two_files_plays_once():
+    a, b = tagged(1, artist="Skrillex"), tagged(2, artist="skrillex ")
+    b["title"] = "SONG 1"
+    out = [m["track_id"] for m in flows.render(ONE["chunks"], [a, b], minutes=30)]
+    assert len(out) == 1
+
+
+def test_play_keeps_its_sources_through_a_reroute(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from sestudio import downloaded
+    from sestudio.web.app import create_app
+    from sestudio.web.routes import music_flows
+
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SESTUDIO_DB", str(tmp_path / "library.db"))
+    library._conn = None
+    downloaded.invalidate()
+    monkeypatch.setattr(music_flows, "_pool", lambda: SRC_LIB)
+    c = TestClient(create_app())
+    flow = c.post("/api/music/flows", json={"name": "F", "flow": ONE}).json()
+    only = [{"kind": "artist", "value": "Noisia", "rule": "only"}]
+    r = c.post(
+        f"/api/music/flows/{flow['id']}/play",
+        json={"sources": only, "then": "stop", "minutes": 120},
+    )
+    assert r.status_code == 200, r.text
+    q = c.get("/api/music/queue").json()
+    assert q["source"]["sources"] == only and q["source"]["then"] == "stop"
+    noisia = {str(20 + i) for i in range(6)}
+    assert {it["track_id"] for it in q["items"]} <= noisia
+    r = c.post("/api/music/queue/reroute", json={"seed": 7})
+    assert r.status_code == 200, r.text
+    q = c.get("/api/music/queue").json()
+    assert {it["track_id"] for it in q["items"]} <= noisia
+    assert q["source"]["sources"] == only
