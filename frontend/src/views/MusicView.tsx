@@ -384,7 +384,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       </>}
     />
   ) : tab === 'flows' ? (
-    <FlowsHome onOpen={id => go({ fl: id })} />
+    <FlowsHome onOpen={id => go({ fl: id })} byId={byId} />
   ) : tab === 'mixes' ? (
     <MixesList onOpen={id => go({ mx: id })} />
   ) : !all.length ? (

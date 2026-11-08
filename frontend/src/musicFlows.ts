@@ -95,6 +95,18 @@ export async function saveFlow(name: string, flow: Partial<Flow>, id?: string): 
   return out
 }
 
+export async function deleteFlow(id: string) {
+  await json(`/flows/${id}`, { method: 'DELETE' })
+  await refreshFlows()
+}
+
+/** One slot of a rendered mix: the track and the join it makes with the one before. */
+export interface Slot { track_id: string; join: string | null; chunk: string }
+
+/** What the flow would play now, without playing it. */
+export const renderFlow = (id: string, body: { minutes?: number; seed?: number } = {}) =>
+  json<{ mix: Slot[]; minutes: number }>(`/flows/${id}/render`, { method: 'POST', body: JSON.stringify(body) })
+
 export async function reroute(body: { choices?: Record<string, string>; seed?: number }) {
   await json('/queue/reroute', { method: 'POST', body: JSON.stringify(body) })
 }
