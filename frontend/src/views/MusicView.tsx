@@ -30,6 +30,8 @@ import MixesList from '../components/music/flows/MixesList'
 import FlowLanes from '../components/music/flows/FlowLanes'
 import MixView from '../components/music/flows/MixView'
 import { useFlows } from '../musicFlows'
+import PlayAsFlow from '../components/music/flows/PlayAsFlow'
+import type { Source } from '../flowSources'
 import Sources, { type SourceTab } from '../components/music/edit/Sources'
 import { refOf, resetFocus, setSheet as setEditSheet, songKey, useFocus } from '../components/music/edit/focus'
 import { toast } from '../components/music/toast'
@@ -131,8 +133,10 @@ function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicT
 }
 
 /** An album's or an artist's own page: cover, facts, the three ways to play it, its tracks. */
-function Detail({ name, round, tracks, get, onPlaylist }: {
+function Detail({ name, round, tracks, get, onPlaylist, flow }: {
   name: string; round?: boolean; tracks: MusicTrack[]; get: (id: string) => Summary | undefined; onPlaylist: (t: MusicTrack) => void
+  /** Play as a flow from this page (SPEC-flows-tab PR 4). */
+  flow: { source: Source; byId: Map<string, MusicTrack>; onFlows: () => void }
 }) {
   const facts = factsLine(tracks.map(t => get(t.id)), tracks.map(t => t.bpm))
   const time = totalTime(tracks.reduce((s, t) => s + (t.duration || 0), 0))
@@ -154,22 +158,25 @@ function Detail({ name, round, tracks, get, onPlaylist }: {
             {facts && <span className="block text-xs text-base-content/60">{facts}</span>}
           </p>
           <div className="hidden md:flex gap-2">
-            <DetailActions name={name} tracks={tracks} shuffled={shuffled} />
+            <DetailActions name={name} tracks={tracks} shuffled={shuffled} flow={flow} />
           </div>
         </div>
       </div>
-      <div className="flex gap-2 md:hidden"><DetailActions name={name} tracks={tracks} shuffled={shuffled} /></div>
+      <div className="flex flex-wrap gap-2 md:hidden"><DetailActions name={name} tracks={tracks} shuffled={shuffled} flow={flow} /></div>
       <ul>{tracks.map(t => <TrackRow key={t.id} track={t} list={tracks} onPlaylist={onPlaylist} />)}</ul>
     </div>
   )
 }
 
-function DetailActions({ name, tracks, shuffled }: { name: string; tracks: MusicTrack[]; shuffled: () => MusicTrack[] }) {
+function DetailActions({ name, tracks, shuffled, flow }: {
+  name: string; tracks: MusicTrack[]; shuffled: () => MusicTrack[]; flow: { source: Source; byId: Map<string, MusicTrack>; onFlows: () => void }
+}) {
   return (
     <>
       <button onClick={() => run(playAll(tracks))} className="btn btn-primary rounded-xl gap-2">
         <svg className="size-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Play
       </button>
+      <PlayAsFlow name={name} className="rounded-xl" {...flow} />
       <button onClick={() => run(playAll(shuffled()))} className="btn rounded-xl">Shuffle</button>
       <button onClick={() => run(post(addPayload(tracks, 'append')))} className="btn rounded-xl">Add to queue</button>
       <SaveAsPlaylist name={name} tracks={addPayload(tracks, 'append').tracks} />
@@ -266,6 +273,8 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     navigate('music', next)
   }
   const openNode = (id: string) => go({ pl: id || undefined })
+  /** "Open in Flows": the sources are already set; show them on the Flows tab. */
+  const toFlows = () => { setTab('flows'); go({}) }
   const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(sheet, () => setSheet(false))
   useModalBack(adding, () => setAdding(false))
@@ -371,9 +380,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   ) : drafting ? null : node ? (
     <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} edit={editing} onEdit={node.kind === 'playlist' ? () => setEditing(true) : undefined} onSource={t => { setSourceTab(t); setEditSheet(t) }} />
   ) : album ? (
-    <Detail name={album.name} tracks={album.tracks} get={get} onPlaylist={setPickFor} />
+    <Detail name={album.name} tracks={album.tracks} get={get} onPlaylist={setPickFor} flow={{ source: { kind: 'album', value: album.name, rule: 'only' }, byId, onFlows: toFlows }} />
   ) : artist ? (
-    <Detail name={artist.name} round tracks={artist.tracks} get={get} onPlaylist={setPickFor} />
+    <Detail name={artist.name} round tracks={artist.tracks} get={get} onPlaylist={setPickFor} flow={{ source: { kind: 'artist', value: artist.name, rule: 'only' }, byId, onFlows: toFlows }} />
   ) : searching ? (
     <MusicSearch
       query={query}
