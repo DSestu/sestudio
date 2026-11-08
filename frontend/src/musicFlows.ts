@@ -130,7 +130,7 @@ export async function deleteFlow(id: string) {
 }
 
 /** One slot of a rendered mix: the track and the join it makes with the one before. */
-export interface Slot { track_id: string; join: string | null; chunk: string }
+export interface Slot { track_id: string; join: string | null; chunk: string; at?: number }
 
 /** What the flow would play now, without playing it. */
 export const renderFlow = (id: string, body: { minutes?: number; seed?: number } & ScopeBody = {}) =>
@@ -145,11 +145,10 @@ export async function reroute(body: { choices?: Record<string, string>; seed?: n
 /** The one name the dial keeps rewriting, so playing it many times is still one flow. */
 export const DIAL_NAME = 'Now'
 
-/** A one-chunk flow around the dial's three values (energy and mood 0..1, tempo in BPM). */
+/** Right now (SPEC-blend R1): the first track near this energy (0..1) and tempo, then every pick holds close. */
 export function dialFlow(energy: number, tempo: number, length: Flow['length']): Partial<Flow> {
-  // shortcut: mood has no analysis yet (SPEC §11.1), so it does not shape the flow; wire it with PR 12.
   return {
-    chunks: [{ id: 'now', share: 1, next: [], layers: { tempo: [[0, tempo], [1, tempo]], energy: [[0, energy], [1, energy]], harmony: [] } }],
+    chunks: [{ id: 'now', share: 1, next: [], layers: { start: { energy, tempo }, energy: [{ from: 0, to: 1, lean: 'hold' }], harmony: [] } }],
     pull: 'strong',
     length,
   }

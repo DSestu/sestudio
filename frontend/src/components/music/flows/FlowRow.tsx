@@ -1,10 +1,11 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import {
-  KINDS, deleteFlow, energyShape, eventDots, firstPath, playFlow, saveFlow, type Flow, type Slot,
+  KINDS, deleteFlow, energyShape, eventDots, firstPath, playFlow, saveFlow, type Curve, type Flow, type ScopeBody, type Slot,
 } from '../../../musicFlows'
+import { useSummaries } from '../../../musicMeta'
 import { UNKNOWN_ARTIST, type MusicTrack } from '../../../musicLibrary'
 import { scopeBody, useFlowSources } from '../../../flowSources'
-import { known, lengthLabel, preview } from './flowPreview'
+import { known, lengthLabel, preview, shapeRender } from './flowPreview'
 import { flowSentence, madeWhen } from './flowWords'
 
 // A flow on the Flows tab (SPEC-flows-tab §2, board A): its shape, what it does in one sentence,
@@ -14,10 +15,26 @@ const run = (p: Promise<unknown>) => { p.catch(() => {}) }
 const blur = () => (document.activeElement as HTMLElement | null)?.blur()
 const artistOf = (t?: MusicTrack) => (t?.artist && t.artist !== UNKNOWN_ARTIST ? t.artist : '')
 
-/** The energy curve as a filled line, harmony events as dots; `now` dims what has played. */
-export function Shape({ flow, w, h, now, dots = true }: { flow: Pick<Flow, 'chunks'>; w: number; h: number; now?: number; dots?: boolean }) {
+/** A flow's shape from a real render (SPEC-blend S1): each pick's energy along the flow; null until it is in. */
+export function useRenderedShape(flow: Pick<Flow, 'id'>, scope: ScopeBody = {}): Curve | null {
+  const [mix, setMix] = useState<Slot[] | null>(null)
+  const sk = JSON.stringify(scope)
+  useEffect(() => {
+    let live = true
+    shapeRender(flow.id, scope).then(m => { if (live) setMix(m) }, () => {})
+    return () => { live = false }
+  }, [flow.id, sk]) // eslint-disable-line react-hooks/exhaustive-deps -- scope is in sk
+  const { get } = useSummaries(useMemo(() => (mix ?? []).map(s => s.track_id), [mix]))
+  if (!mix?.length) return null
+  const end = Math.max(1, ...mix.map(s => s.at ?? 0))
+  const pts = mix.flatMap(s => { const e = get(s.track_id)?.energyScale?.track; return e == null ? [] : [[(s.at ?? 0) / end, e / 100] as [number, number]] })
+  return pts.length >= 2 ? pts : null
+}
+
+/** The energy as a filled line (from a render when given, else drawn from the leans), harmony events as dots; `now` dims what has played. */
+export function Shape({ flow, w, h, now, dots = true, pts: drawn }: { flow: Pick<Flow, 'chunks'>; w: number; h: number; now?: number; dots?: boolean; pts?: Curve | null }) {
   const gid = useId()
-  const pts = energyShape(flow) ?? [[0, 0.5], [1, 0.5]]
+  const pts = drawn ?? energyShape(flow) ?? [[0, 0.5], [1, 0.5]]
   const y = (v: number) => h - 3 - v * (h - 10)
   const P = pts.map(([f, v]) => [f * w, y(v)] as const)
   let d = `M${P[0][0]} ${P[0][1]}`
@@ -123,6 +140,7 @@ export default function FlowRow({ flow, open, onToggle, onOpen, byId }: {
   const slots = got?.key === key ? got.slots ?? null : null
   const failed = got?.key === key && !!got.failed
   const sub = opensWith(flow, byId)
+  const shape = useRenderedShape(flow, scope)
   const edit = () => flow.preset
     ? run(saveFlow(`${flow.name} copy`, { chunks: flow.chunks, pull: flow.pull, length: flow.length, allowOnline: flow.allowOnline }).then(f => onOpen(f.id)))
     : onOpen(flow.id)
@@ -133,8 +151,8 @@ export default function FlowRow({ flow, open, onToggle, onOpen, byId }: {
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
         className={`flex cursor-pointer items-center gap-3 rounded-xl px-1 py-2.5 sm:gap-3.5 sm:px-3 ${open ? '' : 'hover:bg-white/4'}`}
       >
-        <span className="hidden sm:block"><Shape flow={flow} w={150} h={40} /></span>
-        <span className="sm:hidden"><Shape flow={flow} w={70} h={34} /></span>
+        <span className="hidden sm:block"><Shape flow={flow} pts={shape} w={150} h={40} /></span>
+        <span className="sm:hidden"><Shape flow={flow} pts={shape} w={70} h={34} /></span>
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-sm font-semibold">
             {flow.name}
