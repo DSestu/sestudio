@@ -92,3 +92,18 @@ def test_a_copy_of_a_track_is_not_picked_again():
     got = builder.build_arc(POOL + copies, builder.PRESETS["Slow burn"], 40 * 60)
     ids = [s["id"].removesuffix("-copy") for s in got["slots"]]
     assert len(set(ids)) == len(ids)
+
+
+def test_old_energy_points_read_as_a_start_and_leans():
+    arc = builder.upgrade(
+        {
+            "energy": [0.35, 0.7, 0.95, 0.4],
+            "mood": [0],
+            "genre": [{"g": "Drum & Bass", "x1": 1}],
+        }
+    )
+    assert arc["start"] == 0.35
+    assert [s["lean"] for s in arc["energy"]] == ["lift", "ease"]
+    assert arc["energy"][-1]["x1"] == 1
+    assert builder.upgrade(arc) == arc
+    assert builder.build_arc(POOL, arc, 20 * 60)["slots"]

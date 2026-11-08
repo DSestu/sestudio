@@ -54,6 +54,11 @@ def _near(step: float, best: float, spread: float) -> float:
     return math.exp(-(((step - best) / spread) ** 2))
 
 
+def energy_part(delta: float, lean: str = "hold") -> float:
+    """The Blend energy part of a step from one track to the next under *lean*, 0..1."""
+    return _near(delta, LEAN.get(lean, LEAN["hold"])["energy"], SPREAD["energy"])
+
+
 #: An energy step "holds" while the Hold part stays this high (about 8 points either way).
 HOLD_PART: Final = 0.75
 

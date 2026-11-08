@@ -6,6 +6,7 @@ import {
 } from '../../../musicPlaylists'
 import { startPlayback } from '../player'
 import { MOOD_LADDER } from '../../../harmony'
+import { EnergyLevel } from '../TrackMeta'
 
 const run = (p: Promise<unknown>) => { p.catch(e => window.alert((e as Error).message)) }
 
@@ -113,13 +114,13 @@ export function SmartForm({ node, onClose }: { node?: PlaylistNode; onClose: () 
             </select>
           </label>
         </div>
+        {/* The level itself (SPEC-blend): a slider on the fixed energy scale, off at 0. */}
         <label className="flex flex-col gap-1 text-xs">Energy at least
-          <select className="select select-bordered select-sm w-full" value={energy} onChange={e => setEnergy(e.target.value)}>
-            <option value="">Any</option>
-            <option value="25">25 and up</option>
-            <option value="50">50 and up</option>
-            <option value="75">75 and up</option>
-          </select>
+          <span className="flex items-center gap-3">
+            <input type="range" min={0} max={100} step={5} value={energy || 0} onChange={e => setEnergy(e.target.value === '0' ? '' : e.target.value)}
+              aria-valuetext={energy ? `energy ${energy} of 100 or more` : 'any energy'} className="rn-level min-w-0 flex-1" />
+            {energy ? <EnergyLevel value={Number(energy)} /> : <span className="w-14 text-base-content/50">Any</span>}
+          </span>
         </label>
         <label className="flex flex-col gap-1 text-xs">Added within the last (days)
           <input className={field} type="number" min={0} value={days} onChange={e => setDays(e.target.value)} />
