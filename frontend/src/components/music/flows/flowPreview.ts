@@ -1,4 +1,4 @@
-import { LENGTHS, renderFlow, type Flow, type Slot } from '../../../musicFlows'
+import { LENGTHS, renderFlow, type Flow, type ScopeBody, type Slot } from '../../../musicFlows'
 
 // What a flow row shows of a render (SPEC-flows-tab §4): rendered when a row opens, kept for the session.
 
@@ -6,10 +6,10 @@ const cache = new Map<string, Promise<Slot[]>>()
 /** The last render seen per flow, for the artists line of a closed row. */
 export const known = new Map<string, Slot[]>()
 
-export function preview(id: string, seed: number): Promise<Slot[]> {
-  const key = `${id}:${seed}`
+export function preview(id: string, seed: number, scope: ScopeBody = {}): Promise<Slot[]> {
+  const key = `${id}:${seed}:${JSON.stringify(scope)}`
   if (!cache.has(key)) {
-    cache.set(key, renderFlow(id, { minutes: 40, seed }).then(
+    cache.set(key, renderFlow(id, { minutes: 40, seed, ...scope }).then(
       r => { known.set(id, r.mix); return r.mix },
       e => { cache.delete(key); throw e },
     ))
