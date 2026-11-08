@@ -42,17 +42,27 @@ def test_energy_raw_reads_loudness_and_highs():
     assert highs == 3 / 8
 
 
-def test_levels_rank_tracks_against_the_library(db):  # noqa: F811
-    for i, (loud, highs) in enumerate(
-        [(0.05, 0.1), (0.1, 0.2), (0.2, 0.3), (0.4, 0.4)]
-    ):
-        _row(f"t{i}", loud, highs)
+def test_energy_is_on_a_fixed_scale_whatever_the_library(db):  # noqa: F811
+    _row("loud", 0.4, 0.15)
     store.renormalise()
-    got = store.get([f"t{i}" for i in range(4)])
-    levels = [got[f"t{i}"]["energyLevel"] for i in range(4)]
-    assert levels == list(profile.LEVELS)
-    scores = [got[f"t{i}"]["energyScale"]["track"] for i in range(4)]
-    assert scores == sorted(scores) and scores[0] < scores[-1]
+    alone = store.get(["loud"])["loud"]["energyScale"]["track"]
+    for i, (loud, highs) in enumerate([(0.3, 0.12), (0.5, 0.18), (0.45, 0.2)]):
+        _row(f"o{i}", loud, highs)
+    store.renormalise()
+    assert store.get(["loud"])["loud"]["energyScale"]["track"] == alone
+    assert "energyLevel" not in store.get(["loud"])["loud"]
+
+
+def test_close_tracks_get_close_scores():
+    a = profile.energy_score((0.30, 0.10))
+    b = profile.energy_score((0.32, 0.105))
+    assert abs(a - b) < 0.03
+    assert (
+        profile.energy_score((0.05, 0.015))
+        < 0.2
+        < 0.8
+        < profile.energy_score((0.5, 0.17))
+    )
 
 
 def test_intro_and_outro_are_on_the_same_scale(db):  # noqa: F811
@@ -61,17 +71,3 @@ def test_intro_and_outro_are_on_the_same_scale(db):  # noqa: F811
     store.renormalise()
     e = store.get(["quiet-intro"])["quiet-intro"]["energyScale"]
     assert e["intro"] < e["outro"]
-
-
-def test_a_state_from_before_the_scale_is_redone(db):  # noqa: F811
-    _row("a", 0.2, 0.3)
-    _row("b", 0.3, 0.3)
-    state = store.renormalise()
-    state.pop("energy")
-    conn = library._connect()
-    conn.execute(
-        "INSERT OR REPLACE INTO music_state (key, value) VALUES ('norm', ?)",
-        (json.dumps(state),),
-    )
-    conn.commit()
-    assert "energyLevel" in store.get(["a"])["a"]

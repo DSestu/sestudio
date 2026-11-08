@@ -1,4 +1,5 @@
 import { MOOD_LADDER, moodOf } from '../../../harmony'
+import { EnergyLevel } from '../TrackMeta'
 import { openFitsFor } from '../../../musicFits'
 import { genreColor, genreShort, useSummary } from '../../../musicMeta'
 import { useModalBack } from '../../../useModalBack'
@@ -99,7 +100,10 @@ function Card({ id, title }: { id: string; title: string }) {
             <div>
               <div className="mb-1 text-xs font-semibold text-base-content/50">Energy across the track</div>
               {curve?.length ? <EnergyShape curve={curve} color={color} /> : <p className="text-sm text-base-content/50">Not analysed yet.</p>}
-              <p className="mt-1 text-xs text-base-content/50">{s?.energyLevel ? `${s.energyLevel} · ` : ''}intro and outro are where mixes overlap</p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-base-content/50">
+                {s?.energyScale?.track != null && <><EnergyLevel value={s.energyScale.track} /> <span>intro <EnergyLevel value={s.energyScale.intro} /></span> <span>outro <EnergyLevel value={s.energyScale.outro} /></span> ·</>}
+                <span>intro and outro are where mixes overlap</span>
+              </p>
             </div>
           </div>
         </div>

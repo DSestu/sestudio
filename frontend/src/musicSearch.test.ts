@@ -3,11 +3,11 @@ import type { MusicTrack } from './musicLibrary'
 import { groupResults, hitPayload, matchWords, mergeResults, type OnlineHit } from './musicSearch'
 
 describe('matchWords', () => {
-  const s = { bpm: 149.6, key: 'G minor', genre: 'Dubstep', energyLevel: 'Intense', harmony: { track: { tonic: 'G', mode: 'Phrygian', notes: [] } } } as never
+  const s = { bpm: 149.6, key: 'G minor', genre: 'Dubstep', energyScale: { track: 81 }, harmony: { track: { tonic: 'G', mode: 'Phrygian', notes: [] } } } as never
   const ok = (q: string) => matchWords(q.split(' '), 'some title', s)
   it('finds a track by key, mode, mood, energy, genre and tempo', () => {
-    for (const q of ['g minor', 'phryg', 'menacing', 'intense', 'dubstep 150', 'title']) expect(ok(q), q).toBe(true)
-    for (const q of ['dark', 'calm', 'dubstep 120', 'a minor']) expect(ok(q), q).toBe(false)
+    for (const q of ['g minor', 'phryg', 'menacing', 'energy 80+', 'energy 75-85', 'energy 80 dubstep', 'dubstep 150', 'title']) expect(ok(q), q).toBe(true)
+    for (const q of ['dark', 'intense', 'energy 85+', 'energy 50-70', 'dubstep 120', 'a minor']) expect(ok(q), q).toBe(false)
   })
   it('only matches the title without an analysis', () => {
     expect(matchWords(['dark'], 'some title')).toBe(false)

@@ -67,7 +67,6 @@ SUMMARY_KEYS = (
     "genre",
     "genreConf",
     "genreSource",
-    "energyLevel",
     "energyScale",
     "harmony",
     "balance",
