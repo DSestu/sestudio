@@ -117,20 +117,21 @@ def _bands(
     path: str,
     on_bands: Callable[[np.ndarray, float], None] | None = None,
     also: dict[int, Path] | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
     """8 band RMS envelopes at 10 Hz from one decode: each 0.1 s frame's power spectrum weighted by the filters' |H|².
 
     Was 8 ffmpeg decodes, one per filter (about 5x slower); same filters, so the values match within a few percent.
     Read from ffmpeg as it decodes, ``BAND_STEP`` seconds at a time, and *on_bands* gets the envelopes so far after
     each, with the duration in the file's header (0 without one). The same decode writes the mono signal at each
     rate of *also* (rate -> file, s16le): one decode instead of one per rate.
-    Returns the envelopes and the 16 kHz signal (the genre model's rate).
+    The same decode also measures the loudness (:func:`_ebur128`).
+    Returns the envelopes, the 16 kHz signal (the genre model's rate) and the loudness.
     """
     win = 1600
     # shortcut: the filters ran at the source rate (usually 44.1 kHz) before the resample; this assumes 44.1 kHz.
     gain2 = _biquad_gain2(np.fft.rfftfreq(win, 1 / 16000), 44100)
     # Info level, so the header's duration is in the log before the first samples.
-    cmd = [ffmpeg_binary(), "-hide_banner", "-nostats", "-i", path]
+    cmd = [ffmpeg_binary(), "-hide_banner", "-nostats", "-i", path, *LOUDNESS_OUT]
     for rate, out in (also or {}).items():
         cmd += ["-ac", "1", "-ar", str(rate), "-f", "s16le", str(out)]
     cmd += ["-ac", "1", "-ar", "16000", "-f", "s16le", "-"]
@@ -153,8 +154,33 @@ def _bands(
                         Path(tmp, "log").read_text("utf-8", "replace")
                     )
                 on_bands(np.concatenate(parts, axis=1), duration)
+        proc.wait()  # the summary is written as ffmpeg exits, after the last samples
+        loud = _ebur128(Path(tmp, "log").read_text("utf-8", "replace"))
     bands = np.concatenate(parts, axis=1) if parts else np.zeros((8, 0))
-    return bands, _s16(b"".join(chunks))
+    return bands, _s16(b"".join(chunks)), loud
+
+
+#: An extra ffmpeg output measuring EBU R128 loudness on the file's own channels and
+#: rate (not the mono downmix the envelopes use); its summary goes to the log.
+#: framelog=verbose keeps its per-frame lines out of an info-level log.
+LOUDNESS_OUT = ("-map", "0:a:0", "-af", "ebur128=peak=true:framelog=verbose", "-f", "null", "-")  # fmt: skip
+
+
+def _ebur128(log: str) -> dict[str, float]:
+    """``lufs`` (integrated loudness) and ``tp`` (true peak, dBTP) from ebur128's summary; {} without one."""
+    i = re.findall(r"I:\s+(-?[\d.]+) LUFS", log)
+    tp = re.findall(r"Peak:\s+(-?inf|-?[\d.]+) dBFS", log)
+    if not i:
+        return {}
+    return {"lufs": float(i[-1]), "tp": float(tp[-1]) if tp else 0.0}
+
+
+def loudness(path: str) -> dict[str, float]:
+    """Integrated loudness and true peak of *path* (:func:`_ebur128`): one decode, for tracks analysed before it."""
+    cmd = [ffmpeg_binary(), "-hide_banner", "-nostats", "-i", path, *LOUDNESS_OUT]
+    return _ebur128(
+        subprocess.run(cmd, capture_output=True).stderr.decode("utf-8", "replace")
+    )
 
 
 def _header_duration(log: str) -> float:
@@ -248,7 +274,7 @@ def analyse_file(
     """
     with tempfile.TemporaryDirectory() as tmp:
         also = {4000: Path(tmp, "low"), TEMPO_SR: Path(tmp, "tempo")}
-        bands, signal = _bands(path, on_bands, also)
+        bands, signal, loud_r128 = _bands(path, on_bands, also)
         low, x = (
             _s16(f.read_bytes()) if f.exists() else _s16(b"") for f in also.values()
         )
@@ -267,7 +293,7 @@ def analyse_file(
     notes = modes.notes(x) if len(x) >= modes.MIN_SAMPLES else None
     if on_notes and duration >= MIN_TEMPO_SECONDS:
         on_notes(modes.profile_steps(x, f=notes))
-    extra = _profile(x, bands, loud, bpm, bar0, notes)
+    extra = _profile(x, bands, loud, bpm, bar0, notes) | loud_r128
     patches = genres.audio_patches(path, duration, signal)
     return RawAnalysis(
         duration, bands, loud, zcr, bpm, beat0, bar0, conf, extra, patches
