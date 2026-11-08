@@ -65,5 +65,6 @@ SESTUDIO_API=$API VITE_POLL=$POLL setsid npx vite --host 0.0.0.0 --port "$PORT" 
 for _ in $(seq 60); do curl -s -o /dev/null "http://localhost:$PORT" && break; sleep 0.5; done
 # WSL runs in mirrored networking, so the Windows LAN address is local here too.
 LAN=$(ip -4 route get "$(ip -4 route show default | awk 'NR==1{print $3}')" 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src") print $(i+1)}' || true)
-echo "preview $NAME: http://localhost:$PORT${LAN:+  phone: http://$LAN:$PORT}  api: $API"
+TS=$(tailscale ip -4 2>/dev/null | head -1 || true)
+echo "preview $NAME: http://localhost:$PORT${LAN:+  phone: http://$LAN:$PORT}${TS:+  tailscale: http://$TS:$PORT}  api: $API"
 echo "logs: $STATE/{vite,backend}.log"
