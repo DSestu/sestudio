@@ -1,4 +1,4 @@
-import { blend, energyLean, type Lean } from '../../../blend'
+import { blend, energyLean, type Blend, type Lean } from '../../../blend'
 
 // How well one track follows another (harmony master plan E0.5), ranked by Blend (SPEC-blend). The same
 // rules, thresholds and move names as src/sestudio/music/proximity.py: keep both in step.
@@ -136,6 +136,12 @@ export function harmonyOf(a: ProxTrack, b: ProxTrack): { shared: number | null; 
 
 const edge = (t: ProxTrack, which: 'intro' | 'outro' | 'track') => t.energyScale?.[which] ?? t.energyScale?.track ?? null
 
+/** The Blend of a → b with this file's harmony reading (Camelot stands in for an unread key). */
+export function blendOf(a: ProxTrack, b: ProxTrack, lean: Lean = 'hold'): Blend {
+  const { kind } = harmonyOf(a, b)
+  return blend(a, b, { lean, harmony: kind ? HARMONY_PART[kind] : 0.4 })
+}
+
 /** Everything worth saying about the move from a to b (unknown facts are null), with its Blend. */
 export function join(a: ProxTrack, b: ProxTrack, lean: Lean = 'hold'): Join {
   const { shared, kind } = harmonyOf(a, b)
@@ -157,7 +163,7 @@ export function join(a: ProxTrack, b: ProxTrack, lean: Lean = 'hold'): Join {
     genreChange: !!(ga && gb && ga !== gb),
     bpmDelta: a.bpm && b.bpm ? Math.round((b.bpm - a.bpm) * 10) / 10 : null,
     tempoJump: !!(a.bpm && b.bpm && Math.abs(b.bpm - a.bpm) > a.bpm * TEMPO_TOL),
-    blend: blend(a, b, { lean, harmony: kind ? HARMONY_PART[kind] : 0.4 }).score,
+    blend: blendOf(a, b, lean).score,
   }
 }
 

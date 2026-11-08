@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
 import { KINDS, playMix, refreshFlows, useFlows, type Mix } from '../../../musicFlows'
 import type { MusicTrack } from '../../../musicLibrary'
-import { useSummaries } from '../../../musicMeta'
+import type { BlendTrack, Lean } from '../../../blend'
+import { useSummaries, type Summary } from '../../../musicMeta'
+import type { SlotBlend } from '../../../musicQueue'
+import { BlendMark } from '../BlendMark'
 
 // A mix as a list (SPEC-music-flows §7, board 4): lineage, live or frozen, pins.
 // A track placed by hand is a pin; the flow refills around it. Unpin lets the flow decide again.
 
 const run = (p: Promise<unknown>) => { p.catch(() => {}) }
 
-interface Slot { track_id: string; chunk?: string; join?: string | null; blend?: { blocked: boolean } | null; pinned?: boolean; frozen?: boolean }
+interface Slot { track_id: string; chunk?: string; join?: string | null; blend?: SlotBlend | null; lean?: Lean; pinned?: boolean; frozen?: boolean }
+const asTrack = (id: string, s?: Summary): BlendTrack => ({ id, bpm: s?.bpm, genre: s?.genre, harmony: s?.harmony, energyScale: s?.energyScale })
 
 async function call(path: string, method = 'POST', body?: unknown) {
   const res = await fetch(`/api/music/mixes/${path}`, {
@@ -105,6 +109,10 @@ export default function MixView({ mixId, byId, onEditFlow }: { mixId: string; by
               </span>
               {s.join && <span className={`rounded bg-white/7 px-1.5 text-[11px] ${s.join === 'break' ? 'text-error' : 'text-base-content/75'}`}>{KINDS[s.join] ?? s.join}</span>}
               {blocked && <span className="rounded-full bg-error/15 px-1.5 text-[11px] text-error" title="Nothing left met every Must">past a Must</span>}
+              {i > 0 && s.blend?.parts && (
+                <BlendMark b={{ ...s.blend, join: s.join ?? null }} a={asTrack(slots![i - 1].track_id, get(slots![i - 1].track_id))} t={asTrack(s.track_id, sum)}
+                  into={t?.title} lean={s.lean} harmony={s.join ? KINDS[s.join] ?? s.join : null} />
+              )}
               {!frozen && (
                 <button onClick={() => togglePin(i)} aria-pressed={pin} className={`btn btn-ghost btn-xs ${pin ? 'text-primary' : 'text-base-content/60'}`}>
                   {pin ? 'Unpin' : 'Pin'}
