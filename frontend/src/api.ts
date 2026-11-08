@@ -113,6 +113,10 @@ export interface AppSettings {
   music_autopilot_arc?: 'warmup' | 'slow-burn' | 'dubstep' | 'flat-out'
   /** Concurrent downloads a watcher may run, kept below the interactive pool. */
   watcher_max_concurrent?: number
+  /** Default watcher check interval in seconds, per source; watchers at interval 0 follow it. */
+  watcher_interval_twitch?: number
+  watcher_interval_youtube?: number
+  watcher_interval_other?: number
   /** Every host a download could use, for the ranking control. Read-only. */
   known_hosts?: string[]
   /** The shipped order, restored by "Reset". Read-only. */

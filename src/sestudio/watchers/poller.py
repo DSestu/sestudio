@@ -17,7 +17,7 @@ from sestudio.sites.base import ContentSite, SiteError
 from sestudio.tmdb import TmdbDisabled
 from sestudio.watchers.autodownload import auto_download
 from sestudio.watchers.engine import UnsupportedKind, poll_once
-from sestudio.watchers.models import PAGE_KINDS, Watcher
+from sestudio.watchers.models import PAGE_KINDS, Watcher, default_interval
 from sestudio.watchers.notify import dispatch
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,8 @@ def initial_next_poll(now: int | None = None) -> int:
 
 
 def _interval(watcher: Watcher) -> int:
+    if not watcher.interval_seconds:
+        return default_interval(watcher.kind, watcher.config)
     return max(_MIN_INTERVAL, int(watcher.interval_seconds))
 
 

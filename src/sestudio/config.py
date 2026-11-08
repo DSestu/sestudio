@@ -76,6 +76,11 @@ class AppConfig:
     # the worker pool: background work should never be what makes a download you
     # asked for sit and wait.
     watcher_max_concurrent: int = 2
+    # Default check interval per watcher source, in seconds; a watcher set to
+    # "Default" (interval 0) follows its source's value.
+    watcher_interval_twitch: int = 300
+    watcher_interval_youtube: int = 86400
+    watcher_interval_other: int = 86400
     # Outbound notification when a watcher finds something. Off unless a channel
     # is configured, so nothing is ever sent by default.
     notifications_enabled: bool = False
@@ -175,6 +180,15 @@ def load_config() -> AppConfig:
             autoplay_on_open=bool(data.get("autoplay_on_open", True)),
             collapse_seasons=bool(data.get("collapse_seasons", True)),
             watcher_max_concurrent=int(data.get("watcher_max_concurrent", 2)),
+            watcher_interval_twitch=max(
+                300, int(data.get("watcher_interval_twitch", 300))
+            ),
+            watcher_interval_youtube=max(
+                300, int(data.get("watcher_interval_youtube", 86400))
+            ),
+            watcher_interval_other=max(
+                300, int(data.get("watcher_interval_other", 86400))
+            ),
             notifications_enabled=bool(data.get("notifications_enabled", False)),
             callmebot_phone=str(data.get("callmebot_phone", "")),
             callmebot_apikey=str(data.get("callmebot_apikey", "")),

@@ -77,3 +77,22 @@ const UNKNOWN: KindMeta = {
 export function kindMeta(kind: string): KindMeta {
   return META[kind] ?? UNKNOWN
 }
+
+/** Check frequencies offered for watchers and their per-source defaults. */
+export const INTERVALS = [
+  { value: 300, label: 'Every 5 minutes' },
+  { value: 1800, label: 'Every 30 minutes' },
+  { value: 3600, label: 'Hourly' },
+  { value: 21600, label: 'Every 6 hours' },
+  { value: 86400, label: 'Daily' },
+]
+
+export function intervalLabel(seconds: number): string {
+  return INTERVALS.find(i => i.value === seconds)?.label ?? `Every ${Math.round(seconds / 60)} minutes`
+}
+
+/** The Settings key whose default a watcher with interval 0 follows. */
+export function intervalSetting(kind: string, config: Record<string, unknown>) {
+  const source = kind === 'channel' && (config.source === 'twitch' || config.source === 'youtube') ? config.source : 'other'
+  return `watcher_interval_${source}` as const
+}
