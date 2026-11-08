@@ -3,7 +3,9 @@ import { DIAL_NAME, KINDS, dialFlow, playFlow, saveFlow, useFlows, type Flow } f
 import { UNKNOWN_ARTIST, type MusicTrack } from '../../../musicLibrary'
 import { useMusicQueue } from '../../../musicQueue'
 import { openPlayer } from '../player'
+import { scopeBody, useFlowSources } from '../../../flowSources'
 import FlowRow, { Shape } from './FlowRow'
+import FromBar from './FromBar'
 import { ENERGY_WORDS } from './flowWords'
 import { fresh, toFlow } from './lanes'
 
@@ -44,12 +46,13 @@ function RightNow({ flows }: { flows: Flow[] }) {
   const [level, setLevel] = useState(2)
   const [tempo, setTempo] = useState(172)
   const [busy, setBusy] = useState(false)
+  const sources = useFlowSources()
   const play = async () => {
     setBusy(true)
     try {
       const mine = flows.find(f => f.name === DIAL_NAME && !f.preset)
       const flow = await saveFlow(DIAL_NAME, dialFlow(LEVEL[level], tempo, 'endless'), mine?.id)
-      await playFlow(flow.id)
+      await playFlow(flow.id, scopeBody(sources))
     } finally {
       setBusy(false)
     }
@@ -96,6 +99,7 @@ export default function FlowsHome({ onOpen, byId }: { onOpen: (id: string) => vo
   return (
     <div className="flex max-w-[860px] flex-col gap-3.5">
       {playing && <Playing flow={playing} byId={byId} />}
+      <FromBar />
       <RightNow flows={flows} />
       <section aria-label="Your flows" className="mt-1.5">
         <div className="mb-1 flex items-center gap-2.5 px-1 sm:px-3">

@@ -3,6 +3,7 @@ import {
   KINDS, deleteFlow, energyShape, eventDots, firstPath, playFlow, saveFlow, type Flow, type Slot,
 } from '../../../musicFlows'
 import { UNKNOWN_ARTIST, type MusicTrack } from '../../../musicLibrary'
+import { scopeBody, useFlowSources } from '../../../flowSources'
 import { known, lengthLabel, preview } from './flowPreview'
 import { flowSentence, madeWhen } from './flowWords'
 
@@ -109,14 +110,16 @@ export default function FlowRow({ flow, open, onToggle, onOpen, byId }: {
 }) {
   const [seed, setSeed] = useState(1)
   const [tries, setTries] = useState(0)
-  const key = `${flow.id}:${seed}:${tries}`
+  const sources = useFlowSources()
+  const scope = scopeBody(sources)
+  const key = `${flow.id}:${seed}:${tries}:${JSON.stringify(scope)}`
   const [got, setGot] = useState<{ key: string; slots?: Slot[]; failed?: boolean } | null>(null)
   useEffect(() => {
     if (!open) return
     let live = true
-    preview(flow.id, seed).then(slots => { if (live) setGot({ key, slots }) }, () => { if (live) setGot({ key, failed: true }) })
+    preview(flow.id, seed, scope).then(slots => { if (live) setGot({ key, slots }) }, () => { if (live) setGot({ key, failed: true }) })
     return () => { live = false }
-  }, [open, flow.id, seed, key])
+  }, [open, flow.id, seed, key]) // eslint-disable-line react-hooks/exhaustive-deps -- scope is in key
   const slots = got?.key === key ? got.slots ?? null : null
   const failed = got?.key === key && !!got.failed
   const sub = opensWith(flow, byId)
@@ -141,7 +144,7 @@ export default function FlowRow({ flow, open, onToggle, onOpen, byId }: {
           {sub && <span className="mt-0.5 hidden truncate text-xs text-base-content/45 sm:block">{sub}</span>}
         </span>
         <span className="hidden shrink-0 rounded-full bg-white/7 px-2 py-px text-[11px] text-base-content/65 sm:inline">{lengthLabel(flow)}</span>
-        <PlayButton label={`Play ${flow.name}`} onClick={() => run(playFlow(flow.id, { seed }))} small />
+        <PlayButton label={`Play ${flow.name}`} onClick={() => run(playFlow(flow.id, { seed, ...scope }))} small />
         <RowMenu flow={flow} onOpen={onOpen} />
       </div>
       {open && (

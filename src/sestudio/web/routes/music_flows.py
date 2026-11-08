@@ -151,6 +151,50 @@ def create_flow(body: FlowBody) -> dict[str, Any]:
     return _run(mixes.flow_create, body.name or "Flow", body.flow or {})
 
 
+@router.get("/flows/sources")
+def flow_sources() -> dict[str, list[dict[str, Any]]]:
+    """What a play can draw from (SPEC-flows-tab §2): every genre, library, artist and album
+    of the analysed tracks, with how many each holds, most first."""
+    labels = {
+        lib["id"]: lib.get("label") or lib["id"] for lib in libraries.all_libraries()
+    }
+    seen: dict[str, dict[str, dict[str, Any]]] = {k: {} for k in flows.SOURCE_KINDS}
+    for t in _pool():
+        for kind in flows.SOURCE_KINDS:
+            value = str(t.get(kind) or "").strip()
+            if not value:
+                continue
+            key = value.casefold()
+            row = seen[kind].setdefault(
+                key, {"value": value, "label": labels.get(value, value), "count": 0}
+            )
+            row["count"] += 1
+            if kind == "album" and t.get("artist"):
+                row.setdefault("sub", t["artist"])
+    return {
+        kind: sorted(rows.values(), key=lambda r: (-r["count"], r["label"].casefold()))
+        for kind, rows in seen.items()
+    }
+
+
+class ScopeBody(BaseModel):
+    sources: list[Source] = []
+
+
+@router.post("/flows/scope")
+def flow_scope(body: ScopeBody) -> dict[str, Any]:
+    """How much music a set of sources holds: the tracks their Only rules keep, how many of
+    those a Lean rule favours, and the seconds of mix they fill."""
+    pool = _pool()
+    scoped, lean, narrowed = flows.scope(pool, [s.model_dump() for s in body.sources])
+    return {
+        "count": len(scoped),
+        "lean": sum(1 for t in scoped if t["id"] in lean),
+        "seconds": round(flows.capacity(scoped)),
+        "narrowed": narrowed,
+    }
+
+
 @router.get("/flows/{flow_id}")
 def get_flow(flow_id: str) -> dict[str, Any]:
     return _run(mixes.flow_get, flow_id)

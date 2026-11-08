@@ -532,3 +532,44 @@ def test_play_keeps_its_sources_through_a_reroute(tmp_path, monkeypatch):
     q = c.get("/api/music/queue").json()
     assert {it["track_id"] for it in q["items"]} <= noisia
     assert q["source"]["sources"] == only
+
+
+def test_the_picker_lists_and_counts_sources(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from sestudio import downloaded
+    from sestudio.web.app import create_app
+    from sestudio.web.routes import music_flows
+
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SESTUDIO_DB", str(tmp_path / "library.db"))
+    library._conn = None
+    downloaded.invalidate()
+    monkeypatch.setattr(music_flows, "_pool", lambda: SRC_LIB)
+    c = TestClient(create_app())
+    lists = c.get("/api/music/flows/sources").json()
+    assert [r["value"] for r in lists["library"]] == ["dm", "neuro"]
+    assert lists["album"][0] == {
+        "value": "X",
+        "label": "X",
+        "count": 6,
+        "sub": "Noisia",
+    }
+    assert lists["genre"] == [
+        {"value": "Drum & Bass", "label": "Drum & Bass", "count": 14}
+    ]
+    got = c.post(
+        "/api/music/flows/scope",
+        json={
+            "sources": [
+                {"kind": "library", "value": "dm", "rule": "only"},
+                {"kind": "album", "value": "RAT", "rule": "lean"},
+            ]
+        },
+    ).json()
+    assert got == {
+        "count": 8,
+        "lean": 4,
+        "seconds": round(8 * (300 - flows.BLEND_S)),
+        "narrowed": True,
+    }

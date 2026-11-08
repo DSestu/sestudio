@@ -81,7 +81,10 @@ export function useFlows() {
   return useSyncExternalStore(subscribe, () => snap)
 }
 
-export const playFlow = (id: string, body: { choices?: Record<string, string>; minutes?: number; seed?: number } = {}) =>
+/** Sources and what happens when they run out (flowSources.ts `scopeBody`). */
+export interface ScopeBody { sources?: { kind: string; value: string; rule: string }[]; then?: 'stop' | 'similar' }
+
+export const playFlow = (id: string, body: { choices?: Record<string, string>; minutes?: number; seed?: number } & ScopeBody = {}) =>
   startPlayback(async () => { await json(`/flows/${id}/play`, { method: 'POST', body: JSON.stringify(body) }) })
 
 export const playMix = (id: string) =>
@@ -104,7 +107,7 @@ export async function deleteFlow(id: string) {
 export interface Slot { track_id: string; join: string | null; chunk: string }
 
 /** What the flow would play now, without playing it. */
-export const renderFlow = (id: string, body: { minutes?: number; seed?: number } = {}) =>
+export const renderFlow = (id: string, body: { minutes?: number; seed?: number } & ScopeBody = {}) =>
   json<{ mix: Slot[]; minutes: number }>(`/flows/${id}/render`, { method: 'POST', body: JSON.stringify(body) })
 
 export async function reroute(body: { choices?: Record<string, string>; seed?: number }) {
