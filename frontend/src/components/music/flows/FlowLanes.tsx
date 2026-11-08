@@ -1,23 +1,32 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
+import type { Setting } from '../../../blend'
 import { playFlow, refreshFlows, saveFlow, useFlows, type Flow } from '../../../musicFlows'
 import type { MusicTrack } from '../../../musicLibrary'
+import { useSummaries } from '../../../musicMeta'
+import type { SlotBlend } from '../../../musicQueue'
+import { BlendRing } from '../BlendRing'
 import {
-  ANY, CCOL, COLOURS, ENERGY, KINDS, addBrick, fresh, fromFlow, genreLabel, pullEdge, remove, setValue, split, starts, stretches, swap, toFlow, total,
-  type LaneKind, type Lanes, type Stretch,
+  ANY, CCOL, COLOURS, KINDS, LEANS, addBrick, fresh, fromFlow, genreLabel, pullEdge, remove, setSetting, setValue, split, starts, stretches, swap, toFlow, total,
+  type LaneKind, type Lanes, type SettingKind, type Stretch,
 } from './lanes'
 
-// The flow editor: three lanes of bricks (energy, genre, key colour) over the night, dragged in from
-// a palette, resized by their edges, split and removed; the Library row says where tracks run short.
-// Design: docs/proto/flows/lanes.html (Lanes, tinted bricks, Search genre drawer).
+// The flow editor: three lanes of bricks (energy leans, genre, key colour) over the night, dragged in
+// from a palette, resized by their edges, split and removed; each lane Must / Prefer / Ignore. The
+// energy lane shows what a real render picks, the Blend row how each join sits, the Library row where
+// tracks run short. Design: docs/proto/flows/lanes.html, .impeccable/mocks/blend/board.html §1.
 
 const run = (p: Promise<unknown>) => { p.catch(() => {}) }
 const LABEL: Record<LaneKind, string> = { energy: 'Energy', genre: 'Genre', colour: 'Harmony' }
-const NOTE: Record<LaneKind, string> = { energy: 'how hard it hits', genre: 'what style', colour: 'the colour of the keys' }
-const EHINT: Record<string, string> = { Calm: 'quietest', Low: 'soft', Mid: 'middle', High: 'strong', Peak: 'loudest', Build: 'rises', Ease: 'falls' }
+const NOTE: Record<LaneKind, string> = { energy: 'which way it leans', genre: 'what style', colour: 'the colour of the keys' }
+const EHINT: Record<string, string> = { Lift: 'steps up', Hold: 'stays close', Ease: 'steps down' }
+const SETTINGS: Setting[] = ['must', 'prefer', 'ignore']
+/** What Must does on each lane, said under its setting. */
+const MUST_NOTE: Record<SettingKind, string> = { energy: 'Must only blocks big jumps', tempo: 'Must blocks more than 8 BPM', genre: 'Must plays only these', colour: 'Must keeps the colour' }
+const SET_LABEL: Record<SettingKind, string> = { energy: 'Energy', tempo: 'Tempo', genre: 'Genre', colour: 'Harmony' }
 const CHINT: Record<string, string> = { Any: 'any key', bright: 'major', warm: 'Dorian', dark: 'minor', exotic: 'harmonic' }
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 const RECENT_KEY = 'sestudio.flowGenres'
-const LW = 88
+const LW = 150 // --fl-lw: the name column, wide enough for Must / Prefer / Ignore
 
 /** A genre's colour, stable per name (the genre list is open-ended). */
 const genreCol = (v: string) => {
@@ -30,39 +39,41 @@ const colOf = (k: LaneKind, v: string) => (k === 'genre' ? genreCol(v) : CCOL[v]
 const labelOf = (k: LaneKind, v: string) => (k === 'genre' ? genreLabel(v) : k === 'colour' ? cap(v) : v)
 const fmt = (m: number) => (m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}`)
 
-function EnergyMark({ v, w = 18, h = 12 }: { v: string; w?: number; h?: number }) {
-  const [a, b] = ENERGY[v] ?? ENERGY.Mid
-  const y = (e: number) => h - 1 - e * (h - 3)
-  const d = `M0 ${y(a)} C${w / 2} ${y(a)} ${w / 2} ${y(b)} ${w} ${y(b)}`
+/** A lean's slope: up, level, down. */
+function EnergyMark({ v, w = 20, h = 12 }: { v: string; w?: number; h?: number }) {
+  const lean = LEANS[v] ?? 'hold'
+  const [a, b] = lean === 'lift' ? [h - 1, 1] : lean === 'ease' ? [1, h - 1] : [h / 2, h / 2]
   return (
     <svg className="shrink-0" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <path d={`${d} L${w} ${h} L0 ${h}Z`} fill="oklch(82% .11 75 / .35)" />
-      <path d={d} fill="none" stroke="var(--fl-energy)" strokeWidth={1.5} />
+      <path d={`M1 ${a} L${w - 1} ${b}`} fill="none" stroke="var(--fl-energy)" strokeWidth={2} strokeLinecap="round" />
     </svg>
+  )
+}
+
+/** Must / Prefer / Ignore for one lane. */
+function SettingSeg({ k, v, onChange }: { k: SettingKind; v: Setting; onChange: (v: Setting) => void }) {
+  return (
+    <span className="fl-set" role="group" aria-label={`${SET_LABEL[k]}: how strictly`}>
+      {SETTINGS.map(x => <button key={x} aria-pressed={v === x} onClick={() => onChange(x)}>{x === 'must' ? 'Must' : x === 'prefer' ? 'Prefer' : 'Ignore'}</button>)}
+    </span>
   )
 }
 const Mark = ({ k, v }: { k: LaneKind; v: string }) =>
   k === 'energy' ? <EnergyMark v={v} /> : <span className="fl-dot" style={{ background: colOf(k, v) }} />
 
-/** One continuous energy line over the lane, eased at each change. */
-function Curve({ lanes, p, H }: { lanes: Lanes; p: number; H: number }) {
-  const st = starts(lanes.energy), y = (e: number) => H - 10 - e * (H - 50)
-  const pts: [number, number][] = []
-  lanes.energy.forEach((b, i) => {
-    const x0 = st[i] * p, x1 = (st[i] + b.len) * p, t = Math.min(14, (x1 - x0) / 4), [a, c] = ENERGY[b.v] ?? ENERGY.Mid
-    pts.push([i ? x0 + t : x0, y(a)], [i < lanes.energy.length - 1 ? x1 - t : x1, y(c)])
-  })
-  let d = `M${pts[0][0]} ${pts[0][1]}`
-  for (let i = 1; i < pts.length; i++) {
-    const [px, py] = pts[i - 1], [qx, qy] = pts[i], m = (qx - px) / 2
-    d += ` C${px + m} ${py} ${qx - m} ${qy} ${qx} ${qy}`
-  }
-  const W = total(lanes) * p
+/** One slot of the editor's draft render: when it starts, its track, how it blends with the one before. */
+interface RSlot { at: number; track_id: string; blend?: SlotBlend }
+
+/** Where a real render goes: each pick's energy as a dot, joined; the leans are only nudges, so this is the truth. */
+function Result({ mix, energyOf, p, H, W }: { mix: RSlot[]; energyOf: (id: string) => number | undefined; p: number; H: number; W: number }) {
+  const y = (e: number) => H - 10 - (e / 100) * (H - 34)
+  const pts = mix.flatMap(m => { const e = energyOf(m.track_id); return e == null ? [] : [[(m.at / 60) * p + 4, y(e)] as const] })
+  if (!pts.length) return null
+  const d = pts.map(([x, v], i) => `${i ? 'L' : 'M'}${x} ${v}`).join(' ')
   return (
     <svg className="fl-curve" width={W} height={H} aria-hidden="true">
-      <defs><linearGradient id="fl-eg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="oklch(82% .11 75)" stopOpacity=".28" /><stop offset="1" stopColor="oklch(82% .11 75)" stopOpacity="0" /></linearGradient></defs>
-      <path d={`${d} L${W} ${H} L0 ${H}Z`} fill="url(#fl-eg)" />
-      <path d={d} fill="none" stroke="var(--fl-energy)" strokeWidth={2} strokeLinecap="round" />
+      <path d={d} fill="none" stroke="var(--fl-energy)" strokeWidth={1.6} strokeLinejoin="round" />
+      {pts.map(([x, v], i) => <circle key={i} cx={x} cy={v} r={2.8} fill="var(--fl-energy)" />)}
     </svg>
   )
 }
@@ -97,6 +108,7 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
   const [showAll, setShowAll] = useState(false)
   const [recent, setRecent] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as string[] } catch { return [] } })
   const [fits, setFits] = useState<Fits | null>(null)
+  const [draft, setDraft] = useState<RSlot[] | null>(null)
   const [ghost, setGhost] = useState<{ x: number; y: number; k: LaneKind; v: string } | null>(null)
   const [over, setOver] = useState('')
   const [note, setNote] = useState('')
@@ -104,6 +116,9 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
   const [box, setBox] = useState<HTMLDivElement | null>(null)
   const width = useWidth(box)
   const phone = width > 0 && width < 480
+
+  const { get: summary } = useSummaries(useMemo(() => (draft ?? []).map(m => m.track_id), [draft]))
+  const energyOf = (id: string) => summary(id)?.energyScale?.track
 
   // The saved flow is the start (set while rendering, once it arrives); edits stay local until Save.
   if (saved && !lanes) {
@@ -113,7 +128,9 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
   }
 
   const T = lanes ? total(lanes) : 60
-  const p = frozenP ?? (phone ? 5.5 : Math.max(3, (width - LW - 64) / T))
+  // Phones fit the whole flow in a card's width; desktop leaves room for the lane names.
+  // A phone card holds the track (T·p), its end + (56) and the card padding (24), with a little air.
+  const p = frozenP ?? (phone ? Math.max(2, (width - 92) / T) : Math.max(3, (width - LW - 64) / T))
   const st: Stretch[] = useMemo(() => (lanes ? stretches(lanes) : []), [lanes])
   const avg = useMemo(() => {
     const d = [...byId.values()].map(t => t.duration).filter(Boolean)
@@ -133,6 +150,19 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
     }, 200)
     return () => window.clearTimeout(t)
   }, [lanes, st, T])
+
+  // What the flow would really play: the energy lane's dots and the Blend row read it.
+  useEffect(() => {
+    if (!lanes) return
+    const t = window.setTimeout(() => {
+      fetch('/api/music/flows/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flow: { ...toFlow(lanes), pull: saved?.pull ?? 'strong' }, minutes: T, seed: 1 }),
+      }).then(r => (r.ok ? r.json() : null)).then(r => r && setDraft((r as { mix: RSlot[] }).mix)).catch(() => {})
+    }, 400)
+    return () => window.clearTimeout(t)
+  }, [lanes, T, saved?.pull])
 
   const change = (n: Lanes) => { setLanes(n); setDirty(true) }
   const pushRecent = (k: LaneKind, v: string) => {
@@ -272,7 +302,7 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
     const s = starts(lanes[k])
     return (
       <div className={`fl-track fl-t-${k}`} style={{ width: T * p + 56 }}>
-        {k === 'energy' && <Curve lanes={lanes} p={p} H={96} />}
+        {k === 'energy' && draft && <Result mix={draft} energyOf={energyOf} p={p} H={96} W={T * p + 56} />}
         {lanes[k].map((b, i) => {
           const w = b.len * p, on = sel?.k === k && sel.i === i, drop = `l:${k}:${i}`
           return (
@@ -297,6 +327,52 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
       </div>
     )
   }
+  // Every row of the board: its name, its setting, its track (desktop grid or phone cards).
+  const seg = (k: SettingKind) => <SettingSeg k={k} v={lanes.settings[k]} onChange={v => change(setSetting(lanes, k, v))} />
+  const hint = (k: SettingKind, fallback: string) => (lanes.settings[k] === 'must' ? MUST_NOTE[k] : lanes.settings[k] === 'ignore' ? 'not counted' : fallback)
+  const W = T * p + 56
+  const rows: { key: string; name: string; note: string; set?: ReactNode; track: ReactNode }[] = [
+    { key: 'energy', name: LABEL.energy, note: hint('energy', NOTE.energy), set: seg('energy'), track: lane('energy') },
+    {
+      key: 'tempo', name: 'Tempo', note: hint('tempo', 'leans with energy'), set: seg('tempo'),
+      track: (
+        <div className="fl-track fl-t-genre" style={{ width: W }}>
+          <div className={`fl-brick fl-flat${lanes.settings.tempo === 'ignore' ? ' opacity-45' : ''}`} style={{ left: 2, width: T * p - 4, ['--c' as string]: 'oklch(70% .04 240)' }}>
+            <span className="fl-v">Close to the track before</span>{T * p > 360 && <small className="font-normal opacity-60">steps of a few BPM</small>}
+          </div>
+        </div>
+      ),
+    },
+    { key: 'genre', name: LABEL.genre, note: hint('genre', NOTE.genre), set: seg('genre'), track: lane('genre') },
+    { key: 'colour', name: LABEL.colour, note: hint('colour', NOTE.colour), set: seg('colour'), track: lane('colour') },
+    {
+      key: 'blend', name: 'Blend', note: 'how each join sits',
+      track: (
+        <div className="fl-track fl-t-blend" style={{ width: W }}>
+          {(draft ?? []).slice(1).map((m, j) => m.blend && (
+            <span key={j} className="fl-ring" style={{ left: (m.at / 60) * p }}><BlendRing score={m.blend.score} size={phone ? 14 : 16} /></span>
+          ))}
+        </div>
+      ),
+    },
+    {
+      key: 'lib', name: 'Library', note: 'tracks that fit',
+      track: (
+        <div className="fl-track fl-t-lib" style={{ width: W }}>
+          {st.map((x, j) => {
+            const n = fits?.stretches[j]?.count, want = need(x.e - x.s), w = (x.e - x.s) * p
+            return (
+              <div key={j} className={`fl-st${n !== undefined && n < want ? ' fl-thin' : ''}`} style={{ left: x.s * p, width: w }}
+                title={`${x.energy}, ${genreLabel(x.genre)}, ${cap(x.colour)}: ${n ?? '…'} of your tracks fit, ${fmt(x.e - x.s)} needs about ${want}`}>
+                {n === undefined ? '' : w > 40 ? `${n} fit` : n}
+                <div className="fl-bar"><i style={{ width: `${n === undefined ? 0 : Math.min(100, n / want * 100)}%` }} /></div>
+              </div>
+            )
+          })}
+        </div>
+      ),
+    },
+  ]
   const short = st.filter((x, i) => fits && (fits.stretches[i]?.count ?? 0) < need(x.e - x.s)).length
 
   // --- the panel under the board: the selected brick, or the flow ---------------------------------
@@ -307,7 +383,7 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
     const { k, i } = sel, b = lanes[k][i], s0 = starts(lanes[k])[i]
     const covered = st.map((x, j) => ({ x, j })).filter(({ x }) => x.e > s0 && x.s < s0 + b.len)
     const ids = [...new Set(covered.flatMap(({ j }) => fits?.stretches[j]?.ids ?? []))]
-    const picks = k === 'energy' ? Object.keys(ENERGY) : k === 'colour' ? COLOURS : [...new Set([ANY, b.v, ...libGenres.slice(0, 5).map(([g]) => g)])]
+    const picks = k === 'energy' ? Object.keys(LEANS) : k === 'colour' ? COLOURS : [...new Set([ANY, b.v, ...libGenres.slice(0, 5).map(([g]) => g)])]
     return (
       <>
         <h2 className="text-lg font-semibold tracking-tight">{LABEL[k]}: {labelOf(k, b.v)}</h2>
@@ -340,7 +416,7 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
             })}
           </ul>
           {covered.some(({ x, j }) => (fits?.stretches[j]?.count ?? Infinity) < need(x.e - x.s)) && (
-            <p className="mb-2 text-sm text-warning">Where it is short, tracks would repeat or a lane gives way. Widen the energy, or pick Any genre or Any harmony.</p>
+            <p className="mb-2 text-sm text-warning">Where it is short, a track a Must would keep out plays anyway. Set Genre or Harmony to Prefer, or pick Any.</p>
           )}
           <ol className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 text-sm">
             {ids.map(id => byId.get(id)).filter(Boolean).map(t => (
@@ -368,42 +444,46 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
           <div className="fl-tabs" role="tablist">
             {KINDS.map(k => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{LABEL[k]}</button>)}
           </div>
-          {tab === 'energy' && <div className="fl-chips">{Object.keys(ENERGY).map(v => chip('energy', v, EHINT[v]))}</div>}
+          {tab === 'energy' && <>
+            <div className="fl-chips">{Object.keys(LEANS).map(v => chip('energy', v, EHINT[v]))}</div>
+            <p className="fl-palnote">A lean nudges each pick a little up, level or down from the track before. There is no level to hit.</p>
+          </>}
           {tab === 'genre' && genreDrawer()}
           {tab === 'colour' && <div className="fl-chips">{COLOURS.map(v => chip('colour', v, CHINT[v]))}</div>}
         </aside>
 
         <main className="min-w-0">
-          <div className="fl-card pb-2.5 pt-1.5">
-            <p className="px-4 pb-1 pt-2.5 text-xs text-base-content/50">{phone ? 'Drag a brick from above onto its lane. Tap to edit.' : 'Drag a brick onto its lane, or onto a + to add one.'}</p>
-            <div ref={setBox} className="overflow-x-auto px-4 pb-1">
-              <div className="fl-grid">
-                {ticks.slice(1).map(m => <div key={m} className="fl-gl" style={{ left: `calc(var(--fl-lw) + ${m * p}px)` }} />)}
-                <div />
-                <div className="fl-track fl-ruler" style={{ width: T * p + 56 }}>
-                  {ticks.map(m => <span key={m} style={{ left: m * p }}>{m ? fmt(m) : 'start'}</span>)}
+          <div className={phone ? '' : 'fl-card pb-2.5 pt-1.5'}>
+            <p className={`text-xs text-base-content/50 ${phone ? 'pb-2' : 'px-4 pb-1 pt-2.5'}`}>{phone ? 'Drag a brick from above onto its lane. Tap to edit.' : 'Drag a brick onto its lane, or onto a + to add one.'}</p>
+            <div ref={setBox} className={phone ? 'grid gap-2' : 'overflow-x-auto px-4 pb-1'}>
+              {phone ? rows.map(r => (
+                <div key={r.key} className="fl-card fl-pcard">
+                  <div className="fl-phead"><span className="fl-pname">{r.name}<small>{r.note}</small></span>{r.set}</div>
+                  {r.track}
                 </div>
-                {KINDS.map(k => [
-                  <div key={`n${k}`} className="fl-name">{LABEL[k]}<small>{NOTE[k]}</small></div>,
-                  <div key={`t${k}`} className="contents">{lane(k)}</div>,
-                ])}
-                <div className="fl-name">Library<small>tracks that fit</small></div>
-                <div className="fl-track fl-t-lib" style={{ width: T * p + 56 }}>
-                  {st.map((x, j) => {
-                    const n = fits?.stretches[j]?.count, want = need(x.e - x.s), w = (x.e - x.s) * p
-                    return (
-                      <div key={j} className={`fl-st${n !== undefined && n < want ? ' fl-thin' : ''}`} style={{ left: x.s * p, width: w }}
-                        title={`${x.energy}, ${genreLabel(x.genre)}, ${cap(x.colour)}: ${n ?? '…'} of your tracks fit, ${fmt(x.e - x.s)} needs about ${want}`}>
-                        {n === undefined ? '' : w > 40 ? `${n} fit` : n}
-                        <div className="fl-bar"><i style={{ width: `${n === undefined ? 0 : Math.min(100, n / want * 100)}%` }} /></div>
-                      </div>
-                    )
-                  })}
+              )) : (
+                <div className="fl-grid">
+                  {ticks.slice(1).map(m => <div key={m} className="fl-gl" style={{ left: `calc(var(--fl-lw) + ${m * p}px)` }} />)}
+                  <div />
+                  <div className="fl-track fl-ruler" style={{ width: T * p + 56 }}>
+                    {ticks.map(m => <span key={m} style={{ left: m * p }}>{m ? fmt(m) : 'start'}</span>)}
+                  </div>
+                  {rows.map(r => [
+                    <div key={`n${r.key}`} className="fl-name">{r.name}{r.set}<small>{r.note}</small></div>,
+                    <div key={`t${r.key}`} className="contents">{r.track}</div>,
+                  ])}
                 </div>
-              </div>
+              )}
             </div>
           </div>
-          <section className="fl-card mt-4 px-4 py-4" aria-live="polite">{panel()}</section>
+          {phone && sel ? (
+            <section className="fl-sheet" aria-live="polite">
+              <button className="fl-btn fl-sheet-x" aria-label="Close" onClick={() => setSel(null)}>×</button>
+              {panel()}
+            </section>
+          ) : (
+            <section className="fl-card mt-4 px-4 py-4" aria-live="polite">{panel()}</section>
+          )}
         </main>
       </div>
 

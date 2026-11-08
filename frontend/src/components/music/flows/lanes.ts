@@ -1,67 +1,73 @@
-import type { Flow, GenreBlock } from '../../../musicFlows'
-import { energyPoints, firstPath } from '../../../musicFlows'
+import type { Lean, Setting } from '../../../blend'
+import type { Flow, GenreBlock, LeanBlock, Layers } from '../../../musicFlows'
+import { firstPath } from '../../../musicFlows'
 
-// The lanes editor's model (docs/proto/flows/lanes.html): three lanes of bricks over minutes.
-// A flow it saves is one chunk; its layers are read back into the same bricks.
+// The lanes editor's model (docs/proto/flows/lanes.html, SPEC-blend PR 4): three lanes of bricks over
+// minutes, each lane Must / Prefer / Ignore, plus tempo's setting. A flow it saves is one chunk; its
+// layers are read back into the same bricks.
 
 export type LaneKind = 'energy' | 'genre' | 'colour'
 export interface Brick { v: string; len: number }
-export type Lanes = Record<LaneKind, Brick[]>
-export const KINDS: LaneKind[] = ['energy', 'genre', 'colour']
-
-/** Energy bricks: start and end on the library's scale (0..1). */
-export const ENERGY: Record<string, [number, number]> = {
-  Calm: [0.1, 0.1], Low: [0.3, 0.3], Mid: [0.5, 0.5], High: [0.7, 0.7], Peak: [0.9, 0.9], Build: [0.3, 0.9], Ease: [0.9, 0.3],
+/** The layers a lane setting governs: the Harmony lane is the key's colour and the key joins together. */
+export type SettingKind = 'energy' | 'tempo' | 'genre' | 'colour'
+export type Lanes = Record<LaneKind, Brick[]> & {
+  settings: Record<SettingKind, Setting>
+  /** What the first track is near, kept as the flow had it (Right now sets it; the lanes do not draw it). */
+  start?: Layers['start']
 }
+export const KINDS: LaneKind[] = ['energy', 'genre', 'colour']
+export const SETTING_KINDS: SettingKind[] = ['energy', 'tempo', 'genre', 'colour']
+
+/** Energy bricks: which way each pick leans from the one before. */
+export const LEANS: Record<string, Lean> = { Lift: 'lift', Hold: 'hold', Ease: 'ease' }
+const LEAN_NAME: Record<Lean, string> = { lift: 'Lift', hold: 'Hold', ease: 'Ease' }
+/** An old curve stretch rising more than this (0..1) reads as Lift, falling more as Ease (flows.SLOPE). */
+const SLOPE = 0.1
+const DEFAULT_SETTINGS: Record<SettingKind, Setting> = { energy: 'prefer', tempo: 'prefer', genre: 'prefer', colour: 'prefer' }
 export const COLOURS = ['Any', 'bright', 'warm', 'dark', 'exotic']
 /** Each key colour's swatch (the editor's Harmony lane, and the playlist's). */
 export const CCOL: Record<string, string> = { Any: 'oklch(62% .02 240)', bright: 'oklch(87% .11 95)', warm: 'oklch(77% .11 55)', dark: 'oklch(64% .11 275)', exotic: 'oklch(71% .12 320)' }
 export const ANY = 'Any'
 export const STEP = 5
-const FLAT = ['Calm', 'Low', 'Mid', 'High', 'Peak']
 
 export const total = (l: Lanes) => l.energy.reduce((s, b) => s + b.len, 0)
 export const starts = (bs: Brick[]) => bs.reduce<number[]>((a, _, i) => (a.push(i ? a[i - 1] + bs[i - 1].len : 0), a), [])
 const snap = (m: number) => Math.max(STEP, Math.round(m / STEP) * STEP)
-const copy = (l: Lanes): Lanes => ({ energy: l.energy.map(b => ({ ...b })), genre: l.genre.map(b => ({ ...b })), colour: l.colour.map(b => ({ ...b })) })
+const copy = (l: Lanes): Lanes => ({ ...l, energy: l.energy.map(b => ({ ...b })), genre: l.genre.map(b => ({ ...b })), colour: l.colour.map(b => ({ ...b })), settings: { ...l.settings } })
 
-/** A new flow's lanes: a one-hour rise, plateau and fall, any genre, any colour. */
+/** A new flow's lanes: an hour that lifts, holds and eases, any genre, any colour, every lane Prefer. */
 export const fresh = (): Lanes => ({
-  energy: [{ v: 'Build', len: 20 }, { v: 'High', len: 30 }, { v: 'Ease', len: 10 }],
+  energy: [{ v: 'Lift', len: 20 }, { v: 'Hold', len: 30 }, { v: 'Ease', len: 10 }],
   genre: [{ v: ANY, len: 60 }],
   colour: [{ v: ANY, len: 60 }],
+  settings: { ...DEFAULT_SETTINGS },
 })
 
 /** Genres a genre brick plays, from its value ("Drum & Bass", or several joined by "|"). */
 export const genresOf = (v: string) => (v === ANY ? [] : v.split('|'))
 export const genreLabel = (v: string) => { const g = genresOf(v); return g.length > 1 ? `${g[0]} +${g.length - 1}` : g[0] ?? ANY }
 
-function energyName(a: number, b: number): string {
-  if (Math.abs(a - b) < 0.15) return FLAT[Math.max(0, Math.min(4, Math.round((a + b) / 2 * 5 - 0.5)))]
-  return a < b ? 'Build' : 'Ease'
-}
-
 // --- lanes → flow --------------------------------------------------------------------
 
 /**
- * One chunk whose layers carry the three lanes; the length is the lanes' minutes. `harmony: []` asks
- * every join to match its neighbour's key: without the key the generator treats joins as free.
+ * One chunk whose layers carry the three lanes and their settings; the length is the lanes' minutes.
+ * `harmony: []` asks every join to match its neighbour's key; the Harmony lane's setting governs both
+ * the key's colour and those joins.
  */
 export function toFlow(l: Lanes): Pick<Flow, 'chunks' | 'length'> {
   const T = total(l) || 1
-  const energy: [number, number][] = []
-  starts(l.energy).forEach((s, i) => {
-    const [a, b] = ENERGY[l.energy[i].v] ?? ENERGY.Mid
-    energy.push([s / T, a], [(s + l.energy[i].len) / T, b])
-  })
+  const energy: LeanBlock[] = starts(l.energy).map((s, i) => ({ from: s / T, to: (s + l.energy[i].len) / T, lean: LEANS[l.energy[i].v] ?? 'hold' }))
+  const strict = l.settings.genre === 'must' ? 'must' as const : 'prefer' as const
   const blocks = (k: 'genre' | 'colour') => starts(l[k]).flatMap((s, i) => {
     const b = l[k][i]
     if (b.v === ANY) return []
     const span = { from: s / T, to: (s + b.len) / T }
-    return [k === 'genre' ? { ...span, genres: genresOf(b.v), strict: 'must' as const } : { ...span, colour: b.v }]
+    return [k === 'genre' ? { ...span, genres: genresOf(b.v), strict } : { ...span, colour: b.v }]
   })
+  const settings = { ...l.settings, harmony: l.settings.colour }
+  const layers = { energy, genre: blocks('genre') as GenreBlock[], colour: blocks('colour'), harmony: [], settings, ...(l.start ? { start: l.start } : {}) }
   return {
-    chunks: [{ id: 'all', share: 1, next: [], layers: { energy, genre: blocks('genre') as GenreBlock[], colour: blocks('colour'), harmony: [] } as never }],
+    chunks: [{ id: 'all', share: 1, next: [], layers: layers as never }],
     length: String(T) as Flow['length'],
   }
 }
@@ -82,7 +88,7 @@ function fitTo(bs: Brick[], T: number, merge: boolean): Brick[] {
     if (merge && last && last.v === b.v) last.len += len
     else out.push({ v: b.v, len })
   }
-  if (!out.length) return [{ v: merge ? ANY : 'Mid', len: T }]
+  if (!out.length) return [{ v: merge ? ANY : 'Hold', len: T }]
   while (out.length > 1 && out.slice(0, -1).reduce((s, b) => s + b.len, 0) >= T) out.pop()
   out[out.length - 1].len = T - out.slice(0, -1).reduce((s, b) => s + b.len, 0)
   return out
@@ -109,34 +115,74 @@ export function fromFlow(flow: Pick<Flow, 'chunks' | 'length'>): { lanes: Lanes;
   const T = snap(minutesOf(flow))
   const path = firstPath(flow)
   const shares = path.reduce((s, c) => s + c.share, 0) || 1
-  const energy: [number, number][] = []
+  const leans: { from: number; to: number; v: string }[] = []
   const genre: { from: number; to: number; v: string }[] = []
   const colour: { from: number; to: number; v: string }[] = []
   let at = 0
   for (const c of path) {
     const w = c.share / shares
     const L = c.layers as Record<string, unknown> & typeof c.layers
-    for (const [f, v] of energyPoints(L)) energy.push([at + f * w, v])
+    for (const b of leansOf(L)) leans.push({ from: at + b.from * w, to: at + b.to * w, v: LEAN_NAME[b.lean] })
     for (const g of L.genre ?? []) if (g.genres?.length) genre.push({ from: at + g.from * w, to: at + g.to * w, v: g.genres.join('|') })
     for (const k of (L.colour as { from: number; to: number; colour: string }[] | undefined) ?? []) colour.push({ from: at + k.from * w, to: at + k.to * w, v: k.colour })
     at += w
   }
-  const eb: Brick[] = []
-  for (let i = 1; i < energy.length; i++) {
-    const [x0, y0] = energy[i - 1], [x1, y1] = energy[i]
-    if (x1 - x0 > 1e-6) eb.push({ v: energyName(y0, y1), len: (x1 - x0) * T })
-  }
-  const lossy = path.length > 1 || flow.chunks.length > 1 || path.some(c => c.layers.tempo?.length || c.layers.harmony?.length)
+  const eb: Brick[] = leans.filter(b => b.to - b.from > 1e-6).map(b => ({ v: b.v, len: (b.to - b.from) * T }))
+  const first = path[0]?.layers ?? {}
+  const lossy = path.length > 1 || flow.chunks.length > 1 || path.some(c => c.layers.harmony?.length)
   return {
-    lanes: { energy: fitTo(eb, T, false), genre: blockBricks(genre, T), colour: blockBricks(colour, T) },
+    lanes: { energy: fitTo(eb, T, false), genre: blockBricks(genre, T), colour: blockBricks(colour, T), settings: settingsOf(first), start: startOf(first) },
     lossy,
   }
+}
+
+/** A chunk's leans; an older curve read as the server reads it (each stretch by its slope, neighbours merged). */
+export function leansOf(L: Layers): LeanBlock[] {
+  const e = L.energy
+  if (!e?.length) return []
+  if (!Array.isArray(e[0])) return e as LeanBlock[]
+  const out: LeanBlock[] = []
+  const pts = e as [number, number][]
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]
+    if (x1 <= x0) continue
+    const lean: Lean = y1 - y0 > SLOPE ? 'lift' : y0 - y1 > SLOPE ? 'ease' : 'hold'
+    const last = out[out.length - 1]
+    if (last && last.lean === lean) last.to = x1
+    else out.push({ from: x0, to: x1, lean })
+  }
+  return out
+}
+
+/** The lane settings a chunk carries, with the server's defaults for older flows (flows.upgrade). */
+function settingsOf(L: Layers): Record<SettingKind, Setting> {
+  const s = L.settings ?? {}
+  const colourBlocks = ((L as { colour?: unknown[] }).colour ?? []).length > 0
+  const g = (L.genre ?? []).find(b => b.genres?.length)
+  return {
+    energy: s.energy ?? 'prefer',
+    tempo: s.tempo ?? 'prefer',
+    genre: s.genre ?? (g ? g.strict ?? 'must' : 'prefer'),
+    colour: s.colour ?? (colourBlocks ? 'must' : 'prefer'),
+  }
+}
+
+function startOf(L: Layers): Layers['start'] {
+  const st = { ...(L.start ?? {}) }
+  const e = L.energy
+  if (st.energy === undefined && e?.length && Array.isArray(e[0])) st.energy = (e as [number, number][])[0][1]
+  if (st.tempo === undefined && L.tempo?.length) st.tempo = L.tempo[0][1]
+  return Object.keys(st).length ? st : undefined
 }
 
 // --- edits (each returns new lanes) ---------------------------------------------------------
 
 export function setValue(l: Lanes, k: LaneKind, i: number, v: string): Lanes {
   const n = copy(l); n[k][i].v = v; return n
+}
+
+export function setSetting(l: Lanes, k: SettingKind, v: Setting): Lanes {
+  const n = copy(l); n.settings[k] = v; return n
 }
 
 /** A 15-minute brick at *i*; the flow grows, so the other lanes' last bricks stretch. */

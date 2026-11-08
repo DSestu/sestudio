@@ -3,9 +3,10 @@ import { addBrick, fresh, fromFlow, pullEdge, remove, split, stretches, toFlow, 
 import type { Flow } from '../../../musicFlows'
 
 const NIGHT: Lanes = {
-  energy: [{ v: 'Build', len: 20 }, { v: 'High', len: 30 }, { v: 'Peak', len: 15 }, { v: 'Ease', len: 20 }, { v: 'Calm', len: 15 }],
+  energy: [{ v: 'Lift', len: 20 }, { v: 'Hold', len: 30 }, { v: 'Lift', len: 15 }, { v: 'Ease', len: 20 }, { v: 'Hold', len: 15 }],
   genre: [{ v: 'Drum & Bass', len: 50 }, { v: 'Dubstep', len: 15 }, { v: 'Any', len: 35 }],
   colour: [{ v: 'warm', len: 20 }, { v: 'dark', len: 45 }, { v: 'Any', len: 35 }],
+  settings: { energy: 'prefer', tempo: 'must', genre: 'must', colour: 'prefer' },
 }
 
 describe('lanes', () => {
@@ -14,6 +15,12 @@ describe('lanes', () => {
     expect(f.length).toBe('100')
     expect(f.chunks).toHaveLength(1)
     expect(f.chunks[0].layers.harmony).toEqual([]) // joins want a key match
+    expect(f.chunks[0].layers.energy).toEqual([
+      { from: 0, to: 0.2, lean: 'lift' }, { from: 0.2, to: 0.5, lean: 'hold' }, { from: 0.5, to: 0.65, lean: 'lift' },
+      { from: 0.65, to: 0.85, lean: 'ease' }, { from: 0.85, to: 1, lean: 'hold' },
+    ])
+    // The Harmony lane governs the key colour and the key joins together.
+    expect(f.chunks[0].layers.settings).toEqual({ energy: 'prefer', tempo: 'must', genre: 'must', colour: 'prefer', harmony: 'prefer' })
     expect(fromFlow(f as Flow)).toEqual({ lanes: NIGHT, lossy: false })
   })
   it('read a chunked flow along its first path, flagged as lossy', () => {
@@ -27,7 +34,10 @@ describe('lanes', () => {
     } as unknown as Flow
     const { lanes, lossy } = fromFlow(flow)
     expect(lossy).toBe(true)
-    expect(lanes.energy).toEqual([{ v: 'Build', len: 30 }, { v: 'High', len: 30 }])
+    expect(lanes.energy).toEqual([{ v: 'Lift', len: 30 }, { v: 'Hold', len: 30 }])
+    // An older flow: a genre block without a word was a Must, the curve's first value its start.
+    expect(lanes.settings).toEqual({ energy: 'prefer', tempo: 'prefer', genre: 'must', colour: 'prefer' })
+    expect(lanes.start).toEqual({ energy: 0.3 })
     expect(lanes.genre).toEqual([{ v: 'Jungle', len: 30 }, { v: 'Any', len: 30 }])
     expect(lanes.colour).toEqual([{ v: 'Any', len: 60 }])
   })
@@ -48,11 +58,11 @@ describe('lanes', () => {
   })
   it('cut stretches wherever a lane changes', () => {
     expect(stretches(NIGHT).map(s => [s.s, s.e, s.energy, s.genre, s.colour])).toEqual([
-      [0, 20, 'Build', 'Drum & Bass', 'warm'],
-      [20, 50, 'High', 'Drum & Bass', 'dark'],
-      [50, 65, 'Peak', 'Dubstep', 'dark'],
+      [0, 20, 'Lift', 'Drum & Bass', 'warm'],
+      [20, 50, 'Hold', 'Drum & Bass', 'dark'],
+      [50, 65, 'Lift', 'Dubstep', 'dark'],
       [65, 85, 'Ease', 'Any', 'Any'],
-      [85, 100, 'Calm', 'Any', 'Any'],
+      [85, 100, 'Hold', 'Any', 'Any'],
     ])
   })
 })
