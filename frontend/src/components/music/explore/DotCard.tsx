@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { moodOf } from '../../../harmony'
+import { EnergyLevel } from '../TrackMeta'
 import type { MusicTrack } from '../../../musicLibrary'
 import { genreColor, keyLabel, type Summary } from '../../../musicMeta'
 import { addToQueue } from '../../../musicQueue'
@@ -35,7 +36,7 @@ export default function DotCard({ track, s, onPlay, onSet, onFits, insert }: {
       <p className="flex flex-wrap items-center gap-x-2 text-sm text-base-content/70">
         {mood && <span className="inline-flex items-center gap-1.5"><i className="size-2 rounded-full" style={{ background: mood.color }} aria-hidden="true" />{mood.word}</span>}
         <span>{keyLabel(s?.key, s?.camelot)}</span>
-        {s?.energyLevel && <span>· {s.energyLevel}{s.energyScale?.track != null && ` ${Math.round(s.energyScale.track)}`}</span>}
+        {s?.energyScale?.track != null && <span className="inline-flex items-center gap-1.5">· <EnergyLevel value={s.energyScale.track} /></span>}
       </p>
       {keys && read && <Keyboard notes={read.notes} home={read.home} listen="Hear it" />}
       <div className="flex flex-col">

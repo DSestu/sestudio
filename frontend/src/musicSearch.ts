@@ -144,16 +144,32 @@ export function useMusicSearch(query: string, source: SearchSource, delay = 350)
   }, [state, key, q, source])
 }
 
-/** The words a track answers to besides its title: key, tonic, mode, mood, energy level and genre. */
+/** The words a track answers to besides its title: key, tonic, mode, mood and genre. */
 function analysisTokens(s: Summary): string[] {
   const r = s.harmony?.track
   const mode = r?.mode.toLowerCase() ?? ''
-  return [s.key, s.camelot, r?.tonic, mode, moodOf(r?.mode)?.word, s.energyLevel, s.genre].flatMap(x => x?.toLowerCase().split(/\s+/) ?? [])
+  return [s.key, s.camelot, r?.tonic, mode, moodOf(r?.mode)?.word, s.genre].flatMap(x => x?.toLowerCase().split(/\s+/) ?? [])
+}
+
+/** "energy 80+" / "energy 70-85" / "energy 80" (within 5) in the query: the range, and the words left. */
+function energyRange(words: string[]): { range?: [number, number]; rest: string[] } {
+  const i = words.indexOf('energy')
+  const m = i >= 0 ? /^(\d{1,3})(\+|-(\d{1,3}))?$/.exec(words[i + 1] ?? '') : null
+  if (!m) return { rest: words }
+  const a = +m[1]
+  const range: [number, number] = m[2] === '+' ? [a, 100] : m[3] ? [a, +m[3]] : [a - 5, a + 5]
+  return { range, rest: [...words.slice(0, i), ...words.slice(i + 2)] }
 }
 
 /** Whether each query word is in the haystack (title, artist, album), a prefix of an analysis word
- *  ("dark", "dors", "g minor", "intense", "dubstep"), or a tempo within 2 BPM ("150"). */
-export function matchWords(words: string[], hay: string, s?: Summary): boolean {
+ *  ("dark", "dors", "g minor", "dubstep"), or a tempo within 2 BPM ("150"); "energy 80+" and
+ *  "energy 70-85" keep the tracks whose energy level is in the range. */
+export function matchWords(all: string[], hay: string, s?: Summary): boolean {
+  const { range, rest: words } = energyRange(all)
+  if (range) {
+    const e = s?.energyScale?.track
+    if (e == null || e < range[0] || e > range[1]) return false
+  }
   const tokens = s ? analysisTokens(s) : []
   return words.every(w =>
     hay.includes(w) || tokens.some(t => t.startsWith(w)) || (!!s?.bpm && /^\d{2,3}$/.test(w) && Math.abs(s.bpm - +w) <= 2))

@@ -116,9 +116,9 @@ export function SmartForm({ node, onClose }: { node?: PlaylistNode; onClose: () 
         <label className="flex flex-col gap-1 text-xs">Energy at least
           <select className="select select-bordered select-sm w-full" value={energy} onChange={e => setEnergy(e.target.value)}>
             <option value="">Any</option>
-            <option value="25">Steady</option>
-            <option value="50">Driving</option>
-            <option value="75">Intense</option>
+            <option value="25">25 and up</option>
+            <option value="50">50 and up</option>
+            <option value="75">75 and up</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs">Added within the last (days)

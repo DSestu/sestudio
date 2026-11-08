@@ -1,4 +1,4 @@
-import { energySteps, keyDisplay } from '../../harmony'
+import { keyDisplay } from '../../harmony'
 import { genreColor, genreShort, metaLine, refreshSummary, useAnalysing, useSummary, type Summary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import GenreTag from './crates/GenreTag'
@@ -30,13 +30,15 @@ export function KeyChip({ id, title, s }: { id: string; title: string; s?: Summa
     : <button onClick={() => openKeyCard(id, title)} aria-label={`Key card of ${title}`} className={cls}>{inner}</button>
 }
 
-/** Four rising steps, as many lit as the track's energy level; its name on hover. Nothing while it has no level. */
-export function EnergyMeter({ level }: { level?: string }) {
-  const n = energySteps(level)
-  if (!n) return null
+/** A track's energy as a level, 0..100 on a fixed scale (SPEC-blend): a short amber bar and the number, no name.
+ *  `bare` drops the number, for tight rows. Nothing while it has no reading. */
+export function EnergyLevel({ value, bare }: { value?: number | null; bare?: boolean }) {
+  if (value == null) return null
+  const v = Math.max(0, Math.min(100, Math.round(value)))
   return (
-    <span role="img" aria-label={`Energy: ${level}`} title={`Energy: ${level}`} className="inline-flex items-end gap-px h-3 shrink-0 align-middle">
-      {[1, 2, 3, 4].map(k => <i key={k} className={`w-[3px] rounded-[1px] ${k <= n ? 'bg-primary' : 'bg-white/15'}`} style={{ height: 3 + k * 2 }} />)}
+    <span role="img" aria-label={`Energy ${v} of 100`} title={`Energy ${v} of 100`} className="inline-flex items-center gap-1 shrink-0 align-middle">
+      <i className="relative block h-1.5 w-8 overflow-hidden rounded-full bg-white/10"><b className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${v}%`, background: 'oklch(82% .11 75)' }} /></i>
+      {!bare && <span className="text-[11px] tabular-nums text-base-content/50">{v}</span>}
     </span>
   )
 }
@@ -55,7 +57,7 @@ export default function TrackMeta({ id, bpm, title }: { id: string; bpm?: number
       {!analysing && unsure && (
         <button onClick={() => openUnsure(id, title)} aria-label={`Settle the mode of ${title} by ear`} title="Unsure of the mode: listen to both" className="btn btn-ghost btn-xs h-5 min-h-0 px-1.5 text-[11px] text-warning">?</button>
       )}
-      {!analysing && <EnergyMeter level={s?.energyLevel} />}
+      {!analysing && <EnergyLevel value={s?.energyScale?.track} />}
       {tempo ? <span className="text-[11px] text-base-content/40 tabular-nums">{Math.round(tempo)} bpm</span> : null}
     </span>
   )
@@ -71,7 +73,7 @@ export function MetaLine({ id, bpm, title }: { id: string; bpm?: number; title: 
   if (analysing) return <span className="sm:hidden text-base-content/40"> · <Analysing /></span>
   return line || k || s?.genre ? (
     <span className="sm:hidden text-base-content/40 tabular-nums">
-      {s?.energyLevel && <> · <EnergyMeter level={s.energyLevel} /></>}
+      {s?.energyScale?.track != null && <> · <EnergyLevel value={s.energyScale.track} bare /></>}
       {line && ` · ${line}`}
       {k && <> · {theory.level === 'plain' ? <>{k.color && <Dot color={k.color} />} {k.text}</> : (
         // Not a button: the row around it is one.

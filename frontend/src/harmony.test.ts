@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THEORY, ENERGY_LEVELS, EXOTIC, MOOD_LADDER, energySteps, keyDisplay, moodOf } from './harmony'
+import { DEFAULT_THEORY, EXOTIC, MOOD_LADDER, keyDisplay, moodOf } from './harmony'
 
 describe('mood words', () => {
   it('reads each church mode as its word, brightest to darkest', () => {
@@ -15,14 +15,6 @@ describe('mood words', () => {
   })
   it('gives every word its own colour', () => {
     expect(new Set([...MOOD_LADDER, EXOTIC].map(m => m.color)).size).toBe(8)
-  })
-})
-
-describe('energy level', () => {
-  it('lights one to four steps, none for a missing or unknown level', () => {
-    expect(ENERGY_LEVELS.map(energySteps)).toEqual([1, 2, 3, 4])
-    expect(energySteps(undefined)).toBe(0)
-    expect(energySteps('Loud')).toBe(0)
   })
 })
 

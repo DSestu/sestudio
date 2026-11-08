@@ -279,7 +279,7 @@ def _get_state() -> dict[str, Any] | None:
 
 
 def renormalise() -> dict[str, Any]:
-    """Recompute the per-band 98th percentile, the sorted brightness list and the energy scale."""
+    """Recompute the per-band 98th percentile and the sorted brightness list."""
     with library._lock:
         rows = (
             library._connect()
@@ -294,15 +294,6 @@ def renormalise() -> dict[str, Any]:
         * g
         for r, g in zip(rows, gains)
     ]
-    raws = [
-        e["track"]
-        for b, r in zip(shaped, rows)
-        # shortcut: energy is ranked on the mastered loudness, as before; on the normalised one it ranks
-        # how compressed a master is. Moves to normalised levels with the energy rework.
-        if "track" in (e := profile.energy_raw(b, _loudness(r)))
-    ]
-    loud, highs = sorted(v[0] for v in raws), sorted(v[1] for v in raws)
-    scores = sorted(profile.energy_score(v, loud, highs) for v in raws)
     norm = []
     for i in range(8):
         if not shaped:
@@ -314,7 +305,6 @@ def renormalise() -> dict[str, Any]:
         "norm": norm,
         "zcr": sorted(r["zcr"] for r in rows),
         "n": len(rows),
-        "energy": {"loud": loud, "highs": highs, "score": scores},
     }
     with library._lock:
         conn = library._connect()
@@ -351,9 +341,7 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
     if not ids:
         return {}
     state = _get_state()
-    if (
-        state is None or "energy" not in state
-    ):  # none yet, or from before the energy scale
+    if state is None:
         state = renormalise()
     norm, zcr = state["norm"], np.asarray(state["zcr"])
     marks = ",".join("?" * len(ids))
@@ -376,9 +364,8 @@ def get(ids: list[str]) -> dict[str, dict[str, Any]]:
             * g
         )
         loud = _loudness(r) * g
-        energy = profile.energy_scale(
-            profile.energy_raw(bands, _loudness(r)), state["energy"]
-        )  # mastered loudness, as in renormalise
+        # Energy on the fixed scale, from the mastered loudness (profile.LOUD_DB).
+        energy = profile.energy_scale(profile.energy_raw(bands, _loudness(r)))
         p = np.searchsorted(zcr, r["zcr"]) / (len(zcr) - 1) if len(zcr) > 1 else 0.5
         mean = [float(np.mean(np.minimum(bands[i] / norm[i], 1))) for i in range(8)]
         loud_norm = float(np.sort(loud)[int(len(loud) * 0.98)]) if len(loud) else 1.0

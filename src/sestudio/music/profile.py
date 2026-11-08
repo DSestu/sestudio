@@ -8,7 +8,7 @@ Known limits: SPEC-music §9.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 
@@ -72,8 +72,10 @@ def energy(groups: np.ndarray, loud: np.ndarray) -> np.ndarray:
     return np.clip(0.7 * _norm(loud) + 0.3 * _norm(share), 0, 1)
 
 
-#: A track's energy against the whole library, by quartile (harmony master plan E0.4).
-LEVELS = ("Calm", "Steady", "Driving", "Intense")
+#: Energy's fixed scale (SPEC-blend PR 1): mastered loudness in dB and the 2 kHz+ share (log)
+#: mapped to 0..1 between these points, the 2nd and 98th percentiles of a 482-track library.
+LOUD_DB: Final = (-22.0, -5.0)
+HIGHS: Final = (0.012, 0.18)
 #: Intro and outro: this share of the track, at most this many 0.1 s frames.
 EDGE_SHARE, EDGE_MAX = 0.2, 600
 
@@ -103,29 +105,24 @@ def energy_raw(bands: np.ndarray, loud: np.ndarray) -> dict[str, tuple[float, fl
     return out
 
 
-def _rank(v: float, ordered: list[float]) -> float:
-    return float(np.searchsorted(ordered, v) / max(len(ordered) - 1, 1))
+def _lin(v: float, lo: float, hi: float) -> float:
+    return min(1.0, max(0.0, (v - lo) / (hi - lo)))
 
 
-def energy_score(
-    raw: tuple[float, float], loud: list[float], highs: list[float]
-) -> float:
-    """0..1: rank of the loudness (70 %) and of the highs share (30 %) among the library's tracks."""
-    return min(1.0, 0.7 * _rank(raw[0], loud) + 0.3 * _rank(raw[1], highs))
+def energy_score(raw: tuple[float, float]) -> float:
+    """0..1 on a fixed scale: loudness (70 %) and highs share (30 %), the same whatever the library holds."""
+    loud = 20 * np.log10(max(raw[0], 1e-9))
+    highs = np.log(max(raw[1], 1e-9))
+    return 0.7 * _lin(loud, *LOUD_DB) + 0.3 * _lin(
+        highs, np.log(HIGHS[0]), np.log(HIGHS[1])
+    )
 
 
-def energy_scale(
-    raw: dict[str, tuple[float, float]], scale: dict[str, list[float]]
-) -> dict[str, Any]:
-    """``energyLevel`` and ``energyScale`` (track, intro, outro, 0..100) on the library's scale."""
-    if "track" not in raw or not scale.get("score"):
+def energy_scale(raw: dict[str, tuple[float, float]]) -> dict[str, Any]:
+    """``energyScale`` (track, intro, outro, 0..100) on the fixed scale."""
+    if "track" not in raw:
         return {}
-    score = {k: energy_score(v, scale["loud"], scale["highs"]) for k, v in raw.items()}
-    below = np.searchsorted(scale["score"], score["track"]) / len(scale["score"])
-    return {
-        "energyLevel": LEVELS[min(int(below * len(LEVELS)), len(LEVELS) - 1)],
-        "energyScale": {k: round(100 * v) for k, v in score.items()},
-    }
+    return {"energyScale": {k: round(100 * energy_score(v)) for k, v in raw.items()}}
 
 
 def phrase_phase(bpm: float, bar0: float) -> int:
