@@ -20,7 +20,8 @@ describe('gapBridges', () => {
   const b = trk('b', '10A')
   it('puts the strict bridges first, then fills with the rest', () => {
     const pool = [trk('far', '3B'), trk('mid', '9A'), trk('half', '9A', 140)]
-    expect(gapBridges(a, b, pool, 3).map(r => r.id)).toEqual(['mid', 'half', 'far'])
+    // Both of the rest are rough; Blend weighs a clash at the same tempo against a 34 BPM jump in key.
+    expect(gapBridges(a, b, pool, 3).map(r => r.id)).toEqual(['mid', 'far', 'half'])
   })
   it('is never empty while the pool has tracks', () => {
     expect(gapBridges(a, b, [trk('x', '2B')]).map(r => r.id)).toEqual(['x'])

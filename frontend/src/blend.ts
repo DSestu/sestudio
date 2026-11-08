@@ -32,6 +32,8 @@ export interface BlendOpts {
   want?: string
   colour?: string | null
   genres?: string[] | null
+  /** The harmony part when the caller reads joins its own way (proximity, with its Camelot fallback). */
+  harmony?: number
 }
 
 const BRIGHTNESS: Record<string, number> = { Lydian: 3, Ionian: 2, Mixolydian: 1, Dorian: 0, Aeolian: -1, Phrygian: -2, Locrian: -3 }
@@ -53,6 +55,11 @@ export const edge = (t: BlendTrack, which: 'intro' | 'outro' | 'track'): number 
   t.energyScale?.[which] ?? t.energyScale?.track ?? null
 
 const near = (step: number, best: number, spread: number) => Math.exp(-(((step - best) / spread) ** 2))
+
+/** An energy step "holds" while the Hold part stays this high (about 8 points either way). */
+export const HOLD_PART = 0.75
+/** What an energy step does, from the Blend energy part: hold while Hold scores HOLD_PART or more, else lift or ease. */
+export const energyLean = (delta: number): Lean => (near(delta, LEAN.hold.energy, SPREAD.energy) >= HOLD_PART ? 'hold' : delta > 0 ? 'lift' : 'ease')
 const norm = (s?: string | null) => (s ?? '').trim().toLowerCase()
 const r3 = (v: number) => Math.round(v * 1000) / 1000
 
@@ -77,7 +84,7 @@ export function blend(a: BlendTrack, b: BlendTrack, o: BlendOpts = {}): Blend {
   }
 
   const kind = joinKind(a.harmony?.track, b.harmony?.track)
-  parts.harmony = fit(kind, o.want ?? 'match')
+  parts.harmony = o.harmony ?? fit(kind, o.want ?? 'match')
 
   const ca = colourOf(a), cb = colourOf(b)
   if (o.colour) {
