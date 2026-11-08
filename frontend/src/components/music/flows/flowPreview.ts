@@ -17,5 +17,22 @@ export function preview(id: string, seed: number, scope: ScopeBody = {}): Promis
   return cache.get(key)!
 }
 
+const shapes = new Map<string, Promise<Slot[]>>()
+
+/** The whole flow rendered once (seed 1), for its row's shape: the energy of what it really picks. */
+export function shapeRender(id: string, scope: ScopeBody = {}): Promise<Slot[]> {
+  const key = `${id}:${JSON.stringify(scope)}`
+  if (!shapes.has(key)) {
+    shapes.set(key, renderFlow(id, { seed: 1, ...scope }).then(r => r.mix, e => { shapes.delete(key); throw e }))
+  }
+  return shapes.get(key)!
+}
+
+/** A flow was saved: its row draws again from a new render. */
+export function forgetShape(id: string) {
+  for (const k of [...shapes.keys()]) if (k.startsWith(`${id}:`)) shapes.delete(k)
+  for (const k of [...cache.keys()]) if (k.startsWith(`${id}:`)) cache.delete(k)
+}
+
 export const lengthLabel = (f: Flow) =>
   LENGTHS.find(l => l.id === f.length)?.label ?? (/^\d+$/.test(f.length) ? `${f.length} min` : 'Endless')

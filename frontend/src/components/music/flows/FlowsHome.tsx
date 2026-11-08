@@ -1,21 +1,20 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { DIAL_NAME, KINDS, dialFlow, playFlow, saveFlow, useFlows, type Flow } from '../../../musicFlows'
 import { UNKNOWN_ARTIST, type MusicTrack } from '../../../musicLibrary'
+import { useSummaries } from '../../../musicMeta'
 import { useMusicQueue } from '../../../musicQueue'
+import { EnergyLevel } from '../TrackMeta'
+import { forgetShape } from './flowPreview'
 import { openPlayer } from '../player'
 import { scopeBody, useFlowSources } from '../../../flowSources'
 import FlowRow, { Shape } from './FlowRow'
 import FromBar from './FromBar'
-import { ENERGY_WORDS } from './flowWords'
 import { fresh, toFlow } from './lanes'
 
 // The Music tab's Flows (SPEC-flows-tab §2, board A · Shelf): the flow playing, Right now,
 // your flows, the starters. One column; a row opens in place on what it would play.
 
 const run = (p: Promise<unknown>) => { p.catch(() => {}) }
-const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
-/** The energy each word plays at, mid-band of the generator's fifths. */
-const LEVEL = [0.1, 0.3, 0.5, 0.7, 0.9]
 
 /** The flow the queue plays, with where it is in it and what comes next. */
 function Playing({ flow, byId }: { flow: Flow; byId: Map<string, MusicTrack> }) {
@@ -24,10 +23,15 @@ function Playing({ flow, byId }: { flow: Flow; byId: Map<string, MusicTrack> }) 
   const next = byId.get(q.items[q.current + 1]?.track_id ?? '')
   const event = q.items.slice(q.current + 1).find(i => i.flow?.event && !i.flow.event.realised)?.flow?.event
   const now = q.items.length ? (q.current + 0.5) / q.items.length : 0
+  // The shape is what the queue really holds: each track's energy in order.
+  const { get } = useSummaries(useMemo(() => q.items.map(i => i.track_id), [q.items]))
+  const n = Math.max(1, q.items.length - 1)
+  const played = q.items.flatMap((it, i) => { const e = get(it.track_id)?.energyScale?.track; return e == null ? [] : [[i / n, e / 100] as [number, number]] })
+  const pts = played.length >= 2 ? played : null
   return (
     <section aria-label={`Playing ${flow.name}`} className="flex items-center gap-3.5 rounded-xl bg-primary/7 px-3.5 py-3 outline-1 outline-primary/50">
-      <span className="hidden sm:block"><Shape flow={flow} w={220} h={46} now={now} /></span>
-      <span className="sm:hidden"><Shape flow={flow} w={96} h={38} now={now} /></span>
+      <span className="hidden sm:block"><Shape flow={flow} pts={pts} w={220} h={46} now={now} /></span>
+      <span className="sm:hidden"><Shape flow={flow} pts={pts} w={96} h={38} now={now} /></span>
       <div className="min-w-0 flex-1 leading-tight">
         <p className="text-xs text-primary">Playing</p>
         <p className="truncate font-semibold">{flow.name}</p>
@@ -41,9 +45,9 @@ function Playing({ flow, byId }: { flow: Flow; byId: Map<string, MusicTrack> }) 
   )
 }
 
-/** One gesture, a flow plays: an energy word and a tempo become the one-chunk "Now" flow. */
+/** One gesture, a flow plays (SPEC-blend R1): how hard the first track hits and a tempo, then every pick holds close. */
 function RightNow({ flows }: { flows: Flow[] }) {
-  const [level, setLevel] = useState(2)
+  const [level, setLevel] = useState(60)
   const [tempo, setTempo] = useState(172)
   const [busy, setBusy] = useState(false)
   const sources = useFlowSources()
@@ -51,7 +55,8 @@ function RightNow({ flows }: { flows: Flow[] }) {
     setBusy(true)
     try {
       const mine = flows.find(f => f.name === DIAL_NAME && !f.preset)
-      const flow = await saveFlow(DIAL_NAME, dialFlow(LEVEL[level], tempo, 'endless'), mine?.id)
+      const flow = await saveFlow(DIAL_NAME, dialFlow(level / 100, tempo, 'endless'), mine?.id)
+      forgetShape(flow.id)
       await playFlow(flow.id, scopeBody(sources))
     } finally {
       setBusy(false)
@@ -59,22 +64,20 @@ function RightNow({ flows }: { flows: Flow[] }) {
   }
   return (
     <section aria-label="Right now" className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-xl bg-base-200 p-3 sm:px-4 sm:py-3.5">
-      <h2 className="w-full text-sm font-semibold sm:w-auto">Right now</h2>
-      <div role="radiogroup" aria-label="Energy" className="flex rounded-lg bg-base-100 p-0.5 outline-1 outline-white/8">
-        {ENERGY_WORDS.map((w, i) => (
-          <button key={w} role="radio" aria-checked={level === i} onClick={() => setLevel(i)}
-            className={`rounded-md px-2.5 py-1 text-xs ${level === i ? 'bg-base-300 text-base-content' : 'text-base-content/60 hover:text-base-content'}`}>
-            {cap(w)}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center rounded-lg bg-base-100 p-0.5 text-xs outline-1 outline-white/8">
+      <h2 className="text-sm font-semibold max-sm:w-full">Right now</h2>
+      <label className="flex min-w-0 flex-1 items-center gap-3 max-sm:basis-full sm:max-w-md">
+        <span className="shrink-0 text-xs text-base-content/50">start at</span>
+        <input type="range" min={0} max={100} value={level} onChange={e => setLevel(Number(e.target.value))} aria-label="Energy of the first track"
+          aria-valuetext={`energy ${level} of 100`} className="rn-level min-w-0 flex-1" />
+        <EnergyLevel value={level} />
+        <span className="shrink-0 text-xs text-base-content/50">then holds</span>
+      </label>
+      <div className="flex items-center rounded-lg bg-base-100 p-0.5 text-xs outline-1 outline-white/8 sm:ml-auto">
         <button aria-label="Slower" onClick={() => setTempo(t => Math.max(60, t - 2))} className="rounded-md px-2.5 py-1 text-base-content/60 hover:text-base-content">−</button>
         <span className="rounded-md bg-base-300 px-2.5 py-1 tabular-nums">{tempo} bpm</span>
         <button aria-label="Faster" onClick={() => setTempo(t => Math.min(200, t + 2))} className="rounded-md px-2.5 py-1 text-base-content/60 hover:text-base-content">+</button>
       </div>
-      <span className="text-xs text-base-content/45 max-sm:hidden">until you stop</span>
-      <button onClick={() => run(play())} disabled={busy} className="btn btn-primary btn-sm ml-auto">
+      <button onClick={() => run(play())} disabled={busy} className="btn btn-primary btn-sm max-sm:ml-auto">
         {busy ? <span className="loading loading-spinner loading-xs" /> : 'Play'}
       </button>
     </section>

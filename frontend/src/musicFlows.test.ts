@@ -27,9 +27,9 @@ describe('flow cards', () => {
     expect(eventsLine(NIGHT)).toBe('Up a fifth, Break')
     expect(energyShape({ chunks: [chunk('a', [])] })).toBeNull()
   })
-  it('the dial makes one chunk at its values', () => {
+  it('Right now starts near its level and tempo, then holds', () => {
     const f = dialFlow(0.6, 172, 'endless')
-    expect(f.chunks![0].layers).toEqual({ tempo: [[0, 172], [1, 172]], energy: [[0, 0.6], [1, 0.6]], harmony: [] })
+    expect(f.chunks![0].layers).toEqual({ start: { energy: 0.6, tempo: 172 }, energy: [{ from: 0, to: 1, lean: 'hold' }], harmony: [] })
     expect(f.length).toBe('endless')
   })
 })

@@ -5,6 +5,7 @@ import type { MusicTrack } from '../../../musicLibrary'
 import { useSummaries } from '../../../musicMeta'
 import type { SlotBlend } from '../../../musicQueue'
 import { BlendRing } from '../BlendRing'
+import { forgetShape } from './flowPreview'
 import {
   ANY, CCOL, COLOURS, KINDS, LEANS, addBrick, fresh, fromFlow, genreLabel, pullEdge, remove, setSetting, setValue, split, starts, stretches, swap, toFlow, total,
   type LaneKind, type Lanes, type SettingKind, type Stretch,
@@ -251,6 +252,7 @@ export default function FlowLanes({ flowId, byId, onOpen }: { flowId: string; by
   const save = async (): Promise<string> => {
     const body: Partial<Flow> = { ...toFlow(lanes), pull: saved?.pull ?? 'strong', allowOnline: saved?.allowOnline ?? false }
     const out = await saveFlow(name || 'Flow', body, asNew ? undefined : flowId)
+    forgetShape(out.id)
     setDirty(false)
     await refreshFlows()
     if (asNew) onOpen(out.id)

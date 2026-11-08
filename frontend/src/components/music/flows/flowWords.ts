@@ -1,42 +1,41 @@
-import { KINDS, energyShape, eventDots, firstPath, type Flow } from '../../../musicFlows'
+import type { Lean } from '../../../blend'
+import { KINDS, eventDots, firstPath, type Flow } from '../../../musicFlows'
+import { leansOf } from './lanes'
 
-// What a flow does, in one sentence (SPEC-flows-tab §2): "Lively to all out · up a fifth halfway".
+// What a flow does, in one sentence (SPEC-blend S1): the moves only, never a level.
+// "Lifts, holds, then eases out" · "Holds all the way · Progressive House only".
 
-export const ENERGY_WORDS = ['calm', 'easy', 'lively', 'high', 'all out'] as const
-export const energyWord = (v: number) => ENERGY_WORDS[Math.max(0, Math.min(4, Math.floor(v * 5)))]
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 
 /** Where on the flow a thing happens, in words. */
 function where(at: number) {
-  return at < 0.15 ? 'at the start' : at < 0.4 ? 'early' : at < 0.6 ? 'halfway' : at < 0.85 ? 'late' : 'at the end'
+  return at < 0.15 ? 'first' : at < 0.4 ? 'early' : at < 0.6 ? 'halfway' : at < 0.85 ? 'late' : 'at the end'
 }
 
-/** The energy line: "Easy, rising to lively", "Lively all the way", "Easy, up to all out, down to easy". */
+/** The leans along the first path, neighbours with the same lean as one. */
+function moves(flow: Pick<Flow, 'chunks'>): Lean[] {
+  const out: Lean[] = []
+  for (const c of firstPath(flow)) for (const b of leansOf(c.layers)) if (out.at(-1) !== b.lean) out.push(b.lean)
+  return out
+}
+
+/** The moves: "Lifts all the way", "Holds, then eases out", "Lifts, holds, then eases out". */
 function energyLine(flow: Pick<Flow, 'chunks'>): string {
-  const pts = energyShape(flow)
-  if (!pts) return ''
-  const runs: { word: string; v: number }[] = []
-  for (const [, v] of pts) {
-    const word = energyWord(v)
-    if (runs.at(-1)?.word !== word) runs.push({ word, v })
-  }
-  if (runs.length === 1) {
-    const flat = pts.every(([, v]) => Math.abs(v - pts[0][1]) < 0.02)
-    return `${cap(runs[0].word)} ${flat ? 'all the way' : 'and steady'}`
-  }
-  if (runs.length === 2) {
-    const [a, b] = runs
-    return b.v > a.v ? `${cap(a.word)}, rising to ${b.word}` : `${cap(a.word)} down to ${b.word}`
-  }
-  return [cap(runs[0].word), ...runs.slice(1).map((r, i) => `${r.v > runs[i].v ? 'up' : 'down'} to ${r.word}`)].join(', ')
+  const m = moves(flow)
+  if (!m.length) return 'Holds all the way'
+  const word = (l: Lean, last: boolean) => (l === 'lift' ? 'lifts' : l === 'hold' ? 'holds' : last ? 'eases out' : 'eases off')
+  if (m.length === 1) return `${cap(m[0] === 'ease' ? 'eases' : word(m[0], false))} all the way`
+  const words = m.map((l, i) => word(l, i === m.length - 1))
+  return cap(`${words.slice(0, -1).join(', ')}, then ${words.at(-1)}`)
 }
 
+/** An older flow's tempo curve, said as a move. */
 function tempoLine(flow: Pick<Flow, 'chunks'>): string {
   const pts = firstPath(flow).flatMap(c => c.layers.tempo ?? [])
   if (pts.length < 2) return ''
   const a = pts[0][1], b = pts[pts.length - 1][1]
   if (Math.abs(b - a) < 5) return ''
-  return `${b < a ? 'slows' : 'speeds up'} to ${Math.round(b)}`
+  return b < a ? 'slows down' : 'speeds up'
 }
 
 function genreLine(flow: Pick<Flow, 'chunks'>): string {
@@ -54,7 +53,7 @@ export function flowSentence(flow: Pick<Flow, 'chunks'>): string {
     return `${d.kind === 'break' ? 'a break' : name} ${where(d.at)}`
   })
   const parts = [energyLine(flow), ...events.slice(0, 2), tempoLine(flow), genreLine(flow)].filter(Boolean)
-  return parts.length ? cap(parts.join(' · ')) : 'Any energy, any key'
+  return cap(parts.join(' · '))
 }
 
 /** "made today", "made yesterday", "made 3 Nov". */

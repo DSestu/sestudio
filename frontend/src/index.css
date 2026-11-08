@@ -318,6 +318,16 @@
   .follow-row { translate: none; transition-delay: 0s !important; }
 }
 
+/* Right now's level (FlowsHome.tsx, SPEC-blend R1): how hard the first track hits, on the energy amber. */
+.rn-level { appearance: none; height: 28px; background: none; cursor: pointer; }
+.rn-level::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(90deg, oklch(82% 0.11 75 / 0.15), oklch(82% 0.11 75 / 0.9)); }
+.rn-level::-moz-range-track { height: 6px; border-radius: 3px; background: linear-gradient(90deg, oklch(82% 0.11 75 / 0.15), oklch(82% 0.11 75 / 0.9)); }
+.rn-level::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; margin-top: -7px; border-radius: 50%; background: var(--color-base-content); box-shadow: 0 0 0 4px oklch(82% 0.11 75 / 0.35); }
+.rn-level::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--color-base-content); box-shadow: 0 0 0 4px oklch(82% 0.11 75 / 0.35); }
+.rn-level:focus-visible { outline: none; }
+.rn-level:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--color-primary); }
+.rn-level:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px var(--color-primary); }
+
 /* The flow editor's lanes (FlowLanes.tsx; design docs/proto/flows/lanes.html). */
 .flow-lanes {
   --fl-energy: oklch(82% 0.11 75);
