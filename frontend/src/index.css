@@ -385,6 +385,19 @@
 .fl-btn:disabled { opacity: .35; cursor: default; background: none; }
 .fl-ghost { position: fixed; pointer-events: none; z-index: 50; transform: translate(-50%, -50%); background: var(--color-base-400); border: 1px solid var(--fl-hair2); border-radius: 10px; padding: 6px 10px; display: flex; gap: 8px; align-items: center; font-size: 13px; box-shadow: 0 10px 30px oklch(0% 0 0 / .5); }
 .fl-toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--color-base-400); border: 1px solid var(--fl-hair2); border-radius: 12px; padding: 8px 14px; z-index: 60; font-size: 13px; }
+/* The playlist's timeline (SetCurve.tsx): the same lanes, read back from the tracks. */
+.sc .fl-brick { cursor: pointer; font: inherit; font-size: 12px; font-weight: 500; top: 5px; bottom: 5px; padding: 0 9px; gap: 7px; border-radius: 8px; }
+.sc .fl-brick:hover { background: color-mix(in oklch, var(--c) 26%, var(--color-base-200)); }
+.sc .fl-brick.sc-thin { padding: 0; gap: 0; border-radius: 3px; }
+.sc .fl-brick .fl-dot { width: 7px; height: 7px; }
+.sc-clash { position: absolute; top: 9px; bottom: 9px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--color-warning); z-index: 2; pointer-events: none; }
+.sc-readout { display: flex; align-items: center; gap: 8px; height: 24px; min-width: 0; font-size: 12px; white-space: nowrap; color: color-mix(in oklch, var(--color-base-content) 72%, transparent); }
+.sc-readout b { font-weight: 500; color: var(--color-base-content); }
+.sc-hint { margin-left: auto; overflow: hidden; text-overflow: ellipsis; color: color-mix(in oklch, var(--color-base-content) 45%, transparent); }
+.sc-shade { position: absolute; top: 0; bottom: 0; background: oklch(100% 0 0 / 0.05); pointer-events: none; }
+.sc-now { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--color-primary); z-index: 4; pointer-events: none; }
+.sc-now::before { content: ""; position: absolute; top: -4px; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); }
+.fl-ruler .sc-part { top: 2px; bottom: auto; transform: none; font-weight: 500; color: color-mix(in oklch, var(--color-base-content) 72%, transparent); }
 @media (max-width: 700px) {
   .flow-lanes { --fl-lw: 64px; }
   .fl-body { display: block; }

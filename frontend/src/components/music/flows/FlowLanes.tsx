@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent as RKeyboardEv
 import { playFlow, refreshFlows, saveFlow, useFlows, type Flow } from '../../../musicFlows'
 import type { MusicTrack } from '../../../musicLibrary'
 import {
-  ANY, COLOURS, ENERGY, KINDS, addBrick, fresh, fromFlow, genreLabel, pullEdge, remove, setValue, split, starts, stretches, swap, toFlow, total,
+  ANY, CCOL, COLOURS, ENERGY, KINDS, addBrick, fresh, fromFlow, genreLabel, pullEdge, remove, setValue, split, starts, stretches, swap, toFlow, total,
   type LaneKind, type Lanes, type Stretch,
 } from './lanes'
 
@@ -15,7 +15,6 @@ const LABEL: Record<LaneKind, string> = { energy: 'Energy', genre: 'Genre', colo
 const NOTE: Record<LaneKind, string> = { energy: 'how hard it hits', genre: 'what style', colour: 'the colour of the keys' }
 const EHINT: Record<string, string> = { Calm: 'quietest', Low: 'soft', Mid: 'middle', High: 'strong', Peak: 'loudest', Build: 'rises', Ease: 'falls' }
 const CHINT: Record<string, string> = { Any: 'any key', bright: 'major', warm: 'Dorian', dark: 'minor', exotic: 'harmonic' }
-const CCOL: Record<string, string> = { Any: 'oklch(62% .02 240)', bright: 'oklch(87% .11 95)', warm: 'oklch(77% .11 55)', dark: 'oklch(64% .11 275)', exotic: 'oklch(71% .12 320)' }
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 const RECENT_KEY = 'sestudio.flowGenres'
 const LW = 88

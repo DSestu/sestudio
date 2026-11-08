@@ -14,6 +14,8 @@ export const ENERGY: Record<string, [number, number]> = {
   Calm: [0.1, 0.1], Low: [0.3, 0.3], Mid: [0.5, 0.5], High: [0.7, 0.7], Peak: [0.9, 0.9], Build: [0.3, 0.9], Ease: [0.9, 0.3],
 }
 export const COLOURS = ['Any', 'bright', 'warm', 'dark', 'exotic']
+/** Each key colour's swatch (the editor's Harmony lane, and the playlist's). */
+export const CCOL: Record<string, string> = { Any: 'oklch(62% .02 240)', bright: 'oklch(87% .11 95)', warm: 'oklch(77% .11 55)', dark: 'oklch(64% .11 275)', exotic: 'oklch(71% .12 320)' }
 export const ANY = 'Any'
 export const STEP = 5
 const FLAT = ['Calm', 'Low', 'Mid', 'High', 'Peak']

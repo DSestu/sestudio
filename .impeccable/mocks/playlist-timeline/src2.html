@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Playlist edit · timeline on the flow editor's language</title>
+<style>
+:root{
+  --b1:oklch(16% .015 240);--b2:oklch(20% .02 240);--b3:oklch(26% .025 240);--b4:oklch(30% .025 240);
+  --fg:oklch(92% .01 240);--pri:oklch(72% .16 230);--warn:oklch(83% .16 85);
+  --en:oklch(82% .11 75);--hair:oklch(100% 0 0 / .07);--hair2:oklch(100% 0 0 / .12);
+  --m50:color-mix(in oklch,var(--fg) 50%,transparent);--m70:color-mix(in oklch,var(--fg) 72%,transparent);
+}
+*{box-sizing:border-box}
+body{margin:0;background:oklch(13% .012 240);color:var(--fg);font:14px/1.43 ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:color-mix(in oklch,var(--pri) 35%,transparent)}
+.page{max-width:1260px;margin:0 auto;padding:40px 40px 80px}
+h1{font-size:24px;font-weight:600;letter-spacing:-.025em;margin:0 0 6px}
+h2{font-size:18px;font-weight:600;letter-spacing:-.025em;margin:0}
+.lede{color:var(--m70);max-width:72ch;margin:0 0 28px}
+.opt{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:28px;align-items:start;padding:32px 0;border-top:1px solid var(--hair)}
+.opt header{grid-column:1/-1;display:flex;gap:14px;align-items:baseline}
+.opt header .tag{font-size:12px;font-weight:600;color:var(--b1);background:var(--pri);border-radius:6px;padding:1px 8px}
+.opt header p{margin:0;color:var(--m70);max-width:80ch}
+.notes{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;color:var(--m70);font-size:13px}
+.notes b{color:var(--fg);font-weight:500;display:block;margin-bottom:2px}
+.frame-l{font-size:11px;color:var(--m50);margin:0 0 8px}
+/* desktop: the editor's middle column in its real width */
+.desk{background:var(--b1);border:1px solid var(--hair);border-radius:16px;padding:18px 20px;width:560px}
+.phone{background:var(--b1);border:1px solid var(--hair2);border-radius:28px;padding:14px 16px 20px;width:390px}
+.stats{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--m70);margin-bottom:12px;flex-wrap:wrap}
+.pill{background:color-mix(in oklch,var(--warn) 16%,transparent);color:var(--warn);border-radius:99px;padding:1px 9px;font-size:12px}
+.row{display:flex;align-items:center;gap:12px;padding:9px 6px;border-bottom:1px solid var(--hair);font-size:14px}
+.row .tt{flex:1;min-width:0}.row .tt div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .tt small{color:var(--m50);font-size:12px}
+.row .meta{font-size:12px;color:var(--m50);font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center}
+.row.hl{background:color-mix(in oklch,var(--pri) 9%,transparent);box-shadow:inset 0 -2px 0 var(--pri);border-radius:8px 8px 0 0}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+
+/* ===== the flow editor's language, reused ===== */
+.fl-card{background:var(--b2);border:1px solid var(--hair);border-radius:16px;padding:10px 14px 12px;margin-bottom:12px}
+.fl-grid{display:grid;grid-template-columns:var(--lw,76px) minmax(0,1fr)}
+.fl-name{display:flex;flex-direction:column;justify-content:center;font-size:12px;font-weight:500;color:var(--m70);line-height:1.25}
+.fl-name small{font-size:11px;font-weight:400;color:color-mix(in oklch,var(--fg) 48%,transparent)}
+.fl-track{position:relative;border-top:1px solid var(--hair)}
+.fl-ruler{border:0;height:24px}
+.fl-ruler span{position:absolute;bottom:5px;font-size:11px;color:var(--m50);transform:translateX(-50%);font-variant-numeric:tabular-nums;white-space:nowrap}
+.fl-ruler span:first-child{transform:none}
+.fl-gl{position:absolute;top:0;bottom:0;width:1px;background:var(--hair);pointer-events:none}
+.fl-brick{position:absolute;top:5px;bottom:5px;border-radius:8px;display:flex;align-items:center;gap:7px;padding:0 9px;white-space:nowrap;overflow:hidden;font-size:12px;font-weight:500;
+  background:color-mix(in oklch,var(--c) 16%,var(--b2));border:1px solid color-mix(in oklch,var(--c) 32%,transparent);color:color-mix(in oklch,var(--c) 55%,white)}
+.fl-brick .dot{width:7px;height:7px}
+.fl-brick.sel{border-color:var(--pri);box-shadow:0 0 0 1px var(--pri) inset}
+.now{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--pri);pointer-events:none;z-index:4}
+.now::before{content:"";position:absolute;top:-4px;left:-3px;width:8px;height:8px;border-radius:50%;background:var(--pri)}
+svg{display:block}
+.tip{position:absolute;z-index:9;background:var(--b4);border:1px solid var(--hair2);border-radius:10px;padding:7px 10px;font-size:12px;white-space:nowrap;box-shadow:0 8px 24px oklch(0% 0 0/.45);pointer-events:none}
+.tip b{font-weight:500}.tip small{display:block;color:var(--m50);font-size:11px}
+.hint{font-size:12px;color:var(--m50);margin:0 0 6px}
+.legend-none{}
+/* B: tracks as bricks */
+.tb{position:absolute;top:5px;bottom:5px;border-radius:5px;background:color-mix(in oklch,var(--c) 22%,var(--b2));border:1px solid color-mix(in oklch,var(--c) 38%,transparent)}
+.tb.sel{background:color-mix(in oklch,var(--pri) 30%,var(--b2));border-color:var(--pri)}
+.jn{position:absolute;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;z-index:3}
+.jn.clash{background:var(--warn);box-shadow:0 0 0 2px var(--b2)}
+.jn.tempo{width:2px;height:18px;margin:-9px 0 0 -1px;border-radius:1px;background:color-mix(in oklch,var(--warn) 70%,transparent)}
+.now-l{display:flex;gap:16px;align-items:center;margin-top:8px;font-size:11px;color:var(--m50)}
+.now-l i{display:inline-block;vertical-align:middle;margin-right:5px}
+.before{display:grid;grid-template-columns:auto auto;gap:24px;align-items:start;margin-bottom:12px}
+.before img{border-radius:12px;border:1px solid var(--hair2);display:block}
+.before p{color:var(--m70);font-size:13px;margin:6px 0 0;max-width:60ch}
+.ph-lane-l{position:absolute;left:6px;top:4px;font-size:10px;color:var(--m50);z-index:2;pointer-events:none}
+.tb{top:16px}
+</style></head>
+<body><div class="page">
+<h1>Playlist edit: Energy, Genre and Harmony lanes</h1>
+<p class="lede">Round 3. Your Queue playlist, 46 tracks, 3h00. Three lanes taken straight from the flow editor: Energy (amber curve and fade), Genre (tinted bricks) and Harmony (the editor's Bright, Warm, Dark, Exotic), under the same ruler and label column. Clashes are a key matter, so their amber dots sit in the Harmony lane; tempo jumps stay in the stats line. The two versions differ only in how the Genre and Harmony lanes split.</p>
+
+<div class="before">
+  <div><p class="frame-l">Now · desktop</p><img src="BEFORE_D" width="520"></div>
+  <div><p class="frame-l">Now · phone</p><img src="BEFORE_P" width="300">
+  <p>What clashes: a jagged white energy line, a pink dashed "mood" line nobody else uses, a saturated per-track genre ribbon, 16 dotted amber lines for clashes and tempo jumps, and the legend drawn on top of the curve. The flow editor next door says the same things with lanes, a smooth amber curve and tinted bricks.</p></div>
+</div>
+
+<section class="opt" id="R">
+  <header><span class="tag">1</span><h2>Runs</h2><p>Exactly the flow editor's three lanes. Back-to-back tracks of the same genre merge into one brick, so the Genre lane reads like the one you drew in a flow. Harmony does the same with key colours. Clashes are amber dots in the Harmony lane.</p></header>
+  <div><p class="frame-l">Desktop · pointer on the Dubstep run at 1h20, the hovered run shaded across all lanes</p><div class="desk" data-v="R" data-w="desk"></div></div>
+  <div><p class="frame-l">Phone</p><div class="phone" data-v="R" data-w="phone"></div></div>
+  <div class="notes"><div><b>Same as a flow</b>Three lanes, the same label column, curve and bricks as the Lanes editor; a playlist reads as the flow it would be.</div><div><b>Point at a run</b>The run lights up, its tracks light up in the list, and the tooltip says which tracks and how long.</div><div><b>Short runs</b>A run too narrow for its name shows only its colour; the name comes on hover or tap.</div></div>
+</section>
+
+<section class="opt" id="T">
+  <header><span class="tag">2</span><h2>Per track</h2><p>The same three lanes, but Genre and Harmony have one brick per track, tinted by genre or key colour, with the name once above each long run. Clashes sit in the Harmony gap between the two tracks they join. Pointing at a brick or a gap aims Fits at it, like a row or a join in the list.</p></header>
+  <div><p class="frame-l">Desktop · pointer on track 21, its row lit in the list</p><div class="desk" data-v="T" data-w="desk"></div></div>
+  <div><p class="frame-l">Phone · tap a brick to jump to its row</p><div class="phone" data-v="T" data-w="phone"></div></div>
+  <div class="notes"><div><b>Tracks stay countable</b>46 bricks per lane: you see where each track sits and how long it is.</div><div><b>A second way to aim Fits</b>Brick = "Where it fits", gap = "Fits between", same as the list.</div><div><b>Busier</b>Two barcode lanes; on a phone a 3h playlist gives some bricks barely 4px wide.</div></div>
+</section>
+</div>
+
+<script>
+const Q=/*DATA*/[];
+const GROUP={Lydian:'bright',Ionian:'bright',Mixolydian:'warm',Dorian:'warm',Aeolian:'dark',Phrygian:'dark',Locrian:'dark'};
+const grp=m=>GROUP[m]??'exotic';
+const CCOL={bright:'oklch(87% .11 95)',warm:'oklch(77% .11 55)',dark:'oklch(64% .11 275)',exotic:'oklch(71% .12 320)'};
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+const genreCol=v=>{let h=0;for(const ch of v)h=(h*31+ch.charCodeAt(0))%360;return `oklch(74% .12 ${h})`};
+const gShort={'Drum & Bass':'DnB'};
+// Joins: tempo jump > 5 bpm; clashes = the 6 joins with the fewest shared notes (stand-in for the app's note-set reading).
+const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],FL={Db:'C#',Eb:'D#',Gb:'F#',Ab:'G#',Bb:'A#'};
+const SC={Ionian:[0,2,4,5,7,9,11],Dorian:[0,2,3,5,7,9,10],Phrygian:[0,1,3,5,7,8,10],Lydian:[0,2,4,6,7,9,11],Mixolydian:[0,2,4,5,7,9,10],Aeolian:[0,2,3,5,7,8,10],Locrian:[0,1,3,5,6,8,10],'Harmonic minor':[0,2,3,5,7,8,11],'Phrygian dominant':[0,1,4,5,7,8,10]};
+const notes=t=>{const r=NOTE.indexOf(FL[t.k]||t.k);return new Set((SC[t.m]||[]).map(x=>(x+r)%12))};
+const shared=Q.slice(1).map((t,i)=>{const a=notes(Q[i]),b=notes(t);return{i:i+1,s:[...a].filter(x=>b.has(x)).length}});
+const clashSet=new Set([...shared].sort((x,y)=>x.s-y.s).slice(0,6).map(x=>x.i));
+const tempoSet=new Set(Q.map((t,i)=>i&&Math.abs(t.b-Q[i-1].b)>5?i:0).filter(Boolean));
+Q.forEach(t=>t.t=t.t.replace(/＊/g,'*'));
+const TOTAL=Q.reduce((s,t)=>s+t.d,0);
+const starts=[];{let a=0;for(const t of Q){starts.push(a);a+=t.d}}
+const NOW=starts[9]+120; // playing: track 10, 2 min in
+const fmt=s=>{const m=Math.round(s/60);return m<60?`${m}m`:`${Math.floor(m/60)}h${m%60?String(m%60).padStart(2,'0'):''}`};
+const runs=key=>{const r=[];Q.forEach((t,i)=>{const v=key(t);if(r.length&&r.at(-1).v===v){r.at(-1).d+=t.d}else r.push({v,s:starts[i],d:t.d})});return r};
+
+function ruler(W,ticks,extra=''){
+  let h=`<div class="fl-track fl-ruler">`;
+  for(const s of ticks) h+=`<span style="left:${s/TOTAL*W}px">${s?fmt(s):'start'}</span>`;
+  return h+extra+`</div>`;
+}
+const gl=(W,ticks)=>ticks.slice(1).map(s=>`<div class="fl-gl" style="left:${s/TOTAL*W}px"></div>`).join('');
+function energyPath(W,H,top=8,bot=8){
+  const y=e=>top+(1-(e-55)/45)*(H-top-bot);
+  const pts=Q.map((t,i)=>[(starts[i]+t.d/2)/TOTAL*W,y(t.e)]);
+  pts.unshift([0,pts[0][1]]);pts.push([W,pts.at(-1)[1]]);
+  // light smoothing so it reads like the editor's eased curve, not a zig-zag
+  const sm=pts.map((p,i)=>i===0||i===pts.length-1?p:[p[0],(pts[i-1][1]+2*p[1]+pts[i+1][1])/4]);
+  let d=`M${sm[0][0]} ${sm[0][1]}`;
+  for(let i=1;i<sm.length;i++){const[px,py]=sm[i-1],[qx,qy]=sm[i],m=(qx-px)/2;d+=` C${px+m} ${py} ${qx-m} ${qy} ${qx} ${qy}`}
+  return {d,y,sm};
+}
+function curveSvg(W,H,id,extra=''){
+  const {d,y,sm}=energyPath(W,H);
+  return {svg:`<svg width="${W}" height="${H}" style="position:absolute;inset:0"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="oklch(82% .11 75)" stop-opacity=".28"/><stop offset="1" stop-color="oklch(82% .11 75)" stop-opacity="0"/></linearGradient></defs><path d="${d} L${W} ${H} L0 ${H}Z" fill="url(#${id})"/><path d="${d}" fill="none" stroke="var(--en)" stroke-width="2" stroke-linecap="round"/>${extra}</svg>`,y,sm};
+}
+const nowLine=W=>`<div class="now" style="left:${NOW/TOTAL*W}px"></div>`;
+const statsLine=(v)=>`<div class="stats">46 tracks · 3h00 · <span class="pill">6 clashes</span>${v==='C'?'<span class="pill">10 tempo jumps</span>':''}<span style="margin-left:auto;color:var(--m50)">List · Map</span></div>`;
+const rowsAfter=(hl)=>[0,1,2].map(i=>{const t=Q[i+ (hl??0)],n=i+(hl??0);return `<div class="row ${hl!=null&&i===0?'hl':''}"><span style="color:var(--m50);font-size:12px;width:18px;text-align:right">${n+1}</span><div class="tt"><div>${t.t}</div><small>${t.a||'Unknown artist'}</small></div><div class="meta"><span class="dot" style="background:${CCOL[grp(t.m)]}"></span>${cap(grp(t.m))} · ${t.b} bpm · ${fmt(t.d).replace('m','')}:${String(t.d%60).padStart(2,'0')}</div></div>`}).join('');
+
+const stats2=`<div class="stats">46 tracks · 3h00 · <span class="pill">6 clashes</span><span class="pill">10 tempo jumps</span><span style="margin-left:auto;color:var(--m50)">List · Map</span></div>`;
+const rowsG=(hl,n0=0)=>[0,1,2].map(i=>{const n=(hl??n0)+i,t=Q[n],lit=Array.isArray(hl)?false:(hl!=null&&i===0);return `<div class="row ${lit||(window.__lit&&window.__lit.includes(n))?'hl':''}"><span style="color:var(--m50);font-size:12px;width:18px;text-align:right">${n+1}</span><div class="tt"><div>${t.t}</div><small>${t.a||'Unknown artist'}</small></div><div class="meta"><span class="dot" style="background:${genreCol(t.g)}"></span>${gShort[t.g]??t.g} · <span class="dot" style="background:${CCOL[grp(t.m)]}"></span>${cap(grp(t.m))} · ${t.b} bpm · ${Math.floor(t.d/60)}:${String(t.d%60).padStart(2,'0')}</div></div>`}).join('');
+function onCurve(sm,x){for(let k=1;k<sm.length;k++)if(sm[k][0]>=x){const[a,b]=[sm[k-1],sm[k]];return a[1]+(b[1]-a[1])*((x-a[0])/(b[0]-a[0]||1))}return sm.at(-1)[1]}
+function lanes(W,phone,genre,hlx,tip){
+  const lw=phone?60:88,w=W-lw,ticks=[0,1800,3600,5400,7200,9000].filter(s=>!phone||s%3600===0);
+  const EH=phone?64:84,g=gl(w,ticks);
+  const {sm}=energyPath(w,EH);
+  const dots=genre.dotsOnCurve?Q.map((t,i)=>clashSet.has(i)?`<circle cx="${starts[i]/TOTAL*w}" cy="${onCurve(sm,starts[i]/TOTAL*w)}" r="4" fill="var(--warn)" stroke="var(--b2)" stroke-width="2"/>`:'').join(''):'';
+  const c=curveSvg(w,EH,'g'+genre.id+(phone?'p':'d'),dots);
+  const shade=hlx?`<div style="position:absolute;top:0;bottom:0;left:${hlx[0]}px;width:${hlx[1]}px;background:oklch(100% 0 0/.05);pointer-events:none"></div>`:'';
+  const lab=(n,s)=>`<div class="fl-name">${n}${s&&!phone?`<small>${s}</small>`:''}</div>`;
+  return `${stats2}<div class="fl-card"><div class="fl-grid" style="--lw:${lw}px">
+    <div></div>${ruler(w,ticks)}
+    ${lab('Energy','how hard it hits')}<div class="fl-track" style="height:${EH}px">${g}${shade}${c.svg}${nowLine(w)}</div>
+    ${lab('Genre','what style')}<div class="fl-track" style="height:${genre.h}px">${g}${shade}${genre.html(w,phone)}</div>
+    ${lab('Harmony','key colour')}<div class="fl-track" style="height:${genre.h}px">${g}${shade}${genre.harm(w,phone)}${jdots(w,genre.id==='t'?genre.h/2+8:genre.h/2+5)}${phone?'':tip(w)}</div>
+  </div></div>`;
+}
+const jdots=(w,h)=>Q.map((t,i)=>clashSet.has(i)?`<div class="jn clash" style="left:${starts[i]/TOTAL*w}px;top:${h/2}px"></div>`:'').join('');
+function R(W,phone){
+  const rs=runs(t=>t.g);const hr=rs.findIndex(r=>r.v==='Dubstep'&&r.s>4000);
+  const w0=W-(phone?60:88);const x=rs[hr].s/TOTAL*w0,bw=rs[hr].d/TOTAL*w0;
+  const first=starts.indexOf(rs[hr].s);let last=first;{let a=rs[hr].s;while(last<Q.length&&a<rs[hr].s+rs[hr].d){a+=Q[last].d;last++}}
+  window.__lit=phone?null:[...Array(last-first).keys()].map(k=>k+first);
+  const html=(w)=>rs.map((r,i)=>{const x=r.s/TOTAL*w,bw=r.d/TOTAL*w-3,col=genreCol(r.v);return `<div class="fl-brick${!phone&&i===hr?' sel':''}" style="--c:${col};left:${x}px;width:${bw}px">${bw>18?`<span class="dot" style="background:${col}"></span>`:''}${bw>(phone?56:52)?(gShort[r.v]??r.v):''}</div>`}).join('');
+  const tip=w=>`<div class="tip" style="left:${Math.max(0,x-40)}px;top:-112px"><b>Dubstep · tracks ${first+1}–${last}</b><small>${last-first} tracks · ${fmt(rs[hr].d)}</small></div>`;
+  const out=lanes(W,phone,{id:'r',h:phone?34:40,html,harm:(w)=>runs(t=>grp(t.m)).map(r=>{const x=r.s/TOTAL*w,bw=r.d/TOTAL*w-3,col=CCOL[r.v];return `<div class="fl-brick" style="--c:${col};left:${x}px;width:${bw}px">${bw>18?`<span class="dot" style="background:${col}"></span>`:''}${bw>(phone?56:52)?cap(r.v):''}</div>`}).join(''),dotsOnCurve:false},phone?null:[x,bw],tip)+rowsG(phone?null:first);
+  window.__lit=null;return out;
+}
+function T(W,phone){
+  const sel=20,lw=phone?60:88,w0=W-lw;
+  const html=(w)=>{
+    let h=Q.map((t,i)=>{const x=starts[i]/TOTAL*w+1,bw=Math.max(t.d/TOTAL*w-2,1.5),col=genreCol(t.g);return `<div class="tb${!phone&&i===sel?' sel':''}" style="--c:${col};left:${x}px;width:${bw}px;top:${phone?14:16}px"></div>`}).join('');
+
+    const placed=[];runs(t=>t.g).filter(r=>r.d>=600).sort((p,q)=>(p.v==='Drum & Bass')-(q.v==='Drum & Bass')||q.d-p.d).forEach(r=>{const x=r.s/TOTAL*w,lw=(gShort[r.v]??r.v).length*6+6;if(placed.some(([p,pw])=>x<p+pw&&p<x+lw))return;placed.push([x,lw]);h+=`<span style="position:absolute;left:${x+2}px;top:1px;font-size:10px;color:${genreCol(r.v)};white-space:nowrap">${gShort[r.v]??r.v}</span>`});
+    return h};
+  const x=(starts[sel]+Q[sel].d/2)/TOTAL*w0;
+  const tip=w=>`<div class="tip" style="left:${Math.max(0,x-60)}px;top:-118px"><b>21 · ${Q[sel].t}</b><small>${gShort[Q[sel].g]??Q[sel].g} · ${Q[sel].b} bpm · ${Math.floor(Q[sel].d/60)}:${String(Q[sel].d%60).padStart(2,'0')}</small></div>`;
+  return lanes(W,phone,{id:'t',h:phone?46:52,html,harm:(w)=>{let h=Q.map((t,i)=>{const x=starts[i]/TOTAL*w+1,bw=Math.max(t.d/TOTAL*w-2,1.5);return `<div class="tb${!phone&&i===sel?' sel':''}" style="--c:${CCOL[grp(t.m)]};left:${x}px;width:${bw}px;top:${phone?14:16}px"></div>`}).join('');const placed=[];runs(t=>grp(t.m)).filter(r=>r.d>=600).sort((p,q)=>(p.v==='dark')-(q.v==='dark')||q.d-p.d).forEach(r=>{const x=r.s/TOTAL*w,lw=r.v.length*6+6;if(placed.some(([p,pw])=>x<p+pw&&p<x+lw))return;placed.push([x,lw]);h+=`<span style="position:absolute;left:${x+2}px;top:1px;font-size:10px;color:${CCOL[r.v]};white-space:nowrap">${cap(r.v)}</span>`});return h},dotsOnCurve:false},phone?null:[starts[sel]/TOTAL*w0,Q[sel].d/TOTAL*w0],tip)+rowsG(phone?null:sel);
+}
+const V={R,T};
+document.querySelectorAll('[data-v]').forEach(el=>{const phone=el.dataset.w==='phone',W=phone?390-32-28:560-40-28;el.innerHTML=V[el.dataset.v](W,phone)});
+</script></body></html>

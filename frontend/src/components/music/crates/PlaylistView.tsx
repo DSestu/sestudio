@@ -108,6 +108,8 @@ interface RowProps {
   onToPart?: (part: string) => void
   /** The row is the inspector's target. */
   selected?: boolean
+  /** The timeline points at a run this row is in. */
+  lit?: boolean
   /** The inspector is on the join after this row. */
   joinSelected?: boolean
   onSelect?: () => void
@@ -152,7 +154,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
     >
       {gapBefore && <span className="absolute inset-x-0 top-0"><GapLine /></span>}
       {pin !== undefined && <span className="absolute left-0 top-0"><Pin n={pin} /></span>}
-      <div onPointerEnter={onAim && (e => { if (e.pointerType === 'mouse') onAim(false) })} onPointerLeave={onAim && unhover} className={`flex items-center gap-1 rounded-xl hover:bg-white/5 ${ev.selected ? 'bg-primary/10' : ''}`}>
+      <div onPointerEnter={onAim && (e => { if (e.pointerType === 'mouse') onAim(false) })} onPointerLeave={onAim && unhover} className={`flex items-center gap-1 rounded-xl hover:bg-white/5 ${ev.selected ? 'bg-primary/10' : ev.lit ? 'bg-primary/8 shadow-[inset_0_-2px_0_var(--color-primary)]' : ''}`}>
       {ev.onDragStart && (
         <svg className="ml-1 w-4 h-4 shrink-0 cursor-grab text-base-content/30" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
       )}
@@ -206,6 +208,8 @@ export default function PlaylistView({ node, byId, onPlaylist, edit = false, onE
 }) {
   const [matches, setMatches] = useState<{ id: string; list: PlaylistItem[] }>()
   const [editing, setEditing] = useState(false)
+  /** The flat indexes (end excluded) of the timeline run pointed at, lit in the list. */
+  const [lit, setLit] = useState<[number, number] | null>(null)
   /** The Draw the arcs editor, rebuilding this playlist. */
   const [arcs, setArcs] = useState(false)
   useModalBack(arcs, () => setArcs(false))
@@ -544,7 +548,7 @@ export default function PlaylistView({ node, byId, onPlaylist, edit = false, onE
         )}
       </div>
       {!smart && !mapping && joinCounts.clashes > 0 && <ClashTip />}
-      {!smart && !mapping && <SetCurve groups={groups.map(g => ({ name: g.name, tracks: g.items.map(i => flat[flatIndex(i.item_id)]) }))} now={now} />}
+      {!smart && !mapping && <SetCurve groups={groups.map(g => ({ name: g.name, tracks: g.items.map(i => flat[flatIndex(i.item_id)]) }))} now={now} kept={kept} onRun={setLit} />}
       {mapping ? (
         <Explore
           library={library} path={stops} clash={clashRows} onPick={key => { const i = items.find(x => x.item_id === key); if (i) pick(i) }}
@@ -609,6 +613,7 @@ export default function PlaylistView({ node, byId, onPlaylist, edit = false, onE
                     last={i === g.items.length - 1}
                     parts={partRefs}
                     here={g.id}
+                    lit={!!lit && flatIndex(item.item_id) >= lit[0] && flatIndex(item.item_id) < lit[1]}
                     selected={fitsShown && !smart && !tgtTrack && flatIndex(item.item_id) === target}
                     joinSelected={fitsShown && !smart && !tgtTrack && between && flatIndex(item.item_id) === target}
                     {...(edit && !smart && {
