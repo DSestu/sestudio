@@ -31,3 +31,11 @@ export const toggleDim = (d: Dim) => {
   const dims = state.dims.includes(d) ? state.dims.filter(x => x !== d) : state.dims.length < MAX_LEVELS ? [...state.dims, d] : state.dims
   set({ files: false, dims })
 }
+
+// The colour axis of every sigil (tape, explorer, set, orbit): mood by default.
+export type Colour = 'mood' | 'energy' | 'genre'
+const CKEY = 'music.colour'
+let colour: Colour = (['mood', 'energy', 'genre'] as const).find(c => c === localStorage.getItem(CKEY)) ?? 'mood'
+const clisteners = new Set<() => void>()
+export const useColour = (): Colour => useSyncExternalStore(l => { clisteners.add(l); return () => clisteners.delete(l) }, () => colour)
+export const setColour = (c: Colour) => { colour = c; localStorage.setItem(CKEY, c); clisteners.forEach(l => l()) }

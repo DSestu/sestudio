@@ -70,7 +70,23 @@ SUMMARY_KEYS = (
     "energyScale",
     "harmony",
     "balance",
+    "energyLevel",
 )
+#: Points of the energy curve a summary carries: enough for a sigil, a few bytes a track.
+CURVE_POINTS = 24
+
+
+def _curve(energy: list[float] | None) -> list[int] | None:
+    """The energy curve at :data:`CURVE_POINTS` points, each the mean of its slice."""
+    if not energy:
+        return None
+    n = min(CURVE_POINTS, len(energy))
+    return [
+        round(
+            sum(s := energy[len(energy) * i // n : len(energy) * (i + 1) // n]) / len(s)
+        )
+        for i in range(n)
+    ]
 
 
 @router.get("/music/tracks/summary")
@@ -78,7 +94,13 @@ async def tracks_summary(ids: str = Query(...)) -> dict[str, Any]:
     """What the track rows show (tempo, key, genre, balance) without the curves."""
     wanted = [i for i in ids.split(",") if i]
     found = await asyncio.to_thread(_analyses, wanted)
-    return {tid: {k: a[k] for k in SUMMARY_KEYS if k in a} for tid, a in found.items()}
+    return {
+        tid: {
+            **{k: a[k] for k in SUMMARY_KEYS if k in a},
+            "curve": _curve(a.get("energy")),
+        }
+        for tid, a in found.items()
+    }
 
 
 @router.get("/music/tracks/{track_id}/analysis")

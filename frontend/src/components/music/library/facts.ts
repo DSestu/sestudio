@@ -18,6 +18,7 @@ export interface TrackFacts {
   /** Energy on the library's scale, 0..100. */
   energy?: number
   level?: Level
+  curve?: number[]
 }
 
 export type Level = (typeof LEVELS)[number]
@@ -41,7 +42,8 @@ export function factsOf(s: Summary | undefined, t?: MusicTrack): TrackFacts {
     key: s.key,
     camelot: s.camelot,
     energy: s.energyScale?.track,
-    level: levelOf(s.energyScale?.track),
+    level: s.energyLevel ?? levelOf(s.energyScale?.track),
+    curve: s.curve,
   }
 }
 

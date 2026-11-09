@@ -2,20 +2,22 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import ResponsiveModal from '../../ResponsiveModal'
 import { folderName, type MusicTrack } from '../../../musicLibrary'
 import type { LibraryStatus } from '../../../musicLibraries'
-import { applyPreset, useGrouping } from '../../../musicGrouping'
+import { applyPreset, useColour, useGrouping } from '../../../musicGrouping'
 import { useMusicQueue } from '../../../musicQueue'
 import type { Summary } from '../../../musicMeta'
 import { currentParams, patchParams } from '../../../nav'
 import { useModalBack } from '../../../useModalBack'
 import { addTracks } from '../adding'
 import { playFrom } from '../player'
-import { totalTime } from '../format'
 import Explorer from './Explorer'
 import type { TreeHandlers } from './ExplorerTree'
 import { factsFrom } from './facts'
-import { DIMS, findNode, treeOf } from './grouping'
+import { DIMS, findNode, treeOf, type GroupNode, type Grouping } from './grouping'
 import { Ic } from './icons'
-import TrackList from './TrackList'
+import Tape, { type Join } from './Tape'
+import TapeBar, { type Order, type Shape } from './TapeBar'
+import type { TapeGroup } from './tapeLayout'
+import { toast } from '../toast'
 
 // The Music page as one surface (SPEC-music-library §2.1): explorer · centre · right column,
 // three columns that scroll on their own on desktop; stacked on a phone, the explorer sliding in.
@@ -61,11 +63,23 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   useModalBack(browse && !wide, () => setBrowse(false))
   const queue = useMusicQueue()
   const playingId = queue.items[queue.current]?.track_id
+  const colour = useColour()
   const inView = source?.all ?? all
   const viewTree = useMemo(() => (source ? treeOf(source.all, grouping, facts) : tree), [source, tree, grouping, facts])
+  const groups = useMemo(() => tapeGroupsOf(viewTree, grouping), [viewTree, grouping])
+  // Grouped by default, whatever opens (§2.4); Best blend asks the server for the order and the joins.
+  const [order, setOrder] = useState<Order>('grouped')
+  const [shape, setShape] = useState<Shape>('Arc')
+  const sourceName = source ? source.name : 'Whole library'
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- a new source opens Grouped
+  useEffect(() => { setOrder('grouped') }, [sourceKey])
+  const blend = useBlendOrder(order === 'blend' ? inView.slice(0, BLEND_CAP) : undefined, shape, byId)
+  const blendGroups = useMemo<TapeGroup[] | undefined>(() => blend && [{ key: 'blend', head: `Best blend · ${shape}`, name: sourceName, tracks: blend.tracks }], [blend, shape, sourceName])
+  const [selectedId, setSelectedId] = useState<string>()
   const h: TreeHandlers = {
     sourceKey,
     facts,
+    colour,
     playingId,
     onOpen: n => { setSourceKey(n.key); setBrowse(false) },
     onAdd: (ts, label) => void addTracks(ts.map(t => ({ library: t.library, track_id: t.id })), undefined, `Added ${ts.length === 1 ? label : `${ts.length} tracks from ${label}`}`),
@@ -75,24 +89,27 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
     <Explorer tree={tree} total={all.length} libraries={libraries} h={h} dir={grouping.files ? source : undefined}
       onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)} />
   )
-  const chip = (
-    <div className="flex items-center gap-2 px-1">
-      {!wide && <button onClick={() => setBrowse(true)} className="btn btn-sm rounded-full gap-1.5 relative hit"><Ic name="folder" size={14} />Browse</button>}
-      <span className={`flex h-8 items-center gap-1 rounded-full px-3 text-xs ${source ? 'bg-primary/15 text-primary' : 'bg-white/6 text-base-content/70'}`}>
-        {source ? <>{source.kind === 'all' ? '' : `${source.kind === 'folder' || source.kind === 'library' ? 'Folder' : DIMS[source.kind as keyof typeof DIMS]?.label ?? ''}: `}{source.name}
-          <button onClick={() => setSourceKey('')} aria-label="Show the whole library" className="ml-1 grid size-5 place-items-center rounded-full hover:bg-white/10"><Ic name="close" size={11} width={2.4} /></button></>
-          : 'Whole library'}
-      </span>
-      <span className="text-xs text-base-content/50">{inView.length} tracks · {totalTime(inView.reduce((s, t) => s + t.duration, 0))}</span>
-    </div>
-  )
+  const kindLabel = source ? (source.kind === 'folder' || source.kind === 'library' ? 'Folder' : source.kind === 'all' ? '' : DIMS[source.kind].label) : ''
   const centre = (
-    <TrackList tree={viewTree} grouping={grouping} facts={facts} onPlay={h.onTrack} onAdd={h.onAdd} />
+    <>
+      <TapeBar
+        source={source ? { kind: kindLabel, name: source.name } : undefined} onClearSource={() => setSourceKey('')}
+        tracks={inView} grouping={grouping} order={order} onOrder={setOrder} shape={shape} onShape={setShape} colour={colour} facts={facts}
+        blendLine={order === 'blend' ? (blend ? `${blend.score} blend · ${blend.rough} rough ${blend.rough === 1 ? 'join' : 'joins'}${inView.length > BLEND_CAP ? ` · first ${BLEND_CAP}` : ''}` : 'ordering…') : undefined}
+        onAddAll={() => h.onAdd(inView, sourceName)}
+      >
+        {!wide && <button onClick={() => setBrowse(true)} className="btn btn-sm rounded-xl gap-1.5"><Ic name="folder" size={14} />Browse</button>}
+      </TapeBar>
+      <Tape
+        groups={order === 'blend' && blendGroups ? blendGroups : groups} facts={facts} colour={colour}
+        joins={order === 'blend' ? blend?.joins : undefined} selectedId={selectedId} playingId={playingId}
+        onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)}
+      />
+    </>
   )
   if (!wide) {
     return (
       <div className="flex flex-col gap-3">
-        {chip}
         {centre}
         {browse && <ResponsiveModal onClose={() => setBrowse(false)} boxClassName="flex h-[82vh] flex-col p-0">{explorer}</ResponsiveModal>}
       </div>
@@ -101,13 +118,47 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   return (
     <div className="flex gap-4 h-[calc(100dvh-15.5rem-var(--music-bar,0rem))] min-h-0">
       <aside className="w-80 shrink-0 overflow-hidden rounded-2xl bg-white/5">{explorer}</aside>
-      <div className="min-w-0 flex-1 overflow-y-auto rounded-2xl">
-        <div className="sticky top-0 z-10 bg-base-100/90 py-2 backdrop-blur">{chip}</div>
-        {centre}
-      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-2xl">{centre}</div>
       <aside className="w-85 shrink-0 overflow-y-auto rounded-2xl bg-white/5">
-        {right ?? <p className="p-4 text-xs text-base-content/45">Select a track to see its details here.</p>}
+        {right ?? <p className="p-4 text-xs text-base-content/45">{selectedId ? byId.get(selectedId)?.title : 'Select a track to see its details here.'}</p>}
       </aside>
     </div>
   )
+}
+
+/** Best blend caps the tracks it orders (§2.4). */
+const BLEND_CAP = 160
+
+interface BlendResult { tracks: MusicTrack[]; joins: Join[]; score: number; rough: number }
+
+/** The server's Best blend of `tracks` for `shape`; undefined while it works or when off. */
+function useBlendOrder(tracks: MusicTrack[] | undefined, shape: Shape, byId: Map<string, MusicTrack>): BlendResult | undefined {
+  const [out, setOut] = useState<{ key: string; result: BlendResult }>()
+  const key = tracks ? `${shape}|${tracks.map(t => t.id).join(',')}` : ''
+  useEffect(() => {
+    if (!tracks) return
+    const ctrl = new AbortController()
+    fetch('/api/music/set/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: tracks.map(t => t.id), shape }), signal: ctrl.signal })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`order: ${r.status}`))))
+      .then((res: { order: string[]; joins: Join[] }) => {
+        const ordered = res.order.map(id => byId.get(id)).filter((t): t is MusicTrack => !!t)
+        const score = res.joins.length ? Math.round((res.joins.reduce((s, j) => s + j.blend, 0) / res.joins.length) * 100) : 100
+        setOut({ key, result: { tracks: ordered, joins: res.joins, score, rough: res.joins.filter(j => j.mark === 'rough').length } })
+      })
+      .catch((e: Error) => { if (e.name !== 'AbortError') toast(e.message) })
+    return () => ctrl.abort()
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps -- `key` names the request
+  return out?.key === key ? out.result : undefined
+}
+
+/** The leaves of the tree as tape groups: with 2+ levels the parent is the large head. */
+function tapeGroupsOf(tree: GroupNode[], g: Grouping): TapeGroup[] {
+  const out: TapeGroup[] = []
+  const walk = (nodes: GroupNode[], trail: string[]) => nodes.forEach(n => {
+    if (n.files?.length) out.push({ key: n.key, head: trail[0] ?? n.name, name: trail.length ? [...trail.slice(1), n.name].join(' / ') : 'Top level', tracks: n.files })
+    if (n.kids) walk(n.kids, [...trail, n.name])
+    else if (!n.files) out.push({ key: n.key, head: g.dims.length > 1 ? trail[trail.length - 1] ?? '' : '', name: n.name, tracks: n.all })
+  })
+  walk(tree, [])
+  return out
 }
