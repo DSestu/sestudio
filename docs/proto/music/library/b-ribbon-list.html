@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>B · Ribbon list</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.recap { display: flex; align-items: center; gap: 22px; padding: 14px 6px 6px; font-size: 13px; color: var(--mut) }
+.recap b { color: var(--fg); font-weight: 500 }
+.mbar { display: flex; height: 8px; width: 280px; border-radius: 4px; overflow: hidden; gap: 2px }
+.recap .sp { flex: 1 }
+.cols, .row { display: grid; grid-template-columns: 56px minmax(220px, 300px) minmax(0, 1fr) 92px 100px 80px 112px; align-items: center; column-gap: 16px }
+.cols { padding: 14px 12px 6px; font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line) }
+.cols .on { color: var(--blue) }
+.sect { padding: 18px 12px 6px; font-size: 12px; color: var(--dim) }
+.row { padding: 6px 12px; border-radius: 14px; min-height: 60px }
+.row:hover, .row.hov { background: oklch(26% .025 240 / .55) }
+.row .nm { min-width: 0 }
+.row .nm b { display: block; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.row .nm small { display: block; font-size: 12px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.row .snd { position: relative; height: 40px; display: flex; align-items: center }
+.row .snd svg { width: 100%; display: block }
+.row .md, .row .bp, .row .du { font-size: 13px; color: var(--mut); white-space: nowrap }
+.row .md { display: flex; align-items: center; gap: 7px }
+.row .acts { display: flex; justify-content: flex-end; gap: 4px; opacity: 0 }
+.row:hover .acts, .row.hov .acts { opacity: 1 }
+.ib { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--mut) }
+.ib.pri { background: var(--blue); color: var(--blue-ink) }
+.kind-sig { width: 56px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: oklch(72% .16 230 / .1) }
+.live { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); border-radius: 1px; outline: 2px solid var(--bg) }
+.row.open { background: oklch(24% .03 240 / .7); border-radius: 14px 14px 0 0 }
+.kids { background: oklch(24% .03 240 / .7); border-radius: 0 0 14px 14px; padding: 0 0 8px; margin-bottom: 4px }
+.kids .row { min-height: 44px; padding-top: 3px; padding-bottom: 3px; border-radius: 10px }
+.kids .row .nm b { font-size: 13px; font-weight: 400 }
+.kids .row .snd { height: 28px }
+.kids .n { justify-self: end; font-size: 12px; color: var(--dim) }
+.kids .more { padding: 6px 12px 0 84px; font-size: 13px; color: var(--blue) }
+.chev { color: var(--dim); display: inline-block; vertical-align: -3px; margin-left: 4px }
+.ph { display: none }
+@media (max-width: 700px) {
+  .desk { display: none !important }
+  .ph { display: flex }
+  .kinds { overflow: hidden; gap: 6px; margin: 10px 0 2px }
+  .recap { padding: 10px 4px 0; gap: 10px; flex-wrap: wrap }
+  .mbar { width: 100%; order: 3 }
+  .cols { display: none }
+  .row { grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: 's n m' 'r r r'; row-gap: 6px; padding: 8px 8px; column-gap: 12px }
+  .row > :nth-child(1) { grid-area: s } .row .nm { grid-area: n } .row .snd { grid-area: r; height: 18px }
+  .row .md { grid-area: m; gap: 6px; font-size: 12px }
+  .row .bp, .row .du, .row .acts { display: none }
+  .row .gsig, .row .kind-sig { width: 48px; height: 40px }
+  .kids .row { grid-template-columns: 22px minmax(0, 1fr) auto; grid-template-areas: 's n m' 's r r' }
+  .kids .row .snd { height: 14px }
+  .kids .more { padding-left: 42px }
+  .sect { padding: 14px 8px 4px }
+}
+</style></head>
+<body>
+<main>
+  <div class="top">
+    <div class="top-row">
+      <div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div>
+      <div class="search desk" id="search"></div>
+      <button class="btn desk" id="libs">All libraries</button>
+      <div class="bell" id="bell"></div>
+    </div>
+    <div class="top-row desk" id="filters" style="gap:10px"></div>
+  </div>
+  <div class="ph search" style="margin-top:10px" id="psearch"></div>
+  <div class="ph kinds" id="kinds"></div>
+  <div class="recap" id="recap"></div>
+  <div class="cols desk"><span></span><span>Name</span><span class="on">Sound ${'d'}</span><span>Mood</span><span>Tempo</span><span>Length</span><span></span></div>
+  <div id="list"></div>
+</main>
+<script src="data.js"></script><script src="common.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search everything, or paste a link'
+document.getElementById('psearch').innerHTML = icon('search', 18) + 'Search or paste a link'
+document.getElementById('bell').innerHTML = icon('bell')
+document.getElementById('libs').insertAdjacentHTML('beforeend', icon('down', 14))
+document.querySelector('.cols .on').innerHTML = 'Sound'
+const KINDS = ['Everything', 'Albums', 'Artists', 'Tracks', 'Playlists', 'Flows', 'Mixes']
+document.getElementById('filters').innerHTML = `<div class="seg">${KINDS.map((k, i) => `<button class="${i ? '' : 'on'}">${k}</button>`).join('')}</div>
+  <span style="flex:1"></span><button class="btn">Mood ${icon('down', 14)}</button><button class="btn">Tempo ${icon('down', 14)}</button><button class="btn">Genre ${icon('down', 14)}</button><button class="btn ghost">Sort: Recently played ${icon('down', 14)}</button>`
+document.getElementById('kinds').innerHTML = KINDS.map((k, i) => `<span class="chip ${i ? '' : 'on'}">${k}</span>`).join('')
+
+// Recap band: the whole library in one line.
+const counts = {}; T.forEach(t => counts[t.m.word] = (counts[t.m.word] || 0) + 1)
+const moodBar = [...LADDER, EXOTIC].filter(l => counts[l.word]).map(l => `<i title="${l.word}" style="flex:${counts[l.word]};background:${l.color}"></i>`).join('')
+document.getElementById('recap').innerHTML = P
+  ? `<span><b class="tab">474</b> tracks · <b class="tab">107</b> albums · <b class="tab">${FLOWS_.length}</b> flows</span><span class="mbar">${moodBar}</span>`
+  : `<span><b class="tab">474</b> tracks</span><span><b class="tab">107</b> albums</span><span><b class="tab">88</b> artists</span><span><b class="tab">3</b> playlists · <b class="tab">${FLOWS_.length}</b> flows · <b>no</b> mixes</span><span class="mbar">${moodBar}</span><span>Mostly <b style="color:${MOODS.Aeolian[1]}">Dark</b>, around <b class="tab">128</b> and <b class="tab">172</b> BPM</span><span class="sp"></span><span><b class="tab">473</b> of 474 analysed</span>`
+
+const A = n => ALBUMS.find(a => a.name === n), R = n => ARTISTS.find(a => a.name === n)
+const moodCell = m => `<span class="md"><i class="dot" style="background:${m.color}"></i>${m.word}</span>`
+const acts = `<span class="acts"><button class="ib pri">${icon('play', 14)}</button><button class="ib">${icon('plus', 18)}</button><button class="ib">${icon('more', 18)}</button></span>`
+function groupRow(g, kind, opts = {}) {
+  const meta = kind === 'Artist' ? `Artist · ${g.n} tracks · ${ALBUMS.filter(a => a.tracks.some(t => t.ar === g.name)).length} albums` : `${kind} · ${kind === 'Album' ? esc(g.artist) + ' · ' : ''}${g.n} tracks`
+  return `<div class="row ${opts.cls || ''}">${groupSigil(g, P ? 48 : 56, 40)}<span class="nm"><b>${esc(g.name)}${opts.open !== undefined ? `<span class="chev">${icon(opts.open ? 'up' : 'down', 16)}</span>` : ''}</b><small>${meta}</small></span>
+    <span class="snd">${ribbon(g.tracks, 600, P ? 18 : 36, { fluid: true, gap: g.n > 80 ? .6 : 1.5 })}</span>${moodCell(g.mood)}<span class="bp tab">${bpmRange(g)}</span><span class="du tab">${fmtDur(g.dur)}</span>${acts}</div>`
+}
+function trackRow(t, n, cls = '') {
+  return `<div class="row ${cls}">${n ? `<span class="n tab">${n}</span>` : sigil(t, P ? 48 : 56, 40, { r: 10 })}<span class="nm"><b>${esc(t.t)}</b>${n ? '' : `<small>Track · ${esc(t.ar)} · ${esc(t.al)}</small>`}</span>
+    <span class="snd">${sigil(t, 600, n ? (P ? 14 : 28) : (P ? 18 : 36), { bg: false, pad: 0 }).replace('class="sigil"', 'class="sigil" preserveAspectRatio="none" style="width:100%"')}</span>${moodCell(t.m)}<span class="bp tab">${t.bpm} BPM</span><span class="du tab">${fmtTime(t.d)}</span>${acts}</div>`
+}
+function flowRow(f, live) {
+  return `<div class="row">${`<span class="kind-sig">${flowShape(f, P ? 36 : 42, 24)}</span>`}<span class="nm"><b>${f.name}</b><small>Flow · ${f.len === 'endless' ? 'endless' : f.len + ' tracks'} · from all libraries</small></span>
+    <span class="snd">${flowShape(f, 600, P ? 18 : 36).replace('<svg', '<svg preserveAspectRatio="none" style="width:100%"')}${live ? '<i class="live" style="left:38%"></i>' : ''}</span><span class="md">${live ? '<b style="color:var(--blue);font-weight:500">Playing</b>' : 'Shapes energy'}</span><span class="bp">Any</span><span class="du">${f.len === 'endless' ? '∞' : ''}</span>${acts}</div>`
+}
+
+const sel = A('while(1<2)')
+const items = [
+  ['Playing from'],
+  () => flowRow(FLOWS_.find(f => f.name === 'Plateau') || FLOWS_[0], true),
+  () => groupRow(PLAYLISTS[0], 'Playlist'),
+  ['Earlier'],
+  () => groupRow(sel, 'Album', { open: true, cls: 'open' }),
+  () => `<div class="kids">${sel.tracks.slice(0, 5).map((t, i) => trackRow(t, i + 1, i === 3 ? 'hov' : '')).join('')}<div class="more">${sel.n - 5} more tracks</div></div>`,
+  () => trackRow(NOW),
+  () => groupRow(R('Eluun'), 'Artist'),
+  () => groupRow(A('It Sounds Like'), 'Album', { open: false }),
+  () => flowRow(FLOWS_.find(f => f.name === 'Come-down') || FLOWS_[1]),
+  () => groupRow(R('Deadmau5'), 'Artist'),
+  () => groupRow(PLAYLISTS[1], 'Playlist'),
+  () => groupRow(A('Vexillology'), 'Album', { open: false }),
+  () => groupRow(A('neuro soundcloud'), 'Album', { open: false }),
+]
+document.getElementById('list').innerHTML = items.map(i => Array.isArray(i) ? `<div class="sect">${i[0]}</div>` : i()).join('')
+</script>
+</body></html>

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D · Briefing and shelf</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.brief { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; padding: 26px 8px 8px }
+.lede { font-size: 34px; line-height: 1.15; letter-spacing: -.03em; font-weight: 400; max-width: 22ch; text-wrap: balance }
+.lede em { font-style: normal; font-weight: 600 }
+.sky { position: relative; margin-top: 62px }
+.sky > svg { display: block; width: 100% }
+.sky-l { display: flex; font-size: 11px; color: var(--dim); margin-top: 6px }
+.sky-l span { text-align: center; white-space: nowrap; overflow: hidden }
+.pick { position: absolute; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border-radius: 12px; background: oklch(26% .04 240 / .94); border: 1px solid oklch(72% .16 230 / .45); font-size: 13px; white-space: nowrap; box-shadow: 0 8px 20px oklch(0% 0 0 / .4) }
+.pick .btn { height: 28px; padding: 0 10px; font-size: 12px }
+.going h2, .shelf-h h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px }
+.going a { display: flex; align-items: center; gap: 12px; padding: 6px 0; font-size: 13px; color: var(--mut) }
+.going a b { color: var(--fg); font-weight: 500 }
+.going .fl-ic { width: 44px; height: 28px; border-radius: 8px; background: oklch(72% .16 230 / .08); display: grid; place-items: center; flex: none }
+.going .gsig { width: 44px; height: 28px }
+.shelf-h { display: flex; align-items: center; gap: 14px; padding: 30px 8px 12px }
+.shelf-h h2 { margin: 0 }
+.shelf { display: flex; align-items: flex-end; gap: 4px; padding: 22px 8px 14px; overflow: hidden; border-bottom: 2px solid oklch(34% .02 240 / .7); position: relative }
+.sp { flex: none; height: 264px; border-radius: 6px 6px 3px 3px; position: relative; background: oklch(21% .025 240); overflow: hidden; display: flex; flex-direction: column; align-items: center }
+.sp svg { flex: 1; width: 100% }
+.sp .lbl { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 500; padding: 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 150px; color: var(--fg) }
+.sp .ct { font-size: 10px; color: var(--dim); padding: 6px 0 7px }
+.sp.short { height: 236px }
+.div { flex: none; width: 22px; height: 290px; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; margin: 0 4px }
+.div span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); white-space: nowrap }
+.div i { flex: 1; width: 1px; background: var(--line); margin-top: 8px }
+.sp.flow { background: oklch(72% .16 230 / .07); outline: 1px dashed oklch(72% .16 230 / .4); outline-offset: -1px }
+.sp.pl { background: oklch(70% .17 25 / .06) }
+.out { flex: none; width: 420px; height: 300px; border-radius: 10px; background: oklch(23% .03 240); border: 1px solid oklch(40% .03 240 / .5); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 16px 30px oklch(0% 0 0 / .4); transform: translateY(-14px) }
+.out h3 { font-size: 20px; font-weight: 600; letter-spacing: -.02em }
+.out p { font-size: 12px; color: var(--mut) }
+.out .acts { display: flex; gap: 6px }
+.out .acts .btn { height: 30px; font-size: 12px; padding: 0 11px }
+.out ol { list-style: none; overflow: hidden; display: flex; flex-direction: column; gap: 1px; -webkit-mask-image: linear-gradient(#000 70%, transparent) }
+.out li { display: grid; grid-template-columns: 18px 40px minmax(0, 1fr) 70px 30px; gap: 8px; align-items: center; font-size: 12px }
+.out li .n { color: var(--dim); text-align: right }
+.out li .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px }
+.out li .m, .out li .b { color: var(--mut); white-space: nowrap }
+.ph { display: none }
+@media (max-width: 700px) {
+  .desk { display: none !important }
+  .ph { display: block } .ph.search { display: flex } .ph.chip { display: inline-flex }
+  .brief { display: block; padding: 18px 4px 0 }
+  .lede { font-size: 25px }
+  .sky { margin-top: 50px }
+  .going { margin-top: 18px }
+  .shelf-h { padding: 22px 4px 10px; gap: 8px }
+  .shelf { padding: 0 4px 10px; gap: 3px }
+  .sp { height: 190px } .sp.short { height: 170px }
+  .sp .lbl { max-height: 110px; font-size: 11px }
+  .div { height: 206px }
+  .out { position: static; width: auto; height: auto; transform: none; margin: 12px 0 0 }
+}
+</style></head>
+<body>
+<main>
+  <div class="top">
+    <div class="top-row">
+      <div class="title"><h1>Music</h1></div>
+      <div class="search desk" id="search"></div>
+      <div class="bell" id="bell"></div>
+    </div>
+  </div>
+  <div class="ph search" style="margin-top:10px" id="psearch"></div>
+  <section class="brief">
+    <div>
+      <h2 class="lede" id="lede"></h2>
+      <div class="sky" id="sky"></div>
+    </div>
+    <div class="going" id="going"></div>
+  </section>
+  <div class="shelf-h"><h2>Shelf</h2><div class="seg desk"><button class="on">By artist</button><button>By mood</button><button>By tempo</button><button>Newest</button></div><span class="ph chip on">By artist ${'d'}</span>
+    <span style="flex:1"></span><span class="desk" style="display:flex;gap:6px" id="kinds"></span></div>
+  <div class="shelf" id="shelf"></div>
+  <div id="pout"></div>
+</main>
+<script src="data.js"></script><script src="common.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search everything, or paste a link'
+document.getElementById('psearch').innerHTML = icon('search', 18) + 'Search or paste a link'
+document.getElementById('bell').innerHTML = icon('bell')
+document.querySelector('.ph.chip').innerHTML = 'By artist ' + icon('down', 12)
+document.getElementById('kinds').innerHTML = ['Albums', 'Playlists', 'Flows', 'Mixes'].map((k, i) => `<span class="chip ${i < 3 ? 'on' : ''}">${k}</span>`).join('')
+
+document.getElementById('lede').innerHTML = `<em class="tab">474</em> tracks, mostly <em style="color:${MOODS.Aeolian[1]}">dark</em>, gathered at <em class="tab">128</em> and <em class="tab">172</em>&nbsp;BPM.`
+
+// The skyline: every track, brightest to darkest, height by energy.
+const order = [...LADDER, EXOTIC, NONE]
+const sorted = [...T].sort((a, b) => order.findIndex(o => o.word === a.m.word) - order.findIndex(o => o.word === b.m.word) || (b.e || 0) - (a.e || 0))
+const W = 1000, H = P ? 90 : 120, cw = W / sorted.length
+let s = '', x = 0, runs = []
+sorted.forEach((t, i) => { const h = Math.max(4, (t.e || 5) / 100 * H); s += `<rect x="${(i * cw).toFixed(2)}" y="${H - h}" width="${Math.max(.8, cw - .5).toFixed(2)}" height="${h}" fill="${t.m.color}" fill-opacity=".85"/>`; const r = runs.at(-1); if (r && r.w === t.m.word) r.n++; else runs.push({ w: t.m.word, n: 1, start: i }) })
+// A brushed range: dark and driving.
+const dark = runs.find(r => r.w === 'Dark')
+const b0 = dark.start, b1 = dark.start + Math.round(dark.n * .45)
+s = `<rect x="${b0 * cw}" y="0" width="${(b1 - b0) * cw}" height="${H}" fill="oklch(72% .16 230 / .1)"/>` + s + `<rect x="${b0 * cw}" y="0" width="${(b1 - b0) * cw}" height="${H}" fill="none" stroke="var(--blue)" stroke-width="1.5" rx="3" vector-effect="non-scaling-stroke"/>`
+document.getElementById('sky').innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" height="${H}">${s}</svg>
+  <div class="sky-l">${runs.filter(r => r.n).map(r => `<span style="flex:${r.n}">${r.n > (P ? 45 : 20) ? r.w : ''}</span>`).join('')}</div>
+  <div class="pick" style="left:${P ? 0 : `calc(${b0 / sorted.length * 100}% - 2px)`};top:-46px">${P ? '' : `<span>Dark, most energy first</span>`}<b class="tab">${b1 - b0}</b><button class="btn pri">${icon('play', 12)}Play</button>${P ? '' : `<button class="btn">${icon('flow', 14)}As a flow</button>`}</div>`
+
+const plateau = FLOWS_.find(f => f.name === 'Plateau') || FLOWS_[0]
+document.getElementById('going').innerHTML = `<h2>Going on</h2>
+  <a><span class="fl-ic">${flowShape(plateau, 34, 20)}</span><span><b>Plateau</b> is playing, a flow over all libraries</span></a>
+  <a>${groupSigil(PLAYLISTS[0], 44, 28)}<span><b>Queue</b> holds ${PLAYLISTS[0].n} tracks, ${fmtDur(PLAYLISTS[0].dur)}</span></a>
+  <a>${groupSigil(ALBUMS.find(a => a.name === 'neuro soundcloud'), 44, 28)}<span><b>neuro soundcloud</b> is the newest library, 44 tracks</span></a>
+  ${P ? '' : `<a><span class="fl-ic" style="font-size:12px;color:var(--fg)" class="tab">473</span><span><b>473 of 474</b> analysed, 1 waiting</span></a>
+  <a><span class="fl-ic">${icon('plus', 16)}</span><span>No mixes yet. <b style="color:var(--blue)">Make one</b></span></a>`}`
+
+// Spines: each album stands on the shelf; its tracks stack bottom to top.
+function vribbon(tracks, w, h) {
+  const total = tracks.reduce((a, t) => a + t.d, 0), gap = 1.2, usable = h - gap * (tracks.length - 1)
+  let y = h, out = ''
+  for (const t of tracks) {
+    const th = Math.max(1.5, usable * t.d / total), v = t.curve.length ? t.curve : [20, 20], n = v.length
+    const L = [], R = []
+    for (let i = 0; i < n; i++) { const py = y - (i / (n - 1)) * th, a = (v[i] / 100) * (w / 2 - 1); L.push(`${(w / 2 - a).toFixed(1)},${py.toFixed(1)}`); R.unshift(`${(w / 2 + a).toFixed(1)},${py.toFixed(1)}`) }
+    out += `<path d="M${L.join('L')}L${R.join('L')}Z" fill="${t.m.color}" fill-opacity=".9"/>`
+    y -= th + gap
+  }
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${out}</svg>`
+}
+const spineW = g => Math.round(Math.min(46, 20 + Math.sqrt(g.n) * 5))
+const spine = (g, cls = '') => `<div class="sp ${cls}" style="width:${spineW(g)}px" title="${esc(g.name)}">${vribbon(g.tracks, spineW(g), 200)}<span class="lbl">${esc(g.name)}</span><span class="ct tab">${g.n}</span></div>`
+const flowSpine = f => { const pts = f.energy.length ? f.energy : [[0, .5], [1, .5]]; const d = 'M' + pts.map(([x, y]) => `${(4 + y * 22).toFixed(1)},${(200 - x * 196).toFixed(1)}`).join('L'); return `<div class="sp flow" style="width:30px"><svg viewBox="0 0 30 200" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="var(--blue)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg><span class="lbl">${f.name}</span><span class="ct">flow</span></div>` }
+const divider = n => `<div class="div"><span>${esc(n)}</span><i></i></div>`
+const outPanel = g => `<div class="out"><h3>${esc(g.name)}</h3><p>Album · ${esc(g.artist)} · ${g.n} tracks · ${fmtDur(g.dur)} · ${bpmRange(g)} · mostly ${g.mood.word}</p>
+  ${ribbon(g.tracks, 380, 34, { fluid: true })}
+  <div class="acts"><button class="btn pri">${icon('play', 12)}Play</button><button class="btn">${icon('shuffle', 14)}Shuffle</button><button class="btn">${icon('flow', 14)}As a flow</button><button class="btn" style="padding:0 9px">${icon('plus', 14)}</button></div>
+  <ol>${g.tracks.map((t, i) => `<li><span class="n tab">${i + 1}</span>${sigil(t, 40, 22, { r: 5 })}<span class="t">${esc(t.t)}</span><span class="m"><i class="dot" style="background:${t.m.color}"></i> ${t.m.word}</span><span class="b tab">${t.bpm}</span></li>`).join('')}</ol></div>`
+
+const dm = ALBUMS.filter(a => a.artist === 'Deadmau5').slice(0, P ? 8 : 15)
+const open = ALBUMS.find(a => a.name === 'Vexillology')
+const others = ALBUMS.filter(a => a.artist === 'Various artists').slice(0, P ? 2 : 3)
+let html = divider('Playing & yours') + flowSpine(plateau) + spine(PLAYLISTS[0], 'pl') + (P ? '' : FLOWS_.filter(f => f !== plateau).slice(0, 3).map(flowSpine).join('') + spine(PLAYLISTS[1], 'pl'))
+html += divider('Deadmau5') + dm.slice(0, P ? 4 : 6).map((a, i) => spine(a, i % 3 === 1 ? 'short' : '')).join('') + (P ? '' : outPanel(open)) + dm.slice(P ? 4 : 6).filter(a => a !== open).map((a, i) => spine(a, i % 4 === 2 ? 'short' : '')).join('')
+html += divider('Various') + others.map(a => spine(a)).join('')
+document.getElementById('shelf').innerHTML = html
+if (P) document.getElementById('pout').innerHTML = outPanel(open)
+</script>
+</body></html>

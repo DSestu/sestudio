@@ -1,0 +1,45 @@
+/* Explorer: the left column as a tree of library, lists, flows and online sources. */
+main .layout { grid-template-columns: 290px minmax(0, 1fr) 320px }
+.exp { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 12px; align-self: start; height: calc(100vh - 120px); overflow: hidden; border-radius: 16px; background: oklch(18% .022 242); border: 1px solid oklch(30% .02 240 / .5); padding: 10px 6px 6px }
+.exp-h { display: flex; align-items: center; gap: 6px; padding: 0 6px 6px; border-bottom: 1px solid var(--line) }
+.exp-h b { font-size: 14px; font-weight: 600 }
+.exp-h small { font-size: 12px; color: var(--dim) }
+.exp-h .sp { flex: 1 }
+.exp-h button { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--mut) }
+.exp-h button:hover { background: oklch(28% .02 240 / .7); color: var(--fg) }
+.tree { flex: 1; overflow: auto; scrollbar-width: thin; padding: 4px 0 }
+.nd { display: flex; align-items: center; gap: 6px; height: 30px; padding-right: 6px; border-radius: 8px; font-size: 13px; color: var(--mut); cursor: pointer; user-select: none; position: relative }
+.nd:hover { background: oklch(26% .025 240 / .6); color: var(--fg) }
+.nd.on { background: oklch(72% .16 230 / .16); color: var(--fg) }
+.nd .chev { width: 16px; height: 16px; flex: none; display: grid; place-items: center; color: var(--dim); transition: transform .15s }
+.nd .chev.open { transform: rotate(90deg) }
+.nd .chev.none { visibility: hidden }
+.nd .ico { flex: none; display: grid; place-items: center; min-width: 22px; color: var(--dim) }
+.nd .ico .gsig { width: 26px; height: 18px; border-radius: 5px }
+.nd .ico .sigil { display: block }
+.nd .lab { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.nd .lab mark { background: none; color: var(--blue) }
+.nd .lab i { font-style: normal; color: var(--dim); font-size: 11px; margin-left: 6px }
+.nd .ct { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums }
+.nd .add { display: none; width: 22px; height: 22px; border-radius: 6px; place-items: center; color: var(--mut); background: oklch(30% .02 240 / .9) }
+.nd:hover .add { display: grid }
+.nd:hover .ct { display: none }
+.nd .add:hover { color: var(--blue) }
+.nd.sec { margin-top: 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); height: 26px }
+.nd.sec:hover { background: none }
+.nd.more { color: var(--blue); font-size: 12px }
+.nd.dim { opacity: .5 }
+.nd .th { width: 34px; height: 22px; border-radius: 5px; object-fit: cover; background: oklch(26% .02 240) }
+.nd .src-dot { width: 7px; height: 7px; border-radius: 50%; flex: none }
+.spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid oklch(72% .16 230 / .3); border-top-color: var(--blue); animation: sp .8s linear infinite; flex: none }
+@keyframes sp { to { transform: rotate(360deg) } }
+.exp-f { border-top: 1px solid var(--line); padding: 8px 8px 2px; font-size: 11px; color: var(--dim); line-height: 1.45 }
+/* online items in the set: no analysis yet */
+.slane .it.pend > svg, .slist .it.pend .sigil { opacity: .5 }
+.slane .it .thumb { position: absolute; left: 4px; top: 4px; width: 42px; height: 28px; border-radius: 5px; object-fit: cover; box-shadow: 0 2px 8px oklch(0% 0 0 / .5) }
+.slane .it.pend .nm i::after { content: ' · analysing on add' ; color: var(--blue) }
+@media (max-width: 700px) {
+  .exp { position: fixed; left: 0; top: 0; bottom: 0; width: 88vw; height: auto; z-index: 45; border-radius: 0 20px 20px 0; transform: translateX(-102%); transition: transform .3s cubic-bezier(.2, .8, .2, 1); display: flex !important; box-shadow: 16px 0 40px oklch(0% 0 0 / .6) }
+  .exp.open { transform: none }
+  .nd { height: 38px; font-size: 14px }
+}

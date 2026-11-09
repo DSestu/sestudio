@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M · Unified search + set</title>
+<link rel="stylesheet" href="common.css"><link rel="stylesheet" href="gh.css">
+<style>
+.q { color: var(--fg) !important; gap: 8px !important }
+.q .chip { height: 26px; background: oklch(72% .16 230 / .18); color: var(--fg) }
+.q .chip i { color: var(--dim); font-style: normal; font-size: 11px }
+.scope { display: flex; align-items: center; gap: 6px; padding: 12px 4px 4px; flex-wrap: wrap }
+.scope .sp { flex: 1 }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 28px; padding-top: 6px }
+.sec { display: flex; align-items: baseline; gap: 10px; padding: 16px 8px 4px }
+.sec b { font-size: 15px; font-weight: 600 }
+.sec small { font-size: 12px; color: var(--dim) }
+.sec a { margin-left: auto; font-size: 12px; color: var(--blue) }
+.res { display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(0, 220px) 76px; gap: 14px; align-items: center; padding: 5px 8px; border-radius: 12px }
+.res.hov { background: oklch(26% .025 240 / .6) }
+.res b { display: block; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.res b mark { background: none; color: var(--blue) }
+.res small { display: block; font-size: 12px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.res .gsig { width: 52px; height: 34px }
+.res .ad { display: flex; gap: 4px; justify-content: flex-end }
+.ib { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--mut); background: oklch(28% .02 240 / .6) }
+.ib.in { background: oklch(72% .16 230 / .2); color: var(--blue) }
+.tray { position: sticky; top: 16px; align-self: start; border-radius: 18px; background: oklch(20% .028 240); border: 1px solid oklch(72% .16 230 / .35); padding: 16px; display: flex; flex-direction: column; gap: 12px }
+.tray h2 { font-size: 17px; font-weight: 600; display: flex; align-items: baseline; gap: 8px }
+.tray h2 small { font-size: 12px; color: var(--mut); font-weight: 400 }
+.tray .from { display: flex; flex-wrap: wrap; gap: 6px }
+.tray .from .chip { height: 28px; padding: 0 6px 0 4px }
+.tray .from .chip .gsig { width: 28px; height: 20px; border-radius: 6px }
+.tray .ord { display: flex; align-items: center; gap: 8px }
+.tray .ord .seg button { padding: 0 10px }
+.tray .score { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--mut) }
+.tray .score b { font-size: 22px; color: var(--fg); font-weight: 600 }
+.tray .score .chip { height: 22px; font-size: 11px }
+.tray .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.tray .acts .btn { justify-content: center; height: 38px }
+.tray .acts .btn.pri { grid-column: span 2 }
+.tray p { font-size: 12px; color: var(--dim); line-height: 1.45 }
+.sheet { display: none }
+@media (max-width: 700px) {
+  .grid { display: block }
+  .scope { flex-wrap: nowrap; overflow: hidden }
+  .res { grid-template-columns: 44px minmax(0, 1fr) auto; padding: 5px 2px }
+  .sec small { display: none }
+  .res .gsig { width: 44px; height: 32px }
+  .res .rb { display: none }
+  .tray { display: none }
+  .sheet { display: block; position: fixed; left: 10px; right: 10px; bottom: 146px; z-index: 8; border-radius: 18px; background: oklch(22% .03 240); border: 1px solid oklch(72% .16 230 / .45); padding: 10px 12px 12px; box-shadow: 0 -10px 30px oklch(0% 0 0 / .55) }
+  .sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: oklch(50% .02 240); margin: 0 auto 8px }
+  .sheet .row { display: flex; align-items: center; gap: 10px; margin-top: 8px }
+  .sheet .row b { font-size: 15px; font-weight: 600 }
+  .sheet .row small { font-size: 12px; color: var(--mut); display: block }
+  .sheet .row .btn { margin-left: auto }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title desk"><h1>Music</h1></div><div class="search q" id="q"></div><div class="bell desk" id="bell"></div></div></div>
+  <div class="scope" id="scope"></div>
+  <div class="grid">
+    <section id="results"></section>
+    <aside class="tray" id="tray"></aside>
+  </div>
+  <div class="sheet" id="sheet"></div>
+</main>
+<script src="data.js"></script><script src="common.js"></script><script src="gh.js"></script><script src="order.js"></script>
+<script>
+chrome()
+const P = phone()
+// One search box: names and sound words are read together.
+document.getElementById('q').innerHTML = `${icon("search", 18)}<span style="white-space:nowrap">dark 128</span><span class="chip"><i>mood</i> Dark</span><span class="chip"><i>tempo</i> 128</span><span style="flex:1"></span>${icon('close', 16)}`
+document.getElementById('bell').innerHTML = icon('bell')
+document.getElementById('scope').innerHTML = `<span class="chip on">Everything</span><span class="chip">Albums</span><span class="chip">Artists</span><span class="chip">Tracks</span><span class="chip">Playlists & flows</span><span class="chip">Online</span><span class="sp desk"></span><span class="desk" style="font-size:12px;color:var(--dim)">Library first, then YouTube and SoundCloud</span>`
+
+const vex = ALBUMS.find(a => a.name === 'Vexillology')
+const pick = SEARCH.slice(0, 6)
+const inSet = new Set([...vex.tracks, ...pick].map(t => t.id))
+const named = T.filter(t => /dark/i.test(t.t) || /dark/i.test(t.al)).slice(0, 3)
+const addB = (on, play = true) => `<span class="ad">${play ? `<button class="ib">${icon('play', 12)}</button>` : ''}<button class="ib ${on ? 'in' : ''}">${icon(on ? 'close' : 'plus', 15)}</button></span>`
+const trackRow = (t, hov) => `<div class="res ${hov ? 'hov' : ''}">${sigil(t, P ? 44 : 52, 34, { r: 9 })}<span><b>${esc(t.t).replace(/dark/i, m => `<mark>${m}</mark>`)}</b><small><i class="dot" style="background:${t.m.color}"></i> ${t.m.word} · ${t.bpm} BPM · ${esc(t.al)}</small></span><span class="rb">${sigil(t, 220, 22, { bg: false, pad: 0 })}</span>${addB(inSet.has(t.id))}</div>`
+const groupRow = (g, kind, sub) => `<div class="res">${groupSigil(g, 52, 34)}<span><b>${esc(g.name)}</b><small>${kind} · ${sub}</small></span><span class="rb">${ribbon(g.tracks, 220, 22, { gap: 1 })}</span>${addB(g === vex)}</div>`
+const darkAlbums = ALBUMS.filter(a => a.mood.word === 'Dark' && a.bpmLo <= 128 && a.bpmHi >= 128 && a.n >= 8).slice(0, P ? 2 : 3)
+document.getElementById('results').innerHTML = `
+  <div class="sec"><b>Sounds like it</b><small>${SEARCH.length} tracks · dark and menacing, 124–132 BPM</small><a>Add all ${SEARCH.length}</a></div>
+  ${SEARCH.slice(0, P ? 4 : 6).map((t, i) => trackRow(t, i === 2 && !P)).join('')}
+  <div class="sec"><b>Albums</b><small>around 128 BPM</small></div>
+  ${[vex, ...darkAlbums].slice(0, P ? 2 : 3).map(a => groupRow(a, 'Album', `${esc(a.artist)} · ${a.n} tracks · mostly ${a.mood.word}`)).join('')}
+  ${named.length ? `<div class="sec"><b>Named “dark”</b><small>${named.length} track${named.length > 1 ? "s" : ""}</small></div>${named.map(t => trackRow(t)).join('')}` : ''}
+  <div class="sec"><b>Playlists and flows</b></div>
+  ${groupRow(PLAYLISTS[0], 'Playlist', `${PLAYLISTS[0].n} tracks · ${SEARCH.filter(t => PLAYLISTS[0].tracks.includes(t)).length} match`)}`
+
+// The set: whatever you added, from any kind, in its best order.
+const set = [...vex.tracks, ...pick], best = bestOrder(set, { shape: 'Lift' }), s = scoreOf(best), raw = scoreOf(set)
+const dur = fmtDur(set.reduce((a, t) => a + t.d, 0))
+document.getElementById('tray').innerHTML = `<h2>Your set <small>${set.length} tracks · ${dur}</small></h2>
+  <div class="from"><span class="chip">${groupSigil(vex, 28, 20)}Vexillology ${icon('close', 12)}</span><span class="chip">${sigil(pick[0], 28, 20, { r: 5 })}${pick.length} tracks from “dark 128” ${icon('close', 12)}</span></div>
+  <div class="ord"><span class="label">Order</span><div class="seg"><button>As added</button><button class="on">Best blend</button></div><div class="seg"><button>Arc</button><button class="on">Lift</button></div></div>
+  ${joinStrip(best, 600, 70, { energyLine: true, gap: 5 })}
+  <div class="score"><b class="tab">${s.smooth}</b> blend <span>(as added ${raw.smooth})</span><span style="flex:1"></span><span class="chip"><i class="dot" style="background:${ROUGH}"></i>${s.rough} rough</span></div>
+  <div class="acts"><button class="btn pri">${icon('play', 14)}Play the set now</button><button class="btn">Add to queue</button><button class="btn">${icon('plus', 15)}Save as playlist</button><button class="btn">${icon('flow', 15)}As a flow</button><button class="btn">Clear</button></div>
+  <p>“Add to queue” slots each track where it blends best around what's already queued, never before the track playing.</p>`
+document.getElementById('sheet').innerHTML = `<div class="grab"></div>${joinStrip(best, 600, 40, { gap: 4 })}<div class="row"><span><b>Set · ${set.length} tracks</b><small>Best blend · Lift · ${s.smooth} blend</small></span><button class="btn">Queue</button><button class="btn pri">${icon('play', 14)}Play</button></div>`
+</script>
+</body></html>

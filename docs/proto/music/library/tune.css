@@ -1,0 +1,52 @@
+/* Tune panel + the CSS side of the tunable values. */
+main .layout { grid-template-columns: var(--exp-w, 290px) minmax(0, 1fr) var(--side-w, 320px) }
+body.side-none main .layout { grid-template-columns: var(--exp-w, 290px) minmax(0, 1fr) }
+body.side-none .side { display: none }
+body.side-orbit #fits, body.side-fits #orb { display: none }
+body.no-detail #detail, body.no-mini #mini { display: none }
+.tape2 { height: calc(var(--tape-h, 96px) + 154px) }
+.trk { height: calc(var(--tape-h, 96px) + 24px) }
+.trk svg { height: var(--tape-h, 96px) }
+.trk .nm { top: calc(var(--tape-h, 96px) + 4px); line-height: 1.25 }
+.trk .nm i { display: block; font-style: normal; color: var(--dim) }
+.dia { top: calc(82px + var(--tape-h, 96px) / 2) }
+body.den-compact .nd { height: 24px; font-size: 12px }
+body.den-roomy .nd { height: 36px; font-size: 14px }
+.tune { position: fixed; right: 12px; top: 96px; z-index: 50 }
+.tune:not(.open) { top: auto; bottom: 86px }
+.tune-tab { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 12px; background: oklch(30% .05 235); border: 1px solid oklch(72% .16 230 / .5); color: var(--fg); font-size: 13px; font-weight: 500; box-shadow: 0 8px 22px oklch(0% 0 0 / .5) }
+.tune.open { width: 340px; max-height: calc(100vh - 190px); display: flex; flex-direction: column; border-radius: 18px; background: oklch(19% .03 245 / .98); border: 1px solid oklch(72% .16 230 / .45); box-shadow: 0 20px 50px oklch(0% 0 0 / .6); backdrop-filter: blur(10px) }
+.tune-h { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--line) }
+.tune-h b { font-size: 15px; font-weight: 600 }
+.tune-h small { font-size: 12px; color: var(--blue) }
+.tune-h button { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--mut) }
+.tune-b { flex: 1; overflow: auto; scrollbar-width: thin; padding: 6px 8px }
+.tg-h { width: 100%; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 8px; border-radius: 9px; font-size: 13px; font-weight: 600 }
+.tg-h:hover { background: oklch(26% .025 240 / .6) }
+.tg-h .ic { color: var(--dim); transition: transform .15s }
+.tg-g.open .tg-h .ic { transform: rotate(90deg) }
+.tg-h em { font-style: normal; font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 99px; background: oklch(72% .16 230 / .2); color: var(--blue) }
+.tg-h em.nt { background: oklch(83% .16 85 / .18); color: oklch(85% .14 85) }
+.tg-c { display: flex; flex-direction: column; gap: 8px; padding: 4px 8px 12px 28px }
+.tp { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--mut) }
+.tp > span { display: flex; justify-content: space-between; gap: 8px }
+.tp b { font-weight: 500; color: var(--fg); font-variant-numeric: tabular-nums }
+.tp.chg > span { color: var(--blue) }
+.tp input[type=range] { width: 100%; accent-color: oklch(72% .16 230) }
+.tp select { height: 30px; border-radius: 8px; background: oklch(24% .02 240); color: var(--fg); border: 1px solid var(--line); padding: 0 8px; font: inherit; font-size: 12px }
+.tp.tg { flex-direction: row; align-items: center; justify-content: space-between; cursor: pointer }
+.tp.tg input { position: absolute; opacity: 0; pointer-events: none }
+.tp.tg i { width: 34px; height: 20px; border-radius: 10px; background: oklch(32% .02 240); position: relative; flex: none; transition: background .15s }
+.tp.tg i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--fg); transition: transform .15s }
+.tp.tg input:checked + i { background: oklch(72% .16 230 / .8) }
+.tp.tg input:checked + i::after { transform: translateX(14px) }
+.tp.tg input:focus-visible + i { outline: 2px solid var(--blue); outline-offset: 2px }
+.tg-c textarea { width: 100%; resize: vertical; border-radius: 9px; background: oklch(16% .02 240); color: var(--fg); border: 1px solid var(--line); padding: 7px 9px; font: inherit; font-size: 12px }
+.tg-c textarea:focus { outline: 1px solid var(--blue) }
+.lnk { align-self: flex-start; font-size: 12px; color: var(--blue) }
+.tune-f { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line) }
+.tune-f .btn { height: 32px; font-size: 12px; padding: 0 10px }
+@media (max-width: 700px) {
+  .tune { top: auto; bottom: 150px; right: 10px }
+  .tune.open { position: fixed; left: 0; right: 0; bottom: 0; top: 30vh; width: auto; max-height: none; border-radius: 22px 22px 0 0 }
+}

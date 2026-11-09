@@ -40,8 +40,33 @@ LEAN: Final = {
 }
 #: Part of a genre or colour change when nothing asks for one.
 CHANGE: Final = 0.4
+#: Blend by (SPEC-music-library §2.7): the user's importance of each axis, 0..1, as the
+#: Music page names them; a layer's weight is scaled by importance / default. Tempo is
+#: not an axis: it stays at its weight as a guard.
+AXES: Final = {
+    "harmony": "harmony",
+    "mood": "colour",
+    "energy": "energy",
+    "genre": "genre",
+}
+DEFAULT_IMPORTANCE: Final = {"harmony": 0.9, "mood": 0.45, "energy": 0.7, "genre": 0.35}
 
 Track = dict[str, Any]
+
+
+def layer_weights(weights: dict[str, float] | None) -> dict[str, float]:
+    """The Prefer weight of each layer under Blend by *weights* (None: the defaults)."""
+    if not weights:
+        return dict(WEIGHTS)
+    out = dict(WEIGHTS)
+    for axis, layer in AXES.items():
+        if axis in weights:
+            out[layer] = (
+                WEIGHTS[layer]
+                * max(0.0, float(weights[axis]))
+                / DEFAULT_IMPORTANCE[axis]
+            )
+    return out
 
 
 def edge(t: Track, which: str) -> float | None:
@@ -79,15 +104,18 @@ def blend(
     colour: str | None = None,
     genres: list[str] | None = None,
     harmony: float | None = None,
+    weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """How well *b* follows *a*: ``score`` 0..1, ``parts`` per layer, ``steps`` (energy, tempo), ``join``, ``blocked``.
 
     *want*: the harmony event this join should serve (``match`` when none). *colour* and
     *genres*: what a flow's colour or genre block asks for here; without them a change
     from *a* scores lower and a match scores full. *harmony*: the harmony part when the
-    caller reads joins its own way (proximity, with its Camelot fallback).
+    caller reads joins its own way (proximity, with its Camelot fallback). *weights*:
+    Blend by importances (:data:`AXES`), scaling the layers' weights.
     """
     cfg = {k: (settings or {}).get(k, "prefer") for k in LAYERS}
+    base = layer_weights(weights)
     best = LEAN.get(lean, LEAN["hold"])
     parts: dict[str, float | None] = dict.fromkeys(LAYERS)
     blocked = False
@@ -129,7 +157,7 @@ def blend(
             parts[k] = None
         if parts[k] is None:
             continue
-        w = WEIGHTS[k] * (MUST if cfg[k] == "must" else 1.0)
+        w = base[k] * (MUST if cfg[k] == "must" else 1.0)
         total += w * parts[k]  # type: ignore[operator]
         weight += w
     return {

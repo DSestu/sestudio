@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>I · Tape + index</title>
+<link rel="stylesheet" href="common.css"><link rel="stylesheet" href="gh.css">
+<style>
+.grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 22px; padding-top: 14px }
+.idx { display: flex; flex-direction: column; gap: 16px; height: calc(100vh - 140px); overflow: hidden }
+.idx .label { padding: 0 8px 4px; display: flex; justify-content: space-between }
+.ix { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 10px; font-size: 13px; color: var(--mut) }
+.ix span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ix small { font-size: 12px; color: var(--dim) }
+.ix.on { background: oklch(72% .16 230 / .14); color: var(--fg) }
+.ix.on small { color: var(--blue) }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 6px }
+.chips .chip { height: 26px; font-size: 12px }
+.bar2 { display: flex; align-items: center; gap: 12px; margin-bottom: 10px }
+.bar2 .sp { flex: 1 }
+.az { display: flex; gap: 6px; font-size: 12px; color: var(--dim) }
+.az .on { color: var(--blue); font-weight: 600 }
+.below { display: grid; grid-template-columns: minmax(0, 1fr) 250px 330px; gap: 22px; margin-top: 16px; align-items: start }
+.sel h2 { font-size: 22px; font-weight: 600; letter-spacing: -.02em }
+.sel p { color: var(--mut); font-size: 13px; margin: 2px 0 12px }
+.acts { display: flex; gap: 8px; flex-wrap: wrap }
+.orbbox { border-radius: 18px; background: radial-gradient(60% 60% at 50% 50%, oklch(21% .035 250), oklch(15% .02 245) 85%); border: 1px solid oklch(32% .02 240 / .5); position: relative; width: 250px; height: 250px; overflow: hidden }
+.orbbox .ctr { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) }
+.orbbox .ctr .sigil { background: oklch(18% .03 250); border-radius: 10px; display: block }
+.orbbox .cap { position: absolute; left: 12px; top: 10px; font-size: 11px; color: var(--dim) }
+/* phone */
+.psearch { margin-top: 10px; position: relative; z-index: 6 }
+.psearch .search { color: var(--fg) }
+.drop { position: absolute; left: 0; right: 0; top: 48px; border-radius: 16px; background: oklch(22% .03 240); border: 1px solid oklch(40% .03 240 / .6); box-shadow: 0 18px 40px oklch(0% 0 0 / .6); padding: 8px 6px }
+.drop .label { padding: 6px 8px 2px }
+.dim { opacity: .35; margin-right: 18px }
+.vrail { position: fixed; right: 4px; top: 150px; display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--dim); z-index: 1 }
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div><div class="search desk" id="search"></div><div class="bell" id="bell"></div></div></div>
+  <div class="grid desk">
+    <aside class="idx" id="idx"></aside>
+    <section>
+      <div class="bar2"><div class="seg"><button class="on">By artist</button><button>By album</button><button>By mood</button><button>By tempo</button><button>Newest</button></div><span class="sp"></span><div class="az" id="az"></div></div>
+      <div class="mini" id="mini"></div>
+      <div class="tape" id="tape" style="height:280px;margin-top:12px"></div>
+      <div class="below">
+        <div class="sel" id="sel"></div>
+        <div class="orbbox" id="orb"></div>
+        <div id="fits"></div>
+      </div>
+    </section>
+  </div>
+  <div class="ph psearch" id="ps"></div>
+  <div class="ph dim" id="pt"></div>
+  <div class="ph vrail" id="vrail"></div>
+</main>
+<script src="data.js"></script><script src="common.js"></script><script src="gh.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Find an artist, album, track, playlist or flow'
+document.getElementById('bell').innerHTML = icon('bell')
+const start = TAPE.findIndex(g => g.al === 'Vexillology') - 1
+const hov = TAPE[start].ts[4]
+
+if (!P) {
+  // Index: every way in, one column.
+  const genres = [...groupBy(T.filter(t => t.g), t => t.g)].sort((a, b) => b[1].length - a[1].length).slice(0, 8)
+  const artists = ARTISTS.filter(a => a.name !== 'Various artists').slice(0, 7)
+  document.getElementById('idx').innerHTML = `
+    <div><div class="label"><span>Artists</span><span>88</span></div>${artists.map(a => `<a class="ix ${a.name === 'Deadmau5' ? 'on' : ''}"><span>${esc(a.name)}</span><small class="tab">${a.name === 'Deadmau5' ? 'here' : a.n}</small></a>`).join('')}<a class="ix"><span style="color:var(--blue)">All 88 artists</span></a></div>
+    <div><div class="label"><span>Genres</span></div><div class="chips">${genres.map(([g, ts]) => `<span class="chip">${g} <b class="tab">${ts.length}</b></span>`).join('')}</div></div>
+    <div><div class="label"><span>Playlists</span><span>New</span></div>${PLAYLISTS.map(p => `<a class="ix"><span>${p.name}</span><small class="tab">${p.n}</small></a>`).join('')}</div>
+    <div><div class="label"><span>Flows</span><span>${FLOWS_.length}</span></div>${FLOWS_.slice(0, 4).map(f => `<a class="ix">${flowShape(f, 26, 14)}<span>${f.name}</span></a>`).join('')}</div>
+    <div><div class="label"><span>Libraries</span></div>${LIBS.filter(l => l.count).map(l => `<a class="ix"><i class="dot" style="background:var(--success, oklch(76% .17 155))"></i><span>${esc(l.label)}</span><small class="tab">${l.count}</small></a>`).join('')}</div>`
+  document.getElementById('az').innerHTML = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c => `<span class="${c === 'D' ? 'on' : ''}">${c}</span>`).join('')
+  const tape = document.getElementById('tape'), TW = tape.clientWidth, K = .2
+  tape.innerHTML = tapeHtml({ TW, TH: 280, groups: TAPE.slice(start), K, hov })
+  const mini = document.getElementById('mini')
+  mini.innerHTML = miniHtml(mini.clientWidth, start, TW / K)
+  // Selected track: details, its orbit, and what fits after it.
+  const t = hov
+  document.getElementById('sel').innerHTML = `<h2>${esc(t.t)}</h2><p>${esc(t.ar)} · ${esc(t.al)} · ${fmtTime(t.d)} · <i class="dot" style="background:${t.m.color}"></i> ${t.m.word} · ${t.bpm} BPM · ${t.key}</p>
+    ${ribbon([t], 600, 40, { fluid: true })}
+    <div class="acts" style="margin-top:12px"><button class="btn pri">${icon('play', 14)}Play</button><button class="btn">Play from here</button><button class="btn">${icon('plus', 16)}Add to…</button><button class="btn">${icon('flow', 16)}Flow from it</button></div>`
+  const p = { bpm: t.bpm, b: t.m.b, e: t.e }
+  document.getElementById('orb').innerHTML = orbitSvg({ W: 250, H: 250, p, labels: false, r0: 30, skip: new Set([t.id]) }) + `<span class="ctr">${sigil(t, 44, 28, { r: 8 })}</span><span class="cap">Around this track</span>`
+  const near = T.filter(x => x !== t).map(x => ({ x, d: fitDist(x, p) })).sort((a, b) => a.d - b.d).filter((v, i, a) => a.findIndex(w => w.x.t === v.x.t) === i).slice(0, 4)
+  document.getElementById('fits').innerHTML = `<div class="h2">Fits after it <small>${T.filter(x => fitDist(x, p) < .22).length} tracks</small></div>` + near.map(({ x, d }) => `<div class="r">${sigil(x, 48, 32, { r: 8 })}<span><b>${esc(x.t)}</b><small>${x.m.word} · ${x.bpm} · ${esc(x.al)}</small></span><span class="fit">${Math.round((1 - d) * 100)}%<div class="fitbar"><i style="width:${(1 - d) * 100}%"></i></div></span></div>`).join('')
+} else {
+  // Phone: typing in the search jumps the tape; results by kind.
+  const vex = ALBUMS.find(a => a.name === 'Vexillology'), dm = ARTISTS.find(a => a.name === 'Deadmau5')
+  document.getElementById('ps').innerHTML = `<div class="search">${icon('search', 18)}<span>ve</span><span style="flex:1"></span>${icon('close', 16)}</div>
+    <div class="drop"><div class="label">Albums</div><div class="r hov">${groupSigil(vex, 48, 32)}<span><b>Vexillology</b><small>Deadmau5 · 10 tracks · jump</small></span><span class="fit">${icon('right', 16)}</span></div>
+      <div class="label">Tracks</div>${T.filter(t => /^ve/i.test(t.t) || / ve/i.test(t.t)).slice(0, 2).map(t => `<div class="r">${sigil(t, 48, 32, { r: 8 })}<span><b>${esc(t.t)}</b><small>${esc(t.al)} · ${t.m.word} · ${t.bpm}</small></span><span class="fit">${icon('play', 14)}</span></div>`).join('')}
+      <div class="label">Genres</div><div style="display:flex;gap:6px;padding:4px 6px"><span class="chip">Electro House</span><span class="chip">Progressive House</span></div></div>`
+  document.getElementById('pt').innerHTML = vtapeHtml(TAPE.slice(start), { hov })
+  document.getElementById('vrail').innerHTML = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c => `<span>${c}</span>`).join('')
+}
+</script>
+</body></html>

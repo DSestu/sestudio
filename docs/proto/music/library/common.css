@@ -1,0 +1,90 @@
+:root {
+  --bg: oklch(15% .018 245);
+  --aisle: oklch(19% .022 242);
+  --row: oklch(24% .025 240);
+  --line: oklch(30% .02 240 / .6);
+  --fg: oklch(93% .01 240);
+  --mut: oklch(72% .02 240);
+  --dim: oklch(56% .02 240);
+  --blue: oklch(72% .16 230);
+  --blue-ink: oklch(18% .05 230);
+  --coral: oklch(70% .17 25);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0 }
+html, body { background: var(--bg); color: var(--fg); font: 14px/1.43 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased }
+body { display: flex; min-height: 100vh }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer }
+::selection { background: oklch(72% .16 230 / .35) }
+.tab { font-variant-numeric: tabular-nums }
+.ic { flex: none; display: block }
+
+/* rail */
+.rail { width: 108px; flex: none; position: sticky; top: 0; height: 100vh; padding: 12px }
+.rail-in { height: 100%; border-radius: 16px; background: var(--aisle); border: 1px solid oklch(32% .02 240 / .5); display: flex; flex-direction: column; align-items: center; padding: 16px 0 12px; gap: 4px }
+.mark { margin-bottom: 14px }
+.rail-search { width: 52px; height: 52px; border-radius: 14px; background: var(--blue); color: var(--blue-ink); display: grid; place-items: center; margin-bottom: 14px }
+.rail-item { width: 72px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; font-size: 11px; font-weight: 500; color: var(--mut) }
+.rail-item span { width: 46px; height: 30px; display: grid; place-items: center; border-radius: 10px }
+.rail-item.on { color: var(--fg) }
+.rail-item.on span { background: oklch(72% .16 230 / .2); color: var(--blue) }
+.rail-item.set { margin-top: auto }
+
+main { flex: 1; min-width: 0; padding: 20px 24px 120px 12px }
+
+/* player + dock */
+.bottom { position: fixed; left: 108px; right: 0; bottom: 14px; display: flex; justify-content: center; pointer-events: none; z-index: 20 }
+.player { pointer-events: auto; position: relative; overflow: hidden; width: 512px; height: 56px; border-radius: 16px; display: flex; align-items: center; gap: 12px; padding: 0 10px; background: oklch(24% .04 250 / .82); backdrop-filter: blur(16px); border: 1px solid oklch(60% .05 220 / .35); box-shadow: 0 10px 30px oklch(0% 0 0 / .45) }
+.pl-aura { position: absolute; inset: 8px 0; opacity: .9 }
+.pl-aura svg { width: 100%; height: 100% }
+.pl-art, .pl-meta, .player button { position: relative }
+.pl-art .sigil { display: block; background: oklch(18% .03 250); border-radius: 9px }
+.pl-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25 }
+.pl-meta b { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.pl-meta small { color: var(--mut); font-size: 12px }
+.pl-meta i { font-style: normal }
+.pl-play { width: 36px; height: 36px; border-radius: 10px; background: var(--blue); color: var(--blue-ink); display: grid; place-items: center }
+.pl-btn { width: 36px; height: 36px; display: grid; place-items: center; color: var(--mut) }
+.pl-stop { position: relative; width: 9px; height: 9px; border-radius: 2px; background: var(--coral); margin: 0 10px }
+.dock { display: none }
+
+/* group sigil */
+.gsig { display: inline-grid; place-items: center; width: 56px; height: 40px; border-radius: 10px; background: color-mix(in oklch, var(--c) 9%, transparent); flex: none }
+.gsig svg { display: block }
+
+/* shared header card (the app's top card) */
+.top { border-radius: 18px; background: linear-gradient(180deg, oklch(24% .035 235 / .9), oklch(20% .03 240 / .9)); border: 1px solid oklch(40% .04 230 / .35); padding: 14px 20px 12px; display: flex; flex-direction: column; gap: 10px }
+.top-row { display: flex; align-items: center; gap: 22px }
+.title h1 { font-size: 20px; font-weight: 500; letter-spacing: -.02em; line-height: 1.2 }
+.title p { font-size: 12px; color: var(--mut) }
+.title em { font-style: italic }
+.search { flex: 1; height: 42px; border-radius: 12px; border: 1.5px solid oklch(72% .16 230 / .7); background: oklch(16% .02 240); display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--dim) }
+.search .ic { color: var(--blue) }
+.bell { margin-left: auto; width: 40px; height: 40px; border-radius: 12px; background: oklch(28% .02 240 / .7); display: grid; place-items: center; color: var(--fg); position: relative }
+.bell::after { content: '73'; position: absolute; top: -7px; right: -5px; font-size: 10px; background: var(--blue); color: var(--blue-ink); padding: 0 6px; border-radius: 9px; font-weight: 600 }
+.btn { height: 34px; padding: 0 14px; border-radius: 10px; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; background: oklch(30% .02 240 / .7); white-space: nowrap }
+.btn.pri { background: var(--blue); color: var(--blue-ink) }
+.btn.ghost { background: transparent; color: var(--mut) }
+.seg { display: inline-flex; gap: 2px; background: oklch(14% .02 240 / .6); border-radius: 12px; padding: 3px }
+.seg button { height: 30px; padding: 0 13px; border-radius: 9px; font-size: 13px; color: var(--mut) }
+.seg button.on { background: oklch(72% .16 230 / .2); color: var(--fg) }
+.chip { height: 28px; padding: 0 11px; border-radius: 99px; background: oklch(26% .02 240 / .8); font-size: 12px; color: var(--mut); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap }
+.chip b { color: var(--fg); font-weight: 500 }
+.chip.on { background: oklch(72% .16 230 / .2); color: var(--blue) }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none }
+.label { font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--dim) }
+.mood { display: inline-flex; align-items: center; gap: 6px }
+
+@media (max-width: 700px) {
+  .rail { display: none }
+  main { padding: 10px 10px 170px }
+  .bottom { left: 10px; right: 10px; bottom: 10px; flex-direction: column; border-radius: 22px; overflow: hidden; background: oklch(22% .035 245 / .9); backdrop-filter: blur(18px); border: 1px solid oklch(60% .05 220 / .35); pointer-events: auto }
+  .player { width: auto; border: 0; border-bottom: 1px solid oklch(50% .03 230 / .3); border-radius: 0; background: none; box-shadow: none; height: 62px }
+  .player > .pl-btn:last-child, .pl-stop { display: none }
+  .dock { display: flex; justify-content: space-around; align-items: center; height: 64px }
+  .dock a { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--mut); width: 64px }
+  .dock a.on { color: var(--blue) }
+  .dock a.on .ic { background: oklch(72% .16 230 / .2); border-radius: 10px; width: 46px; padding: 3px 12px; height: 28px }
+  .dock-search { width: 52px !important; height: 50px; border-radius: 16px; background: var(--blue); color: var(--blue-ink) !important; display: grid !important; place-items: center }
+  .top { padding: 14px 16px 12px; border-radius: 20px }
+}

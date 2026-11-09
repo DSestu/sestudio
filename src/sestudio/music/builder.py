@@ -11,7 +11,8 @@ same seed gives the same set; another seed gives another valid one.
 
 from __future__ import annotations
 
-from collections.abc import Collection
+import math
+from collections.abc import Callable, Collection
 from typing import Any, Final
 
 from sestudio.music import blend, flows, proximity
@@ -198,4 +199,255 @@ def build_arc(
         "genreChanges": sum(bool(j and j["genreChange"]) for j in joins),
         "clashes": sum(bool(j and not j["safe"]) for j in joins),
         "tempoJumps": sum(bool(j and j["tempoJump"]) for j in joins),
+    }
+
+
+# --- Best blend of a given set (SPEC-music-library §2.7, §2.8) ---------------
+
+#: Energy shapes over a set: position 0..1 -> share of the set's energy range.
+SHAPES: Final[dict[str, Callable[[float], float]]] = {
+    "Hold": lambda x: 0.5,
+    "Lift": lambda x: 0.25 + 0.65 * x,
+    "Ease": lambda x: 0.85 - 0.6 * x,
+    "Arc": lambda x: 0.3 + 0.6 * math.sin(math.pi * x),
+}
+#: How hard the shape pulls against the join's Blend.
+SHAPE_PULL: Final = 0.8
+#: Above this many tracks only the greedy pass runs (the swaps are quadratic).
+ORDER_CAP: Final = 200
+#: Swap passes, and the extra a clash weighs in them.
+SWAP_PASSES: Final = 6
+SWAP_CLASH: Final = 3.0
+#: Fix all gives up after this many changes.
+FIX_STEPS: Final = 30
+
+Weights = dict[str, float] | None
+
+
+def _energy(t: dict[str, Any]) -> float | None:
+    return (t.get("energyScale") or {}).get("track")
+
+
+def _dist(
+    a: dict[str, Any], b: dict[str, Any], weights: Weights, welcome: Weights
+) -> float:
+    """How far *b* is from blending after *a*, 0..1 (1 - Blend)."""
+    return 1 - proximity.join(a, b, "hold", weights, welcome)["blend"]
+
+
+def _swaps(
+    out: list[dict[str, Any]],
+    pinned: set[str],
+    wants: list[float],
+    weights: Weights,
+    welcome: Weights,
+) -> None:
+    """2-opt in place: reverse a run of free tracks when its two outer joins plus its
+    distance from the shape (*wants*: the energy wanted at each index) get cheaper."""
+    n = len(out)
+    if n < 4:
+        return
+    prefix = [0]
+    for t in out:
+        prefix.append(prefix[-1] + (t["id"] in pinned))
+
+    def c(a: dict[str, Any], b: dict[str, Any]) -> float:
+        j = proximity.join(a, b, "hold", weights, welcome)
+        return 1 - j["blend"] + (SWAP_CLASH if j["move"] == "clash" else 0.0)
+
+    def pull(t: dict[str, Any], k: int) -> float:
+        e = _energy(t)
+        return 0.0 if e is None else SHAPE_PULL * abs(e - wants[k]) / 60
+
+    for _ in range(SWAP_PASSES):
+        better = False
+        for i in range(1, n - 1):
+            for j in range(i + 1, n):
+                if prefix[j + 1] - prefix[i]:  # a pinned track inside the run
+                    break
+                before = c(out[i - 1], out[i]) + (
+                    c(out[j], out[j + 1]) if j < n - 1 else 0
+                )
+                after = c(out[i - 1], out[j]) + (
+                    c(out[i], out[j + 1]) if j < n - 1 else 0
+                )
+                for k in range(i, j + 1):
+                    before += pull(out[k], k)
+                    after += pull(out[i + j - k], k)
+                if after < before - 0.01:
+                    out[i : j + 1] = out[i : j + 1][::-1]
+                    better = True
+        if not better:
+            return
+
+
+def order_set(
+    tracks: list[dict[str, Any]],
+    pins: dict[int | str, str] | None = None,
+    shape: str = "Arc",
+    weights: Weights = None,
+    welcome: Weights = None,
+) -> list[dict[str, Any]]:
+    """*tracks* in their best succession: each free slot takes the free track that
+    blends best after the one before, pulled towards the *shape*'s energy there;
+    pinned tracks (``{index: id}``) keep their index. Then runs of free tracks are
+    reversed while that cuts the join distances. Ids without an analysis are
+    ordered as unknowns.
+    """
+    n = len(tracks)
+    if n < 3:
+        return list(tracks)
+    by_id = {t["id"]: t for t in tracks}
+    out: list[dict[str, Any] | None] = [None] * n
+    pinned: set[str] = set()
+    for key, tid in (pins or {}).items():
+        i = int(key)
+        if 0 <= i < n and tid in by_id and tid not in pinned and out[i] is None:
+            out[i] = by_id[tid]
+            pinned.add(tid)
+    free = [t for t in tracks if t["id"] not in pinned]
+    energies = [e for t in tracks if (e := _energy(t)) is not None]
+    lo, hi = (min(energies), max(energies)) if energies else (0.0, 100.0)
+    span = (hi - lo) or 1.0
+    f = SHAPES.get(shape, SHAPES["Arc"])
+    prev: dict[str, Any] | None = None
+    for i in range(n):
+        if out[i] is not None:
+            prev = out[i]
+            continue
+        if not free:
+            break
+        want = lo + f(i / (n - 1)) * span
+        if prev is None:  # the opener: the track nearest the shape's start
+            best = min(
+                free,
+                key=lambda t: (
+                    abs((_energy(t) if _energy(t) is not None else want) - want),
+                    t["id"],
+                ),
+            )
+        else:
+            p = prev
+            best = min(
+                free,
+                key=lambda t: (
+                    _dist(p, t, weights, welcome)
+                    + SHAPE_PULL
+                    * abs((_energy(t) if _energy(t) is not None else want) - want)
+                    / 60,
+                    t["id"],
+                ),
+            )
+        out[i] = best
+        free.remove(best)
+        prev = best
+    done = [t for t in out if t is not None] + free
+    if len(done) <= ORDER_CAP:
+        wants = [lo + f(k / (n - 1)) * span for k in range(len(done))]
+        _swaps(done, pinned, wants, weights, welcome)
+    return done
+
+
+def _count(tracks: list[dict[str, Any]], kept: Collection[str]) -> int:
+    return sum(
+        bool(proximity.problems(proximity.join(a, b)))
+        for a, b in zip(tracks, tracks[1:])
+        if f"{a['id']}>{b['id']}" not in kept
+    )
+
+
+def fix_set(
+    tracks: list[dict[str, Any]],
+    pool: list[dict[str, Any]],
+    kept: Collection[str] = (),
+    weights: Weights = None,
+    welcome: Weights = None,
+) -> dict[str, Any]:
+    """Fix all: for each problem join in order, insert the *pool* track that leaves no
+    problem on either side and blends best, else move the second track to the spot
+    with the fewest problems when that lowers the count; stop when nothing improves.
+    Returns ``{"order", "inserted", "moved", "left"}``.
+    """
+    out = list(tracks)
+    in_set = {t["id"] for t in out}
+    songs = {_song(t) for t in out}
+    pool = [t for t in pool if t["id"] not in in_set and _song(t) not in songs]
+    kept = set(kept)
+    inserted: list[str] = []
+    moved: list[str] = []
+    skipped: set[str] = set()
+
+    def path_cost(arr: list[dict[str, Any]]) -> float:
+        return sum(_dist(x, y, weights, welcome) for x, y in zip(arr, arr[1:]))
+
+    for _ in range(FIX_STEPS):
+        changed = False
+        for i in range(len(out) - 1):
+            a, b = out[i], out[i + 1]
+            key = f"{a['id']}>{b['id']}"
+            if (
+                key in kept
+                or key in skipped
+                or not proximity.problems(proximity.join(a, b))
+            ):
+                continue
+            # Only a track near both tempi can bridge without a tempo jump of its own.
+            pa, pb = a.get("bpm"), b.get("bpm")
+            near = [
+                t
+                for t in pool
+                if not (pa and pb and t.get("bpm"))
+                or (
+                    abs(t["bpm"] - pa) <= pa * proximity.TEMPO_TOL * 2
+                    and abs(pb - t["bpm"]) <= t["bpm"] * proximity.TEMPO_TOL * 2
+                )
+            ]
+            ranked = sorted(
+                (
+                    (
+                        len(proximity.problems(j1)) + len(proximity.problems(j2)),
+                        2 - j1["blend"] - j2["blend"],
+                        t["id"],
+                        t,
+                    )
+                    for t in near
+                    for j1, j2 in (
+                        (
+                            proximity.join(a, t, "hold", weights, welcome),
+                            proximity.join(t, b, "hold", weights, welcome),
+                        ),
+                    )
+                ),
+                key=lambda r: r[:3],
+            )
+            if ranked and ranked[0][0] == 0:
+                t = ranked[0][3]
+                out.insert(i + 1, t)
+                pool.remove(t)
+                inserted.append(t["id"])
+                changed = True
+                break
+            base = _count(out, kept)
+            rest = [t for t in out if t is not b]
+            spots = sorted(
+                range(len(rest) + 1),
+                key=lambda p: (
+                    _count(rest[:p] + [b] + rest[p:], kept),
+                    path_cost(rest[:p] + [b] + rest[p:]),
+                ),
+            )
+            new = rest[: spots[0]] + [b] + rest[spots[0] :]
+            if _count(new, kept) < base:
+                out = new
+                moved.append(b["id"])
+                changed = True
+                break
+            skipped.add(key)
+        if not changed:
+            break
+    return {
+        "order": out,
+        "inserted": inserted,
+        "moved": moved,
+        "left": _count(out, kept),
     }

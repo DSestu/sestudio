@@ -180,6 +180,10 @@ class FitsBody(BaseModel):
     filters: dict[str, Any] = {}
     limit: int = Field(50, ge=1, le=500)
     exclude: list[str] = []
+    #: Blend by (the Music page): axis importances (harmony, mood, energy, genre) and how
+    #: welcome each harmony move is (proximity.MOVES). Omitted: the app's defaults.
+    weights: dict[str, float] | None = None
+    harmony: dict[str, float] | None = None
 
 
 @router.post("/music/proximity/fits-after")
@@ -189,7 +193,13 @@ async def fits_after(body: FitsBody) -> dict[str, Any]:
     def run() -> list[dict[str, Any]]:
         pool = _pool(body.pool)
         return proximity.fits_after(
-            _track(body.track, pool), pool, body.filters, body.limit, body.exclude
+            _track(body.track, pool),
+            pool,
+            body.filters,
+            body.limit,
+            body.exclude,
+            body.weights,
+            body.harmony,
         )
 
     return {"track": body.track, "results": await asyncio.to_thread(run)}
@@ -203,6 +213,10 @@ class BridgeBody(BaseModel):
     limit: int = Field(10, ge=1, le=100)
     #: Most in-between tracks a path may use (bridge-path only).
     steps: int = Field(3, ge=1, le=5)
+    weights: dict[str, float] | None = None
+    harmony: dict[str, float] | None = None
+    #: False (bridges only): every track, those leaving no problem first.
+    strict: bool = True
 
 
 @router.post("/music/proximity/bridges")
@@ -212,7 +226,16 @@ async def bridges(body: BridgeBody) -> dict[str, Any]:
     def run() -> list[dict[str, Any]]:
         pool = _pool(body.pool)
         a, b = _track(body.a, pool), _track(body.b, pool)
-        return proximity.bridges(a, b, pool, body.limit, body.exclude)
+        return proximity.bridges(
+            a,
+            b,
+            pool,
+            body.limit,
+            body.exclude,
+            body.weights,
+            body.harmony,
+            body.strict,
+        )
 
     return {"results": await asyncio.to_thread(run)}
 
@@ -267,6 +290,83 @@ async def build_set(body: BuildBody) -> dict[str, Any]:
         pool = _pool(body.pool)
         start = _track(body.start, pool) if body.start else None
         return builder.build_arc(pool, arc, body.length, body.seed, start, body.skip)
+
+    return await asyncio.to_thread(run)
+
+
+class OrderBody(BaseModel):
+    #: The set, in the user's order. An id without an analysis (an online track still
+    #: being analysed) is ordered too, as an unknown.
+    ids: list[str]
+    #: Tracks that keep their index: ``{"4": "<id>"}``.
+    pins: dict[int, str] = {}
+    shape: str = "Arc"
+    weights: dict[str, float] | None = None
+    harmony: dict[str, float] | None = None
+
+
+def _set_tracks(ids: list[str]) -> list[dict[str, Any]]:
+    by_id = {t["id"]: t for t in _pool(ids)}
+    return [by_id.get(i, {"id": i}) for i in ids]
+
+
+def _joins(
+    tracks: list[dict[str, Any]],
+    weights: dict[str, float] | None,
+    welcome: dict[str, float] | None,
+) -> list[dict[str, Any]]:
+    return [
+        proximity.explain(a, b, weights, welcome) for a, b in zip(tracks, tracks[1:])
+    ]
+
+
+@router.post("/music/set/order")
+async def order_set(body: OrderBody) -> dict[str, Any]:
+    """Best blend of a given set: its best succession for the shape and the Blend by weights, pins kept."""
+    if body.shape not in builder.SHAPES:
+        raise HTTPException(status_code=400, detail="Unknown shape")
+
+    def run() -> dict[str, Any]:
+        out = builder.order_set(
+            _set_tracks(body.ids), body.pins, body.shape, body.weights, body.harmony
+        )
+        return {
+            "order": [t["id"] for t in out],
+            "joins": _joins(out, body.weights, body.harmony),
+        }
+
+    return await asyncio.to_thread(run)
+
+
+class FixBody(BaseModel):
+    ids: list[str]
+    #: Joins the user keeps as they are, as ``"<a>><b>"``.
+    kept: list[str] = []
+    #: Where bridges come from; omitted means every analysed local track.
+    pool: list[str] | None = None
+    weights: dict[str, float] | None = None
+    harmony: dict[str, float] | None = None
+
+
+@router.post("/music/set/fix")
+async def fix_set(body: FixBody) -> dict[str, Any]:
+    """Fix all: a bridge inserted where one leaves no problem, else a track moved to a better spot."""
+
+    def run() -> dict[str, Any]:
+        r = builder.fix_set(
+            _set_tracks(body.ids),
+            _pool(body.pool),
+            body.kept,
+            body.weights,
+            body.harmony,
+        )
+        return {
+            "order": [t["id"] for t in r["order"]],
+            "joins": _joins(r["order"], body.weights, body.harmony),
+            "inserted": r["inserted"],
+            "moved": r["moved"],
+            "left": r["left"],
+        }
 
     return await asyncio.to_thread(run)
 

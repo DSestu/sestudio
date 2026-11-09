@@ -220,6 +220,7 @@ def local_tracks(lib_id: str, root: Path) -> list[dict[str, Any]]:
             "duration": f.duration or 0,
             "folder": f.folder,
             "name": f.series,
+            "path": f.path,
         }
         for f in _files(lib_id, root)
     ]

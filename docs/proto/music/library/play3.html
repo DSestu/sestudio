@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Music · explorer</title>
+<link rel="stylesheet" href="common.css"><link rel="stylesheet" href="gh.css"><link rel="stylesheet" href="drawer.css"><link rel="stylesheet" href="explorer.css">
+<style>
+main { padding-bottom: 110px }
+.q { color: var(--fg) !important; gap: 8px !important; flex: 1 }
+.q input { flex: 1; min-width: 60px; background: none; border: 0; outline: 0; color: var(--fg); font: inherit; font-size: 15px }
+.q input::placeholder { color: var(--dim) }
+.q .chip { height: 26px; background: oklch(72% .16 230 / .18); color: var(--fg); flex: none }
+.q .chip i { color: var(--dim); font-style: normal; font-size: 11px }
+.q .x { cursor: pointer; color: var(--mut) }
+.layout { display: grid; grid-template-columns: 210px minmax(0, 1fr) 330px; gap: 20px; padding-top: 14px }
+/* index */
+.idx { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 140px); overflow: auto; scrollbar-width: thin }
+.idx .label { padding: 0 8px 3px; display: flex; justify-content: space-between }
+.ix { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 10px; font-size: 13px; color: var(--mut); cursor: pointer; width: 100%; text-align: left }
+.ix:hover { background: oklch(26% .025 240 / .6); color: var(--fg) }
+.ix span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ix small { font-size: 12px; color: var(--dim) }
+.ix.on { background: oklch(72% .16 230 / .14); color: var(--fg) }
+/* centre */
+.bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px }
+.bar .sp { flex: 1 }
+.src { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px 0 12px; border-radius: 10px; background: oklch(26% .03 240); font-size: 13px; font-weight: 500 }
+.src button { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: var(--mut) }
+.count { font-size: 13px; color: var(--mut) }
+.count b { color: var(--fg); font-weight: 600 }
+.seg button { cursor: pointer }
+.mini { position: relative; height: 26px; cursor: pointer; margin-bottom: 8px }
+.tape2 { position: relative; height: 250px; overflow-x: auto; overflow-y: hidden; border-radius: 16px; background: oklch(17% .02 245); border: 1px solid oklch(30% .02 240 / .5); scrollbar-width: thin; scroll-behavior: smooth }
+.tape2 .inner { position: relative; height: 100% }
+.trk { position: absolute; top: 82px; height: 120px; cursor: pointer; border-radius: 8px }
+.trk svg { position: absolute; left: 2px; right: 2px; top: 0; width: calc(100% - 4px); height: 96px }
+.trk .nm { position: absolute; left: 2px; right: 2px; top: 100px; font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.trk:hover { background: oklch(30% .02 240 / .35) }
+.trk.sel { outline: 1.5px solid var(--fg); outline-offset: 2px }
+.trk.sel .nm { color: var(--fg) }
+.trk.now::before { content: ''; position: absolute; left: 50%; top: -8px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); transform: translateX(-50%) }
+.ghd { position: absolute; top: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ghd .a { font-size: 22px; font-weight: 300; color: oklch(80% .02 240 / .4); display: block; height: 28px }
+.ghd b { font-size: 13px; font-weight: 600; display: block }
+.ghd small { font-size: 11px; color: var(--mut) }
+.vline { position: absolute; top: 46px; bottom: 12px; width: 1px; background: oklch(40% .02 240 / .5) }
+.dia { position: absolute; top: 136px; width: 9px; height: 9px; transform: translate(-50%, -50%) rotate(45deg); border-radius: 1px; border: 1px solid var(--bg); pointer-events: none }
+.empty { padding: 90px 20px; text-align: center; color: var(--mut) }
+.detail { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 16px; background: oklch(20% .025 240); border: 1px solid oklch(34% .02 240 / .5) }
+.detail h3 { font-size: 18px; font-weight: 600; letter-spacing: -.01em }
+.detail p { font-size: 12px; color: var(--mut); margin-top: 2px }
+.detail .acts { display: flex; gap: 6px; flex-wrap: wrap }
+.detail .acts .btn { height: 32px; font-size: 12px; padding: 0 11px }
+/* right */
+.side { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 12px; align-self: start }
+.orb { position: relative; border-radius: 18px; background: radial-gradient(60% 60% at 50% 50%, oklch(21% .035 250), oklch(15% .02 245) 85%); border: 1px solid oklch(32% .02 240 / .5); overflow: hidden; aspect-ratio: 1 }
+.orb svg { width: 100%; height: 100%; display: block }
+.orb circle[data-id] { cursor: pointer }
+.orb circle[data-id]:hover { stroke: var(--fg); stroke-width: 2 }
+.orb .cap { position: absolute; left: 12px; top: 10px; font-size: 11px; color: var(--dim); right: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.r { cursor: pointer }
+.r:hover { background: oklch(26% .025 240 / .6) }
+.r .ib { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: oklch(28% .02 240 / .7); color: var(--mut) }
+.r .ib:hover { color: var(--blue) }
+/* tray */
+.tray { border-radius: 18px; background: oklch(20% .028 240); border: 1px solid oklch(72% .16 230 / .35); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px }
+.tray h2 { font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; cursor: default }
+.tray h2 small { font-size: 12px; color: var(--mut); font-weight: 400 }
+.tray .ord { display: flex; gap: 6px; flex-wrap: wrap }
+.tray .ord .seg button { padding: 0 9px; height: 28px; font-size: 12px }
+.tray .score { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--mut) }
+.tray .score b { font-size: 20px; color: var(--fg); font-weight: 600 }
+.tray .rows { max-height: 220px; overflow: auto; scrollbar-width: thin }
+.tray .li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; padding: 2px 0 }
+.tray .li span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tray .li button { color: var(--dim); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px }
+.tray .li button:hover { color: var(--coral) }
+.tray .jn { height: 10px; padding-left: 14px; display: flex; align-items: center }
+.tray .jn i { width: 7px; height: 7px; transform: rotate(45deg); display: inline-block; border-radius: 1px }
+.tray .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px }
+.tray .acts .btn { justify-content: center; height: 34px; font-size: 12px }
+.tray .acts .pri { grid-column: span 2 }
+.tray .hint { font-size: 12px; color: var(--dim); line-height: 1.45 }
+.toast { position: fixed; left: 50%; bottom: 96px; transform: translate(-50%, 20px); opacity: 0; transition: .25s cubic-bezier(.2, .8, .2, 1); background: oklch(30% .03 240); border: 1px solid var(--line); padding: 9px 14px; border-radius: 12px; font-size: 13px; z-index: 30; pointer-events: none }
+.toast.on { opacity: 1; transform: translate(-50%, 0) }
+.pchips { display: none }
+@media (max-width: 700px) {
+  main { padding-bottom: 260px }
+  .layout { display: block; padding-top: 8px }
+  .idx { display: none }
+  .pchips { display: flex; gap: 6px; overflow-x: auto; padding: 10px 2px 2px; scrollbar-width: none }
+  .pchips .chip { cursor: pointer; flex: none }
+  .tape2 { height: 220px }
+  .trk { top: 72px; height: 110px } .trk svg { height: 84px } .trk .nm { top: 88px }
+  .dia { top: 114px }
+  .detail { grid-template-columns: 1fr }
+  .side { position: static; margin-top: 14px }
+  .orb { max-width: 340px; margin: 0 auto; width: 100% }
+  .tray { position: fixed; left: 10px; right: 10px; bottom: 146px; z-index: 9; box-shadow: 0 -10px 30px oklch(0% 0 0 / .55); max-height: 60vh; overflow: auto }
+  .tray:not(.open) > :not(h2) { display: none }
+  .tray h2 { cursor: pointer }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title desk"><h1>Music</h1><p id="libcount"></p></div>
+    <label class="search q" id="q"></label><div class="bell desk" id="bell"></div></div></div>
+  <div class="pchips" id="pchips"></div>
+  <div class="layout">
+    <aside class="idx" id="idx"></aside>
+    <section>
+      <div class="bar" id="bar"></div>
+      <div class="mini" id="mini"></div>
+      <div class="tape2" id="tape"><div class="inner" id="inner"></div></div>
+      <div class="detail" id="detail"></div>
+    </section>
+    <aside class="side">
+      <div class="orb" id="orb"></div>
+      <div id="fits"></div>
+    </aside>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="data.js"></script><script src="bands.js"></script><script src="common.js"></script><script src="gh.js"></script><script src="order.js"></script><script>window.DRAWER_DEFAULT = "C"; window.DRAWER_LOCK = true</script><script src="drawer.js"></script><script src="explorer.js"></script>
+<script>
+chrome()
+const $ = id => document.getElementById(id)
+const P = () => phone()
+// The same track can sit in two libraries: browse shows it once (open question 7).
+const LIB = T.filter((t, i, a) => a.findIndex(u => u.t === t.t && Math.abs(u.d - t.d) < 3) === i)
+const libIds = new Set(LIB.map(t => t.id))
+const S = { text: '', source: null, order: 'list', shape: 'Arc', sel: null, playing: NOW, set: [], setOrder: 'blend', setShape: 'Lift', trayOpen: false }
+
+// ---- search: names and sound words, read together -----------------------------------------
+const MOOD_WORDS = Object.fromEntries([...LADDER, EXOTIC].map(l => [l.word.toLowerCase(), l.word]))
+function parse(text) {
+  const moods = [], terms = []; let bpm = null
+  for (const w of text.toLowerCase().split(/\s+/).filter(Boolean)) {
+    if (MOOD_WORDS[w]) moods.push(MOOD_WORDS[w])
+    else if (/^\d{2,3}$/.test(w) && +w >= 60 && +w <= 200) bpm = +w
+    else terms.push(w)
+  }
+  return { moods, bpm, terms }
+}
+function view() {
+  const q = parse(S.text)
+  let ts = S.source ? S.source.tracks : LIB
+  return ts.filter(t => (!q.moods.length || q.moods.includes(t.m.word)) && (!q.bpm || Math.abs((t.bpm || 0) - q.bpm) <= 4)
+    && q.terms.every(w => `${t.t} ${t.al} ${t.ar} ${t.g || ''}`.toLowerCase().includes(w)))
+}
+
+// ---- top: search box ------------------------------------------------------------------------
+$('bell').innerHTML = icon('bell')
+$('libcount').innerHTML = `<em class="tab">${LIB.length}</em> tracks · 4 libraries`
+$('q').innerHTML = `${icon('search', 18)}<span id="qchips" style="display:contents"></span><input id="qi" placeholder="Search names or sounds: try “dark 128”, “deadmau5”, “floating”" autocomplete="off"><span class="x" id="qx" hidden>${icon('close', 16)}</span>`
+if (phone()) $('qi').placeholder = 'Search names or sounds'
+$('qi').addEventListener('input', e => { S.text = e.target.value; render() })
+$('qx').addEventListener('click', () => { S.text = ''; $('qi').value = ''; render() })
+
+// ---- index (desktop) and chips (phone) -------------------------------------------------------
+function renderIndexOld() {
+  const artists = ARTISTS.filter(a => a.name !== 'Various artists').slice(0, 10)
+  const genres = [...groupBy(LIB.filter(t => t.g), t => t.g)].sort((a, b) => b[1].length - a[1].length).slice(0, 7)
+  const on = k => S.source && S.source.key === k ? 'on' : ''
+  $('idx').innerHTML = `
+    <div><div class="label"><span>Lists</span></div>${PLAYLISTS.map(p => `<button class="ix ${on('pl:' + p.name)}" data-src="pl:${esc(p.name)}">${groupSigil(p, 30, 20)}<span>${esc(p.name)}</span><small class="tab">${p.n}</small></button>`).join('')}</div>
+    <div><div class="label"><span>Artists</span><span>${ARTISTS.length}</span></div>${artists.map(a => `<button class="ix ${on('ar:' + a.name)}" data-src="ar:${esc(a.name)}"><span>${esc(a.name)}</span><small class="tab">${a.n}</small></button>`).join('')}</div>
+    <div><div class="label"><span>Albums</span><span>${ALBUMS.length}</span></div>${ALBUMS.filter(a => a.n >= 9 && a.artist !== 'Various artists').slice(0, 8).map(a => `<button class="ix ${on('al:' + a.name)}" data-src="al:${esc(a.name)}">${groupSigil(a, 30, 20)}<span>${esc(a.name)}</span><small class="tab">${a.n}</small></button>`).join('')}</div>
+    <div><div class="label"><span>Genres</span></div>${genres.map(([g, ts]) => `<button class="ix" data-q="${esc(g.split(' ')[0].toLowerCase())}"><span>${esc(g)}</span><small class="tab">${ts.length}</small></button>`).join('')}</div>
+    <div><div class="label"><span>Flows</span></div>${FLOWS_.slice(0, 5).map(f => `<button class="ix" data-flow="${esc(f.name)}">${flowShape(f, 26, 14)}<span>${esc(f.name)}</span></button>`).join('')}</div>`
+  $('pchips').innerHTML = PLAYLISTS.map(p => `<span class="chip ${on('pl:' + p.name)}" data-src="pl:${esc(p.name)}">${esc(p.name)}</span>`).join('') + artists.slice(0, 5).map(a => `<span class="chip ${on('ar:' + a.name)}" data-src="ar:${esc(a.name)}">${esc(a.name)}</span>`).join('') + ['dark', 'floating', '128', '172'].map(w => `<span class="chip" data-q="${w}">“${w}”</span>`).join('')
+}
+function sourceOf(key) {
+  const [k, name] = [key.slice(0, 2), key.slice(3)]
+  const g = k === 'pl' ? PLAYLISTS.find(p => p.name === name) : k === 'ar' ? ARTISTS.find(a => a.name === name) : ALBUMS.find(a => a.name === name)
+  return { key, kind: { pl: 'Playlist', ar: 'Artist', al: 'Album' }[k], name, g, tracks: g.tracks.filter(t => libIds.has(t.id)) }
+}
+document.addEventListener('click', e => {
+  const s = e.target.closest('[data-src]'); if (s) { const key = s.dataset.src; S.source = S.source && S.source.key === key ? null : sourceOf(key); S.order = S.source && S.source.kind !== 'Album' ? 'blend' : 'list'; $('tape').scrollLeft = 0; render(); return }
+  const q = e.target.closest('[data-q]'); if (q) { S.text = q.dataset.q; $('qi').value = S.text; render(); return }
+  const f = e.target.closest('[data-flow]'); if (f) { toast(`Plays the ${f.dataset.flow} flow from these sources`); return }
+})
+
+// ---- tape ------------------------------------------------------------------------------------
+const shapePath = t => { const v = t.curve.length ? t.curve : [20, 20], n = v.length; const top = v.map((e, k) => `${(k / (n - 1) * 100).toFixed(1)},${(50 - e / 100 * 48).toFixed(1)}`), bot = v.map((e, k) => `${(k / (n - 1) * 100).toFixed(1)},${(50 + e / 100 * 48).toFixed(1)}`).reverse(); return `M${top.join('L')}L${bot.join('L')}Z` }
+let laid = []
+function renderTape(ts) {
+  const K = P() ? .16 : .2, inner = $('inner')
+  laid = []
+  if (!ts.length) { inner.style.width = '100%'; inner.innerHTML = `<div class="empty">Nothing matches. Try fewer words, or clear the list.</div>`; return }
+  let x = 24, h = ''
+  const put = t => { const w = Math.max(26, t.d * K); laid.push({ t, x, w }); h += `<div draggable="true" class="trk ${S.sel === t ? 'sel' : ''} ${S.playing === t ? 'now' : ''}" data-id="${t.id}" style="left:${x}px;width:${w}px" title="${esc(t.t)}"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${shapePath(t)}" fill="${t.m.color}" fill-opacity=".85"/></svg><span class="nm">${esc(t.t)}</span></div>`; x += w }
+  if (S.order === 'list') {
+    const ids = new Set(ts.map(t => t.id)); let lastAr = ''
+    for (const g of TAPE) {
+      const kept = g.ts.filter(t => ids.has(t.id)); if (!kept.length) continue
+      const gs = summarise(g.al, kept, '')
+      h += `<span class="vline" style="left:${x - 12}px"></span><div class="ghd" data-group="${esc(g.ar)}" style="left:${x}px;max-width:${Math.max(60, kept.reduce((a, t) => a + Math.max(26, t.d * K), 0) + 10)}px"><span class="a">${g.ar !== lastAr ? esc(g.ar) : ''}</span><b>${esc(g.al)}</b><small>${kept.length} · ${fmtDur(gs.dur)} · ${bpmRange(gs)}</small></div>`
+      lastAr = g.ar
+      kept.forEach(put); x += 26
+    }
+  } else {
+    const ord = bestOrder(ts.slice(0, 160), { shape: S.shape })
+    h += `<div class="ghd" style="left:24px"><span class="a">Best blend · ${S.shape}</span><b>${S.source ? esc(S.source.name) : 'Search result'}</b><small>${scoreOf(ord).smooth} blend · ${scoreOf(ord).rough} rough joins</small></div>`
+    ord.forEach((t, i) => { put(t); if (i < ord.length - 1) { h += `<i class="dia" style="left:${x + 3}px;background:${markOf(joinD(t, ord[i + 1]))}"></i>`; x += 6 } })
+  }
+  inner.style.width = (x + 40) + 'px'
+  inner.innerHTML = h
+}
+$('inner').addEventListener('click', e => { const el = e.target.closest('.trk'); if (!el) return; S.sel = T.find(t => t.id === el.dataset.id); render(false) })
+$('inner').addEventListener('dblclick', e => { const el = e.target.closest('.trk'); if (el) play(T.find(t => t.id === el.dataset.id)) })
+$('tape').addEventListener('wheel', e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); $('tape').scrollBy({ left: e.deltaY * 1.4, behavior: 'auto' }) } }, { passive: false })
+$('tape').addEventListener('scroll', () => miniWin())
+
+// ---- minimap ---------------------------------------------------------------------------------
+function renderMini() {
+  const total = laid.reduce((a, l) => a + l.w, 0) || 1, MW = $('mini').clientWidth
+  $('mini').innerHTML = `<svg viewBox="0 0 ${MW} 26" preserveAspectRatio="none" style="width:100%;height:100%;display:block">${laid.map(l => `<rect x="${(l.x / ($('inner').scrollWidth || 1) * MW).toFixed(2)}" y="${26 - (l.t.e || 5) / 100 * 22}" width="${Math.max(.8, l.w / ($('inner').scrollWidth || 1) * MW - .3).toFixed(2)}" height="${(l.t.e || 5) / 100 * 22}" fill="${l.t.m.color}" fill-opacity=".8"/>`).join('')}</svg><span class="win" id="win"></span>`
+  miniWin()
+}
+function miniWin() { const tp = $('tape'), w = $('win'); if (!w) return; const sw = tp.scrollWidth || 1, MW = $('mini').clientWidth; w.style.left = (tp.scrollLeft / sw * MW) + 'px'; w.style.width = Math.min(MW, tp.clientWidth / sw * MW) + 'px' }
+$('mini').addEventListener('click', e => { const r = $('mini').getBoundingClientRect(), tp = $('tape'); tp.scrollLeft = (e.clientX - r.left) / r.width * tp.scrollWidth - tp.clientWidth / 2 })
+
+// ---- bar above the tape ----------------------------------------------------------------------
+function renderBar(ts) {
+  const q = parse(S.text)
+  $('qchips').innerHTML = q.moods.map(m => `<span class="chip"><i>mood</i> ${m}</span>`).join('') + (q.bpm ? `<span class="chip"><i>tempo</i> ${q.bpm}</span>` : '')
+  $('qx').hidden = !S.text
+  $('bar').innerHTML = `${S.source ? `<span class="src">${S.source.kind}: ${esc(S.source.name)}<button id="clrsrc" title="Back to the whole library">${icon('close', 13)}</button></span>` : `<span class="src" style="padding-right:12px">Whole library</span>`}
+    <span class="count"><b class="tab">${ts.length}</b> tracks · ${fmtDur(ts.reduce((a, t) => a + t.d, 0))}</span><span class="sp"></span>
+    <div class="seg"><button data-order="list" class="${S.order === 'list' ? 'on' : ''}">${S.source && S.source.kind === 'Playlist' ? 'As listed' : 'By artist'}</button><button data-order="blend" class="${S.order === 'blend' ? 'on' : ''}">Best blend</button></div>
+    ${S.order === 'blend' ? `<div class="seg">${Object.keys(SHAPES).filter(k => k !== 'Drawn').map(k => `<button data-shape="${k}" class="${S.shape === k ? 'on' : ''}">${k}</button>`).join('')}</div>` : ''}
+    <button class="btn" id="addall">${icon('plus', 15)}${P() ? 'All' : 'Add all to set'}</button>`
+  $('clrsrc') && ($('clrsrc').onclick = () => { S.source = null; S.order = 'list'; render() })
+  $('bar').querySelectorAll('[data-order]').forEach(b => b.onclick = () => { S.order = b.dataset.order; $('tape').scrollLeft = 0; render() })
+  $('bar').querySelectorAll('[data-shape]').forEach(b => b.onclick = () => { S.shape = b.dataset.shape; render() })
+  $('addall').onclick = () => { const add = ts.filter(t => !S.set.includes(t)).slice(0, 60); S.set.push(...add); toast(`${add.length} tracks added to your set`); render(false) }
+}
+
+// ---- selected track --------------------------------------------------------------------------
+function renderDetail() {
+  const t = S.sel || S.playing, inSet = S.set.includes(t)
+  const alb = ALBUMS.find(a => a.tracks.includes(t))
+  $('detail').innerHTML = `<div><h3>${esc(t.t)}</h3><p>${esc(t.ar)} · ${esc(t.al)} · ${fmtTime(t.d)} · <i class="dot" style="background:${t.m.color}"></i> ${t.m.word} · ${t.bpm} BPM${t.key ? ' · ' + t.key : ''}${S.sel ? '' : ' · <b style="color:var(--blue);font-weight:500">playing</b>'}</p></div>
+    <div class="acts"><button class="btn pri" id="dplay">${icon('play', 12)}Play</button><button class="btn" id="dset">${icon(inSet ? 'close' : 'plus', 14)}${inSet ? 'In your set' : 'Add to set'}</button>${alb ? `<button class="btn" id="dalb">Open ${esc(alb.name.length > 18 ? alb.name.slice(0, 17) + '…' : alb.name)}</button>` : ''}</div>`
+  $('dplay').onclick = () => play(t)
+  $('dset').onclick = () => { toggleSet(t) }
+  $('dalb') && ($('dalb').onclick = () => { S.source = { key: 'al:' + alb.name, kind: 'Album', name: alb.name, g: alb, tracks: alb.tracks }; S.order = 'list'; render() })
+}
+
+// ---- orbit around the selected (or playing) track --------------------------------------------
+function renderOrbit() {
+  const c = S.sel || S.playing, p = { bpm: c.bpm, b: c.m.b, e: c.e }
+  const W = 330, H = 330, cx = W / 2, cy = H / 2, r0 = 34, R = W / 2 - 10
+  let s = ''
+  ;[.22, .45, .7, 1].forEach((f, k) => { s += `<circle cx="${cx}" cy="${cy}" r="${r0 + f * (R - r0)}" fill="none" stroke="oklch(60% .03 240 / ${k ? .16 : .5})" ${k ? 'stroke-dasharray="2 5"' : ''}/>` })
+  const setIds = new Set(S.set.map(t => t.id))
+  for (const t of LIB) {
+    if (t === c) continue
+    const d = fitDist(t, p), i = Math.max(0, SECTORS.findIndex(m => m.word === t.m.word))
+    const a = (i + .1 + jit(t.id) * .8) / SECTORS.length * Math.PI * 2 - Math.PI / 2, rr = r0 + d * (R - r0)
+    s += `<circle data-id="${t.id}" cx="${(cx + Math.cos(a) * rr).toFixed(1)}" cy="${(cy + Math.sin(a) * rr).toFixed(1)}" r="${d < .22 ? 3.6 : 2.4}" fill="${t.m.color}" fill-opacity="${d < .22 ? .95 : .35}" ${setIds.has(t.id) ? 'stroke="var(--blue)" stroke-width="1.5"' : ''}><title>${esc(t.t)}</title></circle>`
+  }
+  s += `<g transform="translate(${cx - 22},${cy - 14})">${sigil(c, 44, 28, { r: 7 }).replace('class="sigil"', 'class="sigil"')}</g>`
+  $('orb').innerHTML = `<svg viewBox="0 0 ${W} ${H}">${s}</svg><span class="cap">Around ${esc(c.t)} · click a dot to move there</span>`
+  const near = LIB.filter(t => t !== c).map(t => ({ t, d: fitDist(t, p) })).sort((a, b) => a.d - b.d).slice(0, 5)
+  $('fits').innerHTML = `<div class="h2">Fits after it <small>${LIB.filter(t => t !== c && fitDist(t, p) < .22).length} tracks</small></div>` + near.map(({ t, d }) => `<div class="r" data-pick="${t.id}">${sigil(t, 48, 32, { r: 8 })}<span><b>${esc(t.t)}</b><small>${t.m.word} · ${t.bpm} · ${Math.round((1 - d) * 100)}%</small></span><button class="ib" data-add="${t.id}" title="Add to set">${icon(S.set.includes(t) ? 'close' : 'plus', 14)}</button></div>`).join('')
+}
+$('orb').addEventListener('click', e => { const c = e.target.closest('circle[data-id]'); if (c) { S.sel = T.find(t => t.id === c.dataset.id); render(false); scrollToSel() } })
+$('fits').addEventListener('click', e => {
+  const a = e.target.closest('[data-add]'); if (a) { toggleSet(T.find(t => t.id === a.dataset.add)); return }
+  const r = e.target.closest('[data-pick]'); if (r) { S.sel = T.find(t => t.id === r.dataset.pick); render(false); scrollToSel() }
+})
+function scrollToSel() { const l = laid.find(l => l.t === S.sel); if (l) $('tape').scrollLeft = l.x - $('tape').clientWidth / 2 + l.w / 2 }
+
+// ---- playing, toast, render --------------------------------------------------------------------
+function play(t) {
+  S.playing = t
+  const bar = document.querySelector('.player')
+  bar.querySelector('.pl-meta b').textContent = t.t
+  bar.querySelector('.pl-meta small').innerHTML = `<i style="color:${t.m.color}">${t.m.word}</i> · ${t.bpm} BPM`
+  bar.querySelector('.pl-art').innerHTML = sigil(t, 36, 36, { r: 9 })
+  bar.querySelector('.pl-aura').innerHTML = ribbon([t], 600, 40, { alpha: .25 })
+  if (!S.sel) S.sel = null
+  render(false)
+}
+let tt = 0
+function toast(m) { const el = $('toast'); el.textContent = m; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2200) }
+function render(full = true) {
+  const ts = view()
+  renderIndex(); renderBar(ts)
+  const keep = $('tape').scrollLeft
+  renderTape(ts)
+  if (!full) $('tape').scrollLeft = keep
+  renderMini(); renderDetail(); renderOrbit(); renderTray()
+}
+render()
+addEventListener('resize', () => render(false))
+</script>
+</body></html>

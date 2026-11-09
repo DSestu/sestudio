@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>G · Orbit</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 28px; padding-top: 16px }
+.orb { position: relative; border-radius: 22px; background: radial-gradient(60% 60% at 50% 50%, oklch(21% .035 250), oklch(15% .02 245) 80%); border: 1px solid oklch(32% .02 240 / .5); overflow: hidden; height: calc(100vh - 150px) }
+#orb { width: 100%; height: 100%; display: block }
+.ctr { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; pointer-events: none }
+.ctr b { font-size: 15px; font-weight: 600 }
+.ctr small { font-size: 12px; color: var(--mut) }
+.ctr .sigil { background: oklch(18% .03 250); border-radius: 14px; box-shadow: 0 6px 18px oklch(0% 0 0 / .5) }
+.orb-top { position: absolute; left: 16px; top: 14px; right: 16px; display: flex; gap: 8px; align-items: center }
+.orb-top .sp { flex: 1 }
+.near { display: flex; flex-direction: column; gap: 18px; overflow: hidden; height: calc(100vh - 150px) }
+.near h2 { font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px }
+.near h2 small { font-size: 12px; color: var(--dim); font-weight: 400 }
+.r { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 5px 6px; border-radius: 12px }
+.r:hover, .r.hov { background: oklch(26% .025 240 / .6) }
+.r b { display: block; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.r small { display: block; font-size: 12px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.r .fit { font-size: 12px; color: var(--mut); text-align: right; white-space: nowrap }
+.fitbar { width: 54px; height: 5px; border-radius: 3px; background: oklch(30% .02 240); margin-top: 4px; overflow: hidden }
+.fitbar i { display: block; height: 100%; background: var(--blue); border-radius: 3px }
+.r .gsig, .r .fic { width: 52px; height: 34px }
+.fic { border-radius: 10px; background: oklch(72% .16 230 / .08); display: grid; place-items: center }
+.ph { display: none }
+@media (max-width: 700px) {
+  .desk { display: none !important }
+  .ph { display: block }
+  .wrap { display: block; padding-top: 10px }
+  .orb { height: 320px } .ctr b, .ctr small { display: none }
+  .near { height: auto; margin-top: 14px; gap: 14px }
+  .r { grid-template-columns: 46px minmax(0, 1fr) auto; padding: 5px 2px }
+  .r .gsig, .r .fic { width: 46px; height: 32px }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div><div class="search desk" id="search"></div><div class="bell" id="bell"></div></div></div>
+  <div class="wrap">
+    <section class="orb"><svg id="orb"></svg><div class="ctr" id="ctr"></div><div class="orb-top" id="otop"></div></section>
+    <aside class="near" id="near"></aside>
+  </div>
+</main>
+<script src="data.js"></script><script src="common.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search everything, or paste a link'
+document.getElementById('bell').innerHTML = icon('bell')
+document.getElementById('otop').innerHTML = `<div class="seg"><button class="on">Around now</button><button>Around…</button></div><span class="sp"></span>${P ? '' : `<span class="chip">Fits by tempo, mood and energy</span>`}`
+
+// Distance from what's playing: tempo (half and double count), mood steps, energy.
+const C = NOW
+const tdist = b => b ? Math.min(...[b, b * 2, b / 2].map(v => Math.abs(v - C.bpm))) : 40
+const dist = t => t === C ? 0 : Math.min(1, tdist(t.bpm) / 40 * .45 + Math.abs(t.m.b - C.m.b) / 4 * .3 + Math.abs((t.e || 0) - (C.e || 0)) / 60 * .25)
+const all = T.map(t => ({ t, d: dist(t) })).filter(x => x.t !== C)
+const sectors = [...LADDER, EXOTIC]
+const el = document.getElementById('orb'), W = el.clientWidth, H = el.clientHeight
+const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - (P ? 14 : 30), r0 = P ? 40 : 96
+const jit = id => (parseInt(id.slice(0, 6), 16) % 1000) / 1000
+let s = ''
+const rings = [[.22, 'Fits next'], [.45, 'Close'], [.7, 'A step away'], [1, 'Far']]
+rings.forEach(([f, l]) => { const rr = r0 + f * (R - r0); s += `<circle cx="${cx}" cy="${cy}" r="${rr}" fill="none" stroke="oklch(60% .03 240 / ${f === .22 ? .5 : .18})" stroke-width="1" ${f === .22 ? '' : 'stroke-dasharray="2 5"'}/>`; if (!P || f < 1) s += `<text x="${cx}" y="${cy - rr - 5}" text-anchor="middle" font-size="11" fill="var(--dim)">${l}</text>` })
+// Mood sectors around the ring.
+sectors.forEach((m, i) => { const a = (i + .5) / sectors.length * Math.PI * 2 - Math.PI / 2; const lr = R + (P ? 2 : 14); if (!P) s += `<text x="${cx + Math.cos(a) * lr}" y="${cy + Math.sin(a) * lr + 4}" text-anchor="middle" font-size="11" fill="${m.color}" fill-opacity=".8">${m.word}</text>`; const b = i / sectors.length * Math.PI * 2 - Math.PI / 2; s += `<line x1="${cx + Math.cos(b) * r0}" y1="${cy + Math.sin(b) * r0}" x2="${cx + Math.cos(b) * R}" y2="${cy + Math.sin(b) * R}" stroke="oklch(60% .03 240 / .08)"/>` })
+// Tracks: angle by mood, radius by distance.
+const pos = x => { const i = Math.max(0, sectors.findIndex(m => m.word === x.t.m.word)); const a = (i + .1 + jit(x.t.id) * .8) / sectors.length * Math.PI * 2 - Math.PI / 2; const rr = r0 + x.d * (R - r0); return [cx + Math.cos(a) * rr, cy + Math.sin(a) * rr] }
+const hiAlbum = ALBUMS.find(a => a.name === 'neuro soundcloud')
+const hiIds = new Set(hiAlbum.tracks.map(t => t.id))
+for (const x of all) { const [px, py] = pos(x); const near = x.d < .22; s += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${(P ? 2 : 2.6) + (near ? 1.4 : 0)}" fill="${x.t.m.color}" fill-opacity="${near ? 1 : hiIds.has(x.t.id) ? .8 : .35}" ${hiIds.has(x.t.id) && !P ? 'stroke="oklch(95% .01 240 / .6)" stroke-width="1"' : ''}/>` }
+el.setAttribute('viewBox', `0 0 ${W} ${H}`); el.innerHTML = s
+document.getElementById('ctr').innerHTML = `${sigil(C, P ? 56 : 84, P ? 36 : 52, { r: 12 })}<b>${esc(C.t)}</b><small><i class="dot" style="background:${C.m.color}"></i> ${C.m.word} · ${C.bpm} BPM · ${C.key}</small>`
+
+// Near now: every kind of thing, ranked by how well it follows.
+const near = all.sort((a, b) => a.d - b.d).filter((x, i, a) => a.findIndex(y => y.t.t === x.t.t) === i)
+const fit = d => Math.round((1 - d) * 100)
+const fitCell = (d, extra = '') => `<span class="fit">${extra || fit(d) + '%'}<div class="fitbar"><i style="width:${fit(d)}%"></i></div></span>`
+const groupFit = g => { const ds = g.tracks.map(dist); return { d: avg(ds), n: ds.filter(d => d < .22).length } }
+const albums = ALBUMS.filter(a => a.n > 3).map(a => ({ a, ...groupFit(a) })).sort((x, y) => x.d - y.d).slice(0, P ? 2 : 3)
+const pls = PLAYLISTS.map(a => ({ a, ...groupFit(a) })).sort((x, y) => x.d - y.d)
+const peak = FLOWS_.find(f => f.name === 'Peak') || FLOWS_[0]
+document.getElementById('near').innerHTML = `
+  <div><h2>Fits next <small>${near.filter(x => x.d < .22).length} tracks</small></h2>
+    ${near.slice(0, P ? 3 : 5).map((x, i) => `<div class="r ${i === 0 && !P ? 'hov' : ''}">${sigil(x.t, P ? 46 : 52, 34, { r: 9 })}<span><b>${esc(x.t.t)}</b><small><i class="dot" style="background:${x.t.m.color}"></i> ${x.t.m.word} · ${x.t.bpm} BPM · ${esc(x.t.al)}</small></span>${fitCell(x.d)}</div>`).join('')}</div>
+  <div><h2>Albums that follow</h2>
+    ${albums.map(g => `<div class="r ${g.a === hiAlbum && !P ? 'hov' : ''}">${groupSigil(g.a, 52, 34)}<span><b>${esc(g.a.name)}</b><small>${esc(g.a.artist)} · ${g.n} of ${g.a.n} fit next</small></span>${fitCell(g.d)}</div>`).join('')}</div>
+  <div><h2>Playlists and flows</h2>
+    ${pls.map(g => `<div class="r">${groupSigil(g.a, 52, 34)}<span><b>${esc(g.a.name)}</b><small>Playlist · ${g.n} of ${g.a.n} fit next</small></span>${fitCell(g.d)}</div>`).join('')}
+    <div class="r"><span class="fic">${flowShape(peak, 40, 22)}</span><span><b>${peak.name}</b><small>Flow · keeps this energy going</small></span>${fitCell(.2, 'Keeps it')}</div></div>`
+</script>
+</body></html>

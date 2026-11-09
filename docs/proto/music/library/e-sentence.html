@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E · Sentence</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 40px; padding: 30px 8px 0 }
+.sent { font-size: 34px; line-height: 1.55; letter-spacing: -.025em; font-weight: 400; max-width: 28ch }
+.tok { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px 0 14px; height: 48px; vertical-align: 2px; border-radius: 14px; background: oklch(26% .03 240); border: 1px solid oklch(40% .03 240 / .6); font-weight: 500; white-space: nowrap }
+.tok .ic { color: var(--dim) }
+.tok.add { background: none; border-style: dashed; color: var(--dim); font-weight: 400 }
+.tok .sw { width: 10px; height: 10px; border-radius: 50% }
+.res-h { display: flex; align-items: center; gap: 10px; margin: 22px 0 6px; flex-wrap: wrap }
+.res-h .n { font-size: 15px; color: var(--mut); margin-right: 8px }
+.res-h .n b { color: var(--fg); font-weight: 600 }
+.try { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 20px; font-size: 13px; color: var(--dim); align-items: center }
+.try .chip { color: var(--fg) }
+.ag { display: grid; grid-template-columns: 56px minmax(170px, 230px) minmax(0, 1fr) 70px; gap: 16px; align-items: center; padding: 8px 10px; border-radius: 14px }
+.ag:hover, .ag.hov { background: oklch(25% .025 240 / .6) }
+.ag b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ag small { display: block; font-size: 12px; color: var(--mut) }
+.ag .hits { font-size: 13px; color: var(--mut); text-align: right; white-space: nowrap }
+.ag .hits b { display: inline; color: var(--blue) }
+.ag svg.ribbon { width: 100%; display: block }
+.side h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px }
+.side section { margin-bottom: 26px }
+.hist a { display: block; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--mut); line-height: 1.4 }
+.hist a b { color: var(--fg); font-weight: 500 }
+.hist a small { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); margin-top: 2px }
+.facts a { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 14px; color: var(--mut); border-bottom: 1px solid var(--line) }
+.facts a b { color: var(--fg); font-weight: 500 }
+.facts a span:last-child { color: var(--blue); font-size: 13px; white-space: nowrap }
+.ph { display: none }
+@media (max-width: 700px) {
+  .desk { display: none !important }
+  .ph { display: block }
+  .wrap { display: block; padding: 18px 4px 0 }
+  .sent { font-size: 24px; line-height: 1.75 }
+  .tok { height: 38px; padding: 0 10px; border-radius: 12px }
+  .res-h { margin-top: 14px }
+  .res-h .btn { flex: 1; justify-content: center }
+  .ag { grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-areas: 's n h' 'r r r'; row-gap: 6px; padding: 8px 4px }
+  .ag > :nth-child(1) { grid-area: s } .ag .nm { grid-area: n } .ag .rb { grid-area: r } .ag .hits { grid-area: h }
+  .ag .gsig { width: 44px; height: 36px }
+  .side { margin-top: 22px }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div><div class="search desk" id="search"></div><div class="bell" id="bell"></div></div></div>
+  <div class="wrap">
+    <section>
+      <h2 class="sent" id="sent"></h2>
+      <div class="res-h" id="resh"></div>
+      <div class="try" id="try"></div>
+      <div id="groups"></div>
+    </section>
+    <aside class="side" id="side"></aside>
+  </div>
+</main>
+<script src="data.js"></script><script src="common.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search a name, or paste a link'
+document.getElementById('bell').innerHTML = icon('bell')
+const dn = icon('down', 16, 2.2)
+const tok = (inner, cls = '') => `<span class="tok ${cls}">${inner}${cls ? '' : dn}</span>`
+const dark = MOODS.Aeolian[1]
+// The query the sentence spells out.
+const match = t => (t.m.word === 'Dark' || t.m.word === 'Menacing') && t.e >= 55 && t.bpm >= 124 && t.bpm <= 132
+const hits = T.filter(match)
+document.getElementById('sent').innerHTML = `Play ${tok(`<i class="sw" style="background:${dark}"></i>dark`)} ${tok('driving')} tracks around ${tok('<span class="tab">128</span>&nbsp;BPM')} from ${tok('anywhere')} ${tok(icon('plus', 16) + (P ? '' : 'and…'), 'add')}`
+document.getElementById('resh').innerHTML = `<span class="n"><b class="tab">${hits.length}</b> tracks · ${fmtDur(hits.reduce((a, t) => a + t.d, 0))} · from <b class="tab">${new Set(hits.map(t => t.al)).size}</b> albums</span>
+  <button class="btn pri">${icon('play', 14)}Play</button><button class="btn">${icon('flow', 16)}As a flow</button><button class="btn desk">${icon('plus', 16)}Save as playlist</button>`
+document.getElementById('try').innerHTML = `<span>Nudge</span><span class="chip">brighter</span><span class="chip">calmer</span><span class="chip">faster</span><span class="chip">only Deadmau5</span><span class="chip desk">like what's playing</span><span class="chip desk">never played</span>`
+
+// Results, grouped by where they live: each album lights the tracks that match.
+const groups = ALBUMS.map(a => ({ a, n: a.tracks.filter(match).length })).filter(g => g.n).sort((x, y) => y.n - x.n).slice(0, P ? 5 : 8)
+const litRibbon = (tracks, w, h) => { const total = tracks.reduce((s, t) => s + t.d, 0), gap = 1.5, usable = w - gap * (tracks.length - 1); let x = 0, o = ''; for (const t of tracks) { const tw = Math.max(1.5, usable * t.d / total); o += `<path d="${silhouette(t.curve, x, tw, h)}" fill="${match(t) ? t.m.color : 'oklch(40% .02 240)'}" fill-opacity="${match(t) ? .95 : .35}"/>`; x += tw + gap } return `<svg class="ribbon" viewBox="0 0 ${w} ${h}" height="${h}" preserveAspectRatio="none">${o}</svg>` }
+document.getElementById('groups').innerHTML = groups.map((g, i) => `<div class="ag ${i === 1 && !P ? 'hov' : ''}">${groupSigil(g.a)}<span class="nm"><b>${esc(g.a.name)}</b><small>Album · ${esc(g.a.artist)}</small></span><span class="rb">${litRibbon(g.a.tracks, 600, P ? 20 : 34)}</span><span class="hits"><b class="tab">${g.n}</b> of ${g.a.n}</span></div>`).join('')
+
+// Side: earlier sentences (saved ones are flows), and what the library itself suggests.
+const counts = {}; T.forEach(t => counts[t.m.word] = (counts[t.m.word] || 0) + 1)
+document.getElementById('side').innerHTML = `
+  <section><h2>Your sentences</h2><div class="hist">
+    <a><b>Warm-up</b>: calm to driving, bright, anything<small>${flowShape(FLOWS_.find(f => f.name === 'Warm-up') || FLOWS_[0], 60, 16)} saved as a flow</small></a>
+    <a><b>Peak</b>: intense tracks at 172 BPM<small>${flowShape(FLOWS_.find(f => f.name === 'Peak') || FLOWS_[0], 60, 16)} saved as a flow</small></a>
+    <a>Everything by <b>Deadmau5</b>, darkest first<small>yesterday</small></a>
+    <a>The <b>Queue</b> playlist, shuffled<small>yesterday</small></a>
+  </div></section>
+  <section class="desk"><h2>From your library</h2><div class="facts">
+    <a><span><b class="tab">${counts.Dark}</b> dark tracks</span><span>Play them</span></a>
+    <a><span><b class="tab">${T.filter(t => t.bpm >= 168 && t.bpm <= 176).length}</b> tracks at 172 BPM</span><span>Play them</span></a>
+    <a><span><b class="tab">${counts.Exotic}</b> in harmonic minor</span><span>Play them</span></a>
+    <a><span><b>neuro soundcloud</b> is newest</span><span>Open</span></a>
+    <a><span>No mixes yet</span><span>Make one</span></a>
+  </div></section>`
+</script>
+</body></html>
