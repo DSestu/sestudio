@@ -20,6 +20,7 @@ import { Ic } from './icons'
 import Tape from './Tape'
 import { BLEND_CAP, useBlendOrder, useSetOrder } from './blendOrder'
 import SetList from './SetList'
+import BlendBy from './BlendBy'
 import TapeBar, { type Order, type Shape } from './TapeBar'
 import type { TapeGroup } from './tapeLayout'
 import { LINK_RE, useMusicQuery } from '../../../musicQuery'
@@ -129,6 +130,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   const kindLabel = source ? (source.kind === 'folder' || source.kind === 'library' ? 'Folder' : source.kind === 'all' ? '' : DIMS[source.kind].label) : ''
   const centre = (
     <>
+      {(set.mode === 'blend' || order === 'blend') && <BlendBy joins={setView.joins} score={setView.res?.score} hasSet={set.tracks.length > 1} />}
       <TapeBar
         source={source ? { kind: kindLabel, name: source.name } : undefined} onClearSource={() => setSourceKey('')}
         tracks={inView} grouping={grouping} order={order} onOrder={setOrder} shape={shape} onShape={setShape} colour={colour} facts={facts}

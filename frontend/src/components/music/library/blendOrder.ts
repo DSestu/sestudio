@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { MusicTrack } from '../../../musicLibrary'
 import { toast } from '../toast'
+import { useBlendWeights, type Move } from '../../../musicBlendWeights'
 import type { Shape } from './tapeLayout'
 
 // Best blend (SPEC-music-library §2.7): the server orders a list for a shape, pins kept, and
@@ -12,6 +13,8 @@ export interface Join {
   /** "clash", "tempo", "energy". */
   problems: string[]
   kind?: string | null
+  /** The server's move: same-key, pivot, next-door, modal-shift, lift, drop, clash. */
+  move?: string | null
   kindLabel?: string | null
   /** Notes the two scales share. */
   shared?: number | null
@@ -39,7 +42,8 @@ export const keepOrder = (ts: MusicTrack[]): Record<number, string> => Object.fr
 /** The server's order of `tracks` for `shape` with `pins`; undefined while it works or when off. */
 export function useBlendOrder(tracks: MusicTrack[] | undefined, shape: Shape, pins: Record<number, string> = {}): BlendResult | undefined {
   const [out, setOut] = useState<{ key: string; result: BlendResult }>()
-  const key = tracks ? `${shape}|${tracks.map(t => t.id).join(',')}|${JSON.stringify(pins)}` : ''
+  const { importance, welcome } = useBlendWeights()
+  const key = tracks ? `${shape}|${tracks.map(t => t.id).join(',')}|${JSON.stringify(pins)}|${JSON.stringify(importance)}|${JSON.stringify(welcome)}` : ''
   useEffect(() => {
     if (!tracks) return
     if (tracks.length < 2) {
@@ -48,7 +52,7 @@ export function useBlendOrder(tracks: MusicTrack[] | undefined, shape: Shape, pi
     }
     const byId = new Map(tracks.map(t => [t.id, t]))
     const ctrl = new AbortController()
-    fetch('/api/music/set/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: tracks.map(t => t.id), pins, shape }), signal: ctrl.signal })
+    fetch('/api/music/set/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: tracks.map(t => t.id), pins, shape, weights: importance, harmony: welcome }), signal: ctrl.signal })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`order: ${r.status}`))))
       .then((res: { order: string[]; joins: Join[] }) => {
         const ordered = res.order.map(id => byId.get(id)).filter((t): t is MusicTrack => !!t)
@@ -71,4 +75,20 @@ export function useSetOrder(s: { tracks: MusicTrack[]; pinned: string[]; mode: '
   const res = useBlendOrder(s.tracks, s.shape, pins)
   const shown = res?.tracks ?? s.tracks
   return { res, shown, joins: res && res.tracks === shown ? res.joins : undefined }
+}
+
+
+interface Effect { score?: number; clashes: number; transposed: number; genreChanges: number; counts: Partial<Record<Move, number>> }
+
+/** What the set's joins add up to under the current weights. */
+export function effectOf(joins: Join[] | undefined, score: number | undefined): Effect {
+  const counts: Partial<Record<Move, number>> = {}
+  for (const j of joins ?? []) if (j.move) counts[j.move as Move] = (counts[j.move as Move] ?? 0) + 1
+  return {
+    score,
+    clashes: counts.clash ?? 0,
+    transposed: (counts.lift ?? 0) + (counts.drop ?? 0),
+    genreChanges: (joins ?? []).filter(j => j.genreChange).length,
+    counts,
+  }
 }

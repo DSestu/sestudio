@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MusicTrack } from '../../../musicLibrary'
 import { applyOrder, joinKey, keepJoin, removeFromSet, togglePin, unkeepJoin, useSet } from '../../../musicSet'
 import { fmtTime, totalTime } from '../format'
+import { blendBody } from '../../../musicBlendWeights'
 import { toast } from '../toast'
 import { leanOf, type Join, type useSetOrder } from './blendOrder'
 import type { Facts } from './facts'
@@ -62,7 +63,7 @@ export default function SetList({ order, facts, colour, byId, selectedId, onSele
   useEffect(() => { if (open && !shown.some((t, i) => i < shown.length - 1 && joinKey(t, shown[i + 1]) === open)) setOpen(null) }, [open, shown]) // eslint-disable-line react-hooks/set-state-in-effect -- the open join left the set
 
   const fixAll = () => {
-    post<{ order: string[]; inserted: string[]; moved: string[]; left: number }>('set/fix', { ids: shownIds, kept: s.kept })
+    post<{ order: string[]; inserted: string[]; moved: string[]; left: number }>('set/fix', { ids: shownIds, kept: s.kept, ...blendBody() })
       .then(r => {
         const have = new Map(shown.map(t => [t.id, t]))
         applyOrder(r.order.map(id => have.get(id) ?? byId.get(id)).filter((t): t is MusicTrack => !!t))
@@ -255,13 +256,13 @@ function FixPanel({ a, b, i, shown, problems, facts, colour, byId, kept, onClose
   const [bridges, setBridges] = useState<Bridge[] | null>(null)
   useEffect(() => {
     let live = true
-    post<{ results: Bridge[] }>('proximity/bridges', { a: a.id, b: b.id, exclude: shown.map(t => t.id), limit: 3, strict: false })
+    post<{ results: Bridge[] }>('proximity/bridges', { a: a.id, b: b.id, exclude: shown.map(t => t.id), limit: 3, strict: false, ...blendBody() })
       .then(r => { if (live) setBridges(r.results.filter(x => byId.has(x.id)).slice(0, 3)) }, e => { if (live) { setBridges([]); fail(e) } })
     return () => { live = false }
   }, [a.id, b.id]) // eslint-disable-line react-hooks/exhaustive-deps -- asked once per join
   const insert = (t: MusicTrack) => { applyOrder([...shown.slice(0, i + 1), t, ...shown.slice(i + 1)]); onClose() }
   const move = () => {
-    post<{ order: string[]; left: number }>('set/spot', { ids: shown.map(t => t.id), id: b.id, kept })
+    post<{ order: string[]; left: number }>('set/spot', { ids: shown.map(t => t.id), id: b.id, kept, ...blendBody() })
       .then(r => {
         const have = new Map(shown.map(t => [t.id, t]))
         applyOrder(r.order.map(id => have.get(id)).filter((t): t is MusicTrack => !!t))
