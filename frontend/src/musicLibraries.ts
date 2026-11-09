@@ -75,6 +75,7 @@ interface ServerTrack {
   duration: number
   folder: string
   name: string
+  path?: string
 }
 
 async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
@@ -99,6 +100,7 @@ export const toMusicTrack = (t: ServerTrack): MusicTrack => ({
   duration: t.duration,
   folder: t.folder,
   albumName: t.name,
+  path: t.path,
 })
 
 /** Where a track of a non-local library plays from. */

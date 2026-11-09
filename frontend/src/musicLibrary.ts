@@ -22,6 +22,8 @@ export interface MusicTrack {
   bpm?: number
   /** The folder it lives in, the key of its album card. */
   folder: string
+  /** The file on disk, when the server knows it. */
+  path?: string
 }
 
 export interface MusicAlbum {
@@ -49,6 +51,7 @@ function toTrack(f: DownloadedFile, folder: string): MusicTrack {
     duration: f.duration ?? 0,
     bpm: f.bpm,
     folder,
+    path: f.path,
   }
 }
 
