@@ -68,7 +68,6 @@ export function useCanvas(draw: (g: CanvasRenderingContext2D, w: number, h: numb
     let last = ''
     const run = (w: number, h: number) => {
       const dpr = devicePixelRatio || 1
-      // The observer's first call repeats the mount's size: nothing to redraw.
       const key = `${w}|${h}|${dpr}`
       if (key === last) return
       last = key
@@ -79,11 +78,10 @@ export function useCanvas(draw: (g: CanvasRenderingContext2D, w: number, h: numb
       g.clearRect(0, 0, w, h)
       draw(g, w, h)
     }
-    const r = c.getBoundingClientRect()
-    run(r.width, r.height)
-    // The size comes with the entry: reading the box after a redraw would force a layout per canvas, and a
-    // queue sheet resizing through the mode switch resizes every row's canvas on every frame.
-    // shortcut: the entry's size ignores CSS transforms (the mount's read does not); fine while no scaled box holds one.
+    // The size comes with the entry, also for the first draw (the observer's first call, before paint): reading the
+    // box here would force a layout per canvas, one per queue row as the layer mounts, and a queue sheet resizing
+    // through the mode switch resizes every row's canvas on every frame.
+    // shortcut: the entry's size ignores CSS transforms; fine while no scaled box holds one.
     const ro = new ResizeObserver(([e]) => run(e.contentRect.width, e.contentRect.height))
     ro.observe(c)
     return () => ro.disconnect()
