@@ -12,6 +12,7 @@ import { gapBridges } from './gaps'
 import { openHarmonyBasics } from './harmony/store'
 import { openKeyCard } from './harmony/keyCardStore'
 import { PULL, rankByPull } from '../../flowFits'
+import { useBlendWeights } from '../../musicBlendWeights'
 import { KINDS, useFlows, type Flow } from '../../musicFlows'
 import { useMusicQueue } from '../../musicQueue'
 import { armRowDrag, type DragSource } from './rowDrag'
@@ -133,6 +134,8 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
   const b = then && proxOf(then, get(then.id))
   const known = !!a.harmony?.track || !!a.camelot
   const fKey = JSON.stringify(f)
+  // Rankings follow Blend by and Harmony moves (blendOf reads them): a change re-ranks.
+  const bw = useBlendWeights()
   const exKey = exclude.join(',')
   const rows = useMemo(() => {
     const skip = new Set([...exclude, anchor.id, then?.id ?? ''])
@@ -141,7 +144,7 @@ export default function FitsNext({ anchor, then, where, library, exclude = [], a
     const once = (id: string) => { const k = songKey(byId.get(id)); if (!k || seen.has(k)) return false; seen.add(k); return true }
     if (b) return gapBridges(a, b, pool, SHOWN * 2, skip).filter(r => once(r.id)).slice(0, SHOWN).map(r => ({ id: r.id, join: r.before, then: r.after }))
     return rankFits(a, pool, f).filter(r => !skip.has(r.id) && once(r.id)).slice(0, SHOWN).map(r => ({ ...r, then: undefined }))
-  }, [anchor.id, then?.id, pool, exKey, fKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [anchor.id, then?.id, pool, exKey, fKey, bw]) // eslint-disable-line react-hooks/exhaustive-deps
   const flowRows = useMemo(() => {
     if (!flowMode) return []
     const skip = new Set([...exclude, anchor.id])
