@@ -61,6 +61,22 @@ export default function Tape({ groups, facts, colour, joins, selectedId, playing
   const ids = useMemo(() => layout.items.map(l => l.t.id), [layout])
   const pickedTracks = useMemo(() => layout.items.filter(l => picked.has(l.t.id)).map(l => l.t), [layout, picked])
   const box = useBoxSelect(scroller, inner, layout.items, ids)
+  // One tab stop on the tape: the selected track, else the first; arrows move along it (§6 keyboard).
+  const stop = Math.max(0, layout.items.findIndex(l => l.t.id === selectedId))
+  const trackKey = (e: React.KeyboardEvent, i: number) => {
+    const t = layout.items[i].t
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault()
+      const els = inner.current?.querySelectorAll<HTMLElement>('[data-tape-track]')
+      const next = els?.[Math.min((els?.length ?? 1) - 1, Math.max(0, i + (e.key === 'ArrowRight' ? 1 : -1)))]
+      next?.focus()
+      next?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      clickSelect('tape', t.id, ids, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey })
+      onSelect(t)
+    }
+  }
   const MW = 1000
   const winX = (scroll.left / scroll.inner) * 100
   const winW = Math.min(100, (width / scroll.inner) * 100)
@@ -106,8 +122,13 @@ export default function Tape({ groups, facts, colour, joins, selectedId, playing
                   {...hoverProps?.(l.t)}
                   onClick={e => { if (box.consumeClick()) return; clickSelect('tape', l.t.id, ids, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey }); onSelect(l.t) }}
                   onDoubleClick={() => onPlay(l.t)}
+                  role="button"
+                  aria-label={l.t.title}
+                  aria-pressed={on}
+                  tabIndex={i === stop ? 0 : -1}
+                  onKeyDown={e => trackKey(e, i)}
                   title={l.t.title}
-                  className={`absolute cursor-pointer rounded-lg hover:bg-white/8 ${on ? 'bg-primary/12 ring-1 ring-primary/60' : ''} ${sel ? 'outline-1.5 outline-offset-2 outline-base-content' : ''}`}
+                  className={`absolute cursor-pointer rounded-lg hover:bg-white/8 focus-visible:outline-2 focus-visible:outline-primary ${on ? 'bg-primary/12 ring-1 ring-primary/60' : ''} ${sel ? 'outline-1.5 outline-offset-2 outline-base-content' : ''}`}
                   style={{ left: l.x, top: HEAD_H + 12, width: l.w, height: TRACK_H + LABEL_H + 6 }}
                 >
                   {l.t.id === playingId && <span className="absolute -top-2 left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-primary" />}

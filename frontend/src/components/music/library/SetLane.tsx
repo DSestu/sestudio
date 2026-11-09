@@ -124,6 +124,9 @@ export default function SetLane({ order, facts, colour, get, wide, sourceName, s
                       {...moveProps(t)}
                       {...hoverProps?.(t)}
                       onClick={e => { clickSelect('set', t.id, shownIds, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey }); onSelect(t) }}
+                      tabIndex={0}
+                      aria-label={t.title}
+                      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); clickSelect('set', t.id, shownIds, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey }); onSelect(t) } }}
                       className={`group relative flex h-full shrink-0 cursor-pointer flex-col rounded-lg hover:bg-white/6 ${picked.has(t.id) ? 'bg-primary/12 ring-1 ring-primary/60' : ''} ${t.id === selectedId ? 'outline-1.5 outline-offset-1 outline-base-content' : ''}`}
                       style={{ flex: `${Math.max(1, t.duration)} 1 0`, minWidth: MIN_W }}
                     >
@@ -131,7 +134,7 @@ export default function SetLane({ order, facts, colour, get, wide, sourceName, s
                         <path d={silhouette(f.curve, 2, 96, 96, 50)} fill={c} fillOpacity=".85" />
                       </svg>
                       <span className="truncate px-0.5 text-[10px] text-base-content/55">{pinned && <Ic name="pin" size={9} className="mr-0.5 inline text-primary" />}{t.title}</span>
-                      <span className="absolute right-0.5 top-0.5 hidden gap-0.5 group-hover:flex">
+                      <span className="absolute right-0.5 top-0.5 hidden gap-0.5 group-hover:flex group-focus-within:flex">
                         <button onClick={e => { e.stopPropagation(); togglePin(t.id, shown) }} aria-label={pinned ? `Unpin ${t.title}` : `Pin ${t.title}`} className={`grid size-5 place-items-center rounded bg-base-300/90 text-[10px] ${pinned ? 'text-primary' : ''}`}><Ic name="pin" size={11} /></button>
                         <button onClick={e => { e.stopPropagation(); removeFromSet([t.id]) }} aria-label={`Remove ${t.title}`} className="grid size-5 place-items-center rounded bg-base-300/90"><Ic name="close" size={11} width={2.4} /></button>
                       </span>
@@ -195,6 +198,10 @@ function EnergyLine({ tracks, facts, shape }: { tracks: MusicTrack[]; facts: Fac
 /** Save: a small form under the button with a suggested name and a warning for a name in use. */
 function SaveSet({ tracks, facts, sourceName }: { tracks: MusicTrack[]; facts: Facts; sourceName?: string }) {
   const [open, setOpen] = useState(false)
+  const opener = useRef<HTMLButtonElement>(null)
+  // Closing hands focus back to Save (§6 keyboard).
+  const wasOpen = useRef(false)
+  useEffect(() => { if (wasOpen.current && !open) opener.current?.focus(); wasOpen.current = open }, [open])
   const [name, setName] = useState('')
   const lists = usePlaylists()
   const suggest = () => {
@@ -219,7 +226,7 @@ function SaveSet({ tracks, facts, sourceName }: { tracks: MusicTrack[]; facts: F
   }
   return (
     <span className="relative">
-      <button disabled={!tracks.length} onClick={() => { setName(suggest()); setOpen(o => !o) }} aria-expanded={open} className="btn btn-xs sm:btn-sm rounded-xl">Save</button>
+      <button ref={opener} disabled={!tracks.length} onClick={() => { setName(suggest()); setOpen(o => !o) }} aria-expanded={open} className="btn btn-xs sm:btn-sm rounded-xl">Save</button>
       {open && (
         <form onSubmit={save} onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }} className="absolute right-0 top-full z-30 mt-1.5 flex w-72 flex-col gap-2 rounded-xl bg-base-200 p-3 shadow-lg">
           <label className="flex flex-col gap-1 text-xs text-base-content/60">Name this playlist
