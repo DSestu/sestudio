@@ -218,6 +218,10 @@ ORDER_CAP: Final = 200
 #: Swap passes, and the extra a clash weighs in them.
 SWAP_PASSES: Final = 6
 SWAP_CLASH: Final = 3.0
+#: How sharply the clash penalty follows harmony's share of Blend by.
+CLASH_EXP: Final = 2
+#: Openers Best blend tries; the cheapest whole order wins.
+OPENERS: Final = 4
 #: Fix all gives up after this many changes.
 FIX_STEPS: Final = 30
 
@@ -235,18 +239,28 @@ def _dist(
     return 1 - proximity.join(a, b, "hold", weights, welcome)["blend"]
 
 
+def clash_penalty(weights: Weights) -> float:
+    """The clash penalty grows with harmony's share of Blend by above the default (squared):
+    Keys first avoids clashes harder; the defaults and below keep :data:`SWAP_CLASH`."""
+    imp = {**blend.DEFAULT_IMPORTANCE, **(weights or {})}
+    share = imp["harmony"] / (sum(imp.values()) or 1)
+    base = blend.DEFAULT_IMPORTANCE["harmony"] / sum(blend.DEFAULT_IMPORTANCE.values())
+    return SWAP_CLASH * max(1.0, share / base) ** CLASH_EXP
+
+
 def _pair_cost(
     weights: Weights, welcome: Weights
 ) -> Callable[[dict[str, Any], dict[str, Any]], float]:
     """The cost of the join a -> b in one ordering (1 - Blend, plus a clash penalty), each
     pair worked out once: the swaps ask the same few thousand pairs tens of thousands of times."""
+    clash = clash_penalty(weights)
     memo: dict[tuple[str, str], float] = {}
 
     def cost(a: dict[str, Any], b: dict[str, Any]) -> float:
         key = (a["id"], b["id"])
         if key not in memo:
             j = proximity.join(a, b, "hold", weights, welcome)
-            memo[key] = 1 - j["blend"] + (SWAP_CLASH if j["move"] == "clash" else 0.0)
+            memo[key] = 1 - j["blend"] + (clash if j["move"] == "clash" else 0.0)
         return memo[key]
 
     return cost
@@ -299,8 +313,7 @@ def _swaps(
         for i in range(n):
             t = out[i]
             if t["id"] in pinned or not (
-                (i > 0 and c(out[i - 1], t) >= SWAP_CLASH)
-                or (i < n - 1 and c(t, out[i + 1]) >= SWAP_CLASH)
+                (i > 0 and c(out[i - 1], t) > 1) or (i < n - 1 and c(t, out[i + 1]) > 1)
             ):
                 continue
             base = total(out)
@@ -351,42 +364,51 @@ def order_set(
     span = (hi - lo) or 1.0
     f = SHAPES.get(shape, SHAPES["Arc"])
     cost = _pair_cost(weights, welcome)
-    prev: dict[str, Any] | None = None
-    for i in range(n):
-        if out[i] is not None:
-            prev = out[i]
-            continue
-        if not free:
-            break
-        want = lo + f(i / (n - 1)) * span
-        if prev is None:  # the opener: the track nearest the shape's start
-            best = min(
-                free,
-                key=lambda t: (
-                    abs((_energy(t) if _energy(t) is not None else want) - want),
-                    t["id"],
-                ),
-            )
-        else:
-            p = prev
-            best = min(
-                free,
-                key=lambda t: (
-                    cost(p, t)
-                    + SHAPE_PULL
-                    * abs((_energy(t) if _energy(t) is not None else want) - want)
-                    / 60,
-                    t["id"],
-                ),
-            )
-        out[i] = best
-        free.remove(best)
-        prev = best
-    done = [t for t in out if t is not None] + free
-    if len(done) <= ORDER_CAP:
-        wants = [lo + f(k / (n - 1)) * span for k in range(len(done))]
-        _swaps(done, pinned, wants, cost)
-    return done
+    wants = [lo + f(k / (n - 1)) * span for k in range(n)]
+
+    def pull(t: dict[str, Any], k: int) -> float:
+        e = _energy(t)
+        return 0.0 if e is None else SHAPE_PULL * abs(e - wants[k]) / 60
+
+    def build(opener: dict[str, Any] | None) -> list[dict[str, Any]]:
+        slots, left = list(out), list(free)
+        prev: dict[str, Any] | None = None
+        for i in range(n):
+            if slots[i] is not None:
+                prev = slots[i]
+                continue
+            if not left:
+                break
+            if prev is None:  # the opener
+                best = (
+                    opener
+                    if opener in left
+                    else min(left, key=lambda t: (pull(t, i), t["id"]))
+                )
+            else:
+                p = prev
+                best = min(left, key=lambda t: (cost(p, t) + pull(t, i), t["id"]))
+            slots[i] = best
+            left.remove(best)
+            prev = best
+        done = [t for t in slots if t is not None] + left
+        if len(done) <= ORDER_CAP:
+            _swaps(done, pinned, wants, cost)
+        return done
+
+    def total(arr: list[dict[str, Any]]) -> float:
+        return sum(cost(x, y) for x, y in zip(arr, arr[1:])) + sum(
+            pull(t, k) for k, t in enumerate(arr)
+        )
+
+    # A greedy order can corner a track that fits few others; a few openers near the
+    # shape's start give it other paths, and the cheapest whole order wins.
+    openers: list[dict[str, Any] | None] = (
+        [None]
+        if out[0] is not None or n > ORDER_CAP
+        else sorted(free, key=lambda t: (pull(t, 0), t["id"]))[:OPENERS]
+    )
+    return min((build(o) for o in openers), key=total)
 
 
 def _count(tracks: list[dict[str, Any]], kept: Collection[str]) -> int:

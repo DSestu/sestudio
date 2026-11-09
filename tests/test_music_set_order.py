@@ -210,3 +210,11 @@ def test_order_set_reads_each_pair_once(monkeypatch):
     monkeypatch.setattr(proximity, "join", counting)
     builder.order_set(tracks, None, "Arc")
     assert len(seen) == len(set(seen))
+
+
+def test_clash_penalty_follows_harmony_only_upwards():
+    assert builder.clash_penalty(None) == pytest.approx(builder.SWAP_CLASH)
+    keys = {"harmony": 1, "mood": 0.4, "energy": 0.35, "genre": 0.2}
+    energy = {"harmony": 0.05, "mood": 0.05, "energy": 1, "genre": 0.05}
+    assert builder.clash_penalty(keys) > builder.SWAP_CLASH
+    assert builder.clash_penalty(energy) == pytest.approx(builder.SWAP_CLASH)
