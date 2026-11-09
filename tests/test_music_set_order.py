@@ -167,6 +167,14 @@ def test_order_and_fix_api(monkeypatch):
         "/api/music/set/fix", json={"ids": ids[:4], "kept": [f"{ids[0]}>{ids[1]}"]}
     ).json()
     assert {"order", "joins", "inserted", "moved", "left"} <= set(f)
+    s = c.post("/api/music/set/spot", json={"ids": ids[:5], "id": ids[1]}).json()
+    assert (
+        sorted(s["order"]) == sorted(ids[:5]) and len(s["joins"]) == 4 and "left" in s
+    )
+    assert (
+        c.post("/api/music/set/spot", json={"ids": ids[:3], "id": "zz"}).status_code
+        == 404
+    )
     br = c.post(
         "/api/music/proximity/bridges",
         json={"a": ids[0], "b": ids[1], "strict": False, "limit": 3},
@@ -181,3 +189,10 @@ def test_order_and_fix_api(monkeypatch):
         },
     ).json()
     assert fits["results"]
+
+
+def test_move_to_best_lowers_the_problems():
+    a, b, c = trk(0, "A", "Aeolian"), trk(1, "C#", "Ionian"), trk(2, "A", "Aeolian")
+    d = trk(3, "C#", "Ionian")
+    out = builder.move_to_best([a, b, c, d], b)
+    assert builder._count(out, ()) < builder._count([a, b, c, d], ())

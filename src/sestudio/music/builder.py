@@ -356,6 +356,26 @@ def _count(tracks: list[dict[str, Any]], kept: Collection[str]) -> int:
     )
 
 
+def move_to_best(
+    tracks: list[dict[str, Any]],
+    b: dict[str, Any],
+    kept: Collection[str] = (),
+    weights: Weights = None,
+    welcome: Weights = None,
+) -> list[dict[str, Any]]:
+    """*tracks* with *b* moved to the spot with the fewest problem joins, then the smoothest."""
+    rest = [t for t in tracks if t is not b]
+
+    def ranked(p: int) -> tuple[int, float]:
+        arr = rest[:p] + [b] + rest[p:]
+        return _count(arr, kept), sum(
+            _dist(x, y, weights, welcome) for x, y in zip(arr, arr[1:])
+        )
+
+    p = min(range(len(rest) + 1), key=ranked)
+    return rest[:p] + [b] + rest[p:]
+
+
 def fix_set(
     tracks: list[dict[str, Any]],
     pool: list[dict[str, Any]],
@@ -376,9 +396,6 @@ def fix_set(
     inserted: list[str] = []
     moved: list[str] = []
     skipped: set[str] = set()
-
-    def path_cost(arr: list[dict[str, Any]]) -> float:
-        return sum(_dist(x, y, weights, welcome) for x, y in zip(arr, arr[1:]))
 
     for _ in range(FIX_STEPS):
         changed = False
@@ -428,15 +445,7 @@ def fix_set(
                 changed = True
                 break
             base = _count(out, kept)
-            rest = [t for t in out if t is not b]
-            spots = sorted(
-                range(len(rest) + 1),
-                key=lambda p: (
-                    _count(rest[:p] + [b] + rest[p:], kept),
-                    path_cost(rest[:p] + [b] + rest[p:]),
-                ),
-            )
-            new = rest[: spots[0]] + [b] + rest[spots[0] :]
+            new = move_to_best(out, b, kept, weights, welcome)
             if _count(new, kept) < base:
                 out = new
                 moved.append(b["id"])

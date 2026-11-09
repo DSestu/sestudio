@@ -18,7 +18,8 @@ import { factsFrom } from './facts'
 import { DIMS, findNode, treeOf, type GroupNode, type Grouping } from './grouping'
 import { Ic } from './icons'
 import Tape from './Tape'
-import { BLEND_CAP, useBlendOrder } from './blendOrder'
+import { BLEND_CAP, useBlendOrder, useSetOrder } from './blendOrder'
+import SetList from './SetList'
 import TapeBar, { type Order, type Shape } from './TapeBar'
 import type { TapeGroup } from './tapeLayout'
 import { LINK_RE, useMusicQuery } from '../../../musicQuery'
@@ -106,6 +107,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   const hc = useHoverCard()
   const focusTrack = (selectedId && byId.get(selectedId)) || (playingId && byId.get(playingId)) || undefined
   const set = useSet()
+  const setView = useSetOrder(set)
   const inSet = useMemo(() => new Set(set.tracks.map(t => t.id)), [set.tracks])
   // + on a track: in the set, or out of it again.
   const toggleOne = (t: MusicTrack) => (inSet.has(t.id) ? removeFromSet([t.id]) : h.onAdd([t], t.title))
@@ -147,7 +149,8 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
         joins={order === 'blend' ? blend?.joins : undefined} selectedId={selectedId} playingId={playingId}
         onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)} hoverProps={hc.props} picked={picked}
       />
-      <SetLane facts={facts} colour={colour} get={get} wide={wide} sourceName={source?.kind === 'album' ? source.name : undefined} selectedId={selectedId} onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} />
+      <SetLane order={setView} facts={facts} colour={colour} get={get} wide={wide} sourceName={source?.kind === 'album' ? source.name : undefined} selectedId={selectedId} onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} />
+      <SetList order={setView} facts={facts} colour={colour} byId={byId} selectedId={selectedId} onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} />
       {hc.hover && <HoverCard hover={hc.hover} facts={facts} colour={colour} />}
     </>
   )

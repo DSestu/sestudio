@@ -4,18 +4,17 @@ import type { Summary } from '../../../musicMeta'
 import { createWithTracks, usePlaylists } from '../../../musicPlaylists'
 import { addPayload } from '../../../musicQueue'
 import {
-  clearSet, LANDED_MS, moveBlock, pinsOf, removeFromSet, setPinOnDrop, setSetMode, setSetShape,
+  clearSet, joinKey, LANDED_MS, removeFromSet, setPinOnDrop, setSetMode, setSetShape,
   togglePin, UNDO_MS, undoRemove, unpinAll, useSet,
 } from '../../../musicSet'
-import { endDrag } from '../edit/focus'
 import { totalTime } from '../format'
 import { toast } from '../toast'
-import { keepOrder, useBlendOrder } from './blendOrder'
-import { carriedNow, carryProps, endCarry } from './carry'
-import { clearSelection, clickSelect, getSelection, idsIn, useSelection } from './selection'
+import type { useSetOrder } from './blendOrder'
+import { clearSelection, clickSelect, idsIn, useSelection } from './selection'
+import { useDeleteKey, useDragOff, useSetDrop } from './setGestures'
 import type { Facts } from './facts'
 import { Ic } from './icons'
-import { addTracksToSet, playSetAsFlow, playSetNext, queueSetBlended } from './setQueue'
+import { playSetAsFlow, playSetNext, queueSetBlended } from './setQueue'
 import { silhouette, trackColor, type Colour } from './sigil'
 import { Seg } from './TapeBar'
 import { MARK_COLOR, SHAPES } from './tapeLayout'
@@ -45,7 +44,9 @@ function useExpiry(at: number | undefined, ms: number) {
   return !!at && gone !== at
 }
 
-export default function SetLane({ facts, colour, get, wide, sourceName, selectedId, onSelect, hoverProps }: {
+export default function SetLane({ order, facts, colour, get, wide, sourceName, selectedId, onSelect, hoverProps }: {
+  /** The set as shown and its joins (asked once, shared with the list). */
+  order: ReturnType<typeof useSetOrder>
   facts: Facts
   colour: Colour
   get: (id: string) => Summary | undefined
@@ -58,55 +59,17 @@ export default function SetLane({ facts, colour, get, wide, sourceName, selected
 }) {
   const s = useSet()
   const blend = s.mode === 'blend'
-  const pins = useMemo(() => (blend ? pinsOf(s) : keepOrder(s.tracks)), [blend, s])
-  const res = useBlendOrder(s.tracks, s.shape, pins)
-  const shown = res?.tracks ?? s.tracks
-  const joins = res && res.tracks === shown ? res.joins : undefined
-  const clashes = joins?.filter(j => j.problems.includes('clash')).length ?? 0
+  const { res, shown, joins } = order
+  const clashes = joins?.filter((j, i) => j.problems.includes('clash') && !s.kept.includes(joinKey(shown[i], shown[i + 1]))).length ?? 0
   const secs = s.tracks.reduce((a, t) => a + t.duration, 0)
   const showLanded = useExpiry(s.landed?.at, LANDED_MS)
   const showUndo = useExpiry(s.undo?.at, UNDO_MS)
   const lane = useRef<HTMLDivElement>(null)
   const picked = idsIn(useSelection(), 'set')
   const shownIds = useMemo(() => shown.map(t => t.id), [shown])
-  const { off, moveProps } = useDragOff(lane, shown, picked)
-  // Delete removes the selected tracks of the set.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Delete' || (e.target as HTMLElement | null)?.closest('input, textarea, [contenteditable]')) return
-      const sel = getSelection()
-      if (sel.scope !== 'set' || !sel.ids.size) return
-      removeFromSet([...sel.ids])
-      clearSelection()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-  const [slot, setSlot] = useState<number | null>(null)
-
-  const slotAt = (x: number): number => {
-    const items = [...(lane.current?.querySelectorAll<HTMLElement>('[data-set-item]') ?? [])]
-    const i = items.findIndex(el => { const r = el.getBoundingClientRect(); return x < r.left + r.width / 2 })
-    return i < 0 ? items.length : i
-  }
-  const over = (e: React.DragEvent) => {
-    if (!carriedNow()) return
-    e.preventDefault()
-    setSlot(s.tracks.length ? slotAt(e.clientX) : 0)
-  }
-  const drop = (e: React.DragEvent) => {
-    const c = carriedNow()
-    setSlot(null)
-    if (!c) return
-    e.preventDefault()
-    const at = s.tracks.length ? slotAt(e.clientX) : undefined
-    if (c.from === 'set') {
-      moveBlock(c.tracks.map(t => t.id), at ?? 0, shown)
-      if (blend) toast('Your order now. Best blend puts it back, keeping pins.')
-    } else addTracksToSet(c.tracks, c.label, at, shown)
-    endCarry()
-    endDrag()
-  }
+  const { off, moveProps } = useDragOff(lane, shown, picked, 'x')
+  useDeleteKey()
+  const { slot, ...dropProps } = useSetDrop(lane, shown, 'x', blend)
 
   const landed = s.landed && showLanded ? landedLine(s.landed, shown, joins) : ''
   return (
@@ -139,7 +102,7 @@ export default function SetLane({ facts, colour, get, wide, sourceName, selected
         {s.tracks.length > 1 && <span className="tabular-nums text-base-content/55">{res ? `${res.score} blend · ${res.rough} rough · ` : ''}{s.pinned.length} pinned · {clashes} {clashes === 1 ? 'clash' : 'clashes'}</span>}
       </div>
       {off !== null && <p className="text-center text-xs font-medium text-error" role="status">Release to remove {off} {off === 1 ? 'track' : 'tracks'}</p>}
-      <div onDragOver={over} onDragLeave={() => setSlot(null)} onDrop={drop}>
+      <div {...dropProps}>
         {!s.tracks.length ? (
           <div className={`grid h-24 place-items-center rounded-xl border-2 border-dashed px-4 text-center text-xs ${slot !== null ? 'border-primary/70 bg-primary/5 text-base-content' : 'border-white/15 text-base-content/50'}`}>
             Drag tracks, albums, moods or a selection here, or press + anywhere. Best blend orders them; pinned ones stay put.
@@ -272,48 +235,4 @@ function SaveSet({ tracks, facts, sourceName }: { tracks: MusicTrack[]; facts: F
       )}
     </span>
   )
-}
-
-/** How far off the lane a dragged item is let go to remove it (§2.6 Remove). */
-const OFF_PX = 36
-
-/**
- * Moves inside the lane: a selected item carries the whole selection as a block; dragged more
- * than 36 px above or below the lane, a red label says release removes them, and it does.
- */
-function useDragOff(lane: React.RefObject<HTMLDivElement | null>, shown: MusicTrack[], picked: ReadonlySet<string>) {
-  const [off, setOff] = useState<number | null>(null)
-  const moving = useRef<string[]>([])
-  const isOff = useRef(false)
-  const onOver = useRef((e: DragEvent) => {
-    const r = lane.current?.getBoundingClientRect()
-    const now = !!r && (e.clientY < r.top - OFF_PX || e.clientY > r.bottom + OFF_PX)
-    if (now !== isOff.current) {
-      isOff.current = now
-      setOff(now ? moving.current.length : null)
-    }
-  })
-  const moveProps = (t: MusicTrack) => {
-    const block = picked.has(t.id) && picked.size > 1 ? shown.filter(x => picked.has(x.id)) : [t]
-    const cp = carryProps(block, block.length > 1 ? `${block.length} tracks` : t.title, 'set')
-    return {
-      ...cp,
-      onDragStart: (e: React.DragEvent) => {
-        cp.onDragStart(e)
-        moving.current = block.map(x => x.id)
-        document.addEventListener('dragover', onOver.current)
-      },
-      onDragEnd: () => {
-        cp.onDragEnd()
-        document.removeEventListener('dragover', onOver.current)
-        if (isOff.current) {
-          removeFromSet(moving.current)
-          clearSelection()
-        }
-        isOff.current = false
-        setOff(null)
-      },
-    }
-  }
-  return { off, moveProps }
 }
