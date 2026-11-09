@@ -22,6 +22,8 @@ export interface SetState {
   mode: SetMode
   shape: Shape
   pinOnDrop: boolean
+  /** Joins the user keeps as they are (`a>b` ids): they stop counting as problems. */
+  kept: string[]
   /** Where the last drop landed, for the message under the lane (3 s). */
   landed?: Landed
   /** What the last removal took, for Undo (8 s). */
@@ -33,10 +35,10 @@ export const UNDO_MS = 8000
 export const LANDED_MS = 3000
 
 function read(): SetState {
-  const base: SetState = { tracks: [], pinned: [], mode: 'blend', shape: 'Arc', pinOnDrop: true }
+  const base: SetState = { tracks: [], pinned: [], mode: 'blend', shape: 'Arc', pinOnDrop: true, kept: [] }
   try {
     const s = JSON.parse(localStorage.getItem(KEY) ?? '') as Partial<SetState>
-    return { ...base, tracks: s.tracks ?? [], pinned: s.pinned ?? [], mode: s.mode ?? 'blend', shape: s.shape ?? 'Arc', pinOnDrop: s.pinOnDrop ?? true }
+    return { ...base, tracks: s.tracks ?? [], pinned: s.pinned ?? [], mode: s.mode ?? 'blend', shape: s.shape ?? 'Arc', pinOnDrop: s.pinOnDrop ?? true, kept: s.kept ?? [] }
   } catch {
     return base
   }
@@ -46,8 +48,8 @@ let state = read()
 const listeners = new Set<() => void>()
 function set(patch: Partial<SetState>) {
   state = { ...state, ...patch }
-  const { tracks, pinned, mode, shape, pinOnDrop } = state
-  try { localStorage.setItem(KEY, JSON.stringify({ tracks, pinned, mode, shape, pinOnDrop })) } catch { /* private mode: kept for this session */ }
+  const { tracks, pinned, mode, shape, pinOnDrop, kept } = state
+  try { localStorage.setItem(KEY, JSON.stringify({ tracks, pinned, mode, shape, pinOnDrop, kept })) } catch { /* private mode: kept for this session */ }
   listeners.forEach(l => l())
 }
 
@@ -118,3 +120,10 @@ export const unpinAll = () => set({ pinned: [] })
 export const setSetMode = (mode: SetMode) => set({ mode })
 export const setSetShape = (shape: Shape) => set({ shape })
 export const setPinOnDrop = (pinOnDrop: boolean) => set({ pinOnDrop })
+
+/** The set in this order, frozen to Your order so it stays put (a fix, a sort). */
+export const applyOrder = (tracks: MusicTrack[]) => set({ tracks, mode: 'mine' })
+
+export const joinKey = (a: { id: string }, b: { id: string }) => `${a.id}>${b.id}`
+export const keepJoin = (key: string) => set({ kept: [...state.kept, key] })
+export const unkeepJoin = (key: string) => set({ kept: state.kept.filter(k => k !== key) })

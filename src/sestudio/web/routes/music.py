@@ -425,3 +425,34 @@ async def online_audio(track_id: str, request: Request) -> RedirectResponse:
         request.app.state.proxy_secret, stream["url"], stream["referer"], "youtube"
     )
     return RedirectResponse(target, status_code=307)
+
+
+class SpotBody(BaseModel):
+    ids: list[str]
+    #: The track to move.
+    id: str
+    kept: list[str] = []
+    weights: dict[str, float] | None = None
+    harmony: dict[str, float] | None = None
+
+
+@router.post("/music/set/spot")
+async def set_spot(body: SpotBody) -> dict[str, Any]:
+    """Move B to a better spot (SPEC-music-library §2.8): the set with that track where it
+    leaves the fewest problem joins, then blends smoothest."""
+
+    def run() -> dict[str, Any]:
+        tracks = _set_tracks(body.ids)
+        b = next((t for t in tracks if t["id"] == body.id), None)
+        if b is None:
+            raise HTTPException(status_code=404, detail="Not in the set")
+        out = builder.move_to_best(
+            tracks, b, set(body.kept), body.weights, body.harmony
+        )
+        return {
+            "order": [t["id"] for t in out],
+            "joins": _joins(out, body.weights, body.harmony),
+            "left": builder._count(out, set(body.kept)),
+        }
+
+    return await asyncio.to_thread(run)
