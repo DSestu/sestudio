@@ -19,6 +19,7 @@ const PATHS = {
   sort: 'M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3',
   flow: 'M3 17c3 0 4-10 7-10s4 6 7 6 3-3 4-3',
   search: 'M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zM20 20l-5.5-5.5',
+  pin: 'M12 16v6M8 3h8l-1.5 6L18 13H6l3.5-4z',
 } as const
 export type IconName = keyof typeof PATHS
 

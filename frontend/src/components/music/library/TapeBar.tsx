@@ -14,7 +14,7 @@ import { energyColor, genreColor, UNREAD } from './sigil'
 export type Order = 'grouped' | 'blend'
 export type { Shape }
 
-function Seg<T extends string>({ options, value, onPick, label }: { options: readonly (readonly [T, string])[]; value: T; onPick: (v: T) => void; label: string }) {
+export function Seg<T extends string>({ options, value, onPick, label }: { options: readonly (readonly [T, string])[]; value: T; onPick: (v: T) => void; label: string }) {
   return (
     <div role="group" aria-label={label} className="inline-flex gap-0.5 rounded-xl bg-black/25 p-0.5">
       {options.map(([k, l]) => (

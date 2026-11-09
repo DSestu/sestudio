@@ -3,7 +3,7 @@ import { useFlows } from '../../../musicFlows'
 import type { MusicTrack } from '../../../musicLibrary'
 import { usePlaylists } from '../../../musicPlaylists'
 import { hitPayload, sourceLabel, useMusicSearch, type OnlineHit } from '../../../musicSearch'
-import { addTracks } from '../adding'
+import { addTracksToSet } from './setQueue'
 import { dragProps } from '../edit/focus'
 import { trackOfHit } from '../edit/onlineAnalysis'
 import { fmtTime } from '../format'
@@ -123,7 +123,7 @@ function OnlineRow({ hit }: { hit: OnlineHit }) {
       icon={hit.thumb ? <img src={hit.thumb} alt="" loading="lazy" className="size-5 rounded object-cover" /> : <Ic name="search" size={12} />}
       label={<>{hit.title}<i className="ml-1.5 text-[11px] not-italic text-base-content/50">{[hit.artist, hit.duration ? fmtTime(hit.duration) : '', hit.kind === 'video' ? 'video' : ''].filter(Boolean).join(' · ')}</i></>}
       onClick={() => void playPayload([hitPayload(hit)])}
-      onAdd={() => void addTracks([hitPayload(hit)], undefined, `Added ${hit.title}`)}
+      onAdd={() => { addTracksToSet([t], hit.title) }}
       drag={dragProps(t)}
     />
   )
