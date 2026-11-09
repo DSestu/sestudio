@@ -26,16 +26,18 @@ export interface ExplorerProps {
   onNewList: () => void
   onFlow: (id: string) => void
   onFlows: () => void
+  onMix: (id: string) => void
+  onMixes: () => void
   onAddLibrary: () => void
   onClose?: () => void
   /** Search mode: the flat results replace the rail and the sections. */
   search?: { words: string; body: React.ReactNode }
 }
 
-export default function Explorer({ tree, total, libraries, h, dir, onList, onNewList, onFlow, onFlows, onAddLibrary, onClose, search }: ExplorerProps) {
+export default function Explorer({ tree, total, libraries, h, dir, onList, onNewList, onFlow, onFlows, onMix, onMixes, onAddLibrary, onClose, search }: ExplorerProps) {
   const g = useGrouping()
   const preset = presetOf(g)
-  const { flows } = useFlows()
+  const { flows, mixes } = useFlows()
   const blur = () => (document.activeElement as HTMLElement | null)?.blur()
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -98,6 +100,10 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
             {flows.map(f => (
               <Row key={f.id} depth={0} icon={<Shape flow={f} w={22} h={14} dots={false} />} label={f.name} onClick={() => onFlow(f.id)} />
             ))}
+          </Section>
+          <Section title="Mixes" action={<button onClick={onMixes} className="btn btn-ghost btn-xs">All</button>}>
+            {mixes.map(m => <Row key={m.id} depth={0} icon={<Ic name="list" size={13} />} label={m.name} onClick={() => onMix(m.id)} />)}
+            {!mixes.length && <p className="px-3 py-1 text-xs text-base-content/45">Play a flow, then save what it made as a mix.</p>}
           </Section>
           <Section title="Online">
             {ONLINE.map(s => <Row key={s} depth={0} icon={<Ic name="search" size={13} />} label={<>{s} <i className="ml-1 text-[11px] not-italic text-base-content/45">type to search</i></>} dim />)}

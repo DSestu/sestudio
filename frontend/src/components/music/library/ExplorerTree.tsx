@@ -16,6 +16,7 @@ const GROUPS_SHOWN = 8
 const DEEP_SHOWN = 40
 const TRACKS_SHOWN = 12
 const FILES_SHOWN = 40
+const FLOW_KINDS = new Set<GroupNode['kind']>(['album', 'artist', 'library', 'genre'])
 const ALL_SHOWN = new Set(['mood', 'tempo', 'energy'])
 
 const ICON: Record<GroupNode['kind'], IconName> = {
@@ -34,10 +35,12 @@ export interface TreeHandlers {
   colour: Colour
   /** The playing track, lit in the tree. */
   playingId?: string
+  /** Play a group as a flow (§2.2 doors): albums, artists, libraries and genres. */
+  onFlowDoor?: (n: GroupNode, at: DOMRect) => void
   hoverProps?: (t: MusicTrack) => object
 }
 
-export function Row({ depth, chevron, onChevron, icon, label, count, onClick, onDouble, onAdd, active, dim, drag, title, extra }: {
+export function Row({ depth, chevron, onChevron, icon, label, count, onClick, onDouble, onAdd, active, dim, drag, title, extra, tool }: {
   depth: number
   /** undefined: no chevron (a track); else open or shut. */
   chevron?: boolean
@@ -53,6 +56,8 @@ export function Row({ depth, chevron, onChevron, icon, label, count, onClick, on
   drag?: Record<string, unknown>
   title?: string
   extra?: object
+  /** A hover tool before the +, like Play as a flow. */
+  tool?: ReactNode
 }) {
   return (
     <div
@@ -71,6 +76,7 @@ export function Row({ depth, chevron, onChevron, icon, label, count, onClick, on
       </button>
       <span className="grid size-5 shrink-0 place-items-center text-base-content/60">{icon}</span>
       <button onClick={onClick} onDoubleClick={onDouble} title={title} className="min-w-0 flex-1 truncate text-left leading-tight">{label}</button>
+      {tool && <span className="hidden group-hover:contents">{tool}</span>}
       {count !== undefined && <span className={`shrink-0 tabular-nums text-[11px] text-base-content/50 ${onAdd ? 'group-hover:hidden' : ''}`}>{count}</span>}
       {onAdd && (
         <button onClick={onAdd} aria-label="Add to your set" title="Add to your set" className="hidden size-6 shrink-0 place-items-center rounded-md text-base-content/70 hover:bg-white/10 hover:text-base-content group-hover:grid">
@@ -141,6 +147,9 @@ export function Nodes({ nodes, depth, prefix, h }: { nodes: GroupNode[]; depth: 
               count={n.all.length}
               onClick={() => h.onOpen(n)}
               onAdd={() => h.onAdd(n.all, n.name)}
+              tool={h.onFlowDoor && FLOW_KINDS.has(n.kind) ? (
+                <button onClick={e => h.onFlowDoor!(n, e.currentTarget.getBoundingClientRect())} aria-label={`Play ${n.name} as a flow`} title="Play as a flow" className="grid size-6 shrink-0 place-items-center rounded-md text-base-content/70 hover:bg-white/10 hover:text-base-content"><Ic name="flow" size={13} /></button>
+              ) : undefined}
               active={h.sourceKey === n.key}
               drag={carryProps(n.all, n.name)}
             />

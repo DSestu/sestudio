@@ -78,11 +78,11 @@ export default function SetLane({ order, facts, colour, get, wide, sourceName, s
         <h3 className="text-sm font-semibold">Your set</h3>
         <span className="text-xs text-base-content/55">{s.tracks.length} {s.tracks.length === 1 ? 'track' : 'tracks'}{s.tracks.length ? ` · ${totalTime(secs)}` : ''}{res && s.tracks.length > 1 ? ` · ${res.score} blend` : ''}</span>
         <span className="flex-1" />
-        <button disabled={!s.tracks.length} onClick={() => void playSetNext(shown).catch((e: Error) => toast(e.message))} className="btn btn-primary btn-sm rounded-xl gap-1"><svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Play the set</button>
-        <button disabled={!s.tracks.length} onClick={() => void queueSetBlended(shown, get).catch((e: Error) => toast(e.message))} className="btn btn-sm rounded-xl">Queue</button>
+        <button disabled={!s.tracks.length} onClick={() => void playSetNext(shown).catch((e: Error) => toast(e.message))} className="btn btn-primary btn-xs sm:btn-sm rounded-xl gap-1"><svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Play the set</button>
+        <button disabled={!s.tracks.length} onClick={() => void queueSetBlended(shown, get).catch((e: Error) => toast(e.message))} className="btn btn-xs sm:btn-sm rounded-xl">Queue</button>
         <SaveSet tracks={shown} facts={facts} sourceName={sourceName} />
-        {wide && <button disabled={!s.tracks.length} onClick={() => void playSetAsFlow(shown, sourceName ? `${sourceName} flow` : 'Your set').catch((e: Error) => toast(e.message))} className="btn btn-sm rounded-xl">As a flow</button>}
-        <button disabled={!s.tracks.length} onClick={clearSet} className="btn btn-ghost btn-sm rounded-xl">Clear</button>
+        {wide && <button disabled={!s.tracks.length} onClick={() => void playSetAsFlow(shown, sourceName ? `${sourceName} flow` : 'Your set').catch((e: Error) => toast(e.message))} className="btn btn-xs sm:btn-sm rounded-xl">As a flow</button>}
+        <button disabled={!s.tracks.length} onClick={clearSet} className="btn btn-ghost btn-xs sm:btn-sm rounded-xl">Clear</button>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Seg label="Set order" options={[['mine', 'Your order'], ['blend', 'Best blend']] as const} value={s.mode} onPick={setSetMode} />
@@ -219,7 +219,7 @@ function SaveSet({ tracks, facts, sourceName }: { tracks: MusicTrack[]; facts: F
   }
   return (
     <span className="relative">
-      <button disabled={!tracks.length} onClick={() => { setName(suggest()); setOpen(o => !o) }} aria-expanded={open} className="btn btn-sm rounded-xl">Save</button>
+      <button disabled={!tracks.length} onClick={() => { setName(suggest()); setOpen(o => !o) }} aria-expanded={open} className="btn btn-xs sm:btn-sm rounded-xl">Save</button>
       {open && (
         <form onSubmit={save} onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }} className="absolute right-0 top-full z-30 mt-1.5 flex w-72 flex-col gap-2 rounded-xl bg-base-200 p-3 shadow-lg">
           <label className="flex flex-col gap-1 text-xs text-base-content/60">Name this playlist

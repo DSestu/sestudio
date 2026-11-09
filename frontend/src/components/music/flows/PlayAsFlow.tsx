@@ -119,26 +119,7 @@ function Panel({ name, start, byId, onClose, onFlows }: {
   )
 }
 
-/** The button beside Play and Shuffle, and its panel. */
-export default function PlayAsFlow({ name, source, byId, onFlows, className = '' }: {
-  name: string; source: Source; byId?: Map<string, MusicTrack>; onFlows: () => void; className?: string
-}) {
-  const [open, setOpen] = useState(false)
-  return (
-    <span className="relative">
-      <button data-flow-toggle aria-expanded={open} onClick={() => setOpen(o => !o)}
-        className={`btn gap-2 ${open ? 'outline-[1.5px] outline-primary' : ''} ${className}`}>
-        <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true" className="shrink-0">
-          <path d="M1 11 C7 11 9 4 21 3" fill="none" stroke="var(--fl-energy, oklch(82% 0.11 75))" strokeWidth="1.75" strokeLinecap="round" />
-        </svg>
-        <span className="max-sm:hidden">Play as a flow</span><span className="sm:hidden">Flow</span>
-      </button>
-      {open && <Panel name={name} start={source} byId={byId} onClose={() => setOpen(false)} onFlows={() => { setOpen(false); onFlows() }} />}
-    </span>
-  )
-}
-
-/** The panel opened from a door that is not a button row (a library row, a genre chip): pinned under *at*. */
+/** The panel opened from a door (an explorer group's flow button): pinned under *at*. */
 export function PlayAsFlowAt({ at, name, source, byId, onClose, onFlows }: {
   at: DOMRect; name: string; source: Source; byId?: Map<string, MusicTrack>; onClose: () => void; onFlows: () => void
 }) {

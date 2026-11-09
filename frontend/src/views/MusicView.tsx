@@ -16,7 +16,7 @@ import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
 import FitsNext from '../components/music/FitsNext'
 import { closeFits, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
-import { currentParams, patchParams, replaceParams, type Navigate } from '../nav'
+import { currentParams, replaceParams, type Navigate } from '../nav'
 import FlowsHome from '../components/music/flows/FlowsHome'
 import MixesList from '../components/music/flows/MixesList'
 import FlowLanes from '../components/music/flows/FlowLanes'
@@ -28,14 +28,6 @@ import { toast } from '../components/music/toast'
 import { createWithTracks, freshName, itemsOf, playlistApi, usePlaylists } from '../musicPlaylists'
 import MusicSurface from '../components/music/library/MusicSurface'
 import QueryChips from '../components/music/library/QueryChips'
-
-const TABS = [
-  // Flows and mixes (SPEC-music-flows) stay as tabs until they join the surface (SPEC-music-library PR 10).
-  { id: 'flows', label: 'Flows' },
-  { id: 'mixes', label: 'Mixes' },
-  { id: 'library', label: 'Library' },
-] as const
-type MusicTab = (typeof TABS)[number]['id']
 
 const run = (p: Promise<void>) => { p.catch(() => {}) }
 
@@ -76,20 +68,11 @@ const useWide = () => useSyncExternalStore(
 
 const KIND_LABEL = { folder: 'Folder', playlist: 'Playlist', smart: 'Smart list' } as const
 
-// The tab lives in the URL (Back returns to it as it was) and here, so coming back to Music
-// from the nav finds it as it was left. The old albums / artists / tracks tabs are the surface.
-const last = { tab: 'library' as MusicTab }
-const initial = () => {
-  const p = currentParams()
-  const tab = TABS.find(t => t.id === p.get('tab'))?.id
-  return { tab: tab ?? (p.get('tab') || p.get('al') || p.get('ar') || p.get('lib') || p.get('genre') ? 'library' : last.tab) }
-}
-
 export default function MusicView({ params, navigate }: { params: URLSearchParams; navigate: Navigate }) {
   const titles = useDownloadedLibrary()
-  const [start] = useState(initial)
-  const [tab, setTab] = useState<MusicTab>(start.tab)
-  const flowsTab = tab === 'flows' || tab === 'mixes'
+  // Flows and mixes open in the centre from the explorer (SPEC-music-library §2.2); `?tab=` names them, so old links and Back still work.
+  const centre = params.get('tab') === 'flows' ? 'flows' : params.get('tab') === 'mixes' ? 'mixes' : 'library'
+  const openCentre = (c: 'library' | 'flows' | 'mixes') => navigate('music', { ...Object.fromEntries(currentParams()), tab: c === 'library' ? undefined : c })
   const query = useMusicQuery()
   const fitsFor = useFitsFor()
   const wide = useWide()
@@ -137,10 +120,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
 
   const ids = useMemo(() => all.filter(t => t.library !== 'online').map(t => t.id), [all])
   const { get, v } = useSummaries(ids)
-  useEffect(() => {
-    last.tab = tab
-    patchParams({ tab: tab === 'library' ? undefined : tab })
-  }, [tab])
   const page = (node ?? drafting) || !!flowEdit || !!mixOpen
 
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
@@ -164,7 +143,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     />
   )
   const searching = !page && query.trim() !== '' && !LINK_RE.test(query.trim())
-  const surface = !page && (searching || !flowsTab)
+  const surface = !page
   const inList = useMemo(() => new Set(node ? itemsOf(node).map(i => songKey(byId.get(i.track_id) ?? i)) : []), [node, byId])
   const sources = editing && node && (
     <Sources
@@ -178,16 +157,17 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     <MixView key={mixOpen} mixId={mixOpen} byId={byId} onEditFlow={id => go({ fl: id })} />
   ) : drafting ? null : node ? (
     <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} edit={editing} onEdit={node.kind === 'playlist' ? () => setEditing(true) : undefined} onSource={t => { setSourceTab(t); setEditSheet(t) }} />
-  ) : tab === 'flows' && !searching ? (
-    <FlowsHome onOpen={id => go({ fl: id })} byId={byId} />
-  ) : tab === 'mixes' && !searching ? (
-    <MixesList onOpen={id => go({ mx: id })} />
   ) : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
   ) : (
     <MusicSurface
       all={all} libraries={libraries} get={get} v={v} wide={wide} right={fitsPanel || undefined}
-      onList={id => go({ pl: id })} onNewList={() => newPlaylist()} onFlow={id => go({ fl: id })} onFlows={() => setTab('flows')} onAddLibrary={() => setAdding(true)}
+      onList={id => go({ pl: id })} onNewList={() => newPlaylist()} onFlow={id => go({ fl: id })} onMix={id => go({ mx: id })} onFlows={() => openCentre('flows')} onMixes={() => openCentre('mixes')} onAddLibrary={() => setAdding(true)}
+      centreView={centre !== 'library' && !searching ? {
+        label: centre === 'flows' ? 'Flows' : 'Mixes',
+        node: centre === 'flows' ? <FlowsHome onOpen={id => go({ fl: id })} byId={byId} /> : <MixesList onOpen={id => go({ mx: id })} />,
+        onClose: () => openCentre('library'),
+      } : undefined}
     />
   )
 
@@ -208,9 +188,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           title="Music"
           status={<><em>{all.length}</em> tracks</>}
           action={{ label: 'New playlist', onClick: () => newPlaylist() }}
-          tabs={[...TABS]}
-          tab={tab}
-          onTab={setTab}
         />
       )}
       <div className="flex gap-6 items-start">
