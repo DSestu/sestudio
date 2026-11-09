@@ -20,6 +20,9 @@ export interface Summary {
   /** Tonic, mode and notes of the track, and its energy on the library scale (0..100). */
   harmony?: { track?: Reading }
   energyScale?: { track?: number; intro?: number; outro?: number }
+  energyLevel?: 'Calm' | 'Steady' | 'Driving' | 'Intense'
+  /** The energy curve at 24 points, 0..100: the track's sigil. */
+  curve?: number[]
   /** Mean bass, mids, highs, 0..1. */
   balance?: [number, number, number]
 }

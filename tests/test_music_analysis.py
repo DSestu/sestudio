@@ -203,6 +203,7 @@ def test_analysis_api(db, root, tmp_path, monkeypatch):
     light = c.get("/api/music/tracks/summary", params={"ids": ",".join(ids)}).json()
     assert set(light) == set(ids)
     assert "bands" not in light[ids[0]] and "bpm" in light[ids[0]]
+    assert "curve" in light[ids[0]] and "energy" not in light[ids[0]]
     assert c.get("/api/music/tracks/zzz/analysis").status_code == 404
     fits = c.post(
         "/api/music/proximity/fits-after",
