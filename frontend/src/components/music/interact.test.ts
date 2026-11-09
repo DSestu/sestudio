@@ -93,6 +93,13 @@ describe('row drag', () => {
     expect(dropIndex(mids, 5, 1, 1)).toBe(0) // the playing row itself goes anywhere
   })
 
+  it('counts from the first rendered row when the queue renders a window of its rows', () => {
+    const mids = [10, 30, 50, 70] // rows 40..43
+    expect(dropIndex(mids, 45, 41, 0, 40)).toBe(42)
+    expect(dropIndex(mids, 99, 41, 0, 40)).toBe(44)
+    expect(dropIndex(mids, 5, 41, 50, 40)).toBe(50) // still never above the playing row
+  })
+
   it('never moves a row onto its own place or the next', () => {
     expect(isMove(2, 2)).toBe(false)
     expect(isMove(2, 3)).toBe(false)

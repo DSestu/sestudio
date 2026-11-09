@@ -95,14 +95,15 @@ export function rowDragIntent(touch: boolean, dist: number, heldMs: number): 'wa
 }
 
 /**
- * The queue index a drag would land on (0..n), from the rows' vertical middles.
+ * The queue index a drag would land on (0..n), from the rows' vertical middles; `base` is the first one's index
+ * (the queue renders a window of its rows).
  * A queue row never goes above the playing one unless it is the playing one;
  * a library row (`from` null) never above the row after it.
  */
-export function dropIndex(mids: number[], y: number, from: number | null, cur: number): number {
-  let at = mids.length
+export function dropIndex(mids: number[], y: number, from: number | null, cur: number, base = 0): number {
+  let at = base + mids.length
   for (let i = 0; i < mids.length; i++) {
-    if (y < mids[i]) { at = i; break }
+    if (y < mids[i]) { at = base + i; break }
   }
   if (from === cur) return at
   return Math.max(at, cur + (from === null ? 1 : 0))

@@ -64,8 +64,11 @@ function showLine(at: number | null) {
   if (!line) return
   line.style.opacity = at === null ? '0' : '1'
   if (at === null) return
+  // The rows in the page are a window of the queue: find the one by its queue index, else under the last.
   const rows = rowsEl()
-  const ref = rows[at] ? rows[at].offsetTop : rows.length ? rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight : 0
+  const row = rows.find(r => Number(r.dataset.at) === at)
+  const last = rows[rows.length - 1]
+  const ref = row ? row.offsetTop : last ? last.offsetTop + last.offsetHeight : 0
   line.style.top = `${ref - 1}px`
 }
 
@@ -118,8 +121,9 @@ function moveTo(e: PointerEvent) {
   if (joins.slot !== null) { joins.slot = null; wake() }
   if (e.clientY < q.top + 50) list.scrollTop -= 8
   else if (e.clientY > q.bottom - 40) list.scrollTop += 8
-  const mids = rowsEl().map(r => r.getBoundingClientRect().top + r.offsetHeight / 2)
-  a.at = dropIndex(mids, e.clientY, a.src.from, a.src.cur())
+  const rows = rowsEl()
+  const mids = rows.map(r => r.getBoundingClientRect().top + r.offsetHeight / 2)
+  a.at = dropIndex(mids, e.clientY, a.src.from, a.src.cur(), Number(rows[0]?.dataset.at ?? 0))
   showLine(a.at)
 }
 
