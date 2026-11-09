@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MusicTrack } from './musicLibrary'
-import { addToSet, clearSet, getSet, moveInSet, pinsOf, removeFromSet, setPinOnDrop, setSetMode, togglePin, undoRemove, unpinAll } from './musicSet'
+import { addToSet, clearSet, getSet, moveBlock, pinsOf, removeFromSet, setPinOnDrop, setSetMode, togglePin, undoRemove, unpinAll } from './musicSet'
 
 const t = (id: string): MusicTrack => ({ id, library: 'L', libraryLabel: 'L', title: id, artist: 'a', album: '', duration: 200, folder: '' })
 const ids = () => getSet().tracks.map(x => x.id)
@@ -39,8 +39,16 @@ describe('the set', () => {
     expect(ids()).toEqual(['c', 'b', 'a'])
     expect(pinsOf(getSet())).toEqual({ 1: 'b' })
     unpinAll()
-    moveInSet('a', 0, [t('c'), t('b'), t('a')])
+    moveBlock(['a'], 0, [t('c'), t('b'), t('a')])
     expect(ids()).toEqual(['a', 'c', 'b'])
     expect(getSet().mode).toBe('mine')
+  })
+  it('moves a block to a slot, keeping its order', () => {
+    clearSet()
+    addToSet([t('a'), t('b'), t('c'), t('d'), t('e')], 'x')
+    moveBlock(['d', 'b'], 0, getSet().tracks)
+    expect(ids()).toEqual(['b', 'd', 'a', 'c', 'e'])
+    moveBlock(['b', 'd'], 5, getSet().tracks)
+    expect(ids()).toEqual(['a', 'c', 'e', 'b', 'd'])
   })
 })
