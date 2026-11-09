@@ -60,6 +60,9 @@ MODULATIONS: Final = (
 TIE: Final = 0.03
 #: What a play may draw from (SPEC-flows-tab §2): ``{"kind", "value", "rule": only|lean}``.
 SOURCE_KINDS: Final = ("library", "artist", "album", "genre")
+#: What a play may also lean on without being listed as a source: one track by id (the Music
+#: page's set played as a flow, SPEC-music-library §2.6).
+PLAY_KINDS: Final = (*SOURCE_KINDS, "id")
 #: What a Lean-on-it source adds to a slot's Blend score: about a genre match's share.
 LEAN: Final = 0.12
 
@@ -80,7 +83,7 @@ def scope(
     """What a play draws from: Only sources filter *lib* (same kind adds up, kinds narrow
     each other), Lean ones become a score bonus per track id. The flag says whether any
     Only source narrowed it."""
-    srcs = [s for s in sources or [] if s.get("kind") in SOURCE_KINDS]
+    srcs = [s for s in sources or [] if s.get("kind") in PLAY_KINDS]
     only: dict[str, list[dict[str, Any]]] = {}
     for s in srcs:
         if s.get("rule", "only") == "only":

@@ -18,7 +18,7 @@ router = APIRouter(prefix="/music")
 class Source(BaseModel):
     """What a play may draw from (SPEC-flows-tab §2)."""
 
-    kind: Literal["library", "artist", "album", "genre"]
+    kind: Literal["library", "artist", "album", "genre", "id"]
     value: str
     rule: Literal["only", "lean"] = "only"
 
@@ -449,3 +449,21 @@ def read_queue(body: ReadBody2) -> dict[str, Any]:
     source = _source(rendered, flow=mix["flow"], mix=mix["id"], choices={}, seed=1)
     keep = state["current"] + 1
     return _queue_run(queue.future, _items(rendered, pool)[keep : len(ids)], source)
+
+
+class SetFlowBody(BaseModel):
+    ids: list[str]
+    name: str = "Your set"
+
+
+@router.post("/set/flow")
+def play_set_as_flow(body: SetFlowBody) -> dict[str, Any]:
+    """The Music page's set as a flow (SPEC-music-library §2.6): its shape read from its
+    tracks in their order, played with every one of them as a Lean source."""
+    by = {t["id"]: t for t in _pool()}
+    tracks = [by[i] for i in body.ids if i in by]
+    if not tracks:
+        raise HTTPException(400, "no analysed track in the set")
+    flow = _run(mixes.flow_create, body.name, flows.read(tracks))
+    lean = [Source(kind="id", value=t["id"], rule="lean") for t in tracks]
+    return play_flow(flow["id"], PlayBody(sources=lean))

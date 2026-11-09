@@ -8,10 +8,8 @@ import { fitTape, HEAD_H, LABEL_H, MARK_COLOR, TAPE_H, TRACK_H, type TapeGroup }
 // The tape (SPEC-music-library §2.4): every track in view as a sigil, width by length, grouped
 // like the explorer, with a header per group; a minimap above; wheel scrolls sideways.
 
-export interface Join {
-  mark: 'smooth' | 'close' | 'rough'
-  blend: number
-}
+import type { Join } from './blendOrder'
+import { carryProps } from './carry'
 
 
 export default function Tape({ groups, facts, colour, joins, selectedId, playingId, onSelect, onPlay, hoverProps }: {
@@ -78,7 +76,7 @@ export default function Tape({ groups, facts, colour, joins, selectedId, playing
           {layout.heads.map((h, i) => {
             const showHead = h.head !== layout.heads[i - 1]?.head
             return (
-              <div key={h.key} className="absolute" style={{ left: h.x, top: 12, maxWidth: h.maxW }}>
+              <div key={h.key} {...carryProps(h.tracks, h.name || h.head)} className="absolute cursor-grab" style={{ left: h.x, top: 12, maxWidth: h.maxW }} title="Drag the group into your set">
                 <span className="absolute -left-3 top-9 h-32 w-px bg-white/15" />
                 <span className="block h-7 truncate text-[22px] font-light leading-7 text-base-content/40">{showHead ? h.head : ''}</span>
                 <b className="block truncate text-[13px] font-semibold">{h.name}</b>

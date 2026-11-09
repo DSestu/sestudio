@@ -5,6 +5,7 @@ import { fmtTime } from '../format'
 import type { Facts } from './facts'
 import { fileName, type GroupNode } from './grouping'
 import { trackColor, type Colour } from './sigil'
+import { carryProps } from './carry'
 import { Ic, type IconName } from './icons'
 
 // The explorer's tree (SPEC-music-library §2.2): group rows with a chevron, an icon, the
@@ -141,7 +142,7 @@ export function Nodes({ nodes, depth, prefix, h }: { nodes: GroupNode[]; depth: 
               onClick={() => h.onOpen(n)}
               onAdd={() => h.onAdd(n.all, n.name)}
               active={h.sourceKey === n.key}
-              drag={{ draggable: true, onDragStart: (e: React.DragEvent) => { e.dataTransfer.setData('text/plain', n.name) } }}
+              drag={carryProps(n.all, n.name)}
             />
             {on && n.kids && <Nodes nodes={n.kids} depth={depth + 1} prefix={n.key} h={h} />}
             {on && tracks.slice(0, shown).map(t => <TrackRow key={t.id} t={t} depth={depth + 1} list={tracks} file={!!files} h={h} />)}

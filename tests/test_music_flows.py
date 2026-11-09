@@ -642,3 +642,29 @@ def test_the_picker_lists_and_counts_sources(tmp_path, monkeypatch):
         "seconds": round(8 * (300 - flows.BLEND_S)),
         "narrowed": True,
     }
+
+
+def test_the_set_plays_as_a_flow_leaning_on_its_tracks(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from sestudio import downloaded
+    from sestudio.web.app import create_app
+    from sestudio.web.routes import music_flows
+
+    monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SESTUDIO_DB", str(tmp_path / "library.db"))
+    library._conn = None
+    downloaded.invalidate()
+    monkeypatch.setattr(music_flows, "_pool", lambda: SRC_LIB)
+    got, lean, narrowed = flows.scope(
+        SRC_LIB, [{"kind": "id", "value": "3", "rule": "lean"}]
+    )
+    assert not narrowed and set(lean) == {"3"} and len(got) == len(SRC_LIB)
+    c = TestClient(create_app())
+    picked = ["20", "21", "22"]
+    r = c.post("/api/music/set/flow", json={"ids": picked, "name": "My set"})
+    assert r.status_code == 200, r.text
+    q = c.get("/api/music/queue").json()
+    assert [s["value"] for s in q["source"]["sources"]] == picked
+    assert any(f["name"] == "My set" for f in c.get("/api/music/flows").json())
+    assert c.post("/api/music/set/flow", json={"ids": ["nope"]}).status_code == 400

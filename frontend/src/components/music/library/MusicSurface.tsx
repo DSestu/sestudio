@@ -7,17 +7,19 @@ import { useMusicQueue } from '../../../musicQueue'
 import type { Summary } from '../../../musicMeta'
 import { currentParams, patchParams } from '../../../nav'
 import { useModalBack } from '../../../useModalBack'
-import { addTracks } from '../adding'
+import { removeFromSet, useSet } from '../../../musicSet'
+import { addTracksToSet } from './setQueue'
+import SetLane from './SetLane'
 import { playFrom } from '../player'
 import Explorer from './Explorer'
 import type { TreeHandlers } from './ExplorerTree'
 import { factsFrom } from './facts'
 import { DIMS, findNode, treeOf, type GroupNode, type Grouping } from './grouping'
 import { Ic } from './icons'
-import Tape, { type Join } from './Tape'
+import Tape from './Tape'
+import { BLEND_CAP, useBlendOrder } from './blendOrder'
 import TapeBar, { type Order, type Shape } from './TapeBar'
 import type { TapeGroup } from './tapeLayout'
-import { toast } from '../toast'
 import { LINK_RE, useMusicQuery } from '../../../musicQuery'
 import ExplorerSearch from './ExplorerSearch'
 import { isEmpty, matches, parseQuery } from './searchWords'
@@ -86,7 +88,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   const sourceName = source ? source.name : 'Whole library'
   // eslint-disable-next-line react-hooks/set-state-in-effect -- a new source opens Grouped
   useEffect(() => { setOrder('grouped') }, [sourceKey])
-  const blend = useBlendOrder(order === 'blend' ? inView.slice(0, BLEND_CAP) : undefined, shape, byId)
+  const blend = useBlendOrder(order === 'blend' ? inView.slice(0, BLEND_CAP) : undefined, shape)
   const blendGroups = useMemo<TapeGroup[] | undefined>(() => blend && [{ key: 'blend', head: `Best blend · ${shape}`, name: sourceName, tracks: blend.tracks }], [blend, shape, sourceName])
   const [selectedId, setSelectedId] = useState<string>()
   const h: TreeHandlers = {
@@ -96,20 +98,23 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
     playingId,
     hoverProps: t => hc.props(t),
     onOpen: n => { setSourceKey(n.key); setBrowse(false) },
-    onAdd: (ts, label) => void addTracks(ts.map(t => ({ library: t.library, track_id: t.id })), undefined, `Added ${ts.length === 1 ? label : `${ts.length} tracks from ${label}`}`),
+    onAdd: (ts, label) => { addTracksToSet(ts, label) },
     onTrack: (t, list) => void playFrom(list, t),
   }
   const hc = useHoverCard()
   const focusTrack = (selectedId && byId.get(selectedId)) || (playingId && byId.get(playingId)) || undefined
-  const addOne = (t: MusicTrack) => h.onAdd([t], t.title)
+  const set = useSet()
+  const inSet = useMemo(() => new Set(set.tracks.map(t => t.id)), [set.tracks])
+  // + on a track: in the set, or out of it again.
+  const toggleOne = (t: MusicTrack) => (inSet.has(t.id) ? removeFromSet([t.id]) : h.onAdd([t], t.title))
   const rightColumn = focusTrack ? (
     <>
       <TrackInfo
         track={focusTrack} selected={!!selectedId} facts={facts} colour={colour} libraries={libraries}
         onClear={() => setSelectedId(undefined)} onPlay={() => void playFrom(inView.some(t => t.id === focusTrack.id) ? inView : [focusTrack], focusTrack)}
-        action={{ label: 'Add to queue', onClick: () => addOne(focusTrack) }}
+        action={{ label: inSet.has(focusTrack.id) ? 'Remove from set' : 'Add to set', onClick: () => toggleOne(focusTrack) }}
       />
-      <Orbit focus={focusTrack} all={all} facts={facts} colour={colour} inSet={NO_SET} onFocus={t => setSelectedId(t.id)} onAdd={addOne} />
+      <Orbit focus={focusTrack} all={all} facts={facts} colour={colour} inSet={inSet} onFocus={t => setSelectedId(t.id)} onAdd={toggleOne} />
     </>
   ) : <p className="p-4 text-xs text-base-content/45">Select a track to see its details here.</p>
   const explorer = (
@@ -133,6 +138,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
         joins={order === 'blend' ? blend?.joins : undefined} selectedId={selectedId} playingId={playingId}
         onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)} hoverProps={hc.props}
       />
+      <SetLane facts={facts} colour={colour} get={get} wide={wide} sourceName={source?.kind === 'album' ? source.name : undefined} selectedId={selectedId} onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} />
       {hc.hover && <HoverCard hover={hc.hover} facts={facts} colour={colour} />}
     </>
   )
@@ -156,32 +162,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   )
 }
 
-/** Best blend caps the tracks it orders (§2.4). */
-const BLEND_CAP = 160
-/** The set lands in PR 6; until then nothing is outlined in the orbit. */
-const NO_SET: ReadonlySet<string> = new Set()
 
-interface BlendResult { tracks: MusicTrack[]; joins: Join[]; score: number; rough: number }
-
-/** The server's Best blend of `tracks` for `shape`; undefined while it works or when off. */
-function useBlendOrder(tracks: MusicTrack[] | undefined, shape: Shape, byId: Map<string, MusicTrack>): BlendResult | undefined {
-  const [out, setOut] = useState<{ key: string; result: BlendResult }>()
-  const key = tracks ? `${shape}|${tracks.map(t => t.id).join(',')}` : ''
-  useEffect(() => {
-    if (!tracks) return
-    const ctrl = new AbortController()
-    fetch('/api/music/set/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: tracks.map(t => t.id), shape }), signal: ctrl.signal })
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`order: ${r.status}`))))
-      .then((res: { order: string[]; joins: Join[] }) => {
-        const ordered = res.order.map(id => byId.get(id)).filter((t): t is MusicTrack => !!t)
-        const score = res.joins.length ? Math.round((res.joins.reduce((s, j) => s + j.blend, 0) / res.joins.length) * 100) : 100
-        setOut({ key, result: { tracks: ordered, joins: res.joins, score, rough: res.joins.filter(j => j.mark === 'rough').length } })
-      })
-      .catch((e: Error) => { if (e.name !== 'AbortError') toast(e.message) })
-    return () => ctrl.abort()
-  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps -- `key` names the request
-  return out?.key === key ? out.result : undefined
-}
 
 /** The leaves of the tree as tape groups: with 2+ levels the parent is the large head. */
 function tapeGroupsOf(tree: GroupNode[], g: Grouping): TapeGroup[] {
