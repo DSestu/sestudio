@@ -73,7 +73,7 @@
 |---|---|
 | Track info | Top of the column, for the **selected** track (else the playing one; `×` returns to playing, `^` folds to the title). Title, artist · album, full file path (needs §3), **energy and sections** curve, **spectrum** (bands × time heat strip), six facts (Tempo, Key + Camelot, Mood + mode, Energy level + value with `in a → out b`, Genre, Length), **balance** bars (bass / mids / highs), **harmony** (the 12 notes with the scale lit and the tonic filled; the mode on the brightness ladder Floating … Unstable), place in the set with both joins, lists it is in, **Play** and **Add to / Remove from set**. The data is all in `/tracks/{id}/analysis` today. |
 | Orbit | The focused track at the centre; every other track placed by mood (angle, in ladder order) and fit distance (radius: rings "Fits next" 0.22, "Close", "A step away", "Far"); set members outlined. Click a dot to focus it (the tape scrolls to it). |
-| Fits after it | The 5 closest tracks to the focused one (fit = tempo 0.25 · mood 0.45 · energy 0.25 of the §2.7 distance, no harmony — unchanged from the mockup), each with **+**. |
+| Fits after it | The 5 tracks that blend best after the focused one: the Blend under this device's Blend by and Harmony moves (§2.7), so harmony counts. The orbit's radius is 1 − that Blend (rings: smooth ≥ 0.83 fits next, Close to 0.58, A step away, Far). Each with **+**. *(Was tempo .25 · mood .45 · energy .25 without harmony; changed at the user's request.)* |
 | Tune | The mockup's Tune panel is not shipped. Its values become constants (§2.9). |
 
 ### 2.6 Your set (centre, under the tape)
@@ -122,7 +122,7 @@ The **set** is a working list, separate from the queue. It is where things land 
 | Tape labels · colour · headers · stretch · minimap | title · mood · on · on · on |
 | Explorer: rail · groups before "more" · flat search · online first · online per source · BPM in rows | icon rail · 8 · on · on · 5 · on |
 | Search: sound words · BPM tolerance · sound words online · de-duplicate | on · ±10 · off · on |
-| Orbit fit weights tempo / mood / energy · fits ring · rows | .25 / .45 / .25 · 0.22 · 5 |
+| Orbit distance · fits ring · rows | 1 − Blend (with Blend by) · 0.17 · 5 |
 | Blend: tempo guard · smooth below · rough from · shape pull · default order · default shape | .3 · .17 · .42 · .8 · Best blend · Arc |
 | Blend by importances h / m / e / g | .9 / .45 / .7 / .35 |
 | Harmony welcome same / relative / next / mode / lift / drop / clash | 1 / .9 / .85 / .55 / .45 / .35 / 0 |

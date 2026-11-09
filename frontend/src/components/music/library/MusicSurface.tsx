@@ -131,7 +131,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
         onClear={() => setSelectedId(undefined)} onPlay={() => void playFrom(inView.some(t => t.id === focusTrack.id) ? inView : [focusTrack], focusTrack)}
         action={{ label: inSet.has(focusTrack.id) ? 'Remove from set' : 'Add to set', onClick: () => toggleOne(focusTrack) }}
       />
-      <Orbit focus={focusTrack} all={all} facts={facts} colour={colour} inSet={inSet} onFocus={t => setSelectedId(t.id)} onAdd={toggleOne} />
+      <Orbit focus={focusTrack} all={all} facts={facts} get={get} colour={colour} inSet={inSet} onFocus={t => setSelectedId(t.id)} onAdd={toggleOne} />
     </>
   ) : <p className="p-4 text-xs text-base-content/45">Select a track to see its details here.</p>
   const explorer = (

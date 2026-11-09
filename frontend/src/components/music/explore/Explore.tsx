@@ -10,6 +10,7 @@ import { useFitsPrefs } from '../../../fitsPrefs'
 import { playFrom } from '../player'
 import DotCard from './DotCard'
 import { dotOf, PAD, place, ringRadius, type Dot } from './place'
+import { useBlendWeights } from '../../../musicBlendWeights'
 
 const NOTES = ['C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯', 'A♭', 'E♭', 'B♭', 'F']
 /** Darkest first, the way the map reads from left to right. */
@@ -77,11 +78,12 @@ export default function Explore({ library, path, anchor, clash, onPick, action, 
   const stops = path.flatMap((s, i) => { const d = dotsById.get(s.track.id); return d ? [{ ...s, n: i + 1, d }] : [] })
   const faint = useMemo(() => library.filter(t => dotsById.has(t.id) && !taken.has(t.id)), [library, dotsById, taken])
   // The tracks Fits next would list first, as far as the map shows them.
+  const bw = useBlendWeights()
   const fits = useMemo(() => {
     if (!anchor) return new Set<string>()
     const pool = faint.map(t => proxOf(t, get(t.id)))
     return new Set(rankFits(proxOf(anchor.track, get(anchor.track.id)), pool, filtersOf(prefs, settings.music_harmony_rule)).slice(0, RINGED).map(r => r.id))
-  }, [anchor, faint, prefs, settings.music_harmony_rule, v]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [anchor, faint, prefs, settings.music_harmony_rule, v, bw]) // eslint-disable-line react-hooks/exhaustive-deps
   const picked = sel ? library.find(t => t.id === sel) : undefined
   const small = w < 520
   const r0 = view === 'vibe' && small ? 4.5 : 6

@@ -1,5 +1,6 @@
 import type { ProxTrack, Reading } from './components/music/crates/proximity'
 import { fit, joinKind } from './flowFits'
+import { DEFAULT_IMPORTANCE, type Importance } from './musicBlendWeights'
 
 // Blend (SPEC-blend §2): how well one track follows another, as one soft score. The same rules and
 // numbers as src/sestudio/music/blend.py; tests/fixtures/blend.json checks both against each other.
@@ -34,6 +35,9 @@ export interface BlendOpts {
   genres?: string[] | null
   /** The harmony part when the caller reads joins its own way (proximity, with its Camelot fallback). */
   harmony?: number
+  /** Blend by importances (harmony, mood, energy, genre): each scales its layer's Prefer weight
+   *  by importance / default, as the server's `blend.layer_weights` (SPEC-music-library §2.7). */
+  weights?: Partial<Importance>
 }
 
 const BRIGHTNESS: Record<string, number> = { Lydian: 3, Ionian: 2, Mixolydian: 1, Dorian: 0, Aeolian: -1, Phrygian: -2, Locrian: -3 }
@@ -62,6 +66,14 @@ export const HOLD_PART = 0.64
 export const energyLean = (delta: number): Lean => (near(delta, LEAN.hold.energy, SPREAD.energy) >= HOLD_PART ? 'hold' : delta > 0 ? 'lift' : 'ease')
 const norm = (s?: string | null) => (s ?? '').trim().toLowerCase()
 const r3 = (v: number) => Math.round(v * 1000) / 1000
+
+/** Which layer each Blend by axis weighs. */
+const AXIS_LAYER: Record<string, Layer> = { harmony: 'harmony', mood: 'colour', energy: 'energy', genre: 'genre' }
+const layerWeight = (k: Layer, w?: Partial<Importance>): number => {
+  const axis = Object.keys(AXIS_LAYER).find(a => AXIS_LAYER[a] === k) as keyof Importance | undefined
+  const v = axis && w?.[axis]
+  return v == null || !axis ? WEIGHTS[k] : (WEIGHTS[k] * v) / DEFAULT_IMPORTANCE[axis]
+}
 
 /** How well `b` follows `a`: the score, each layer's part, the energy and tempo steps, the join, and whether a Must blocks it. */
 export function blend(a: BlendTrack, b: BlendTrack, o: BlendOpts = {}): Blend {
@@ -106,7 +118,7 @@ export function blend(a: BlendTrack, b: BlendTrack, o: BlendOpts = {}): Blend {
     if (cfg[k] === 'ignore') parts[k] = null
     const p = parts[k]
     if (p == null) continue
-    const w = WEIGHTS[k] * (cfg[k] === 'must' ? MUST : 1)
+    const w = layerWeight(k, o.weights) * (cfg[k] === 'must' ? MUST : 1)
     total += w * p
     weight += w
   }

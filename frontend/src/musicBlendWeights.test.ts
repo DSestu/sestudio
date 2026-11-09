@@ -20,3 +20,14 @@ describe('blend by', () => {
     expect(getBlendWeights().importance).toEqual({ harmony: 1, mood: 0.02, energy: 0.5, genre: 0.02 })
   })
 })
+
+describe('Blend by in the Blend score', () => {
+  it('defaults change nothing; a light axis counts less', async () => {
+    const { blend } = await import('./blend')
+    const a = { id: 'a', bpm: 128, genre: 'House', energyScale: { outro: 10 } }
+    const b = { id: 'b', bpm: 128, genre: 'House', energyScale: { intro: 90 } }
+    const base = blend(a, b).score
+    expect(blend(a, b, { weights: DEFAULT_IMPORTANCE }).score).toBeCloseTo(base, 3)
+    expect(blend(a, b, { weights: { energy: 0.02 } }).score).toBeGreaterThan(base)
+  })
+})

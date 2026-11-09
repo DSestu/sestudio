@@ -1,4 +1,5 @@
 import { blend, energyLean, type Blend, type Lean } from '../../../blend'
+import { getBlendWeights, type Move } from '../../../musicBlendWeights'
 
 // How well one track follows another (harmony master plan E0.5), ranked by Blend (SPEC-blend). The same
 // rules, thresholds and move names as src/sestudio/music/proximity.py: keep both in step.
@@ -50,8 +51,6 @@ export const SAFE_NOTES = 6
 export const TEMPO_TOL = 0.06
 /** An energy step's word, by the lean it serves best. */
 const STEP_WORD = { lift: 'lifts', hold: 'holds', ease: 'eases off' } as const
-/** Each move kind's harmony part in a Blend: a transposition after every shared-notes move, ahead of a clash. */
-const HARMONY_PART: Record<Kind, number> = { 'same-key': 1, pivot: 0.8, 'modal-shift': 0.6, 'next-door': 0.6, transposed: 0.5, clash: 0 }
 /** Blend 0..1 to a cost on the old scale (0 best, about 20 for a clash), which the gap finders add up. */
 export const COST_SCALE = 20
 /** Candidates tried at each step of a path. */
@@ -137,9 +136,15 @@ export function harmonyOf(a: ProxTrack, b: ProxTrack): { shared: number | null; 
 const edge = (t: ProxTrack, which: 'intro' | 'outro' | 'track') => t.energyScale?.[which] ?? t.energyScale?.track ?? null
 
 /** The Blend of a → b with this file's harmony reading (Camelot stands in for an unread key). */
+/** The Blend by move of a join: transposed splits into lift (up) and drop (down). */
+const moveOf = (kind: Kind, a: ProxTrack, b: ProxTrack): Move => (kind === 'transposed' ? ((transposition(a, b) ?? 1) > 0 ? 'lift' : 'drop') : kind)
+
+/** How b follows a under the Blend by weights and harmony moves on this device (their defaults are
+*  today's Blend: the default welcome and importances, as the server's). */
 export function blendOf(a: ProxTrack, b: ProxTrack, lean: Lean = 'hold'): Blend {
   const { kind } = harmonyOf(a, b)
-  return blend(a, b, { lean, harmony: kind ? HARMONY_PART[kind] : 0.4 })
+  const { importance, welcome } = getBlendWeights()
+  return blend(a, b, { lean, harmony: kind ? welcome[moveOf(kind, a, b)] : 0.4, weights: importance })
 }
 
 /** Everything worth saying about the move from a to b (unknown facts are null), with its Blend. */

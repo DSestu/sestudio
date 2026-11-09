@@ -2,7 +2,10 @@ import { useMemo } from 'react'
 import type { MusicTrack } from '../../../musicLibrary'
 import type { Facts } from './facts'
 import { MOOD_ORDER } from './facts'
-import { FITS_RING, fitDist, RINGS } from './fit'
+import type { Summary } from '../../../musicMeta'
+import { useBlendWeights } from '../../../musicBlendWeights'
+import { blendOf } from '../crates/proximity'
+import { proxOfId } from '../queueGaps'
 import { Ic } from './icons'
 import { silhouette, trackColor, type Colour } from './sigil'
 
@@ -10,11 +13,16 @@ import { silhouette, trackColor, type Colour } from './sigil'
 // by mood (angle, in ladder order) and fit distance (radius); set members outlined. Click a dot
 // to focus it. Under it, "Fits after it": the 5 closest, each with +.
 
+/** The rings in Blend terms: smooth joins (Blend 0.83 and up) fit next; rough ones (below 0.58) are past Close. */
+const FITS_RING = 0.17
+const RINGS: [number, string][] = [[FITS_RING, 'Fits next'], [0.42, 'Close'], [0.7, 'A step away'], [1, 'Far']]
 const W = 330, R0 = 34, R = W / 2 - 10
 const jit = (id: string) => (parseInt(id.slice(0, 6), 16) % 1000) / 1000 || 0.5
 
-export default function Orbit({ focus, all, facts, colour, inSet, onFocus, onAdd }: {
+export default function Orbit({ focus, all, facts, get, colour, inSet, onFocus, onAdd }: {
   focus: MusicTrack
+  /** Summaries, for the Blend of each track after the focused one. */
+  get: (id: string) => Summary | undefined
   all: MusicTrack[]
   facts: Facts
   colour: Colour
@@ -23,14 +31,19 @@ export default function Orbit({ focus, all, facts, colour, inSet, onFocus, onAdd
   onAdd: (t: MusicTrack) => void
 }) {
   const p = facts(focus.id)
-  const placed = useMemo(() => all.filter(t => t.id !== focus.id).map(t => {
+  // Distance = 1 - the Blend of the track after the focused one, under this device's Blend by and Harmony moves.
+  const weights = useBlendWeights()
+  const placed = useMemo(() => {
+    const from = proxOfId(focus.id, get(focus.id))
+    return all.filter(t => t.id !== focus.id).map(t => {
     const f = facts(t.id)
-    const d = fitDist(f, p)
+    const d = t.library === 'online' && !get(t.id) ? 1 : 1 - blendOf(from, proxOfId(t.id, get(t.id))).score
     const i = Math.max(0, MOOD_ORDER.indexOf(f.mood?.word ?? ''))
     const a = ((i + 0.1 + jit(t.id) * 0.8) / MOOD_ORDER.length) * Math.PI * 2 - Math.PI / 2
     const rr = R0 + d * (R - R0)
     return { t, f, d, x: W / 2 + Math.cos(a) * rr, y: W / 2 + Math.sin(a) * rr }
-  }), [all, facts, focus.id, p])
+    })
+  }, [all, facts, get, focus.id, weights]) // eslint-disable-line react-hooks/exhaustive-deps -- `weights` changes what blendOf reads
   const near = useMemo(() => [...placed].sort((a, b) => a.d - b.d).slice(0, 5), [placed])
   const fitsN = placed.filter(x => x.d < FITS_RING).length
   return (
