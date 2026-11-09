@@ -6,6 +6,7 @@ import { Shape } from '../flows/FlowRow'
 import { Nodes, Row, type TreeHandlers } from './ExplorerTree'
 import { DIMS, GROUP_SORTS, PRESETS, TRACK_SORTS, findNode, groupingLabel, presetOf, sortLabel, type Dim, type GroupNode } from './grouping'
 import { Ic, type IconName } from './icons'
+import RailPopover from './RailPopover'
 
 // The explorer (SPEC-music-library §2.2): the icon rail, the Library tree for the grouping
 // (a file explorer in Library mode), Lists, Flows and Online.
@@ -47,7 +48,7 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
         <span className="flex-1" />
         {onClose && <button onClick={onClose} aria-label="Close" className="btn btn-ghost btn-circle btn-xs relative hit"><Ic name="close" size={15} /></button>}
       </div>
-      {search ? <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2 text-sm">{search.body}</div> : <div className="flex min-h-0 flex-1">
+      {search ? <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-1.5 pb-2 text-sm">{search.body}</div> : <div className="flex min-h-0 flex-1">
         <nav aria-label="Group by" className="flex w-13 shrink-0 flex-col items-stretch gap-0.5 border-r border-white/8 px-1 pb-2">
           {PRESETS.map(p => (
             <button key={p.id} onClick={() => applyPreset(p.id)} aria-pressed={preset === p.id} title={p.dims.length > 1 ? `${p.label} › ${p.dims.slice(1).map(d => DIMS[d].label).join(' › ')}` : p.label}
@@ -55,11 +56,8 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
               <Ic name={RAIL_ICON[p.id]} size={17} /><span>{p.label}</span>
             </button>
           ))}
-          <div className="dropdown dropdown-right">
-            <button tabIndex={0} aria-pressed={!preset} title={`Stack levels: ${groupingLabel(g)}`} className={`flex w-full flex-col items-center gap-0.5 rounded-lg py-1.5 text-[9px] leading-none ${!preset ? 'bg-primary/15 text-primary' : 'text-base-content/60 hover:bg-white/5 hover:text-base-content'}`}>
-              <Ic name="layers" size={17} /><span>Custom</span>
-            </button>
-            <div tabIndex={0} className="dropdown-content z-30 ml-1 w-52 rounded-xl bg-base-200 p-2 shadow-lg">
+          <RailPopover label="Custom" title={`Stack levels: ${groupingLabel(g)}`} pressed={!preset} width="w-52" icon={<Ic name="layers" size={17} />}
+            className={`flex w-full flex-col items-center gap-0.5 rounded-lg py-1.5 text-[9px] leading-none ${!preset ? 'bg-primary/15 text-primary' : 'text-base-content/60 hover:bg-white/5 hover:text-base-content'}`}>
               <p className="px-1 pb-1 text-[11px] text-base-content/50">Stack levels · click in order</p>
               {(Object.keys(DIMS) as Dim[]).map(d => {
                 const i = g.files ? -1 : g.dims.indexOf(d)
@@ -73,22 +71,17 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
               <hr className="my-1 border-white/10" />
               <button onClick={() => { setGrouping({ files: false, dims: [] }); blur() }} className="flex w-full items-center gap-2 rounded-lg px-2 h-8 text-sm hover:bg-white/5"><Ic name="list" size={14} />Flat, no levels</button>
               <p className="px-1 pt-1 text-[11px] text-base-content/50">{groupingLabel(g)}</p>
-            </div>
-          </div>
+          </RailPopover>
           <span className="flex-1" />
-          <div className="dropdown dropdown-right dropdown-end">
-            <button tabIndex={0} title={`Sort: ${sortLabel(g)}`} className="flex w-full flex-col items-center gap-0.5 rounded-lg py-1.5 text-[9px] leading-none text-base-content/60 hover:bg-white/5 hover:text-base-content">
-              <Ic name="sort" size={17} /><span>Sort</span>
-            </button>
-            <div tabIndex={0} className="dropdown-content z-30 ml-1 w-48 rounded-xl bg-base-200 p-2 shadow-lg">
+          <RailPopover label="Sort" title={`Sort: ${sortLabel(g)}`} width="w-48" icon={<Ic name="sort" size={17} />}
+            className="flex w-full flex-col items-center gap-0.5 rounded-lg py-1.5 text-[9px] leading-none text-base-content/60 hover:bg-white/5 hover:text-base-content">
               <p className="px-1 pb-1 text-[11px] text-base-content/50">Groups</p>
               {GROUP_SORTS.map(([k, l]) => <button key={k} onClick={() => setGrouping({ groupSort: k })} aria-pressed={g.groupSort === k} className={`block w-full rounded-lg px-2 h-7 text-left text-sm ${g.groupSort === k ? 'bg-primary/15 text-primary' : 'hover:bg-white/5'}`}>{l}</button>)}
               <p className="px-1 pt-2 pb-1 text-[11px] text-base-content/50">Tracks</p>
               {TRACK_SORTS.map(([k, l]) => <button key={k} onClick={() => setGrouping({ trackSort: k })} aria-pressed={g.trackSort === k} className={`block w-full rounded-lg px-2 h-7 text-left text-sm ${g.trackSort === k ? 'bg-primary/15 text-primary' : 'hover:bg-white/5'}`}>{l}</button>)}
-            </div>
-          </div>
+          </RailPopover>
         </nav>
-        <div className="min-w-0 flex-1 overflow-y-auto px-1.5 pb-2 text-sm">
+        <div className="scroll-thin min-w-0 flex-1 overflow-y-auto px-1.5 pb-2 text-sm">
           {g.files && <Address dir={dir} libraries={libraries} tree={tree} onOpen={h.onOpen} />}
           <Section title="Library" hint={g.files ? 'folders' : `by ${groupingLabel(g).toLowerCase()}`} action={g.files ? <button onClick={onAddLibrary} className="btn btn-ghost btn-xs">Add</button> : undefined}>
             {tree.length ? <Nodes nodes={tree} depth={0} prefix="g" h={h} /> : <p className="px-3 py-2 text-xs text-base-content/45">No music yet</p>}

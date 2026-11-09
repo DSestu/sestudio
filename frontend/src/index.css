@@ -151,6 +151,12 @@
   }
 }
 
+/* A quiet thin scrollbar for the Music page's columns (Windows draws thick ones with arrows). */
+@utility scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+
 /* A 44px touch target around a smaller control, without changing how it looks.
    The control must be positioned (relative or absolute). */
 @utility hit {
