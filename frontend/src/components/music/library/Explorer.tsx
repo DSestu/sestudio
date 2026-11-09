@@ -28,9 +28,11 @@ export interface ExplorerProps {
   onFlows: () => void
   onAddLibrary: () => void
   onClose?: () => void
+  /** Search mode: the flat results replace the rail and the sections. */
+  search?: { words: string; body: React.ReactNode }
 }
 
-export default function Explorer({ tree, total, libraries, h, dir, onList, onNewList, onFlow, onFlows, onAddLibrary, onClose }: ExplorerProps) {
+export default function Explorer({ tree, total, libraries, h, dir, onList, onNewList, onFlow, onFlows, onAddLibrary, onClose, search }: ExplorerProps) {
   const g = useGrouping()
   const preset = presetOf(g)
   const { flows } = useFlows()
@@ -39,11 +41,11 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         <b className="text-sm">Explorer</b>
-        <small className="text-xs text-base-content/50">{total} tracks</small>
+        <small className="truncate text-xs text-base-content/50">{search ? `matching “${search.words}”` : `${total} tracks`}</small>
         <span className="flex-1" />
         {onClose && <button onClick={onClose} aria-label="Close" className="btn btn-ghost btn-circle btn-xs relative hit"><Ic name="close" size={15} /></button>}
       </div>
-      <div className="flex min-h-0 flex-1">
+      {search ? <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2 text-sm">{search.body}</div> : <div className="flex min-h-0 flex-1">
         <nav aria-label="Group by" className="flex w-13 shrink-0 flex-col items-stretch gap-0.5 border-r border-white/8 px-1 pb-2">
           {PRESETS.map(p => (
             <button key={p.id} onClick={() => applyPreset(p.id)} aria-pressed={preset === p.id} title={p.dims.length > 1 ? `${p.label} › ${p.dims.slice(1).map(d => DIMS[d].label).join(' › ')}` : p.label}
@@ -101,7 +103,7 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
             {ONLINE.map(s => <Row key={s} depth={0} icon={<Ic name="search" size={13} />} label={<>{s} <i className="ml-1 text-[11px] not-italic text-base-content/45">type to search</i></>} dim />)}
           </Section>
         </div>
-      </div>
+      </div>}
       <p className="border-t border-white/8 px-3 py-1.5 text-[11px] leading-snug text-base-content/45">Click opens it on the tape. Drag a track into your set. Double-click plays.</p>
     </div>
   )
