@@ -4,6 +4,7 @@ import { dragProps } from '../edit/focus'
 import { fmtTime } from '../format'
 import type { Facts } from './facts'
 import { fileName, type GroupNode } from './grouping'
+import { trackColor, type Colour } from './sigil'
 import { Ic, type IconName } from './icons'
 
 // The explorer's tree (SPEC-music-library §2.2): group rows with a chevron, an icon, the
@@ -29,6 +30,7 @@ export interface TreeHandlers {
   onAdd: (tracks: MusicTrack[], label: string) => void
   onTrack: (t: MusicTrack, list: MusicTrack[]) => void
   facts: Facts
+  colour: Colour
   /** The playing track, lit in the tree. */
   playingId?: string
 }
@@ -81,7 +83,7 @@ export function TrackRow({ t, depth, list, file, h }: { t: MusicTrack; depth: nu
   return (
     <Row
       depth={depth}
-      icon={<span className="size-2.5 rounded-sm" style={{ background: f.mood?.color ?? 'oklch(45% .02 240)' }} />}
+      icon={<span className="size-2.5 rounded-sm" style={{ background: trackColor(f, h.colour) }} />}
       label={<>
         {file ? <FileLabel name={name} /> : name}
         {file && t.title !== name.replace(/\.[^.]+$/, '') && <i className="ml-1.5 text-[11px] not-italic text-base-content/50">{t.title}</i>}
