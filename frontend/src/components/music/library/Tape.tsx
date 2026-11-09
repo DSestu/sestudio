@@ -14,7 +14,7 @@ export interface Join {
 }
 
 
-export default function Tape({ groups, facts, colour, joins, selectedId, playingId, onSelect, onPlay }: {
+export default function Tape({ groups, facts, colour, joins, selectedId, playingId, onSelect, onPlay, hoverProps }: {
   groups: TapeGroup[]
   facts: Facts
   colour: Colour
@@ -24,6 +24,7 @@ export default function Tape({ groups, facts, colour, joins, selectedId, playing
   playingId?: string
   onSelect: (t: MusicTrack) => void
   onPlay: (t: MusicTrack) => void
+  hoverProps?: (t: MusicTrack) => object
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
@@ -94,6 +95,7 @@ export default function Tape({ groups, facts, colour, joins, selectedId, playing
               <div key={l.t.id} className="contents">
                 <div
                   {...dragProps(l.t)}
+                  {...hoverProps?.(l.t)}
                   onClick={() => onSelect(l.t)}
                   onDoubleClick={() => onPlay(l.t)}
                   title={l.t.title}

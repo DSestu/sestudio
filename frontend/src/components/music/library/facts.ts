@@ -19,6 +19,13 @@ export interface TrackFacts {
   energy?: number
   level?: Level
   curve?: number[]
+  /** The mode by its analysis name ("Dorian") and the 7 notes of the scale. */
+  mode?: string
+  notes?: string[]
+  /** Mean bass, mids, highs, 0..1. */
+  balance?: [number, number, number]
+  energyIn?: number
+  energyOut?: number
 }
 
 export type Level = (typeof LEVELS)[number]
@@ -44,6 +51,11 @@ export function factsOf(s: Summary | undefined, t?: MusicTrack): TrackFacts {
     energy: s.energyScale?.track,
     level: s.energyLevel ?? levelOf(s.energyScale?.track),
     curve: s.curve,
+    mode,
+    notes: s.harmony?.track?.notes,
+    balance: s.balance,
+    energyIn: s.energyScale?.intro,
+    energyOut: s.energyScale?.outro,
   }
 }
 

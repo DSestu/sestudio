@@ -18,6 +18,10 @@ import Tape, { type Join } from './Tape'
 import TapeBar, { type Order, type Shape } from './TapeBar'
 import type { TapeGroup } from './tapeLayout'
 import { toast } from '../toast'
+import HoverCard from './HoverCard'
+import { useHoverCard } from './hoverCard'
+import Orbit from './Orbit'
+import TrackInfo from './TrackInfo'
 
 // The Music page as one surface (SPEC-music-library §2.1): explorer · centre · right column,
 // three columns that scroll on their own on desktop; stacked on a phone, the explorer sliding in.
@@ -81,10 +85,24 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
     facts,
     colour,
     playingId,
+    hoverProps: t => hc.props(t),
     onOpen: n => { setSourceKey(n.key); setBrowse(false) },
     onAdd: (ts, label) => void addTracks(ts.map(t => ({ library: t.library, track_id: t.id })), undefined, `Added ${ts.length === 1 ? label : `${ts.length} tracks from ${label}`}`),
     onTrack: (t, list) => void playFrom(list, t),
   }
+  const hc = useHoverCard()
+  const focusTrack = (selectedId && byId.get(selectedId)) || (playingId && byId.get(playingId)) || undefined
+  const addOne = (t: MusicTrack) => h.onAdd([t], t.title)
+  const rightColumn = focusTrack ? (
+    <>
+      <TrackInfo
+        track={focusTrack} selected={!!selectedId} facts={facts} colour={colour} libraries={libraries}
+        onClear={() => setSelectedId(undefined)} onPlay={() => void playFrom(inView.some(t => t.id === focusTrack.id) ? inView : [focusTrack], focusTrack)}
+        action={{ label: 'Add to queue', onClick: () => addOne(focusTrack) }}
+      />
+      <Orbit focus={focusTrack} all={all} facts={facts} colour={colour} inSet={NO_SET} onFocus={t => setSelectedId(t.id)} onAdd={addOne} />
+    </>
+  ) : <p className="p-4 text-xs text-base-content/45">Select a track to see its details here.</p>
   const explorer = (
     <Explorer tree={tree} total={all.length} libraries={libraries} h={h} dir={grouping.files ? source : undefined}
       onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)} />
@@ -103,14 +121,16 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
       <Tape
         groups={order === 'blend' && blendGroups ? blendGroups : groups} facts={facts} colour={colour}
         joins={order === 'blend' ? blend?.joins : undefined} selectedId={selectedId} playingId={playingId}
-        onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)}
+        onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)} hoverProps={hc.props}
       />
+      {hc.hover && <HoverCard hover={hc.hover} facts={facts} colour={colour} />}
     </>
   )
   if (!wide) {
     return (
       <div className="flex flex-col gap-3">
         {centre}
+        {rightColumn}
         {browse && <ResponsiveModal onClose={() => setBrowse(false)} boxClassName="flex h-[82vh] flex-col p-0">{explorer}</ResponsiveModal>}
       </div>
     )
@@ -120,7 +140,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
       <aside className="w-80 shrink-0 overflow-hidden rounded-2xl bg-white/5">{explorer}</aside>
       <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-2xl">{centre}</div>
       <aside className="w-85 shrink-0 overflow-y-auto rounded-2xl bg-white/5">
-        {right ?? <p className="p-4 text-xs text-base-content/45">{selectedId ? byId.get(selectedId)?.title : 'Select a track to see its details here.'}</p>}
+        {right ?? rightColumn}
       </aside>
     </div>
   )
@@ -128,6 +148,8 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
 
 /** Best blend caps the tracks it orders (§2.4). */
 const BLEND_CAP = 160
+/** The set lands in PR 6; until then nothing is outlined in the orbit. */
+const NO_SET: ReadonlySet<string> = new Set()
 
 interface BlendResult { tracks: MusicTrack[]; joins: Join[]; score: number; rough: number }
 

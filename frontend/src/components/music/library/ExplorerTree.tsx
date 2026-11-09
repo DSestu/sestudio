@@ -33,9 +33,10 @@ export interface TreeHandlers {
   colour: Colour
   /** The playing track, lit in the tree. */
   playingId?: string
+  hoverProps?: (t: MusicTrack) => object
 }
 
-export function Row({ depth, chevron, onChevron, icon, label, count, onClick, onDouble, onAdd, active, dim, drag, title }: {
+export function Row({ depth, chevron, onChevron, icon, label, count, onClick, onDouble, onAdd, active, dim, drag, title, extra }: {
   depth: number
   /** undefined: no chevron (a track); else open or shut. */
   chevron?: boolean
@@ -50,12 +51,14 @@ export function Row({ depth, chevron, onChevron, icon, label, count, onClick, on
   dim?: boolean
   drag?: Record<string, unknown>
   title?: string
+  extra?: object
 }) {
   return (
     <div
       className={`group flex h-8 items-center gap-1 rounded-lg pr-1 text-[13px] ${active ? 'bg-primary/15 text-primary' : 'hover:bg-white/5'} ${dim ? 'text-base-content/45' : ''}`}
       style={{ paddingLeft: 4 + depth * 14 }}
       {...drag}
+      {...extra}
     >
       <button
         onClick={onChevron}
@@ -95,6 +98,7 @@ export function TrackRow({ t, depth, list, file, h }: { t: MusicTrack; depth: nu
       active={h.playingId === t.id}
       drag={dragProps(t)}
       title={t.path}
+      extra={h.hoverProps?.(t)}
     />
   )
 }
