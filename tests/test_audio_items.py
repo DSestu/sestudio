@@ -109,6 +109,7 @@ def test_parser_on_the_real_names():
         ("a.opus", "audio/ogg"),
         ("a.ogg", "audio/ogg"),
         ("a.FLAC", "audio/flac"),
+        ("a.wav", "audio/wav"),
         ("a.mp4", "video/mp4"),
     ],
 )

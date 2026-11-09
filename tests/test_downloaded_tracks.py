@@ -613,3 +613,10 @@ def test_segments_and_audio_copies_share_one_budget_and_the_new_file_stays(
     assert downloaded.video_cache_size() == 500
     assert downloaded.clear_video_cache() == 500
     assert downloaded.video_cache_size() == 0
+
+
+def test_a_wav_is_never_cast_as_it_is(tmp_path: Path):
+    """Few TVs take a raw wav, so casting one goes through the encode to MPEG-TS."""
+    file = tmp_path / "take.wav"
+    file.write_bytes(b"x")
+    assert downloaded.browser_can_play(file) is False
