@@ -123,19 +123,20 @@ function More({ depth, n, onClick }: { depth: number; n: number; onClick: () => 
 }
 
 /** The group rows at one level, with their children when open. */
-export function Nodes({ nodes, depth, prefix, h }: { nodes: GroupNode[]; depth: number; prefix: string; h: TreeHandlers }) {
+/** `filter`: the filtered tree is showing; its open groups start open, and matches are lit. */
+export function Nodes({ nodes, depth, prefix, h, filter }: { nodes: GroupNode[]; depth: number; prefix: string; h: TreeHandlers; filter?: { open: ReadonlySet<string>; words: string[] } }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [more, setMore] = useState<ReadonlySet<string>>(new Set())
   const grow = (k: string) => setMore(s => new Set(s).add(k))
   const toggle = (k: string) => setOpen(s => { const n = new Set(s); if (!n.delete(k)) n.add(k); return n })
-  const lim = more.has(prefix) || ALL_SHOWN.has(nodes[0]?.kind) ? Infinity : depth === 0 ? GROUPS_SHOWN : DEEP_SHOWN
+  const lim = filter || more.has(prefix) || ALL_SHOWN.has(nodes[0]?.kind) ? Infinity : depth === 0 ? GROUPS_SHOWN : DEEP_SHOWN
   return (
     <>
       {nodes.slice(0, lim).map(n => {
-        const on = open.has(n.key)
+        const on = open.has(n.key) !== !!filter?.open.has(n.key)
         const files = n.files
         const tracks = files ?? (n.kids ? [] : n.all)
-        const shown = more.has(n.key) ? Infinity : files ? FILES_SHOWN : TRACKS_SHOWN
+        const shown = filter || more.has(n.key) ? Infinity : files ? FILES_SHOWN : TRACKS_SHOWN
         return (
           <div key={n.key}>
             <Row
@@ -143,7 +144,7 @@ export function Nodes({ nodes, depth, prefix, h }: { nodes: GroupNode[]; depth: 
               chevron={on}
               onChevron={() => toggle(n.key)}
               icon={<Ic name={ICON[n.kind]} size={14} />}
-              label={n.name}
+              label={<Lit text={n.name} terms={filter?.words} />}
               count={n.all.length}
               onClick={() => h.onOpen(n)}
               onAdd={() => h.onAdd(n.all, n.name)}
@@ -153,8 +154,8 @@ export function Nodes({ nodes, depth, prefix, h }: { nodes: GroupNode[]; depth: 
               active={h.sourceKey === n.key}
               drag={carryProps(n.all, n.name)}
             />
-            {on && n.kids && <Nodes nodes={n.kids} depth={depth + 1} prefix={n.key} h={h} />}
-            {on && tracks.slice(0, shown).map(t => <TrackRow key={t.id} t={t} depth={depth + 1} list={tracks} file={!!files} h={h} />)}
+            {on && n.kids && <Nodes nodes={n.kids} depth={depth + 1} prefix={n.key} h={h} filter={filter} />}
+            {on && tracks.slice(0, shown).map(t => <TrackRow key={t.id} t={t} depth={depth + 1} list={tracks} file={!!files} h={h} terms={filter?.words} />)}
             {on && tracks.length > shown && <More depth={depth + 1} n={tracks.length - shown} onClick={() => grow(n.key)} />}
           </div>
         )

@@ -1,0 +1,95 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root{--bg:oklch(17% .02 250);--col:oklch(20% .025 250);--line:rgb(255 255 255/.08);--txt:oklch(92% .01 250);--dim:rgb(255 255 255/.5);--pri:oklch(72% .16 230)}
+body{margin:0;font:13px/1.35 system-ui,sans-serif;color:var(--foreground)}
+h2{font-size:15px;margin:18px 0 4px} p.n{margin:0 0 8px;color:var(--muted-foreground);font-size:12.5px}
+.row{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.app{background:var(--bg);color:var(--txt);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.top{display:flex;gap:8px;align-items:center;background:var(--col);border-radius:12px;padding:6px 8px}
+.input{display:flex;align-items:center;gap:6px;border:1px solid rgb(255 255 255/.14);border-radius:9px;height:30px;padding:0 9px;color:var(--dim);font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden}
+.input.on{border-color:var(--pri);color:var(--txt);box-shadow:0 0 0 2px oklch(72% .16 230/.25)}
+.chip{background:oklch(72% .16 230/.18);color:var(--pri);border-radius:6px;padding:1px 6px;font-size:11px}
+.cols{display:flex;gap:8px;height:330px}
+.ex{width:250px;background:var(--col);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.mid,.side{background:var(--col);border-radius:12px;flex:1;opacity:.55;display:grid;place-items:center;color:var(--dim);font-size:11px}
+.side{flex:.6}
+.hd{display:flex;gap:6px;align-items:baseline;padding:9px 10px 6px}.hd small{color:var(--dim);font-size:11px}
+.body{display:flex;flex:1;min-height:0}
+.rail{width:40px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:3px;padding:0 4px}
+.ri{height:30px;border-radius:7px;display:grid;place-items:center;font-size:8px;color:var(--dim)}
+.ri.on{background:oklch(72% .16 230/.15);color:var(--pri)}
+.tree{flex:1;padding:0 6px;font-size:12px;overflow:hidden}
+.sec{font-size:10px;letter-spacing:.08em;color:var(--dim);font-weight:600;padding:7px 2px 3px}
+.it{height:24px;display:flex;align-items:center;gap:6px;padding:0 6px;border-radius:6px;white-space:nowrap;overflow:hidden}
+.it i{width:10px;height:10px;border-radius:3px;background:rgb(255 255 255/.2);flex-shrink:0}
+.it.hit{background:rgb(255 255 255/.05)} b.m{color:var(--pri);font-weight:600}
+.ft{border-top:1px solid var(--line);padding:5px 10px;font-size:10px;color:var(--dim)}
+.tag{display:inline-block;font-size:10px;font-weight:700;background:var(--primary);color:var(--primary-foreground);border-radius:5px;padding:1px 6px;margin-right:6px}
+.phone{width:250px;background:var(--bg);color:var(--txt);border-radius:22px;padding:10px;display:flex;flex-direction:column;gap:8px;border:1px solid var(--line)}
+.sheet{background:var(--col);border-radius:14px 14px 0 0;flex:1;display:flex;flex-direction:column;overflow:hidden;height:300px}
+.grab{width:34px;height:4px;border-radius:2px;background:rgb(255 255 255/.25);margin:6px auto 0}
+.cap{font-size:11px;color:var(--muted-foreground);margin:4px 0 0}
+.icon{width:12px;height:12px;border:1.6px solid currentColor;border-radius:50%;flex-shrink:0;position:relative}
+.x{margin-left:auto;opacity:.6}
+</style></head><body>
+
+<h2><span class="tag">A</span>Field in the explorer, header box stays</h2>
+<p class="n">A search field under “Explorer · 412 tracks”. It shares its text with the header box, so typing in either updates both. Typing switches the column to results: online, then library, then lists.</p>
+<div class="row">
+ <div class="app" style="flex:1;min-width:520px">
+  <div class="top"><b style="font-size:12px">Music</b><div class="input" style="max-width:340px"><span class="icon"></span><span class="chip">dark</span>deadmau5</div></div>
+  <div class="cols">
+   <div class="ex"><div class="hd"><b>Explorer</b><small>matching “dark deadmau5”</small></div>
+    <div style="padding:0 8px 8px"><div class="input on"><span class="icon"></span><span class="chip">dark</span>deadmau5<span class="x">✕</span></div></div>
+    <div class="tree"><div class="sec">ONLINE</div><div class="it hit"><i></i><b class="m">deadmau5</b> · Strobe</div><div class="it"><i></i><b class="m">deadmau5</b> · I Remember</div>
+     <div class="sec">IN YOUR LIBRARY · 6</div><div class="it"><i></i>Vexillology</div><div class="it"><i></i>Imaginary Friends</div><div class="it"><i></i>Seeya</div>
+     <div class="sec">LISTS AND FLOWS</div><div class="it"><i></i>Late night</div></div>
+    <div class="ft">Click opens it on the tape. Drag into your set.</div></div>
+   <div class="mid">tape · set</div><div class="side">track info</div>
+  </div></div>
+ <div><div class="phone"><div class="input"><span class="icon"></span>Search names or sounds…</div>
+  <div class="sheet"><div class="grab"></div><div class="hd"><b>Explorer</b><small>412 tracks</small></div>
+   <div style="padding:0 8px 8px"><div class="input"><span class="icon"></span>Search the explorer</div></div>
+   <div class="body"><div class="tree"><div class="sec">LIBRARY</div><div class="it"><i></i>Deadmau5</div><div class="it"><i></i>Rezz</div><div class="it"><i></i>Burial</div><div class="sec">LISTS</div><div class="it"><i></i>Late night</div></div></div></div></div>
+  <p class="cap">Phone: the Browse sheet gets the field too</p></div>
+</div>
+
+<h2><span class="tag">B</span>The search moves into the explorer</h2>
+<p class="n">On the Music page the header box goes away and the explorer field is the only one. Pasted links work there too. Keeps one search per page, but the field sits in the narrow column.</p>
+<div class="row">
+ <div class="app" style="flex:1;min-width:520px">
+  <div class="top"><b style="font-size:12px">Music</b><span style="flex:1"></span><span style="font-size:11px;color:var(--dim)">no search here</span></div>
+  <div class="cols">
+   <div class="ex"><div class="hd"><b>Explorer</b><small>412 tracks</small></div>
+    <div style="padding:0 8px 8px"><div class="input"><span class="icon"></span>Names, sounds, or a link</div></div>
+    <div class="body"><div class="rail"><div class="ri on">Album</div><div class="ri">Artist</div><div class="ri">Files</div><div class="ri">Mood</div><div class="ri">Genre</div></div>
+     <div class="tree"><div class="sec">LIBRARY</div><div class="it"><i></i>Deadmau5</div><div class="it"><i></i>Rezz</div><div class="it"><i></i>Burial</div><div class="sec">LISTS</div><div class="it"><i></i>Late night</div><div class="sec">FLOWS</div><div class="it"><i></i>Warm up</div></div></div>
+    <div class="ft">Click opens it on the tape.</div></div>
+   <div class="mid">tape · set</div><div class="side">track info</div>
+  </div></div>
+ <div><div class="phone">
+  <div class="sheet" style="height:340px"><div class="grab"></div><div class="hd"><b>Explorer</b><small>412 tracks</small></div>
+   <div style="padding:0 8px 8px"><div class="input"><span class="icon"></span>Names, sounds, or a link</div></div>
+   <div class="body"><div class="tree"><div class="sec">LIBRARY</div><div class="it"><i></i>Deadmau5</div><div class="it"><i></i>Rezz</div><div class="sec">LISTS</div><div class="it"><i></i>Late night</div></div></div></div></div>
+  <p class="cap">Phone: the field above the page goes; search lives in Browse</p></div>
+</div>
+
+<h2><span class="tag">C</span>Filter the tree in place</h2>
+<p class="n">A smaller field that only filters the explorer tree, keeping folders and groups (like VS Code's file filter). Online results stay in the header search. Two searches with two different jobs.</p>
+<div class="row">
+ <div class="app" style="flex:1;min-width:520px">
+  <div class="top"><b style="font-size:12px">Music</b><div class="input" style="max-width:340px"><span class="icon"></span>Search names or sounds, or paste a link</div></div>
+  <div class="cols">
+   <div class="ex"><div class="hd"><b>Explorer</b><small>3 of 412 tracks</small></div>
+    <div style="padding:0 8px 8px"><div class="input on" style="height:26px"><span class="icon"></span>vex<span class="x">✕</span></div></div>
+    <div class="body"><div class="rail"><div class="ri">Album</div><div class="ri on">Artist</div><div class="ri">Files</div><div class="ri">Mood</div></div>
+     <div class="tree"><div class="sec">LIBRARY</div><div class="it">▾ Deadmau5</div><div class="it" style="padding-left:18px">▾ 4×4=12</div><div class="it hit" style="padding-left:30px"><i></i><b class="m">Vex</b>illology</div><div class="it">▾ Rezz</div><div class="it hit" style="padding-left:18px"><i></i><b class="m">Vex</b> Dub</div><div class="sec">LISTS</div><div class="it hit"><i></i><b class="m">Vex</b> mix</div></div></div>
+    <div class="ft">Showing matches with their folders.</div></div>
+   <div class="mid">tape · set</div><div class="side">track info</div>
+  </div></div>
+ <div><div class="phone"><div class="input"><span class="icon"></span>Search names or sounds…</div>
+  <div class="sheet"><div class="grab"></div><div class="hd"><b>Explorer</b><small>3 of 412</small></div>
+   <div style="padding:0 8px 8px"><div class="input on" style="height:26px"><span class="icon"></span>vex<span class="x">✕</span></div></div>
+   <div class="body"><div class="tree"><div class="it">▾ Deadmau5</div><div class="it hit" style="padding-left:18px"><i></i><b class="m">Vex</b>illology</div><div class="it">▾ Rezz</div><div class="it hit" style="padding-left:18px"><i></i><b class="m">Vex</b> Dub</div></div></div></div></div>
+  <p class="cap">Phone: same filter in the Browse sheet</p></div>
+</div>
+</body></html>

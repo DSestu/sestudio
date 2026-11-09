@@ -3,8 +3,9 @@ import { useFlows } from '../../../musicFlows'
 import { applyPreset, setGrouping, toggleDim, useGrouping } from '../../../musicGrouping'
 import PlaylistTree from '../crates/PlaylistTree'
 import { Shape } from '../flows/FlowRow'
-import { Nodes, Row, type TreeHandlers } from './ExplorerTree'
-import { DIMS, GROUP_SORTS, PRESETS, TRACK_SORTS, findNode, groupingLabel, presetOf, sortLabel, type Dim, type GroupNode } from './grouping'
+import { Lit, Nodes, Row, type TreeHandlers } from './ExplorerTree'
+import { useMemo, useState } from 'react'
+import { DIMS, GROUP_SORTS, PRESETS, TRACK_SORTS, filterTree, filterWords, findNode, groupingLabel, presetOf, sortLabel, type Dim, type GroupNode } from './grouping'
 import { Ic, type IconName } from './icons'
 import RailPopover from './RailPopover'
 
@@ -40,15 +41,29 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
   const preset = presetOf(g)
   const { flows, mixes } = useFlows()
   const blur = () => (document.activeElement as HTMLElement | null)?.blur()
+  // The filter (§2.2): narrows this tree in place; the header search stays the one that goes online.
+  const [text, setText] = useState('')
+  const words = useMemo(() => filterWords(text), [text])
+  const cut = useMemo(() => words.length ? filterTree(tree, words) : undefined, [tree, words])
+  const match = useMemo(() => words.length ? (name: string) => { const low = name.toLowerCase(); return words.every(w => low.includes(w)) } : undefined, [words])
+  const shown = cut?.nodes ?? tree
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         <b className="text-sm">Explorer</b>
-        <small className="truncate text-xs text-base-content/50">{search ? `matching “${search.words}”` : `${total} tracks`}</small>
+        <small className="truncate text-xs text-base-content/50">{search ? `matching “${search.words}”` : cut ? `${cut.hits} of ${total} tracks` : `${total} tracks`}</small>
         <span className="flex-1" />
         {onClose && <button onClick={onClose} aria-label="Close" className="btn btn-ghost btn-circle btn-xs relative hit"><Ic name="close" size={15} /></button>}
       </div>
-      {search ? <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-1.5 pb-2 text-sm">{search.body}</div> : <div className="flex min-h-0 flex-1">
+      {!search && (
+        <label className={`input input-sm mx-3 mb-2 flex w-auto items-center gap-1.5 ${text ? 'input-primary' : ''}`}>
+          <Ic name="search" size={14} className="shrink-0 text-base-content/50" />
+          <input type="search" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Escape' && text) { e.stopPropagation(); setText('') } }}
+            placeholder="Filter the explorer" aria-label="Filter the explorer" className="min-w-0 grow" />
+          {text && <button onClick={() => setText('')} aria-label="Clear the filter" className="grid size-5 shrink-0 place-items-center rounded text-base-content/60 hover:text-base-content"><Ic name="close" size={13} /></button>}
+        </label>
+      )}
+      {search ?<div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-1.5 pb-2 text-sm">{search.body}</div> : <div className="flex min-h-0 flex-1">
         <nav aria-label="Group by" className="flex w-13 shrink-0 flex-col items-stretch gap-0.5 border-r border-white/8 px-1 pb-2">
           {PRESETS.map(p => (
             <button key={p.id} onClick={() => applyPreset(p.id)} aria-pressed={preset === p.id} title={p.dims.length > 1 ? `${p.label} › ${p.dims.slice(1).map(d => DIMS[d].label).join(' › ')}` : p.label}
@@ -84,23 +99,25 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
         <div className="scroll-thin min-w-0 flex-1 overflow-y-auto px-1.5 pb-2 text-sm">
           {g.files && <Address dir={dir} libraries={libraries} tree={tree} onOpen={h.onOpen} />}
           <Section title="Library" hint={g.files ? 'folders' : `by ${groupingLabel(g).toLowerCase()}`} action={g.files ? <button onClick={onAddLibrary} className="btn btn-ghost btn-xs">Add</button> : undefined}>
-            {tree.length ? <Nodes nodes={tree} depth={0} prefix="g" h={h} /> : <p className="px-3 py-2 text-xs text-base-content/45">No music yet</p>}
+            {shown.length
+              ? <Nodes key={words.join(' ')} nodes={shown} depth={0} prefix="g" h={h} filter={cut && { open: cut.open, words }} />
+              : <p className="px-3 py-2 text-xs text-base-content/45">{cut ? `Nothing here matches “${text.trim()}”` : 'No music yet'}</p>}
           </Section>
           <Section title="Lists">
-            <div className="-mt-4"><PlaylistTree active="" onPick={onList} onNew={onNewList} /></div>
+            <div className="-mt-4"><PlaylistTree active="" onPick={onList} onNew={onNewList} match={match} /></div>
           </Section>
           <Section title="Flows" action={<button onClick={onFlows} className="btn btn-ghost btn-xs">All</button>}>
-            {flows.map(f => (
-              <Row key={f.id} depth={0} icon={<Shape flow={f} w={22} h={14} dots={false} />} label={f.name} onClick={() => onFlow(f.id)} />
+            {flows.filter(f => !match || match(f.name)).map(f => (
+              <Row key={f.id} depth={0} icon={<Shape flow={f} w={22} h={14} dots={false} />} label={<Lit text={f.name} terms={words} />} onClick={() => onFlow(f.id)} />
             ))}
           </Section>
           <Section title="Mixes" action={<button onClick={onMixes} className="btn btn-ghost btn-xs">All</button>}>
-            {mixes.map(m => <Row key={m.id} depth={0} icon={<Ic name="list" size={13} />} label={m.name} onClick={() => onMix(m.id)} />)}
+            {mixes.filter(m => !match || match(m.name)).map(m => <Row key={m.id} depth={0} icon={<Ic name="list" size={13} />} label={<Lit text={m.name} terms={words} />} onClick={() => onMix(m.id)} />)}
             {!mixes.length && <p className="px-3 py-1 text-xs text-base-content/45">Play a flow, then save what it made as a mix.</p>}
           </Section>
-          <Section title="Online">
+          {!cut && <Section title="Online">
             {ONLINE.map(s => <Row key={s} depth={0} icon={<Ic name="search" size={13} />} label={<>{s} <i className="ml-1 text-[11px] not-italic text-base-content/45">type to search</i></>} dim />)}
-          </Section>
+          </Section>}
         </div>
       </div>}
       <p className="border-t border-white/8 px-3 py-1.5 text-[11px] leading-snug text-base-content/45">Click opens it on the tape. Drag a track into your set. Double-click plays.</p>
