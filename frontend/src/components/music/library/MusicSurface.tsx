@@ -30,24 +30,34 @@ import HoverCard from './HoverCard'
 import { useHoverCard } from './hoverCard'
 import Orbit from './Orbit'
 import TrackInfo from './TrackInfo'
+import { PlayAsFlowAt } from '../flows/PlayAsFlow'
+import type { Source } from '../../../flowSources'
+import { setMusicQuery } from '../../../musicQuery'
+
+/** Sound words a phone can try with one tap (§2.3). */
+const QUICK_WORDS = ['dark', 'floating', '128', '172']
 
 // The Music page as one surface (SPEC-music-library §2.1): explorer · centre · right column,
 // three columns that scroll on their own on desktop; stacked on a phone, the explorer sliding in.
 
-export default function MusicSurface({ all, libraries, get, v, wide, right, onList, onNewList, onFlow, onFlows, onAddLibrary }: {
+export default function MusicSurface({ all, libraries, get, v, wide, right, onList, onNewList, onFlow, onFlows, onMix, onMixes, onAddLibrary, centreView }: {
   all: MusicTrack[]
   libraries: LibraryStatus[]
   get: (id: string) => Summary | undefined
   /** Bumps when summaries land, so the tree regroups. */
   v: number
   wide: boolean
-  /** What the right column shows for now (the Fits panel); PR 4 brings the track info. */
+  /** The Fits panel when one is open, else the track info. */
   right?: ReactNode
   onList: (id: string) => void
   onNewList: () => void
   onFlow: (id: string) => void
   onFlows: () => void
+  onMix: (id: string) => void
+  onMixes: () => void
   onAddLibrary: () => void
+  /** Flows or Mixes, opened from the explorer, in place of the tape and the set. */
+  centreView?: { label: string; node: ReactNode; onClose: () => void }
 }) {
   const grouping = useGrouping()
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
@@ -94,6 +104,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   const blend = useBlendOrder(order === 'blend' ? inView.slice(0, BLEND_CAP) : undefined, shape)
   const blendGroups = useMemo<TapeGroup[] | undefined>(() => blend && [{ key: 'blend', head: `Best blend · ${shape}`, name: sourceName, tracks: blend.tracks }], [blend, shape, sourceName])
   const [selectedId, setSelectedId] = useState<string>()
+  const [door, setDoor] = useState<{ at: DOMRect; name: string; source: Source } | null>(null)
   const picked = idsIn(useSelection(), 'tape')
   const h: TreeHandlers = {
     sourceKey,
@@ -101,6 +112,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
     colour,
     playingId,
     hoverProps: t => hc.props(t),
+    onFlowDoor: (n, at) => setDoor({ at, name: n.name, source: n.kind === 'genre' ? { kind: 'genre', value: n.name, rule: 'lean' } : n.kind === 'library' ? { kind: 'library', value: n.all[0]?.library ?? n.name, label: n.name, rule: 'only' } : { kind: n.kind === 'artist' ? 'artist' : 'album', value: n.name, rule: 'only' } }),
     onOpen: n => { setSourceKey(n.key); setBrowse(false) },
     onAdd: (ts, label) => { addTracksToSet(ts, label) },
     onTrack: (t, list) => void playFrom(list, t),
@@ -124,13 +136,30 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   ) : <p className="p-4 text-xs text-base-content/45">Select a track to see its details here.</p>
   const explorer = (
     <Explorer tree={tree} total={all.length} libraries={libraries} h={h} dir={grouping.files ? source : undefined}
-      onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)}
+      onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onMix={onMix} onMixes={onMixes} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)}
       search={searching ? { words: text.trim(), body: <ExplorerSearch query={query} matched={matched} h={h} onOpenAs={(p, k) => { applyPreset(p); setSourceKey(k); setBrowse(false) }} onList={onList} onFlow={onFlow} /> } : undefined} />
   )
   const kindLabel = source ? (source.kind === 'folder' || source.kind === 'library' ? 'Folder' : source.kind === 'all' ? '' : DIMS[source.kind].label) : ''
-  const centre = (
+  const quick = !wide && (
+    <div role="group" aria-label="Quick" className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
+      <button onClick={() => setBrowse(true)} className="btn btn-sm shrink-0 gap-1.5 rounded-full"><Ic name="folder" size={14} />Browse</button>
+      {QUICK_WORDS.map(w => <button key={w} onClick={() => setMusicQuery(w)} className="btn btn-ghost btn-sm shrink-0 rounded-full bg-white/6">“{w}”</button>)}
+    </div>
+  )
+  const centre = centreView ? (
     <>
-      {(set.mode === 'blend' || order === 'blend') && <BlendBy joins={setView.joins} score={setView.res?.score} hasSet={set.tracks.length > 1} />}
+      {quick}
+      <div className="flex items-center gap-2 px-1">
+        <h3 className="text-sm font-semibold">{centreView.label}</h3>
+        <span className="flex-1" />
+        <button onClick={centreView.onClose} className="btn btn-ghost btn-sm gap-1 rounded-xl"><Ic name="close" size={12} width={2.4} />Back to the library</button>
+      </div>
+      {centreView.node}
+    </>
+  ) : (
+    <>
+      {quick}
+      {(set.mode === 'blend' || order === 'blend') && <BlendBy joins={setView.joins} score={setView.res?.score} hasSet={set.tracks.length > 1} sheet={!wide} />}
       <TapeBar
         source={source ? { kind: kindLabel, name: source.name } : undefined} onClearSource={() => setSourceKey('')}
         tracks={inView} grouping={grouping} order={order} onOrder={setOrder} shape={shape} onShape={setShape} colour={colour} facts={facts}
@@ -144,7 +173,6 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
             <button onClick={clearSelection} className="btn btn-ghost btn-xs rounded-lg">Clear</button>
           </span>
         )}
-        {!wide && <button onClick={() => setBrowse(true)} className="btn btn-sm rounded-xl gap-1.5"><Ic name="folder" size={14} />Browse</button>}
       </TapeBar>
       <Tape
         groups={order === 'blend' && blendGroups ? blendGroups : groups} facts={facts} colour={colour}
@@ -156,22 +184,25 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
       {hc.hover && <HoverCard hover={hc.hover} facts={facts} colour={colour} />}
     </>
   )
+  const doorPop = door && <PlayAsFlowAt at={door.at} name={door.name} source={door.source} byId={byId} onClose={() => setDoor(null)} onFlows={() => { setDoor(null); onFlows() }} />
   if (!wide) {
     return (
       <div className="flex flex-col gap-3">
         {centre}
         {rightColumn}
+        {doorPop}
         {browse && <ResponsiveModal onClose={() => setBrowse(false)} boxClassName="flex h-[82vh] flex-col p-0">{explorer}</ResponsiveModal>}
       </div>
     )
   }
   return (
-    <div className="flex gap-4 h-[calc(100dvh-15.5rem-var(--music-bar,0rem))] min-h-0">
+    <div className="flex gap-4 h-[calc(100dvh-12.25rem-var(--music-bar,0rem))] min-h-0">
       <aside className="w-80 shrink-0 overflow-hidden rounded-2xl bg-white/5">{explorer}</aside>
       <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-2xl">{centre}</div>
       <aside className="w-85 shrink-0 overflow-y-auto rounded-2xl bg-white/5">
         {right ?? rightColumn}
       </aside>
+      {doorPop}
     </div>
   )
 }

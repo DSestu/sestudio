@@ -56,7 +56,7 @@ function Radar({ value, onDrag, onRelease }: { value: Importance; onDrag: (v: Im
   )
 }
 
-export default function BlendBy({ joins, score, hasSet }: { joins?: Join[]; score?: number; hasSet: boolean }) {
+export default function BlendBy({ joins, score, hasSet, sheet = false }: { joins?: Join[]; score?: number; hasSet: boolean; /** A phone: the panel is a bottom sheet over the page. */ sheet?: boolean }) {
   const { importance, welcome } = useBlendWeights()
   const [open, setOpen] = useState(false)
   // The radar moves freely; the set re-orders once the dot is let go.
@@ -83,8 +83,9 @@ export default function BlendBy({ joins, score, hasSet }: { joins?: Join[]; scor
         <span className="truncate text-base-content/55">{short}</span>
         <Ic name="up" size={13} className={`transition-transform ${open ? '' : 'rotate-180'}`} />
       </button>
+      {open && sheet && <div onClick={() => setOpen(false)} className="fixed inset-0 z-40 bg-black/50" aria-hidden="true" />}
       {open && (
-        <div className="absolute inset-x-0 top-full mt-1 flex max-h-[calc(100vh-260px)] flex-col gap-3 overflow-y-auto rounded-2xl bg-base-300 p-3 shadow-xl">
+        <div role={sheet ? 'dialog' : undefined} aria-label="Blend by" className={`flex flex-col gap-3 overflow-y-auto bg-base-300 p-3 shadow-xl ${sheet ? 'fixed inset-x-0 bottom-0 z-50 max-h-[85vh] rounded-t-3xl pb-[calc(1rem+env(safe-area-inset-bottom))]' : 'absolute inset-x-0 top-full mt-1 max-h-[calc(100vh-260px)] rounded-2xl'}`}>
           <div className="flex flex-wrap items-center gap-4">
             <Radar value={shown} onDrag={setDraft} onRelease={() => { if (draft) setImportance(draft); setDraft(null) }} />
             <div className="flex min-w-56 flex-1 flex-col gap-2">
