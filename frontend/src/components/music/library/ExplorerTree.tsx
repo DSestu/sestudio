@@ -80,7 +80,7 @@ export function Row({ depth, chevron, onChevron, icon, label, count, onClick, on
   )
 }
 
-export function TrackRow({ t, depth, list, file, h }: { t: MusicTrack; depth: number; list: MusicTrack[]; file?: boolean; h: TreeHandlers }) {
+export function TrackRow({ t, depth, list, file, h, terms, sub }: { t: MusicTrack; depth: number; list: MusicTrack[]; file?: boolean; h: TreeHandlers; terms?: string[]; sub?: string }) {
   const f = h.facts(t.id)
   const name = file ? fileName(t) : t.title
   return (
@@ -88,7 +88,8 @@ export function TrackRow({ t, depth, list, file, h }: { t: MusicTrack; depth: nu
       depth={depth}
       icon={<span className="size-2.5 rounded-sm" style={{ background: trackColor(f, h.colour) }} />}
       label={<>
-        {file ? <FileLabel name={name} /> : name}
+        {file ? <FileLabel name={name} /> : <Lit text={name} terms={terms} />}
+        {sub && <i className="ml-1.5 text-[11px] not-italic text-base-content/50">{sub}</i>}
         {file && t.title !== name.replace(/\.[^.]+$/, '') && <i className="ml-1.5 text-[11px] not-italic text-base-content/50">{t.title}</i>}
         {f.bpm ? <i className="ml-1.5 text-[11px] not-italic tabular-nums text-base-content/50">{Math.round(f.bpm)}</i> : null}
       </>}
@@ -151,4 +152,20 @@ export function Nodes({ nodes, depth, prefix, h }: { nodes: GroupNode[]; depth: 
       {nodes.length > lim && <More depth={depth} n={nodes.length - lim} onClick={() => grow(prefix)} />}
     </>
   )
+}
+
+/** `text` with the first match of each search word lit. */
+export function Lit({ text, terms }: { text: string; terms?: string[] }) {
+  if (!terms?.length) return <>{text}</>
+  const low = text.toLowerCase()
+  const spans = terms.map(w => [low.indexOf(w), w.length] as const).filter(([i]) => i >= 0).sort((a, b) => a[0] - b[0])
+  const out: React.ReactNode[] = []
+  let at = 0
+  for (const [i, n] of spans) {
+    if (i < at) continue
+    out.push(text.slice(at, i), <mark key={i} className="rounded-sm bg-primary/30 text-inherit">{text.slice(i, i + n)}</mark>)
+    at = i + n
+  }
+  out.push(text.slice(at))
+  return <>{out}</>
 }

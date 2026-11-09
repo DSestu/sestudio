@@ -7,18 +7,14 @@ import PageHeader from '../components/PageHeader'
 import ResponsiveModal from '../components/ResponsiveModal'
 import { useDownloadedLibrary } from '../downloadedLibrary'
 import { useLibraries, useLibraryTracks } from '../musicLibraries'
-import { albumsOf, formatDuration, matchTracks, type MusicTrack } from '../musicLibrary'
-import { addPayload, addToQueue, post, resolveLink, useMusicQueue, type OnlineLink } from '../musicQueue'
+import { albumsOf, type MusicTrack } from '../musicLibrary'
+import { post, resolveLink, useMusicQueue, type OnlineLink } from '../musicQueue'
 import { addTracks, nextIndex } from '../components/music/adding'
-import { playFrom, playPayload } from '../components/music/player'
-import { useAnalysing, useSummaries } from '../musicMeta'
-import { openKeyCard } from '../components/music/harmony/keyCardStore'
-import TrackMeta, { MetaLine } from '../components/music/TrackMeta'
-import MusicSearch from '../components/music/MusicSearch'
+import { playPayload } from '../components/music/player'
+import { useSummaries } from '../musicMeta'
 import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
 import FitsNext from '../components/music/FitsNext'
-import SaveAsPlaylist from '../components/music/SaveAsPlaylist'
-import { closeFits, openFitsFor, useFitsFor } from '../musicFits'
+import { closeFits, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, patchParams, replaceParams, type Navigate } from '../nav'
 import FlowsHome from '../components/music/flows/FlowsHome'
@@ -31,6 +27,7 @@ import { refOf, resetFocus, setSheet as setEditSheet, songKey, useFocus } from '
 import { toast } from '../components/music/toast'
 import { createWithTracks, freshName, itemsOf, playlistApi, usePlaylists } from '../musicPlaylists'
 import MusicSurface from '../components/music/library/MusicSurface'
+import QueryChips from '../components/music/library/QueryChips'
 
 const TABS = [
   // Flows and mixes (SPEC-music-flows) stay as tabs until they join the surface (SPEC-music-library PR 10).
@@ -41,47 +38,6 @@ const TABS = [
 type MusicTab = (typeof TABS)[number]['id']
 
 const run = (p: Promise<void>) => { p.catch(() => {}) }
-
-function TrackRow({ track, list, onPlaylist }: { track: MusicTrack; list: MusicTrack[]; onPlaylist: (t: MusicTrack) => void }) {
-  const analysing = useAnalysing(track.id)
-  return (
-    <li className="flex items-center gap-1 rounded-xl hover:bg-white/5">
-      <button
-        onClick={() => run(playFrom(list, track))}
-        className="flex-1 min-w-0 flex items-center gap-3 px-3 h-12 text-left"
-      >
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-sm font-medium">{track.title}</span>
-          <span className="block truncate text-xs text-base-content/60">{track.artist}<MetaLine id={track.id} bpm={track.bpm} title={track.title} /></span>
-        </span>
-        <span className="w-10 text-right text-xs text-base-content/60 tabular-nums">{formatDuration(track.duration)}</span>
-      </button>
-      <TrackMeta id={track.id} bpm={track.bpm} title={track.title} />
-      <div className="dropdown dropdown-end">
-        <button tabIndex={0} aria-label={`Add ${track.title}`} className="btn btn-ghost btn-circle btn-sm mr-1 relative hit">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
-        </button>
-        <ul tabIndex={0} className="dropdown-content menu menu-sm z-30 w-56 rounded-xl bg-base-200 p-1 shadow-lg">
-          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); run(addToQueue(track)) }}>Add to queue</button></li>
-          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); onPlaylist(track) }}>Add to playlist…</button></li>
-          {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openFitsFor(track.id) }}>Fits next</button></li>}
-          {!analysing && <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); openKeyCard(track.id, track.title) }}>Key card</button></li>}
-          <li><button onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); window.location.hash = `#/music?pl=new&seed=${encodeURIComponent(track.id)}` }}>New playlist from this</button></li>
-        </ul>
-      </div>
-    </li>
-  )
-}
-
-/** The count of a shown list and the button that saves it as a playlist. */
-function ListSave({ count, name, tracks }: { count: number; name: string; tracks: MusicTrack[] }) {
-  return (
-    <div className="flex items-center gap-2 px-3">
-      <span className="flex-1 text-xs text-base-content/60">{count} {count === 1 ? 'track' : 'tracks'}</span>
-      <SaveAsPlaylist name={name} tracks={addPayload(tracks, 'append').tracks} className="btn btn-ghost btn-sm h-11 sm:h-8" />
-    </div>
-  )
-}
 
 /** A pasted YouTube / YouTube Music link: play it as music or queue it. */
 function LinkCard({ url }: { url: string }) {
@@ -185,10 +141,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     last.tab = tab
     patchParams({ tab: tab === 'library' ? undefined : tab })
   }, [tab])
-  const tracks = useMemo(
-    () => matchTracks(all, query, get),
-    [all, query, v], // eslint-disable-line react-hooks/exhaustive-deps
-  )
   const page = (node ?? drafting) || !!flowEdit || !!mixOpen
 
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
@@ -212,7 +164,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     />
   )
   const searching = !page && query.trim() !== '' && !LINK_RE.test(query.trim())
-  const surface = !page && !searching && !flowsTab
+  const surface = !page && (searching || !flowsTab)
   const inList = useMemo(() => new Set(node ? itemsOf(node).map(i => songKey(byId.get(i.track_id) ?? i)) : []), [node, byId])
   const sources = editing && node && (
     <Sources
@@ -226,18 +178,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     <MixView key={mixOpen} mixId={mixOpen} byId={byId} onEditFlow={id => go({ fl: id })} />
   ) : drafting ? null : node ? (
     <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} edit={editing} onEdit={node.kind === 'playlist' ? () => setEditing(true) : undefined} onSource={t => { setSourceTab(t); setEditSheet(t) }} />
-  ) : searching ? (
-    <MusicSearch
-      query={query}
-      byId={byId}
-      renderLibrary={ts => <>
-        <ListSave count={ts.length} name={query.trim()} tracks={ts} />
-        <ul>{ts.map(t => <TrackRow key={t.id} track={t} list={ts} onPlaylist={setPickFor} />)}</ul>
-      </>}
-    />
-  ) : tab === 'flows' ? (
+  ) : tab === 'flows' && !searching ? (
     <FlowsHome onOpen={id => go({ fl: id })} byId={byId} />
-  ) : tab === 'mixes' ? (
+  ) : tab === 'mixes' && !searching ? (
     <MixesList onOpen={id => go({ mx: id })} />
   ) : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
@@ -263,7 +206,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       ) : (
         <PageHeader
           title="Music"
-          status={<><em>{tracks.length}</em> tracks</>}
+          status={<><em>{all.length}</em> tracks</>}
           action={{ label: 'New playlist', onClick: () => newPlaylist() }}
           tabs={[...TABS]}
           tab={tab}
@@ -278,14 +221,17 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         )}
         <div className="flex-1 min-w-0 flex flex-col gap-4">
           {!page && (
-            <input
-              type="search"
-              value={query}
-              onChange={e => setMusicQuery(e.target.value)}
-              placeholder="Search your libraries and online, or paste a link"
-              aria-label="Search your libraries"
-              className="input input-bordered w-full md:hidden"
-            />
+            <label className="input input-bordered flex w-full items-center gap-1 md:hidden">
+              <QueryChips />
+              <input
+                type="search"
+                value={query}
+                onChange={e => setMusicQuery(e.target.value)}
+                placeholder="Search names or sounds, or paste a link"
+                aria-label="Search your libraries"
+                className="min-w-0 grow"
+              />
+            </label>
           )}
           {!page && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {editing && !wide && (

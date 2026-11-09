@@ -18,6 +18,9 @@ import Tape, { type Join } from './Tape'
 import TapeBar, { type Order, type Shape } from './TapeBar'
 import type { TapeGroup } from './tapeLayout'
 import { toast } from '../toast'
+import { LINK_RE, useMusicQuery } from '../../../musicQuery'
+import ExplorerSearch from './ExplorerSearch'
+import { isEmpty, matches, parseQuery } from './searchWords'
 import HoverCard from './HoverCard'
 import { useHoverCard } from './hoverCard'
 import Orbit from './Orbit'
@@ -68,8 +71,14 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   const queue = useMusicQueue()
   const playingId = queue.items[queue.current]?.track_id
   const colour = useColour()
-  const inView = source?.all ?? all
-  const viewTree = useMemo(() => (source ? treeOf(source.all, grouping, facts) : tree), [source, tree, grouping, facts])
+  // Search (§2.3): the words narrow the tape live; the explorer goes flat.
+  const text = useMusicQuery()
+  const query = useMemo(() => parseQuery(LINK_RE.test(text.trim()) ? '' : text), [text])
+  const searching = !isEmpty(query)
+  const matched = useMemo(() => (searching ? all.filter(t => matches(t, facts, query)) : all), [all, facts, query, searching])
+  const base = source?.all ?? all
+  const inView = useMemo(() => (searching ? base.filter(t => matches(t, facts, query)) : base), [base, facts, query, searching])
+  const viewTree = useMemo(() => (source || searching ? treeOf(inView, grouping, facts) : tree), [source, searching, inView, tree, grouping, facts])
   const groups = useMemo(() => tapeGroupsOf(viewTree, grouping), [viewTree, grouping])
   // Grouped by default, whatever opens (§2.4); Best blend asks the server for the order and the joins.
   const [order, setOrder] = useState<Order>('grouped')
@@ -105,7 +114,8 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   ) : <p className="p-4 text-xs text-base-content/45">Select a track to see its details here.</p>
   const explorer = (
     <Explorer tree={tree} total={all.length} libraries={libraries} h={h} dir={grouping.files ? source : undefined}
-      onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)} />
+      onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)}
+      search={searching ? { words: text.trim(), body: <ExplorerSearch query={query} matched={matched} h={h} onOpenAs={(p, k) => { applyPreset(p); setSourceKey(k); setBrowse(false) }} onList={onList} onFlow={onFlow} /> } : undefined} />
   )
   const kindLabel = source ? (source.kind === 'folder' || source.kind === 'library' ? 'Folder' : source.kind === 'all' ? '' : DIMS[source.kind].label) : ''
   const centre = (
