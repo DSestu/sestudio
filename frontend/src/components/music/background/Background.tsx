@@ -21,12 +21,16 @@ export interface Rect {
   h: number
 }
 
+let grainUrl = ''
+
 /** A film-grain tile: light and dark specks around zero, so it needs no blend mode (the background is its own
  *  stacking context, a soft-light grain would only see the transparent canvas and grey the frame). Moved every
  *  frame so it reads as grain, not dust. */
 function grainTile() {
+  // Once per page, on a CPU canvas: a GPU canvas's toDataURL waits for the GPU to drain, and the layer remounts on every open.
+  if (grainUrl) return grainUrl
   const n = Object.assign(document.createElement('canvas'), { width: 256, height: 256 })
-  const g = n.getContext('2d')!
+  const g = n.getContext('2d', { willReadFrequently: true })!
   const img = g.createImageData(256, 256)
   for (let i = 0; i < img.data.length; i += 4) {
     const v = Math.random() * 2 - 1
@@ -34,7 +38,7 @@ function grainTile() {
     img.data[i + 3] = Math.abs(v) * 0.1 * 255
   }
   g.putImageData(img, 0, 0)
-  return `url(${n.toDataURL()})`
+  return (grainUrl = `url(${n.toDataURL()})`)
 }
 
 /** `clip` narrows the light to the stage rectangle (expanded mode); the wrapper is clipped, not the zoomed canvas. */
