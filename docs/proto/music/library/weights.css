@@ -1,0 +1,115 @@
+/* Blend by: chip, popover, four designs, harmony moves. */
+.wchip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 9px 0 7px; border-radius: 10px; background: oklch(26% .03 240); border: 1px solid oklch(72% .16 230 / .35); font-size: 12px; color: var(--mut); white-space: nowrap }
+.wchip:hover { border-color: var(--blue); color: var(--fg) }
+.wchip b { color: var(--fg); font-weight: 600 }
+.wbars { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px }
+.wbars i { width: 4px; border-radius: 1.5px; max-height: 16px }
+#wpop { position: fixed; z-index: 92; width: 330px; padding: 14px; border-radius: 16px; background: oklch(21% .03 245 / .99); border: 1px solid oklch(72% .16 230 / .45); box-shadow: 0 22px 50px oklch(0% 0 0 / .6); display: flex; flex-direction: column; gap: 10px; opacity: 0; transform: translateY(-4px); transition: opacity .14s, transform .18s cubic-bezier(.2, .8, .2, 1); max-height: calc(100vh - 24px); overflow: auto; scrollbar-width: thin }
+#wpop.on { opacity: 1; transform: none }
+.wtop b, .wh-top b { font-size: 15px; font-weight: 600 }
+.wtop small { display: block; font-size: 12px; color: var(--mut) }
+.wtabs { align-self: flex-start }
+.wtabs button { height: 28px; padding: 0 11px; font-size: 12px }
+.wctl { touch-action: none; user-select: none }
+.wctl svg { display: block; width: 100%; max-width: 290px; margin: 0 auto; cursor: crosshair }
+.wctl-radar svg circle { cursor: grab }
+.whelp { font-size: 12px; color: var(--dim); line-height: 1.45 }
+.wread { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; font-size: 12px; color: var(--mut) }
+.wread span { display: flex; align-items: center; gap: 6px }
+.wread i { width: 9px; height: 9px; border-radius: 3px; background: var(--c); flex: none }
+.wread b { color: var(--fg); font-weight: 600 }
+.wmore { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; height: 22px; padding: 0 7px; border-radius: 7px; font-size: 11px; color: oklch(80% .14 85); background: oklch(80% .14 85 / .12) }
+.wmore:hover { background: oklch(80% .14 85 / .22) }
+.wpre { display: flex; flex-wrap: wrap; gap: 5px }
+.wpre button { height: 26px; padding: 0 10px; border-radius: 99px; font-size: 12px; color: var(--mut); background: oklch(27% .02 240 / .9) }
+.wpre button:hover { color: var(--fg) }
+.wpre button.on { background: oklch(72% .16 230 / .22); color: var(--fg) }
+.weff { font-size: 12px; color: var(--mut); padding: 8px 10px; border-radius: 10px; background: oklch(17% .02 240) }
+.weff b { color: var(--fg) }
+.weff.dim { color: var(--dim) }
+.wfoot { font-size: 11px; color: var(--dim) }
+/* bar */
+.wbar { position: relative; height: 54px; border-radius: 12px; overflow: visible; background: oklch(17% .02 240) }
+.wseg { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 8px; background: color-mix(in oklch, var(--c) 30%, oklch(17% .02 240)); border-top: 3px solid var(--c); overflow: hidden; white-space: nowrap }
+.wseg:first-child { border-radius: 12px 0 0 12px } .wseg:nth-last-child(1) { border-radius: 0 12px 12px 0 }
+.wseg b { font-size: 12px; font-weight: 600; color: var(--fg) }
+.wseg small { font-size: 11px; color: var(--mut) }
+.wdiv { position: absolute; top: -6px; bottom: -6px; width: 14px; margin-left: -7px; cursor: ew-resize; z-index: 2 }
+.wdiv::after { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 4px; border-radius: 2px; background: oklch(95% .01 240); box-shadow: 0 0 0 2px oklch(18% .03 240) }
+/* sliders */
+.wsl { display: flex; flex-direction: column; gap: 10px }
+.wsl label { display: grid; grid-template-columns: 62px 1fr 38px; grid-template-areas: 'n s v' 'm m m'; align-items: center; gap: 2px 10px; font-size: 13px }
+.wsl label > span { grid-area: n; color: var(--c); font-weight: 600 }
+.wsl input { grid-area: s; accent-color: var(--c) }
+.wsl label > b { grid-area: v; text-align: right; font-weight: 600 }
+.wsl .wmore { grid-area: m; justify-self: start; margin: 0 }
+/* harmony moves */
+.wh-top { display: flex; align-items: center; gap: 10px }
+.wback { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px 0 5px; border-radius: 8px; font-size: 12px; color: var(--mut); background: oklch(27% .02 240 / .9) }
+.wback .ic { transform: rotate(180deg) }
+.wmoves { display: flex; flex-direction: column; gap: 4px }
+.wmv { display: grid; grid-template-columns: 54px minmax(0, 1fr) 30px 22px; grid-template-areas: 'p t v c' 'p s s s'; gap: 2px 8px; align-items: center; padding: 6px 4px; border-radius: 10px }
+.wmv:hover { background: oklch(26% .025 240 / .6) }
+.wpic { grid-area: p; display: flex; flex-direction: column; gap: 2px }
+.wpic > span { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1px }
+.wpic i { height: 7px; border-radius: 1.5px; background: oklch(28% .02 240) }
+.wpic i.on { background: oklch(70% .15 340 / .8) }
+.wpic i.sh { background: oklch(80% .14 85) }
+.wmv.tr .wpic i.on { background: oklch(82% .12 200) }
+.wmv-t { grid-area: t; min-width: 0 }
+.wmv-t b { font-size: 13px; font-weight: 600 }
+.wmv-t small { display: block; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.wmv input { grid-area: s; width: 100%; accent-color: oklch(80% .14 85) }
+.wmv.tr input { accent-color: oklch(82% .12 200) }
+.wmv.cl input { accent-color: oklch(83% .16 85) }
+.wmv em { grid-area: v; font-style: normal; font-size: 12px; font-weight: 600; text-align: right }
+.wcnt { grid-area: c; font-size: 11px; color: var(--dim); text-align: right }
+.sl-c.tr { color: oklch(82% .12 200); background: oklch(82% .12 200 / .12) }
+@media (max-width: 700px) {
+  #wpop { left: 8px !important; right: 8px; bottom: 8px; top: auto !important; width: auto; max-height: 82vh; border-radius: 20px }
+}
+.wctl-bar { padding: 8px 0 4px } .wctl-bar .whelp { margin-top: 12px }
+/* Accordion: opens top-down under its row and pushes the column down. */
+.wchip.on { border-color: var(--blue); color: var(--fg); background: oklch(72% .16 230 / .16) }
+.wacc { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .32s cubic-bezier(.2, .8, .2, 1), opacity .2s ease-out, margin .32s cubic-bezier(.2, .8, .2, 1); margin: 0 }
+.wacc.open { grid-template-rows: 1fr; opacity: 1; margin: 0 0 12px }
+.wacc-in { overflow: hidden; min-height: 0 }
+.wacc-body { border-radius: 14px; background: oklch(17% .022 242); border: 1px solid oklch(72% .16 230 / .3); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px }
+.wa-main { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; align-items: center }
+.wa-main .wctl svg { max-width: 250px }
+.wa-side { display: flex; flex-direction: column; gap: 9px; min-width: 0 }
+.wa-h { font-size: 12px; color: var(--mut) } .wa-h b { font-size: 15px; color: var(--fg); font-weight: 600; margin-right: 6px }
+.wa-side .wread { grid-template-columns: repeat(2, auto); justify-content: start; gap: 4px 22px }
+.wh { border-top: 1px solid var(--line); padding-top: 8px }
+.wh-h { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; height: 32px; padding: 0 4px; border-radius: 8px }
+.wh-h:hover { background: oklch(26% .025 240 / .6) }
+.wh-h .ic { color: var(--dim); transition: transform .2s }
+.wh.open .wh-h .ic { transform: rotate(90deg) }
+.wh-h b { font-size: 14px; font-weight: 600; color: oklch(80% .14 85) }
+.wh-cur { font-size: 12px; padding: 1px 8px; border-radius: 7px; background: oklch(80% .14 85 / .14); color: oklch(85% .12 85) }
+.wh-h small { font-size: 12px; color: var(--dim); margin-left: auto }
+.wh-grid { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s cubic-bezier(.2, .8, .2, 1) }
+.wh.open .wh-grid { grid-template-rows: 1fr }
+.wh-in { overflow: hidden; min-height: 0; display: flex; flex-direction: column; gap: 8px }
+.wh.open .wh-in { padding-top: 8px }
+.wh .wmoves { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px }
+.wa-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 8px }
+.wa-foot .weff { flex: 1; min-width: 220px; margin: 0 }
+.wa-foot .btn { height: 30px; font-size: 12px }
+@media (max-width: 700px) {
+  .wa-main { grid-template-columns: 1fr } .wa-main .wctl svg { max-width: 240px }
+  .wa-side .wread { grid-template-columns: 1fr 1fr }
+  .wh .wmoves { grid-template-columns: 1fr }
+  .wh-h small { display: none }
+}
+@media (prefers-reduced-motion: reduce) { .wacc, .wh-grid { transition: none } }
+
+/* Sticky bar: always at the top of the centre column, opens downward. */
+.wstrip { position: sticky; top: 0; z-index: 8; margin: 0 0 10px; padding-bottom: 2px; background: var(--bg); box-shadow: 0 8px 14px -10px oklch(0% 0 0 / .8) }
+.wstrip-h { display: flex; align-items: center; gap: 8px; width: 100%; height: 38px; padding: 0 12px 0 10px; border-radius: 12px; background: oklch(20% .03 240); border: 1px solid oklch(72% .16 230 / .3); font-size: 12px; color: var(--mut); text-align: left }
+.wstrip-h:hover, .wstrip.open .wstrip-h { border-color: var(--blue) }
+.wstrip-h b { color: var(--fg); font-weight: 600; font-size: 13px }
+.wstrip-cur { color: oklch(85% .12 85) }
+.wstrip-eff { margin-left: auto; color: var(--mut) }
+.wstrip .wacc.open { margin: 8px 0 4px }
+.wstrip .wacc-body { max-height: calc(100vh - 260px); overflow: auto; scrollbar-width: thin }

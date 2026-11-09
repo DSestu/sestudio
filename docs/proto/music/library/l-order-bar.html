@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>L · Order any set</title>
+<link rel="stylesheet" href="common.css"><link rel="stylesheet" href="gh.css">
+<style>
+.src { display: flex; align-items: center; gap: 8px; padding: 16px 4px 10px; flex-wrap: wrap }
+.src .chip { height: 34px; padding: 0 12px; font-size: 13px }
+.src .chip.on { background: oklch(72% .16 230 / .2); color: var(--fg); font-weight: 500 }
+.src .chip .gsig { width: 30px; height: 20px; border-radius: 6px }
+.ctl { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; background: oklch(20% .025 240); border: 1px solid oklch(34% .02 240 / .5); flex-wrap: wrap }
+.ctl .label { margin-right: -2px }
+.ctl .sp { flex: 1 }
+.pin { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 4px; border-radius: 9px; background: oklch(28% .02 240 / .7); font-size: 12px }
+.lanes { margin-top: 16px; display: grid; grid-template-columns: 150px minmax(0, 1fr); column-gap: 16px; row-gap: 0; align-items: center }
+.lanes .lh b { display: block; font-size: 14px; font-weight: 600 }
+.lanes .lh small { display: block; font-size: 12px; color: var(--mut) }
+.lanes .lh .big { font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; margin-top: 4px }
+.lanes .lh .big span { font-size: 12px; font-weight: 400; color: var(--mut) }
+.lane { border-radius: 14px; background: oklch(17% .02 245); border: 1px solid oklch(30% .02 240 / .5); padding: 8px 10px }
+.lane.after { border-color: oklch(72% .16 230 / .45) }
+.trails { height: 54px }
+.trails svg { width: 100%; height: 100%; display: block }
+.scs { display: flex; gap: 6px; margin-top: 6px }
+.scs .chip { height: 24px; font-size: 11px }
+.bottom2 { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 26px; margin-top: 18px }
+.list { columns: 2; column-gap: 26px }
+.li { break-inside: avoid; display: grid; grid-template-columns: 20px 44px minmax(0, 1fr) 62px 30px; gap: 10px; align-items: center; padding: 3px 0; font-size: 13px }
+.li .n { color: var(--dim); text-align: right; font-size: 12px }
+.li .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.li .m, .li .b { color: var(--mut); font-size: 12px; white-space: nowrap }
+.jn { break-inside: avoid; display: flex; align-items: center; gap: 8px; height: 12px; padding-left: 40px; font-size: 10px; color: var(--dim) }
+.jn i { width: 8px; height: 8px; transform: rotate(45deg); border-radius: 1px; display: inline-block }
+.acts { display: flex; flex-direction: column; gap: 8px }
+.acts .btn { justify-content: center; height: 40px }
+.acts p { font-size: 12px; color: var(--dim); line-height: 1.5 }
+@media (max-width: 700px) {
+  .src { flex-wrap: nowrap; overflow: hidden; padding: 12px 2px 8px }
+  .ctl { padding: 10px; gap: 8px }
+  .ctl .seg { overflow: hidden; max-width: 100% }
+  .lanes { grid-template-columns: 1fr; row-gap: 6px; margin-top: 12px }
+  .trails { display: none }
+  .bottom2 { display: block; margin-top: 12px }
+  .list { columns: 1 }
+  .li { grid-template-columns: 18px 40px minmax(0, 1fr) auto }
+  .li .b { display: none }
+  .acts { position: fixed; left: 10px; right: 10px; bottom: 146px; flex-direction: row; z-index: 8; background: var(--bg); padding: 6px; border-radius: 14px }
+  .acts .btn:not(.pri) { background: oklch(28% .02 240) }
+  .lanes .lh { display: flex; align-items: baseline; gap: 10px } .lanes .lh .big { margin: 0 0 0 auto; font-size: 22px }
+  .acts .btn { flex: 1; box-shadow: 0 8px 20px oklch(0% 0 0 / .5) }
+  .acts p, .acts .x { display: none }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div><div class="search desk" id="search"></div><div class="bell" id="bell"></div></div></div>
+  <div class="src" id="src"></div>
+  <div class="ctl" id="ctl"></div>
+  <div class="lanes" id="lanes"></div>
+  <div class="bottom2"><div class="list" id="list"></div><div class="acts" id="acts"></div></div>
+</main>
+<script src="data.js"></script><script src="common.js"></script><script src="gh.js"></script><script src="order.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search anything; every result can be played, queued or ordered'
+document.getElementById('bell').innerHTML = icon('bell')
+const set = QUEUE, best = bestOrder(set, { shape: 'Arc', first: set[0] })
+const A = scoreOf(set), B = scoreOf(best)
+const vex = ALBUMS.find(a => a.name === 'Vexillology')
+// Any set opens the same order bar: the queue, a search, an album, a playlist.
+document.getElementById('src').innerHTML = `<span class="label desk">Order</span>
+  <span class="chip on">${groupSigil(PLAYLISTS[0], 30, 20)}Queue · ${set.length} next</span>
+  <span class="chip">${icon('search', 14)} “dark 128” · ${SEARCH.length}</span>
+  <span class="chip">${groupSigil(vex, 30, 20)}Vexillology</span>
+  <span class="chip">${groupSigil(PLAYLISTS[1], 30, 20)}New playlist</span>
+  <span class="chip desk">${icon('plus', 14)} Any album, artist, filter or flow result</span>`
+document.getElementById('ctl').innerHTML = `<div class="seg"><button>${P ? 'As is' : 'As it is'}</button><button class="on">${P ? 'Best' : 'Best blend'}</button><button>${P ? 'Tempo' : 'By tempo'}</button><button>${P ? 'Energy' : 'By energy'}</button>${P ? '' : '<button>Smart shuffle</button>'}</div>
+  <span class="label">Shape</span><div class="seg"><button>Hold</button><button>Lift</button><button>Ease</button><button class="on">Arc</button></div>
+  <span class="sp desk"></span><span class="pin desk">${sigil(set[0], 30, 22, { r: 6 })}Start with ${esc(set[0].t.slice(0, 18))}</span><button class="btn desk">${icon('plus', 14)}Pin a track</button>`
+
+// Before and after, with Blend diamonds on every join.
+const W = 1000, H = P ? 46 : 64
+let trails = ''
+if (!P) {
+  const pos = ts => { const tot = ts.reduce((a, t) => a + t.d, 0), g = 6, u = W - g * (ts.length - 1); let x = 0; const m = new Map(); ts.forEach(t => { const tw = u * t.d / tot; m.set(t.id, x + tw / 2); x += tw + g }); return m }
+  const pa = pos(set), pb = pos(best)
+  trails = `<span></span><div class="trails"><svg viewBox="0 0 ${W} 54" preserveAspectRatio="none">${set.map(t => `<path d="M${pa.get(t.id)},0 C${pa.get(t.id)},27 ${pb.get(t.id)},27 ${pb.get(t.id)},54" fill="none" stroke="${t.m.color}" stroke-opacity=".45" stroke-width="1.2" vector-effect="non-scaling-stroke"/>`).join('')}</svg></div>`
+}
+document.getElementById('lanes').innerHTML = `
+  <div class="lh"><b>As it is</b><small>${A.rough} rough joins</small><div class="big tab" style="color:var(--mut)">${A.smooth}<span> blend</span></div></div>
+  <div class="lane">${joinStrip(set, W, H, { alpha: .55 })}${P ? `<div class="scs">${scoreChips(A)}</div>` : ''}</div>
+  ${trails}
+  <div class="lh"><b style="color:var(--blue)">Best blend · Arc</b><small>${B.rough} rough joins</small><div class="big tab">${B.smooth}<span> blend</span></div></div>
+  <div class="lane after">${joinStrip(best, W, H + 10, { energyLine: true })}<div class="scs">${scoreChips(B)}</div></div>`
+
+// The new order as a list, with the join between each pair.
+const moodCell = t => `<span class="m"><i class="dot" style="background:${t.m.color}"></i> ${t.m.word}</span>`
+const lean = (a, b) => { const de = (b.e || 0) - (a.e || 0); return de > 6 ? 'Lift' : de < -6 ? 'Ease' : 'Hold' }
+document.getElementById('list').innerHTML = best.slice(0, P ? 7 : 14).map((t, i) => (i ? `<div class="jn"><i style="background:${markOf(joinD(best[i - 1], t))}"></i>${lean(best[i - 1], t)} · ${t.bpm === best[i - 1].bpm ? 'same tempo' : `${best[i - 1].bpm}→${t.bpm}`}</div>` : '') + `<div class="li"><span class="n tab">${i + 1}</span>${sigil(t, P ? 40 : 44, 26, { r: 6 })}<span class="t">${esc(t.t)}</span>${moodCell(t)}<span class="b tab">${t.bpm}</span></div>`).join('')
+document.getElementById('acts').innerHTML = `<button class="btn pri">${icon('play', 14)}${P ? 'Apply' : 'Apply to the queue'}</button><button class="btn">${P ? 'Save' : `${icon('plus', 16)}Save as a playlist`}</button><button class="btn x">Play in this order once</button><button class="btn ghost x">Keep it as it is</button>
+  <p>Ordering never adds or drops a track. Pins stay where you put them. The queue keeps the track playing now in place.</p>`
+</script>
+</body></html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>K · Tape with filters</title>
+<link rel="stylesheet" href="common.css"><link rel="stylesheet" href="gh.css">
+<style>
+.facets { display: flex; align-items: center; gap: 8px; padding: 14px 4px 10px; flex-wrap: wrap }
+.facets .chip.f { background: oklch(72% .16 230 / .16); color: var(--fg); height: 32px; padding: 0 8px 0 12px }
+.facets .chip.f .ic { color: var(--mut) }
+.facets .chip.add { background: none; border: 1px dashed var(--line); height: 32px }
+.facets .sp { flex: 1 }
+.res { font-size: 13px; color: var(--mut) }
+.res b { color: var(--fg); font-weight: 600 }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 22px }
+.groups { margin-top: 14px }
+.g { display: grid; grid-template-columns: 52px minmax(160px, 250px) minmax(0, 1fr) 70px; gap: 14px; align-items: center; padding: 6px 8px; border-radius: 12px }
+.g.hov { background: oklch(26% .025 240 / .6) }
+.g b { display: block; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.g small { display: block; font-size: 12px; color: var(--mut) }
+.g .ribbon { width: 100%; display: block }
+.g .n { text-align: right; font-size: 13px; color: var(--mut) }
+.g .n b { display: inline; color: var(--blue) }
+.radar { border-radius: 18px; background: radial-gradient(60% 60% at 50% 50%, oklch(21% .035 250), oklch(15% .02 245) 85%); border: 1px solid oklch(32% .02 240 / .5); position: relative; height: 290px; overflow: hidden }
+.radar .ctr { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) }
+.radar .ctr .sigil { display: block; background: oklch(18% .03 250); border-radius: 9px }
+.side p { font-size: 13px; color: var(--mut); line-height: 1.5; margin: 10px 2px }
+.side p b { color: var(--fg); font-weight: 500 }
+.side .btn { width: 100%; justify-content: center; margin-top: 6px }
+.bar2 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 13px; color: var(--mut) }
+@media (max-width: 700px) {
+  .facets { flex-wrap: nowrap; overflow: hidden; padding: 10px 2px 6px }
+  .grid { display: block }
+  .pres { display: flex; align-items: center; gap: 10px; padding: 4px 2px 6px }
+  .pres .res { flex: 1 }
+  .rmini { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; background: oklch(18% .03 250); border: 1px solid var(--line); flex: none; position: relative }
+  .rmini svg { position: absolute; left: -13px; top: -13px }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div><div class="search desk" id="search"></div><div class="bell" id="bell"></div></div></div>
+  <div class="facets" id="facets"></div>
+  <div class="ph flex pres" id="pres"></div>
+  <div class="grid desk">
+    <section>
+      <div class="bar2" id="bar2"></div>
+      <div class="mini" id="mini"></div>
+      <div class="tape" id="tape" style="height:270px;margin-top:12px"></div>
+      <div class="groups" id="groups"></div>
+    </section>
+    <aside class="side" id="side"></aside>
+  </div>
+  <div class="ph" id="pt" style="margin-right:4px"></div>
+</main>
+<script src="data.js"></script><script src="common.js"></script><script src="gh.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search everything, or paste a link'
+document.getElementById('bell').innerHTML = icon('bell')
+// The filter: dark or menacing, 124–132 BPM.
+const keep = t => (t.m.word === 'Dark' || t.m.word === 'Menacing') && t.bpm >= 124 && t.bpm <= 132
+const hits = T.filter(keep)
+const groups = TAPE.filter(g => g.ts.some(keep))
+const x = icon('close', 13, 2.4)
+document.getElementById('facets').innerHTML = `<button class="btn">Group by: Album ${icon('down', 14)}</button>
+  <span class="chip f">Mood: Dark, Menacing ${x}</span><span class="chip f">124–132 BPM ${x}</span><span class="chip add">${icon('plus', 14)} Genre</span><span class="chip add">${icon('plus', 14)} Artist</span><span class="chip add">${icon('plus', 14)} Energy</span>
+  <span class="sp desk"></span><span class="res desk"><b class="tab">${hits.length}</b> tracks in <b class="tab">${groups.length}</b> albums · ${fmtDur(hits.reduce((a, t) => a + t.d, 0))}</span>
+  <button class="btn pri desk">${icon('play', 14)}Play all</button><button class="btn desk">${icon('flow', 16)}As a flow</button>`
+const radar = (W, H, r0) => orbitSvg({ W, H, p: { bpm: NOW.bpm, b: NOW.m.b, e: NOW.e }, tracks: T.filter(t => t !== NOW), hi: new Set(hits.map(t => t.id)), labels: false, r0, rings: W > 100 })
+
+if (!P) {
+  const start = TAPE.indexOf(groups.find(g => g.ts.filter(keep).reduce((a, t) => a + t.d, 0) > 300))
+  const tape = document.getElementById('tape'), TW = tape.clientWidth, K = .2
+  document.getElementById('bar2').innerHTML = `<span>Filtered-out tracks shrink to ticks, so you see where the matches sit in each album.</span>`
+  const big = groups.filter(g => g.ts.filter(keep).reduce((a, t) => a + t.d, 0) > 300)
+  tape.innerHTML = tapeHtml({ TW, TH: 270, groups: big, K, keep, hov: big[0].ts.filter(keep)[2] })
+  const mini = document.getElementById('mini')
+  mini.innerHTML = miniHtml(mini.clientWidth, start, TW / K, keep)
+  // The groups in the result: a list to jump the tape by.
+  const lit = (ts, w, h) => { const total = ts.reduce((s, t) => s + t.d, 0), gap = 1.5, u = w - gap * (ts.length - 1); let px = 0, o = ''; for (const t of ts) { const tw = Math.max(1.5, u * t.d / total); o += `<path d="${silhouette(t.curve, px, tw, h)}" fill="${keep(t) ? t.m.color : 'oklch(40% .02 240)'}" fill-opacity="${keep(t) ? .95 : .3}"/>`; px += tw + gap } return `<svg class="ribbon" viewBox="0 0 ${w} ${h}" height="${h}" preserveAspectRatio="none">${o}</svg>` }
+  document.getElementById('groups').innerHTML = `<div class="h2">In the result <small>click to jump the tape</small></div>` + groups.slice(0, 6).map((g, i) => { const s = summarise(g.al, g.ts, ''); return `<div class="g ${i === 1 ? "hov" : ""}">${groupSigil(s, 52, 34)}<span><b>${esc(g.al)}</b><small>${esc(g.ar)}</small></span>${lit(g.ts, 600, 28)}<span class="n"><b class="tab">${g.ts.filter(keep).length}</b> of ${g.ts.length}</span></div>` }).join('')
+  const near = hits.filter(t => fitDist(t, { bpm: NOW.bpm, b: NOW.m.b, e: NOW.e }) < .45).length
+  document.getElementById('side').innerHTML = `<div class="radar">${radar(290, 290, 34)}<span class="ctr">${sigil(NOW, 40, 26, { r: 7 })}</span></div>
+    <p>Lit dots are the result, placed around <b>${NOW.t}</b>, which is playing. ${near ? `<b class="tab">${near}</b> of them sit close enough to follow it.` : `None follow it closely: it runs at ${NOW.bpm} BPM, they run near 128.`}</p>
+    <button class="btn">Keep only what fits now</button><button class="btn">${icon('plus', 16)}Save as a smart list</button>`
+} else {
+  document.getElementById('pres').innerHTML = `<span class="res"><b class="tab">${hits.length}</b> tracks · <b class="tab">${groups.length}</b> albums<br><span style="color:var(--blue);display:inline-flex;align-items:center;gap:6px;margin-top:4px">${icon("play", 11)} Play all</span></span><span class="rmini">${radar(90, 90, 10)}</span>`
+  document.getElementById('pt').innerHTML = vtapeHtml(groups, { keep, max: 3, hov: groups[0].ts.filter(keep)[1] })
+}
+</script>
+</body></html>

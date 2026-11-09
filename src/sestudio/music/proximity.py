@@ -42,6 +42,32 @@ HARMONY_PART: Final = {
 }
 #: Blend 0..1 to a cost on the old scale (0 best, about 20 for a clash), which the gap finders add up.
 COST_SCALE: Final = 20.0
+#: Harmony moves (SPEC-music-library §2.7): a transposition is a lift up or a drop down,
+#: and the user sets how welcome each move is, 0 (avoid) .. 1 (as good as the same key).
+#: The defaults reproduce HARMONY_PART.
+MOVES: Final = (
+    "same-key",
+    "pivot",
+    "next-door",
+    "modal-shift",
+    "lift",
+    "drop",
+    "clash",
+)
+DEFAULT_WELCOME: Final = {
+    "same-key": 1.0,
+    "pivot": 0.8,
+    "next-door": 0.6,
+    "modal-shift": 0.6,
+    "lift": 0.5,
+    "drop": 0.5,
+    "clash": 0.0,
+}
+#: Blend marks on the Music page: smooth from this score, rough below that one.
+SMOOTH_FROM: Final = 0.83
+ROUGH_BELOW: Final = 0.58
+#: An energy step (outro to intro, 0..100) the set list flags as a jump.
+ENERGY_JUMP: Final = 25
 #: Candidates tried at each step of a path; a search over the whole library
 #: would be quadratic. shortcut: raise it if a bridge is missed in a big library.
 BEAM: Final = 30
@@ -127,8 +153,25 @@ def _edge(t: Track, which: str) -> float | None:
     return s.get(which, s.get("track"))
 
 
-def join(a: Track, b: Track, lean: str = "hold") -> Join:
-    """Everything worth saying about the move from *a* to *b* (unknown facts are None), with its Blend (SPEC-blend)."""
+def move_of(kind: str | None, semitones: int | None) -> str | None:
+    """The join's harmony move as Blend by names it: a transposition is a lift or a drop."""
+    if kind == "transposed":
+        return "lift" if (semitones or 0) > 0 else "drop"
+    return kind
+
+
+def join(
+    a: Track,
+    b: Track,
+    lean: str = "hold",
+    weights: dict[str, float] | None = None,
+    welcome: dict[str, float] | None = None,
+) -> Join:
+    """Everything worth saying about the move from *a* to *b* (unknown facts are None), with its Blend (SPEC-blend).
+
+    *weights* (Blend by axes) and *welcome* (how welcome each harmony move is) are the
+    Music page's settings; None means the app's defaults.
+    """
     shared, kind = harmony(a, b)
     ba = ((a.get("harmony") or {}).get("track") or {}).get("brightness")
     bb = ((b.get("harmony") or {}).get("track") or {}).get("brightness")
@@ -146,21 +189,59 @@ def join(a: Track, b: Track, lean: str = "hold") -> Join:
     step = None if delta is None else STEP_WORD[_blend.energy_lean(delta)]
     ga, gb = (a.get("genre") or "").lower(), (b.get("genre") or "").lower()
     pa, pb = a.get("bpm"), b.get("bpm")
+    semis = transposition(a, b) if kind == "transposed" else None
+    move = move_of(kind, semis)
+    part = (
+        0.4
+        if move is None
+        else min(
+            1.0, max(0.0, float({**DEFAULT_WELCOME, **(welcome or {})}.get(move, 0.4)))
+        )
+    )
     return {
         "shared": shared,
         "kind": kind,
         "kindLabel": KINDS.get(kind or ""),
+        "move": move,
         "safe": kind == "transposed" or (shared is not None and shared >= SAFE_NOTES),
-        "semitones": transposition(a, b) if kind == "transposed" else None,
+        "semitones": semis,
         "mood": mood,
         "energy": {"step": step, "delta": delta},
         "genreChange": bool(ga and gb and ga != gb),
         "bpmDelta": round(pb - pa, 1) if pa and pb else None,
         "tempoJump": bool(pa and pb and abs(pb - pa) > pa * TEMPO_TOL),
-        "blend": _blend.blend(
-            a, b, lean=lean, harmony=HARMONY_PART.get(kind or "", 0.4)
-        )["score"],
+        "blend": _blend.blend(a, b, lean=lean, harmony=part, weights=weights)["score"],
     }
+
+
+def mark(j: Join) -> str:
+    """The join's colour on the Music page: smooth, close or rough, from its Blend."""
+    s = j["blend"]
+    return "smooth" if s >= SMOOTH_FROM else "rough" if s < ROUGH_BELOW else "close"
+
+
+def problems(j: Join) -> list[str]:
+    """What the set list flags on a join: a clash, a tempo jump inside one genre, an energy jump."""
+    out = []
+    if j["move"] == "clash":
+        out.append("clash")
+    if j["tempoJump"] and not j["genreChange"]:
+        out.append("tempo")
+    delta = j["energy"]["delta"]
+    if delta is not None and abs(delta) > ENERGY_JUMP:
+        out.append("energy")
+    return out
+
+
+def explain(
+    a: Track,
+    b: Track,
+    weights: dict[str, float] | None = None,
+    welcome: dict[str, float] | None = None,
+) -> Join:
+    """:func:`join` plus the Music page's view of it: ``mark`` and ``problems``."""
+    j = join(a, b, "hold", weights, welcome)
+    return {**j, "mark": mark(j), "problems": problems(j)}
 
 
 def tempo_ok(j: Join) -> bool:
@@ -198,12 +279,15 @@ def fits_after(
     filters: dict[str, Any] | None = None,
     limit: int = 50,
     exclude: Collection[str] = (),
+    weights: dict[str, float] | None = None,
+    welcome: dict[str, float] | None = None,
 ) -> list[dict[str, Any]]:
     """Tracks of *pool* that follow *track*, best first, each as ``{"id", "join"}``.
 
     Filters: ``harmony`` (``safe`` default, or ``any``), ``tempo`` (``near`` default,
     or ``any``), ``mood`` (``up``/``down``/``same``), ``genre`` (``any`` default, ``same``,
     or a genre name). ``energy`` (``lift``/``hold``/``ease``) is a lean: it ranks, never leaves out.
+    *weights* and *welcome* are the Music page's Blend by settings.
     """
     f = filters or {}
     lean = f.get("energy") or "hold"
@@ -211,7 +295,7 @@ def fits_after(
     for t in pool:
         if t["id"] == track["id"] or t["id"] in exclude:
             continue
-        j = join(track, t, lean)
+        j = join(track, t, lean, weights, welcome)
         if _passes(j, t, f):
             out.append((cost(j), t["id"], j))
     out.sort(key=lambda r: r[:2])
@@ -224,8 +308,16 @@ def bridges(
     pool: list[Track],
     limit: int = 10,
     exclude: Collection[str] = (),
+    weights: dict[str, float] | None = None,
+    welcome: dict[str, float] | None = None,
+    strict: bool = True,
 ) -> list[dict[str, Any]]:
-    """Single tracks safe both after *a* and before *b*, the energy nearest between them first."""
+    """Single tracks between *a* and *b*.
+
+    *strict* (the default): only tracks safe both after *a* and before *b*, the
+    energy nearest between them first. Otherwise (the Music page's Fix panel): every
+    track, those that ``leave`` no problem first, then the best pair of Blends.
+    """
     ea, eb = _edge(a, "outro"), _edge(b, "intro")
     mid = (ea + eb) / 2 if ea is not None and eb is not None else None
     skip = {a["id"], b["id"], *exclude}
@@ -233,13 +325,22 @@ def bridges(
     for t in pool:
         if t["id"] in skip:
             continue
-        j1, j2 = join(a, t), join(t, b)
-        if all(j["safe"] and tempo_ok(j) for j in (j1, j2)):
-            e = _edge(t, "track")
-            far = abs(e - mid) if mid is not None and e is not None else 50
-            out.append((far, cost(j1) + cost(j2), t["id"], j1, j2))
-    out.sort(key=lambda r: r[:3])
-    return [{"id": i, "before": j1, "after": j2} for _, _, i, j1, j2 in out[:limit]]
+        j1, j2 = (
+            join(a, t, "hold", weights, welcome),
+            join(t, b, "hold", weights, welcome),
+        )
+        if strict and not all(j["safe"] and tempo_ok(j) for j in (j1, j2)):
+            continue
+        e = _edge(t, "track")
+        far = abs(e - mid) if mid is not None and e is not None else 50
+        left = len(problems(j1)) + len(problems(j2))
+        key = (far, cost(j1) + cost(j2)) if strict else (left, cost(j1) + cost(j2))
+        out.append((key, t["id"], j1, j2, left))
+    out.sort(key=lambda r: r[:2])
+    return [
+        {"id": i, "before": j1, "after": j2, "left": left}
+        for _, i, j1, j2, left in out[:limit]
+    ]
 
 
 def bridge_path(

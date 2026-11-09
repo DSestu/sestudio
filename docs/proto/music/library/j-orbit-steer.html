@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>J · Orbit you steer</title>
+<link rel="stylesheet" href="common.css"><link rel="stylesheet" href="gh.css">
+<style>
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 24px; padding-top: 14px }
+.trail { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; font-size: 13px; color: var(--mut) }
+.trail .chip { height: 30px }
+.trail .chip.cur { background: oklch(72% .16 230 / .2); color: var(--fg); font-weight: 500 }
+.trail .ic { color: var(--dim) }
+.trail .find { margin-left: auto; height: 34px; border-radius: 10px; border: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--dim); width: 230px }
+.orb { position: relative; border-radius: 22px; background: radial-gradient(60% 60% at 50% 50%, oklch(21% .035 250), oklch(15% .02 245) 80%); border: 1px solid oklch(32% .02 240 / .5); overflow: hidden }
+.ctr { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center }
+.ctr b { font-size: 15px; font-weight: 600 }
+.ctr small { font-size: 12px; color: var(--mut) }
+.lm { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 99px; background: oklch(24% .03 240 / .9); border: 1px solid var(--line); font-size: 12px; white-space: nowrap }
+.lm .gsig { width: 26px; height: 18px; border-radius: 9px }
+.lm.hov { border-color: var(--blue); color: var(--fg); background: oklch(28% .05 235 / .95) }
+.lm small { color: var(--dim) }
+.strip { margin-top: 14px; border-radius: 16px; background: oklch(17% .02 245); border: 1px solid oklch(30% .02 240 / .5); padding: 12px 14px; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 18px; align-items: center }
+.strip > * { min-width: 0 } .strip .tt { overflow: hidden }
+.strip h3 { font-size: 16px; font-weight: 600 }
+.strip p { font-size: 12px; color: var(--mut); margin: 2px 0 10px }
+.strip .acts { display: flex; gap: 6px }
+.strip .acts .btn { height: 30px; font-size: 12px; padding: 0 10px }
+.strip .tt { display: flex; gap: 0 }
+.strip .tt > div { min-width: 0 }
+.strip .tt span { display: block; font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px }
+.panel { display: flex; flex-direction: column; gap: 10px }
+.panel .find2 { height: 38px; border-radius: 11px; border: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--dim); font-size: 13px }
+.panel .row2 { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--mut) }
+@media (max-width: 700px) {
+  .grid { display: block; padding-top: 10px }
+  .trail { flex-wrap: nowrap; overflow: hidden }
+  .trail .find { display: none }
+  .strip { grid-template-columns: 1fr; gap: 8px }
+  .panel { margin-top: 16px }
+  .panel .seg { overflow: hidden }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div><div class="search desk" id="search"></div><div class="bell" id="bell"></div></div></div>
+  <div class="grid">
+    <section>
+      <div class="trail" id="trail"></div>
+      <div class="orb" id="orb"></div>
+      <div class="strip" id="strip"></div>
+    </section>
+    <aside class="panel" id="panel"></aside>
+  </div>
+</main>
+<script src="data.js"></script><script src="common.js"></script><script src="gh.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search everything, or paste a link'
+document.getElementById('bell').innerHTML = icon('bell')
+const C = ALBUMS.find(a => a.name === 'Vexillology'), p = profileOf(C.tracks)
+const sep = icon('right', 14)
+// Where you hopped from: each step re-centred the orbit.
+document.getElementById('trail').innerHTML = `${P ? '' : '<span>Centred on</span>'}<span class="chip">${sigil(NOW, 22, 14, { r: 4, bg: false })}Black Bloc</span>${sep}<span class="chip">Deadmau5</span>${sep}<span class="chip cur">Vexillology</span>
+  <span class="find">${icon('search', 15)}Centre on…</span>`
+
+// The orbit around the album's own sound.
+const orb = document.getElementById('orb'), W = orb.clientWidth, H = P ? 320 : Math.min(560, innerHeight - 330)
+orb.style.height = H + 'px'
+const r0 = P ? 44 : 78, R = Math.min(W, H) / 2 - (P ? 8 : 26)
+orb.innerHTML = orbitSvg({ W, H, p, hi: new Set(C.tracks.map(t => t.id)), labels: !P, r0 }) + `<div class="ctr">${groupSigil(C, P ? 52 : 70, P ? 34 : 44)}${P ? '' : `<b>${C.name}</b><small>${C.n} tracks · ${bpmRange(C)}</small>`}</div>`
+// Landmarks: other albums, placed where their sound sits, as places to hop to.
+const others = ALBUMS.filter(a => a !== C && a.n >= 5 && a.artist !== 'Various artists' || ['neuro soundcloud', 'Mixed'].includes(a.name)).filter(a => a !== C)
+  .map(a => ({ a, d: avg(a.tracks.map(t => fitDist(t, p))) })).sort((x, y) => x.d - y.d)
+const place = (g, d) => { const i = Math.max(0, SECTORS.findIndex(m => m.word === g.mood.word)); const ang = (i + .5) / SECTORS.length * Math.PI * 2 - Math.PI / 2; const rr = r0 + Math.min(1, d * 1.25) * (R - r0); return [W / 2 + Math.cos(ang) * rr, H / 2 + Math.sin(ang) * rr] }
+const used = []
+others.slice(0, P ? 3 : 6).forEach(({ a, d }, k) => {
+  let [x, y] = place(a, d); while (used.some(([u, v]) => Math.abs(u - x) < 140 && Math.abs(v - y) < 26)) y += 28
+  used.push([x, y]); x = Math.max(70, Math.min(W - 70, x))
+  orb.insertAdjacentHTML('beforeend', `<span class="lm ${k === 1 ? 'hov' : ''}" style="left:${x}px;top:${y}px">${groupSigil(a, 26, 18)}${esc(a.name.length > 22 ? a.name.slice(0, 21) + "…" : a.name)} <small class="tab">${Math.round((1 - d) * 100)}%</small></span>`)
+})
+
+// The centred album as a short tape, to play it.
+const tot = C.dur
+document.getElementById('strip').innerHTML = `<div><h3>${C.name}</h3><p>Album · ${C.artist} · ${fmtDur(C.dur)} · mostly ${C.mood.word}</p><div class="acts"><button class="btn pri">${icon('play', 12)}Play</button><button class="btn">${icon('shuffle', 14)}Shuffle</button><button class="btn">${icon('flow', 14)}${P ? 'Flow' : 'As a flow'}</button></div></div>
+  <div><div>${ribbon(C.tracks, 800, P ? 40 : 54, { fluid: true, gap: 3 })}</div><div class="tt">${C.tracks.map(t => `<div style="flex:${t.d}"><span>${esc(t.t)}</span></div>`).join('')}</div></div>`
+
+// Browse panel: any kind, ranked by how close it sits to the centre.
+const rowsAlb = others.slice(0, P ? 4 : 8)
+document.getElementById('panel').innerHTML = `
+  <div class="seg"><button class="on">Albums</button><button>Artists</button><button>Playlists</button><button>Flows</button><button>Tracks</button></div>
+  <div class="find2 desk">${icon('search', 15)}Filter albums</div>
+  <div class="row2"><span>${ALBUMS.length} albums</span><button class="btn ghost" style="height:26px;padding:0">Nearest to Vexillology ${icon('down', 14)}</button></div>
+  <div>${rowsAlb.map(({ a, d }, k) => `<div class="r ${k === 1 ? 'hov' : ''}">${groupSigil(a, 48, 32)}<span><b>${esc(a.name)}</b><small>${esc(a.artist)} · ${a.n} tracks · mostly ${a.mood.word}</small></span><span class="fit">${Math.round((1 - d) * 100)}%<div class="fitbar"><i style="width:${(1 - d) * 100}%"></i></div></span></div>`).join('')}</div>
+  ${P ? '' : `<p style="font-size:12px;color:var(--dim);padding:4px 6px">Click a row or a landmark to centre on it. Double-click to open it.</p>`}`
+</script>
+</body></html>

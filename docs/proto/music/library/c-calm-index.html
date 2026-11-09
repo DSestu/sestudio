@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C · Calm index</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 40px; margin-top: 18px }
+.ctl { display: flex; align-items: center; gap: 18px; padding: 0 4px 6px; font-size: 13px; color: var(--mut) }
+.ctl .on { color: var(--fg); text-decoration: underline; text-underline-offset: 6px; text-decoration-color: var(--blue); text-decoration-thickness: 2px }
+.ctl .sep { width: 1px; height: 16px; background: var(--line) }
+.letter { display: grid; grid-template-columns: 56px minmax(0, 1fr); border-top: 1px solid var(--line); padding: 14px 0 10px }
+.letter > h3 { font-size: 30px; font-weight: 300; color: var(--dim); line-height: 1; padding-top: 4px }
+.e { padding: 6px 10px 7px; border-radius: 12px; max-width: 880px }
+.e .h { display: flex; align-items: baseline; gap: 10px }
+.e .h b { font-size: 18px; font-weight: 500; letter-spacing: -.01em }
+.e .h span { font-size: 12px; color: var(--dim) }
+.e .h .dot { width: 6px; height: 6px; transform: translateY(-2px) }
+.e p { font-size: 13px; color: var(--mut); line-height: 1.6; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.e p i { font-style: normal; color: var(--dim); padding: 0 5px }
+.e.focus { background: oklch(22% .03 240 / .85); padding: 12px 14px 14px; margin: 6px 0 }
+.e.focus .h b { font-size: 22px }
+.e.focus .ribbon { display: block; margin: 12px 0 10px }
+.fl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.ex-acts { display: flex; gap: 8px; margin: 12px 0 8px }
+.ex-tr { display: grid; grid-template-columns: 22px 52px minmax(0, 1fr) 84px 64px 44px; align-items: center; column-gap: 12px; padding: 3px 0; font-size: 13px }
+.ex-tr .n { color: var(--dim); text-align: right; font-size: 12px }
+.ex-tr .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ex-tr .m, .ex-tr .b, .ex-tr .d { color: var(--mut); font-size: 12px; white-space: nowrap }
+.recap { position: sticky; top: 20px; align-self: start; display: flex; flex-direction: column; gap: 22px; padding-top: 8px }
+.recap h2 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 8px }
+.recap .lede { font-size: 20px; line-height: 1.35; letter-spacing: -.015em; color: var(--fg); font-weight: 400 }
+.recap .lede em { font-style: normal; font-weight: 600 }
+.ladder { display: grid; grid-template-columns: 74px minmax(0, 1fr) 30px; row-gap: 9px; column-gap: 10px; align-items: center; font-size: 12px; color: var(--mut) }
+.ladder .bar { position: relative; height: 10px; border-radius: 3px; background: oklch(30% .02 240 / .4) }
+.ladder .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; opacity: .35 }
+.ladder .bar u { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px }
+.ladder .tab { text-align: right; color: var(--fg) }
+.hist { display: flex; align-items: flex-end; gap: 2px; height: 64px }
+.hist i { flex: 1; border-radius: 2px 2px 0 0; background: oklch(72% .16 230 / .28) }
+.hist i.hit { background: var(--blue) }
+.axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-top: 4px }
+.going { display: flex; flex-direction: column; gap: 2px }
+.going a { display: flex; align-items: center; gap: 12px; padding: 6px 0; font-size: 13px; color: var(--mut) }
+.going a b { color: var(--fg); font-weight: 500 }
+.going .fl-ic { width: 44px; height: 28px; border-radius: 8px; background: oklch(72% .16 230 / .08); display: grid; place-items: center }
+.ctx { font-size: 13px; color: var(--mut); line-height: 1.55 }
+.ctx b { color: var(--fg); font-weight: 500 }
+.scrub { display: none }
+.ph { display: none }
+@media (max-width: 700px) {
+  .layout { display: block; margin-top: 12px }
+  .desk { display: none !important }
+  .ph { display: block } .ph.search { display: flex }
+  .recap { position: static; gap: 10px; padding: 0 4px 12px }
+  .recap .lede { font-size: 17px }
+  .recap > :not(.lede-wrap) { display: none }
+  .ctl { overflow: hidden; gap: 14px; white-space: nowrap; padding: 0 4px 8px }
+  .letter { grid-template-columns: 30px minmax(0, 1fr); padding: 10px 0 6px }
+  .letter > h3 { font-size: 22px }
+  .e { padding: 5px 4px 6px; margin-right: 18px }
+  .e .h b { font-size: 16px }
+  .e.focus { padding: 12px; margin-right: 14px }
+  .e.focus .h b { font-size: 19px }
+  .ex-tr { grid-template-columns: 18px 40px minmax(0, 1fr) auto; column-gap: 8px }
+  .ex-tr .b, .ex-tr .d { display: none }
+  .ex-acts .btn { flex: 1; justify-content: center }
+  .scrub { display: flex; position: fixed; right: 3px; top: 210px; flex-direction: column; gap: 3px; font-size: 10px; color: var(--dim); text-align: center; z-index: 5 }
+  .scrub .on { color: var(--blue); font-weight: 600 }
+}
+</style></head>
+<body>
+<main>
+  <div class="top">
+    <div class="top-row">
+      <div class="title"><h1>Music</h1></div>
+      <div class="search desk" id="search"></div>
+      <div class="bell" id="bell"></div>
+    </div>
+  </div>
+  <div class="ph search" style="margin-top:10px" id="psearch"></div>
+  <div class="layout">
+    <section>
+      <div class="ctl" id="ctl"></div>
+      <div id="index"></div>
+    </section>
+    <aside class="recap" id="recap"></aside>
+  </div>
+  <div class="scrub" id="scrub"></div>
+</main>
+<script src="data.js"></script><script src="common.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search everything, or paste a link'
+document.getElementById('psearch').innerHTML = icon('search', 18) + 'Search or paste a link'
+document.getElementById('bell').innerHTML = icon('bell')
+document.getElementById('ctl').innerHTML = `<span>Index by</span><a class="on">A–Z</a><a>Artist</a><a>Genre</a><a>Mood</a><a>Tempo</a><span class="sep desk"></span><a class="desk">Everything</a><a class="desk" style="color:var(--dim)">Albums · Artists · Playlists · Flows · Mixes</a>`
+
+// One index of everything you can play.
+const entries = []
+ALBUMS.forEach(a => entries.push({ name: a.name, kind: 'Album', g: a, sub: `${a.artist} · ${a.n} tracks`, run: a.tracks.map(t => t.t) }))
+ARTISTS.filter(a => a.name !== 'Various artists').forEach(a => entries.push({ name: a.name, kind: 'Artist', g: a, sub: `${a.n} track${a.n > 1 ? "s" : ""}`, run: [...new Set(a.tracks.map(t => t.al))] }))
+PLAYLISTS.forEach(p => entries.push({ name: p.name, kind: 'Playlist', g: p, sub: `${p.n} tracks`, run: p.tracks.map(t => t.t) }))
+FLOWS_.forEach(f => entries.push({ name: f.name, kind: 'Flow', f, sub: f.len === 'endless' ? 'endless' : `${f.len} tracks`, run: ['shapes energy across all libraries'] }))
+entries.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
+const letterOf = n => /^[a-z]/i.test(n) ? n[0].toUpperCase() : '#'
+const focus = entries.find(e => e.name === 'Vexillology')
+
+function entryHtml(e) {
+  const dot = e.g ? `<i class="dot" style="background:${e.g.mood.color}"></i>` : `<i class="dot" style="background:var(--blue)"></i>`
+  if (e !== focus) return `<div class="e"><div class="h">${dot}<b>${esc(e.name)}</b><span>${e.kind} · ${esc(e.sub)}</span></div><p>${e.run.slice(0, 14).map(esc).join('<i>·</i>')}</p></div>`
+  const g = e.g
+  return `<div class="e focus"><div class="h">${dot}<b>${esc(e.name)}</b><span>${e.kind} · ${esc(e.sub)} · ${fmtDur(g.dur)}</span></div>
+    ${ribbon(g.tracks, 800, P ? 44 : 56, { fluid: true })}
+    <div class="fl"><span class="chip">${bpmRange(g)}</span><span class="chip"><i class="dot" style="background:${g.mood.color}"></i>Mostly ${g.mood.word}</span><span class="chip">${g.genre}</span><span class="chip">Energy ${g.energy}</span></div>
+    <div class="ex-acts"><button class="btn pri">${icon('play', 14)}Play</button><button class="btn">${icon('shuffle', 16)}Shuffle</button><button class="btn">${icon('flow', 16)}${P ? 'Flow' : 'As a flow'}</button><button class="btn" style="padding:0 10px">${icon('plus', 16)}</button></div>
+    ${g.tracks.map((t, i) => `<div class="ex-tr"><span class="n tab">${i + 1}</span>${sigil(t, P ? 40 : 52, 24, { r: 6 })}<span class="t">${esc(t.t)}</span><span class="m"><i class="dot" style="background:${t.m.color}"></i> ${t.m.word}</span><span class="b tab">${t.bpm} BPM</span><span class="d tab">${fmtTime(t.d)}</span></div>`).join('')}</div>`
+}
+const byLetter = groupBy(entries, e => letterOf(e.name))
+const show = P ? ['P', 'V'] : ['P', 'R', 'V']
+document.getElementById('index').innerHTML = [...byLetter].filter(([l]) => show.includes(l)).map(([l, es]) => `<div class="letter"><h3>${l}</h3><div>${es.filter(e => e.kind !== 'Artist' || e.g.n > 2).slice(0, l === 'V' ? 9 : P ? 3 : 5).map(entryHtml).join('')}</div></div>`).join('')
+document.getElementById('scrub').innerHTML = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c => `<span class="${c === 'V' ? 'on' : ''}">${c}</span>`).join('')
+
+// Recap: the library now, and the focused entry against it.
+const counts = {}; T.forEach(t => counts[t.m.word] = (counts[t.m.word] || 0) + 1)
+const fc = {}; focus.g.tracks.forEach(t => fc[t.m.word] = (fc[t.m.word] || 0) + 1)
+const maxC = Math.max(...Object.values(counts))
+const ladder = [...LADDER, EXOTIC].map(l => `<span>${l.word}</span><span class="bar"><i style="width:${(counts[l.word] || 0) / maxC * 100}%;background:${l.color}"></i><u style="width:${(fc[l.word] || 0) / focus.g.n * 100}%;background:${l.color};top:auto;height:3px;bottom:-5px"></u></span><span class="tab">${counts[l.word] || 0}</span>`).join('')
+const bins = []; for (let b = 90; b < 180; b += 4) bins.push([b, T.filter(t => t.bpm >= b && t.bpm < b + 4).length, focus.g.tracks.some(t => t.bpm >= b && t.bpm < b + 4)])
+const hm = Math.max(...bins.map(b => b[1]))
+const darker = Math.round(T.filter(t => t.m.b < focus.g.mood.b).length / T.length * 100)
+const plateau = FLOWS_.find(f => f.name === 'Plateau') || FLOWS_[0]
+document.getElementById('recap').innerHTML = `
+  <div class="lede-wrap"><p class="lede">${P ? `<em class="tab">474</em> tracks, mostly <em style="color:${MOODS.Aeolian[1]}">dark</em>, at <em class="tab">128</em> or <em class="tab">172</em> BPM.` : `<em class="tab">474</em> tracks in 4 libraries, mostly <em style="color:${MOODS.Aeolian[1]}">dark</em>, gathered at <em class="tab">128</em> and <em class="tab">172</em> BPM. 473 analysed.`}</p></div>
+  <div><h2>Going on</h2><div class="going">
+    <a><span class="fl-ic">${flowShape(plateau, 34, 20)}</span><span><b>Plateau</b> is playing, a flow over all libraries</span></a>
+    <a>${groupSigil(PLAYLISTS[0], 44, 28)}<span><b>Queue</b> holds ${PLAYLISTS[0].n} tracks, ${fmtDur(PLAYLISTS[0].dur)}</span></a>
+    <a>${groupSigil(ALBUMS.find(a => a.name === 'neuro soundcloud'), 44, 28)}<span><b>neuro soundcloud</b> is the newest library, 44 tracks</span></a>
+    <a><span class="fl-ic">${icon('plus', 16)}</span><span>No mixes yet. <b style="color:var(--blue)">Make one</b></span></a>
+  </div></div>
+  <div><h2>Mood · bright line is Vexillology</h2><div class="ladder">${ladder}</div></div>
+  <div><h2>Tempo</h2><div class="hist">${bins.map(([b, n, hit]) => `<i class="${hit ? 'hit' : ''}" style="height:${Math.max(3, Math.sqrt(n / hm) * 64)}px"></i>`).join('')}</div><div class="axis"><span>90</span><span>110</span><span>128</span><span>150</span><span>178</span></div>
+    <p class="ctx" style="margin-top:10px"><b>Vexillology</b> sits at ${bpmRange(focus.g)}, brighter than ${darker}% of your library.</p></div>`
+</script>
+</body></html>

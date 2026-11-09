@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A · Sound map</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.grid { display: grid; grid-template-columns: 236px minmax(0, 1fr) 392px; gap: 18px; margin-top: 16px; height: calc(100vh - 226px) }
+.lenses { overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding-top: 2px }
+.lens-h { display: flex; justify-content: space-between; align-items: baseline; padding: 0 8px 2px }
+.lens-h a { font-size: 12px; color: var(--dim) }
+.lens { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 12px; color: var(--mut) }
+.lens .gsig { width: 44px; height: 30px }
+.lens .gsig svg { width: 36px; height: 20px }
+.lens span { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.lens small { font-size: 12px; color: var(--dim) }
+.lens.on { background: oklch(72% .16 230 / .14); color: var(--fg) }
+.lens .fl { width: 44px; height: 30px; border-radius: 10px; background: oklch(72% .16 230 / .08); display: grid; place-items: center }
+.mapwrap { position: relative; border-radius: 18px; background: radial-gradient(120% 90% at 60% 30%, oklch(20% .03 250), oklch(16% .02 245)); border: 1px solid oklch(32% .02 240 / .5); overflow: hidden; display: flex; flex-direction: column }
+.map-top { display: flex; align-items: center; gap: 10px; padding: 12px 14px 0; position: relative; z-index: 2 }
+.map-top .sp { flex: 1 }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 11px; font-size: 12px; color: var(--mut) }
+.legend span { display: inline-flex; align-items: center; gap: 5px }
+#map { flex: 1; width: 100%; display: block }
+.lasso-bar { position: absolute; white-space: nowrap; display: flex; align-items: center; gap: 6px; padding: 5px 5px 5px 12px; border-radius: 12px; background: oklch(26% .04 240 / .92); border: 1px solid oklch(72% .16 230 / .45); font-size: 13px; box-shadow: 0 8px 24px oklch(0% 0 0 / .4); z-index: 3 }
+.lasso-bar b { font-weight: 500 }
+.lasso-bar .btn { height: 28px; padding: 0 10px; font-size: 12px }
+.tip { position: absolute; width: 214px; padding: 10px; border-radius: 12px; background: oklch(23% .03 245 / .96); border: 1px solid var(--line); box-shadow: 0 10px 26px oklch(0% 0 0 / .45); font-size: 12px; z-index: 3 }
+.tip b { display: block; font-size: 13px; font-weight: 500; margin: 6px 0 1px }
+.tip span { color: var(--mut) }
+.detail { display: flex; flex-direction: column; min-height: 0 }
+.dhead { padding: 4px 4px 14px }
+.dhead .ribbon { display: block; margin-bottom: 14px }
+.dhead h2 { font-size: 24px; font-weight: 600; letter-spacing: -.025em; line-height: 1.2 }
+.dhead p { color: var(--mut); font-size: 13px; margin-top: 2px }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 }
+.acts { display: flex; gap: 8px }
+.tracks { flex: 1; overflow: hidden; border-top: 1px solid var(--line); padding-top: 6px; -webkit-mask-image: linear-gradient(#000 80%, transparent) }
+.tr { display: flex; align-items: center; gap: 10px; padding: 5px 4px; border-radius: 10px }
+.tr.on { background: oklch(30% .03 240 / .5) }
+.tr .n { width: 18px; text-align: right; font-size: 12px; color: var(--dim) }
+.tr .t { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tr .k { font-size: 12px; color: var(--mut); width: 64px }
+.tr .b { font-size: 12px; color: var(--mut); width: 30px; text-align: right }
+.ph { display: none }
+@media (max-width: 700px) {
+  .grid { display: block; height: auto; margin-top: 10px }
+  .lenses, .desk { display: none }
+  .ph { display: flex }
+  .chips { gap: 6px; overflow: hidden; margin: 10px 0 }
+  .mapwrap { height: 330px }
+  .map-top { padding: 10px 10px 0 }
+  .legend { font-size: 11px; gap: 8px }
+  .detail { margin-top: 14px }
+  .dhead h2 { font-size: 20px }
+  .acts .btn { flex: 1; justify-content: center }
+  .tracks { -webkit-mask-image: none }
+}
+</style></head>
+<body>
+<main>
+  <div class="top">
+    <div class="top-row">
+      <div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div>
+      <div class="search desk">${search}</div>
+      <span class="desk" style="display:flex;gap:8px"><button class="btn">All libraries ${'v'}</button></span>
+      <div class="bell">${bell}</div>
+    </div>
+    <div class="top-row desk" id="axes"></div>
+  </div>
+  <div class="ph search" style="margin-top:10px" id="psearch"></div>
+  <div class="ph chips" id="pchips"></div>
+  <div class="grid">
+    <aside class="lenses" id="lenses"></aside>
+    <section class="mapwrap" id="mapwrap">
+      <div class="map-top"><div class="legend" id="legend"></div><span class="sp"></span></div>
+      <svg id="map"></svg>
+    </section>
+    <section class="detail" id="detail"></section>
+  </div>
+</main>
+<script src="data.js"></script><script src="common.js"></script>
+<script>
+// Template placeholders in the static markup.
+document.body.innerHTML = document.body.innerHTML.replace('${search}', icon('search', 18) + 'Search tracks, albums, artists, flows, or paste a link').replace('${bell}', icon('bell')).replace("${'v'}", icon('down', 14))
+chrome()
+const P = phone()
+const sel = ALBUMS.find(a => a.name === 'while(1<2)')
+const selIds = new Set(sel.tracks.map(t => t.id))
+document.getElementById('psearch').innerHTML = icon('search', 18) + 'Search or paste a link'
+
+document.getElementById('axes').innerHTML = `
+  <div class="seg"><button class="on">Tempo × Energy</button><button>Mood × Energy</button><button>Tempo × Mood</button></div>
+  <span class="label" style="margin-left:6px">Genre</span>
+  <span class="chip on">All</span><span class="chip">Progressive House <b class="tab">75</b></span><span class="chip">Drum &amp; Bass <b class="tab">57</b></span><span class="chip">Electronic <b class="tab">107</b></span><span class="chip">Ambient <b class="tab">39</b></span><span class="chip">Dubstep <b class="tab">14</b></span>`
+
+document.getElementById('pchips').innerHTML = `<span class="chip on">${icon('close', 12, 2.4)} Album: while(1&lt;2)</span><span class="chip">Artists</span><span class="chip">Playlists</span><span class="chip">Flows</span><span class="chip">Genre</span>`
+
+// Lenses: everything you can look through, in one column.
+const lens = (g, on) => `<a class="lens ${on ? 'on' : ''}">${groupSigil(g)}<span>${esc(g.name)}</span><small class="tab">${g.n}</small></a>`
+document.getElementById('lenses').innerHTML = `
+  <div><div class="lens-h"><span class="label">Playing from</span></div>
+    ${FLOWS_.slice(0, 1).map(f => `<a class="lens"><span class="fl">${flowShape(f, 34, 20)}</span><span>Flow · ${f.name}</span><small>live</small></a>`).join('')}</div>
+  <div><div class="lens-h"><span class="label">Albums</span><a>107</a></div>${ALBUMS.slice(0, 7).map(a => lens(a, a === sel)).join('')}</div>
+  <div><div class="lens-h"><span class="label">Artists</span><a>88</a></div>${ARTISTS.filter(a => a.name !== "Various artists").slice(0, 3).map(a => lens(a)).join('')}</div>
+  <div><div class="lens-h"><span class="label">Playlists</span><a>New</a></div>${PLAYLISTS.slice(0, 2).map(a => lens(a)).join('')}</div>
+  <div><div class="lens-h"><span class="label">Flows</span><a>${FLOWS_.length}</a></div>${FLOWS_.slice(1, 4).map(f => `<a class="lens"><span class="fl">${flowShape(f, 34, 20)}</span><span>${f.name}</span><small>flow</small></a>`).join('')}</div>`
+
+// Legend doubles as the library's mood recap.
+const counts = {}; T.forEach(t => counts[t.m.word] = (counts[t.m.word] || 0) + 1)
+document.getElementById('legend').innerHTML = [...LADDER, EXOTIC].filter(l => counts[l.word]).map(l => `<span><i class="dot" style="background:${l.color}"></i>${l.word} <b class="tab" style="font-weight:500;color:var(--fg)">${counts[l.word]}</b></span>`).join('')
+
+// The map.
+const wrap = document.getElementById('mapwrap'), svg = document.getElementById('map')
+const W = svg.clientWidth, H = svg.clientHeight
+const L = P ? 22 : 60, R = 14, Tp = 18, Bt = 54
+const x = b => L + (Math.min(186, Math.max(84, b)) - 84) / 102 * (W - L - R)
+const y = e => Tp + (1 - e / 100) * (H - Tp - Bt)
+const jit = id => (parseInt(id.slice(0, 6), 16) % 1000) / 1000 - .5
+let s = ''
+// Energy bands.
+const bands = [['Calm', 0, 30], ['Steady', 30, 55], ['Driving', 55, 78], ['Intense', 78, 100]]
+bands.forEach(([n, a, b], i) => { s += `<rect x="${L}" y="${y(b)}" width="${W - L - R}" height="${y(a) - y(b)}" fill="oklch(100% 0 0 / ${i % 2 ? .018 : 0})"/><text x="${L - 8}" y="${(y(a) + y(b)) / 2 + 4}" text-anchor="end" font-size="11" fill="var(--dim)">${P ? n[0] : n}</text>` })
+// Tempo histogram along the floor.
+const bins = {}; T.forEach(t => { if (t.bpm) { const k = Math.floor(t.bpm / 3) * 3; bins[k] = (bins[k] || 0) + 1 } })
+const mx = Math.max(...Object.values(bins))
+Object.entries(bins).forEach(([k, n]) => { if (k < 80 || k > 190) return; s += `<rect x="${x(+k) + 1}" y="${H - 22 - Math.sqrt(n / mx) * 26}" width="${Math.max(2, x(+k + 3) - x(+k) - 2)}" height="${Math.sqrt(n / mx) * 26}" rx="1.5" fill="oklch(72% .16 230 / .35)"/>` })
+;[90, 110, 128, 150, 172].forEach(b => { s += `<text x="${x(b)}" y="${H - 6}" text-anchor="middle" font-size="11" fill="var(--dim)" class="tab">${b}</text>` })
+s += `<text x="${W - R}" y="${H - 6}" text-anchor="end" font-size="11" fill="var(--dim)">BPM</text>`
+// Genre regions, named where they gather.
+const gen = groupBy(T.filter(t => t.g && t.bpm), t => t.g)
+const placed = []
+for (const [g, ts] of [...gen].sort((a, b) => b[1].length - a[1].length)) { if (ts.length < 14) continue; const bx = avg(ts.map(t => Math.min(186, t.bpm))), ey = avg(ts.map(t => t.e || 0)); const gx = x(bx), gy = y(ey) - (P ? 30 : 46); if (placed.some(([a, b]) => Math.abs(a - gx) < 150 && Math.abs(b - gy) < 22)) continue; placed.push([gx, gy]); s += `<text x="${gx}" y="${gy}" text-anchor="middle" font-size="${P ? 10 : 11}" letter-spacing=".1em" fill="oklch(80% .02 240 / .4)">${g.toUpperCase()}</text>` }
+// Lasso.
+const la = { b0: 124, b1: 132, e0: 55, e1: 82 }
+const inL = T.filter(t => t.bpm >= la.b0 && t.bpm <= la.b1 && t.e >= la.e0 && t.e <= la.e1)
+s += `<rect x="${x(la.b0) - 6}" y="${y(la.e1)}" width="${x(la.b1) - x(la.b0) + 12}" height="${y(la.e0) - y(la.e1)}" rx="14" fill="oklch(72% .16 230 / .06)" stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="5 5"/>`
+// Tracks.
+const pos = t => [x(t.bpm || 80) + jit(t.id) * 16, y(t.e || 0) + jit(t.id.slice(3)) * 7]
+for (const t of T) { if (!t.bpm) continue; const [px, py] = pos(t); const on = selIds.has(t.id); s += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${(P ? 2.2 : 2.8) + t.d / 260}" fill="${t.m.color}" fill-opacity="${on ? 1 : .38}"/>` }
+// The album as a path through its tracks, in order.
+const path = sel.tracks.filter(t => t.bpm).map(pos)
+s += `<path d="M${path.map(p => p.map(v => v.toFixed(1)).join(',')).join('L')}" fill="none" stroke="oklch(95% .01 240 / .55)" stroke-width="1.2" stroke-linejoin="round"/>`
+path.forEach(([px, py], i) => { s += `<circle cx="${px}" cy="${py}" r="${P ? 4 : 5}" fill="none" stroke="oklch(95% .01 240 / .8)" stroke-width="1.4"/>` })
+svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s
+
+// Lasso bar + a hovered track.
+const oy = svg.getBoundingClientRect().top - wrap.getBoundingClientRect().top
+const lb = document.createElement('div'); lb.className = 'lasso-bar'
+lb.innerHTML = `${icon('lasso', 16)}<b>${la.b0}–${la.b1} BPM · Driving</b><span style="color:var(--mut)" class="tab">${inL.length}</span><button class="btn pri">${icon('play', 12)}Play</button>${P ? '' : `<button class="btn">${icon('flow', 14)}As a flow</button>`}`
+lb.style.left = (P ? 10 : 70) + 'px'; lb.style.bottom = (P ? 64 : 76) + 'px'
+wrap.appendChild(lb)
+if (!P) {
+  const h = sel.tracks.find(t => t.t.startsWith('Sleepless')) || sel.tracks[3]; const [hx, hy] = pos(h)
+  const tip = document.createElement('div'); tip.className = 'tip'
+  tip.innerHTML = `${sigil(h, 194, 44)}<b>${esc(h.t)}</b><span><i class="dot" style="background:${h.m.color}"></i> ${h.m.word} · ${h.key} · ${h.bpm} BPM · ${fmtTime(h.d)}</span>`
+  tip.style.left = (hx + 24) + "px"; tip.style.top = (oy + hy - 150) + "px"; wrap.appendChild(tip)
+  svg.insertAdjacentHTML('beforeend', `<circle cx="${hx}" cy="${hy}" r="9" fill="none" stroke="var(--blue)" stroke-width="2"/>`)
+}
+
+// Detail: what the map is looking through.
+document.getElementById('detail').innerHTML = `
+  <div class="dhead">
+    ${ribbon(sel.tracks, 380, P ? 56 : 76, { fluid: true })}
+    <h2>${esc(sel.name)}</h2>
+    <p>Album · ${esc(sel.artist)} · ${sel.n} tracks · ${fmtDur(sel.dur)}</p>
+    <div class="facts"><span class="chip">${bpmRange(sel)}</span><span class="chip"><i class="dot" style="background:${sel.mood.color}"></i>Mostly ${sel.mood.word}</span><span class="chip">${sel.genre}</span><span class="chip">Energy ${sel.energy}</span></div>
+    <div class="acts"><button class="btn pri">${icon('play', 14)}Play</button><button class="btn">${icon('shuffle', 16)}Shuffle</button><button class="btn">${icon('flow', 16)}As a flow</button><button class="btn" style="padding:0 10px">${icon('plus', 16)}</button></div>
+  </div>
+  <div class="tracks">${sel.tracks.map((t, i) => `<div class="tr ${i === 3 && !P ? 'on' : ''}"><span class="n tab">${i + 1}</span>${sigil(t, 44, 26, { r: 7 })}<span class="t">${esc(t.t)}</span><span class="k"><i class="dot" style="background:${t.m.color}"></i> ${t.m.word}</span><span class="b tab">${t.bpm ?? ''}</span></div>`).join('')}</div>`
+</script>
+</body></html>

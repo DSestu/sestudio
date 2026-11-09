@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>N · Order on the tape</title>
+<link rel="stylesheet" href="common.css"><link rel="stylesheet" href="gh.css">
+<style>
+.hd { display: flex; align-items: center; gap: 10px; padding: 16px 4px 10px; flex-wrap: wrap }
+.hd .src { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 6px; border-radius: 11px; background: oklch(26% .03 240); font-weight: 500 }
+.hd .src .gsig { width: 34px; height: 24px; border-radius: 7px }
+.hd .sp { flex: 1 }
+.hd .sc { font-size: 13px; color: var(--mut) }
+.hd .sc b { color: var(--fg); font-size: 18px; font-weight: 600 }
+.stage { border-radius: 18px; background: oklch(17% .02 245); border: 1px solid oklch(30% .02 240 / .5); padding: 12px 14px 10px }
+.shape { position: relative; height: 92px }
+.shape svg { width: 100%; height: 100%; display: block }
+.shape .run { position: absolute; top: 0; font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--blue) }
+.cols { display: flex; gap: 6px; align-items: flex-end }
+.cols > div { min-width: 0 }
+.pins { display: flex; gap: 6px; height: 22px; margin-top: 6px }
+.pins > div { min-width: 0; display: flex; justify-content: center }
+.pin { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 6px; background: oklch(72% .16 230 / .2); color: var(--blue); font-size: 11px; font-weight: 500; white-space: nowrap }
+.names { display: flex; gap: 6px; margin-top: 4px }
+.names > div { min-width: 0; font-size: 11px; color: var(--mut); line-height: 1.3 }
+.names span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.names i { font-style: normal; color: var(--dim) }
+.strip { position: relative }
+.pop { position: absolute; width: 300px; color: var(--fg); border-radius: 14px; background: oklch(23% .03 240 / .97); border: 1px solid oklch(68% .19 25 / .6); box-shadow: 0 14px 30px oklch(0% 0 0 / .55); padding: 12px; z-index: 4; font-size: 13px }
+.pop h4 { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px }
+.pop h4 i { width: 10px; height: 10px; transform: rotate(45deg); border-radius: 1px; display: inline-block }
+.pop dl { display: grid; grid-template-columns: 70px 1fr; gap: 3px 10px; margin: 8px 0; font-size: 12px }
+.pop dt { color: var(--dim) }
+.pop .fix { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 10px; background: oklch(28% .03 240 / .7); margin-top: 6px }
+.pop .fix b { font-weight: 500; font-size: 13px; display: block }
+.pop .fix small { font-size: 11px; color: var(--mut) }
+.pop .fix .btn { margin-left: auto; height: 28px; font-size: 12px; padding: 0 10px }
+.below { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 22px; margin-top: 16px }
+.below p { font-size: 13px; color: var(--mut); line-height: 1.55 }
+.below p b { color: var(--fg); font-weight: 500 }
+.orbbox { width: 230px; height: 230px; border-radius: 18px; background: radial-gradient(60% 60% at 50% 50%, oklch(21% .035 250), oklch(15% .02 245) 85%); border: 1px solid oklch(32% .02 240 / .5); position: relative; overflow: hidden }
+.orbbox .cap { position: absolute; left: 12px; top: 10px; font-size: 11px; color: var(--dim) }
+.orbbox .ctr { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) }
+.orbbox .ctr .sigil { display: block; background: oklch(18% .03 250); border-radius: 9px }
+.acts { display: flex; gap: 8px; margin-top: 12px }
+/* phone */
+.vl .li { display: grid; grid-template-columns: 18px 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px }
+.vl .li .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.vl .li .n, .vl .li .m { color: var(--mut); font-size: 12px; white-space: nowrap }
+.vl .jn { display: flex; align-items: center; gap: 8px; height: 16px; padding-left: 38px; font-size: 11px; color: var(--dim) }
+.vl .jn i { width: 9px; height: 9px; transform: rotate(45deg); border-radius: 1px; display: inline-block }
+.vl .jn.open { height: auto; display: block; padding: 0; margin: 4px 0 }
+@media (max-width: 700px) {
+  .hd { padding: 12px 2px 8px }
+  .stage { padding: 10px }
+  .shape { height: 54px }
+  .pop { position: static; width: auto; box-shadow: none }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div><div class="search desk" id="search"></div><div class="bell" id="bell"></div></div></div>
+  <div class="hd" id="hd"></div>
+  <div class="stage">
+    <div class="shape" id="shape"></div>
+    <div class="desk"><div class="pins" id="pins"></div><div class="strip" id="strip"></div><div class="names" id="names"></div></div>
+    <div class="ph vl" id="vl"></div>
+  </div>
+  <div class="below desk" id="below"></div>
+</main>
+<script src="data.js"></script><script src="common.js"></script><script src="gh.js"></script><script src="order.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search anything; every result can be played, queued or ordered'
+document.getElementById('bell').innerHTML = icon('bell')
+// A drawn shape: Lift, then Hold, then Ease — the same runs as flows.
+SHAPES.Drawn = i => i < .35 ? .2 + i / .35 * .65 : i < .7 ? .85 : .85 - (i - .7) / .3 * .6
+const set = QUEUE, best = bestOrder(set, { shape: 'Drawn', first: set[0] }), s = scoreOf(best)
+// Show one rough join, the one to fix.
+let ri = best.findIndex((t, i) => i < best.length - 1 && joinD(t, best[i + 1]) >= .42); if (ri < 0) ri = 9
+const a = best[ri], b = best[ri + 1]
+document.getElementById('hd').innerHTML = `<span class="label">Ordering</span><span class="src">${groupSigil(PLAYLISTS[0], 34, 24)}Queue · ${set.length} next ${icon('down', 14)}</span>
+  ${P ? '' : `<div class="seg"><button>As it is</button><button class="on">Best blend</button><button>By tempo</button><button>By energy</button></div>`}
+  <span class="sp"></span><span class="sc"><b class="tab">${s.smooth}</b> blend · ${s.rough} rough</span>${P ? '' : `<button class="btn">Undo</button><button class="btn pri">${icon('play', 14)}Apply to queue</button>`}`
+
+// Shape lane.
+const sh = document.getElementById("shape"), SW = 1000, SH = 92
+const pts = Array.from({ length: 41 }, (_, k) => [k / 40 * SW, SH - 8 - SHAPES.Drawn(k / 40) * (SH - 22)])
+sh.innerHTML = `<svg viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="none"><path d="M${pts.map(p => p.join(',')).join('L')}L${SW},${SH}L0,${SH}Z" fill="oklch(72% .16 230 / .1)"/><path d="M${pts.map(p => p.join(',')).join('L')}" fill="none" stroke="var(--blue)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+  ${[.35, .7].map(f => `<line x1="${f * SW}" x2="${f * SW}" y1="12" y2="${SH}" stroke="oklch(72% .16 230 / .35)" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>`).join('')}</svg>
+  <span class="run" style="left:4px">Lift</span><span class="run" style="left:36%">Hold</span><span class="run" style="left:71%">Ease</span>`
+
+if (!P) {
+  const flex = t => `flex:${t.d}`
+  document.getElementById('pins').innerHTML = best.map((t, i) => `<div style="${flex(t)}">${i === 0 ? `<span class="pin">${icon('right', 10)}Start</span>` : i === Math.round(best.length * .5) ? `<span class="pin">Pinned</span>` : ''}</div>`).join('')
+  const strip = document.getElementById('strip')
+  strip.innerHTML = joinStrip(best, 1000, 150, { energyLine: true })
+  // Where the rough join sits, for the popover.
+  const tot = best.reduce((x, t) => x + t.d, 0), gap = 6, W = strip.clientWidth, u = W - gap * (best.length - 1)
+  let jx = 0; for (let i = 0; i <= ri; i++) jx += u * best[i].d / tot + gap
+  jx -= gap / 2
+  strip.insertAdjacentHTML('beforeend', `<span style="position:absolute;left:${jx - 11}px;top:64px;width:22px;height:22px;border:2px solid var(--fg);border-radius:6px;transform:rotate(45deg)"></span>`)
+  const good = T.filter(t => !set.includes(t)).map(t => ({ t, d: joinD(a, t) + joinD(t, b) })).sort((x, y) => x.d - y.d)[0].t
+  strip.insertAdjacentHTML('beforeend', `<div class="pop" style="left:${Math.max(0, jx - 330)}px;top:168px">
+    <h4><i style="background:${markOf(joinD(a, b))}"></i>Rough join · ${Math.round((1 - joinD(a, b)) * 100)} blend</h4>
+    <dl><dt>Tempo</dt><dd>${a.bpm} → ${b.bpm} BPM</dd><dt>Mood</dt><dd>${a.m.word} → ${b.m.word}</dd><dt>Energy</dt><dd>${a.eo ?? a.e} out → ${b.ei ?? b.e} in</dd></dl>
+    <div class="fix">${sigil(good, 40, 26, { r: 6 })}<span><b>${esc(good.t)}</b><small>from your library · bridges it at ${Math.round((1 - (joinD(a, good) + joinD(good, b)) / 2) * 100)}</small></span><button class="btn">Slot in</button></div></div>`)
+  document.getElementById('names').innerHTML = best.map(t => `<div style="${flex(t)}"><span>${esc(t.t)}</span><i>${t.m.word} · ${t.bpm}</i></div>`).join('')
+  document.getElementById('below').innerHTML = `<div style="padding-top:150px"><p>Drag the shape to change where the set lifts, holds and eases; the order follows. Drag a track to pin it where it is. Tap any diamond to see why two tracks meet well or badly.</p>
+    <div class="acts"><button class="btn">${icon('plus', 15)}Save as playlist</button><button class="btn">${icon('flow', 15)}Save the shape as a flow</button></div></div>
+    <div><div class="orbbox">${orbitSvg({ W: 230, H: 230, p: { bpm: a.bpm, b: a.m.b, e: a.eo ?? a.e }, labels: false, r0: 28, hi: new Set([good.id, b.id]), skip: new Set([a.id]) })}<span class="ctr">${sigil(a, 40, 26, { r: 7 })}</span><span class="cap">After ${esc(a.t.slice(0, 20))}</span></div>
+    <p style="margin-top:8px;font-size:12px">Outlined: the track it meets now, and the bridge.</p></div>`
+} else {
+  const rows = best.slice(Math.max(0, ri - 3), ri + 4)
+  const base = Math.max(0, ri - 3)
+  const good = T.filter(t => !set.includes(t)).map(t => ({ t, d: joinD(a, t) + joinD(t, b) })).sort((x, y) => x.d - y.d)[0].t
+  document.getElementById('vl').innerHTML = `<div style="margin:8px 0 4px">${joinStrip(best, 600, 34, { gap: 4 })}</div>` + rows.map((t, k) => { const i = base + k; const j = k ? (i - 1 === ri ? `<div class="jn open"><div class="pop"><h4><i style="background:${markOf(joinD(a, b))}"></i>Rough join · ${Math.round((1 - joinD(a, b)) * 100)} blend</h4><dl><dt>Tempo</dt><dd>${a.bpm} → ${b.bpm}</dd><dt>Mood</dt><dd>${a.m.word} → ${b.m.word}</dd></dl><div class="fix">${sigil(good, 40, 26, { r: 6 })}<span><b>${esc(good.t)}</b><small>bridges it</small></span><button class="btn">Slot in</button></div></div></div>` : `<div class="jn"><i style="background:${markOf(joinD(best[i - 1], t))}"></i>${t.bpm === best[i - 1].bpm ? 'same tempo' : best[i - 1].bpm + '→' + t.bpm}</div>`) : ''; return j + `<div class="li"><span class="n tab">${i + 1}</span>${sigil(t, 40, 26, { r: 6 })}<span class="t">${esc(t.t)}</span><span class="m"><i class="dot" style="background:${t.m.color}"></i> ${t.m.word}</span></div>` }).join('')
+}
+</script>
+</body></html>

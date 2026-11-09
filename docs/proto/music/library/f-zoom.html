@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>F · Zoom</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.crumbs { display: flex; align-items: center; gap: 6px; padding: 22px 6px 10px; font-size: 15px; color: var(--mut) }
+.crumbs b { color: var(--fg); font-weight: 600 }
+.crumbs .ic { color: var(--dim) }
+.crumbs .sp { flex: 1 }
+#ice { display: block; width: 100% }
+.lvl { font-size: 11px; fill: var(--dim); letter-spacing: .06em }
+.below { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 36px; padding: 18px 6px 0 }
+.focus h2 { font-size: 24px; font-weight: 600; letter-spacing: -.02em }
+.focus p { color: var(--mut); font-size: 13px; margin: 2px 0 12px }
+.acts { display: flex; gap: 8px; margin-bottom: 12px }
+.tl { columns: 2; column-gap: 28px }
+.tr { break-inside: avoid; display: grid; grid-template-columns: 20px 46px minmax(0, 1fr) 64px 32px; gap: 10px; align-items: center; padding: 3px 0; font-size: 13px }
+.tr .n { color: var(--dim); text-align: right; font-size: 12px }
+.tr .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tr .m, .tr .b { color: var(--mut); font-size: 12px; white-space: nowrap }
+.stats h3 { font-size: 13px; font-weight: 600; margin: 0 0 6px }
+.stats section { margin-bottom: 18px }
+.stats p { font-size: 13px; color: var(--mut); line-height: 1.5 }
+.stats p b { color: var(--fg); font-weight: 500 }
+.mb { display: flex; height: 10px; border-radius: 3px; overflow: hidden; gap: 2px }
+.ph { display: none }
+@media (max-width: 700px) {
+  .desk { display: none !important }
+  .ph { display: block }
+  .crumbs { padding: 16px 4px 8px; font-size: 14px; flex-wrap: wrap }
+  .below { display: block; padding: 14px 4px 0 }
+  .focus h2 { font-size: 20px }
+  .acts .btn { flex: 1; justify-content: center }
+  .tl { columns: 1 }
+  .tr { grid-template-columns: 18px 40px minmax(0, 1fr) auto }
+  .tr .b { display: none }
+  .stats { margin-top: 18px }
+}
+</style></head>
+<body>
+<main>
+  <div class="top"><div class="top-row"><div class="title"><h1>Music</h1><p class="desk"><em class="tab">474</em> tracks · 4 libraries</p></div><div class="search desk" id="search"></div><div class="bell" id="bell"></div></div></div>
+  <div class="crumbs" id="crumbs"></div>
+  <svg id="ice"></svg>
+  <div class="below">
+    <section class="focus" id="focus"></section>
+    <aside class="stats" id="stats"></aside>
+  </div>
+</main>
+<script src="data.js"></script><script src="common.js"></script>
+<script>
+chrome()
+const P = phone()
+document.getElementById('search').innerHTML = icon('search', 18) + 'Search everything, or paste a link'
+document.getElementById('bell').innerHTML = icon('bell')
+const sep = icon('right', 14)
+// Zoomed into the Deadmau5 library on desktop, the Deadmau5 artist on phone.
+const zoomLib = 'Deadmau5'
+const inZoom = T.filter(t => t.lib === zoomLib && (!P || t.ar === 'Deadmau5'))
+document.getElementById('crumbs').innerHTML = `<a>Everything</a>${sep}<a${P ? '' : ' style="color:var(--fg)"'}>${P ? 'Deadmau5' : '<b>Deadmau5</b>'}</a>${P ? sep + '<b>Deadmau5</b>' : ''}<span class="sp"></span>
+  <span class="desk" style="display:flex;gap:8px"><button class="btn">Width: length ${icon('down', 14)}</button><button class="btn">Order: most tracks ${icon('down', 14)}</button></span>`
+
+const svg = document.getElementById('ice')
+const W = svg.clientWidth || 1300
+const rows = P ? { mini: [0, 16], gap: 30, art: [46, 28], alb: [80, 64], trk: [164, 110] } : { mini: [0, 20], gap: 36, art: [56, 30], alb: [92, 54], trk: [172, 120] }
+const H = rows.trk[0] + rows.trk[1] + 4
+let s = ''
+// Whole library as a thin minimap, with the zoom window.
+const libs = [...groupBy(T, t => t.lib)].map(([l, ts]) => ({ l, ts, d: ts.reduce((a, t) => a + t.d, 0) })).sort((a, b) => b.d - a.d)
+const totalAll = libs.reduce((a, l) => a + l.d, 0)
+let x = 0, z0 = 0, z1 = 0
+for (const l of libs) { const w = l.d / totalAll * W; const on = l.l === zoomLib; s += `<rect x="${x + 1}" y="${rows.mini[0]}" width="${w - 2}" height="${rows.mini[1]}" rx="4" fill="${on ? 'oklch(72% .16 230 / .3)' : 'oklch(30% .02 240 / .7)'}"/>`; if (w > 70) s += `<text x="${x + 8}" y="${rows.mini[0] + rows.mini[1] - 6}" font-size="11" fill="${on ? 'var(--fg)' : 'var(--mut)'}">${esc(l.l)}</text>`; if (on) { z0 = x; z1 = x + w }; x += w }
+if (P) { const ld = libs.find(l => l.l === zoomLib); const share = inZoom.reduce((a, t) => a + t.d, 0) / ld.d; z1 = z0 + (z1 - z0) * share }
+// Funnel from the window to the zoomed bands.
+s += `<path d="M${z0},${rows.mini[1] + 2} L0,${rows.art[0] - 6} L${W},${rows.art[0] - 6} L${z1},${rows.mini[1] + 2}Z" fill="oklch(72% .16 230 / .06)"/><rect x="${z0}" y="${rows.mini[0]}" width="${z1 - z0}" height="${rows.mini[1]}" rx="4" fill="none" stroke="var(--blue)" stroke-width="1.5"/>`
+
+// Hierarchy inside the zoom: artist > album > track, widths by length.
+const total = inZoom.reduce((a, t) => a + t.d, 0)
+const sx = d => d / total * W
+const artists = [...groupBy(inZoom, t => t.ar)].sort((a, b) => b[1].length - a[1].length)
+const focus = ALBUMS.find(a => a.name === 'Vexillology')
+let fx0 = 0, fx1 = 0
+x = 0
+for (const [ar, ats] of artists) {
+  const aw = sx(ats.reduce((a, t) => a + t.d, 0))
+  const ag = summarise(ar, ats, 'Artist')
+  s += `<rect x="${x + 1}" y="${rows.art[0]}" width="${Math.max(1, aw - 2)}" height="${rows.art[1]}" rx="5" fill="${ag.mood.color}" fill-opacity=".16"/>`
+  if (aw > 90) s += `<text x="${x + 10}" y="${rows.art[0] + rows.art[1] / 2 + 4}" font-size="12" font-weight="500" fill="var(--fg)">${esc(ar)} <tspan fill="var(--dim)" font-weight="400">${ats.length}</tspan></text>`
+  let ax = x
+  for (const [al, ts] of [...groupBy(ats, t => t.al)].sort((a, b) => b[1].length - a[1].length)) {
+    const w = sx(ts.reduce((a, t) => a + t.d, 0)), g = summarise(al, ts, 'Album'), on = al === focus.name
+    // Album band: its mood mix as stacked colour.
+    const mix = groupBy(ts, t => t.m.word); let my = rows.alb[0]
+    for (const [, mt] of [...mix].sort((a, b) => b[1].length - a[1].length)) { const mh = mt.length / ts.length * rows.alb[1]; s += `<rect x="${ax + 1}" y="${my}" width="${Math.max(1, w - 2)}" height="${mh}" fill="${mt[0].m.color}" fill-opacity="${on ? .95 : .55}"/>`; my += mh }
+    if (w > 64) s += `<text x="${ax + 7}" y="${rows.alb[0] + rows.alb[1] + 14}" font-size="11" fill="${on ? 'var(--fg)' : 'var(--mut)'}">${esc(al.length > w / 7 ? al.slice(0, Math.floor(w / 7) - 1) + '…' : al)}</text>`
+    // Tracks: each its own silhouette.
+    let tx = ax
+    for (const t of ts) { const tw = sx(t.d); s += `<path d="${silhouette(t.curve, tx + .5, Math.max(1, tw - 1), rows.trk[1], rows.trk[0] + rows.trk[1] / 2)}" fill="${t.m.color}" fill-opacity="${on ? 1 : .5}"/>`; tx += tw }
+    if (on) { fx0 = ax; fx1 = ax + w }
+    ax += w
+  }
+  x += aw
+}
+// The hovered album, outlined through every band.
+s += `<rect x="${fx0}" y="${rows.alb[0] - 4}" width="${fx1 - fx0}" height="${rows.trk[0] + rows.trk[1] - rows.alb[0] + 8}" rx="8" fill="none" stroke="var(--fg)" stroke-opacity=".8" stroke-width="1.5"/>`
+svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('height', H); svg.innerHTML = s
+
+const g = focus
+document.getElementById('focus').innerHTML = `<h2>${esc(g.name)}</h2><p>Album · ${esc(g.artist)} · ${g.n} tracks · ${fmtDur(g.dur)} · ${bpmRange(g)} · mostly ${g.mood.word}</p>
+  <div class="acts"><button class="btn pri">${icon('play', 14)}Play</button><button class="btn">${icon('shuffle', 16)}Shuffle</button><button class="btn">${icon('flow', 16)}As a flow</button><button class="btn desk">Zoom in ${icon('right', 14)}</button></div>
+  <div class="tl">${g.tracks.map((t, i) => `<div class="tr"><span class="n tab">${i + 1}</span>${sigil(t, P ? 40 : 46, 24, { r: 6 })}<span class="t">${esc(t.t)}</span><span class="m"><i class="dot" style="background:${t.m.color}"></i> ${t.m.word}</span><span class="b tab">${t.bpm}</span></div>`).join('')}</div>`
+
+// What's in view, as a recap that follows the zoom.
+const mix = groupBy(inZoom, t => t.m.word)
+const mb = [...LADDER, EXOTIC].filter(l => mix.has(l.word)).map(l => `<i style="flex:${mix.get(l.word).length};background:${l.color}"></i>`).join('')
+const zs = summarise(zoomLib, inZoom, 'Library')
+document.getElementById('stats').innerHTML = `<section><h3>In view</h3><p><b class="tab">${inZoom.length}</b> tracks, <b class="tab">${artists.length}</b> artist${artists.length > 1 ? 's' : ''}, <b class="tab">${new Set(inZoom.map(t => t.al)).size}</b> albums · ${fmtDur(zs.dur)}</p></section>
+  <section><h3>Mood</h3><div class="mb">${mb}</div><p style="margin-top:6px">Mostly <b style="color:${zs.mood.color}">${zs.mood.word}</b>, ${zs.genre}</p></section>
+  <section class="desk"><h3>Tempo</h3><p>${bpmRange(zs)}, centred on <b class="tab">${zs.bpm}</b></p></section>
+  <section class="desk"><button class="btn pri">${icon('play', 14)}Play everything in view</button> <button class="btn">${icon('flow', 16)}As a flow</button></section>`
+</script>
+</body></html>
