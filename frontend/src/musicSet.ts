@@ -96,14 +96,13 @@ export function undoRemove() {
   if (u) set({ tracks: u.tracks, pinned: u.pinned, mode: u.mode, undo: undefined })
 }
 
-/** Move a track to index `to` of the order on screen; a hand move switches to Your order. */
-export function moveInSet(id: string, to: number, shown: MusicTrack[]) {
-  const from = shown.findIndex(t => t.id === id)
-  if (from < 0) return
-  const out = [...shown]
-  const [t] = out.splice(from, 1)
-  out.splice(to > from ? to - 1 : to, 0, t)
-  set({ tracks: out, mode: 'mine' })
+/** Move tracks as one block to index `to` of the order on screen (in their order there); a hand move switches to Your order. */
+export function moveBlock(ids: string[], to: number, shown: MusicTrack[]) {
+  const moving = new Set(ids)
+  const block = shown.filter(t => moving.has(t.id))
+  const before = shown.slice(0, to).filter(t => !moving.has(t.id))
+  const after = shown.slice(to).filter(t => !moving.has(t.id))
+  set({ tracks: [...before, ...block, ...after], mode: 'mine' })
 }
 
 /** Pin or unpin; pinning in Best blend first freezes the order on screen so it stays put. */

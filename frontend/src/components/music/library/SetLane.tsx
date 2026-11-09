@@ -4,7 +4,7 @@ import type { Summary } from '../../../musicMeta'
 import { createWithTracks, usePlaylists } from '../../../musicPlaylists'
 import { addPayload } from '../../../musicQueue'
 import {
-  clearSet, LANDED_MS, moveInSet, pinsOf, removeFromSet, setPinOnDrop, setSetMode, setSetShape,
+  clearSet, LANDED_MS, moveBlock, pinsOf, removeFromSet, setPinOnDrop, setSetMode, setSetShape,
   togglePin, UNDO_MS, undoRemove, unpinAll, useSet,
 } from '../../../musicSet'
 import { endDrag } from '../edit/focus'
@@ -12,6 +12,7 @@ import { totalTime } from '../format'
 import { toast } from '../toast'
 import { keepOrder, useBlendOrder } from './blendOrder'
 import { carriedNow, carryProps, endCarry } from './carry'
+import { clearSelection, clickSelect, getSelection, idsIn, useSelection } from './selection'
 import type { Facts } from './facts'
 import { Ic } from './icons'
 import { addTracksToSet, playSetAsFlow, playSetNext, queueSetBlended } from './setQueue'
@@ -66,6 +67,21 @@ export default function SetLane({ facts, colour, get, wide, sourceName, selected
   const showLanded = useExpiry(s.landed?.at, LANDED_MS)
   const showUndo = useExpiry(s.undo?.at, UNDO_MS)
   const lane = useRef<HTMLDivElement>(null)
+  const picked = idsIn(useSelection(), 'set')
+  const shownIds = useMemo(() => shown.map(t => t.id), [shown])
+  const { off, moveProps } = useDragOff(lane, shown, picked)
+  // Delete removes the selected tracks of the set.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' || (e.target as HTMLElement | null)?.closest('input, textarea, [contenteditable]')) return
+      const sel = getSelection()
+      if (sel.scope !== 'set' || !sel.ids.size) return
+      removeFromSet([...sel.ids])
+      clearSelection()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const [slot, setSlot] = useState<number | null>(null)
 
   const slotAt = (x: number): number => {
@@ -85,7 +101,7 @@ export default function SetLane({ facts, colour, get, wide, sourceName, selected
     e.preventDefault()
     const at = s.tracks.length ? slotAt(e.clientX) : undefined
     if (c.from === 'set') {
-      moveInSet(c.tracks[0].id, at ?? 0, shown)
+      moveBlock(c.tracks.map(t => t.id), at ?? 0, shown)
       if (blend) toast('Your order now. Best blend puts it back, keeping pins.')
     } else addTracksToSet(c.tracks, c.label, at, shown)
     endCarry()
@@ -113,9 +129,16 @@ export default function SetLane({ facts, colour, get, wide, sourceName, selected
         </label>
         {s.pinned.length > 0 && <button onClick={unpinAll} className="btn btn-ghost btn-xs rounded-lg">Unpin all · {s.pinned.length}</button>}
         {showUndo && s.undo && <button onClick={undoRemove} className="btn btn-xs rounded-lg">Undo remove · {s.undo.count}</button>}
+        {picked.size > 0 && (
+          <span className="flex items-center gap-1 text-primary">{picked.size} selected
+            <button onClick={() => { removeFromSet([...picked]); clearSelection() }} className="btn btn-xs rounded-lg">Remove</button>
+            <button onClick={clearSelection} className="btn btn-ghost btn-xs rounded-lg">Clear</button>
+          </span>
+        )}
         <span className="flex-1" />
         {s.tracks.length > 1 && <span className="tabular-nums text-base-content/55">{res ? `${res.score} blend · ${res.rough} rough · ` : ''}{s.pinned.length} pinned · {clashes} {clashes === 1 ? 'clash' : 'clashes'}</span>}
       </div>
+      {off !== null && <p className="text-center text-xs font-medium text-error" role="status">Release to remove {off} {off === 1 ? 'track' : 'tracks'}</p>}
       <div onDragOver={over} onDragLeave={() => setSlot(null)} onDrop={drop}>
         {!s.tracks.length ? (
           <div className={`grid h-24 place-items-center rounded-xl border-2 border-dashed px-4 text-center text-xs ${slot !== null ? 'border-primary/70 bg-primary/5 text-base-content' : 'border-white/15 text-base-content/50'}`}>
@@ -135,10 +158,10 @@ export default function SetLane({ facts, colour, get, wide, sourceName, selected
                     {slot === i && <Marker />}
                     <div
                       data-set-item
-                      {...carryProps([t], t.title, 'set')}
+                      {...moveProps(t)}
                       {...hoverProps?.(t)}
-                      onClick={() => onSelect(t)}
-                      className={`group relative flex h-full shrink-0 cursor-pointer flex-col rounded-lg hover:bg-white/6 ${t.id === selectedId ? 'outline-1.5 outline-offset-1 outline-base-content' : ''}`}
+                      onClick={e => { clickSelect('set', t.id, shownIds, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey }); onSelect(t) }}
+                      className={`group relative flex h-full shrink-0 cursor-pointer flex-col rounded-lg hover:bg-white/6 ${picked.has(t.id) ? 'bg-primary/12 ring-1 ring-primary/60' : ''} ${t.id === selectedId ? 'outline-1.5 outline-offset-1 outline-base-content' : ''}`}
                       style={{ flex: `${Math.max(1, t.duration)} 1 0`, minWidth: MIN_W }}
                     >
                       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full" style={{ height: LANE_H }} aria-hidden="true">
@@ -249,4 +272,48 @@ function SaveSet({ tracks, facts, sourceName }: { tracks: MusicTrack[]; facts: F
       )}
     </span>
   )
+}
+
+/** How far off the lane a dragged item is let go to remove it (§2.6 Remove). */
+const OFF_PX = 36
+
+/**
+ * Moves inside the lane: a selected item carries the whole selection as a block; dragged more
+ * than 36 px above or below the lane, a red label says release removes them, and it does.
+ */
+function useDragOff(lane: React.RefObject<HTMLDivElement | null>, shown: MusicTrack[], picked: ReadonlySet<string>) {
+  const [off, setOff] = useState<number | null>(null)
+  const moving = useRef<string[]>([])
+  const isOff = useRef(false)
+  const onOver = useRef((e: DragEvent) => {
+    const r = lane.current?.getBoundingClientRect()
+    const now = !!r && (e.clientY < r.top - OFF_PX || e.clientY > r.bottom + OFF_PX)
+    if (now !== isOff.current) {
+      isOff.current = now
+      setOff(now ? moving.current.length : null)
+    }
+  })
+  const moveProps = (t: MusicTrack) => {
+    const block = picked.has(t.id) && picked.size > 1 ? shown.filter(x => picked.has(x.id)) : [t]
+    const cp = carryProps(block, block.length > 1 ? `${block.length} tracks` : t.title, 'set')
+    return {
+      ...cp,
+      onDragStart: (e: React.DragEvent) => {
+        cp.onDragStart(e)
+        moving.current = block.map(x => x.id)
+        document.addEventListener('dragover', onOver.current)
+      },
+      onDragEnd: () => {
+        cp.onDragEnd()
+        document.removeEventListener('dragover', onOver.current)
+        if (isOff.current) {
+          removeFromSet(moving.current)
+          clearSelection()
+        }
+        isOff.current = false
+        setOff(null)
+      },
+    }
+  }
+  return { off, moveProps }
 }

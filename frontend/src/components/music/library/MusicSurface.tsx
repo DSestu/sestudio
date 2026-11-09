@@ -10,6 +10,7 @@ import { useModalBack } from '../../../useModalBack'
 import { removeFromSet, useSet } from '../../../musicSet'
 import { addTracksToSet } from './setQueue'
 import SetLane from './SetLane'
+import { clearSelection, idsIn, useSelection } from './selection'
 import { playFrom } from '../player'
 import Explorer from './Explorer'
 import type { TreeHandlers } from './ExplorerTree'
@@ -91,6 +92,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   const blend = useBlendOrder(order === 'blend' ? inView.slice(0, BLEND_CAP) : undefined, shape)
   const blendGroups = useMemo<TapeGroup[] | undefined>(() => blend && [{ key: 'blend', head: `Best blend · ${shape}`, name: sourceName, tracks: blend.tracks }], [blend, shape, sourceName])
   const [selectedId, setSelectedId] = useState<string>()
+  const picked = idsIn(useSelection(), 'tape')
   const h: TreeHandlers = {
     sourceKey,
     facts,
@@ -131,12 +133,19 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
         blendLine={order === 'blend' ? (blend ? `${blend.score} blend · ${blend.rough} rough ${blend.rough === 1 ? 'join' : 'joins'}${inView.length > BLEND_CAP ? ` · first ${BLEND_CAP}` : ''}` : 'ordering…') : undefined}
         onAddAll={() => h.onAdd(inView, sourceName)}
       >
+        {picked.size > 1 && (
+          <span className="flex h-8 items-center gap-1 rounded-[10px] bg-primary/15 pl-3 pr-1 text-xs text-primary">
+            <b>{picked.size}</b> selected · drag them, or
+            <button onClick={() => { h.onAdd(inView.filter(t => picked.has(t.id)), `${picked.size} tracks`); clearSelection() }} className="btn btn-xs rounded-lg">Add to set</button>
+            <button onClick={clearSelection} className="btn btn-ghost btn-xs rounded-lg">Clear</button>
+          </span>
+        )}
         {!wide && <button onClick={() => setBrowse(true)} className="btn btn-sm rounded-xl gap-1.5"><Ic name="folder" size={14} />Browse</button>}
       </TapeBar>
       <Tape
         groups={order === 'blend' && blendGroups ? blendGroups : groups} facts={facts} colour={colour}
         joins={order === 'blend' ? blend?.joins : undefined} selectedId={selectedId} playingId={playingId}
-        onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)} hoverProps={hc.props}
+        onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)} hoverProps={hc.props} picked={picked}
       />
       <SetLane facts={facts} colour={colour} get={get} wide={wide} sourceName={source?.kind === 'album' ? source.name : undefined} selectedId={selectedId} onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} />
       {hc.hover && <HoverCard hover={hc.hover} facts={facts} colour={colour} />}
