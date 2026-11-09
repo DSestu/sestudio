@@ -59,6 +59,10 @@ function Radar({ value, onDrag, onRelease }: { value: Importance; onDrag: (v: Im
 export default function BlendBy({ joins, score, hasSet, sheet = false }: { joins?: Join[]; score?: number; hasSet: boolean; /** A phone: the panel is a bottom sheet over the page. */ sheet?: boolean }) {
   const { importance, welcome } = useBlendWeights()
   const [open, setOpen] = useState(false)
+  const opener = useRef<HTMLButtonElement>(null)
+  // Closing hands focus back to the bar (§6 keyboard).
+  const wasOpen = useRef(false)
+  useEffect(() => { if (wasOpen.current && !open) opener.current?.focus(); wasOpen.current = open }, [open])
   // The radar moves freely; the set re-orders once the dot is let go.
   const [draft, setDraft] = useState<Importance | null>(null)
   const shown = draft ?? importance
@@ -74,7 +78,7 @@ export default function BlendBy({ joins, score, hasSet, sheet = false }: { joins
   const short = hasSet && joins ? `set ${eff.score ?? '…'} blend · ${eff.clashes} ${eff.clashes === 1 ? 'clash' : 'clashes'}` : 'your set is empty'
   return (
     <div className="sticky top-[calc(var(--top-card-h,4.25rem)+env(safe-area-inset-top)+0.5rem)] z-20 md:top-0">
-      <button onClick={() => setOpen(o => !o)} aria-expanded={open} className={`flex w-full items-center gap-2 rounded-xl px-3 py-1.5 text-left text-xs backdrop-blur ${open ? 'bg-base-300' : 'bg-base-300/90 hover:bg-base-300'}`}>
+      <button ref={opener} onClick={() => setOpen(o => !o)} aria-expanded={open} className={`flex w-full items-center gap-2 rounded-xl px-3 py-1.5 text-left text-xs backdrop-blur ${open ? 'bg-base-300' : 'bg-base-300/90 hover:bg-base-300'}`}>
         <Bars i={shown} />
         <span className="text-base-content/60">Blend by</span>
         <b className="font-semibold">{leadOf(shown)}</b>

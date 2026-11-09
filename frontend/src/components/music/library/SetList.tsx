@@ -133,7 +133,7 @@ export default function SetList({ order, facts, colour, byId, selectedId, onSele
                 const f = facts(t.id)
                 const j = joins?.[i]
                 return [
-                  <tr key={t.id} data-set-item {...moveProps(t)} {...hoverProps?.(t)} onClick={e => { clickSelect('set', t.id, shownIds, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey }); onSelect(t) }}
+                  <tr key={t.id} data-set-item {...moveProps(t)} {...hoverProps?.(t)} tabIndex={0} aria-label={t.title} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); clickSelect('set', t.id, shownIds, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey }); onSelect(t) } }} onClick={e => { clickSelect('set', t.id, shownIds, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey }); onSelect(t) }}
                     className={`cursor-pointer border-t border-white/6 hover:bg-white/5 ${picked.has(t.id) ? 'bg-primary/12' : ''} ${slot === i ? 'shadow-[inset_0_2px_0_var(--color-primary)]' : ''}`}>
                     <td className="px-1 py-1.5 tabular-nums text-base-content/45">{i + 1}</td>
                     <td className="max-w-48 truncate px-1">{t.title}</td>
@@ -225,12 +225,13 @@ function Tools({ t, pinned, onPin }: { t: MusicTrack; pinned: boolean; onPin: ()
 
 function Row({ t, i, facts, colour, pinned, picked, focused, drag, hover, onClick, onPin }: {
   t: MusicTrack; i: number; facts: Facts; colour: Colour; pinned: boolean; picked: boolean; focused: boolean
-  drag: object; hover?: object; onClick: (e: React.MouseEvent) => void; onPin: () => void
+  drag: object; hover?: object; onClick: (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void; onPin: () => void
 }) {
   const f = facts(t.id)
   const c = trackColor(f, colour)
   return (
-    <div data-set-item {...drag} {...hover} onClick={onClick}
+    <div data-set-item {...drag} {...hover} onClick={onClick} tabIndex={0} aria-label={t.title}
+      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(e) } }}
       className={`flex h-11 cursor-pointer items-center gap-2 rounded-lg px-1 hover:bg-white/5 ${picked ? 'bg-primary/12' : ''} ${focused ? 'outline-1 outline-base-content/60' : ''}`}>
       <span className="cursor-grab text-base-content/30" aria-hidden="true">⋮⋮</span>
       <span className="w-5 text-right text-[11px] tabular-nums text-base-content/45">{i + 1}</span>
