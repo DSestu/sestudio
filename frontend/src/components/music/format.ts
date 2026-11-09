@@ -17,3 +17,9 @@ export const sky = (h: number) =>
   `linear-gradient(to top, oklch(15% .045 ${h}) 0%, oklch(10.5% .03 ${h}) 45%, oklch(8.5% .02 ${h}) 100%)`
 
 export const DEFAULT_HUE = 215
+
+/** "2 h 58" or "38 min". */
+export const totalTime = (s: number) => {
+  const m = Math.round(s / 60)
+  return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`
+}
