@@ -235,15 +235,32 @@ def _dist(
     return 1 - proximity.join(a, b, "hold", weights, welcome)["blend"]
 
 
+def _pair_cost(
+    weights: Weights, welcome: Weights
+) -> Callable[[dict[str, Any], dict[str, Any]], float]:
+    """The cost of the join a -> b in one ordering (1 - Blend, plus a clash penalty), each
+    pair worked out once: the swaps ask the same few thousand pairs tens of thousands of times."""
+    memo: dict[tuple[str, str], float] = {}
+
+    def cost(a: dict[str, Any], b: dict[str, Any]) -> float:
+        key = (a["id"], b["id"])
+        if key not in memo:
+            j = proximity.join(a, b, "hold", weights, welcome)
+            memo[key] = 1 - j["blend"] + (SWAP_CLASH if j["move"] == "clash" else 0.0)
+        return memo[key]
+
+    return cost
+
+
 def _swaps(
     out: list[dict[str, Any]],
     pinned: set[str],
     wants: list[float],
-    weights: Weights,
-    welcome: Weights,
+    c: Callable[[dict[str, Any], dict[str, Any]], float],
 ) -> None:
     """2-opt in place: reverse a run of free tracks when its two outer joins plus its
-    distance from the shape (*wants*: the energy wanted at each index) get cheaper."""
+    distance from the shape (*wants*: the energy wanted at each index) get cheaper; then
+    move a free track off a clash when that makes the whole order cheaper."""
     n = len(out)
     if n < 4:
         return
@@ -251,13 +268,14 @@ def _swaps(
     for t in out:
         prefix.append(prefix[-1] + (t["id"] in pinned))
 
-    def c(a: dict[str, Any], b: dict[str, Any]) -> float:
-        j = proximity.join(a, b, "hold", weights, welcome)
-        return 1 - j["blend"] + (SWAP_CLASH if j["move"] == "clash" else 0.0)
-
     def pull(t: dict[str, Any], k: int) -> float:
         e = _energy(t)
         return 0.0 if e is None else SHAPE_PULL * abs(e - wants[k]) / 60
+
+    def total(arr: list[dict[str, Any]]) -> float:
+        return sum(c(x, y) for x, y in zip(arr, arr[1:])) + sum(
+            pull(t, k) for k, t in enumerate(arr)
+        )
 
     for _ in range(SWAP_PASSES):
         better = False
@@ -277,6 +295,28 @@ def _swaps(
                 if after < before - 0.01:
                     out[i : j + 1] = out[i : j + 1][::-1]
                     better = True
+        # A track on a clash may move elsewhere, if the whole order gets cheaper (no pin crossed).
+        for i in range(n):
+            t = out[i]
+            if t["id"] in pinned or not (
+                (i > 0 and c(out[i - 1], t) >= SWAP_CLASH)
+                or (i < n - 1 and c(t, out[i + 1]) >= SWAP_CLASH)
+            ):
+                continue
+            base = total(out)
+            best: tuple[float, list[dict[str, Any]]] | None = None
+            for p in range(n):
+                lo, hi = min(i, p), max(i, p)
+                if p == i or prefix[hi + 1] - prefix[lo]:
+                    continue
+                arr = out[:i] + out[i + 1 :]
+                arr.insert(p, t)
+                v = total(arr)
+                if v < base - 0.01 and (best is None or v < best[0]):
+                    best = (v, arr)
+            if best:
+                out[:] = best[1]
+                better = True
         if not better:
             return
 
@@ -310,6 +350,7 @@ def order_set(
     lo, hi = (min(energies), max(energies)) if energies else (0.0, 100.0)
     span = (hi - lo) or 1.0
     f = SHAPES.get(shape, SHAPES["Arc"])
+    cost = _pair_cost(weights, welcome)
     prev: dict[str, Any] | None = None
     for i in range(n):
         if out[i] is not None:
@@ -331,7 +372,7 @@ def order_set(
             best = min(
                 free,
                 key=lambda t: (
-                    _dist(p, t, weights, welcome)
+                    cost(p, t)
                     + SHAPE_PULL
                     * abs((_energy(t) if _energy(t) is not None else want) - want)
                     / 60,
@@ -344,7 +385,7 @@ def order_set(
     done = [t for t in out if t is not None] + free
     if len(done) <= ORDER_CAP:
         wants = [lo + f(k / (n - 1)) * span for k in range(len(done))]
-        _swaps(done, pinned, wants, weights, welcome)
+        _swaps(done, pinned, wants, cost)
     return done
 
 

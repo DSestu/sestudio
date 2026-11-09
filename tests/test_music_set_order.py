@@ -196,3 +196,17 @@ def test_move_to_best_lowers_the_problems():
     d = trk(3, "C#", "Ionian")
     out = builder.move_to_best([a, b, c, d], b)
     assert builder._count(out, ()) < builder._count([a, b, c, d], ())
+
+
+def test_order_set_reads_each_pair_once(monkeypatch):
+    tracks = mixed()
+    seen: list[tuple[str, str]] = []
+    real = proximity.join
+
+    def counting(a, b, *args, **kw):
+        seen.append((a["id"], b["id"]))
+        return real(a, b, *args, **kw)
+
+    monkeypatch.setattr(proximity, "join", counting)
+    builder.order_set(tracks, None, "Arc")
+    assert len(seen) == len(set(seen))
