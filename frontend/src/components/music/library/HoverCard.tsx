@@ -5,7 +5,7 @@ import { useFullAnalysis } from './analysisFull'
 import type { Facts } from './facts'
 import { trackColor, type Colour } from './sigil'
 import { Sections } from './TrackInfo'
-import type { Hover } from './hoverCard'
+import type { Hover } from './useHoverCard'
 
 // The hover card (SPEC-music-library §2.4): what a track shows when the mouse rests on it.
 
