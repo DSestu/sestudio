@@ -8,7 +8,7 @@ import { speed } from './presence'
 import PlayerSearch from './PlayerSearch'
 import Crate, { LibraryList } from './Crate'
 import { askFits } from './gaps'
-import { wake } from './idle'
+import { pauseLoops, wake } from './idle'
 import { joins } from './joins'
 import ToastBar from './ToastBar'
 import Background from './background/Background'
@@ -91,13 +91,16 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const [vw, setVw] = useState({ W: innerWidth, H: innerHeight })
   const expanded = useMode() === 'expanded' && !tv
   // Each mode has its own place to add from (the crate, the column, the Library page): a switch closes it.
-  const [was, setWas] = useState(expanded)
-  if (was !== expanded) {
-    setWas(expanded)
-    setReveal('off')
-    setPeek(false)
-    setFinding(false)
-    setAim(null)
+  // The layer stays mounted when closed (player.ts), so closing drops them too, as an unmount used to.
+  const [was, setWas] = useState({ expanded, open })
+  if (was.expanded !== expanded || was.open !== open) {
+    setWas({ expanded, open })
+    if (was.expanded !== expanded || !open) {
+      setReveal('off')
+      setPeek(false)
+      setFinding(false)
+      setAim(null)
+    }
   }
   const small = isPhone(vw.W) || isShort(vw.W, vw.H)
   // The desktop's expanded view opens the library as a column beside the queue; phones get a Library page.
@@ -154,6 +157,20 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
   const apply = useCallback((t: number) => {
     const r = root.current
     if (!r) return
+    const p = tv ? 1 : presence.value(performance.now())
+    // Closed and at rest, the layer stays mounted for the next open (player.ts) but leaves layout and paint, and its loops sleep.
+    const parked = !tv && p === 0 && !isLayerOpen() && !presence.holding()
+    r.style.display = parked ? 'none' : ''
+    pauseLoops(parked)
+    if (parked) {
+      const rl = rail.current
+      if (rl) {
+        Object.assign(rl.style, { zIndex: '', opacity: '', transform: '', visibility: '' })
+        rl.inert = false
+      }
+      if (scrim.current) scrim.current.style.visibility = 'hidden'
+      return
+    }
     const W = r.clientWidth
     const H = r.clientHeight
     // The library column takes its room from the stage as it opens.
@@ -213,7 +230,6 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     const short = isShort(W, H)
     fade(topRow.current, short ? 1 : 1 - t, short ? 0 : -14 * t)
     fade(card.current, short ? 0 : t, -20 * (1 - t))
-    const p = tv ? 1 : presence.value(performance.now())
     const rl = rail.current
     // While the card grows or shrinks over the immersive view, the rail is still the app's, under the scrim.
     if (rl && p < 1 && t < 1) {
@@ -379,7 +395,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
     return () => obs.disconnect()
   }, [tv, kick])
   useEffect(() => {
-    if (tv || expanded || small || !window.matchMedia('(hover: hover)').matches) return
+    if (tv || !open || expanded || small || !window.matchMedia('(hover: hover)').matches) return
     let leave = 0
     let rest = 0
     const stay = () => { clearTimeout(leave); leave = 0 }
@@ -416,7 +432,7 @@ export default function Layer({ tv = false }: { tv?: boolean }) {
       window.removeEventListener('pointerdown', pin, true)
       window.removeEventListener('focusin', pin)
     }
-  }, [tv, expanded, small])
+  }, [tv, open, expanded, small])
 
   // A switch retargets from the current progress; reduced motion swaps with a short crossfade instead.
   const first = useRef(true)
