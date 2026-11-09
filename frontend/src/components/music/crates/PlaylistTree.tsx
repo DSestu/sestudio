@@ -139,18 +139,19 @@ export function SmartForm({ node, onClose }: { node?: PlaylistNode; onClose: () 
 }
 
 /** PLAYLISTS (folders, playlists, sets) and SMART LISTS under the libraries. */
-export default function PlaylistTree({ active, onPick, onNew }: { active: string; onPick: (id: string) => void; onNew: () => void }) {
+/** `match`: the explorer filter (SPEC-music-library §2.2); only lists whose name it accepts show, without folders. */
+export default function PlaylistTree({ active, onPick, onNew, match }: { active: string; onPick: (id: string) => void; onNew: () => void; match?: (name: string) => boolean }) {
   const nodes = usePlaylists()
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [form, setForm] = useState(false)
   const { rows, smart, folders } = useMemo(() => {
     const roots = buildTree(nodes)
-    const all = visibleRows(roots, collapsed)
+    const all = match ? visibleRows(roots, new Set()).filter(r => r.node.kind !== 'folder' && match(r.node.name)).map(r => ({ ...r, depth: 0 })) : visibleRows(roots, collapsed)
     const folderList: TreeNode[] = []
     const collect = (l: TreeNode[]) => l.forEach(n => { if (n.kind === 'folder') { folderList.push(n); collect(n.children) } })
     collect(roots)
-    return { rows: all.filter(r => r.node.kind !== 'smart'), smart: nodes.filter(n => n.kind === 'smart').map(n => ({ ...n, children: [] })), folders: folderList }
-  }, [nodes, collapsed])
+    return { rows: all.filter(r => r.node.kind !== 'smart'), smart: nodes.filter(n => n.kind === 'smart' && (!match || match(n.name))).map(n => ({ ...n, children: [] })), folders: folderList }
+  }, [nodes, collapsed, match])
   const toggle = (id: string) => setCollapsed(s => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n })
   const newFolder = () => {
     const name = window.prompt('New folder')

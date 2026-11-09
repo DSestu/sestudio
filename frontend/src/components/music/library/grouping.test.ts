@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MusicTrack } from '../../../musicLibrary'
 import { factsOf, levelOf, type Facts } from './facts'
-import { DEFAULT_GROUPING, fileTreeOf, findNode, leavesOf, presetOf, sortTracks, tempoBand, treeOf, type Grouping } from './grouping'
+import { DEFAULT_GROUPING, fileTreeOf, filterTree, filterWords, findNode, leavesOf, presetOf, sortTracks, tempoBand, treeOf, type Grouping } from './grouping'
 
 const tr = (id: string, p: Partial<MusicTrack> = {}): MusicTrack => ({
   id, library: 'L1', libraryLabel: 'Deadmau5', title: id, artist: 'deadmau5', album: 'Vexillology', duration: 300, folder: 'Vexillology', ...p,
@@ -70,5 +70,23 @@ describe('grouping', () => {
     expect(findNode(t, 'L2|sub|deeper')!.files![0].title).toBe('Deep')
     const leaves = leavesOf(t)
     expect(leaves.map(l => l.key)).toEqual(['L1|FLOAN', 'L1|RFTF', 'L1|Vexillology', 'L2', 'L2|sub|deeper'])
+  })
+
+  it('filters the tree: matching groups stay whole and shut, others keep their matches and open', () => {
+    const byAlbum = treeOf(T, g({ dims: ['artist', 'album'] }), facts)
+    const a = filterTree(byAlbum, filterWords('STROBE'))
+    expect(a.nodes.map(n => n.name)).toEqual(['deadmau5'])
+    expect(a.nodes[0].kids!.map(n => [n.name, n.all.map(t => t.id)])).toEqual([['FLOAN', ['Strobe']]])
+    expect([...a.open].sort()).toEqual(['deadmau5', 'deadmau5|FLOAN'])
+    expect(a.hits).toBe(1)
+    const b = filterTree(byAlbum, filterWords('vexill'))
+    expect(b.nodes[0].kids!.map(n => n.name)).toEqual(['Vexillology'])
+    expect(b.open.has('deadmau5|Vexillology')).toBe(false)
+    expect(b.hits).toBe(2)
+    const f = filterTree(fileTreeOf(T), filterWords('deep one'))
+    expect(f.nodes.map(n => n.key)).toEqual(['L2'])
+    expect(findNode(f.nodes, 'L2|sub|deeper')!.files!.map(t => t.id)).toEqual(['Deep'])
+    expect(findNode(f.nodes, 'L2')!.files).toEqual([])
+    expect(filterTree(byAlbum, filterWords('nothing')).nodes).toEqual([])
   })
 })

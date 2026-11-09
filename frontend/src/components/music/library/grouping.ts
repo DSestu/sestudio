@@ -197,3 +197,36 @@ export function leavesOf(nodes: GroupNode[]): GroupNode[] {
   walk(nodes)
   return out
 }
+
+/** The filter's words: lower case, split on spaces. */
+export const filterWords = (text: string): string[] => text.toLowerCase().split(/\s+/).filter(Boolean)
+
+const hasAll = (text: string, words: string[]) => { const low = text.toLowerCase(); return words.every(w => low.includes(w)) }
+
+/** A track matches when every word is in its title, artist, album or file name. */
+export const trackMatches = (t: MusicTrack, words: string[]): boolean =>
+  hasAll([t.title, t.artist, t.album, t.albumName, fileName(t)].filter(Boolean).join(' '), words)
+
+/**
+ * The tree cut down to what matches (SPEC-music-library §2.2 Filter). A group whose name matches
+ * stays whole and shut; any other group keeps only its matching tracks and sub-groups, and opens.
+ * shortcut: every word must hit one name (a group or a track), not a group name plus a track name.
+ */
+export function filterTree(nodes: GroupNode[], words: string[]): { nodes: GroupNode[]; open: Set<string>; hits: number } {
+  const open = new Set<string>()
+  const hit = new Set<string>()
+  const cut = (ns: GroupNode[]): GroupNode[] => ns.flatMap(n => {
+    if (hasAll(n.name, words)) { n.all.forEach(t => hit.add(t.id)); return [n] }
+    const kids = n.kids ? cut(n.kids) : null
+    const files = n.files?.filter(t => trackMatches(t, words))
+    const all = n.all.filter(t => trackMatches(t, words))
+    const leaf = n.kids ? files ?? [] : all
+    if (!kids?.length && !leaf.length) return []
+    leaf.forEach(t => hit.add(t.id))
+    open.add(n.key)
+    const kept = new Set([...leaf, ...(kids ?? []).flatMap(k => k.all)])
+    return [{ ...n, all: n.all.filter(t => kept.has(t)), kids: kids?.length ? kids : null, files }]
+  })
+  const out = cut(nodes)
+  return { nodes: out, open, hits: hit.size }
+}
