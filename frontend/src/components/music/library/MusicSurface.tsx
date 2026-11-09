@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ResponsiveModal from '../../ResponsiveModal'
 import { folderName, type MusicTrack } from '../../../musicLibrary'
 import type { LibraryStatus } from '../../../musicLibraries'
@@ -104,6 +104,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   const blend = useBlendOrder(order === 'blend' ? inView.slice(0, BLEND_CAP) : undefined, shape)
   const blendGroups = useMemo<TapeGroup[] | undefined>(() => blend && [{ key: 'blend', head: `Best blend · ${shape}`, name: sourceName, tracks: blend.tracks }], [blend, shape, sourceName])
   const [selectedId, setSelectedId] = useState<string>()
+  const [fillRef, fillStyle] = useFillHeight(wide)
   const [door, setDoor] = useState<{ at: DOMRect; name: string; source: Source } | null>(null)
   const picked = idsIn(useSelection(), 'tape')
   const h: TreeHandlers = {
@@ -196,10 +197,10 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
     )
   }
   return (
-    <div className="flex gap-4 h-[calc(100dvh-12.25rem-var(--music-bar,0rem))] min-h-0">
+    <div ref={fillRef} className="flex min-h-0 gap-4" style={fillStyle}>
       <aside className="w-80 shrink-0 overflow-hidden rounded-2xl bg-white/5">{explorer}</aside>
-      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-2xl">{centre}</div>
-      <aside className="w-85 shrink-0 overflow-y-auto rounded-2xl bg-white/5">
+      <div className="scroll-thin flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-2xl">{centre}</div>
+      <aside className="scroll-thin w-85 shrink-0 overflow-y-auto rounded-2xl bg-white/5">
         {right ?? rightColumn}
       </aside>
       {doorPop}
@@ -219,4 +220,34 @@ function tapeGroupsOf(tree: GroupNode[], g: Grouping): TapeGroup[] {
   })
   walk(tree, [])
   return out
+}
+
+/** Space kept between the columns and the player bar. */
+const GAP_ABOVE_BAR = 12
+
+/**
+ * The three columns fill the screen down to just above the player bar, whatever the header and
+ * the bar measure; the page's own bottom padding (kept for the bar) is cancelled so it does not scroll.
+ */
+function useFillHeight(on: boolean) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [style, setStyle] = useState<React.CSSProperties>({ height: 'calc(100dvh - 12rem)' })
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!on || !el) return
+    const fit = () => {
+      const root = getComputedStyle(document.documentElement)
+      const rem = parseFloat(root.fontSize) || 16
+      const bar = (parseFloat(root.getPropertyValue('--music-bar')) || 0) * rem
+      const top = el.getBoundingClientRect().top + window.scrollY
+      const pad = parseFloat(getComputedStyle(el.closest('main') ?? document.body).paddingBottom) || 0
+      setStyle({ height: Math.max(420, window.innerHeight - top - bar - GAP_ABOVE_BAR), marginBottom: Math.min(0, bar + GAP_ABOVE_BAR - pad) })
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    const watch = new MutationObserver(fit) // the player bar sets --music-bar on <html> when it shows or hides
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
+    return () => { window.removeEventListener('resize', fit); watch.disconnect() }
+  }, [on])
+  return [ref, style] as const
 }

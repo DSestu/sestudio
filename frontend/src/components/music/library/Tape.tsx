@@ -2,7 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MusicTrack } from '../../../musicLibrary'
 import type { Facts } from './facts'
 import { silhouette, trackColor, type Colour } from './sigil'
-import { fitTape, HEAD_H, LABEL_H, MARK_COLOR, TAPE_H, TRACK_H, type TapeGroup } from './tapeLayout'
+import { fitTape, HEAD_H, LABEL_H, MARGIN, MARK_COLOR, TAPE_H, TRACK_H, type TapeGroup } from './tapeLayout'
+
+/** How wide a pinned group header may be. */
+const PIN_W = 260
 
 // The tape (SPEC-music-library §2.4): every track in view as a sigil, width by length, grouped
 // like the explorer, with a header per group; a minimap above; wheel scrolls sideways.
@@ -98,13 +101,20 @@ export default function Tape({ groups, facts, colour, joins, selectedId, playing
           {box.rect && <span className="pointer-events-none absolute z-10 rounded border border-primary/60 bg-primary/10" style={box.rect} />}
           {!layout.items.length && <p className="absolute inset-x-0 top-20 text-center text-sm text-base-content/50">Nothing here.</p>}
           {layout.heads.map((h, i) => {
-            const showHead = h.head !== layout.heads[i - 1]?.head
+            // The header stays pinned at the left edge while its group is in view, then leaves with it.
+            const end = h.x + h.maxW - 10
+            const pinW = Math.min(PIN_W, end - h.x)
+            const left = Math.max(h.x, Math.min(scroll.left + MARGIN, end - pinW))
+            const pinned = left > h.x
+            const showHead = pinned || h.head !== layout.heads[i - 1]?.head
             return (
-              <div key={h.key} {...carryProps(h.tracks, h.name || h.head)} className="absolute cursor-grab" style={{ left: h.x, top: 12, maxWidth: h.maxW }} title="Drag the group into your set">
-                <span className="absolute -left-3 top-9 h-32 w-px bg-white/15" />
+              <div key={h.key} className="contents">
+                <span className="absolute w-px bg-white/15" style={{ left: h.x - 12, top: 48, height: 128 }} />
+              <div {...carryProps(h.tracks, h.name || h.head)} className={`absolute cursor-grab ${pinned ? 'z-10 rounded-lg bg-base-100/85 pr-2 backdrop-blur-sm' : ''}`} style={{ left, top: 12, maxWidth: end - left + 10 }} title="Drag the group into your set">
                 <span className="block h-7 truncate text-[22px] font-light leading-7 text-base-content/40">{showHead ? h.head : ''}</span>
                 <b className="block truncate text-[13px] font-semibold">{h.name}</b>
                 <small className="block truncate text-[11px] text-base-content/50">{headLine(h.tracks, facts)}</small>
+              </div>
               </div>
             )
           })}
