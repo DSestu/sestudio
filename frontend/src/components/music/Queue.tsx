@@ -262,7 +262,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
   for (const l of leaving) entries.splice(Math.min(l.at, entries.length), 0, { item: l.item, i: -1, gone: true })
 
   return (
-    <section data-queue className="relative rounded-[inherit] flex flex-col min-h-0 h-full overflow-hidden" style={{ ['--rowbg' as string]: expanded ? 'var(--color-base-200)' : 'hsl(205 42% 12%)' }}>
+    <section data-queue data-exp={expanded || undefined} className="relative rounded-[inherit] flex flex-col min-h-0 h-full overflow-hidden">
       {/* The layer cross-fades these two with the mode: glass by default, a flat column expanded. */}
       <span aria-hidden="true" data-qglass className="glass absolute inset-0 rounded-[inherit]" />
       <span aria-hidden="true" data-qflat className="absolute inset-0 rounded-[inherit] bg-base-200 opacity-0" />
@@ -327,7 +327,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
       {!tv && !(library && adding) && <FlowStrip q={q} />}
       {library && adding ? library : <div className="relative flex min-h-0 flex-1 flex-col">
       {editable && expanded && <GapRail rough={gaps.rough} n={q.items.length} current={q.current} title={titleAt} onOpen={at => onAim!(at)} />}
-      <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden'} ${editable && expanded && gaps.rough.length ? 'pr-2.5' : ''}`}>
+      <div ref={list} data-list className={`relative flex-1 overflow-y-auto overscroll-contain ${expanded ? '' : 'max-md:overflow-hidden [&>[data-gap]]:hidden'} ${editable && expanded && gaps.rough.length ? 'pr-2.5' : ''}`}>
         <span
           data-dropline
           aria-hidden="true"
@@ -347,7 +347,8 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             onFits={editable ? fits : undefined}
             leaving={gone ? () => setLeaving(l => l.filter(x => x.item.item_id !== item.item_id)) : undefined}
           />
-          {editable && expanded && !gone && i >= q.current && i < q.items.length - 1 && (aim === i + 1
+          {/* The marks stay mounted in the default view, hidden by the list: a switch flips one class instead of mounting a mark per row. */}
+          {editable && !gone && i >= q.current && i < q.items.length - 1 && (expanded && aim === i + 1
             ? <GapBox key={`box${q.items[i + 1].item_id}`} q={q} at={i + 1} gap={gaps.gap(i + 1)} info={info} onClose={() => onAim!(null)} onMore={() => onAim!(i + 1, true)} onKeep={() => { gaps.keep(i + 1); onAim!(null) }} />
             : <GapMark gap={gaps.gap(i + 1)} at={i + 1} title={titleAt(i + 1)} onOpen={at => onAim!(at)} />)}
           </Fragment>
@@ -362,7 +363,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
           </div>
         ))}
         {!q.items.length && <p className="px-3 py-6 text-center text-xs text-base-content/42">The queue is empty.</p>}
-        {!tv && <div className={`sticky bottom-0 z-10 px-2.5 pb-2.5 pt-1.5 ${expanded ? '' : 'max-md:hidden'}`} style={{ background: 'linear-gradient(transparent, var(--rowbg) 10px)' }}>
+        {!tv && <div data-rowbg className={`sticky bottom-0 z-10 px-2.5 pb-2.5 pt-1.5 ${expanded ? '' : 'max-md:hidden'}`} style={{ background: 'linear-gradient(transparent, var(--rowbg) 10px)' }}>
           <button
             data-add-row
             aria-pressed={adding}

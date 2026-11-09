@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { getQueue, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
 import { useSummaries, useSummary } from '../../musicMeta'
 import type { MusicTrack } from '../../musicLibrary'
@@ -16,16 +16,19 @@ import { usePosition } from './player'
 
 const plus = <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 
-/** The mark between two rows: a pill when rough, a dot otherwise; hover shows where an insert lands, a click opens it. */
-export function GapMark({ gap, at, title, onOpen }: { gap: Gap | null; at: number; title?: string; onOpen: (at: number) => void }) {
+/** The mark between two rows: a pill when rough, a dot otherwise; hover shows where an insert lands, a click opens it.
+ *  Memoised: the queue keeps a mark per row mounted and re-renders on every mode switch and queue change. `onOpen`
+ *  is left out of the comparison: it only sets the layer's state, so an older render's callback does the same. */
+export const GapMark = memo(function GapMark({ gap, at, title, onOpen }: { gap: Gap | null; at: number; title?: string; onOpen: (at: number) => void }) {
   const tone = gap && gapTone(gap.join)
   return (
     <button
       type="button"
       data-gap={at}
+      data-rowbg
       aria-label={`What fits before ${title ?? 'this track'}${gap?.rough ? `: ${roughLabel(gap.join)}` : ''}`}
       onClick={() => onOpen(at)}
-      className="group/gap relative z-[2] -my-[7px] block h-3.5 w-full outline-none max-md:-my-2 max-md:h-4"
+      className="group/gap relative z-[2] -my-2 block h-4 w-full outline-none [content-visibility:auto]"
     >
       <span aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-primary opacity-0 transition-opacity duration-100 group-hover/gap:opacity-100 group-focus-visible/gap:opacity-100 group-data-[hl=1]/gap:opacity-100" />
       <span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 grid size-4 -translate-y-1/2 scale-75 place-items-center rounded-full bg-primary text-primary-content opacity-0 transition duration-100 group-hover/gap:scale-100 group-hover/gap:opacity-100 group-focus-visible/gap:opacity-100 group-data-[hl=1]/gap:scale-100 group-data-[hl=1]/gap:opacity-100">{plus}</span>
@@ -34,7 +37,7 @@ export function GapMark({ gap, at, title, onOpen }: { gap: Gap | null; at: numbe
         : gap?.join.kind && <span aria-hidden="true" className="pointer-events-none absolute right-[58px] top-1/2 size-[5px] -translate-y-1/2 rounded-full opacity-70" style={{ background: tone! }} />}
     </button>
   )
-}
+}, (a, b) => a.gap === b.gap && a.at === b.at && a.title === b.title)
 
 const songKey = (t: MusicTrack) => `${t.title}\u0000${t.artist}`.toLowerCase()
 
