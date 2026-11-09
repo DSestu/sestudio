@@ -192,6 +192,15 @@
   background: hsl(205 62% 14% / 0.78);
 }
 
+/* The queue's row colour, by mode, set on the parts that paint it. On the queue itself the variable would be
+   inherited by every element in it, and a switch between the modes would restyle the whole list. */
+[data-queue] :is([data-fg], [data-rowbg]) {
+  --rowbg: hsl(205 42% 12%);
+}
+[data-queue][data-exp] :is([data-fg], [data-rowbg]) {
+  --rowbg: var(--color-base-200);
+}
+
 /* The add panel holds a search field and small text over the title and timeline: solid, or they read through it. */
 .music-layer [data-addp].glass {
   background: hsl(205 55% 11%);
