@@ -218,6 +218,8 @@ export default function Timeline({ q, info, progress = () => 0, palette = TIMELI
       outside: () => live.current.onOutside?.(),
     })
     const fit = () => {
+      // Hidden (the parked player): keep the size it had.
+      if (!cv.clientWidth || !cv.clientHeight) return
       r.resize(cv.clientWidth, cv.clientHeight, window.devicePixelRatio)
       wake()
     }

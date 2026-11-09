@@ -13,8 +13,9 @@ import { Presence, settle } from './presence'
 // playing from a list keeps you browsing; the player bar opens it.
 
 // The layer grows out of the bar and shrinks back into it (SPEC-music-player-motion): `open` is where it is
-// going, `mounted` whether it is in the page (also while it closes or follows a drag from the bar), and
-// `covered` whether it has settled open over the bar.
+// going, `mounted` whether it is in the page, and `covered` whether it has settled open over the bar.
+// Once mounted it stays: closed and at rest it hides and its loops sleep (Layer), so the next open skips
+// the mount (the WebGL stages and every queue row).
 let open = false
 let mounted = false
 let covered = false
@@ -73,13 +74,10 @@ export function primePlayer() {
 export function unprimePlayer() {
   setTimeout(() => { if (!open && presence.holding()) releasePlayer(0, 0) }, 350)
 }
-/** The layer reports a motion that has come to rest: closed at 0 it leaves the page, open at 1 it covers the bar. */
+/** The layer reports a motion that has come to rest: open at 1 it covers the bar. */
 export function settled(p: number) {
   if (presence.holding()) return
-  if (p === 0 && !open && mounted) {
-    mounted = false
-    notify()
-  } else if (p === 1 && open && !covered) {
+  if (p === 1 && open && !covered) {
     covered = true
     notify()
   }

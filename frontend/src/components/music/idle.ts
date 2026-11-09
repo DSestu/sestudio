@@ -7,12 +7,21 @@ const wakers = new Set<() => void>()
 
 export const wake = () => wakers.forEach(w => w())
 
+// The closed player stays in the page, hidden: its loops sleep until it shows again.
+let paused = false
+export function pauseLoops(p: boolean) {
+  if (paused === p) return
+  paused = p
+  if (!p) wake()
+}
+
 /** Run `step` every frame (at most `fps()` per second when that gives one) until it reports nothing moving for a few frames; returns the stop function. */
 export function frameLoop(step: (now: number) => boolean, fps?: () => number): () => void {
   let id = 0
   let quiet = 0
   let last = -1e9
   const tick = (now: number) => {
+    if (paused) { id = 0; return }
     id = requestAnimationFrame(tick)
     const cap = fps?.() ?? 0
     if (cap && now - last < 1000 / cap - 4) return
@@ -22,7 +31,7 @@ export function frameLoop(step: (now: number) => boolean, fps?: () => number): (
   }
   const start = () => {
     quiet = 0
-    if (!id) id = requestAnimationFrame(tick)
+    if (!id && !paused) id = requestAnimationFrame(tick)
   }
   wakers.add(start)
   start()

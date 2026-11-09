@@ -67,6 +67,8 @@ export function useCanvas(draw: (g: CanvasRenderingContext2D, w: number, h: numb
     if (!c) return
     let last = ''
     const run = (w: number, h: number) => {
+      // Hidden (the parked player): keep the drawing, so showing it again redraws nothing.
+      if (!w || !h) return
       const dpr = devicePixelRatio || 1
       const key = `${w}|${h}|${dpr}`
       if (key === last) return
