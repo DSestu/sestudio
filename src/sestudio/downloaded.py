@@ -101,6 +101,7 @@ _AUDIO_MEDIA_TYPES = {
     ".opus": "audio/ogg",
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",
+    ".wav": "audio/wav",
 }
 _AUDIO_SUFFIXES = frozenset(_AUDIO_MEDIA_TYPES)
 _MEDIA_TYPES.update(_AUDIO_MEDIA_TYPES)

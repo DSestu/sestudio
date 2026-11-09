@@ -139,7 +139,7 @@ def test_runner_analyses_new_files_once_and_serves_them(
     db, root, tmp_path, monkeypatch
 ):
     monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
-    _write_wav(root / "Artist - One.flac", clicks(150, 12))
+    _write_wav(root / "Artist - One.wav", clicks(150, 12))
     _write_wav(root / "Artist - Two.flac", sine(60))
     # Not an audio file: ignored.
     (root / "notes.txt").write_text("x")
