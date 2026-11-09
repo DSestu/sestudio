@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { metaLine, useSummary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import { getQueue, queueActions, type QueueItem, type QueueState, type TrackInfo } from '../../musicQueue'
@@ -13,6 +13,7 @@ import KeyListen from './KeyListen'
 import QueueActions from './QueueActions'
 import { useAnalyses } from './mix/analysis'
 import { playItem } from './player'
+import { wake } from './idle'
 import { armRowDrag, gripRowDrag, justDragged, lastDrop, type DragSource } from './rowDrag'
 import { armSwipe, justSwiped } from './swipe'
 import RowThread from './RowThread'
@@ -25,6 +26,11 @@ import { BlendMark } from './BlendMark'
 const EASE = 'cubic-bezier(.2,.7,.2,1)'
 /** More changes than this at once (a replaced queue, a playlist) just appear. */
 const MAX_ANIMATED = 3
+// The rendered window: rows past the view on each side, its edges moved in steps so a scroll re-renders rarely.
+// shortcut: every row is one 50 px line pair (the gap marks add no height); measure rows if one ever wraps.
+const ROW = 50
+const OVER = 8
+const CHUNK = 8
 
 interface RowProps {
   item: QueueItem
@@ -79,7 +85,7 @@ const Row = memo(function Row({ item, info, playing, source, leaving, tv, range,
       role="button"
       tabIndex={0}
       data-row
-      {...(!leaving && { 'data-item': item.item_id })}
+      {...(!leaving && { 'data-item': item.item_id, 'data-at': source.from })}
       // Off-screen rows skip layout and paint (a long queue re-flows on every frame of the mode switch); 50 px is a row's height.
       aria-current={playing || undefined}
       className={`group relative overflow-hidden [content-visibility:auto] [contain-intrinsic-height:auto_50px] cursor-pointer select-none touch-pan-y transition-opacity duration-[350ms] data-[played=1]:opacity-[.42] ${leaving ? 'pointer-events-none' : ''}`}
@@ -175,15 +181,43 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
     }
   }
 
+  // Only the rows near the view are in the page; spacers stand in for the rest. A long queue otherwise restyled
+  // and laid out every row on each mode switch, and mounted them all on the first open.
+  const [win, setWin] = useState({ a: 0, b: 6 * CHUNK })
+  const place = useCallback(() => {
+    const box = list.current
+    if (!box) return
+    const a = Math.floor(Math.max(0, Math.floor(box.scrollTop / ROW) - OVER) / CHUNK) * CHUNK
+    const b = Math.ceil((Math.ceil((box.scrollTop + innerHeight) / ROW) + OVER) / CHUNK) * CHUNK
+    setWin(w => (w.a === a && w.b === b ? w : { a, b }))
+  }, [])
+  // The phone's Library page replaces the list: back on the queue, the new list starts at the top.
+  const listShown = !(library && adding)
+  useEffect(() => {
+    const box = list.current
+    if (!box) return
+    place()
+    box.addEventListener('scroll', place, { passive: true })
+    window.addEventListener('resize', place)
+    return () => {
+      box.removeEventListener('scroll', place)
+      window.removeEventListener('resize', place)
+    }
+  }, [place, listShown])
+  // The timeline paints the rows (the highlight, played): new ones need a frame even while it sleeps.
+  useEffect(wake, [win])
+
   useLayoutEffect(() => {
     const box = list.current
     if (!box) return
     const rows = [...box.querySelectorAll<HTMLElement>('[data-item]')]
     const tops = new Map(rows.map(r => [r.dataset.item!, r.offsetTop]))
-    const ids = [...tops.keys()]
+    // The whole queue, not the rows in the page: a row scrolled into the window is not an added one.
+    const ids = q.items.map(i => i.item_id)
     const before = seen.current
     seen.current = { ids, tops }
-    const added = ids.filter(id => !before.tops.has(id))
+    const had = new Set(before.ids)
+    const added = ids.filter(id => !had.has(id))
     if (!before.ids.length || ids.join() === before.ids.join()) return
     if (!added.length && ids.length === before.ids.length) {
       // A reorder: every row slides from where it was; the dragged one from where it was dropped.
@@ -223,16 +257,19 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
   const cur = q.current
   // The playing row sits 56 px below the header.
   useEffect(() => {
-    if (!tv) return
-    const row = list.current?.querySelector<HTMLElement>('[aria-current]')
-    if (row) list.current!.scrollTo({ top: row.offsetTop - 56, behavior: 'smooth' })
+    if (tv) list.current?.scrollTo({ top: cur * ROW - 56, behavior: 'smooth' })
   }, [tv, cur, q.items.length])
 
   const gaps = useQueueGaps(q)
   const editable = !tv && !!onAim
   // An opened gap (from the rail, a mark, the phone strip) scrolls into view.
+  // Outside the window it is not in the page yet: scroll to where it will be, and the window follows.
   useEffect(() => {
-    if (aim !== null) list.current?.querySelector('[data-gapbox]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (aim === null) return
+    const box = list.current
+    const el = box?.querySelector('[data-gapbox]')
+    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    else box?.scrollTo({ top: Math.max(0, aim * ROW - box.clientHeight / 3), behavior: 'smooth' })
   }, [aim])
   const titleAt = (at: number) => info(q.items[at]?.track_id ?? '')?.title ?? 'the track'
   // From a join's breakdown: Fits for that gap, or take the track out first (undo in its toast) and fill the gap.
@@ -262,7 +299,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
   for (const l of leaving) entries.splice(Math.min(l.at, entries.length), 0, { item: l.item, i: -1, gone: true })
 
   return (
-    <section data-queue data-exp={expanded || undefined} className="relative rounded-[inherit] flex flex-col min-h-0 h-full overflow-hidden">
+    <section data-queue data-exp={expanded || undefined} data-win={`${win.a}-${win.b}`} className="relative rounded-[inherit] flex flex-col min-h-0 h-full overflow-hidden">
       {/* The layer cross-fades these two with the mode: glass by default, a flat column expanded. */}
       <span aria-hidden="true" data-qglass className="glass absolute inset-0 rounded-[inherit]" />
       <span aria-hidden="true" data-qflat className="absolute inset-0 rounded-[inherit] bg-base-200 opacity-0" />
@@ -333,7 +370,8 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-2.5 z-10 h-0.5 rounded-sm bg-primary opacity-0 ring-[3px] ring-primary/22 transition-[top,opacity] duration-80"
         />
-        {entries.map(({ item, i, gone }) => (
+        <div aria-hidden="true" style={{ height: Math.min(win.a, entries.length) * ROW }} />
+        {entries.slice(win.a, win.b).map(({ item, i, gone }) => (
           <Fragment key={item.item_id}>
           <Row
             item={item}
@@ -353,6 +391,7 @@ export default function Queue({ q, info, adding, onAdd, expanded, onPin, library
             : <GapMark gap={gaps.gap(i + 1)} at={i + 1} title={titleAt(i + 1)} onOpen={at => onAim!(at)} />)}
           </Fragment>
         ))}
+        <div aria-hidden="true" style={{ height: Math.max(0, entries.length - win.b) * ROW }} />
         {pilot.ghosts.map(g => (
           <div key={g.track.id} aria-label={`Autopilot will add ${g.track.title}`} className="flex min-h-14 items-center gap-2.5 px-3 py-1.5 text-[13px] opacity-55">
             <div className="min-w-0 flex-1">

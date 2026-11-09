@@ -104,21 +104,23 @@ function makeMorph(before: Model, after: Model, moved: string | undefined, t0: n
 
 const rowHl = new WeakMap<Element, number>()
 /** Each row with its layout index, looked up again only when the model, the sheet or its rows change. */
-let rowCache: { m: Model | null; el: Element | null; rows: [HTMLElement, number][] } = { m: null, el: null, rows: [] }
+let rowCache: { m: Model | null; el: Element | null; win: string | null; rows: [HTMLElement, number][] } = { m: null, el: null, win: null, rows: [] }
 
 /** The queue rows follow the highlight: `--hl` is the row's own, the rows above the track under the view are "played". */
 function paintRows(queueEl: Element | null, m: Model, k: number) {
   if (!queueEl) return
   const c = rowCache
-  // A remounted list (the phone's Library tab and back) keeps the model but has new rows.
-  if (c.m !== m || c.el !== queueEl || !c.rows.length || !c.rows[0][0].isConnected) {
+  // A remounted list (the phone's Library tab and back) keeps the model but has new rows, and so does a scroll
+  // that moves the window of rows the queue renders (its data-win).
+  const win = queueEl.getAttribute('data-win')
+  if (c.m !== m || c.el !== queueEl || c.win !== win || !c.rows.length || !c.rows[0][0].isConnected) {
     const at = new Map(m.ids.map((id, i) => [id, i]))
     const rows: [HTMLElement, number][] = []
     queueEl.querySelectorAll<HTMLElement>('[data-item]').forEach(row => {
       const i = at.get(row.dataset.item!)
       if (i !== undefined) rows.push([row, i])
     })
-    rowCache = { m, el: queueEl, rows }
+    rowCache = { m, el: queueEl, win, rows }
   }
   for (const [row, i] of rowCache.rows) {
     const hl = m.items[i].hl
