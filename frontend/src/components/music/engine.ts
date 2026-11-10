@@ -201,15 +201,28 @@ class AudioEngine {
     return isSoundTab() ? this.lead : 0
   }
 
-  /** Moved only when the asked value changes: gliding the delay bends the pitch while it plays, so it jumps when nothing plays. */
-  setLead(s: number) {
-    const v = Math.max(0, Math.min(0.45, s))
-    if (!this.delay || Math.abs(v - (this.leadWant ?? NaN)) < 0.001) return
-    const t = this.ctx!.currentTime
-    if (this.leadWant === null || this.els[this.act].paused) this.delay.delayTime.setValueAtTime(v, t)
-    else this.delay.delayTime.setTargetAtTime(v, t, 0.05)
-    this.leadWant = v
+  /** The speakers' latency, read once for the page: the browser's figure drifts, and each visual reading its own moved the delay. */
+  get spk() {
+    if (!this.spkRead && this.ctx?.state === 'running') this.spkRead = (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0)
+    return this.spkRead
   }
+  private spkRead = 0
+
+  setLead(s: number) {
+    this.leadWant = Math.max(0, Math.min(0.45, s))
+    this.applyLead()
+  }
+
+  /** Any move of the delay while sound runs through it speeds the sound up or slows it down, so a new lead waits for silence (the first one aside). */
+  private applyLead() {
+    const d = this.delay?.delayTime
+    if (!d || this.leadWant === null || Math.abs(d.value - this.leadWant) < 0.001) return
+    if (this.leadSet && this.els.some(el => !el.paused)) return
+    d.cancelScheduledValues(0)
+    d.setValueAtTime(this.leadWant, this.ctx!.currentTime)
+    this.leadSet = true
+  }
+  private leadSet = false
 
   /** Seconds into the playing element. */
   get time() {
@@ -361,6 +374,7 @@ class AudioEngine {
 
   private tick() {
     this.trims.forEach((_, i) => this.retrim(i))
+    this.applyLead()
     const q = this.queue
     const f = this.fade
     if (f && this.ctx!.currentTime >= f.end) {
@@ -372,7 +386,11 @@ class AudioEngine {
       if (!ei.paused && ei.readyState >= 3) {
         const l = lockPhase(ei.currentTime, this.els[f.from].currentTime, f.plan)
         if (l.jump) ei.currentTime += l.jump
-        else ei.playbackRate = l.rate
+        else {
+          // currentTime is read in coarse steps, so the raw correction jitters every tick and the tempo warbles: ease towards it, in 0.1 % steps.
+          const r = Math.round((ei.playbackRate + (l.rate - ei.playbackRate) * 0.25) * 1000) / 1000
+          if (r !== ei.playbackRate) ei.playbackRate = r
+        }
         if (syncStatus) setSync({ ...syncStatus, errMs: l.errMs, locked: l.locked })
       }
     }
