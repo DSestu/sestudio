@@ -30,7 +30,7 @@ export default function BarAura({ bar, q, duration }: { bar: RefObject<HTMLEleme
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
     // The EQ's own chain (Background.tsx): the live analyser through the Look's bands, bent by the track's energy.
     const bands = new Bands(), energy = new Energy()
-    let fq = new Uint8Array(0), nb = 0, spk = 0, calm = 0, last = 0, raf = 0
+    let fq = new Uint8Array(0), nb = 0, calm = 0, last = 0, raf = 0
     let track = '', p: Prepped | null = null, g: Grid | null = null, seen = -1
     let shape: Shape = { w: 0, h: 0, rt: 0, rb: 0 }, pts: [number, number][] = [], key = ''
     const step = (now: number) => {
@@ -65,12 +65,7 @@ export default function BarAura({ bar, q, duration }: { bar: RefObject<HTMLEleme
       const playing = q.playing && !still.matches
       calm += ((playing ? 0 : 1) - calm) * (still.matches ? 1 : tc(dt, 1000))
       const look = getLook(), an = engine.analyser
-      if (an) {
-        const ac = an.context as AudioContext
-        // Read once, as the EQ does: the browser's figure drifts, and every move of the delay is heard.
-        spk ||= (ac.outputLatency || 0) + (ac.baseLatency || 0)
-        engine.setLead(lightLead(an, look.s, spk))
-      }
+      if (an) engine.setLead(lightLead(an, look.s, engine.spk))
       energy.step(g, t, q.playing, dt, look.s)
       const { p: s } = bend({ ...look.s }, energy.I, g?.bl ?? 0.5)
       if (s.nb !== nb) { nb = s.nb; bands.reset() }

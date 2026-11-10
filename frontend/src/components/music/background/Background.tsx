@@ -73,7 +73,6 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
     let nb = 0
     let last = 0
     let lastSig = ''
-    let spk = 0
     const step = (now: number): boolean => {
       const look = getLook()
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 60
@@ -87,10 +86,8 @@ export default function Background({ clip = null }: { clip?: Rect | null }) {
       const an = engine.analyser
       const ac = an?.context as AudioContext | undefined
       const out = ac ? (ac.outputLatency || 0) + (ac.baseLatency || 0) : 0
-      // The speakers' latency is read once: the browser's figure drifts, and every move of the delay is heard.
-      if (!spk) spk = out
       // The light reacts late; the sound waits that long, so the attack plays out before the hit and the peak lands on it.
-      if (an) engine.setLead(lightLead(an, look.s, spk))
+      if (an) engine.setLead(lightLead(an, look.s, engine.spk))
       // What is heard now: the media clock minus the delay and the output latency.
       const heard = engine.time - engine.lead - out
       energy.step(grids.g, heard, q.playing, dt, look.s)
