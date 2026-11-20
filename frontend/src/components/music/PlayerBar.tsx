@@ -6,7 +6,7 @@ import { keyDisplay } from '../../harmony'
 import { useSummary } from '../../musicMeta'
 import { useTheory } from '../../musicTheory'
 import { useAnalysis, useMusicQueue, useTrackInfo } from '../../musicQueue'
-import { usePhoneStrip } from '../../phoneStrip'
+import { setMusicBarShown, usePhoneStrip } from '../../phoneStrip'
 import BarAura from './BarAura'
 import { DEFAULT_HUE, fmtBpm } from './format'
 import SendToTv from './SendToTv'
@@ -48,7 +48,11 @@ export default function PlayerBar({ onMusicPage }: { onMusicPage: boolean }) {
   useEffect(() => {
     if (!shown) return
     document.documentElement.style.setProperty('--music-bar', '4.5rem')
-    return () => { document.documentElement.style.removeProperty('--music-bar') }
+    setMusicBarShown(true)
+    return () => {
+      document.documentElement.style.removeProperty('--music-bar')
+      setMusicBarShown(false)
+    }
   }, [shown])
   if (!shown) return null
   const hue = analysis?.hue ?? DEFAULT_HUE
@@ -107,7 +111,8 @@ export default function PlayerBar({ onMusicPage }: { onMusicPage: boolean }) {
         className={`fixed glass h-16 flex items-center gap-3 px-3 cursor-pointer select-none touch-none md:z-40 md:rounded-2xl md:left-1/2 md:-translate-x-1/2 md:w-[min(36rem,calc(100vw-9rem))] md:bottom-[calc(1rem+var(--lift))] max-md:z-[39] max-md:inset-x-3 max-md:bottom-(--dock-top) max-md:pl-2.5 max-md:transition-[translate,border-radius] max-md:duration-300 max-md:ease-out max-md:animate-dock-rise motion-reduce:transition-none motion-reduce:animate-none ${
           away ? 'max-md:translate-y-[4.125rem] max-md:rounded-2xl' : 'max-md:translate-y-[calc(-1*var(--discover-lift,0px))] max-md:rounded-t-2xl'
         }`}
-        style={{ '--lift': casting ? '4.5rem' : '0rem' } as React.CSSProperties}
+        // Top corners square off while the mini-player sits on the bar (it sets --bar-top-r).
+        style={{ '--lift': casting ? '4.5rem' : '0rem', borderTopLeftRadius: 'var(--bar-top-r, 1rem)', borderTopRightRadius: 'var(--bar-top-r, 1rem)' } as React.CSSProperties}
       >
         <span
           aria-hidden="true"

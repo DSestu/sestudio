@@ -21,6 +21,10 @@ export interface BrowserPlayerControls {
   qualities: number[]
   /** Frames the video has shown and dropped so far, null where the browser can't say. */
   frames: () => { total: number; dropped: number } | null
+  /** Why nothing plays (no source, or the one playing died); null while it plays or is still loading. */
+  failure: string | null
+  /** Test the sources again, as the watch view's "Try again". */
+  retry: () => void
 }
 
 let state: BrowserPlayerControls | null = null

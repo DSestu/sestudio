@@ -27,3 +27,20 @@ export function usePhoneStripShown(): boolean {
     () => mounted > 0,
   )
 }
+
+// Whether the music bar is up (desktop or phone): the video mini-player joins
+// onto its top edge as one dock rather than sitting on the same spot.
+let musicBar = false
+const musicListeners = new Set<() => void>()
+
+export function setMusicBarShown(shown: boolean) {
+  musicBar = shown
+  musicListeners.forEach(l => l())
+}
+
+export function useMusicBarShown(): boolean {
+  return useSyncExternalStore(
+    l => { musicListeners.add(l); return () => musicListeners.delete(l) },
+    () => musicBar,
+  )
+}

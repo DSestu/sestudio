@@ -231,9 +231,17 @@ export default function VideoPane({
   // Expose play/pause + paused state to out-of-view surfaces (the mini-player).
   const [paused, setPaused] = useState(true)
   const [qualities, setQualities] = useState<number[]>([])
+  // The same two dead ends the overlays below show, for the mini-player's own compact state.
+  const failed = !displaySource && !probing && !pending && !source
+    ? failure?.replace(/^All providers failed — [\w-]+: /, '') || 'No playable source'
+    : displaySource && !probing && !source ? 'No working source' : null
+  const onRetryRef = useRef(onRetry)
+  useEffect(() => { onRetryRef.current = onRetry })
   useEffect(() => {
     setBrowserPlayerControls({
       qualities,
+      failure: failed,
+      retry: () => onRetryRef.current(),
       isPaused: paused,
       playPause: () => {
         const p = playerRef.current
@@ -257,7 +265,7 @@ export default function VideoPane({
         return q ? { total: q.totalVideoFrames, dropped: q.droppedVideoFrames } : null
       },
     })
-  }, [paused, qualities])
+  }, [paused, qualities, failed])
   useEffect(() => () => setBrowserPlayerControls(null), [])
 
   // A quality picked while it plays: Auto, or the rendition closest below.
