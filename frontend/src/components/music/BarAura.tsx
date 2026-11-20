@@ -9,6 +9,8 @@ import { rawOf, useAnalyses } from './mix/analysis'
 
 const RADIUS = 16
 /** The phone dock, which the bar joins into one glass object (the desktop rail's nav has the same label but no size there). */
+/** The video mini-player, which joins onto the bar's top edge as one dock. */
+const mini = () => [...document.querySelectorAll<HTMLElement>('[data-mini-player]')].map(n => n.getBoundingClientRect()).find(r => r.width > 0)
 const dock = () => [...document.querySelectorAll<HTMLElement>('nav[aria-label="Primary"]')].map(n => n.getBoundingClientRect()).find(r => r.width > 0)
 
 /**
@@ -46,10 +48,11 @@ export default function BarAura({ bar, q, duration }: { bar: RefObject<HTMLEleme
         const raw = rawOf(id)
         p = prep(raw); g = grid(raw)
       }
-      // The bar alone, or with the dock it sits on (phone, while the dock is up).
-      const r = el.getBoundingClientRect(), d = dock()
+      // The bar alone, or with the dock it sits on (phone, while the dock is up) and the mini-player on it.
+      const r = el.getBoundingClientRect(), d = dock(), m = mini()
       const joined = !!d && d.width > 0 && d.top < window.innerHeight && Math.abs(d.top - r.bottom) < 3
-      const x = r.left, y = r.top, w = r.width, h = (joined ? d.bottom : r.bottom) - r.top
+      const topped = !!m && Math.abs(m.bottom - r.top) < 3
+      const x = r.left, y = topped ? m.top : r.top, w = r.width, h = (joined ? d.bottom : r.bottom) - y
       const dpr = window.devicePixelRatio || 1
       const k = `${x},${y},${w},${h},${dpr}`
       if (k !== key) {
