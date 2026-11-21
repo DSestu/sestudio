@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from sestudio import downloaded
+from sestudio import downloaded, storage
 from sestudio.config import config_dir, load_config, save_config
 from sestudio.music import store
 
@@ -43,8 +43,7 @@ YTMUSIC_MAX = 500
 transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None = None
 
 
-class Invalid(ValueError):
-    pass
+Invalid = storage.Invalid
 
 
 # --- registry -----------------------------------------------------------------
@@ -80,59 +79,41 @@ def public(lib: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _music_id(library_id: str) -> str:
+    if not any(x["id"] == library_id for x in registered()):
+        raise Invalid(f"unknown library: {library_id}")
+    return library_id
+
+
 def add(
     kind: str, label: str = "", path: str = "", url: str = "", token: str = ""
 ) -> dict[str, Any]:
-    label = label.strip()
-    lib: dict[str, Any] = {"kind": kind}
-    if kind == FOLDER:
-        folder = Path(path.strip()).expanduser()
-        if not folder.is_dir():
-            raise Invalid("That folder does not exist on this machine")
-        lib |= {"id": "f" + secrets.token_hex(3), "path": str(folder)}
-        label = label or folder.name or str(folder)
-    elif kind == REMOTE:
-        url = url.strip().rstrip("/")
-        if not url.startswith(("http://", "https://")):
-            raise Invalid("The server address must start with http:// or https://")
-        if not token.strip():
-            raise Invalid("A token from the other server is needed")
-        lib |= {"id": "r" + secrets.token_hex(3), "url": url, "token": token.strip()}
-        label = label or url.split("//", 1)[1]
-    elif kind == YTMUSIC:
-        if any(x["kind"] == YTMUSIC for x in registered()):
-            raise Invalid("A YouTube Music account is already added")
-        lib["id"] = "y" + secrets.token_hex(3)
-        label = label or "YouTube Music"
-    else:
+    """A music-only storage (SPEC-storage); its music view is what is returned."""
+    if kind not in KINDS:
         raise Invalid(f"unknown library kind: {kind}")
-    lib["label"] = label
-    cfg = load_config()
-    cfg.music_libraries.append(lib)
-    save_config(cfg)
-    return lib
+    s = storage.add(
+        storage.FOLDER if kind == FOLDER else kind, ["music"], label, path, url, token
+    )
+    return get(s["id"])
 
 
 def rename(library_id: str, label: str) -> dict[str, Any]:
-    cfg = load_config()
-    for lib in cfg.music_libraries:
-        if lib["id"] == library_id:
-            lib["label"] = label.strip() or lib["label"]
-            save_config(cfg)
-            return lib
-    raise Invalid(f"unknown library: {library_id}")
+    storage.rename(_music_id(library_id), label)
+    return get(library_id)
 
 
 def remove(library_id: str) -> None:
-    cfg = load_config()
-    kept = [lib for lib in cfg.music_libraries if lib["id"] != library_id]
-    if len(kept) == len(cfg.music_libraries):
-        raise Invalid(f"unknown library: {library_id}")
-    gone = next(lib for lib in cfg.music_libraries if lib["id"] == library_id)
-    if gone["kind"] == FOLDER and gone["path"] not in cfg.music_dismissed:
-        cfg.music_dismissed.append(gone["path"])
-    cfg.music_libraries = kept
-    save_config(cfg)
+    """Take a library out of the music; a storage that also holds video stays, as video."""
+    s = storage.get(_music_id(library_id))
+    if s["kind"] == storage.FOLDER:
+        cfg = load_config()
+        if s["path"] not in cfg.music_dismissed:
+            cfg.music_dismissed.append(s["path"])
+            save_config(cfg)
+    if s["roles"] == ["music"]:
+        storage.remove(library_id)
+    else:
+        storage.set_roles(library_id, [r for r in s["roles"] if r != "music"])
     with _lock:
         _remote.pop(library_id, None)
         _ytmusic.pop(library_id, None)
@@ -158,24 +139,13 @@ def sync_defaults() -> None:
     Idempotent; a folder the user removed (``music_dismissed``) stays removed.
     """
     cfg = load_config()
-    known = {lib.get("path") for lib in cfg.music_libraries} | set(cfg.music_dismissed)
-    added = False
+    known = {s.get("path") for s in cfg.storages} | set(cfg.music_dismissed)
     for d in android_storage()["folders"]:
         path, label = str(d.get("path", "")), str(d.get("label", ""))
         if not path or path in known or not Path(path).is_dir():
             continue
-        cfg.music_libraries.append(
-            {
-                "id": "f" + secrets.token_hex(3),
-                "kind": FOLDER,
-                "label": label or Path(path).name,
-                "path": path,
-            }
-        )
+        storage.add(storage.FOLDER, ["music"], label or Path(path).name, path)
         known.add(path)
-        added = True
-    if added:
-        save_config(cfg)
 
 
 def folder_roots() -> list[tuple[str, Path]]:
