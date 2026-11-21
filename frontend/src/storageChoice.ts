@@ -1,0 +1,110 @@
+import { useSyncExternalStore } from 'react'
+import { getStorages, type DownloadedTitle, type StorageInfo } from './api'
+
+// Storages (SPEC-storage §8.1): the places files live, and which one the Media
+// page is on. The list is held once for the app; the choice is per device, like
+// the layout, and starts on the storage that takes downloads.
+
+export const ALL_STORAGES = 'all'
+const CHOICE_KEY = 'sestudio.mediaStorage.v1'
+
+let storages: StorageInfo[] = []
+let loaded = false
+let inflight: Promise<void> | null = null
+let choice: string | null = readChoice()
+const listeners = new Set<() => void>()
+const notify = () => listeners.forEach(l => l())
+
+function readChoice(): string | null {
+  try { return localStorage.getItem(CHOICE_KEY) } catch { return null }
+}
+
+export function refreshStorages(): Promise<void> {
+  if (inflight) return inflight
+  inflight = getStorages()
+    .then(next => { storages = next; loaded = true; notify() })
+    .catch(() => { /* keep what was listed */ })
+    .finally(() => { inflight = null })
+  return inflight
+}
+
+const onFocus = () => { void refreshStorages() }
+
+function subscribe(cb: () => void): () => void {
+  listeners.add(cb)
+  if (listeners.size === 1) window.addEventListener('focus', onFocus)
+  if (!loaded) void refreshStorages()
+  return () => {
+    listeners.delete(cb)
+    if (listeners.size === 0) window.removeEventListener('focus', onFocus)
+  }
+}
+
+/** Every storage, `local` first. */
+export function useStorages(): StorageInfo[] {
+  return useSyncExternalStore(subscribe, () => storages)
+}
+
+/** The folders that hold video: what the Media page can be on. */
+export function videoStorages(list: StorageInfo[]): StorageInfo[] {
+  return list.filter(s => s.kind === 'folder' && s.roles.includes('video'))
+}
+
+/** What the Media page shows: one storage's id, or `all`. A choice whose
+ *  storage is gone falls back to the download target. */
+export function effectiveChoice(list: StorageInfo[], picked: string | null): string {
+  const video = videoStorages(list)
+  if (picked === ALL_STORAGES) return ALL_STORAGES
+  if (picked && video.some(s => s.id === picked)) return picked
+  return video.find(s => s.download)?.id ?? video[0]?.id ?? ALL_STORAGES
+}
+
+export function useStorageChoice(): string {
+  const list = useStorages()
+  const picked = useSyncExternalStore(subscribe, () => choice)
+  return effectiveChoice(list, picked)
+}
+
+export function setStorageChoice(id: string): void {
+  choice = id
+  try { localStorage.setItem(CHOICE_KEY, id) } catch { /* per-device nicety only */ }
+  notify()
+}
+
+/**
+ * The listing narrowed to one storage: titles with no file there drop out, and
+ * the rest keep only their files there, with size and languages to match.
+ */
+export function onStorage(titles: DownloadedTitle[], id: string): DownloadedTitle[] {
+  if (id === ALL_STORAGES) return titles
+  const out: DownloadedTitle[] = []
+  for (const t of titles) {
+    const files = t.files.filter(f => (f.storage ?? 'local') === id)
+    if (!files.length) continue
+    if (files.length === t.files.length) { out.push(t); continue }
+    out.push({
+      ...t,
+      files,
+      storages: [id],
+      size: files.reduce((n, f) => n + f.size, 0),
+      mtime: Math.max(...files.map(f => f.mtime)),
+      langs: [...new Set(files.map(f => f.lang).filter(Boolean))].sort(),
+    })
+  }
+  return out
+}
+
+/** How many titles each storage holds, for the switcher. */
+export function titleCounts(titles: DownloadedTitle[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const t of titles) {
+    for (const id of t.storages ?? ['local']) counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  return counts
+}
+
+/** Which icon a storage gets: this machine, a network share, or another folder. */
+export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'>): 'pc' | 'share' | 'folder' {
+  if (s.id === 'local') return 'pc'
+  return /^(\\\\|\/\/)/.test(s.path ?? '') ? 'share' : 'folder'
+}

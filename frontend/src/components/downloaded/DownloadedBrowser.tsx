@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { DownloadedFile, DownloadedTitle } from '../../api'
+import type { DownloadedFile, DownloadedTitle, StorageInfo } from '../../api'
 import { downloadedThumbUrl } from '../../api'
 import { fmtSize } from '../../downloadedLibrary'
 import { buildFolders, folderAt, sortedChildren, type FolderNode } from '../../downloadedFolders'
@@ -24,6 +24,8 @@ interface Props {
   onPlay: (title: DownloadedTitle, file: DownloadedFile) => void
   /** Left out when deleting is turned off in Settings. */
   onDelete?: (title: DownloadedTitle, file: DownloadedFile) => void
+  /** With every storage shown at once, each is a top folder (SPEC-storage §8.1). */
+  storages?: StorageInfo[]
 }
 
 /**
@@ -36,7 +38,7 @@ interface Props {
  * still lifted from each file is the only picture there is. The tree view says
  * the same thing as an outline; this one is for looking rather than scanning.
  */
-export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelete }: Props) {
+export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelete, storages }: Props) {
   // Kept in the URL, so coming back from playing a file (browser back) lands in
   // the folder it was opened from rather than at the top of the tree again.
   const [path, setPathState] = useState<string[]>(
@@ -47,13 +49,19 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
     patchParams({ dir: next.join('/') || undefined })
   }
   const needle = filter.trim().toLowerCase()
-  const root = buildFolders(titles, needle)
+  const root = buildFolders(
+    titles,
+    needle,
+    storages && ((id: string) => storages.find(s => s.id === id)?.label ?? id),
+  )
 
   // Filtering can prune the folder you were standing in; fall back to the root
   // rather than showing nothing with no way out.
   const node = folderAt(root, path) ?? root
   const here = folderAt(root, path) ? path : []
   const { folders, files } = sortedChildren(node)
+  // Crumbs name each level; a storage's top folder is keyed by its id.
+  const names = here.map((part, i) => folderAt(root, here.slice(0, i + 1))?.name ?? part)
 
   const items = [
     ...folders.map(child => {
@@ -70,7 +78,7 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6L9 5H6a2 2 0 00-2 2z" />
           </svg>
         ),
-        onClick: () => setPath([...here, child.name]),
+        onClick: () => setPath([...here, child.path.split('/').pop() ?? child.name]),
       }
     }),
     ...files.map(({ file, title }) => ({
@@ -106,7 +114,7 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
             disabled={here.length === 0}
             className={`text-sm ${here.length === 0 ? 'text-base-content/50' : 'link link-hover'}`}
           >
-            Download folder
+            {storages ? 'All storages' : 'Download folder'}
           </button>
           {here.map((part, i) => (
             <span key={`${part}-${i}`} className="flex items-center gap-1 min-w-0">
@@ -118,7 +126,7 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
                   i === here.length - 1 ? 'text-base-content/50' : 'link link-hover'
                 }`}
               >
-                {part}
+                {names[i]}
               </button>
             </span>
           ))}

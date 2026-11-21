@@ -13,6 +13,8 @@ export interface Leaf {
 
 export interface FolderNode {
   name: string
+  /** Set on a storage's own top folder when every storage is shown at once. */
+  storage?: string
   /** Path from the root, for navigating and for React keys. */
   path: string
   folders: Map<string, FolderNode>
@@ -34,16 +36,33 @@ function emptyNode(name: string, path: string): FolderNode {
  * collapsed: the point is to show the arrangement as it is, awkward parts and
  * all.
  */
-export function buildFolders(titles: DownloadedTitle[], needle = ''): FolderNode {
+export function buildFolders(
+  titles: DownloadedTitle[],
+  needle = '',
+  /** With every storage shown, each one's name as its top folder (SPEC-storage §8.1). */
+  storageName?: (id: string) => string,
+): FolderNode {
   const root = emptyNode('', '')
   for (const title of titles) {
     for (const file of title.files) {
-      if (needle && !file.path.toLowerCase().includes(needle)) continue
+      const rel = file.rel ?? file.path
+      if (needle && !rel.toLowerCase().includes(needle)) continue
       // Everything but the filename: the leaf is the file itself.
-      const parts = file.path.split('/').slice(0, -1)
+      const parts = rel.split('/').slice(0, -1)
       let node = root
       root.count += 1
       root.size += file.size
+      if (storageName) {
+        const id = file.storage ?? 'local'
+        let top = root.folders.get(id)
+        if (!top) {
+          top = { ...emptyNode(storageName(id), id), storage: id }
+          root.folders.set(id, top)
+        }
+        top.count += 1
+        top.size += file.size
+        node = top
+      }
       for (const part of parts) {
         let next = node.folders.get(part)
         if (!next) {

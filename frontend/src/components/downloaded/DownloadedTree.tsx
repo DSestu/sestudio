@@ -1,4 +1,4 @@
-import type { DownloadedFile, DownloadedTitle } from '../../api'
+import type { DownloadedFile, DownloadedTitle, StorageInfo } from '../../api'
 import { fmtSize } from '../../downloadedLibrary'
 import { buildFolders, sortedChildren, type FolderNode } from '../../downloadedFolders'
 
@@ -15,6 +15,8 @@ interface Props {
   onPlay: (title: DownloadedTitle, file: DownloadedFile) => void
   /** Omitted where deleting would be out of place — the button is then absent. */
   onDelete?: (title: DownloadedTitle, file: DownloadedFile) => void
+  /** With every storage shown at once, each is a root (SPEC-storage §8.1). */
+  storages?: StorageInfo[]
 }
 
 /** One folder and everything under it, shut until asked.
@@ -23,12 +25,13 @@ interface Props {
  * the top level it is meant to reveal. The count and size on each row are there
  * so a folder can be judged without opening it.
  */
-function Folder({ node, expanded, onPlay, onDelete }: {
+function Folder({ node, expanded, onPlay, onDelete, storages }: {
   node: FolderNode
   /** Filtering opens what is left, so the matches are on screen. */
   expanded: boolean
   onPlay: Props['onPlay']
   onDelete: Props['onDelete']
+  storages?: StorageInfo[]
 }) {
   // Shared with the card browser, so the two never disagree about order.
   const { folders, files } = sortedChildren(node)
@@ -49,13 +52,18 @@ function Folder({ node, expanded, onPlay, onDelete }: {
               <svg className="w-4 h-4 shrink-0 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6L9 5H6a2 2 0 00-2 2z" />
               </svg>
-              <span className="text-sm truncate">{child.name}</span>
+              <span className={`text-sm truncate ${child.storage ? 'font-semibold' : ''}`}>{child.name}</span>
+              {child.storage && (
+                <span className="font-mono text-xs text-base-content/45 truncate min-w-0">
+                  {storages?.find(s => s.id === child.storage)?.path}
+                </span>
+              )}
               <span className="ml-auto text-xs text-base-content/40 tabular-nums shrink-0">
                 {child.count} · {fmtSize(child.size)}
               </span>
             </summary>
             <div className="pl-4 border-l border-base-300 ml-3">
-              <Folder node={child} expanded={expanded} onPlay={onPlay} onDelete={onDelete} />
+              <Folder node={child} expanded={expanded} onPlay={onPlay} onDelete={onDelete} storages={storages} />
             </div>
           </details>
         </li>
@@ -72,7 +80,7 @@ function Folder({ node, expanded, onPlay, onDelete }: {
           <button
             onClick={() => onPlay(title, file)}
             className="min-w-0 flex-1 text-left"
-            title={file.path}
+            title={file.rel ?? file.path}
           >
             <span className="block text-sm truncate">{file.path.split('/').pop()}</span>
           </button>
@@ -99,10 +107,14 @@ function Folder({ node, expanded, onPlay, onDelete }: {
 
 /** The download folder as a tree — every file, where it really lives. */
 export default function DownloadedTree({
-  titles, filter = '', expandMatches = true, onPlay, onDelete,
+  titles, filter = '', expandMatches = true, onPlay, onDelete, storages,
 }: Props) {
   const needle = filter.trim().toLowerCase()
-  const root = buildFolders(titles, needle)
+  const root = buildFolders(
+    titles,
+    needle,
+    storages && ((id: string) => storages.find(s => s.id === id)?.label ?? id),
+  )
   return (
     <div className="rounded-box border border-base-300 p-2">
       {root.count === 0 ? (
@@ -115,6 +127,7 @@ export default function DownloadedTree({
           expanded={expandMatches && needle !== ''}
           onPlay={onPlay}
           onDelete={onDelete}
+          storages={storages}
         />
       )}
     </div>

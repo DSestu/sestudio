@@ -1027,8 +1027,13 @@ export async function checkDownloads(items: DownloadItem[]): Promise<string[]> {
 // --- Local library (what has been downloaded) ------------------------------- #
 
 export interface DownloadedFile {
-  /** Path relative to the download root. The id for playing and deleting. */
+  /** The id for playing, casting and deleting: the path inside the download
+   *  folder, or `storage:path` for a file on another storage. */
   path: string
+  /** Where it sits inside its storage (SPEC-storage), for the folder views. */
+  rel?: string
+  /** The storage it is on; `local` is the download folder. */
+  storage?: string
   /** 0 for a film, or a file whose name carries no SxxEyy prefix. */
   number: number
   title: string
@@ -1063,9 +1068,31 @@ export interface DownloadedTitle {
   page_url: string
   source: string
   langs: string[]
+  /** The storages its files are on, `local` first. */
+  storages?: string[]
   files: DownloadedFile[]
   size: number
   mtime: number
+}
+
+/** A place files live (SPEC-storage): a folder on this machine, a share, a mount,
+ *  or a music-only source. */
+export interface StorageInfo {
+  id: string
+  kind: 'folder' | 'remote_sestudio' | 'ytmusic_account' | string
+  label: string
+  path?: string
+  url?: string
+  roles: ('video' | 'music')[]
+  /** The one storage new downloads go to. */
+  download: boolean
+  state: 'online' | 'offline'
+}
+
+export async function getStorages(): Promise<StorageInfo[]> {
+  const res = await fetch(`${BASE}/storages`)
+  if (!res.ok) throw new Error(`Storages failed (${res.status})`)
+  return res.json()
 }
 
 /** Everything on disk, grouped by title. Newest first. */
