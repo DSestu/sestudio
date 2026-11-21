@@ -3,6 +3,7 @@ import RankRow from '../../components/RankRow'
 import type { AppSettings, SiteInfo } from '../../api'
 import { getSites } from '../../api'
 import { DEFAULT_HOST_ORDER } from '../../downloadPrefs'
+import { useStorages } from '../../storageChoice'
 import { Choice, SettingRow, SettingsGroup, ToggleRow } from './rows'
 import type { SettingsProps } from './SettingsView'
 
@@ -18,13 +19,15 @@ export default function Downloads({ settings, onUpdate }: SettingsProps) {
   useEffect(() => { void getSites().then(setSites) }, [])
 
   const toServer = settings.download_destination === 'server'
+  // Where they land is a storage, picked in Settings › Storage (SPEC-storage §8.2).
+  const target = useStorages().find(s => s.download)
 
   return (
     <>
       <SettingsGroup>
         <SettingRow
           label="Download to"
-          help={toServer ? 'Saved on the server, in the folder below' : 'Streamed through the server to this browser'}
+          help={toServer ? 'Saved on the server, on the storage below' : 'Streamed through the server to this browser'}
         >
           <Choice
             label="Download to"
@@ -34,17 +37,14 @@ export default function Downloads({ settings, onUpdate }: SettingsProps) {
           />
         </SettingRow>
         <SettingRow
-          label="Folder on the server"
-          htmlFor="set-output"
-          help={toServer ? undefined : 'Only used when downloading to the server'}
-          stacked
+          label={<>Saved on <span className="font-semibold">{target?.label ?? 'This PC'}</span></>}
+          help={
+            <span className="block font-mono truncate">
+              {toServer ? target?.path ?? settings.output_root : 'Only used when downloading to the server'}
+            </span>
+          }
         >
-          <input
-            id="set-output"
-            className="input input-sm h-9 w-full bg-base-100 border-0 font-mono"
-            value={settings.output_root}
-            onChange={e => onUpdate({ output_root: e.target.value })}
-          />
+          <a href="#/settings?s=storage" className="btn btn-ghost btn-sm">Storage ›</a>
         </SettingRow>
       </SettingsGroup>
 
