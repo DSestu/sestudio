@@ -230,6 +230,7 @@ export default function HomeView({
             style={style}
             size="M"
             title="Watchlist"
+            fit
             count={watchlist.length}
             onOpen={() => onNavigate('library', { tab: 'watchlist' })}
             // A bookmark ribbon hanging from the top edge: marked to come back to.
@@ -250,6 +251,7 @@ export default function HomeView({
             style={style}
             size="M"
             title="Favourites"
+            fit
             count={favourites.length}
             onOpen={() => onNavigate('library', { tab: 'favourites' })}
             icon={
@@ -281,6 +283,7 @@ export default function HomeView({
             style={style}
             size="M"
             title="Discover"
+            fit
             sub={discover ? `${discover.title} · ${catalogLabel}` : catalogLabel}
             onOpen={() => onOpenCatalog(catalogId)}
             loading={!discover}

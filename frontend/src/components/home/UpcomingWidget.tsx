@@ -82,6 +82,8 @@ export default function UpcomingWidget({ episodes, lang, onOpen, onSearchTerm, o
       style={style}
       size="M"
       title="Upcoming"
+      // The single-episode layout sizes its poster to the fixed height.
+      fit={!one}
       sub="next 7 days"
       onOpen={onSeeAll}
       frame="f-up bg-transparent! outline-1 outline-dashed outline-base-400 -outline-offset-1"

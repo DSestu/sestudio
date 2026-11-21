@@ -5,7 +5,7 @@ import type { WidgetSize } from '../../homeOrder'
 // add up (an S is as tall as an M, an L is two Ms), so widgets side by side end
 // on the same line. Phones stack in 2 columns with rows as tall as their
 // widgets, so each size has a fixed phone height instead, and a fit widget
-// (Continue watching) takes just the height its content needs.
+// (Continue watching, the poster widgets) takes just the height its content needs.
 const SPAN: Record<WidgetSize, string> = {
   S: 'col-span-1 h-[260px] md:h-auto md:row-span-3',
   M: 'col-span-2 h-[260px] md:h-auto md:row-span-3',
@@ -87,7 +87,7 @@ export default function Widget({
           <span className={headClass}>{heading}</span>
         )}
       </h2>
-      {loading ? <div className="skeleton flex-1 rounded-box" /> : children}
+      {loading ? <div className="skeleton flex-1 min-h-44 rounded-box" /> : children}
     </section>
   )
 }

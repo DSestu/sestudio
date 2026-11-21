@@ -30,6 +30,7 @@ export default function ChannelsWidget({ summary, style, onPlay, onSeeAll }: Pro
       style={style}
       size="M"
       title="From your channels"
+      fit
       sub={calm ? 'latest' : undefined}
       badge={summary.fresh}
       onOpen={onSeeAll}
