@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from sestudio import remotefs, vault
 from sestudio.config import (
     FOLDER_STORAGE,
     LOCAL_STORAGE,
@@ -31,10 +32,12 @@ from sestudio.config import (
 
 LOCAL, FOLDER = LOCAL_STORAGE, FOLDER_STORAGE
 REMOTE, YTMUSIC = "remote_sestudio", "ytmusic_account"
-KINDS = (FOLDER, REMOTE, YTMUSIC)
+#: Servers read in the app over their protocol (SPEC-storage §9, X1).
+NETWORK = ("ftp", "sftp", "smb")
+KINDS = (FOLDER, REMOTE, YTMUSIC, *NETWORK)
 #: Kinds that only hold music for now (SPEC-storage phase 2, X3).
 MUSIC_ONLY = (REMOTE, YTMUSIC)
-_PREFIX = {FOLDER: "f", REMOTE: "r", YTMUSIC: "y"}
+_PREFIX = {FOLDER: "f", REMOTE: "r", YTMUSIC: "y", "ftp": "n", "sftp": "n", "smb": "n"}
 
 
 class Invalid(ValueError):
@@ -73,9 +76,14 @@ def add(
     path: str = "",
     url: str = "",
     token: str = "",
+    network: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Add a storage. *network* carries an FTP, SFTP or SMB server's fields
+    (host, port, share, username, domain, tls) and its password, which goes to
+    the vault, never the config."""
     label = label.strip()
     s: dict[str, Any] = {"kind": kind}
+    password = ""
     if kind == FOLDER:
         folder = Path(path.strip()).expanduser()
         if not path.strip() or not folder.is_dir():
@@ -94,6 +102,10 @@ def add(
         if any(x["kind"] == YTMUSIC for x in all_storages()):
             raise Invalid("A YouTube Music account is already added")
         label = label or "YouTube Music"
+    elif kind in NETWORK:
+        s |= _network_fields(kind, path, network or {})
+        password = str((network or {}).get("password") or "")
+        label = label or f"{s['host']}{'/' + s['share'] if kind == 'smb' else ''}"
     else:
         raise Invalid(f"unknown storage kind: {kind}")
     s |= {
@@ -102,10 +114,41 @@ def add(
         "roles": _roles(kind, roles),
         "download": False,
     }
+    if password:
+        vault.put(s["id"], {"password": password})
     cfg = load_config()
     cfg.storages.append(s)
     save_config(cfg)
     return s
+
+
+def _network_fields(kind: str, path: str, net: dict[str, Any]) -> dict[str, Any]:
+    host = str(net.get("host") or "").strip()
+    if not host or "/" in host or " " in host:
+        raise Invalid(
+            "The server's name or address is needed, like nas.local or 192.168.1.20"
+        )
+    out: dict[str, Any] = {"host": host, "path": "/" + path.strip().strip("/")}
+    port = net.get("port")
+    if port not in (None, ""):
+        try:
+            out["port"] = int(port)
+        except (TypeError, ValueError):
+            raise Invalid("The port is a number, like 21") from None
+        if not 0 < out["port"] < 65536:
+            raise Invalid("The port is a number from 1 to 65535")
+    if net.get("username"):
+        out["username"] = str(net["username"]).strip()
+    if kind == "smb":
+        share = str(net.get("share") or "").strip().strip("/\\")
+        if not share:
+            raise Invalid("The share's name is needed, like films")
+        out["share"] = share
+        if net.get("domain"):
+            out["domain"] = str(net["domain"]).strip()
+    if kind == "ftp":
+        out["tls"] = bool(net.get("tls"))
+    return out
 
 
 def _edit(storage_id: str, change) -> dict[str, Any]:
@@ -155,6 +198,8 @@ def remove(storage_id: str) -> dict[str, Any]:
     cfg.storages = [s for s in cfg.storages if s is not gone]
     save_config(cfg)  # with no target left, `reconcile` gives it back to `local`
     _forget(storage_id)
+    vault.drop(storage_id)
+    remotefs.forget(storage_id)
     return gone
 
 
@@ -167,6 +212,8 @@ def remove(storage_id: str) -> dict[str, Any]:
 
 #: How long a reachability check may take before the storage counts as offline.
 CHECK_TIMEOUT = 3.0
+#: The same for a server reached over FTP, SFTP or SMB: a handshake takes longer.
+NET_CHECK_TIMEOUT = 8.0
 #: How long a check's answer is trusted.
 STATE_TTL = 15.0
 #: How long another storage's listing is trusted; it is refreshed in the background.
@@ -180,41 +227,55 @@ _state: dict[str, dict[str, Any]] = {}
 _lists: dict[str, dict[str, Any]] = {}
 
 
+def _reachable(s: dict[str, Any]) -> bool:
+    if s["kind"] == FOLDER:
+        return Path(s["path"]).is_dir()
+    try:  # a server: connect and list its top folder
+        remotefs.filesystem(s).ls(remotefs.root(s))
+        return True
+    except Exception:  # noqa: BLE001 - any failure to answer is "away"
+        remotefs.forget(s["id"])  # a dropped connection is not reused
+        return False
+
+
 def _probe(
-    path: str, previous: dict[str, Any] | None
+    s: dict[str, Any], previous: dict[str, Any] | None
 ) -> tuple[bool, threading.Thread | None]:
-    """Whether *path* is a folder, decided within ``CHECK_TIMEOUT``; a check still
-    running from before is not doubled, and counts as offline."""
+    """Whether *s* answers, decided within its timeout; a check still running
+    from before is not doubled, and counts as offline."""
     if previous and previous.get("probe") and previous["probe"].is_alive():
         return False, previous["probe"]
     found: list[bool] = []
     probe = threading.Thread(
-        target=lambda: found.append(Path(path).is_dir()),
-        daemon=True,
-        name="storage-probe",
+        target=lambda: found.append(_reachable(s)), daemon=True, name="storage-probe"
     )
     probe.start()
-    probe.join(CHECK_TIMEOUT)
+    probe.join(CHECK_TIMEOUT if s["kind"] == FOLDER else NET_CHECK_TIMEOUT)
     return (bool(found and found[0]), None if found else probe)
+
+
+def _where(s: dict[str, Any]) -> tuple:
+    """What a check's answer is about: a changed address is checked again."""
+    return (s.get("host"), s.get("share"), s.get("port"), s.get("path"))
 
 
 def state(s: dict[str, Any]) -> dict[str, Any]:
     """``{state: online | offline, since}``: ``since`` is when it went away."""
-    if s["kind"] != FOLDER:
+    if s["kind"] != FOLDER and s["kind"] not in NETWORK:
         return {"state": "online", "since": None}
     now = time.time()
     with _lock:
         known = _state.get(s["id"])
-        if known and known["path"] == s["path"] and now - known["checked"] < STATE_TTL:
+        if known and known["path"] == _where(s) and now - known["checked"] < STATE_TTL:
             return {"state": known["state"], "since": known["since"]}
-    ok, probe = _probe(s["path"], known)
+    ok, probe = _probe(s, known)
     since = None if ok else ((known or {}).get("since") or now)
     with _lock:
         _state[s["id"]] = {
             "state": "online" if ok else "offline",
             "since": since,
             "checked": time.time(),
-            "path": s["path"],
+            "path": _where(s),
             "probe": probe,
         }
     return {"state": "online" if ok else "offline", "since": since}

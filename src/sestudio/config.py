@@ -302,7 +302,11 @@ def reconcile(cfg: AppConfig) -> AppConfig:
             "kind": _MUSIC_KIND.get(s["kind"], s["kind"]),
         }
         for s in storages
-        if s["id"] != LOCAL_STORAGE and "music" in s["roles"]
+        if s["id"] != LOCAL_STORAGE
+        and "music" in s["roles"]
+        # FTP, SFTP and SMB storages reach the music page through their own
+        # listing (SPEC-storage §9), not as libraries an older build would read.
+        and s["kind"] not in ("ftp", "sftp", "smb")
     ]
     return cfg
 

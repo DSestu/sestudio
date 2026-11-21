@@ -47,6 +47,9 @@ dependencies = [
     # Drives the headless Chromium that draws the music station's TV picture
     # (music/station.py). No 32-bit ARM wheel: those devices can't cast music.
     "playwright>=1.64.1; platform_machine != 'armv7l'",
+    "fsspec>=2024.6",
+    "smbprotocol>=1.13",
+    "paramiko>=3.4",
 ]
 
 [project.urls]
