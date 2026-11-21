@@ -88,6 +88,16 @@ def serve(
         )
         app.state.https_port = https_port
 
+    # ffmpeg reads a file on an FTP, SFTP or SMB storage through this server's
+    # own relay (SPEC-storage §9.1); plain HTTP when there is one.
+    from sestudio import remotefs
+
+    remotefs.RELAY = (
+        f"http://127.0.0.1:{http_port}"
+        if not no_http
+        else f"https://127.0.0.1:{https_port}"
+    )
+
     if not servers:
         console.print("[red]Nothing to serve: --no-http and --no-https both set[/red]")
         sys.exit(1)

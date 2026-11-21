@@ -45,9 +45,21 @@ export function useStorages(): StorageInfo[] {
   return useSyncExternalStore(subscribe, () => storages)
 }
 
-/** The folders that hold video: what the Media page can be on. */
+/** FTP, SFTP and SMB servers, read in the app (SPEC-storage §9). */
+export const NETWORK_KINDS = ['ftp', 'sftp', 'smb']
+
+/** The folders and servers that hold video: what the Media page can be on. */
 export function videoStorages(list: StorageInfo[]): StorageInfo[] {
-  return list.filter(s => s.kind === 'folder' && s.roles.includes('video'))
+  return list.filter(s => (s.kind === 'folder' || NETWORK_KINDS.includes(s.kind)) && s.roles.includes('video'))
+}
+
+/** Where a storage is, as shown under its name: a path, or `sftp://host/path`. */
+export function whereOf(s: Pick<StorageInfo, 'kind' | 'path' | 'url'> & { host?: string; share?: string }): string {
+  if (NETWORK_KINDS.includes(s.kind)) {
+    const share = s.share ? `/${s.share}` : ''
+    return `${s.kind}://${s.host ?? ''}${share}${s.path && s.path !== '/' ? s.path : ''}`
+  }
+  return s.path ?? s.url ?? ''
 }
 
 /** What the Media page shows: one storage's id, or `all`. A choice whose
@@ -119,7 +131,8 @@ export function offlineIds(list: StorageInfo[]): Set<string> {
 }
 
 /** Which icon a storage gets: this machine, a network share, or another folder. */
-export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'>): 'pc' | 'share' | 'folder' {
+export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'> & { kind?: string }): 'pc' | 'share' | 'folder' {
   if (s.id === 'local') return 'pc'
+  if (s.kind && NETWORK_KINDS.includes(s.kind)) return 'share'
   return /^(\\\\|\/\/)/.test(s.path ?? '') ? 'share' : 'folder'
 }

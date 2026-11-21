@@ -23,7 +23,9 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
 from sestudio import downloaded, interpolate, library
+from sestudio import remotefs
 from sestudio import storage as storages
+from sestudio.web.ranged import ranged
 from sestudio.music import runner
 from sestudio.config import load_config
 from sestudio.web.streaming import ClosingStreamingResponse
@@ -56,11 +58,11 @@ _CORS_HEADERS = {
 
 
 def video_storages() -> list[dict[str, Any]]:
-    """The folders that hold video, ``local`` first (SPEC-storage)."""
+    """The folders and servers that hold video, ``local`` first (SPEC-storage)."""
     return [
         s
         for s in storages.all_storages()
-        if s["kind"] == storages.FOLDER and "video" in s["roles"]
+        if s["kind"] in (storages.FOLDER, *storages.NETWORK) and "video" in s["roles"]
     ]
 
 
@@ -258,6 +260,8 @@ def _resolved(path: str, storage_id: str = storages.LOCAL) -> Any:
         root = storages.get(storage_id)
     except storages.Invalid:
         raise HTTPException(status_code=404, detail="No such storage") from None
+    if root["kind"] in storages.NETWORK:
+        return _resolved_remote(root, path)
     if root["kind"] != storages.FOLDER:
         raise HTTPException(status_code=404, detail="That storage holds no files here")
     try:
@@ -268,6 +272,25 @@ def _resolved(path: str, storage_id: str = storages.LOCAL) -> Any:
         # Answered at once: touching a share that is away can hang for a minute.
         raise HTTPException(status_code=503, detail=f"{root['label']} is offline")
     if not target.is_file():
+        raise HTTPException(status_code=404, detail="No such file")
+    return target
+
+
+def _resolved_remote(root: dict[str, Any], path: str) -> remotefs.RemoteFile:
+    """A file on an FTP, SFTP or SMB storage (spec §9.1), confined to its top folder."""
+    parts = [p for p in path.replace("\\", "/").split("/") if p not in ("", ".")]
+    if not parts or ".." in parts:
+        raise HTTPException(status_code=403, detail="Path outside the storage")
+    if not storages.online(root):
+        raise HTTPException(status_code=503, detail=f"{root['label']} is offline")
+    target = remotefs.top(root).joinpath(*parts)
+    try:
+        found = target.is_file()
+    except Exception:  # noqa: BLE001 - the server failing mid-request
+        raise HTTPException(
+            status_code=503, detail=f"{root['label']} is not answering"
+        ) from None
+    if not found:
         raise HTTPException(status_code=404, detail="No such file")
     return target
 
@@ -384,6 +407,8 @@ async def get_downloaded_file(
             headers=headers,
         )
 
+    if isinstance(target, remotefs.RemoteFile):
+        return ranged(request, target, media_type, headers)
     return FileResponse(
         target,
         # By extension: a collection that predates this tool is full of mkv and
@@ -1309,6 +1334,9 @@ async def get_downloaded_subtitle(
         )
         if match is None:
             raise HTTPException(status_code=404, detail="No such subtitle file")
+        if isinstance(match, remotefs.RemoteFile):  # beside a file on a server
+            body = await asyncio.to_thread(match.read_bytes)
+            return Response(body, media_type="text/vtt", headers=dict(_CORS_HEADERS))
         return FileResponse(match, media_type="text/vtt", headers=dict(_CORS_HEADERS))
 
     if index is None:

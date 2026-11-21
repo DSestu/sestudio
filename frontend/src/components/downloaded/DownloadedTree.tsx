@@ -1,6 +1,7 @@
 import type { DownloadedFile, DownloadedTitle, StorageInfo } from '../../api'
 import { fmtSize } from '../../downloadedLibrary'
 import { buildFolders, sortedChildren, type FolderNode } from '../../downloadedFolders'
+import { whereOf } from '../../storageChoice'
 
 interface Props {
   titles: DownloadedTitle[]
@@ -58,7 +59,7 @@ function Folder({ node, expanded, onPlay, onDelete, storages }: {
               <span className={`text-sm truncate ${child.storage ? 'font-semibold' : ''}`}>{child.name}</span>
               {child.storage && (
                 <span className="font-mono text-xs text-base-content/45 truncate min-w-0">
-                  {storages?.find(s => s.id === child.storage)?.path}
+                  {(() => { const s = storages?.find(x => x.id === child.storage); return s ? whereOf(s) : '' })()}
                 </span>
               )}
               {child.storage && storages?.find(s => s.id === child.storage)?.state === 'offline' && (

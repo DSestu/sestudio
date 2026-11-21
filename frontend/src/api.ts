@@ -1083,6 +1083,11 @@ export interface StorageInfo {
   label: string
   path?: string
   url?: string
+  /** An FTP, SFTP or SMB server's address (SPEC-storage §9). */
+  host?: string
+  port?: number
+  share?: string
+  username?: string
   roles: ('video' | 'music')[]
   /** The one storage new downloads go to. */
   download: boolean

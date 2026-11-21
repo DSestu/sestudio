@@ -103,3 +103,117 @@ def test_the_add_form_tests_a_server(mem):
     assert "secret" not in c.get("/api/storages").text
     assert json.loads(c.get("/api/settings").text).get("storages") is None
     library.reset_connection()
+
+
+# --- listing, relay, playback (PRs 8–10) ----------------------------------------
+
+
+@pytest.fixture()
+def served(mem, tmp_path):
+    fs, _ = mem
+    fs.pipe("/films/Show/Season 01/VF/S01E01 - Pilot.mkv", b"0123456789")
+    library.reset_connection()
+    from sestudio import downloaded
+
+    downloaded.invalidate()
+    storage._lists.clear()
+    c = TestClient(create_app())
+    (tmp_path / "out").mkdir()
+    c.put("/api/settings", json={"output_root": str(tmp_path / "out")})
+    s = storage.add("ftp", ["video"], "Seedbox", path="/films", network={"host": "nas"})
+    yield c, s
+    library.reset_connection()
+
+
+def test_a_server_is_listed_like_a_folder(served):
+    c, s = served
+    titles = {t["series"]: t for t in c.get("/api/downloaded").json()}
+    show = titles["Show"]
+    assert show["storages"] == [s["id"]]
+    [f] = show["files"]
+    assert (f["rel"], f["path"], f["size"]) == (
+        "Show/Season 01/VF/S01E01 - Pilot.mkv",
+        f"{s['id']}:Show/Season 01/VF/S01E01 - Pilot.mkv",
+        10,
+    )
+
+
+def test_the_relay_serves_ranges(served):
+    c, s = served
+    url = f"/api/storages/{s['id']}/raw/Show/Season 01/VF/S01E01 - Pilot.mkv"
+    full = c.get(url)
+    assert full.status_code == 200 and full.content == b"0123456789"
+    part = c.get(url, headers={"Range": "bytes=2-5"})
+    assert part.status_code == 206 and part.content == b"2345"
+    assert part.headers["content-range"] == "bytes 2-5/10"
+    tail = c.get(url, headers={"Range": "bytes=-3"})
+    assert tail.content == b"789"
+    assert c.get(url, headers={"Range": "bytes=20-"}).status_code == 416
+    assert c.get(f"/api/storages/{s['id']}/raw/%2E%2E/etc/passwd").status_code == 403
+
+
+def test_a_listed_key_plays_from_the_server(served):
+    c, s = served
+    key = f"{s['id']}:Show/Season 01/VF/S01E01 - Pilot.mkv"
+    resp = c.get(
+        "/api/downloaded/file", params={"path": key}, headers={"Range": "bytes=0-3"}
+    )
+    assert resp.status_code == 206 and resp.content == b"0123"
+
+
+def test_ffmpeg_is_handed_the_relay_url(served, monkeypatch):
+    _, s = served
+    monkeypatch.setattr(remotefs, "RELAY", "http://127.0.0.1:9999")
+    f = remotefs.top(s) / "Show" / "Season 01" / "VF" / "S01E01 - Pilot.mkv"
+    assert remotefs.media_input(f) == (
+        f"http://127.0.0.1:9999/api/storages/{s['id']}/raw/Show/Season%2001/VF/S01E01%20-%20Pilot.mkv"
+    )
+    assert f.stat().st_size == 10 and f.suffix == ".mkv" and f.stem == "S01E01 - Pilot"
+
+
+def test_sidecar_subtitles_beside_a_file_on_a_server(served):
+    c, s = served
+    fs = remotefs._open(s)
+    fs.pipe("/films/Show/Season 01/VF/S01E01 - Pilot.fr.vtt", b"WEBVTT\n")
+    key = f"{s['id']}:Show/Season 01/VF/S01E01 - Pilot.mkv"
+    resp = c.get("/api/downloaded/subtitle", params={"path": key, "sidecar": "fr"})
+    assert resp.status_code == 200 and resp.text == "WEBVTT\n"
+
+
+def test_ffmpeg_reads_a_server_file_through_the_relay(served, monkeypatch, tmp_path):
+    """End to end: a real ffprobe, a real HTTP server, the relay, the file on the server."""
+    import socket
+    import subprocess
+    import threading
+    import time
+
+    import uvicorn
+
+    from sestudio import downloaded
+    from sestudio.media import ffmpeg_binary
+
+    c, s = served
+    clip = tmp_path / "clip.mp4"
+    subprocess.run(
+        [ffmpeg_binary(), "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=2:size=64x48:rate=10",
+         "-pix_fmt", "yuv420p", str(clip)],
+        check=True,
+    )  # fmt: skip
+    remotefs._open(s).pipe("/films/Clip.mp4", clip.read_bytes())
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    server = uvicorn.Server(
+        uvicorn.Config(c.app, host="127.0.0.1", port=port, log_level="error")
+    )
+    threading.Thread(target=server.run, daemon=True).start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    monkeypatch.setattr(remotefs, "RELAY", f"http://127.0.0.1:{port}")
+    try:
+        target = remotefs.top(s) / "Clip.mp4"
+        assert abs((downloaded.duration_of(target) or 0) - 2.0) < 0.3
+    finally:
+        server.should_exit = True
