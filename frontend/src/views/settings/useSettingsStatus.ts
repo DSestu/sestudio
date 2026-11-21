@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AppSettings } from '../../api'
 import { getServerLog } from '../../api'
 import { useLibraries } from '../../musicLibraries'
+import { useStorages } from '../../storageChoice'
 import { thisMachine, useActiveServer } from '../../servers'
 import { loadPlayerPrefs, qualityValue } from '../../playerPrefs'
 import { loadSubtitleStyle } from '../../subtitleStyle'
@@ -27,6 +28,9 @@ export function uptime(started: number): string {
  */
 export function useSettingsStatus(settings: AppSettings): { summary: Record<string, string>; problems: Problem[] } {
   const libraries = useLibraries()
+  const storages = useStorages()
+  const target = storages.find(s => s.download)
+  const away = storages.filter(s => s.state === 'offline')
   const active = useActiveServer()
   const [setup] = useAiSetup()
   const [server, setServer] = useState<{ started: number } | null | undefined>()
@@ -47,7 +51,8 @@ export function useSettingsStatus(settings: AppSettings): { summary: Record<stri
     ].join(' · '),
     subtitles: [subtitles.fontFamily, `${Math.round(subtitles.fontSize * 100)}%`, subtitles.blur && 'blur'].filter(Boolean).join(' · '),
     sources: [off ? `${off} site${off > 1 ? 's' : ''} off` : 'All sites on', settings.tmdb_configured ? 'TMDB connected' : 'No TMDB key'].join(' · '),
-    downloads: settings.download_destination === 'server' ? `Server · ${settings.output_root}` : 'This device',
+    downloads: settings.download_destination === 'server' ? `Server · ${target?.label ?? settings.output_root}` : 'This device',
+    storage: [`${storages.length} ${storages.length === 1 ? 'storage' : 'storages'}`, away.length ? `${away.length} offline` : '', target ? `downloads to ${target.label}` : ''].filter(Boolean).join(' · '),
     music: `${libraries.length} librar${libraries.length === 1 ? 'y' : 'ies'} · ${libraries.reduce((n, l) => n + l.count, 0)} tracks`,
     notifications: !settings.notifications_enabled ? 'Off'
       : settings.callmebot_configured ? 'WhatsApp on' : 'WhatsApp on · number or key missing',
@@ -65,6 +70,14 @@ export function useSettingsStatus(settings: AppSettings): { summary: Record<stri
   }
   if (ai && setup?.step === 'failed') {
     problems.push({ category: 'playback', title: 'AI frame rates failed to set up.', text: 'Reinstall to try again.' })
+  }
+
+  for (const s of away) {
+    problems.push({
+      category: 'storage',
+      title: `${s.label} is offline.`,
+      text: s.download ? 'Downloads cannot be saved until it is back.' : 'Its titles stay listed, greyed, until it is back.',
+    })
   }
 
   return { summary, problems }

@@ -86,8 +86,9 @@ def _loop(root: str) -> None:
     try:
         while True:
             run_once(root)
-            for library, folder in libraries.folder_roots()[1:]:
-                run_once(folder, library=library)
+            for library, folder in libraries.folder_roots():
+                if library != libraries.LOCAL:  # `root` above is local
+                    run_once(folder, library=library)
             with _lock:
                 if not _again:
                     _running = False

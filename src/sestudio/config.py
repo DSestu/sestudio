@@ -134,7 +134,7 @@ class AppConfig:
     active_server: str = ""
     # Every place files live (SPEC-storage): `{id, kind, label, path | url, token,
     # roles, download}`. The source of truth; `output_root` and `music_libraries`
-    # above are kept as mirrors of it (see `_reconcile`) so older readers and a
+    # above are kept as mirrors of it (see `reconcile`) so older readers and a
     # downgraded build keep working.
     storages: list[dict] = field(default_factory=list)
 
@@ -166,7 +166,7 @@ def config_dir() -> Path:
 def load_config() -> AppConfig:
     path = _config_path()
     if not path.exists():
-        return _reconcile(AppConfig())
+        return reconcile(AppConfig())
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         cfg = AppConfig(
@@ -221,10 +221,10 @@ def load_config() -> AppConfig:
             active_server=str(data.get("active_server", "")),
             storages=[d for d in data.get("storages", []) or [] if isinstance(d, dict)],
         )
-        return _reconcile(cfg)
+        return reconcile(cfg)
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)
-        return _reconcile(AppConfig())
+        return reconcile(AppConfig())
 
 
 def tmdb_key() -> str:
@@ -262,7 +262,7 @@ def _clean_storage(d: dict) -> dict | None:
     return out
 
 
-def _reconcile(cfg: AppConfig) -> AppConfig:
+def reconcile(cfg: AppConfig) -> AppConfig:
     """Make ``storages`` sound and the two mirrors agree with it.
 
     A config from before storages is migrated: the download root becomes the
@@ -308,7 +308,7 @@ def _reconcile(cfg: AppConfig) -> AppConfig:
 
 
 def save_config(cfg: AppConfig) -> None:
-    cfg = _reconcile(cfg)
+    cfg = reconcile(cfg)
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")

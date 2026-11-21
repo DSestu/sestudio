@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from sestudio import library
+from sestudio import library, storage
 from sestudio.config import load_config
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.web.routes import servers
@@ -122,23 +122,55 @@ def _disk(output_root: str) -> dict[str, Any]:
     }
 
 
+def _storages() -> list[dict[str, Any]]:
+    """Every folder storage and whether it answers (SPEC-storage S8)."""
+    return [
+        {k: s[k] for k in ("id", "label", "path", "download")} | storage.state(s)
+        for s in storage.all_storages()
+        if s["kind"] == storage.FOLDER
+    ]
+
+
 @router.get("/health")
 async def get_health(request: Request) -> dict[str, Any]:
     """What Home's Health widget and footer line show: sites up, watchers
     failing, disk free, and the issues among them, worst first."""
     sites = await _sites(request)
     watchers = await asyncio.to_thread(_watchers)
-    disk = await asyncio.to_thread(_disk, load_config().output_root)
+    rows = await asyncio.to_thread(_storages)
+    target = next(r for r in rows if r["download"])
+    # Never asked of a storage that is away: a share whose server is off can
+    # hold the call for a minute (SPEC-storage S13).
+    disk = (
+        await asyncio.to_thread(_disk, target["path"])
+        if target["state"] == "online"
+        else {
+            "path": target["path"],
+            "free_bytes": None,
+            "total_bytes": None,
+            "low": False,
+            "error": "offline",
+        }  # fmt: skip
+    ) | {"storage": target["id"], "label": target["label"]}
 
     # Worst first: a full disk fails every download, a site down fails
     # everything on it, a failing watcher is often just its site being down.
     issues: list[dict[str, Any]] = []
-    if "error" in disk:
+    if target["state"] == "offline":
         issues.append(
             {
                 "kind": "disk",
-                "id": None,
-                "message": "Downloads folder unavailable",
+                "id": target["id"],
+                "message": f"Downloads go to {target['label']}, which is offline",
+                "retry": None,
+            }
+        )
+    elif "error" in disk:
+        issues.append(
+            {
+                "kind": "disk",
+                "id": target["id"],
+                "message": f"{target['label']} unavailable for downloads",
                 "retry": None,
             }
         )
@@ -146,11 +178,22 @@ async def get_health(request: Request) -> dict[str, Any]:
         issues.append(
             {
                 "kind": "disk",
-                "id": None,
-                "message": f"Disk almost full: {disk['free_bytes'] // 10**9} GB free",
+                "id": target["id"],
+                "message": f"{target['label']} almost full: "
+                f"{disk['free_bytes'] // 10**9} GB free",
                 "retry": None,
             }
         )
+    issues += [
+        {
+            "kind": "storage",
+            "id": r["id"],
+            "message": f"{r['label']} is offline",
+            "retry": None,
+        }
+        for r in rows
+        if r["state"] == "offline" and not r["download"]
+    ]
     issues += [
         {
             "kind": "site",
@@ -178,6 +221,7 @@ async def get_health(request: Request) -> dict[str, Any]:
         "sites": sites,
         "watchers": watchers,
         "disk": disk,
+        "storages": rows,
         "issues": issues,
     }
 

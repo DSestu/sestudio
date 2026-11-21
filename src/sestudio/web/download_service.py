@@ -3,13 +3,15 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import shutil
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from sestudio import downloaded, library
+from sestudio import downloaded, library, storage
 from sestudio.config import AppConfig, load_config
+from sestudio.config import reconcile
 from sestudio.downloader import audio_file
 from sestudio.models import StreamSource, sanitize_path_component
 from sestudio.providers.base import ProviderError
@@ -74,8 +76,42 @@ def episode_path(root: str, spec: DownloadSpec, site: ContentSite) -> Path:
     return Path(*parts) / safe_ep
 
 
-def record_downloaded_file(root: str, out_path: Path, spec: DownloadSpec) -> None:
-    """Note what this download is, keyed by its path under the download root.
+def config_storages(cfg: AppConfig) -> list[dict]:
+    """*cfg*'s storages, sound: a config built in code (a test, the CLI) has none yet."""
+    return reconcile(cfg).storages
+
+
+class StorageUnavailable(Exception):
+    """The storage downloads go to cannot take one now: away, or full."""
+
+
+#: Below this much room, the download storage counts as full (SPEC-storage S8).
+MIN_FREE_BYTES = 1 * 10**9
+
+
+def download_root(cfg: AppConfig) -> dict:
+    """The storage new downloads go to, checked: answers, and has room.
+
+    Checked before anything is resolved or written, so a download fails with
+    the reason at once rather than halfway through (SPEC-storage S8).
+    """
+    target = next(s for s in config_storages(cfg) if s["download"])
+    if not storage.online(target):
+        raise StorageUnavailable(f"{target['label']} is offline")
+    try:
+        free = shutil.disk_usage(target["path"]).free
+    except OSError:
+        free = None
+    if free is not None and free < MIN_FREE_BYTES:
+        raise StorageUnavailable(f"{target['label']} is full: {free // 10**6} MB free")
+    return target
+
+
+def record_downloaded_file(
+    root: str, out_path: Path, spec: DownloadSpec, storage_id: str = storage.LOCAL
+) -> None:
+    """Note what this download is, keyed as the listing keys it (`storage:path`
+    off ``local``, see ``routes/downloaded.media_key``).
 
     The path records the series only in sanitised form and says nothing about
     the poster, the page or the site, so the local library reads them back from
@@ -85,6 +121,8 @@ def record_downloaded_file(root: str, out_path: Path, spec: DownloadSpec) -> Non
         relative = out_path.resolve().relative_to(Path(root).resolve()).as_posix()
     except ValueError:
         return  # outside the root (a device download) — not part of the library
+    if storage_id != storage.LOCAL:
+        relative = f"{storage_id}:{relative}"
     try:
         library.set_downloaded_file(
             relative,
@@ -139,6 +177,11 @@ async def queue_download(
     """
     cfg = cfg or load_config()
     site = site_for(sites, spec.source)
+    if not spec.to_device:
+        try:
+            target = await asyncio.to_thread(download_root, cfg)
+        except StorageUnavailable as exc:
+            return QueueResult(spec.episode_name, "error", error=str(exc))
 
     source: StreamSource | None = None
     last_error = "No supported provider available"
@@ -175,14 +218,14 @@ async def queue_download(
         # of the library, so the "already downloaded" check is skipped.
         out_path = Path(tempfile.mkdtemp(prefix="sestudio-device-")) / safe_ep
     else:
-        out_path = episode_path(cfg.output_root, spec, site)
+        out_path = episode_path(target["path"], spec, site)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not spec.to_device:
         # Recorded before the skip check below, so re-queueing a file that is
         # already on disk is also the way to backfill metadata for anything
         # downloaded before this was kept.
-        record_downloaded_file(cfg.output_root, out_path, spec)
+        record_downloaded_file(target["path"], out_path, spec, target["id"])
 
         if audio_file(out_path) or (out_path.exists() and out_path.stat().st_size > 0):
             logger.info(

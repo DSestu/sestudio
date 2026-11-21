@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from sestudio import storage
 from sestudio.config import load_config
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import sanitize_path_component
@@ -180,13 +181,11 @@ def download_stream(token: str, filename: str, request: Request) -> StreamingRes
 @router.post("/downloads/check")
 async def check_downloads(items: list[DownloadRequest], request: Request) -> list[str]:
     """Return episode_names that already exist on disk."""
-    cfg = load_config()
+    root = storage.download_target()["path"]
     sites = request.app.state.sites
     existing: list[str] = []
     for item in items:
-        out_path = episode_path(
-            cfg.output_root, item.to_spec(), site_for(sites, item.source)
-        )
+        out_path = episode_path(root, item.to_spec(), site_for(sites, item.source))
         if out_path.exists() and out_path.stat().st_size > 0:
             existing.append(item.episode_name)
     return existing

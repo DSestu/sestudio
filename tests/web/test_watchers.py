@@ -764,3 +764,68 @@ def test_a_refetch_failure_does_not_lose_the_notification(site, sites, store, tm
     assert any(
         e["item_key"] == "eplang|01|0002|vf" for e in library.watcher_event_list()
     )
+
+
+# --- downloads land on the download storage (SPEC-storage PR 6) ----------------
+
+
+def _nas_cfg(tmp_path, nas) -> AppConfig:
+    return AppConfig(
+        output_root=str(tmp_path / "local"),
+        storages=[
+            {"id": "local", "kind": "folder", "roles": ["video"]},
+            {"id": "fnas", "kind": "folder", "label": "NAS films", "path": str(nas),
+             "roles": ["video"], "download": True},
+        ],
+    )  # fmt: skip
+
+
+def _auto(site, sites, store, cfg) -> int:
+    watcher = _make_watcher()
+    library.watcher_update(watcher.id, auto_download=True)
+    watcher = _reload(watcher)
+    site.set_episodes({1: ["vf"]})
+    poll_once(watcher, sites)
+    site.set_episodes({1: ["vf"], 2: ["vf"]})
+    events = poll_once(watcher, sites)
+    return asyncio.run(
+        auto_download(watcher, events, store=store, sites=sites, cfg=cfg)
+    )
+
+
+def test_a_download_lands_on_the_download_storage(site, sites, store, tmp_path):
+    nas = tmp_path / "nas"
+    nas.mkdir()
+    assert _auto(site, sites, store, _nas_cfg(tmp_path, nas)) == 1
+    [job] = store.all_jobs()
+    assert str(job.output_path).startswith(str(nas))
+    assert any(k.startswith("fnas:") for k in library.downloaded_files())
+
+
+@pytest.mark.parametrize("problem", ["offline", "full"])
+def test_a_download_fails_at_once_when_its_storage_cannot_take_it(
+    site, sites, store, tmp_path, monkeypatch, problem
+):
+    from sestudio.web import download_service
+
+    nas = tmp_path / "nas"
+    if problem == "full":
+        nas.mkdir()
+        tiny = type("U", (), {"free": 10**6, "total": 10**9})()
+        monkeypatch.setattr(download_service.shutil, "disk_usage", lambda p: tiny)
+    seen: list[str] = []
+    real = download_service.queue_download
+
+    async def spy(spec, **kw):
+        result = await real(spec, **kw)
+        seen.append(result.error or "")
+        return result
+
+    monkeypatch.setattr("sestudio.watchers.autodownload.queue_download", spy)
+    assert _auto(site, sites, store, _nas_cfg(tmp_path, nas)) == 0
+    assert seen == [
+        "NAS films is offline"
+        if problem == "offline"
+        else "NAS films is full: 1 MB free"
+    ]
+    assert store.all_jobs() == []
