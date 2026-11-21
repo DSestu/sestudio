@@ -50,7 +50,8 @@ export const NETWORK_KINDS = ['ftp', 'sftp', 'smb']
 
 /** The folders and servers that hold video: what the Media page can be on. */
 export function videoStorages(list: StorageInfo[]): StorageInfo[] {
-  return list.filter(s => (s.kind === 'folder' || NETWORK_KINDS.includes(s.kind)) && s.roles.includes('video'))
+  // Another sestudio holds video too, once its Video is turned on (SPEC-storage §9, X3).
+  return list.filter(s => (s.kind === 'folder' || s.kind === 'remote_sestudio' || NETWORK_KINDS.includes(s.kind)) && s.roles.includes('video'))
 }
 
 /** Where a storage is, as shown under its name: a path, or `sftp://host/path`. */
@@ -133,6 +134,6 @@ export function offlineIds(list: StorageInfo[]): Set<string> {
 /** Which icon a storage gets: this machine, a network share, or another folder. */
 export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'> & { kind?: string }): 'pc' | 'share' | 'folder' {
   if (s.id === 'local') return 'pc'
-  if (s.kind && NETWORK_KINDS.includes(s.kind)) return 'share'
+  if (s.kind && (NETWORK_KINDS.includes(s.kind) || s.kind === 'remote_sestudio')) return 'share'
   return /^(\\\\|\/\/)/.test(s.path ?? '') ? 'share' : 'folder'
 }

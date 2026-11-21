@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
+
+import httpx
 import secrets
 import threading
 import time
@@ -35,8 +37,8 @@ REMOTE, YTMUSIC = "remote_sestudio", "ytmusic_account"
 #: Servers read in the app over their protocol (SPEC-storage §9, X1).
 NETWORK = ("ftp", "sftp", "smb")
 KINDS = (FOLDER, REMOTE, YTMUSIC, *NETWORK)
-#: Kinds that only hold music for now (SPEC-storage phase 2, X3).
-MUSIC_ONLY = (REMOTE, YTMUSIC)
+#: Kinds that only hold music (another sestudio holds video too: SPEC-storage §9, X3).
+MUSIC_ONLY = (YTMUSIC,)
 _PREFIX = {FOLDER: "f", REMOTE: "r", YTMUSIC: "y", "ftp": "n", "sftp": "n", "smb": "n"}
 
 
@@ -230,6 +232,13 @@ _lists: dict[str, dict[str, Any]] = {}
 def _reachable(s: dict[str, Any]) -> bool:
     if s["kind"] == FOLDER:
         return Path(s["path"]).is_dir()
+    if s["kind"] == REMOTE:  # another sestudio: any answer means it is up
+        try:
+            with httpx.Client(timeout=NET_CHECK_TIMEOUT) as client:
+                r = client.get(f"{s['url']}/api/share/video/ping", headers=_bearer(s))
+            return r.status_code < 500
+        except httpx.HTTPError:
+            return False
     try:  # a server: connect and list its top folder
         remotefs.filesystem(s).ls(remotefs.root(s))
         return True
@@ -261,7 +270,7 @@ def _where(s: dict[str, Any]) -> tuple:
 
 def state(s: dict[str, Any]) -> dict[str, Any]:
     """``{state: online | offline, since}``: ``since`` is when it went away."""
-    if s["kind"] != FOLDER and s["kind"] not in NETWORK:
+    if s["kind"] not in (FOLDER, REMOTE, *NETWORK):
         return {"state": "online", "since": None}
     now = time.time()
     with _lock:
@@ -325,10 +334,44 @@ def _entry(s: dict[str, Any]) -> dict[str, Any]:
 def _scan_into(s: dict[str, Any], entry: dict[str, Any]) -> None:
     from sestudio import downloaded
 
-    files = downloaded.scan(remotefs.top(s) if s["kind"] in NETWORK else s["path"])
+    if s["kind"] == REMOTE:
+        files = _peer_files(s)
+    else:
+        files = downloaded.scan(remotefs.top(s) if s["kind"] in NETWORK else s["path"])
     if files != entry["files"]:
         _keep(s["id"], files)
     entry["files"], entry["at"] = files, time.monotonic()
+
+
+def _bearer(s: dict[str, Any]) -> dict[str, str]:
+    return {"Authorization": f"Bearer {s.get('token', '')}"}
+
+
+def _peer_files(s: dict[str, Any]) -> list[Any]:
+    """Another sestudio's films (spec §9, X3), as its share lists them: each file
+    keeps that server's own key as its path."""
+    from sestudio import downloaded
+
+    with httpx.Client(timeout=30.0) as client:
+        r = client.get(f"{s['url']}/api/share/video", headers=_bearer(s))
+    r.raise_for_status()
+    return [
+        downloaded.DownloadedFile(
+            path=f["path"],
+            series=t.get("series", ""),
+            season=int(t.get("season") or 0),
+            number=int(f.get("number") or 0),
+            title=f.get("title", ""),
+            lang=f.get("lang") or downloaded.UNKNOWN_LANG,
+            folder=t.get("folder", ""),
+            size=int(f.get("size") or 0),
+            mtime=float(f.get("mtime") or 0),
+        )  # fmt: skip
+        for t in r.json()
+        if t.get("kind") != "audio"
+        for f in t.get("files", [])
+        if f.get("path")
+    ]
 
 
 def files_of(s: dict[str, Any]) -> list[Any]:
