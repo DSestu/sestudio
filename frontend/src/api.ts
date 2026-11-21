@@ -1087,6 +1087,8 @@ export interface StorageInfo {
   /** The one storage new downloads go to. */
   download: boolean
   state: 'online' | 'offline'
+  /** When it went away (epoch seconds); null while it answers. */
+  since?: number | null
 }
 
 export async function getStorages(): Promise<StorageInfo[]> {

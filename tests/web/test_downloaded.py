@@ -1189,3 +1189,78 @@ def test_storages_are_listed_without_secrets(nas, tmp_path):
     rows = {s["id"]: s for s in resp.json()}
     assert rows["local"]["download"] and rows[nas_id]["path"] == str(root)
     assert (rows[nas_id]["state"], rows[off["id"]]["state"]) == ("online", "offline")
+
+
+# --- a storage that is away (SPEC-storage PR 4) ---------------------------------
+
+
+@pytest.fixture()
+def away(nas, monkeypatch):
+    """The NAS listed once, then switched off."""
+    from sestudio import storage
+
+    c, nas_id, root = nas
+    monkeypatch.setattr(storage, "STATE_TTL", 0.0)
+    downloaded.invalidate()
+    assert any(nas_id in t["storages"] for t in _titles(c))
+    hidden = root.with_name("nas-off")
+    root.rename(hidden)
+    yield c, nas_id, root
+    hidden.rename(root)
+
+
+def test_an_offline_storage_keeps_its_titles_and_says_since_when(away):
+    c, nas_id, _ = away
+    assert any(nas_id in t["storages"] for t in _titles(c))
+    row = next(s for s in c.get("/api/storages").json() if s["id"] == nas_id)
+    assert row["state"] == "offline" and row["since"] > 0
+
+
+def test_its_files_answer_503_at_once(away):
+    c, nas_id, _ = away
+    resp = c.get("/api/downloaded/file", params={"path": f"{nas_id}:{REL}"})
+    assert resp.status_code == 503 and "NAS is offline" in resp.text
+
+
+def test_its_listing_survives_a_restart(away):
+    from sestudio import storage
+
+    c, nas_id, _ = away
+    storage._lists.clear()
+    storage._state.clear()
+    assert any(nas_id in t["storages"] for t in _titles(c))
+
+
+def test_it_is_picked_up_again_without_a_restart(away):
+    c, nas_id, root = away
+    root.with_name("nas-off").rename(root)
+    row = next(s for s in c.get("/api/storages").json() if s["id"] == nas_id)
+    assert row["state"] == "online" and row["since"] is None
+    resp = c.get("/api/downloaded/file", params={"path": f"{nas_id}:{REL}"})
+    assert resp.content == b"NAS-BYTES"
+    root.rename(root.with_name("nas-off"))
+
+
+def test_a_check_that_hangs_counts_as_offline(monkeypatch):
+    import threading
+    import time
+
+    from sestudio import storage
+
+    gate = threading.Event()
+
+    class Hanging:
+        def __init__(self, _p):
+            pass
+
+        def is_dir(self):
+            gate.wait(5)
+            return True
+
+    monkeypatch.setattr(storage, "Path", Hanging)
+    monkeypatch.setattr(storage, "CHECK_TIMEOUT", 0.2)
+    s = {"id": "fhang", "kind": "folder", "path": "\\\\off\\share"}
+    started = time.monotonic()
+    assert storage.state(s)["state"] == "offline"
+    assert time.monotonic() - started < 1
+    gate.set()

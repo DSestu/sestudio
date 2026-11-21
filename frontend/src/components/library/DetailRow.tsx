@@ -3,6 +3,8 @@ import RatingBadge from '../RatingBadge'
 
 interface Props {
   poster_url: string
+  /** Why it cannot play right now ("On NAS films · offline"): the artwork greys. */
+  away?: string
   /** A 16:9 video thumbnail rather than a 2:3 poster. */
   wide?: boolean
   title: string
@@ -37,7 +39,7 @@ interface Props {
  * stretch to fill the row, above it they size to their content.
  */
 export default function DetailRow({
-  poster_url, wide = false, title, meta, submeta, rating, genres, synopsis,
+  poster_url, wide = false, title, meta, submeta, rating, genres, synopsis, away,
   progress, onOpen, actions, overflow, selection,
 }: Props) {
   // In selection mode both tap targets select, and the row's own actions step aside.
@@ -59,7 +61,7 @@ export default function DetailRow({
         className={`shrink-0 self-start ${wide ? 'w-36 sm:w-48' : 'w-24 sm:w-30'} rounded-box overflow-hidden bg-base-300`}
       >
         {poster_url ? (
-          <img src={poster_url} alt="" loading="lazy" className={`w-full ${wide ? 'aspect-video' : 'aspect-[2/3]'} object-cover`} />
+          <img src={poster_url} alt="" loading="lazy" className={`w-full ${wide ? 'aspect-video' : 'aspect-[2/3]'} object-cover ${away ? 'grayscale brightness-50' : ''}`} />
         ) : (
           <div className={`w-full ${wide ? 'aspect-video' : 'aspect-[2/3]'} flex items-center justify-center text-base-content/30 text-2xl`}>?</div>
         )}
@@ -70,6 +72,7 @@ export default function DetailRow({
           <button onClick={activate} className="min-w-0 flex-1 text-left">
             <p className="font-medium leading-tight truncate">{title}</p>
             {meta && <p className="text-sm text-base-content/70 truncate mt-0.5">{meta}</p>}
+            {away && <p className="text-xs font-semibold text-error mt-0.5">{away}</p>}
           </button>
           {selection ? (
             <span

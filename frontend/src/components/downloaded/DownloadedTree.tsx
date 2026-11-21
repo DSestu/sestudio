@@ -40,7 +40,10 @@ function Folder({ node, expanded, onPlay, onDelete, storages }: {
     <ul className="flex flex-col gap-0.5">
       {folders.map(child => (
         <li key={child.path}>
-          <details open={expanded} className="group">
+          <details
+            open={expanded}
+            className={`group ${child.storage && storages?.find(s => s.id === child.storage)?.state === 'offline' ? 'opacity-55' : ''}`}
+          >
             <summary className="flex items-center gap-2 px-2 py-1.5 rounded-box cursor-pointer hover:bg-base-300/60 list-none">
               <svg
                 className="w-3.5 h-3.5 shrink-0 text-base-content/40 transition-transform group-open:rotate-90"
@@ -57,6 +60,9 @@ function Folder({ node, expanded, onPlay, onDelete, storages }: {
                 <span className="font-mono text-xs text-base-content/45 truncate min-w-0">
                   {storages?.find(s => s.id === child.storage)?.path}
                 </span>
+              )}
+              {child.storage && storages?.find(s => s.id === child.storage)?.state === 'offline' && (
+                <span className="text-xs text-error shrink-0">offline</span>
               )}
               <span className="ml-auto text-xs text-base-content/40 tabular-nums shrink-0">
                 {child.count} · {fmtSize(child.size)}

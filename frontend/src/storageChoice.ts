@@ -103,6 +103,21 @@ export function titleCounts(titles: DownloadedTitle[]): Map<string, number> {
   return counts
 }
 
+/** "21:04", or "12 Nov, 21:04" when it was not today: when a storage went away. */
+export function sinceLabel(since: number | null | undefined, now = new Date()): string {
+  if (!since) return ''
+  const at = new Date(since * 1000)
+  const time = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return at.toDateString() === now.toDateString()
+    ? time
+    : `${at.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`
+}
+
+/** The storages that are away, by id. */
+export function offlineIds(list: StorageInfo[]): Set<string> {
+  return new Set(list.filter(s => s.state === 'offline').map(s => s.id))
+}
+
 /** Which icon a storage gets: this machine, a network share, or another folder. */
 export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'>): 'pc' | 'share' | 'folder' {
   if (s.id === 'local') return 'pc'

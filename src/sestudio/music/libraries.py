@@ -149,11 +149,16 @@ def sync_defaults() -> None:
 
 
 def folder_roots() -> list[tuple[str, Path]]:
-    """Every library made of files on this machine, ``local`` first."""
+    """Every library made of files on this machine that answers, ``local`` first.
+
+    One that is away is left out rather than touched: a share whose server is
+    off can hold a call for a minute (SPEC-storage S13).
+    """
+    reachable = {s["id"] for s in storage.all_storages() if storage.online(s)}
     return [
         (lib["id"], Path(lib["path"]))
         for lib in all_libraries()
-        if lib["kind"] in ("local", FOLDER)
+        if lib["kind"] in ("local", FOLDER) and lib["id"] in reachable
     ]
 
 
@@ -416,11 +421,12 @@ def status(indexing: bool = False) -> list[dict[str, Any]]:
         row = public(lib) | {"state": "online", "since": None, "error": ""}
         if lib["kind"] in ("local", FOLDER):
             root = Path(lib["path"])
-            files = _files(lib["id"], root)
+            away = not storage.online(storage.get(lib["id"]))
+            files = [] if away else _files(lib["id"], root)
             done = sum(stamps.get(f.track_id) == (f.mtime, f.size) for f in files)
             row |= {"count": len(files), "indexed": done}
             row["indexing"] = indexing and done < len(files)
-            if not root.is_dir():
+            if away:
                 row |= {"state": "offline", "error": "Folder not found"}
         elif lib["kind"] == REMOTE:
             state = refresh_remote(lib)
