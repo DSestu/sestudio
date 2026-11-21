@@ -438,8 +438,11 @@ def audio_files(root: str | Path, library: str = LOCAL_LIBRARY) -> list[Download
 
 def invalidate() -> None:
     """Drop the cache, so the next scan sees a just-written or deleted file."""
+    from sestudio import storage  # storage reads through this module
+
     with _lock:
         _cache.clear()
+    storage.invalidate()
 
 
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)")

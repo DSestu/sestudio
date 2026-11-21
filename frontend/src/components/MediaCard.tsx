@@ -43,6 +43,9 @@ export interface MediaCardItem {
   onRemove?: () => void
   /** Extra controls (e.g. save toggles). */
   actions?: ReactNode
+  /** Why it cannot play right now ("On NAS films · offline"): the artwork greys
+   *  and this sits across its foot (SPEC-storage S14). */
+  away?: string
 }
 
 export interface Selection {
@@ -136,7 +139,7 @@ export default function MediaCard({ item, removeContext, selection }: Props) {
           }`}
         >
           {item.poster_url ? (
-            <Poster url={item.poster_url} />
+            <div className={item.away ? 'grayscale brightness-50' : undefined}><Poster url={item.poster_url} /></div>
           ) : (
             <div className="w-full aspect-[2/3] bg-base-300 flex items-center justify-center text-base-content/30 text-3xl">
               ?
@@ -149,6 +152,11 @@ export default function MediaCard({ item, removeContext, selection }: Props) {
           {item.badge && (
             <span className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-7 h-7 rounded-box bg-base-100/85 text-base-content/80 backdrop-blur-sm">
               {item.badge}
+            </span>
+          )}
+          {item.away && (
+            <span className="absolute inset-x-0 bottom-0 z-10 px-2 py-1.5 bg-gradient-to-t from-base-100/95 to-transparent text-[11px] font-semibold text-error">
+              {item.away}
             </span>
           )}
           {/* Play affordance — hover-only, so it never occupies a touch card. */}

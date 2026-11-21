@@ -73,7 +73,7 @@ def _scanned() -> list[tuple[str, downloaded.DownloadedFile]]:
     return [
         (s["id"], f)
         for s in video_storages()
-        for f in downloaded.scan(s["path"])
+        for f in storages.files_of(s)
         if s["id"] == storages.LOCAL or f.kind != "audio"
     ]
 
@@ -264,6 +264,9 @@ def _resolved(path: str, storage_id: str = storages.LOCAL) -> Any:
         target = downloaded.resolve(root["path"], path)
     except ValueError:
         raise HTTPException(status_code=403, detail="Path outside the storage")
+    if not storages.online(root):
+        # Answered at once: touching a share that is away can hang for a minute.
+        raise HTTPException(status_code=503, detail=f"{root['label']} is offline")
     if not target.is_file():
         raise HTTPException(status_code=404, detail="No such file")
     return target

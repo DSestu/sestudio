@@ -23,7 +23,7 @@ import ToolbarToggle from '../ToolbarToggle'
 import DownloadedFilesModal from './DownloadedFilesModal'
 import { currentParams, patchParams } from '../../nav'
 import {
-  ALL_STORAGES, onStorage, setStorageChoice, useStorageChoice, useStorages, videoStorages,
+  ALL_STORAGES, offlineIds, onStorage, setStorageChoice, sinceLabel, useStorageChoice, useStorages, videoStorages,
 } from '../../storageChoice'
 
 /** One shelf entry: the merged card, and every downloaded season behind it. */
@@ -113,6 +113,15 @@ export default function DownloadedLibrary({
   const everywhere = several && choice === ALL_STORAGES
   const labelOf = (id: string) => storageList.find(s => s.id === id)?.label ?? id
   const here = video.find(s => s.id === choice)
+  const away = offlineIds(storageList)
+  /** "On NAS films · offline since 21:04" when every file behind a card is on a
+   *  storage that is away: the card stays, greyed (SPEC-storage S14). */
+  const awayLabel = (parts: DownloadedTitle[]) => {
+    const on = [...new Set(parts.flatMap(p => p.storages ?? ['local']))]
+    if (!on.length || !on.every(id => away.has(id))) return undefined
+    const since = Math.min(...on.map(id => storageList.find(s => s.id === id)?.since ?? Infinity))
+    return `On ${on.map(labelOf).join(' + ')} · offline${Number.isFinite(since) ? ` since ${sinceLabel(since)}` : ''}`
+  }
   /** With every storage shown, a card also says where its files are. */
   const describe = (parts: DownloadedTitle[]) => {
     const summary = summarise(parts)
@@ -295,6 +304,7 @@ export default function DownloadedLibrary({
               key: g.key,
               title: nameFor(g),
               subtitle: describe(g.parts),
+              away: awayLabel(g.parts),
               poster_url: posterFor(g),
               rating: metas.get(g.key)?.rating,
               genres: metas.get(g.key)?.genres,
@@ -325,6 +335,7 @@ export default function DownloadedLibrary({
                 poster_url={posterFor(g)}
                 title={nameFor(g)}
                 meta={describe(g.parts)}
+                away={awayLabel(g.parts)}
                 submeta={
                   g.parts.length > 1
                     ? `${g.parts.length} seasons downloaded`

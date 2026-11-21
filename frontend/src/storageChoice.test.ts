@@ -67,3 +67,11 @@ it('puts each storage at the top of the folders when every one is shown', async 
   ])
   expect(folderAt(rooted, ['nas', 'Show'])!.files[0].file.path).toBe('nas:Show/a.mkv')
 })
+
+it('says when a storage went away, with the day once it is not today', async () => {
+  const { sinceLabel } = await import('./storageChoice')
+  const now = new Date(2026, 10, 21, 22, 0)
+  expect(sinceLabel(null, now)).toBe('')
+  expect(sinceLabel(new Date(2026, 10, 21, 21, 4).getTime() / 1000, now)).toMatch(/(21|09).04/)
+  expect(sinceLabel(new Date(2026, 10, 12, 21, 4).getTime() / 1000, now)).toMatch(/12.*(21|09).04/)
+})

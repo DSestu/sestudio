@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import type { StorageInfo } from '../../api'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
 import {
-  ALL_STORAGES, setStorageChoice, storageIcon, titleCounts, useStorageChoice, useStorages, videoStorages,
+  ALL_STORAGES, setStorageChoice, sinceLabel, storageIcon, titleCounts, useStorageChoice, useStorages, videoStorages,
 } from '../../storageChoice'
 
 const ICONS = {
@@ -48,6 +48,7 @@ export default function StorageSwitcher() {
       >
         <StorageGlyph storage={current} />
         <span className="font-medium whitespace-nowrap">{current?.label ?? 'All storages'}</span>
+        {current?.state === 'offline' && <span className="text-error text-xs whitespace-nowrap">offline</span>}
         {current?.path && (
           <span className="font-mono text-xs text-base-content/50 truncate min-w-0">{current.path}</span>
         )}
@@ -64,7 +65,7 @@ export default function StorageSwitcher() {
                 <span className="block text-sm">
                   {s.label}{' '}
                   {s.state === 'offline'
-                    ? <span className="text-error text-xs">· offline</span>
+                    ? <span className="text-error text-xs">· offline{s.since ? ` since ${sinceLabel(s.since)}` : ''}</span>
                     : <span className="text-base-content/50 text-xs">· {counts.get(s.id) ?? 0} titles</span>}
                 </span>
                 <span className="block font-mono text-xs text-base-content/50 truncate">{s.path}</span>

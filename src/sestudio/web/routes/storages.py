@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
@@ -18,15 +17,9 @@ def public(s: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in s.items() if k != "token"}
 
 
-def _state(s: dict[str, Any]) -> str:
-    if s["kind"] != storage.FOLDER:
-        return "online"
-    return "online" if Path(s["path"]).is_dir() else "offline"
-
-
 @router.get("/storages")
 async def list_storages() -> list[dict[str, Any]]:
     def rows() -> list[dict[str, Any]]:
-        return [public(s) | {"state": _state(s)} for s in storage.all_storages()]
+        return [public(s) | storage.state(s) for s in storage.all_storages()]
 
     return await asyncio.to_thread(rows)
