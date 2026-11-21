@@ -217,3 +217,35 @@ def test_ffmpeg_reads_a_server_file_through_the_relay(served, monkeypatch, tmp_p
         assert abs((downloaded.duration_of(target) or 0) - 2.0) < 0.3
     finally:
         server.should_exit = True
+
+
+# --- music on a server (PR 12) --------------------------------------------------
+
+
+def test_a_server_holding_music_is_a_music_library(served, monkeypatch):
+    from sestudio import downloaded
+    from sestudio.music import libraries
+
+    c, _ = served
+    monkeypatch.setattr(
+        downloaded, "audio_info", lambda f: ("Artist", "Song", "Album", 3.0)
+    )
+    fs = remotefs._open({"id": "x", "kind": "ftp", "host": "nas"})
+    fs.pipe("/music/Album/01 Song.mp3", b"ID3-bytes")
+    s = storage.add("ftp", ["music"], "Tunes", path="/music", network={"host": "nas"})
+    storage.files_of(s)  # the background listing a page load starts
+    for _ in range(50):
+        if storage._lists[s["id"]]["files"]:
+            break
+        import time
+
+        time.sleep(0.05)
+    row = next(r for r in c.get("/api/music/libraries").json() if r["id"] == s["id"])
+    assert row["kind"] == "ftp" and row["count"] == 1 and row["state"] == "online"
+    [track] = [t for t in libraries.other_tracks() if t["library"] == s["id"]]
+    assert (track["title"], track["artist"]) == ("Song", "Artist")
+    audio = c.get(f"/api/music/libraries/{s['id']}/tracks/{track['id']}/audio",
+                  headers={"Range": "bytes=0-2"})  # fmt: skip
+    assert audio.status_code == 206 and audio.content == b"ID3"
+    # the music page lists it; the video shelf does not
+    assert not any(s["id"] in t["storages"] for t in c.get("/api/downloaded").json())
