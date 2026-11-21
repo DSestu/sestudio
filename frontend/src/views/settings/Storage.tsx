@@ -4,7 +4,7 @@ import AddStorage from '../../components/storage/AddStorage'
 import { StorageGlyph } from '../../components/downloaded/StorageSwitcher'
 import { fmtSize, refreshDownloadedLibrary, useDownloadedLibrary } from '../../downloadedLibrary'
 import { librariesApi, reloadLibraries, useLibraries } from '../../musicLibraries'
-import { refreshStorages, sinceLabel, titleCounts, useStorages } from '../../storageChoice'
+import { NETWORK_KINDS, refreshStorages, sinceLabel, titleCounts, useStorages, whereOf } from '../../storageChoice'
 
 const KIND_LINE: Record<string, string> = {
   remote_sestudio: 'Another sestudio · music',
@@ -23,6 +23,8 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
   const [error, setError] = useState('')
   const menu = useRef<HTMLDetailsElement>(null)
   const folder = s.kind === 'folder'
+  // A folder or a server read in the app: both hold video (SPEC-storage §9).
+  const files = folder || NETWORK_KINDS.includes(s.kind)
   const away = s.state === 'offline'
 
   const act = (p: Promise<unknown>) =>
@@ -37,7 +39,7 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
 
   const used = s.usage ? s.usage.total - s.usage.free : 0
   const counts = [
-    s.roles.includes('video') && folder ? `${titles} ${titles === 1 ? 'title' : 'titles'}` : '',
+    s.roles.includes('video') && files ? `${titles} ${titles === 1 ? 'title' : 'titles'}` : '',
     s.roles.includes('music') && tracks !== undefined ? `${tracks} ${tracks === 1 ? 'track' : 'tracks'}` : '',
   ].filter(Boolean).join(' · ')
 
@@ -70,7 +72,7 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
         </details>
       </div>
 
-      <div className="font-mono text-xs text-base-content/55 break-all">{s.path ?? s.url ?? KIND_LINE[s.kind] ?? ''}</div>
+      <div className="font-mono text-xs text-base-content/55 break-all">{KIND_LINE[s.kind] ?? whereOf(s)}</div>
 
       {folder && (
         <>
@@ -83,7 +85,12 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
           </div>
         </>
       )}
-      {!folder && counts && <div className="text-xs text-base-content/55">{counts}</div>}
+      {!folder && (counts || away) && (
+        <div className="flex justify-between gap-2 text-xs text-base-content/55">
+          <span>{counts}</span>
+          {away && <span>away</span>}
+        </div>
+      )}
 
       <div className="flex gap-1.5" role="group" aria-label="What it holds">
         {(['video', 'music'] as const).map(role => (
@@ -91,8 +98,8 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
             key={role}
             type="button"
             aria-pressed={s.roles.includes(role)}
-            disabled={!folder && role === 'video'}
-            title={!folder && role === 'video' ? 'This kind of storage holds music only, for now' : undefined}
+            disabled={!files && role === 'video'}
+            title={!files && role === 'video' ? 'This kind of storage holds music only, for now' : undefined}
             onClick={() => toggleRole(role)}
             className={`btn btn-sm flex-1 ${s.roles.includes(role) ? 'btn-primary btn-soft' : 'btn-ghost bg-base-300'}`}
           >
