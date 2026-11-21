@@ -35,6 +35,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from sestudio.remotefs import RemoteFile, media_input
 from sestudio.config import config_dir, load_config
 from sestudio.media import ffmpeg_binary
 
@@ -409,10 +410,14 @@ def _scan_uncached(root: Path) -> list[DownloadedFile]:
     return found
 
 
-def scan(root: str | Path) -> list[DownloadedFile]:
-    """Every video file under *root*. Cached briefly; see ``_CACHE_TTL``."""
-    base = Path(root)
-    key = str(base)
+def scan(root: str | Path | RemoteFile) -> list[DownloadedFile]:
+    """Every video file under *root*. Cached briefly; see ``_CACHE_TTL``.
+
+    *root* may be a server's top folder (``remotefs.top``): it is walked the same
+    way, over its protocol (SPEC-storage §9).
+    """
+    base = root if isinstance(root, RemoteFile) else Path(root)
+    key = f"{root.storage['id']}:{root}" if isinstance(root, RemoteFile) else str(base)
     now = time.monotonic()
     with _lock:
         hit = _cache.get(key)
@@ -610,7 +615,7 @@ def tracks_of(file: Path) -> MediaTracks:
         stat = file.stat()
     except OSError:
         return MediaTracks(audio=[], subtitles=[])
-    key = (str(file), stat.st_size, stat.st_mtime)
+    key = (media_input(file), stat.st_size, stat.st_mtime)
     if key in _tracks:
         return _tracks[key]
 
@@ -618,7 +623,7 @@ def tracks_of(file: Path) -> MediaTracks:
     try:
         binary = ffmpeg_binary()
         result = subprocess.run(
-            [binary, "-nostdin", "-hide_banner", "-i", str(file)],
+            [binary, "-nostdin", "-hide_banner", "-i", media_input(file)],
             timeout=30,
             check=False,
             stdout=subprocess.DEVNULL,
@@ -774,7 +779,7 @@ def alternate_audio(file: Path, relative: str, index: int) -> Path | None:
                 "error",
                 "-y",
                 "-i",
-                str(file),
+                media_input(file),
                 "-map",
                 "0:v:0",
                 "-map",
@@ -1095,7 +1100,7 @@ def hls_segment(
     maps = ["-map", "0:v:0", "-map", f"0:a:{audio}?"]
     return _encode_segment(
         [],
-        str(file),
+        media_input(file),
         maps,
         key,
         index,
@@ -1764,7 +1769,7 @@ def extracted_subtitle(file: Path, relative: str, index: int) -> Path | None:
                 "error",
                 "-y",
                 "-i",
-                str(file),
+                media_input(file),
                 "-map",
                 f"0:s:{index}",
                 "-f",
@@ -1804,7 +1809,7 @@ def duration_of(file: Path) -> float | None:
         stat = file.stat()
     except OSError:
         return None
-    key = (str(file), stat.st_size, stat.st_mtime)
+    key = (media_input(file), stat.st_size, stat.st_mtime)
     if key in _durations:
         return _durations[key]
 
@@ -1813,7 +1818,7 @@ def duration_of(file: Path) -> float | None:
         binary = ffmpeg_binary()
         # No output file: ffmpeg describes the input, complains, and exits.
         result = subprocess.run(
-            [binary, "-nostdin", "-hide_banner", "-i", str(file)],
+            [binary, "-nostdin", "-hide_banner", "-i", media_input(file)],
             timeout=30,
             check=False,
             stdout=subprocess.DEVNULL,
@@ -1842,7 +1847,7 @@ def audio_genre(file: Path) -> str:
         stat = file.stat()
     except OSError:
         return ""
-    return _audio_genres.get((str(file), stat.st_size, stat.st_mtime), "")
+    return _audio_genres.get((media_input(file), stat.st_size, stat.st_mtime), "")
 
 
 def audio_info(file: Path) -> tuple[str, str, str, float | None]:
@@ -1855,14 +1860,14 @@ def audio_info(file: Path) -> tuple[str, str, str, float | None]:
         stat = file.stat()
     except OSError:
         return "", "", "", None
-    key = (str(file), stat.st_size, stat.st_mtime)
+    key = (media_input(file), stat.st_size, stat.st_mtime)
     if key in _audio_infos:
         return _audio_infos[key]
     tags: dict[str, str] = {}
     seconds: float | None = None
     try:
         result = subprocess.run(
-            [ffmpeg_binary(), "-nostdin", "-hide_banner", "-i", str(file)],
+            [ffmpeg_binary(), "-nostdin", "-hide_banner", "-i", media_input(file)],
             timeout=30,
             check=False,
             stdout=subprocess.DEVNULL,
@@ -2017,7 +2022,7 @@ def tv_stream_command(
     opts = stream_input_opts(stream, hls=False) if stream else []
     v = stream.video if stream else 0
     audio = stream.audio if stream else audio
-    inputs = [*seek, *opts, "-i", str(file)]
+    inputs = [*seek, *opts, "-i", media_input(file)]
     video = (
         f"{_tv_fit(width, height)},{_TV_TONEMAP + ',' if hdr else ''}"
         f"{f'fps={fps},' if fps else ''}format={'rgb24' if raw else 'yuv420p'}"
@@ -2026,7 +2031,7 @@ def tv_stream_command(
         # A picture subtitle is overlaid from a second reading of the same file.
         # Read from the first, its sparse packets stall the demuxer behind the
         # audio: a TrueHD film then encodes at a fifth of real time.
-        inputs += [*seek, "-i", str(file)]
+        inputs += [*seek, "-i", media_input(file)]
         graph = (
             f"[0:v:{v}]{video}[b];[1:s:{subtitle.index}]scale={width}:{height}[s];"
             "[b][s]overlay=eof_action=pass[v]"
@@ -2125,7 +2130,7 @@ def tv_drawn_encode(
         *seek,
         *opts,
         "-i",
-        str(file),
+        media_input(file),
         "-map",
         "0:v",
         "-map",
@@ -2234,7 +2239,7 @@ def thumbnail(file: Path, relative: str) -> Path | None:
             "-ss",
             offset,
             "-i",
-            str(file),
+            media_input(file),
             "-frames:v",
             "1",
             "-vf",

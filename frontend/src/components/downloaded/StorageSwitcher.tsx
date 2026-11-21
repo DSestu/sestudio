@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import type { StorageInfo } from '../../api'
 import { useDownloadedLibrary } from '../../downloadedLibrary'
 import {
-  ALL_STORAGES, setStorageChoice, sinceLabel, storageIcon, titleCounts, useStorageChoice, useStorages, videoStorages,
+  ALL_STORAGES, setStorageChoice, sinceLabel, storageIcon, titleCounts, useStorageChoice, useStorages, videoStorages, whereOf,
 } from '../../storageChoice'
 
 const ICONS = {
@@ -12,7 +12,7 @@ const ICONS = {
   all: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
 }
 
-export function StorageGlyph({ storage, className = 'w-4 h-4' }: { storage?: Pick<StorageInfo, 'id' | 'path'>; className?: string }) {
+export function StorageGlyph({ storage, className = 'w-4 h-4' }: { storage?: Pick<StorageInfo, 'id' | 'path' | 'kind'>; className?: string }) {
   const d = storage ? ICONS[storageIcon(storage)] : ICONS.all
   return (
     <svg className={`${className} shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -49,8 +49,8 @@ export default function StorageSwitcher() {
         <StorageGlyph storage={current} />
         <span className="font-medium whitespace-nowrap">{current?.label ?? 'All storages'}</span>
         {current?.state === 'offline' && <span className="text-error text-xs whitespace-nowrap">offline</span>}
-        {current?.path && (
-          <span className="font-mono text-xs text-base-content/50 truncate min-w-0">{current.path}</span>
+        {current && (
+          <span className="font-mono text-xs text-base-content/50 truncate min-w-0">{whereOf(current)}</span>
         )}
         <svg className="w-3 h-3 ml-auto shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -68,7 +68,7 @@ export default function StorageSwitcher() {
                     ? <span className="text-error text-xs">· offline{s.since ? ` since ${sinceLabel(s.since)}` : ''}</span>
                     : <span className="text-base-content/50 text-xs">· {counts.get(s.id) ?? 0} titles</span>}
                 </span>
-                <span className="block font-mono text-xs text-base-content/50 truncate">{s.path}</span>
+                <span className="block font-mono text-xs text-base-content/50 truncate">{whereOf(s)}</span>
               </span>
             </button>
           </li>

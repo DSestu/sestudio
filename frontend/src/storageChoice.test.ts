@@ -75,3 +75,12 @@ it('says when a storage went away, with the day once it is not today', async () 
   expect(sinceLabel(new Date(2026, 10, 21, 21, 4).getTime() / 1000, now)).toMatch(/(21|09).04/)
   expect(sinceLabel(new Date(2026, 10, 12, 21, 4).getTime() / 1000, now)).toMatch(/12.*(21|09).04/)
 })
+
+it('treats servers as video storages and shows where they are', async () => {
+  const { videoStorages, whereOf, storageIcon } = await import('./storageChoice')
+  const ftp = st('n1', { kind: 'sftp', path: '/films' })
+  expect(videoStorages([ftp]).map(s => s.id)).toEqual(['n1'])
+  expect(whereOf({ ...ftp, host: 'nas.local' })).toBe('sftp://nas.local/films')
+  expect(whereOf({ kind: 'smb', host: 'nas', share: 'films', path: '/' })).toBe('smb://nas/films')
+  expect(storageIcon(ftp)).toBe('share')
+})

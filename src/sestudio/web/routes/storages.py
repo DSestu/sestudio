@@ -8,12 +8,13 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from sestudio import remotefs, storage
 from sestudio.config import load_config, save_config
 from sestudio.music import libraries, runner
+from sestudio.web.ranged import ranged
 
 router = APIRouter()
 
@@ -177,3 +178,22 @@ def remove_storage(storage_id: str) -> dict[str, bool]:
             save_config(cfg)
     libraries.forget(storage_id)
     return {"ok": True}
+
+
+@router.api_route("/storages/{storage_id}/raw/{path:path}", methods=["GET", "HEAD"])
+def relay(storage_id: str, path: str, request: Request) -> Response:
+    """A file on an FTP, SFTP or SMB storage, served with byte ranges (spec §9.1):
+    what ffmpeg, the browser, a cast and a TV read it through."""
+    from sestudio import downloaded
+    from sestudio.web.routes.downloaded import _resolved_remote
+
+    s = _run(storage.get, storage_id)
+    if s["kind"] not in storage.NETWORK:
+        raise HTTPException(404, "Only a server's files are relayed")
+    target = _resolved_remote(s, path)
+    return ranged(
+        request,
+        target,
+        downloaded.media_type_for(target),
+        {"Access-Control-Allow-Origin": "*"},
+    )

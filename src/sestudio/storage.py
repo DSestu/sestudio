@@ -313,9 +313,9 @@ def _keep(storage_id: str, files: list[Any]) -> None:
 def _entry(s: dict[str, Any]) -> dict[str, Any]:
     with _lock:
         entry = _lists.get(s["id"])
-        if entry is None or entry["path"] != s["path"]:
+        if entry is None or entry["path"] != _where(s):
             entry = _lists[s["id"]] = {
-                "files": None, "at": 0.0, "scan": None, "path": s["path"],
+                "files": None, "at": 0.0, "scan": None, "path": _where(s),
             }  # fmt: skip
     if entry["files"] is None:
         entry["files"] = _kept(s["id"]) if s["id"] != LOCAL else []
@@ -325,7 +325,7 @@ def _entry(s: dict[str, Any]) -> dict[str, Any]:
 def _scan_into(s: dict[str, Any], entry: dict[str, Any]) -> None:
     from sestudio import downloaded
 
-    files = downloaded.scan(s["path"])
+    files = downloaded.scan(remotefs.top(s) if s["kind"] in NETWORK else s["path"])
     if files != entry["files"]:
         _keep(s["id"], files)
     entry["files"], entry["at"] = files, time.monotonic()
