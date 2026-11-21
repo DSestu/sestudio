@@ -1054,3 +1054,88 @@ def test_a_failing_source_is_not_hammered(tmp_path, monkeypatch):
     monkeypatch.setattr(route.time, "monotonic", lambda: clock)
     assert serve(3) is None
     assert tried.count(3) == 2
+
+
+# --- storages (SPEC-storage PR 2) ---------------------------------------------
+
+
+@pytest.fixture()
+def nas(served, tmp_path):
+    """A second storage holding a file at the same relative path as one in ``local``."""
+    from sestudio import storage
+
+    root = tmp_path / "nas"
+    _write(root / REL, b"NAS-BYTES")
+    return served, storage.add("folder", ["video"], "NAS", str(root))["id"], root
+
+
+def test_the_same_path_on_two_storages_is_two_files(nas):
+    c, nas_id, _ = nas
+    local = c.get("/api/downloaded/file", params={"path": REL})
+    other = c.get("/api/downloaded/file", params={"path": REL, "storage": nas_id})
+    assert (local.content, other.content) == (b"0123456789", b"NAS-BYTES")
+
+
+@pytest.mark.parametrize("storage", ["nope", "..", "/etc"])
+def test_unknown_storage_is_404(served, storage):
+    resp = served.get("/api/downloaded/file", params={"path": REL, "storage": storage})
+    assert resp.status_code == 404
+
+
+def test_traversal_is_refused_on_any_storage(nas):
+    c, nas_id, _ = nas
+    resp = c.get(
+        "/api/downloaded/file", params={"path": "../out/" + REL, "storage": nas_id}
+    )
+    assert resp.status_code == 403
+
+
+def test_a_music_only_server_is_not_a_file_storage(served):
+    from sestudio import storage
+
+    remote = storage.add("remote_sestudio", ["music"], url="https://o", token="t")
+    resp = served.get(
+        "/api/downloaded/file", params={"path": REL, "storage": remote["id"]}
+    )
+    assert resp.status_code == 404
+
+
+def test_keys_keep_local_bare(nas):
+    from sestudio.web.routes.downloaded import media_key
+
+    _, nas_id, _ = nas
+    assert media_key("local", REL) == REL
+    assert media_key(nas_id, REL) == f"{nas_id}:{REL}"
+
+
+def test_delete_on_a_storage_forgets_its_own_row(nas):
+    c, nas_id, root = nas
+    _allow_deletion(c)
+    library.set_downloaded_file(REL, {"series_name": "local one"})
+    library.set_downloaded_file(f"{nas_id}:{REL}", {"series_name": "nas one"})
+    resp = c.delete("/api/downloaded/file", params={"path": REL, "storage": nas_id})
+    assert resp.status_code == 200
+    assert not (root / REL).exists()
+    rows = library.downloaded_files()
+    assert REL in rows and f"{nas_id}:{REL}" not in rows
+
+
+def test_playlists_carry_the_storage_down_to_segments(nas, monkeypatch):
+    c, nas_id, root = nas
+    _write(root / "Film.avi")
+    monkeypatch.setattr(downloaded, "duration_of", lambda _f: 30.0)
+    monkeypatch.setattr(
+        downloaded,
+        "tracks_of",
+        lambda _f: downloaded.MediaTracks(
+            audio=[], subtitles=[], video_width=1920, video_height=1080
+        ),
+    )
+    master = c.get(
+        "/api/downloaded/hls", params={"path": "Film.avi", "storage": nas_id}
+    )
+    assert f"hls?path=Film.avi&storage={nas_id}&audio=0&rung=0" in master.text
+    media = c.get(
+        "/api/downloaded/hls", params={"path": "Film.avi", "storage": nas_id, "rung": 0}
+    )
+    assert f"segment?path=Film.avi&storage={nas_id}&audio=0&rung=0" in media.text
