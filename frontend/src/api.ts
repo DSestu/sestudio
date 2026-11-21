@@ -1115,13 +1115,21 @@ async function storageCall<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface NewStorage {
-  kind: 'folder' | 'remote_sestudio' | 'ytmusic_account'
+  kind: 'folder' | 'remote_sestudio' | 'ytmusic_account' | 'ftp' | 'sftp' | 'smb'
   roles: ('video' | 'music')[]
   label?: string
   path?: string
   url?: string
   token?: string
   download?: boolean
+  /** An FTP, SFTP or SMB server (SPEC-storage §9); the password stays on the server. */
+  host?: string
+  port?: number | null
+  share?: string
+  username?: string
+  domain?: string
+  tls?: boolean
+  password?: string
 }
 
 /** What the add form says about a folder before it is added. */
@@ -1133,6 +1141,8 @@ export const storagesApi = {
     storageCall<StorageInfo>(`/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   remove: (id: string) => storageCall<{ ok: boolean }>(`/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   check: (path: string) => storageCall<FolderCheck>(`/check?path=${encodeURIComponent(path)}`),
+  /** Connect to a server and list its folder, without adding it. */
+  test: (body: NewStorage) => storageCall<{ folders: number }>('/test', { method: 'POST', body: JSON.stringify(body) }),
 }
 
 /** Everything on disk, grouped by title. Newest first. */
