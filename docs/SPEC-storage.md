@@ -160,3 +160,49 @@ Picked from phone + desktop mockups built on the real app (no notes added). The 
 | Add | **+ Add a storage** under the cards opens the add form: folder (path field + Browse, checked live: "Found · 412 folders · 5.8 TB free"), name, **What does it hold?** Video / Music / Both with no default (Q2), "Send new downloads here", Cancel / Add storage. A line links how to mount FTP/SFTP with rclone. |
 | Edit | Rename and Remove from the card (a menu on the card; remove asks in the page, files untouched). |
 | Replaces | The "Folder on the server" field in Settings › Downloads and the Libraries list in Settings › Music (both link here). |
+
+## 9. Phase 2 (decided 2026-11-21)
+
+Phase 1 (PRs 1–6, #571–#576) shipped. Answers to the phase 2 questions:
+
+| Topic | Decision |
+|---|---|
+| X1 playback | A **local HTTP relay**: the server reads a remote file over its protocol and serves it on its own byte-range URL, `GET /api/storages/{id}/raw/{path}`. ffmpeg (HLS, TV, thumbnails, tracks, subtitles), cast, DLNA and the browser all read that URL, so seeking works the same for every protocol. Libraries: `fsspec` with `smbprotocol` (SMB) and `paramiko` (SFTP); FTP is fsspec's own (stdlib `ftplib`). |
+| X4 passwords | A **`secrets.json`** beside `config.json` (owner-only permissions on POSIX), keyed by storage id, never sent to a client, removed with its storage. Existing share tokens stay where they are (the downgrade mirror needs them). |
+| X3 | **Another sestudio's films**: a `remote_sestudio` storage may hold video. The other server shares its video listing and files behind the same share tokens; this one lists them (kept like any other listing) and plays them through the relay. YouTube Music stays music-only. |
+| X2 | Copy / move between storages from a title's **files list** and from **Tree and Browse** (files and folders), as jobs in Media › Queue. **Mockups first.** |
+
+### 9.1 How a remote file reaches ffmpeg
+
+`resolve()` stays the one place a stored file becomes something readable. For a
+folder it is a `Path`, as now. For `ftp`, `sftp`, `smb` and a remote sestudio it
+is a `RemoteFile`: a pure POSIX path (name, suffix, stem work as before) whose
+`str()` is the relay URL on this server's own HTTP port, whose `stat()` answers
+from the listing (size, mtime: the cache keys), and whose parent lists the remote
+folder (sidecar subtitles). Nothing else in the media code changes.
+
+### 9.2 Kinds and fields
+
+| Kind | Fields | Secret |
+|---|---|---|
+| `ftp` | host, port (21), path, username, tls (FTPS) | password |
+| `sftp` | host, port (22), path, username | password (or none with an agent key) |
+| `smb` | host, share, path, username, domain | password |
+
+Roles: video, music, or both. Downloads still only go to a folder (phase 1 rule).
+Reachability: a connect + list of the root within `CHECK_TIMEOUT`. Listing: the
+phase 1 background scan, depth 6, kept on disk.
+
+### 9.3 Build plan (phase 2)
+
+7. **Secrets and remote kinds.** `secrets.json`; `ftp`/`sftp`/`smb` in the registry with validation; `GET /api/storages/check` connects and lists for them; dependencies added.
+8. **Remote listing.** fsspec scan into the same `DownloadedFile` rows; reachability by connect; kept listing.
+9. **Relay.** `/api/storages/{id}/raw/{path}` with Range, from fsspec (and from another sestudio in 14).
+10. **`RemoteFile`.** `resolve()` returns it for remote kinds: play, HLS, tracks, subtitles (embedded and sidecar), thumbnails, cast, DLNA, delete (remote delete through fsspec).
+11. **Settings › Storage** add form tabs for FTP, SFTP, SMB (host, port, share, path, user, password, Test), and the cards showing host and protocol.
+12. **Music on remote storages.** Audio listed as a music library; analysis reads through the relay.
+13. **Share video.** The serving side: `/api/share/video` listing and file, behind share tokens.
+14. **Another sestudio's films.** `remote_sestudio` with the video role: listing, relay proxy with the token, switcher.
+15. **Copy / move: mockups.** Phone + desktop, files list and Tree/Browse.
+16. **Copy / move: build** to the picked mockup: transfer jobs (any storage → a folder or a remote storage), progress in Queue, manifest rows follow the file, source deleted only after a verified copy.
+17. **Android.** The new dependencies in the APK build; a test on the phone build.

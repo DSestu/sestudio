@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from sestudio import storage
+from sestudio import remotefs, storage
 from sestudio.config import load_config, save_config
 from sestudio.music import libraries, runner
 
@@ -29,6 +29,19 @@ class NewStorage(BaseModel):
     url: str = ""
     token: str = ""
     download: bool = False
+    # An FTP, SFTP or SMB server (SPEC-storage §9); the password goes to the vault.
+    host: str = ""
+    port: int | None = None
+    share: str = ""
+    username: str = ""
+    domain: str = ""
+    tls: bool = False
+    password: str = ""
+
+    def network(self) -> dict[str, Any]:
+        return self.model_dump(
+            include={"host", "port", "share", "username", "domain", "tls", "password"}
+        )
 
 
 class StorageEdit(BaseModel):
@@ -98,10 +111,38 @@ async def check_folder(path: str) -> dict[str, Any]:
         ) from None
 
 
+@router.post("/storages/test")
+async def test_server(body: NewStorage) -> dict[str, Any]:
+    """The add form's Test: connect to an FTP, SFTP or SMB server and list its folder,
+    without adding anything."""
+    if body.kind not in storage.NETWORK:
+        raise HTTPException(400, "Only a server is tested this way")
+
+    def attempt() -> dict[str, Any]:
+        probe = {"id": "test", "kind": body.kind}
+        probe |= _run(storage._network_fields, body.kind, body.path, body.network())
+        try:
+            return remotefs.check_with(probe, body.password)
+        except Exception as exc:  # noqa: BLE001 - the server's own words are the answer
+            raise HTTPException(400, f"Could not connect: {exc}") from None
+
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(attempt), CHECK_SECONDS * 2)
+    except TimeoutError:
+        raise HTTPException(400, "The server did not answer in time") from None
+
+
 @router.post("/storages")
 def add_storage(body: NewStorage) -> dict[str, Any]:
     s = _run(
-        storage.add, body.kind, body.roles, body.label, body.path, body.url, body.token
+        storage.add,
+        body.kind,
+        body.roles,
+        body.label,
+        body.path,
+        body.url,
+        body.token,
+        body.network() if body.kind in storage.NETWORK else None,
     )
     if body.download:
         s = _run(storage.set_download, s["id"])
