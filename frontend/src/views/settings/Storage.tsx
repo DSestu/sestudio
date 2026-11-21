@@ -7,7 +7,6 @@ import { librariesApi, reloadLibraries, useLibraries } from '../../musicLibrarie
 import { NETWORK_KINDS, refreshStorages, sinceLabel, titleCounts, useStorages, whereOf } from '../../storageChoice'
 
 const KIND_LINE: Record<string, string> = {
-  remote_sestudio: 'Another sestudio · music',
   ytmusic_account: 'YouTube Music · likes',
 }
 
@@ -24,7 +23,7 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
   const menu = useRef<HTMLDetailsElement>(null)
   const folder = s.kind === 'folder'
   // A folder or a server read in the app: both hold video (SPEC-storage §9).
-  const files = folder || NETWORK_KINDS.includes(s.kind)
+  const files = folder || NETWORK_KINDS.includes(s.kind) || s.kind === 'remote_sestudio'
   const away = s.state === 'offline'
 
   const act = (p: Promise<unknown>) =>

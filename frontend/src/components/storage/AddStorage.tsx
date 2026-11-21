@@ -268,7 +268,7 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
         )}
         {kind === 'remote_sestudio' && (
           <>
-            <p className="text-sm text-base-content/60">Holds music only, for now.</p>
+            <p className="text-sm text-base-content/60">Its music, and its films once Video is turned on on its card.</p>
             <label className="block">
               <span className="text-sm text-base-content/60">Server address</span>
               <input value={url} onChange={e => setUrl(e.target.value)} className={`${field} font-mono`} placeholder="https://192.168.1.20:8443" autoFocus />

@@ -214,3 +214,37 @@ def top(s: dict[str, Any]) -> RemoteFile:
 def media_input(file: Any) -> str:
     """What ffmpeg is given for a stored file: its relay URL when it is on a server."""
     return getattr(file, "url", None) or str(file)
+
+
+class ServerFile(RemoteFile):
+    """A film on another sestudio (spec §9, X3): known from that server's listing
+    and read through this one's relay, which asks it with the share token. Read
+    only: nothing here deletes another server's files."""
+
+    def stat(self) -> _Stat:
+        info = self._info or {}
+        return _Stat(int(info.get("size") or 0), float(info.get("mtime") or 0))
+
+    def exists(self) -> bool:
+        return self._info is not None
+
+    def is_dir(self) -> bool:
+        return False
+
+    def is_file(self) -> bool:
+        return self._info is not None
+
+    def iterdir(self) -> Any:
+        return iter(())
+
+    def glob(self, pattern: str) -> Any:  # type: ignore[override]
+        return iter(())  # sidecars stay on that server; embedded tracks still play
+
+    def relative(self) -> str:
+        return self.as_posix().lstrip("/")
+
+    def open(self, mode: str = "rb", **kw: Any) -> Any:  # type: ignore[override]
+        raise PermissionError("Read through the relay, not opened here")
+
+    def unlink(self, missing_ok: bool = False) -> None:
+        raise PermissionError("Files on another sestudio are read only here")
