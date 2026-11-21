@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useStorages } from '../storageChoice'
 import type { DownloadDestination, DownloadItem } from '../api'
 import { useModalBack } from '../useModalBack'
 import ResponsiveModal from './ResponsiveModal'
@@ -64,6 +65,8 @@ export default function ConfirmDownloadModal({
   hostOptions: knownHosts, defaultHosts = DEFAULT_HOST_ORDER,
 }: Props) {
   useModalBack(true, onCancel)
+  // Where server downloads land: a storage (SPEC-storage §8.2).
+  const target = useStorages().find(s => s.download)
   const [confirming, setConfirming] = useState(false)
   const [dest, setDest] = useState<DownloadDestination>(destination)
   const [audioOnly, setAudioOnly] = useState(false)
@@ -141,7 +144,15 @@ export default function ConfirmDownloadModal({
               <svg className="w-4 h-4 text-base-content/40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
               </svg>
-              <span className="text-base-content/60 text-sm font-mono truncate">{outputRoot}</span>
+              {target ? (
+                <span className="text-base-content/60 text-sm truncate min-w-0">
+                  {target.label}
+                  {target.state === 'offline' && <span className="text-error"> · offline</span>}
+                  <span className="font-mono"> · {target.path}</span>
+                </span>
+              ) : (
+                <span className="text-base-content/60 text-sm font-mono truncate">{outputRoot}</span>
+              )}
             </div>
           ) : (
             <span className="text-base-content/60 text-sm">

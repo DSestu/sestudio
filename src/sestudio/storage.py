@@ -6,7 +6,7 @@ sources (another sestudio server, a YouTube Music account). Each says what it
 holds (``roles``: video, music) and exactly one folder takes new downloads.
 
 The list lives in the config as ``storages``; ``local`` is the download root the
-app always had and cannot be removed. ``config._reconcile`` keeps the older
+app always had and cannot be removed. ``config.reconcile`` keeps the older
 ``output_root`` and ``music_libraries`` keys in step with it.
 """
 
@@ -153,7 +153,7 @@ def remove(storage_id: str) -> dict[str, Any]:
     if gone is None:
         raise Invalid(f"unknown storage: {storage_id}")
     cfg.storages = [s for s in cfg.storages if s is not gone]
-    save_config(cfg)  # with no target left, `_reconcile` gives it back to `local`
+    save_config(cfg)  # with no target left, `reconcile` gives it back to `local`
     _forget(storage_id)
     return gone
 

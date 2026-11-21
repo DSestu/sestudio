@@ -112,7 +112,7 @@ def test_low_disk_comes_first(client, down, disk):
     body = client.get("/api/health").json()
     assert body["disk"]["low"] is True
     assert [i["kind"] for i in body["issues"]] == ["disk", "site"]
-    assert body["issues"][0]["message"] == "Disk almost full: 8 GB free"
+    assert body["issues"][0]["message"] == "This PC almost full: 8 GB free"
 
 
 def test_low_disk_by_ratio(client, disk):
@@ -136,8 +136,8 @@ def test_unavailable_disk_is_an_issue_not_a_500(client, monkeypatch):
     assert body["issues"] == [
         {
             "kind": "disk",
-            "id": None,
-            "message": "Downloads folder unavailable",
+            "id": "local",
+            "message": "This PC unavailable for downloads",
             "retry": None,
         }
     ]
@@ -173,3 +173,29 @@ def test_probe_error_marks_the_site_down(monkeypatch):
 
     monkeypatch.setattr(health, "new_client", boom)
     assert health._probe("https://x.example") == "no network here"
+
+
+def test_storages_that_are_away_are_issues(client, tmp_path, monkeypatch):
+    """SPEC-storage S8: the download storage away is said first, and is never
+    asked how full it is; another storage away is its own issue."""
+    from sestudio import storage
+
+    nas, other = tmp_path / "nas", tmp_path / "other"
+    nas.mkdir()
+    other.mkdir()
+    target = storage.add("folder", ["video"], "NAS films", str(nas))
+    storage.set_download(target["id"])
+    storage.add("folder", ["video"], "Old disk", str(other))
+    nas.rmdir()
+    other.rmdir()
+    asked: list[str] = []
+    monkeypatch.setattr(health.shutil, "disk_usage", lambda p: asked.append(p))
+    body = client.get("/api/health").json()
+    assert [i["message"] for i in body["issues"]] == [
+        "Downloads go to NAS films, which is offline",
+        "Old disk is offline",
+    ]
+    assert body["disk"]["label"] == "NAS films" and asked == []
+    assert {s["label"]: s["state"] for s in body["storages"]} == {
+        "This PC": "online", "NAS films": "offline", "Old disk": "offline",
+    }  # fmt: skip
