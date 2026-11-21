@@ -206,3 +206,10 @@ phase 1 background scan, depth 6, kept on disk.
 15. **Copy / move: mockups.** Phone + desktop, files list and Tree/Browse.
 16. **Copy / move: build** to the picked mockup: transfer jobs (any storage → a folder or a remote storage), progress in Queue, manifest rows follow the file, source deleted only after a verified copy.
 17. **Android.** The new dependencies in the APK build; a test on the phone build.
+
+### 9.4 Progress (2026-11-21)
+
+- Shipped: 7 (#577), 8–10 as one (#578, end-to-end test: a real ffmpeg reads through the relay), 11 (#580), 12 (#581), 13–14 as one (#582, end-to-end test over a real HTTP server).
+- 16: the transfer engine and API ship first (`/api/transfers`); the screens wait on the mockup picks (`docs/proto/storage/mockups-round2.html`).
+- 17: the new dependencies resolve to binary wheels on `aarch64` (`uv pip compile --only-binary :all:`), so `uvx sestudio` installs them on the phone; not yet run on a phone build.
+- Not done: a sidecar subtitle beside another sestudio's film is not listed (embedded tracks play); a TV burning a sidecar subtitle of a file on a server is not tried.

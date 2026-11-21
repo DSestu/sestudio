@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from sestudio import remotefs, storage
+from sestudio import remotefs, storage, transfers
 from sestudio.config import load_config, save_config
 from sestudio.music import libraries, runner
 from sestudio.web.ranged import ranged
@@ -244,3 +244,50 @@ async def peer_stream(s: dict[str, Any], remote_key: str, request: Request) -> R
     passed = {k: v for k, v in r.headers.items() if k.lower() in _PASS}
     passed["Access-Control-Allow-Origin"] = "*"
     return StreamingResponse(body(), status_code=r.status_code, headers=passed)
+
+
+# --- copy and move between storages (SPEC-storage §9, X2) -----------------------
+
+
+class NewTransfer(BaseModel):
+    #: The files, by the key the listing gives them.
+    files: list[str]
+    to: str
+    mode: str = "copy"
+    on_conflict: str = "skip"
+    #: Where they land on the destination; omitted, each keeps its path.
+    folder: str | None = None
+    label: str = ""
+
+
+def _transfer(fn, *args):
+    try:
+        return fn(*args)
+    except (transfers.Invalid, storage.Invalid, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@router.post("/transfers")
+def start_transfer(body: NewTransfer) -> dict[str, Any]:
+    job = _transfer(
+        transfers.create,
+        body.files,
+        body.to,
+        body.mode,
+        body.on_conflict,
+        body.folder,
+        body.label,
+    )
+    return job.public()
+
+
+@router.get("/transfers")
+def list_transfers() -> list[dict[str, Any]]:
+    return transfers.all_jobs()
+
+
+@router.post("/transfers/{job_id}/{action}")
+def control_transfer(job_id: str, action: str) -> dict[str, Any]:
+    if action not in ("pause", "resume", "cancel", "clear"):
+        raise HTTPException(404, "Pause, resume, cancel or clear")
+    return _transfer(transfers.control, job_id, action)
