@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
 from sestudio import downloaded, interpolate, library
+from sestudio import storage as storages
 from sestudio.music import runner
 from sestudio.config import load_config
 from sestudio.web.streaming import ClosingStreamingResponse
@@ -183,17 +184,38 @@ async def downloaded_season(series: str = "", season: int = 0) -> dict[str, Any]
     }
 
 
-def _resolved(path: str) -> Any:
-    """The absolute path for a client-supplied one, or 4xx.
+def media_key(storage_id: str, path: str) -> str:
+    """What a stored file is known by in caches and the manifest (SPEC-storage).
+
+    ``local`` keeps the bare path every earlier build wrote, so nothing cached
+    or recorded before storages existed changes; any other storage prefixes its
+    id, so the same relative path on two storages is two files.
+    """
+    return path if storage_id == storages.LOCAL else f"{storage_id}:{path}"
+
+
+def _on(storage_id: str) -> str:
+    """The query suffix that carries a storage into a URL; none for ``local``."""
+    return "" if storage_id == storages.LOCAL else f"&storage={quote(storage_id)}"
+
+
+def _resolved(path: str, storage_id: str = storages.LOCAL) -> Any:
+    """The absolute path for a client-supplied one on a storage, or 4xx.
 
     This is the only endpoint that turns a caller-controlled string into a real
-    filesystem path, so the confinement check is not optional.
+    filesystem path, so the confinement check is not optional. The storage is
+    looked up in the registry, never used as a path itself.
     """
-    cfg = load_config()
     try:
-        target = downloaded.resolve(cfg.output_root, path)
+        root = storages.get(storage_id)
+    except storages.Invalid:
+        raise HTTPException(status_code=404, detail="No such storage") from None
+    if root["kind"] != storages.FOLDER:
+        raise HTTPException(status_code=404, detail="That storage holds no files here")
+    try:
+        target = downloaded.resolve(root["path"], path)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Path outside the download root")
+        raise HTTPException(status_code=403, detail="Path outside the storage")
     if not target.is_file():
         raise HTTPException(status_code=404, detail="No such file")
     return target
@@ -230,7 +252,10 @@ def _from_offset(target: Path, offset: int) -> Iterator[bytes]:
 
 @router.api_route("/downloaded/file", methods=["GET", "HEAD"])
 async def get_downloaded_file(
-    request: Request, path: str = Query(...), audio: int | None = None
+    request: Request,
+    path: str = Query(...),
+    audio: int | None = None,
+    storage_id: str = Query(storages.LOCAL, alias="storage"),
 ) -> Response:
     """Stream a downloaded file.
 
@@ -254,13 +279,13 @@ async def get_downloaded_file(
     exactly as the original does — none of which would be true of a second,
     parallel endpoint.
     """
-    target = _resolved(path)
+    target = _resolved(path, storage_id)
     if audio is not None:
         # Built here if it is not yet — which waits for ffmpeg, minutes for a
         # re-encode. Only a TV asks for one now (a browser gets the track
         # encoded into its HLS segments), and it waits.
         alternate = await asyncio.to_thread(
-            downloaded.alternate_audio, target, path, audio
+            downloaded.alternate_audio, target, media_key(storage_id, path), audio
         )
         if alternate is not None:
             target = alternate
@@ -548,6 +573,7 @@ def tv_run_from(
 async def get_downloaded_tv(
     request: Request,
     path: str = Query(...),
+    storage_id: str = Query(storages.LOCAL, alias="storage"),
     audio: int = Query(0, ge=0),
     lang: str | None = None,
     rung: int = Query(0, ge=0),
@@ -568,7 +594,7 @@ async def get_downloaded_tv(
     cast's settings as they are changed, without the TV reconnecting (see
     ``_live_piped``).
     """
-    target = _resolved(path)
+    target = _resolved(path, storage_id)
     check_fps(fps)
     duration = await asyncio.to_thread(downloaded.duration_of, target)
     start, headers = tv_seek(request, duration)
@@ -935,6 +961,7 @@ async def serve_segment(
 async def get_downloaded_hls(
     request: Request,
     path: str = Query(...),
+    storage_id: str = Query(storages.LOCAL, alias="storage"),
     audio: int = 0,
     rung: int | None = None,
     fps: int = 0,
@@ -958,12 +985,12 @@ async def get_downloaded_hls(
     whole timeline before a frame has been encoded, so a jump to any point
     fetches that one segment rather than waiting for everything before it.
     """
-    target = _resolved(path)
+    target = _resolved(path, storage_id)
     check_fps(fps)
     durations = await asyncio.to_thread(downloaded.hls_segment_durations, target)
     if durations is None:
         raise HTTPException(status_code=404, detail="Length of that file is unknown")
-    quoted = quote(path)
+    quoted = quote(path) + _on(storage_id)
     # Only when asked for, so the URLs of the source's own rate stay as they were.
     rate = f"&fps={fps}" if fps else ""
     # A cast's id, carried down to its segments (see ``segment_settings``).
@@ -994,11 +1021,13 @@ async def get_downloaded_hls(
     audio = live_audio(request, live, audio)
     tracks = await asyncio.to_thread(downloaded.tracks_of, target)
     warm(
-        path,
+        media_key(storage_id, path),
         (audio, rung, fps),
         downloaded.draws(fps, tracks.video_fps),
         len(durations),
-        lambda i: downloaded.hls_segment(target, path, i, audio, rung, fps),
+        lambda i: downloaded.hls_segment(
+            target, media_key(storage_id, path), i, audio, rung, fps
+        ),
     )
     return response
 
@@ -1103,6 +1132,7 @@ def _playlist(lines: list[str]) -> Response:
 async def get_downloaded_segment(
     request: Request,
     path: str = Query(...),
+    storage_id: str = Query(storages.LOCAL, alias="storage"),
     index: int = Query(..., ge=0),
     audio: int = 0,
     rung: int = 0,
@@ -1115,7 +1145,7 @@ async def get_downloaded_segment(
     what it is playing. Coalesced per segment, so read-ahead and a retry do not
     start the same encode twice.
     """
-    target = _resolved(path)
+    target = _resolved(path, storage_id)
     check_fps(fps)
     rung, fps = await segment_settings(
         request, live, rung, fps, lambda: downloaded.hls_variants(target)
@@ -1124,13 +1154,17 @@ async def get_downloaded_segment(
     durations = await asyncio.to_thread(downloaded.hls_segment_durations, target)
     tracks = await asyncio.to_thread(downloaded.tracks_of, target) if fps else None
     segment = await serve_segment(
-        path,
+        media_key(storage_id, path),
         len(durations or ()),
         index,
         (audio, rung, fps),
         bool(tracks and downloaded.draws(fps, tracks.video_fps)),
-        lambda i: downloaded.hls_segment(target, path, i, audio, rung, fps),
-        lambda i: downloaded.hls_drawn(target, path, i, audio, rung, fps),
+        lambda i: downloaded.hls_segment(
+            target, media_key(storage_id, path), i, audio, rung, fps
+        ),
+        lambda i: downloaded.hls_drawn(
+            target, media_key(storage_id, path), i, audio, rung, fps
+        ),
     )
     if segment is None:
         raise HTTPException(status_code=404, detail="No such segment")
@@ -1145,7 +1179,10 @@ async def get_downloaded_segment(
 
 
 @router.get("/downloaded/tracks")
-async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
+async def get_downloaded_tracks(
+    path: str = Query(...),
+    storage_id: str = Query(storages.LOCAL, alias="storage"),
+) -> dict[str, Any]:
     """What is inside one stored file: its audio and subtitle tracks.
 
     Its own endpoint rather than part of the listing, because each answer costs
@@ -1158,14 +1195,14 @@ async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
     scan deliberately ignores. Whether a subtitle was muxed in or downloaded
     separately is not something the player should have to care about.
     """
-    target = _resolved(path)
+    target = _resolved(path, storage_id)
     tracks = await asyncio.to_thread(downloaded.tracks_of, target)
     sidecars = await asyncio.to_thread(downloaded.sidecar_subtitles, target)
 
     subtitles = [
         {
             **_track_payload(track),
-            "url": f"/api/downloaded/subtitle?path={quote(path)}&index={track.index}",
+            "url": f"/api/downloaded/subtitle?path={quote(path)}{_on(storage_id)}&index={track.index}",
             "embedded": True,
         }
         for track in tracks.subtitles
@@ -1179,7 +1216,7 @@ async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
             "default": False,
             "text": True,
             "url": (
-                f"/api/downloaded/subtitle?path={quote(path)}&sidecar={quote(lang)}"
+                f"/api/downloaded/subtitle?path={quote(path)}{_on(storage_id)}&sidecar={quote(lang)}"
             ),
             "embedded": False,
         }
@@ -1197,13 +1234,16 @@ async def get_downloaded_tracks(path: str = Query(...)) -> dict[str, Any]:
 
 @router.get("/downloaded/subtitle")
 async def get_downloaded_subtitle(
-    path: str = Query(...), index: int | None = None, sidecar: str | None = None
+    path: str = Query(...),
+    index: int | None = None,
+    sidecar: str | None = None,
+    storage_id: str = Query(storages.LOCAL, alias="storage"),
 ) -> FileResponse:
     """One subtitle track as WebVTT, ready for a `<track>` element.
 
     A sidecar is served as it lies; an embedded track is extracted and cached.
     """
-    target = _resolved(path)
+    target = _resolved(path, storage_id)
 
     if sidecar is not None:
         match = next(
@@ -1223,7 +1263,9 @@ async def get_downloaded_subtitle(
     if index is None:
         raise HTTPException(status_code=400, detail="Pass index= or sidecar=")
 
-    vtt = await asyncio.to_thread(downloaded.extracted_subtitle, target, path, index)
+    vtt = await asyncio.to_thread(
+        downloaded.extracted_subtitle, target, media_key(storage_id, path), index
+    )
     if vtt is None:
         raise HTTPException(
             status_code=415,
@@ -1245,20 +1287,24 @@ async def get_downloaded_subtitle(
 
 
 @router.get("/downloaded/thumb")
-async def get_downloaded_thumb(path: str = Query(...)) -> FileResponse:
+async def get_downloaded_thumb(
+    path: str = Query(...),
+    storage_id: str = Query(storages.LOCAL, alias="storage"),
+) -> FileResponse:
     """A still from a stored file, for a title TMDB has no poster for.
 
     Generated in the background on first request and cached on disk from then
     on, so a shelf of unmatched titles costs one ffmpeg run each, once. Until it
     is made the answer is 404 with ``Retry-After``; see ``_THUMB_POOL``.
     """
-    target = _resolved(path)
-    thumb = downloaded.cached_thumbnail(target, path)
+    target = _resolved(path, storage_id)
+    key = media_key(storage_id, path)
+    thumb = downloaded.cached_thumbnail(target, key)
     if thumb is None:
-        if path not in _THUMBS_PENDING:
-            future = _THUMB_POOL.submit(downloaded.thumbnail, target, path)
-            _THUMBS_PENDING[path] = future
-            future.add_done_callback(lambda _f, p=path: _THUMBS_PENDING.pop(p, None))
+        if key not in _THUMBS_PENDING:
+            future = _THUMB_POOL.submit(downloaded.thumbnail, target, key)
+            _THUMBS_PENDING[key] = future
+            future.add_done_callback(lambda _f, k=key: _THUMBS_PENDING.pop(k, None))
         raise HTTPException(
             status_code=404,
             detail="Still not made yet",
@@ -1274,7 +1320,10 @@ async def get_downloaded_thumb(path: str = Query(...)) -> FileResponse:
 
 
 @router.delete("/downloaded/file")
-async def delete_downloaded_file(path: str = Query(...)) -> dict[str, str]:
+async def delete_downloaded_file(
+    path: str = Query(...),
+    storage_id: str = Query(storages.LOCAL, alias="storage"),
+) -> dict[str, str]:
     """Delete one downloaded file, and forget what was recorded about it."""
     # Checked here and not only by hiding the button: anything that can reach
     # the API could otherwise delete from the collection.
@@ -1282,8 +1331,8 @@ async def delete_downloaded_file(path: str = Query(...)) -> dict[str, str]:
         raise HTTPException(
             status_code=403, detail="Deleting files is turned off in Settings"
         )
-    target = _resolved(path)
+    target = _resolved(path, storage_id)
     await asyncio.to_thread(target.unlink)
-    await asyncio.to_thread(library.delete_downloaded_file, path)
+    await asyncio.to_thread(library.delete_downloaded_file, media_key(storage_id, path))
     downloaded.invalidate()
     return {"status": "ok"}

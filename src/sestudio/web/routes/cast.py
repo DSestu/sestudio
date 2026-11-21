@@ -13,9 +13,10 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from sestudio import dlna, downloaded, interpolate, metrics
+from sestudio import storage as storages
 from sestudio.web import forward
 from sestudio.web.routes import downloaded as downloaded_route
-from sestudio.web.routes.downloaded import _resolved, check_fps, offered_rung
+from sestudio.web.routes.downloaded import _on, _resolved, check_fps, offered_rung
 from sestudio.web.proxy import master_variants
 from sestudio.web.routes.stream import short_token, source_qualities, transcode_source
 
@@ -127,7 +128,8 @@ async def plan_cast(body: DlnaPlayRequest, request: Request) -> CastPlan:
     if parsed.path == "/api/downloaded/file":
         query = urllib.parse.parse_qs(parsed.query)
         stored = query.get("path", [""])[0]
-        target = _resolved(stored)
+        on = query.get("storage", [storages.LOCAL])[0]
+        target = _resolved(stored, on)
         audio = int(query.get("audio", ["0"])[0])
         lang = body.subtitle_lang or ""
         burn = (
@@ -162,7 +164,8 @@ async def plan_cast(body: DlnaPlayRequest, request: Request) -> CastPlan:
             or not await asyncio.to_thread(downloaded.browser_can_play, target)
         ):
             proxy_url = (
-                f"/api/downloaded/tv?path={urllib.parse.quote(stored)}&audio={audio}"
+                f"/api/downloaded/tv?path={urllib.parse.quote(stored)}"
+                f"{_on(on)}&audio={audio}"
             )
             if burn:
                 proxy_url += f"&lang={urllib.parse.quote(lang)}"
@@ -346,7 +349,9 @@ async def _variants_for(
     parsed = urllib.parse.urlparse(url)
     query = urllib.parse.parse_qs(parsed.query)
     if parsed.path.startswith("/api/downloaded/"):
-        target = _resolved(query.get("path", [""])[0])
+        target = _resolved(
+            query.get("path", [""])[0], query.get("storage", [storages.LOCAL])[0]
+        )
         variants = await asyncio.to_thread(downloaded.hls_variants, target)
         fps = (await asyncio.to_thread(downloaded.tracks_of, target)).video_fps
         return variants, fps

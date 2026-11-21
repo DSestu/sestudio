@@ -235,7 +235,12 @@ def test_play_with_a_forged_token_is_refused(client):
     assert resp.status_code == 403
 
 
-def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None, quality=0):
+STORED = "/api/downloaded/file?path=Matrix%2FThe%20Matrix.mkv&audio=2"
+
+
+def _cast_stored(
+    client, monkeypatch, *, playable, subtitle=None, lang=None, quality=0, url=STORED
+):
     """Cast a stored file, with what the probes say about it faked."""
     client.app.state.dlna_renderers = {"uuid:tv-1": "http://192.168.1.5:8200/desc.xml"}
     calls = {}
@@ -246,7 +251,13 @@ def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None, qua
 
     monkeypatch.setattr(cast, "_local_ip_for", lambda host: "192.168.1.20")
     monkeypatch.setattr(cast.dlna, "play_on_renderer", fake_play)
-    monkeypatch.setattr(cast, "_resolved", lambda path: Path("/films") / path)
+    monkeypatch.setattr(
+        cast,
+        "_resolved",
+        lambda path, storage="local": (
+            calls.update(storage=storage) or Path("/films") / path
+        ),
+    )
     monkeypatch.setattr(cast.downloaded, "browser_can_play", lambda f: playable)
     monkeypatch.setattr(cast.downloaded, "tv_subtitle", lambda f, lang: subtitle)
     monkeypatch.setattr(cast.downloaded, "duration_of", lambda f: 8160.0)
@@ -262,7 +273,7 @@ def _cast_stored(client, monkeypatch, *, playable, subtitle=None, lang=None, qua
         "/api/cast/dlna/play",
         json={
             "renderer_udn": "uuid:tv-1",
-            "proxy_url": "/api/downloaded/file?path=Matrix%2FThe%20Matrix.mkv&audio=2",
+            "proxy_url": url,
             "kind": "mp4",
             "subtitle_lang": lang,
             "quality": quality,
@@ -287,6 +298,17 @@ def test_play_stored_file_a_browser_cannot_play_is_re_encoded(client, monkeypatc
     assert calls["mime_type"] == "video/mpeg"
     # Handed over so the TV can draw a seek bar for a stream with no length.
     assert calls["duration"] == 8160.0
+
+
+def test_a_file_on_another_storage_is_re_encoded_from_there(client, monkeypatch):
+    calls = _cast_stored(
+        client, monkeypatch, playable=False, url=STORED + "&storage=f1"
+    )
+    assert calls["storage"] == "f1"
+    assert (
+        "/api/downloaded/tv?path=Matrix/The%20Matrix.mkv&storage=f1&audio=2"
+        in (calls["media_url"])
+    )
 
 
 def test_play_stored_file_with_captions_burns_them_in(client, monkeypatch):
@@ -347,7 +369,9 @@ def test_options_say_when_ai_is_still_being_fetched(client, monkeypatch):
         audio=[], subtitles=[], video_width=1920, video_height=1080, video_fps=24.0
     )
     monkeypatch.setattr(cast.downloaded, "tracks_of", lambda f: tracks)
-    monkeypatch.setattr(cast, "_resolved", lambda path: Path("/films") / path)
+    monkeypatch.setattr(
+        cast, "_resolved", lambda path, _storage="local": Path("/films") / path
+    )
     monkeypatch.setattr(
         cast.interpolate, "status", lambda: {"available": False, "preparing": True}
     )
@@ -389,7 +413,9 @@ def test_frame_rates_offered_depend_on_the_source_and_the_gpu(
         video_fps=source_fps,
     )
     monkeypatch.setattr(cast.downloaded, "tracks_of", lambda f: tracks)
-    monkeypatch.setattr(cast, "_resolved", lambda path: Path("/films") / path)
+    monkeypatch.setattr(
+        cast, "_resolved", lambda path, _storage="local": Path("/films") / path
+    )
     monkeypatch.setattr(cast.interpolate, "status", lambda: {"gpu": gpu})
     monkeypatch.setattr(cast.interpolate, "speed", lambda: speed)
 
