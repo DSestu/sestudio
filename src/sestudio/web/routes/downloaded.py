@@ -19,13 +19,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
 from sestudio import downloaded, interpolate, library
 from sestudio import remotefs
 from sestudio import storage as storages
 from sestudio.web.ranged import ranged
+from sestudio.web.routes.music_libraries import require_token
 from sestudio.music import runner
 from sestudio.config import load_config
 from sestudio.web.streaming import ClosingStreamingResponse
@@ -62,7 +63,8 @@ def video_storages() -> list[dict[str, Any]]:
     return [
         s
         for s in storages.all_storages()
-        if s["kind"] in (storages.FOLDER, *storages.NETWORK) and "video" in s["roles"]
+        if s["kind"] in (storages.FOLDER, storages.REMOTE, *storages.NETWORK)
+        and "video" in s["roles"]
     ]
 
 
@@ -262,6 +264,8 @@ def _resolved(path: str, storage_id: str = storages.LOCAL) -> Any:
         raise HTTPException(status_code=404, detail="No such storage") from None
     if root["kind"] in storages.NETWORK:
         return _resolved_remote(root, path)
+    if root["kind"] == storages.REMOTE and "video" in root["roles"]:
+        return _resolved_peer(root, path)
     if root["kind"] != storages.FOLDER:
         raise HTTPException(status_code=404, detail="That storage holds no files here")
     try:
@@ -293,6 +297,18 @@ def _resolved_remote(root: dict[str, Any], path: str) -> remotefs.RemoteFile:
     if not found:
         raise HTTPException(status_code=404, detail="No such file")
     return target
+
+
+def _resolved_peer(root: dict[str, Any], path: str) -> remotefs.ServerFile:
+    """A film on another sestudio (spec §9, X3), found in its kept listing."""
+    if not storages.online(root):
+        raise HTTPException(status_code=503, detail=f"{root['label']} is offline")
+    entry = next((f for f in storages.files_of(root) if f.path == path), None)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="No such file")
+    return remotefs.ServerFile(
+        "/" + path, storage=root, info={"size": entry.size, "mtime": entry.mtime}
+    )
 
 
 def _npt_seconds(value: str) -> float | None:
@@ -407,6 +423,10 @@ async def get_downloaded_file(
             headers=headers,
         )
 
+    if isinstance(target, remotefs.ServerFile):
+        from sestudio.web.routes.storages import peer_stream
+
+        return await peer_stream(target.storage, target.relative(), request)
     if isinstance(target, remotefs.RemoteFile):
         return ranged(request, target, media_type, headers)
     return FileResponse(
@@ -1411,7 +1431,49 @@ async def delete_downloaded_file(
             status_code=403, detail="Deleting files is turned off in Settings"
         )
     target = _resolved(path, storage_id)
+    if isinstance(target, remotefs.ServerFile):
+        raise HTTPException(
+            status_code=403, detail="Files on another sestudio are read only here"
+        )
     await asyncio.to_thread(target.unlink)
     await asyncio.to_thread(library.delete_downloaded_file, media_key(storage_id, path))
     downloaded.invalidate()
     return {"status": "ok"}
+
+
+# --- this server's video, as another sestudio reads it (SPEC-storage §9, X3) ----
+
+video_share = APIRouter(prefix="/share/video", dependencies=[Depends(require_token)])
+
+
+@video_share.get("/ping")
+def share_ping() -> dict[str, bool]:
+    """Whether this server answers the token: how another one tells it is up."""
+    return {"ok": True}
+
+
+@video_share.get("")
+async def share_listing() -> list[dict[str, Any]]:
+    """The video titles of this server's own storages, keyed as it plays them."""
+    own = {s["id"] for s in video_storages() if s["kind"] != storages.REMOTE}
+    titles = await asyncio.to_thread(_listing)
+    out = []
+    for t in titles:
+        files = [f for f in t["files"] if f.get("storage") in own]
+        if t["kind"] != "audio" and files:
+            out.append({**t, "files": files})
+    return out
+
+
+@video_share.api_route("/file", methods=["GET", "HEAD"])
+async def share_file(request: Request, path: str = Query(...)) -> Response:
+    """One of those files, with byte ranges: never another server's (no chaining)."""
+    storage_id, rel = _split(path, storages.LOCAL)
+    own = {s["id"] for s in video_storages() if s["kind"] != storages.REMOTE}
+    if storage_id not in own:
+        raise HTTPException(status_code=404, detail="No such file")
+    target = _resolved(rel, storage_id)
+    media_type = downloaded.media_type_for(target)
+    if isinstance(target, remotefs.RemoteFile):
+        return ranged(request, target, media_type, dict(_CORS_HEADERS))
+    return FileResponse(target, media_type=media_type, headers=dict(_CORS_HEADERS))

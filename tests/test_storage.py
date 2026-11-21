@@ -88,7 +88,7 @@ def test_add_roles_download_and_remove(cfg_path, tmp_path):
         lambda: storage.add("folder", ["video"], path="/does/not/exist"),
         lambda: storage.add("folder", [], path="."),
         lambda: storage.add("folder", ["video", "pictures"], path="."),
-        lambda: storage.add("remote_sestudio", ["video"], url="https://o", token="t"),
+        lambda: storage.add("ytmusic_account", ["video"]),
         lambda: storage.add("ftp", ["video"]),
         lambda: storage.remove("local"),
         lambda: storage.get("nope"),

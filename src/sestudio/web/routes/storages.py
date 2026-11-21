@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from sestudio import remotefs, storage
@@ -181,19 +182,65 @@ def remove_storage(storage_id: str) -> dict[str, bool]:
 
 
 @router.api_route("/storages/{storage_id}/raw/{path:path}", methods=["GET", "HEAD"])
-def relay(storage_id: str, path: str, request: Request) -> Response:
+async def relay(storage_id: str, path: str, request: Request) -> Response:
     """A file on an FTP, SFTP or SMB storage, served with byte ranges (spec §9.1):
     what ffmpeg, the browser, a cast and a TV read it through."""
     from sestudio import downloaded
     from sestudio.web.routes.downloaded import _resolved_remote
 
     s = _run(storage.get, storage_id)
+    if s["kind"] == storage.REMOTE and "video" in s["roles"]:
+        return await peer_stream(s, path, request)
     if s["kind"] not in storage.NETWORK:
         raise HTTPException(404, "Only a server's files are relayed")
-    target = _resolved_remote(s, path)
+    target = await asyncio.to_thread(_resolved_remote, s, path)
     return ranged(
         request,
         target,
         downloaded.media_type_for(target),
         {"Access-Control-Allow-Origin": "*"},
     )
+
+
+#: What a file's answer from another sestudio passes on: what a player needs to seek.
+_PASS = ("content-type", "content-length", "content-range", "accept-ranges")
+
+
+async def peer_stream(s: dict[str, Any], remote_key: str, request: Request) -> Response:
+    """A film on another sestudio (spec §9, X3), asked of it with the share token
+    and streamed on, ranges and all: what the relay answers for it."""
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {s.get('token', '')}",
+        "Accept-Encoding": "identity",
+    }
+    if rng := request.headers.get("range"):
+        headers["Range"] = rng
+    client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=None))
+    req = client.build_request(
+        request.method, f"{s['url']}/api/share/video/file",
+        params={"path": remote_key}, headers=headers,
+    )  # fmt: skip
+    try:
+        r = await client.send(req, stream=True)
+    except httpx.HTTPError:
+        await client.aclose()
+        raise HTTPException(502, f"{s['label']} is not reachable") from None
+    if r.status_code >= 400:
+        await r.aclose()
+        await client.aclose()
+        raise HTTPException(502 if r.status_code in (401, 403) else r.status_code,
+                            f"{s['label']} did not give the file")  # fmt: skip
+
+    async def body():
+        try:
+            async for chunk in r.aiter_bytes():
+                yield chunk
+        finally:
+            await r.aclose()
+            await client.aclose()
+
+    passed = {k: v for k, v in r.headers.items() if k.lower() in _PASS}
+    passed["Access-Control-Allow-Origin"] = "*"
+    return StreamingResponse(body(), status_code=r.status_code, headers=passed)
