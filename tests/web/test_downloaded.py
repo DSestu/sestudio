@@ -1139,3 +1139,53 @@ def test_playlists_carry_the_storage_down_to_segments(nas, monkeypatch):
         "/api/downloaded/hls", params={"path": "Film.avi", "storage": nas_id, "rung": 0}
     )
     assert f"segment?path=Film.avi&storage={nas_id}&audio=0&rung=0" in media.text
+
+
+def test_listing_covers_every_video_storage(nas):
+    c, nas_id, root = nas
+    _write(root / "Only On Nas.mkv")
+    _write(root / "song.mp3")  # a music folder elsewhere is a music library, not this
+    downloaded.invalidate()
+    titles = {t["series"]: t for t in _titles(c)}
+    show = titles["My Show"]
+    assert show["storages"] == ["local", nas_id]
+    paths = {f["storage"]: (f["path"], f["rel"]) for f in show["files"]}
+    assert paths == {"local": (REL, REL), nas_id: (f"{nas_id}:{REL}", REL)}
+    assert titles["Only On Nas"]["storages"] == [nas_id]
+    assert not any(t["kind"] == "audio" for t in titles.values())
+
+
+def test_a_listed_key_plays_without_a_storage(nas):
+    c, nas_id, _ = nas
+    resp = c.get("/api/downloaded/file", params={"path": f"{nas_id}:{REL}"})
+    assert resp.content == b"NAS-BYTES"
+    # an unknown prefix is just part of a path in local
+    assert (
+        c.get("/api/downloaded/file", params={"path": f"zz:{REL}"}).status_code == 404
+    )
+
+
+def test_a_music_only_folder_is_not_listed(served, tmp_path):
+    from sestudio import storage
+
+    music = tmp_path / "music"
+    _write(music / "Show" / "Ep.mkv")
+    storage.add("folder", ["music"], path=str(music))
+    downloaded.invalidate()
+    assert all(t["storages"] == ["local"] for t in _titles(served))
+
+
+def test_storages_are_listed_without_secrets(nas, tmp_path):
+    from sestudio import storage
+
+    c, nas_id, root = nas
+    storage.add("remote_sestudio", ["music"], url="https://o", token="sst_secret")
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    off = storage.add("folder", ["video"], path=str(gone))
+    gone.rmdir()
+    resp = c.get("/api/storages")
+    assert "sst_secret" not in resp.text
+    rows = {s["id"]: s for s in resp.json()}
+    assert rows["local"]["download"] and rows[nas_id]["path"] == str(root)
+    assert (rows[nas_id]["state"], rows[off["id"]]["state"]) == ("online", "offline")

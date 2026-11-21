@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import type { DownloadJob } from '../api'
 import DownloadQueue from '../components/DownloadQueue'
+import StorageSwitcher from '../components/downloaded/StorageSwitcher'
 import EmptyState from '../components/EmptyState'
 import PageHeader from '../components/PageHeader'
 import { clearDeviceDownloads, useDeviceDownloads } from '../deviceDownloads'
@@ -51,6 +52,7 @@ export default function MediaView({
         tabs={TABS.map(t => ({ ...t, count: t.id === 'queue' && activeCount > 0 ? activeCount : undefined }))}
         tab={tab}
         onTab={changeTab}
+        scope={tab === 'collection' ? <StorageSwitcher /> : undefined}
       />
       <div role="tabpanel" id={`media-panel-${tab}`} aria-label={TABS.find(t => t.id === tab)?.label}>
         {tab === 'collection' ? (

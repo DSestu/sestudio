@@ -22,6 +22,9 @@ import SortSelect from '../SortSelect'
 import ToolbarToggle from '../ToolbarToggle'
 import DownloadedFilesModal from './DownloadedFilesModal'
 import { currentParams, patchParams } from '../../nav'
+import {
+  ALL_STORAGES, onStorage, setStorageChoice, useStorageChoice, useStorages, videoStorages,
+} from '../../storageChoice'
 
 /** One shelf entry: the merged card, and every downloaded season behind it. */
 interface Group {
@@ -100,7 +103,23 @@ interface Props {
 export default function DownloadedLibrary({
   onOpenTitle, settings, onUpdateSettings,
 }: Props) {
-  const titles = useDownloadedLibrary()
+  const everything = useDownloadedLibrary()
+  // The storage the page is on (SPEC-storage §8.1), or every one at once.
+  const storageList = useStorages()
+  const choice = useStorageChoice()
+  const titles = useMemo(() => onStorage(everything, choice), [everything, choice])
+  const video = videoStorages(storageList)
+  const several = video.length > 1
+  const everywhere = several && choice === ALL_STORAGES
+  const labelOf = (id: string) => storageList.find(s => s.id === id)?.label ?? id
+  const here = video.find(s => s.id === choice)
+  /** With every storage shown, a card also says where its files are. */
+  const describe = (parts: DownloadedTitle[]) => {
+    const summary = summarise(parts)
+    if (!everywhere) return summary
+    const on = [...new Set(parts.flatMap(p => p.storages ?? ['local']))]
+    return `${summary} · ${on.map(labelOf).join(' + ')}`
+  }
   const layout = useLibraryLayout().downloaded
   const [sort, setSort] = useState<SortKey>(defaultSortFor('saved'))
   const [managing, setManaging] = useState<string | null>(null)
@@ -227,6 +246,18 @@ export default function DownloadedLibrary({
     }
   }
 
+  if (titles.length === 0 && everything.length > 0) {
+    return (
+      <EmptyState
+        title={`Nothing on ${here?.label ?? 'this storage'} yet`}
+        message={here?.state === 'offline'
+          ? `${here.label} is offline: ${here.path} cannot be reached.`
+          : `No video file sits in ${here?.path ?? 'this storage'}.`}
+        action={{ label: 'Show all storages', onClick: () => setStorageChoice(ALL_STORAGES) }}
+      />
+    )
+  }
+
   if (titles.length === 0) {
     return (
       <EmptyState
@@ -263,7 +294,7 @@ export default function DownloadedLibrary({
             items={sorted.map(g => ({
               key: g.key,
               title: nameFor(g),
-              subtitle: summarise(g.parts),
+              subtitle: describe(g.parts),
               poster_url: posterFor(g),
               rating: metas.get(g.key)?.rating,
               genres: metas.get(g.key)?.genres,
@@ -293,7 +324,7 @@ export default function DownloadedLibrary({
                 key={g.key}
                 poster_url={posterFor(g)}
                 title={nameFor(g)}
-                meta={summarise(g.parts)}
+                meta={describe(g.parts)}
                 submeta={
                   g.parts.length > 1
                     ? `${g.parts.length} seasons downloaded`
@@ -333,7 +364,9 @@ export default function DownloadedLibrary({
         <span className="text-base-content/40 text-sm">
           {query || pickedGenres.size
             ? `${sorted.length} matched of ${groups.length}`
-            : `${groups.length} ${groups.length === 1 ? 'title' : 'titles'} on disk`}
+            : `${groups.length} ${groups.length === 1 ? 'title' : 'titles'} ${
+              !several ? 'on disk' : here ? `on ${here.label}` : `on ${video.length} storages`
+            }`}
           {regrouping && <span className="ml-2 text-base-content/30">regrouping…</span>}
         </span>
         {/* The same offers search makes, on the same settings — grouping is
@@ -396,6 +429,7 @@ export default function DownloadedLibrary({
           filter={query}
           onPlay={(title, file) => onOpenTitle(title, file)}
           onDelete={onDelete}
+          storages={everywhere ? video : undefined}
         />
       ) : layout === 'tree' ? (
         <DownloadedTree
@@ -403,6 +437,7 @@ export default function DownloadedLibrary({
           filter={query}
           onPlay={(title, file) => onOpenTitle(title, file)}
           onDelete={onDelete}
+          storages={everywhere ? video : undefined}
         />
       ) : sorted.length === 0 && unmatchedTitles.length === 0 ? (
         <EmptyState
@@ -451,6 +486,7 @@ export default function DownloadedLibrary({
                 filter={query}
                 onPlay={(title, file) => onOpenTitle(title, file)}
                 onDelete={onDelete}
+                storages={everywhere ? video : undefined}
               />
             </section>
           )}
@@ -464,8 +500,13 @@ export default function DownloadedLibrary({
         <ResponsiveModal onClose={() => setConfirming(null)} boxClassName="max-w-md">
           <h3 className="font-semibold text-lg">Delete this file?</h3>
           <p className="text-sm text-base-content/60 mt-2 break-all font-mono">
-            {confirming.file.path}
+            {confirming.file.rel ?? confirming.file.path}
           </p>
+          {several && (
+            <p className="text-sm text-base-content/60 mt-1">
+              On {labelOf(confirming.file.storage ?? 'local')}
+            </p>
+          )}
           <p className="text-sm text-base-content/60 mt-2">
             {fmtSize(confirming.file.size)} — removed from disk for good.
           </p>
@@ -487,6 +528,7 @@ export default function DownloadedLibrary({
           titles={managed.parts}
           onClose={() => setManaging(null)}
           canDelete={settings.allow_file_deletion === true}
+          storageLabel={several ? labelOf : undefined}
           onPlay={(title, file) => {
             setManaging(null)
             // Same destination as the card: the watch view, deep-linked to the

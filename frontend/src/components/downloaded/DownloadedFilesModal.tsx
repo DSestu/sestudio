@@ -23,6 +23,8 @@ interface Props {
   onPlay: (title: DownloadedTitle, file: DownloadedFile) => void
   /** Whether deleting is turned on in Settings. */
   canDelete: boolean
+  /** Names the storage each file is on, once there is more than one. */
+  storageLabel?: (id: string) => string
 }
 
 /**
@@ -32,7 +34,7 @@ interface Props {
  * Deletion is per file and confirmed: a card in the listing can stand for a
  * whole show, so a delete control up there would take out seasons at a time.
  */
-export default function DownloadedFilesModal({ name, titles, onClose, onPlay, canDelete }: Props) {
+export default function DownloadedFilesModal({ name, titles, onClose, onPlay, canDelete, storageLabel }: Props) {
   const [confirming, setConfirming] = useState<DownloadedFile | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +87,7 @@ export default function DownloadedFilesModal({ name, titles, onClose, onPlay, ca
                     <p className="text-sm truncate">{file.title}</p>
                     <p className="text-xs text-base-content/50 font-mono">
                       {label(title, file)} · {fmtSize(file.size)}
+                      {storageLabel && ` · ${storageLabel(file.storage ?? 'local')}`}
                     </p>
                   </div>
 

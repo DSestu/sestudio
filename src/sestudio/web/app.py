@@ -44,6 +44,7 @@ from sestudio.web.routes import (
     seasons,
     servers,
     settings,
+    storages,
     sites,
     stream,
     tmdb,
@@ -207,6 +208,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(music_libraries.share, prefix="/api")
     app.include_router(health.router, prefix="/api")
     app.include_router(servers.router, prefix="/api")
+    app.include_router(storages.router, prefix="/api")
     servers.restore(app)
     # Switched to another server: /api goes there (web/forward.py).
     app.middleware("http")(forward.middleware)

@@ -130,9 +130,12 @@ interface Props<T extends string> {
   away?: boolean
   /** Let a long title take two lines instead of ending in an ellipsis. */
   wrapTitle?: boolean
+  /** A control that says where the page is looking (the Media storage switcher):
+   *  beside the title on a desktop, a full-width row under it on a phone. */
+  scope?: ReactNode
 }
 
-export default function PageHeader<T extends string>({ title, status, onBack, menu, action, tabs, tab, onTab, away, wrapTitle }: Props<T>) {
+export default function PageHeader<T extends string>({ title, status, onBack, menu, action, tabs, tab, onTab, away, wrapTitle, scope }: Props<T>) {
   useEffect(() => { pageHeaderMounted(1); return () => pageHeaderMounted(-1) }, [])
   const desk = useDeskSlots()
   const back = onBack && (
@@ -155,13 +158,15 @@ export default function PageHeader<T extends string>({ title, status, onBack, me
           {!onBack && <ActivityBell />}
           {!onBack && <SettingsButton />}
         </div>
+        {scope && <div className="mt-2 -ml-2.5">{scope}</div>}
         {segmented && <div className="mt-2.5 -ml-2.5">{segmented}</div>}
       </TopCard>
       {/* Desktop: the same pieces, around the search field in AppShell's card. */}
       {desk.title && createPortal(
-        <div className="flex items-center gap-2 min-w-0 max-w-[30%]">
+        <div className={`flex items-center gap-2 min-w-0 ${scope ? 'max-w-[55%]' : 'max-w-[30%]'}`}>
           {back}
           <CardTitle title={title} status={status} wrap={wrapTitle} />
+          {scope && <div className="min-w-0 ml-2">{scope}</div>}
         </div>,
         desk.title,
       )}

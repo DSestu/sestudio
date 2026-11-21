@@ -55,19 +55,43 @@ _CORS_HEADERS = {
 }
 
 
-def _listing(root: str) -> list[dict[str, Any]]:
-    """Downloaded files, grouped into titles.
+def video_storages() -> list[dict[str, Any]]:
+    """The folders that hold video, ``local`` first (SPEC-storage)."""
+    return [
+        s
+        for s in storages.all_storages()
+        if s["kind"] == storages.FOLDER and "video" in s["roles"]
+    ]
+
+
+def _scanned() -> list[tuple[str, downloaded.DownloadedFile]]:
+    """Every file of every video storage, with the storage it is on.
+
+    Audio comes from ``local`` only: a music folder elsewhere is a music
+    library, listed by the music page, not here.
+    """
+    return [
+        (s["id"], f)
+        for s in video_storages()
+        for f in downloaded.scan(s["path"])
+        if s["id"] == storages.LOCAL or f.kind != "audio"
+    ]
+
+
+def _listing() -> list[dict[str, Any]]:
+    """Downloaded files of every video storage, grouped into titles.
 
     Grouping is by the folder-derived (series, season): that is what the
-    filesystem can be trusted for. The manifest then supplies the display name
-    and artwork for whichever files it knows about.
+    filesystem can be trusted for, and a season split over two storages is one
+    title whose ``storages`` say where its files are. The manifest then supplies
+    the display name and artwork for whichever files it knows about.
     """
-    files = downloaded.scan(root)
     manifest = library.downloaded_files()
 
     groups: dict[tuple[str, int, str], dict[str, Any]] = {}
-    for file in files:
-        meta = manifest.get(file.path, {})
+    for storage_id, file in _scanned():
+        path = _key(storage_id, file.path)
+        meta = manifest.get(path, {})
         key = (file.series, file.season, file.kind)
         group = groups.get(key)
         if group is None:
@@ -86,6 +110,7 @@ def _listing(root: str) -> list[dict[str, Any]]:
                 "page_url": meta.get("page_url", ""),
                 "source": meta.get("source", ""),
                 "langs": [],
+                "storages": [],
                 "files": [],
                 "size": 0,
                 "mtime": 0.0,
@@ -99,8 +124,14 @@ def _listing(root: str) -> list[dict[str, Any]]:
 
         if file.lang and file.lang not in group["langs"]:
             group["langs"].append(file.lang)
+        if storage_id not in group["storages"]:
+            group["storages"].append(storage_id)
         entry = {
-            "path": file.path,
+            # The key: what plays, casts and deletes it (see ``media_key``).
+            "path": path,
+            # Where it sits inside its storage, for the folder views.
+            "rel": file.path,
+            "storage": storage_id,
             "number": file.number,
             "title": file.title,
             "lang": file.lang,
@@ -130,9 +161,8 @@ def _listing(root: str) -> list[dict[str, Any]]:
 
 @router.get("/downloaded")
 async def list_downloaded() -> list[dict[str, Any]]:
-    cfg = load_config()
-    runner.kick(cfg.output_root)
-    return await asyncio.to_thread(_listing, cfg.output_root)
+    runner.kick(load_config().output_root)
+    return await asyncio.to_thread(_listing)
 
 
 @router.get("/downloaded/season")
@@ -147,8 +177,7 @@ async def downloaded_season(series: str = "", season: int = 0) -> dict[str, Any]
     ``embed_urls`` is empty by design: there is no host to resolve. The client
     pairs each episode with its file and plays that.
     """
-    cfg = load_config()
-    titles = await asyncio.to_thread(_listing, cfg.output_root)
+    titles = await asyncio.to_thread(_listing)
 
     match = next(
         (t for t in titles if t["series"] == series and t["season"] == season), None
@@ -184,13 +213,31 @@ async def downloaded_season(series: str = "", season: int = 0) -> dict[str, Any]
     }
 
 
+def _split(path: str, storage_id: str) -> tuple[str, str]:
+    """(storage, path inside it) of a path that may be a key (see ``media_key``).
+
+    The listing hands out keys, so a file on any storage is played, cast and
+    deleted through the one ``path`` the client already passes around. A prefix
+    counts only when it names a registered storage other than ``local``.
+    """
+    head, colon, rest = path.partition(":")
+    if storage_id == storages.LOCAL and colon and head != storages.LOCAL:
+        if any(s["id"] == head for s in storages.all_storages()):
+            return head, rest
+    return storage_id, path
+
+
 def media_key(storage_id: str, path: str) -> str:
-    """What a stored file is known by in caches and the manifest (SPEC-storage).
+    """What a stored file is known by in caches, the manifest and the listing.
 
     ``local`` keeps the bare path every earlier build wrote, so nothing cached
     or recorded before storages existed changes; any other storage prefixes its
     id, so the same relative path on two storages is two files.
     """
+    return _key(*_split(path, storage_id))
+
+
+def _key(storage_id: str, path: str) -> str:
     return path if storage_id == storages.LOCAL else f"{storage_id}:{path}"
 
 
@@ -206,6 +253,7 @@ def _resolved(path: str, storage_id: str = storages.LOCAL) -> Any:
     filesystem path, so the confinement check is not optional. The storage is
     looked up in the registry, never used as a path itself.
     """
+    storage_id, path = _split(path, storage_id)
     try:
         root = storages.get(storage_id)
     except storages.Invalid:
