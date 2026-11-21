@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+
 
 from sestudio import config as config_module
 from sestudio.config import AppConfig, load_config, save_config, tmdb_key
@@ -48,7 +50,9 @@ def test_corrupt_config_returns_defaults(tmp_path, monkeypatch):
     monkeypatch.setenv("SESTUDIO_CONFIG", str(tmp_path / "config.json"))
     (tmp_path / "config.json").write_text("not json")
     cfg = load_config()
-    assert cfg == AppConfig()
+    # defaults, plus the `local` storage every config carries (SPEC-storage)
+    assert [s["id"] for s in cfg.storages] == ["local"]
+    assert dataclasses.replace(cfg, storages=[]) == AppConfig()
 
 
 def test_tmdb_key_precedence(tmp_path, monkeypatch):

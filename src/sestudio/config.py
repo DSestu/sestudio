@@ -132,6 +132,11 @@ class AppConfig:
     # use, "" for this machine.
     servers: list[dict] = field(default_factory=list)
     active_server: str = ""
+    # Every place files live (SPEC-storage): `{id, kind, label, path | url, token,
+    # roles, download}`. The source of truth; `output_root` and `music_libraries`
+    # above are kept as mirrors of it (see `_reconcile`) so older readers and a
+    # downgraded build keep working.
+    storages: list[dict] = field(default_factory=list)
 
 
 THEORY_LEVELS = ("plain", "tap", "theory")
@@ -161,10 +166,10 @@ def config_dir() -> Path:
 def load_config() -> AppConfig:
     path = _config_path()
     if not path.exists():
-        return AppConfig()
+        return _reconcile(AppConfig())
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return AppConfig(
+        cfg = AppConfig(
             output_root=str(data.get("output_root", ".")),
             lang=str(data.get("lang", "vf")),
             download_destination=str(data.get("download_destination", "server")),
@@ -214,10 +219,12 @@ def load_config() -> AppConfig:
             music_autopilot_arc=_choice(data, "music_autopilot_arc", AUTOPILOT_ARCS),
             servers=[d for d in data.get("servers", []) or [] if isinstance(d, dict)],
             active_server=str(data.get("active_server", "")),
+            storages=[d for d in data.get("storages", []) or [] if isinstance(d, dict)],
         )
+        return _reconcile(cfg)
     except Exception as exc:
         logger.warning("Failed to read config at %s (%s), using defaults", path, exc)
-        return AppConfig()
+        return _reconcile(AppConfig())
 
 
 def tmdb_key() -> str:
@@ -233,7 +240,75 @@ def tmdb_key() -> str:
     )
 
 
+LOCAL_STORAGE = "local"
+FOLDER_STORAGE = "folder"
+ROLES = ("video", "music")
+# The music settings' own names for kinds: a folder is "local_folder" there.
+_MUSIC_KIND = {FOLDER_STORAGE: "local_folder"}
+_STORAGE_KIND = {v: k for k, v in _MUSIC_KIND.items()}
+
+
+def _clean_storage(d: dict) -> dict | None:
+    """One stored storage, made sound; None when it cannot be used at all."""
+    sid, kind = str(d.get("id", "")), str(d.get("kind", ""))
+    if not sid or not kind:
+        return None
+    if kind == FOLDER_STORAGE and sid != LOCAL_STORAGE and not d.get("path"):
+        return None
+    out = {k: v for k, v in d.items() if k not in ("roles", "download")}
+    out["id"], out["label"] = sid, str(d.get("label", "") or sid)
+    out["roles"] = [r for r in ROLES if r in (d.get("roles") or [])] or ["music"]
+    out["download"] = bool(d.get("download")) and kind == FOLDER_STORAGE
+    return out
+
+
+def _reconcile(cfg: AppConfig) -> AppConfig:
+    """Make ``storages`` sound and the two mirrors agree with it.
+
+    A config from before storages is migrated: the download root becomes the
+    storage ``local`` (video and music, takes downloads), each music library a
+    music-only storage with its id kept. ``output_root`` wins over the stored
+    ``local`` path, so the Settings field that still edits it keeps working.
+    """
+    storages = [s for s in map(_clean_storage, cfg.storages) if s]
+    if not storages:
+        storages = [
+            {
+                **{k: v for k, v in lib.items()},
+                "kind": _STORAGE_KIND.get(lib.get("kind", ""), lib.get("kind", "")),
+                "roles": ["music"],
+                "download": False,
+            }
+            for lib in cfg.music_libraries
+        ]
+        storages = [s for s in map(_clean_storage, storages) if s]
+    # shortcut: an old build that edited `music_libraries` after an upgrade is not
+    # merged back; only `output_root` is. Fine while downgrades are rare.
+    local = next((s for s in storages if s["id"] == LOCAL_STORAGE), None)
+    if local is None:
+        local = {"id": LOCAL_STORAGE, "kind": FOLDER_STORAGE, "label": "This PC",
+                 "roles": list(ROLES), "download": False}  # fmt: skip
+        storages.insert(0, local)
+    local["kind"], local["path"] = FOLDER_STORAGE, cfg.output_root
+    seen: set[str] = set()
+    storages = [s for s in storages if not (s["id"] in seen or seen.add(s["id"]))]
+    targets = [s for s in storages if s["download"]]
+    for s in storages:
+        s["download"] = s is (targets[0] if targets else local)
+    cfg.storages = storages
+    cfg.music_libraries = [
+        {
+            **{k: v for k, v in s.items() if k not in ("roles", "download")},
+            "kind": _MUSIC_KIND.get(s["kind"], s["kind"]),
+        }
+        for s in storages
+        if s["id"] != LOCAL_STORAGE and "music" in s["roles"]
+    ]
+    return cfg
+
+
 def save_config(cfg: AppConfig) -> None:
+    cfg = _reconcile(cfg)
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
