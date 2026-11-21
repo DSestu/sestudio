@@ -27,6 +27,7 @@ export default function ForYouWidget({ group, lang, onOpen, onSeeAll, style }: P
   return (
     <Widget
       size="L"
+      fit
       title="For you"
       sub={`Because you watched ${group.because.title}`}
       onOpen={onSeeAll}
