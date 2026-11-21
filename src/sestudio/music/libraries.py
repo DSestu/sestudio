@@ -114,6 +114,11 @@ def remove(library_id: str) -> None:
         storage.remove(library_id)
     else:
         storage.set_roles(library_id, [r for r in s["roles"] if r != "music"])
+    forget(library_id)
+
+
+def forget(library_id: str) -> None:
+    """Drop what was kept of a library that is gone: a remote's listing, YT Music's likes."""
     with _lock:
         _remote.pop(library_id, None)
         _ytmusic.pop(library_id, None)

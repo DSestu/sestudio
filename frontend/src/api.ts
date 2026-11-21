@@ -1089,12 +1089,45 @@ export interface StorageInfo {
   state: 'online' | 'offline'
   /** When it went away (epoch seconds); null while it answers. */
   since?: number | null
+  /** Room on its disk, bytes; null when it is not a folder or is away. */
+  usage?: { total: number; free: number } | null
 }
 
 export async function getStorages(): Promise<StorageInfo[]> {
   const res = await fetch(`${BASE}/storages`)
   if (!res.ok) throw new Error(`Storages failed (${res.status})`)
   return res.json()
+}
+
+async function storageCall<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}/storages${path}`, {
+    ...init,
+    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.detail ?? `Storage request failed (${res.status})`)
+  return body as T
+}
+
+export interface NewStorage {
+  kind: 'folder' | 'remote_sestudio' | 'ytmusic_account'
+  roles: ('video' | 'music')[]
+  label?: string
+  path?: string
+  url?: string
+  token?: string
+  download?: boolean
+}
+
+/** What the add form says about a folder before it is added. */
+export interface FolderCheck { path: string; name: string; folders: number; total: number; free: number }
+
+export const storagesApi = {
+  add: (body: NewStorage) => storageCall<StorageInfo>('', { method: 'POST', body: JSON.stringify(body) }),
+  edit: (id: string, patch: { label?: string; roles?: StorageInfo['roles']; download?: true }) =>
+    storageCall<StorageInfo>(`/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  remove: (id: string) => storageCall<{ ok: boolean }>(`/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  check: (path: string) => storageCall<FolderCheck>(`/check?path=${encodeURIComponent(path)}`),
 }
 
 /** Everything on disk, grouped by title. Newest first. */

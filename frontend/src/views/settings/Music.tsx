@@ -1,16 +1,8 @@
 import { useEffect, useState } from 'react'
 import { openHarmonyBasics } from '../../components/music/harmony/store'
-import AddLibrary from '../../components/music/crates/AddLibrary'
-import { librariesApi, stateLine, useLibraries, type AnalysisStatus, type ShareToken } from '../../musicLibraries'
+import { librariesApi, useLibraries, type AnalysisStatus, type ShareToken } from '../../musicLibraries'
 import { Choice, RowSelect, SettingRow, SettingsGroup, ToggleRow } from './rows'
 import type { SettingsProps } from './SettingsView'
-
-const KIND_NAME = {
-  local: 'This PC',
-  local_folder: 'Folder',
-  remote_sestudio: 'sestudio server',
-  ytmusic_account: 'YouTube Music',
-} as const
 
 const FIELD = 'input input-sm h-9 flex-1 min-w-0 bg-base-100 border-0'
 
@@ -32,7 +24,6 @@ function useModesProgress(): AnalysisStatus['modes'] | undefined {
 /** Settings › Music: the libraries, the genre model, the YouTube Music cookies file, and the tokens other sestudio servers read this one with. */
 export default function Music({ settings, onUpdate }: SettingsProps) {
   const libraries = useLibraries()
-  const [adding, setAdding] = useState(false)
   const [cookies, setCookies] = useState(settings.ytmusic_cookies ?? '')
   const [tokens, setTokens] = useState<ShareToken[]>([])
   const [label, setLabel] = useState('')
@@ -51,9 +42,6 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
     if (!window.confirm(`Revoke “${t.label}”? Servers using it lose access at once.`)) return
     librariesApi.revokeToken(t.id).then(() => { setFresh(undefined); return librariesApi.tokens().then(setTokens) }, fail)
   }
-  const remove = (id: string, name: string) => {
-    if (window.confirm(`Remove “${name}” from the libraries? Its files are not touched.`)) librariesApi.remove(id).catch(fail)
-  }
   const reanalyse = (id?: string, name?: string) => {
     const what = name ? `every file in “${name}”` : 'every file in every library'
     if (window.confirm(`Analyse ${what} again? Key, mode, tempo, genre and structure are redone in the background; it can take a while.`)) {
@@ -61,28 +49,33 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
     }
   }
   const analysed = libraries.filter(l => l.kind === 'local' || l.kind === 'local_folder')
+  const tracks = libraries.reduce((n, l) => n + l.count, 0)
+  const indexed = analysed.reduce((n, l) => n + (l.indexed ?? 0), 0)
+  const indexing = analysed.some(l => l.indexing)
+  const away = libraries.filter(l => l.state !== 'online')
 
   return (
     <>
       <SettingsGroup title="Libraries">
-        {libraries.map(l => (
-          <SettingRow
-            key={l.id}
-            label={<>{l.label} <span className="text-base-content/50 font-normal">· {KIND_NAME[l.kind]}</span></>}
-            help={<span className="block truncate">{stateLine(l)} · {l.count} tracks{(l.path ?? l.url) ? ` · ${l.path ?? l.url}` : ''}</span>}
-          >
-            {analysed.includes(l) && <button onClick={() => reanalyse(l.id, l.label)} className="btn btn-ghost btn-sm">Reanalyse</button>}
-            {l.kind !== 'local' && <button onClick={() => remove(l.id, l.label)} className="btn btn-ghost btn-sm">Remove</button>}
-          </SettingRow>
-        ))}
+        {/* Where music lives is a storage with the music role, managed with the
+            others in Settings › Storage (SPEC-storage §8.2). */}
+        <SettingRow
+          label={`${libraries.length} ${libraries.length === 1 ? 'library' : 'libraries'} · ${tracks} tracks`}
+          help={
+            indexing
+              ? `Analysing: ${indexed} of ${analysed.reduce((n, l) => n + l.count, 0)} tracks`
+              : away.length
+                ? `${away.map(l => l.label).join(', ')} ${away.length === 1 ? 'is' : 'are'} away`
+                : 'Added, renamed and removed in Storage'
+          }
+        >
+          <a href="#/settings?s=storage" className="btn btn-ghost btn-sm">Storage ›</a>
+        </SettingRow>
         {modes && (
           <SettingRow label="Reading tonic and mode" help={`${modes.done} of ${modes.total} tracks`}>
             <progress className="progress progress-primary w-24" value={modes.done} max={modes.total} aria-label="Tonic and mode progress" />
           </SettingRow>
         )}
-        <button onClick={() => setAdding(true)} className="mx-3 min-h-14 w-[calc(100%-1.5rem)] text-left text-[15px] font-medium text-primary border-base-300 not-first:border-t">
-          Add a library
-        </button>
         {analysed.length > 1 && (
           <button onClick={() => reanalyse()} className="mx-3 min-h-14 w-[calc(100%-1.5rem)] text-left text-[15px] font-medium text-primary border-base-300 border-t">
             Reanalyse all libraries
@@ -197,7 +190,6 @@ export default function Music({ settings, onUpdate }: SettingsProps) {
           </SettingRow>
         ))}
       </SettingsGroup>
-      {adding && <AddLibrary onClose={() => setAdding(false)} />}
     </>
   )
 }
