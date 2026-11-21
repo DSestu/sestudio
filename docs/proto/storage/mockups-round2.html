@@ -1,0 +1,506 @@
+<title>Storage Mockups R2</title>
+<style>
+/* Review page: one column of mockup sections; each shows a phone frame and a scaled desktop frame, then a pick + note. Mock colours are the app's daisyUI theme. */
+:root{
+  --page:oklch(11% .012 240); --b1:oklch(16% .015 240); --b2:oklch(20% .02 240); --b3:oklch(26% .025 240);
+  --card:oklch(21% .035 235); --fg:oklch(92% .01 240); --muted:oklch(68% .02 240); --dim:oklch(52% .02 240);
+  --primary:oklch(72% .16 230); --primary-soft:oklch(34% .08 232); --ok:oklch(76% .17 155); --warn:oklch(83% .16 85); --err:oklch(68% .19 25);
+  --line:oklch(28% .025 240);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--page);color:var(--fg);font:14px/1.45 ui-sans-serif,system-ui,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+h1{font-size:22px;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 8px;max-width:70ch}
+.status{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--page);padding:8px 0;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
+.status b{color:var(--ok)}
+section.round{margin-top:36px;padding-top:20px;border-top:1px solid var(--line)}
+section.round>h2{font-size:18px;margin:0 0 4px}
+.story{color:var(--muted);font-size:13px;margin:0 0 16px}
+.opt{margin:22px 0 10px}
+.opt h3{font-size:16px;margin:0 0 4px;display:flex;gap:10px;align-items:center}
+.opt h3 .tag{font-size:12px;background:var(--primary-soft);color:var(--primary);padding:2px 8px;border-radius:99px}
+.opt p.how{color:var(--muted);margin:0 0 12px;max-width:80ch}
+.frames{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.deskwrap{flex:1 1 560px;min-width:0}
+.deskscale{width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line)}
+.desk{width:1200px;transform-origin:top left}
+.phonewrap{flex:0 0 auto;margin-inline:auto}
+.phone{width:360px;max-width:100%;border:1px solid var(--line);border-radius:28px;overflow:hidden;background:var(--b1);position:relative}
+.cap{font-size:12px;color:var(--dim);margin:6px 2px 0}
+/* ---- app chrome ---- */
+.app{background:var(--b1);color:var(--fg);display:flex;min-height:640px}
+.rail{width:84px;margin:10px;border-radius:14px;background:var(--b2);display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0;flex:none}
+.rail .logo{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#fff,var(--primary));margin-bottom:6px}
+.rail .sbtn{width:46px;height:46px;border-radius:12px;background:var(--primary);display:grid;place-items:center;color:#04121c;margin-bottom:6px}
+.rail .it{width:64px;padding:6px 0;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted)}
+.rail .it.on{background:var(--primary-soft);color:var(--fg)}
+.rail .it.on svg{color:var(--primary)}
+.rail .sp{flex:1}
+.main{flex:1;min-width:0;padding:10px 20px 20px 10px}
+.hcard{background:linear-gradient(180deg,oklch(23% .045 235),oklch(19% .035 238));border:1px solid oklch(30% .05 235);border-radius:16px;padding:14px 18px 10px}
+.hrow{display:flex;align-items:center;gap:16px}
+.hrow h2{font-size:20px;font-weight:500;margin:0}
+.search{flex:1;height:38px;border:1.5px solid var(--primary);border-radius:9px;display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--dim);font-size:13px;background:var(--b1)}
+.kbd{margin-left:auto;font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--muted)}
+.bell{width:36px;height:36px;border-radius:10px;background:var(--b3);display:grid;place-items:center;position:relative;color:var(--fg)}
+.bell i{position:absolute;top:-7px;right:-6px;background:var(--primary);color:#04121c;font:600 10px/1 system-ui;font-style:normal;padding:2px 6px;border-radius:99px}
+.tabs{display:inline-flex;background:var(--b1);border-radius:10px;padding:3px;margin-top:10px}
+.tabs span{padding:6px 40px;border-radius:8px;color:var(--muted);font-size:13px}
+.tabs span.on{background:oklch(36% .08 232);color:var(--fg)}
+.tools{display:flex;align-items:center;gap:12px;margin:14px 0 10px;flex-wrap:wrap}
+.filter{width:200px;height:30px;border:1px solid var(--line);border-radius:5px;padding:0 10px;color:var(--dim);font-size:12px;display:flex;align-items:center;background:var(--b1)}
+.count{color:var(--muted);font-size:13px}
+.lay{margin-left:auto;display:flex;gap:2px;font-size:12px;color:var(--muted)}
+.lay span{padding:5px 10px;border-radius:6px}
+.lay span.on{background:var(--b2);color:var(--fg)}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+.pc{min-width:0}
+.poster{aspect-ratio:2/3;border-radius:8px;background:var(--b3) center/cover no-repeat;position:relative;overflow:hidden}
+.rate{position:absolute;top:6px;right:6px;background:var(--ok);color:#06210f;font:600 11px/1 system-ui;padding:3px 7px;border-radius:99px}
+.where{position:absolute;left:6px;bottom:6px;display:flex;gap:3px;flex-wrap:wrap}
+.where b{font:600 10px/1 system-ui;padding:3px 6px;border-radius:5px;background:oklch(14% .02 240 / .85);color:var(--fg);backdrop-filter:blur(4px)}
+.where b.off{color:var(--err)}
+.pc .t{font-size:13px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc .m{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc.offline .poster{filter:grayscale(1) brightness(.45)}
+.pc.offline .t{color:var(--dim)}
+.offtag{position:absolute;inset:auto 0 0 0;padding:6px;background:linear-gradient(transparent,oklch(10% .02 25 / .9));font:600 10px/1.2 system-ui;color:var(--err)}
+/* storage chips */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px}
+.chip{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:var(--b2);color:var(--fg);font-size:13px;white-space:nowrap}
+.chip small{color:var(--muted)}
+.chip.on{background:var(--primary-soft);outline:1.5px solid var(--primary)}
+.chip.off{color:var(--dim)}
+.chip.off small{color:var(--err)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+.dot.off{background:var(--err)}
+.locline{font:12px ui-monospace,monospace;color:var(--muted);margin:0 0 12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.locline .bar{width:120px;height:5px;border-radius:3px;background:var(--b3);overflow:hidden;display:inline-block;vertical-align:middle}
+.locline .bar i{display:block;height:100%;background:var(--primary)}
+/* sections */
+.sect{margin:6px 0 18px}
+.shead{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);margin-bottom:10px}
+.shead .nm{font-weight:600;font-size:14px}
+.shead .pth{font:12px ui-monospace,monospace;color:var(--muted)}
+.shead .meta{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+.shead .all{color:var(--primary);font-size:12px;white-space:nowrap}
+.sect.off .shead .nm{color:var(--dim)}
+.rowscroll{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 70px)/6);gap:14px;overflow:hidden}
+/* header switcher */
+.switch{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:9px;background:var(--b1);border:1px solid oklch(34% .06 235);font-size:13px;white-space:nowrap}
+.switch .pth{font:11px ui-monospace,monospace;color:var(--muted)}
+.menu{position:absolute;z-index:3;background:var(--b2);border:1px solid var(--line);border-radius:10px;padding:6px;width:330px;box-shadow:0 12px 30px #0009}
+.menu .mi{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:7px}
+.menu .mi.on{background:var(--primary-soft)}
+.menu .mi .tx{min-width:0}
+.menu .mi .tx div:first-child{font-size:13px}
+.menu .mi .tx div+div{font:11px ui-monospace,monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.tree{border:1px solid var(--line);border-radius:10px;padding:6px 0;font-size:13px}
+.tree .r{display:flex;align-items:center;gap:8px;padding:6px 14px}
+.tree .r .sz{margin-left:auto;color:var(--muted);font-size:12px}
+.tree .r.root{font-weight:600}
+.tree .r.root .p{font:11px ui-monospace,monospace;color:var(--muted);font-weight:400}
+.tree .r.off{color:var(--dim)}
+/* phone */
+.ph{padding:10px 10px 90px;min-height:700px}
+.ph .hcard{padding:12px 14px 10px;border-radius:18px}
+.ph .hrow h2{font-size:19px;flex:1}
+.ph .tabs{display:flex}
+.ph .tabs span{flex:1;text-align:center;padding:7px 0}
+.ph .grid{grid-template-columns:repeat(2,1fr);gap:10px}
+.ph .chips{flex-wrap:nowrap;overflow:hidden}
+.ph .rowscroll{grid-auto-columns:42%}
+.ph .tools{margin:12px 0 8px}
+.ph .filter{width:130px}
+.nav{position:absolute;left:10px;right:10px;bottom:10px;height:62px;border-radius:18px;background:var(--b2);border:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;font-size:10px;color:var(--muted)}
+.nav div{display:flex;flex-direction:column;align-items:center;gap:2px}
+.nav .s{width:52px;height:52px;border-radius:14px;background:var(--primary);color:#04121c;display:grid;place-items:center}
+.nav .on{color:var(--fg)} .nav .on svg{color:var(--primary)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--b2);border-radius:18px 18px 0 0;border-top:1px solid var(--line);padding:10px 14px 20px;z-index:4;box-shadow:0 -12px 30px #000a}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--b3);margin:0 auto 10px}
+.scrim{position:absolute;inset:0;background:#0008;z-index:3}
+/* settings */
+.set{display:flex;gap:18px}
+.cats{width:250px;flex:none}
+.cats .g{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:14px 8px 4px}
+.cats .c{padding:8px 10px;border-radius:8px;font-size:13px;color:var(--muted);display:flex;justify-content:space-between}
+.cats .c.on{background:var(--primary-soft);color:var(--fg)}
+.setmain{flex:1;min-width:0}
+.gh{color:var(--muted);font-size:13px;margin:14px 4px 6px}
+.box{background:var(--b2);border-radius:14px;padding:0 14px}
+.srow{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.srow:last-child{border-bottom:0}
+.srow .tx{flex:1;min-width:0}
+.srow .nm{font-size:14px}
+.srow .nm small{color:var(--muted);font-size:13px}
+.srow .pth{font:12px ui-monospace,monospace;color:var(--muted);word-break:break-all}
+.srow .sub{font-size:12px;color:var(--muted)}
+.btn{font-size:13px;color:var(--fg);padding:6px 10px;border-radius:7px;white-space:nowrap}
+.btn.p{color:var(--primary)}
+.btn.solid{background:var(--primary);color:#04121c;font-weight:600}
+.roles{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.role{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--b3);color:var(--fg)}
+.role.dl{background:oklch(32% .07 155);color:var(--ok)}
+.role.offl{background:oklch(30% .08 25);color:var(--err)}
+.link{color:var(--primary);padding:14px 0;font-size:14px;border-bottom:1px solid var(--line)}
+.disk{background:var(--b2);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;border:1.5px solid transparent}
+.disk.target{border-color:oklch(50% .12 155)}
+.disk.off{opacity:.75}
+.disks{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.ph .disks{grid-template-columns:1fr}
+.disk .top{display:flex;gap:10px;align-items:center}
+.disk .top .nm{font-weight:600;flex:1;min-width:0}
+.usage{height:8px;border-radius:4px;background:var(--b3);overflow:hidden;display:flex}
+.usage i{background:var(--primary)}
+.usage.off i{background:var(--dim)}
+.disk .nums{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.tog{display:flex;gap:4px}
+.tog span{flex:1;text-align:center;font-size:12px;padding:6px 0;border-radius:7px;background:var(--b3);color:var(--muted)}
+.tog span.on{background:var(--primary-soft);color:var(--fg);outline:1px solid var(--primary)}
+.dltgt{font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted)}
+.dltgt .rb{width:14px;height:14px;border-radius:50%;border:2px solid var(--dim)}
+.dltgt.on{color:var(--ok)} .dltgt.on .rb{border-color:var(--ok);background:radial-gradient(var(--ok) 40%,transparent 45%)}
+.field{display:flex;flex-direction:column;gap:4px;margin:10px 0}
+.field label{font-size:12px;color:var(--muted)}
+.inp{height:36px;border:1px solid var(--line);border-radius:7px;background:var(--b1);display:flex;align-items:center;padding:0 10px;font:13px ui-monospace,monospace;gap:8px}
+.inp .btn{margin-left:auto;padding:3px 8px;background:var(--b3);font-family:system-ui}
+.hint{font-size:12px;color:var(--dim)}
+.addpanel{background:var(--b2);border-radius:14px;padding:14px;border:1px solid var(--line)}
+.addpanel h4{margin:0 0 4px;font-size:15px}
+.ok{color:var(--ok);font-size:12px}
+/* review controls */
+.pick{margin-top:18px;background:oklch(15% .02 240);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.pick .q{font-weight:600}
+.pbtns{display:flex;gap:8px;flex-wrap:wrap}
+.pbtns button{font:inherit;font-size:14px;min-height:44px;padding:8px 16px;border-radius:9px;border:1px solid var(--line);background:var(--b2);color:var(--fg);cursor:pointer}
+.pbtns button[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary);color:var(--primary);font-weight:600}
+.pbtns button:focus-visible,textarea:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+textarea{font:inherit;font-size:15px;width:100%;min-height:70px;padding:10px;border-radius:9px;border:1px solid var(--line);background:var(--b1);color:var(--fg);resize:vertical}
+@media (max-width:700px){.deskwrap{flex-basis:100%}}
+/* ---- round 2 additions ---- */
+.btn{display:inline-flex;align-items:center;gap:6px}
+.btn.out{border:1px solid var(--line);background:var(--b1)}
+.app.tall{min-height:740px;position:relative}
+.ib{width:32px;height:32px;border-radius:9px;background:var(--b3);display:grid;place-items:center;color:var(--muted);flex:none}
+.phone .ib{width:28px;height:28px}
+.cb{width:18px;height:18px;border-radius:5px;border:2px solid var(--dim);display:grid;place-items:center;flex:none;color:#04121c}
+.cb.on{background:var(--primary);border-color:var(--primary)}
+.dfm{position:absolute;left:50%;top:30px;transform:translateX(-50%);width:680px;background:var(--b2);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 50px #000b;z-index:4;padding:16px 18px 18px;min-height:640px}
+.pfm{position:absolute;left:0;right:0;bottom:0;top:40px;border-radius:18px 18px 0 0;background:var(--b2);z-index:4;padding:12px 12px 0;overflow:hidden;border-top:1px solid var(--line)}
+.fmh{display:flex;align-items:center;gap:10px}
+.fmh .tx{flex:1;min-width:0}
+.fmh h4{margin:0;font-size:17px}
+.sub{font-size:12px;color:var(--muted)}
+.fbtns{display:flex;gap:8px;margin:12px 0 4px}
+.phone .fbtns .btn{flex:1;justify-content:center}
+.seas{display:flex;align-items:center;gap:8px;padding:12px 0 4px;font-weight:600;font-size:13px}
+.seas small{font-weight:400;color:var(--muted);font-size:12px}
+.frow{position:relative;display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.frow .tx{flex:1;min-width:0}
+.frow .nm{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow.sel{background:oklch(24% .05 235);margin:0 -8px;padding-inline:8px;border-radius:8px}
+.pm{position:absolute;right:8px;top:calc(100% - 4px);z-index:6;width:170px;background:var(--b3);border:1px solid oklch(34% .03 240);border-radius:10px;padding:5px;box-shadow:0 12px 30px #000c}
+.pm .mi{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:7px;font-size:13px}
+.pm .mi.on{background:var(--primary-soft)}
+.selstrip{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;border-bottom:1px solid var(--line)}
+.selstrip .n{margin-left:auto;color:var(--muted)}
+.selbar{position:absolute;left:12px;right:12px;bottom:12px;z-index:7;background:var(--b3);border:1px solid var(--primary);border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 10px 30px #000c;flex-wrap:wrap}
+.selbar .n{flex:1;min-width:120px}
+.selbar .n small{display:block;color:var(--muted);font-size:12px}
+.crumb{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);margin:4px 0 12px;flex-wrap:wrap}
+.crumb b{color:var(--fg);font-weight:500}
+.pc{position:relative}
+.pc .dots{position:absolute;top:6px;left:6px;width:28px;height:28px;border-radius:8px;background:oklch(14% .02 240 / .85);display:grid;place-items:center;color:var(--fg)}
+.pc .cb{position:absolute;top:6px;left:6px;background:oklch(14% .02 240 / .85)}
+.pc .cb.on{background:var(--primary)}
+.pc.pick .poster{outline:2.5px solid var(--primary);outline-offset:-2.5px}
+.pc .pm{top:36px;left:6px;right:auto}
+.tree .r{position:relative}
+.tree .r .nmx{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree .r .sz{white-space:nowrap}
+.tree .r.pickrow{background:oklch(24% .05 235)}
+.tree .r.src{opacity:.45}
+.tree .r.drop{background:var(--primary-soft);outline:2px dashed var(--primary);outline-offset:-2px;border-radius:8px}
+.tree .r.nodrop{opacity:.5;cursor:not-allowed}
+.dropnote{font:600 11px system-ui;background:var(--primary);color:#04121c;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.ghost{position:absolute;z-index:8;display:flex;gap:8px;align-items:center;padding:7px 12px;border-radius:10px;background:var(--b3);border:1px solid var(--primary);box-shadow:0 12px 28px #000c;font-size:13px;transform:rotate(-2deg)}
+.ghost small{color:var(--muted)}
+.ph .tree .r{padding-inline:10px;gap:6px}
+.ph .tree .r .sz{font-size:11px}
+.ph .tree .r .p{display:none}
+.lbl{font-size:12px;color:var(--muted);margin:14px 0 6px}
+.dests{display:flex;flex-direction:column;gap:6px}
+.dest{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:10px;border:1.5px solid transparent;background:var(--b1)}
+.dest.on{border-color:var(--primary);background:var(--primary-soft)}
+.dest.dis{opacity:.55}
+.dest .tx{flex:1;min-width:0}
+.dest .nm{font-size:14px;font-weight:600}
+.dest .pth{font:11px ui-monospace,monospace;color:var(--muted);word-break:break-all}
+.fit{font-size:12px;margin-top:3px;display:flex;gap:5px;align-items:flex-start}
+.fit.ok{color:var(--ok)} .fit.bad{color:var(--err)} .fit.off{color:var(--dim)}
+.rbx{width:16px;height:16px;border-radius:50%;border:2px solid var(--dim);flex:none;margin-top:2px}
+.rbx.on{border-color:var(--primary);background:radial-gradient(var(--primary) 40%,transparent 45%)}
+.note{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--muted);margin:12px 0 0}
+.note svg{color:var(--ok);flex:none;margin-top:1px}
+.acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;align-items:center}
+.pop{position:absolute;z-index:5;width:430px;background:var(--b2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 20px 50px #000b}
+.pop:before{content:"";position:absolute;top:-7px;left:60px;width:12px;height:12px;background:var(--b2);border-left:1px solid var(--line);border-top:1px solid var(--line);transform:rotate(45deg)}
+.fopt{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:9px;background:var(--b1);margin-bottom:6px;font-size:13px}
+.fopt.on{outline:1.5px solid var(--primary);background:var(--primary-soft)}
+.fopt .pth{font:11px ui-monospace,monospace;color:var(--muted);word-break:break-all}
+.fb{border:1px solid var(--line);border-radius:10px;padding:4px 10px;background:var(--b1)}
+.fb .fr{display:flex;gap:8px;align-items:center;padding:7px 0;font-size:13px;border-bottom:1px solid var(--line)}
+.fb .fr:last-child{border:0;color:var(--primary)}
+.fb .fr small{margin-left:auto;color:var(--muted)}
+.pfull{background:var(--b2);padding:12px;min-height:700px}
+.qrow{display:flex;gap:12px;background:var(--b2);border-radius:12px;padding:10px 12px;margin-bottom:8px;align-items:flex-start}
+.qth{width:38px;height:56px;border-radius:6px;background:var(--b3) center/cover no-repeat;flex:none;display:grid;place-items:center;color:var(--primary)}
+.qrow .tx{flex:1;min-width:0}
+.qrow .t{font-size:14px;font-weight:600}
+.qrow .s{font-size:12px;color:var(--muted);margin-top:2px}
+.kind{display:inline-block;font:600 10px/1 system-ui;padding:3px 7px;border-radius:99px;background:var(--b3);color:var(--muted);margin-right:6px;vertical-align:1px;text-transform:uppercase;letter-spacing:.04em}
+.kind.x{background:var(--primary-soft);color:var(--primary)}
+.pbar{height:6px;border-radius:3px;background:var(--b3);overflow:hidden;margin:8px 0 4px}
+.pbar i{display:block;height:100%;background:var(--primary)}
+.qrow.done .s b{color:var(--ok);font-weight:600}
+.qrow.fail .s b{color:var(--warn);font-weight:600}
+.qact{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.qact .btn{padding:4px 10px;border:1px solid var(--line);background:var(--b1);font-size:12px}
+.qh{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin:14px 2px 6px}
+</style>
+
+<div class="wrap">
+  <div class="status" id="status">Loading…</div>
+  <h1>Storage: copy and move, round 2</h1>
+  <p class="lead">How to copy or move files between storages: <b>This PC</b> (<code>R:\Video\films-series</code>), <b>NAS films</b> (<code>\\nas\films</code>) and <b>Seedbox</b> (rclone mount on <code>M:\</code>, offline). <b>Backup disk</b> (<code>E:\Backup\video</code>, 12 GB free) is an example, only there to show the "not enough room" case. Four screens, each with a phone and a desktop frame. Pick one option per screen, or say what to mix. Answers save as you tap.</p>
+  <div id="rounds"></div>
+  <section class="round">
+    <h2>Anything else</h2>
+    <textarea id="general" placeholder="Other remarks…"></textarea>
+  </section>
+</div>
+
+<script>
+const I = {
+  home:'<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
+  tv:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="m10 8 5 2.5-5 2.5zM8 21h8"/>',
+  comp:'<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+  music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  heart:'<path d="M12 20s-7-4.4-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.6-9 9-9 9z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  bell:'<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>',
+  sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  pc:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  nas:'<rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5"/><path d="M8 6.5h.01M8 17.5h.01"/>',
+  cloud:'<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1 0 10z"/>',
+  folder:'<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>',
+  chev:'<path d="m9 6 6 6-6 6"/>', down:'<path d="m6 9 6 6 6-6"/>', back:'<path d="m15 6-6 6 6 6"/>',
+  layers:'<path d="m12 3 9 5-9 5-9-5zM3 13l9 5 9-5"/>', plus:'<path d="M12 5v14M5 12h14"/>', check:'<path d="m5 12 5 5 9-10"/>',
+};
+const ic = (n,s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
+const T = 'https://image.tmdb.org/t/p/w342/';
+// real titles from the collection; `on` = which storages hold it (example split)
+const TITLES = [
+  ['Bleach','Season 2 · 14 files · 3.1 GB','e0kKmeM8R7Kersh5N2PPzIRNRhr','8.4',['pc']],
+  ['Erased','Season 1 · 12 files · 1.2 GB','2xo5jNOwXGP41umcmxzZgPxGpaI','8.5',['pc']],
+  ['Stargate SG-1','S1–S10 · 213 files · 50.4 GB','i1pG8vJvGZnYdlFeldq9PvnJC9B','8.3',['pc','nas']],
+  ['M.A.S.H.','S1–S4 · 86 files · 8.8 GB','9dIHQnqE2v7Bi1ze0hPeBZDAWJt','7.9',['nas']],
+  ['Neon Genesis Evangelion','Season 1 · 26 files','kfQKPQSAOmFd6vflaElwVeTLay7','8.6',['seed']],
+  ['TENGOKU-DAIMAKYO','Season 1 · 13 files · 1.8 GB','kstoMA74FLD1rWV3PwJuIgMlvAl','8.0',['pc']],
+  ['Stargate Atlantis','S1–S5 · 99 files · 19.0 GB','81z6ZRDxRiXZd4mioDuzLEU8USH','8.0',['nas']],
+  ['One-Punch Man','S1–S3 · 41 files · 5.2 GB','a8BknzvFVK5EZ83rKg1a83iwaj0','8.4',['pc']],
+  ['Texhnolyze','Season 1 · 22 files · 2.3 GB','kNHeuQIczfl3CIJOiF8yFu1Hz9I','7.0',['seed']],
+  ['Stargate Universe','S1–S2 · 40 files · 6.9 GB','dHOaOZGUhnoRXeK9mhYeSRPh59H','7.4',['nas']],
+  ['Sakamoto Days','Season 1 · 22 files · 3.8 GB','lRNXHxuOVO9TWIs98IOHTjY8XN7','8.0',['pc']],
+  ['Star Wars : Maul','Season 1 · 10 files · 4.5 GB','Av4nP5DgAjRpPWOe81SoE0oc8D0','8.6',['pc']],
+];
+const ST = {
+  pc:{nm:'This PC',short:'PC',icon:'pc',path:'R:\\Video\\films-series',count:1116,free:'2.1 TB free of 7.3 TB',use:71,state:'on'},
+  nas:{nm:'NAS films',short:'NAS',icon:'nas',path:'\\\\nas\\films',count:412,free:'5.8 TB free of 12 TB',use:52,state:'on'},
+  seed:{nm:'Seedbox',short:'Seedbox',icon:'cloud',path:'M:\\  (rclone · ftp://seedbox)',count:87,free:'offline since 21:04',use:40,state:'off'},
+};
+const pcard = (t, opts={}) => {
+  const off = t[4].every(s=>ST[s].state==='off');
+  const badges = opts.badges ? `<div class="where">${t[4].map(s=>`<b class="${ST[s].state==='off'?'off':''}">${ST[s].short}</b>`).join('')}</div>` : '';
+  return `<div class="pc ${off?'offline':''}"><div class="poster" style="background-image:url(${T}${t[2]}.jpg)"><span class="rate">★ ${t[3]}</span>${off&&opts.offtag!==false?'<div class="offtag">On Seedbox · offline</div>':badges}</div><div class="t">${t[0]}</div><div class="m">${t[1]}</div></div>`;
+};
+const rail = () => `<div class="rail"><div class="logo"></div><div class="sbtn">${ic('search',20)}</div>
+  ${[['home','Home'],['tv','Media',1],['comp','Discover'],['music','Music'],['heart','Library']].map(([i,l,on])=>`<div class="it ${on?'on':''}">${ic(i)}${l}</div>`).join('')}
+  <div class="sp"></div><div class="it">${ic('sliders')}Settings</div></div>`;
+const head = (extra='') => `<div class="hcard"><div class="hrow"><h2>Media</h2>${extra}<div class="search">${ic('search',15)} Search titles, or paste a YouTube or Twitch link<span class="kbd">Ctrl K</span></div><div class="bell">${ic('bell')}<i>132</i></div></div><div class="tabs"><span class="on">Collection</span><span>Queue</span></div></div>`;
+const phead = (extra='') => `<div class="hcard"><div class="hrow"><h2>Media</h2><div class="bell">${ic('bell')}<i>132</i></div><div class="bell">${ic('sliders')}</div></div>${extra}<div class="tabs"><span class="on">Collection</span><span>Queue</span></div></div>`;
+const pnav = (on='Media') => `<div class="nav">${[['home','Home'],['tv','Media']].map(([i,l])=>`<div class="${l===on?'on':''}">${ic(i,20)}${l}</div>`).join('')}<div class="s">${ic('search',22)}</div>${[['music','Music'],['heart','Library']].map(([i,l])=>`<div class="${l===on?'on':''}">${ic(i,20)}${l}</div>`).join('')}</div>`;
+const tools = (count, phone) => `<div class="tools"><div class="filter">Filter…</div><span class="count">${count}</span>${phone?'':'<div class="lay"><span class="on">Grid</span><span>Details</span><span>Browse</span><span>Tree</span></div>'}</div>`;
+const chipRow = (sel, phone) => `<div class="chips"><span class="chip ${sel==='all'?'on':''}">${ic('layers',14)} All <small>1,615</small></span>${Object.entries(ST).map(([k,s])=>`<span class="chip ${sel===k?'on':''} ${s.state==='off'?'off':''}"><span class="dot ${s.state==='off'?'off':''}"></span>${s.nm} <small>${s.state==='off'?'offline':s.count.toLocaleString('en')}</small></span>`).join('')}</div>`;
+const sect = (k, n, phone) => { const s = ST[k]; const ts = TITLES.filter(t=>t[4].includes(k)).slice(0,n);
+  return `<div class="sect ${s.state==='off'?'off':''}"><div class="shead">${ic(s.icon,18)}<div><div class="nm">${s.nm}</div><div class="pth">${s.path}</div></div><div class="meta">${s.state==='off'?'<span style="color:var(--err)">Offline since 21:04</span>':s.count+' titles'+(phone?'':' · '+s.free)}</div>${phone?'':'<span class="all">Show all ›</span>'}</div><div class="rowscroll">${ts.map(t=>pcard(t,{offtag:false})).join('')}</div></div>`; };
+
+
+// ---- round 2 ----
+Object.assign(I,{
+  play:'<path d="M7 4v16l13-8z"/>',
+  trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  dots:'<path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/>',
+  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  move:'<path d="M3 12h14M12 6l6 6-6 6M21 4v16"/>',
+  x:'<path d="m6 6 12 12M18 6 6 18"/>',
+  warn:'<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>',
+  pause:'<path d="M8 5v14M16 5v14"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  file:'<path d="M6 3h8l4 4v14H6zM14 3v4h4"/>',
+  minus:'<path d="M6 12h12"/>',
+});
+const cb = on => `<span class="cb ${on?'on':''}">${on==='part'?ic('minus',12):on?ic('check',12):''}</span>`;
+const ib = n => `<span class="ib">${ic(n,16)}</span>`;
+const menu2 = (a,b) => `<div class="pm"><div class="mi ${a?'on':''}">${ic('copy',16)} Copy to…</div><div class="mi ${b?'on':''}">${ic('move',16)} Move to…</div></div>`;
+const rail2 = rail;
+const qhead = () => head().replace('<span class="on">Collection</span><span>Queue</span>','<span>Collection</span><span class="on">Queue</span>');
+const qphead = () => phead().replace('<span class="on">Collection</span><span>Queue</span>','<span>Collection</span><span class="on">Queue</span>');
+const PCT = TITLES.filter(t=>t[4].includes('pc'));
+const bgGrid = (phone) => `<div class="grid">${PCT.slice(0,phone?4:6).map(t=>pcard(t)).join('')}</div>`;
+
+/* 1. files */
+const EPS = [['Children of the Gods','VF','1.4 GB'],['The Enemy Within','VF','1.2 GB'],['Emancipation','VF','1.2 GB'],['The Broca Divide','VO','1.1 GB'],['The First Commandment','VF','1.3 GB'],['Cold Lazarus','VF','1.2 GB'],['The Nox','VF','1.2 GB'],['Brief Candle','VO','1.0 GB'],["Thor's Hammer",'VF','1.2 GB']];
+const frow = (e,i,o={}) => `<div class="frow ${o.on?'sel':''}">${o.sel?cb(o.on):''}<div class="tx"><div class="nm">${e[0]}</div><div class="sub">E0${i+1} · ${e[1]} · ${e[2]} · This PC</div></div>${o.sel?'':ib('play')+ib('trash')+(o.dots?ib('dots'):'')}${o.menu||''}</div>`;
+const fhead = (right='') => `<div class="fmh"><div class="tx"><h4>Stargate SG-1</h4><div class="sub">213 files · 50.4 GB · This PC</div></div>${right}${ib('x')}</div>`;
+const seas = (n,x,box) => `<div class="seas">${box!==undefined?cb(box):ic('down',14)}Season ${n} <small>${x}</small></div>`;
+const filesBody = (kind, phone) => {
+  const n = phone?7:8;
+  if(kind==='A'){
+    return fhead()+`<div class="fbtns"><span class="btn out">${ic('copy',15)} Copy all to…</span><span class="btn out">${ic('move',15)} Move all to…</span></div>`+seas(1,'22 files · 5.1 GB')+
+      EPS.slice(0,n).map((e,i)=>frow(e,i,{dots:1,menu:i===2?menu2(0,1):''})).join('')+`<div class="seas">${ic('chev',14)}Season 2 <small>22 files · 5.0 GB</small></div>`;
+  }
+  const on = [1,1,1,1,1,0,1,0,0];
+  return fhead()+`<div class="selstrip">${cb('part')} Select all <span class="n">12 selected</span><span class="btn p">Cancel</span></div>`+seas(1,'22 files · 5.1 GB','part')+
+    EPS.slice(0,n).map((e,i)=>frow(e,i,{sel:1,on:on[i]})).join('')+`<div class="seas">${ic('chev',14)}Season 2 <small>22 files · 5.0 GB</small></div>`+
+    `<div class="selbar"><div class="n"><b>12 files · 14.8 GB</b><small>on This PC</small></div><span class="btn solid">${ic('copy',15)} Copy to…</span><span class="btn out">${ic('move',15)} Move to…</span></div>`;
+};
+const filesOpt = kind => ({
+  desk: () => `<div class="app tall">${rail()}<div class="main">${head()}${tools('1,116 titles on This PC')}${bgGrid()}</div><div class="scrim"></div><div class="dfm">${filesBody(kind)}</div></div>`,
+  phone: () => `<div class="ph">${phead()}${tools('1,116 titles',1)}${bgGrid(1)}</div><div class="scrim"></div><div class="pfm">${filesBody(kind,1)}</div>`,
+});
+const FILES = [
+  { id:'A', name:'Per-row menu and Copy all / Move all', tag:'menu', how:'Every file row gets a <b>⋯</b> button with <b>Copy to…</b> and <b>Move to…</b>. Two buttons at the top of the modal, <b>Copy all to…</b> and <b>Move all to…</b>, do the whole title (213 files). Nothing new to learn, but picking a few files means doing them one by one.',
+    ...filesOpt('A'), cap:['Desktop: menu open on one row','Phone: same modal, full height'] },
+  { id:'B', name:'Select mode with a bottom bar', tag:'select', how:'A <b>Select</b> button in the header turns the rows into checkboxes, with <b>Select all</b> and a checkbox per season. A bar at the bottom says <b>12 files · 14.8 GB</b> with <b>Copy to…</b> and <b>Move to…</b>. Best for a handful of episodes from several seasons. Shown with select mode already on.',
+    ...filesOpt('B'), cap:['Desktop: 12 files selected','Phone: same, bar at the bottom'] },
+];
+
+/* 2. tree + browse */
+const lt = (count,on,phone) => `<div class="tools"><div class="filter">Filter…</div><span class="count">${count}</span><div class="lay">${phone?`<span class="on">${on} ${ic('down',12)}</span>`:['Grid','Details','Browse','Tree'].map(x=>`<span class="${x===on?'on':''}">${x}</span>`).join('')}</div></div>`;
+const trow = o => `<div class="r ${o.cls||''}" style="padding-left:${14+(o.d||0)*22}px">${o.cb!==undefined?cb(o.cb):''}${ic(o.open?'down':o.leaf?'file':'chev',14)}${ic(o.icon,15)} <span class="nmx">${o.nm}</span>${o.p?`<span class="p">${o.p}</span>`:''}<span class="sz">${o.sz}</span>${o.dots?ib('dots'):''}${o.extra||''}${o.menu||''}</div>`;
+const rootPC = o => trow({cls:'root',icon:'pc',nm:'This PC',p:'R:\\Video\\films-series',sz:'1,116 titles · 5.2 TB',open:1,...o});
+const rootNAS = o => trow({cls:'root',icon:'nas',nm:'NAS films',p:'\\\\nas\\films',sz:'412 titles · 6.2 TB',...o});
+const rootSEED = o => trow({cls:'root off',icon:'cloud',nm:'Seedbox',p:'M:\\',sz:'offline since 21:04',...o});
+const treeRows = (o={}) => {
+  const d = !!o.dots, c = o.cbs;
+  const pick = i => c?{cb:!!c[i],cls:c[i]?'pickrow':''}:{};
+  return [
+    rootPC(),
+    trow({d:1,icon:'folder',nm:'Bleach',sz:'14 files · 3.1 GB',dots:d,...(c?{cb:false}:{})}),
+    trow({d:1,icon:'folder',nm:'Stargate SG-1',sz:'213 files · 50.4 GB',dots:d,open:o.openSG,menu:o.menuSG,...(c?pick(0):{}),cls:(o.srcSG?'src ':'')+(c&&c[0]?'pickrow':'')}),
+    o.openSG?trow({d:2,icon:'folder',nm:'Season 1',sz:'22 files · 5.1 GB',dots:d,open:1}):'',
+    o.openSG?trow({d:3,icon:'file',nm:'S01E01 Children of the Gods',sz:'1.4 GB',dots:d,leaf:1}):'',
+    o.openSG?trow({d:3,icon:'file',nm:'S01E02 The Enemy Within',sz:'1.2 GB',dots:d,leaf:1}):'',
+    trow({d:1,icon:'folder',nm:'One-Punch Man',sz:'41 files · 5.2 GB',dots:d,...(c?pick(1):{}),cls:c&&c[1]?'pickrow':''}),
+    rootNAS(o.nasRoot||{}),
+    rootSEED(o.seedRoot||{}),
+  ].join('');
+};
+const bcard = (t,o={}) => { const h = pcard(t,{}).replace('<span class="rate">', (o.cb!==undefined?cb(o.cb):o.dots?`<span class="dots">${ic('dots',16)}</span>`:'')+'<span class="rate">'); return o.pick?h.replace('class="pc ','class="pc pick '):o.menu?h.replace(/<\/div>$/,o.menu+'</div>'):h; };
+const crumb = `<div class="crumb">${ic('layers',14)} <span>All storages</span> › ${ic('pc',14)} <span>This PC</span> › <b>Series</b></div>`;
+const bar = (txt,sub,phone) => `<div class="selbar" style="${phone?'bottom:84px':'left:110px'}"><div class="n"><b>${txt}</b><small>${sub}</small></div><span class="btn solid">${ic('copy',15)} Copy to…</span><span class="btn out">${ic('move',15)} Move to…</span></div>`;
+const treeDesk = (inner, extraApp='') => `<div class="app tall">${rail()}<div class="main">${head()}${lt('1,615 titles on 3 storages','Tree')}${chipRow('all')}<div class="tree" style="position:relative">${inner}</div></div>${extraApp}</div>`;
+const treePhone = (inner, extra='') => `<div class="ph">${phead()}${lt('1,615 titles','Tree',1)}${chipRow('all',1)}<div class="tree" style="position:relative">${inner}</div></div>${extra}${pnav()}`;
+const TREE = [
+  { id:'T1', name:'A ⋯ menu on every folder and file', tag:'menu', how:'Every row in the Tree, and every card in Browse, has a <b>⋯</b> button (on hover on desktop) with <b>Copy to…</b> and <b>Move to…</b>. Works for a folder (the whole title or season) or one file. Same on both layouts. Desktop shows the Tree, phone shows Browse.',
+    desk: () => treeDesk(treeRows({dots:1,openSG:1,menuSG:menu2(1,0)})),
+    phone: () => `<div class="ph">${phead()}${lt('1,116 titles','Browse',1)}${chipRow('pc',1)}${crumb}<div class="grid">${bcard(PCT[0],{dots:1})}${bcard(PCT[2],{dots:1,menu:menu2(0,1)})}${bcard(PCT[3],{dots:1})}${bcard(PCT[4],{dots:1})}</div></div>${pnav()}`,
+    cap:['Desktop: Tree, menu open on Stargate SG-1','Phone: Browse, menu open on a card'] },
+  { id:'T2', name:'Select mode with a bottom bar', tag:'select', how:'The same select mode as option B for files: a <b>Select</b> button puts a checkbox on every row (Tree) or card (Browse), and a bar at the bottom shows what is picked with <b>Copy to…</b> and <b>Move to…</b>. You can mix folders and files, and pick across storages in the All view. Desktop shows Browse, phone shows Tree.',
+    desk: () => `<div class="app tall">${rail()}<div class="main">${head()}${lt('1,116 titles on This PC','Browse')}${crumb}<div class="selstrip" style="margin-bottom:12px">${cb('part')} Select all <span class="n">3 selected</span><span class="btn p">Cancel</span></div><div class="grid">${PCT.slice(0,6).map((t,i)=>bcard(t,{cb:[0,2,4].includes(i),pick:[0,2,4].includes(i)})).join('')}</div></div>${bar('3 folders · 58.7 GB','Bleach, Stargate SG-1, One-Punch Man')}</div>`,
+    phone: () => `<div class="ph">${phead()}${lt('1,615 titles','Tree',1)}${chipRow('all',1)}<div class="selstrip">${cb('part')} Select all <span class="n">2 selected</span><span class="btn p">Cancel</span></div><div class="tree" style="position:relative;margin-top:8px">${treeRows({cbs:[1,1]})}</div></div>${bar('2 folders · 55.6 GB','Stargate SG-1, One-Punch Man',1)}${pnav()}`,
+    cap:['Desktop: Browse, 3 cards selected','Phone: Tree, 2 rows selected'] },
+  { id:'T3', name:'Drag and drop onto a storage (desktop)', tag:'drag', how:'In the Tree, drag a folder or file onto another storage\'s root. The target lights up and says <b>Drop to copy · hold Shift to move</b>. An offline storage refuses the drop. A phone has no good drag, so it keeps the <b>⋯</b> menu from option T1. Fast for one big move, but nothing says "copy" unless you read the hint.',
+    desk: () => treeDesk(treeRows({openSG:0,srcSG:1,nasRoot:{cls:'root drop',extra:`<span class="dropnote">${ic('copy',12)} Drop to copy · hold Shift to move</span>`},seedRoot:{cls:'root off nodrop'}})+`<div class="ghost" style="left:300px;top:150px">${ic('folder',15)}<span>Stargate SG-1 <small>213 files · 50.4 GB</small></span><span class="ib" style="width:22px;height:22px">${ic('copy',13)}</span></div>`),
+    phone: () => treePhone(treeRows({dots:1,menuSG:menu2(0,1)})),
+    cap:['Desktop: dragging Stargate SG-1 over NAS films','Phone: falls back to the ⋯ menu'] },
+];
+
+/* 3. picker */
+const DEST = [
+  {nm:'NAS films',icon:'nas',path:'\\\\nas\\films',fit:'ok',txt:'Fits · 5.8 TB free'},
+  {nm:'Backup disk',icon:'pc',path:'E:\\Backup\\video',fit:'bad',txt:'Not enough room: needs 50.4 GB, 12 GB free'},
+  {nm:'Seedbox',icon:'cloud',path:'M:\\ · rclone mount',fit:'off',txt:'Offline since 21:04'},
+];
+const pHead = mode => `<div class="fmh"><div class="tx"><h4>${mode} Stargate SG-1 to…</h4><div class="sub">213 files · 50.4 GB · now on This PC</div></div></div>`;
+const pDests = () => `<div class="lbl">Where to</div><div class="dests">${DEST.map((d,i)=>`<div class="dest ${i===0?'on':''} ${d.fit==='off'?'dis':''}"><span class="rbx ${i===0?'on':''}"></span>${ic(d.icon,18)}<div class="tx"><div class="nm">${d.nm}</div><div class="pth">${d.path}</div><div class="fit ${d.fit}">${d.fit==='ok'?ic('check',13):d.fit==='bad'?ic('warn',13):''}<span>${d.txt}</span></div></div></div>`).join('')}</div>`;
+const pClash = () => `<div class="lbl">If a file is already there</div><div class="tog"><span class="on">Skip</span><span>Replace</span><span>Keep both</span></div><div class="hint" style="margin-top:6px">Files that are already there are left alone.</div>`;
+const pNote = mode => mode==='Move'?`<div class="note">${ic('check',14)}<span>The originals are deleted only after each copy is checked.</span></div>`:'';
+const pActs = mode => `<div class="acts"><span class="btn">Cancel</span><span class="btn solid lg">${mode} 213 files</span></div>`;
+const pChooser = () => `<div class="lbl">Folder on NAS films</div><div class="fopt on"><span class="rbx on"></span><div class="tx"><div>Same place as now</div><div class="pth">\\\\nas\\films\\Series\\Stargate SG-1</div></div></div><div class="fopt"><span class="rbx"></span><div class="tx"><div>Pick another folder</div></div></div><div class="fb"><div class="crumb" style="margin:6px 0">${ic('nas',14)} NAS films › <b>Series</b></div>${[['Stargate Atlantis','99 files'],['Stargate SG-1','213 files'],['Stargate Universe','40 files']].map(f=>`<div class="fr">${ic('folder',15)} ${f[0]}<small>${f[1]}</small></div>`).join('')}<div class="fr">${ic('plus',15)} New folder</div></div>`;
+const PICKER = [
+  { id:'P1', name:'Bottom sheet and popover', tag:'light', how:'Quick and small: a <b>bottom sheet</b> on phone, a <b>popover</b> next to the button on desktop. Lists the other storages with path and free space, checks that it fits, then asks what to do with files that are already there. The folder is always the same relative path as now. Phone shows Copy, desktop shows Move (with the safety line).',
+    desk: () => `<div class="app tall">${rail()}<div class="main">${head()}${tools('1,116 titles on This PC')}${bgGrid()}</div><div class="scrim"></div><div class="pop" style="left:260px;top:120px">${pHead('Move')}${pDests()}${pClash()}${pNote('Move')}${pActs('Move')}</div></div>`,
+    phone: () => `<div class="ph">${phead()}${tools('1,116 titles',1)}${bgGrid(1)}</div><div class="scrim"></div><div class="sheet"><div class="grab"></div>${pHead('Copy')}${pDests()}${pClash()}${pActs('Copy')}</div>`,
+    cap:['Desktop: popover, Move','Phone: bottom sheet, Copy'] },
+  { id:'P2', name:'Full modal with a folder chooser', tag:'full', how:'A full modal with the same list, plus a <b>folder chooser inside the destination</b>: default is the same place as now, or pick or create another folder there. Slower for a plain copy, better when the NAS is organised differently. Desktop shows Copy in two columns, phone shows Move as a full page.',
+    desk: () => `<div class="app tall">${rail()}<div class="main">${head()}${tools('1,116 titles on This PC')}${bgGrid()}</div><div class="scrim"></div><div class="dfm" style="width:860px;min-height:0">${pHead('Copy')}<div style="display:flex;gap:22px"><div style="flex:1;min-width:0">${pDests()}${pClash()}</div><div style="flex:1;min-width:0">${pChooser()}</div></div>${pActs('Copy')}</div></div>`,
+    phone: () => `<div class="pfull"><div class="fmh">${ib('back')}<div class="tx"><h4>Move Stargate SG-1 to…</h4><div class="sub">213 files · 50.4 GB · now on This PC</div></div></div>${pDests()}${pChooser()}${pClash()}${pNote('Move')}${pActs('Move')}</div>`,
+    cap:['Desktop: two columns, Copy','Phone: full page, Move'] },
+];
+
+/* 4. queue */
+const qrow = (o) => `<div class="qrow ${o.cls||''}">${o.poster?`<div class="qth" style="background-image:url(${T}${o.poster}.jpg)"></div>`:`<div class="qth">${ic(o.icon,20)}</div>`}<div class="tx"><div class="t"><span class="kind ${o.kx?'x':''}">${o.kind}</span>${o.t}</div><div class="s">${o.s}</div>${o.pct!==undefined?`<div class="pbar"><i style="width:${o.pct}%"></i></div><div class="s">${o.s2}</div>`:''}${o.acts?`<div class="qact">${o.acts.map(a=>`<span class="btn">${a}</span>`).join('')}</div>`:''}</div></div>`;
+const SG = TITLES[2][2];
+const qrows = () => `<div class="qh">Now</div>`+
+  qrow({kind:'Download',t:'Stargate Universe · S2E04',s:'Downloading to This PC',pct:68,s2:'1.1 of 1.6 GB · 12 MB/s · 7 min left',poster:TITLES[9][2],acts:[ic('pause',12)+' Pause','Cancel']})+
+  qrow({kind:'Move',kx:1,t:'Moving Stargate SG-1 · S1–S10 · 213 files → NAS films',s:'From This PC',pct:25,s2:'12.4 of 50.4 GB · 38 MB/s · 17 min left',poster:SG,acts:[ic('pause',12)+' Pause','Cancel']})+
+  qrow({kind:'Download',t:'Sakamoto Days · S1E09',s:'Waiting · starts after the current download',poster:TITLES[10][2],acts:['Cancel']})+
+  `<div class="qh">Finished</div>`+
+  qrow({kind:'Copy',kx:1,cls:'done',t:'Stargate Atlantis · Season 2',s:`<b>${ic('check',12)} Copied 12 files to NAS films</b> · 4.6 GB · 4 min ago`,poster:TITLES[6][2],acts:['Clear']})+
+  qrow({kind:'Copy',kx:1,cls:'fail',t:'One-Punch Man · S1–S3 → NAS films',s:`<b>${ic('warn',12)} 3 files skipped: already there</b> · 38 of 41 files copied`,poster:TITLES[7][2],acts:['Replace them','Keep both','Clear']});
+const QUEUE = [
+  { id:'Q', name:'Transfers beside downloads', tag:'one list', how:'Copies and moves are rows in the same Queue as downloads, marked <b>Copy</b> or <b>Move</b>. A running one shows a progress bar, size, speed and time left, with <b>Pause</b> and <b>Cancel</b>. A finished one says what it did; a one that skipped files says how many and why, and offers what to do next.',
+    desk: () => `<div class="app tall">${rail()}<div class="main">${qhead()}<div style="max-width:760px;margin-top:6px">${qrows()}</div></div></div>`,
+    phone: () => `<div class="ph">${qphead()}${qrows()}</div>${pnav()}`,
+    cap:['Desktop: Queue tab','Phone: Queue tab'] },
+];
+
+let state = {files:{pick:'',note:''}, tree:{pick:'',note:''}, picker:{pick:'',note:''}, queue:{pick:'',note:''}, general:''};
+const SCREENS = [
+  ['files','Files list (a title\'s files modal)','Copy or move one title, one season or some episodes from the files modal.', FILES],
+  ['tree','Tree and Browse layouts','Copy or move folders and files from the other two layouts.', TREE],
+  ['picker','Choose where to','The sheet that asks where to, checks it fits, and what to do with files already there.', PICKER],
+  ['queue','Progress in Media › Queue','Watching a copy or move run, and what it says when it ends.', QUEUE],
+];
+function build(){
+  const root = document.getElementById('rounds');
+  root.innerHTML = SCREENS.map(([key,title,story,opts])=>`<section class="round" id="r-${key}"><h2>${title}</h2><p class="story">${story}</p>
+    ${opts.map(o=>`<div class="opt"><h3>${o.id}. ${o.name} <span class="tag">${o.tag}</span></h3><p class="how">${o.how}</p>
+      <div class="frames"><div class="phonewrap"><div class="phone">${o.phone()}</div><div class="cap">${o.cap[1]}</div></div>
+      <div class="deskwrap"><div class="deskscale"><div class="desk">${o.desk()}</div></div><div class="cap">${o.cap[0]}</div></div></div></div>`).join('')}
+    <div class="pick"><div class="q">Which one for ${title}?</div><div class="pbtns" data-key="${key}">${opts.map(o=>`<button type="button" data-v="${o.id}">${o.id}</button>`).join('')}<button type="button" data-v="mix">Mix</button><button type="button" data-v="none">None</button></div>
+    <textarea id="note-${key}" placeholder="What to change or mix (e.g. B on desktop, A on phone)…"></textarea></div></section>`).join('');
+  document.querySelectorAll('.pbtns').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return; const k=g.dataset.key; state[k].pick = state[k].pick===b.dataset.v?'':b.dataset.v; paint(); save();}));
+  SCREENS.forEach(([k])=>document.getElementById('note-'+k).addEventListener('input',e=>{state[k].note=e.target.value; save();}));
+  document.getElementById('general').addEventListener('input',e=>{state.general=e.target.value; save();});
+  fit(); addEventListener('resize',fit);
+}
+function paint(){
+  document.querySelectorAll('.pbtns').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(state[g.dataset.key].pick===b.dataset.v))));
+  SCREENS.forEach(([k])=>{document.getElementById('note-'+k).value=state[k].note||'';});
+  document.getElementById('general').value = state.general||'';
+}
+function fit(){ document.querySelectorAll('.deskscale').forEach(w=>{const d=w.firstElementChild; const s=Math.min(1,w.clientWidth/1200); d.style.transform=`scale(${s})`; w.style.height=(d.offsetHeight*s)+'px';}); }
+const st = document.getElementById('status');
+let t=null;
+function save(){ st.textContent='Saving…'; clearTimeout(t); t=setTimeout(async()=>{ try{ const r=await fetch('answers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)}); if(!r.ok) throw 0; st.innerHTML='<b>Saved</b> · Claude reads it from the server'; }catch(e){ st.textContent='Not saved: server unreachable'; } },600); }
+build();
+fetch('answers').then(r=>r.json()).then(d=>{ if(d){ SCREENS.forEach(([k])=>{ if(d[k]) state[k]=d[k]; }); if(typeof d.general==='string') state.general=d.general; } paint(); st.innerHTML='<b>Synced</b> · answers save as you tap'; }).catch(()=>{ paint(); st.textContent='Server unreachable: answers won\'t save'; });
+addEventListener('load',fit);
+</script>
