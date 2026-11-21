@@ -11,9 +11,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from sestudio import downloaded
+from sestudio import downloaded, remotefs
 from sestudio.config import load_config
 from sestudio.music import folders, libraries, runner, store
+from sestudio.web.ranged import ranged
 
 router = APIRouter(prefix="/music")
 
@@ -43,10 +44,12 @@ def _run(fn, *args, **kw):
         raise HTTPException(400, str(exc)) from None
 
 
-def _file(track_id: str, library_id: str | None = None):
+def _file(track_id: str, library_id: str | None = None, request: Request | None = None):
     path = libraries.file_for(track_id, library_id)
     if path is None:
         raise HTTPException(404, "No such track")
+    if isinstance(path, remotefs.RemoteFile):  # on a server: byte ranges, as from disk
+        return ranged(request, path, downloaded.media_type_for(path), {})
     return FileResponse(path, media_type=downloaded.media_type_for(path))
 
 
@@ -86,7 +89,7 @@ def reanalyse_all() -> dict[str, int]:
 @router.post("/libraries/{library_id}/reanalyse")
 def reanalyse_library(library_id: str) -> dict[str, int]:
     lib = _run(libraries.get, library_id)
-    if lib["kind"] not in (libraries.LOCAL, libraries.FOLDER):
+    if lib["kind"] not in libraries.FILE_KINDS:
         raise HTTPException(400, "Only folders on this server are analysed here")
     return {"tracks": runner.reanalyse(library_id, load_config().output_root)}
 
@@ -113,7 +116,7 @@ def other_tracks() -> list[dict]:
 async def library_audio(library_id: str, track_id: str, request: Request) -> Response:
     lib = _run(libraries.get, library_id)
     if lib["kind"] != libraries.REMOTE:
-        return _file(track_id, library_id)
+        return _file(track_id, library_id, request)
     remote = libraries.split_remote(track_id)
     if remote is None or remote[0]["id"] != library_id:
         raise HTTPException(404, "No such track")
@@ -192,5 +195,5 @@ def share_analysis(track_id: str) -> dict:
 
 
 @share.get("/tracks/{track_id}/audio")
-def share_audio(track_id: str) -> FileResponse:
-    return _file(track_id)
+def share_audio(track_id: str, request: Request) -> Response:
+    return _file(track_id, request=request)

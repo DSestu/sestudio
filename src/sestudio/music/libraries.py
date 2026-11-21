@@ -9,6 +9,7 @@ hands out; the routes in ``web/routes/music_libraries.py`` expose them.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import hmac
 import json
@@ -21,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from sestudio import downloaded, storage
+from sestudio import downloaded, remotefs, storage
 from sestudio.config import config_dir, load_config, save_config
 from sestudio.music import store
 
@@ -50,7 +51,32 @@ Invalid = storage.Invalid
 
 
 def registered() -> list[dict[str, Any]]:
-    return list(load_config().music_libraries)
+    return [*load_config().music_libraries, *_servers()]
+
+
+def _servers() -> list[dict[str, Any]]:
+    """FTP, SFTP and SMB storages holding music (SPEC-storage §9, PR 12)."""
+    return [
+        {
+            "id": s["id"],
+            "kind": s["kind"],
+            "label": s["label"],
+            "path": remotefs.top(s).as_posix(),
+            "host": s["host"],
+        }  # fmt: skip
+        for s in storage.all_storages()
+        if s["kind"] in storage.NETWORK and "music" in s["roles"]
+    ]
+
+
+#: Libraries made of files: on this machine, or on a server read in the app.
+FILE_KINDS = ("local", FOLDER, *storage.NETWORK)
+
+
+def _root(lib: dict[str, Any]) -> Path | remotefs.RemoteFile:
+    if lib["kind"] in storage.NETWORK:
+        return remotefs.top(storage.get(lib["id"]))
+    return Path(lib["path"])
 
 
 def all_libraries() -> list[dict[str, Any]]:
@@ -161,16 +187,26 @@ def folder_roots() -> list[tuple[str, Path]]:
     """
     reachable = {s["id"] for s in storage.all_storages() if storage.online(s)}
     return [
-        (lib["id"], Path(lib["path"]))
+        (lib["id"], _root(lib))
         for lib in all_libraries()
-        if lib["kind"] in ("local", FOLDER) and lib["id"] in reachable
+        if lib["kind"] in FILE_KINDS and lib["id"] in reachable
     ]
 
 
 # --- files on this machine ----------------------------------------------------
 
 
-def _files(lib_id: str, root: Path) -> list[downloaded.DownloadedFile]:
+def _files(
+    lib_id: str, root: Path | remotefs.RemoteFile
+) -> list[downloaded.DownloadedFile]:
+    if isinstance(root, remotefs.RemoteFile):
+        # The storage's kept listing, refreshed in the background: a server is
+        # never walked on a request (SPEC-storage §9).
+        return [
+            dataclasses.replace(f, track_id=downloaded.track_id(f.path, lib_id))
+            for f in storage.files_of(root.storage)
+            if f.kind == "audio"
+        ]
     return downloaded.audio_files(root, lib_id) if root.is_dir() else []
 
 
@@ -393,7 +429,7 @@ def tracks_of(lib: dict[str, Any]) -> list[dict[str, Any]]:
         return remote_tracks(lib)
     if lib["kind"] == YTMUSIC:
         return ytmusic_tracks(lib)["tracks"]
-    return local_tracks(lib["id"], Path(lib["path"]))
+    return local_tracks(lib["id"], _root(lib))
 
 
 def other_tracks() -> list[dict[str, Any]]:
@@ -424,8 +460,8 @@ def status(indexing: bool = False) -> list[dict[str, Any]]:
     out = []
     for lib in all_libraries():
         row = public(lib) | {"state": "online", "since": None, "error": ""}
-        if lib["kind"] in ("local", FOLDER):
-            root = Path(lib["path"])
+        if lib["kind"] in FILE_KINDS:
+            root = _root(lib)
             away = not storage.online(storage.get(lib["id"]))
             files = [] if away else _files(lib["id"], root)
             done = sum(stamps.get(f.track_id) == (f.mtime, f.size) for f in files)

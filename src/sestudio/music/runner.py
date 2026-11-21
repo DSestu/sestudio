@@ -16,6 +16,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from pathlib import Path
 from typing import Any
 
+from sestudio.remotefs import RemoteFile, media_input
 from sestudio import downloaded
 from sestudio.music import analysis, genres, libraries, store
 
@@ -70,8 +71,8 @@ def reanalyse(library_id: str | None, root: str | Path) -> int:
     ids = [
         f.track_id
         for lib, folder in libraries.folder_roots()
-        if library_id in (None, lib) and folder.is_dir()
-        for f in downloaded.audio_files(folder, lib)
+        if library_id in (None, lib)
+        for f in libraries._files(lib, folder)
     ]
     with _lock:
         for i in ids:
@@ -88,7 +89,7 @@ def _loop(root: str) -> None:
             run_once(root)
             for library, folder in libraries.folder_roots():
                 if library != libraries.LOCAL:  # `root` above is local
-                    run_once(folder, library=library)
+                    run_once(folder, library=library)  # a server's too, via the relay
             with _lock:
                 if not _again:
                     _running = False
@@ -128,7 +129,9 @@ def _upgrade_v2(base: Path, files: list, workers: int) -> int:
     def one(f) -> None:
         raw = store.load_raw(f.track_id)
         if raw is not None:
-            store.set_extra(f.track_id, analysis.upgrade(str(base / f.path), raw))
+            store.set_extra(
+                f.track_id, analysis.upgrade(media_input(base / f.path), raw)
+            )
 
     n = 0
     with ThreadPoolExecutor(workers, thread_name_prefix="profile") as ex:
@@ -152,7 +155,7 @@ def _read_modes(base: Path, files: list, workers: int) -> None:
         _modes_total, _modes_done = len(mine), 0
 
     def one(f) -> None:
-        store.merge_extra(f.track_id, analysis.harmony(str(base / f.path)))
+        store.merge_extra(f.track_id, analysis.harmony(media_input(base / f.path)))
 
     with ThreadPoolExecutor(workers, thread_name_prefix="modes") as ex:
         for future in as_completed([ex.submit(one, f) for f in mine]):
@@ -172,7 +175,7 @@ def _measure_loudness(base: Path, files: list, workers: int) -> None:
         return
 
     def one(f) -> None:
-        if found := analysis.loudness(str(base / f.path)):
+        if found := analysis.loudness(media_input(base / f.path)):
             store.merge_extra(f.track_id, found)
 
     with ThreadPoolExecutor(workers, thread_name_prefix="loudness") as ex:
@@ -189,7 +192,7 @@ def _genre_of(path: Path, raw: analysis.RawAnalysis) -> dict[str, Any]:
     """*raw*'s profile with its genre decided from the analysis' own decode."""
     tag = genres.normalise(downloaded.audio_genre(path))
     return genres.decide(
-        raw.extra, str(path), raw.duration, tag, patches=raw.genre_patches
+        raw.extra, media_input(path), raw.duration, tag, patches=raw.genre_patches
     )
 
 
@@ -202,7 +205,7 @@ def _decide_genres(base: Path, files: list, workers: int) -> None:
         extra, duration = todo[f.track_id]
         path = base / f.path
         tag = genres.normalise(downloaded.audio_genre(path))
-        new = genres.decide(extra, str(path), duration, tag)
+        new = genres.decide(extra, media_input(path), duration, tag)
         if new != extra:
             store.set_extra(f.track_id, new)
 
@@ -221,7 +224,7 @@ def run_once(
 ) -> int:
     """Analyse every pending audio file under *root*; returns how many succeeded."""
     global _total, _done
-    base = Path(root)
+    base = root if isinstance(root, RemoteFile) else Path(root)
     files = downloaded.audio_files(base, library)
     known = store.stamps()
     pending = [
@@ -270,7 +273,8 @@ def run_once(
     try:
         with ex:
             futures = {
-                ex.submit(_analyse, str(base / f.path), f.track_id): f for f in pending
+                ex.submit(_analyse, media_input(base / f.path), f.track_id): f
+                for f in pending
             }
             for future in as_completed(futures):
                 f = futures[future]

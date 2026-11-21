@@ -7,7 +7,7 @@ import { UNKNOWN_ARTIST, type MusicTrack } from './musicLibrary'
 
 const BASE = '/api/music'
 
-export type LibraryKind = 'local' | 'local_folder' | 'remote_sestudio' | 'ytmusic_account'
+export type LibraryKind = 'local' | 'local_folder' | 'remote_sestudio' | 'ytmusic_account' | 'ftp' | 'sftp' | 'smb'
 
 export interface LibraryStatus {
   id: string
@@ -125,6 +125,9 @@ const KIND_LINE: Record<LibraryKind, string> = {
   local_folder: 'folder',
   remote_sestudio: 'sestudio server',
   ytmusic_account: 'likes',
+  ftp: 'FTP server',
+  sftp: 'SFTP server',
+  smb: 'SMB share',
 }
 
 // --- shared copy -----------------------------------------------------------------
