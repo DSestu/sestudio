@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   castSeek, castSeekBy, castSetVolume, castStop, castToggleMute,
-  castPlayPause, castVolumeBy,
+  castPlayPause, castReplaceMedia, castVolumeBy,
   useCastState,
 } from '../../cast'
 import {
@@ -12,6 +12,7 @@ import { useBrowserPlayerControls } from '../../browserPlayerControls'
 import { useBarsHidden } from '../../barsHidden'
 import { castLive } from '../../api'
 import { loadPlayerPrefs } from '../../playerPrefs'
+import { isOwnQualityCut, withHeight } from '../../frameRates'
 import CastFrameRate from './CastFrameRate'
 import CastPerformance from './CastPerformance'
 import CastQuality from './CastQuality'
@@ -92,6 +93,8 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
   // Only one target is ever connected; DLNA takes precedence if both somehow are.
   const target: 'dlna' | 'chromecast' | null =
     dlna.connected ? 'dlna' : cast.connected ? 'chromecast' : null
+  // A provider's master the Chromecast reads directly (YouTube, Twitch).
+  const ownQuality = target === 'chromecast' && !cast.liveId && isOwnQualityCut(cast.mediaUrl)
   usePhoneStrip(!!target && !desktop)
   if (!target) return null
 
@@ -180,6 +183,19 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
       setChanged(true)
     } catch {
       // the bar keeps showing the live state; nothing else to undo
+    } finally {
+      setSwitching(false)
+    }
+  }
+
+  /** Reload a provider's own master at the saved quality, from where it is:
+   *  the Chromecast reads it directly, so nothing on the server can switch it. */
+  async function changeOwnQuality() {
+    setSwitching(true)
+    try {
+      await castReplaceMedia(withHeight(cast.mediaUrl, loadPlayerPrefs().tvQuality ?? 0))
+    } catch {
+      // the TV keeps playing what it had
     } finally {
       setSwitching(false)
     }
@@ -340,26 +356,32 @@ export default function NowCastingBar({ navigate }: { navigate: Navigate }) {
 
               {/* DLNA always: the server knows what it sent. Chromecast when
                   what it plays is one of the server's re-encoded playlists. */}
-              {!music && (target === 'dlna' || cast.liveId) && (
+              {/* And a provider's own master (YouTube, Twitch), its qualities
+                  its own: picking one reloads it at that variant. */}
+              {!music && (target === 'dlna' || cast.liveId || ownQuality) && (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-3 flex-wrap">
                     <CastQuality
                       // DLNA: the server knows what it sent the TV.
                       url={target === 'chromecast' ? cast.mediaUrl : undefined}
                       disabled={switching}
-                      onChange={changeLive}
+                      onChange={ownQuality ? changeOwnQuality : changeLive}
                     />
-                    <CastFrameRate
+                    {!ownQuality && (
+                      <CastFrameRate
+                        url={target === 'chromecast' ? cast.mediaUrl : undefined}
+                        position={live.position}
+                        disabled={switching}
+                        onChange={changeLive}
+                      />
+                    )}
+                  </div>
+                  {!ownQuality && (
+                    <CastPerformance
                       url={target === 'chromecast' ? cast.mediaUrl : undefined}
                       position={live.position}
-                      disabled={switching}
-                      onChange={changeLive}
                     />
-                  </div>
-                  <CastPerformance
-                    url={target === 'chromecast' ? cast.mediaUrl : undefined}
-                    position={live.position}
-                  />
+                  )}
                   {(switching || changed) && (
                     <span role="status" className="text-xs text-base-content/60">
                       {switching && <span className="loading loading-spinner loading-xs mr-1 align-middle" />}

@@ -15,7 +15,7 @@ import { loadPlayerPrefs } from '../../playerPrefs'
 import type { PlayableEpisode } from '../../providers'
 import CastFrameRate from '../cast/CastFrameRate'
 import CastQuality from '../cast/CastQuality'
-import { withFps } from '../../frameRates'
+import { withFps, withHeight } from '../../frameRates'
 
 const CAST_ICON =
   'M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2h-5M3 11a6 6 0 016 6M3 15a2 2 0 012 2M3 19h.01'
@@ -149,10 +149,10 @@ export default function OutputSwitcher({
         const id = Math.random().toString(36).slice(2)
         await castLive(id, quality, fps)
         media = `${withFps(proxyUrl, fps)}&live=${id}`
-      } else if (quality && kind === 'hls' && /\/api\/stream\/proxy\?/.test(proxyUrl)) {
+      } else if (kind === 'hls' && /\/api\/stream\/proxy\?/.test(proxyUrl)) {
         // A master holding its own qualities (YouTube, Twitch): cut to the one
-        // picked, so nothing heavier is fetched.
-        media = `${proxyUrl}&height=${quality}`
+        // picked, Best to its best, so the Chromecast cannot drop to a low one.
+        media = withHeight(proxyUrl, quality)
       }
       await castToChromecast(
         onLan(media),

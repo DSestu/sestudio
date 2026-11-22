@@ -23,6 +23,23 @@ export function withFps(url: string, fps: number): string {
   return `${path}?${params}`
 }
 
+/** *url* — a provider's master proxied as it is (YouTube, Twitch) — cut to its
+ *  variant at most *height* tall, or to its best for 0. Never the whole master:
+ *  a Chromecast left to pick from it starts, and stays, at a low bitrate. */
+export function withHeight(url: string, height: number): string {
+  const [path, query = ''] = url.split('?')
+  const params = new URLSearchParams(query)
+  params.delete('height')
+  params.delete('best')
+  params.set(height ? 'height' : 'best', String(height || 1))
+  return `${path}?${params}`
+}
+
+/** Whether *url* is a proxied master cut to one of its own variants. */
+export function isOwnQualityCut(url: string): boolean {
+  return /\/api\/stream\/proxy\?.*[?&](height|best)=/.test(url)
+}
+
 /** The server's re-encoded playlist a source plays from, if it does: only those
  *  can be sent at another frame rate. */
 export function ladderUrlOf(source: { kind: string; proxy_url: string } | null | undefined): string | null {

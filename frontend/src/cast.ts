@@ -282,6 +282,22 @@ export async function castToChromecast(
   emit()
 }
 
+/** Load *url* in place of what the Chromecast plays, from the same point,
+ *  keeping its title and captions. */
+export async function castReplaceMedia(url: string): Promise<void> {
+  const w = window as Cast
+  const session = w.cast?.framework?.CastContext?.getInstance()?.getCurrentSession()
+  const playing = session?.getMediaSession?.()
+  if (!playing) throw new Error('Nothing is casting')
+  const info = new w.chrome.cast.media.MediaInfo(url, playing.media.contentType)
+  info.metadata = playing.media.metadata
+  info.tracks = playing.media.tracks
+  const request = new w.chrome.cast.media.LoadRequest(info)
+  request.currentTime = playing.getEstimatedTime()
+  request.activeTrackIds = playing.activeTrackIds
+  await session.loadMedia(request)
+}
+
 // --- Remote controls for the active session ------------------------------- #
 
 /** The server's re-encoded playlists, which a load's `live=` id can steer. */
