@@ -53,6 +53,9 @@ class Transfer:
     total_bytes: int
     done_bytes: int = 0
     status: str = "queued"  # queued | running | paused | done | failed | cancelled
+    #: Paused by itself: a share opened through a bridge went away (SPEC-storage
+    #: §10, B15). Says what it waits for; it goes on when that is back.
+    waiting: str = ""
     started: float = 0.0
     finished: float = 0.0
     created: float = field(default_factory=time.time)
@@ -291,13 +294,23 @@ def _next() -> Transfer | None:
     return None
 
 
+#: How often a transfer waiting for a bridge looks again.
+RESUME_EVERY = 10.0
+
+
 def _run() -> None:
     while True:
         with _wake:
             job = _next()
-            while job is None:
-                _wake.wait(timeout=30)
+            if job is None:
+                _wake.wait(timeout=RESUME_EVERY)
                 job = _next()
+        if job is None:
+            _resume_waiting()  # outside the lock: a check can take seconds
+            continue
+        with _wake:
+            if job.status not in ("queued", "running"):
+                continue  # paused or cancelled meanwhile
             if not job.started:
                 job.started = time.time()
             job.status = "running"
@@ -377,6 +390,12 @@ def _run_job(job: Transfer) -> None:
                     library.delete_downloaded_file(item.source)
             item.status = "done"
         except Exception as exc:  # noqa: BLE001 - one file failing does not stop the rest
+            if away := _away(item.source, job.to):
+                # Not a failure: it waits for the bridge, then picks up this file again.
+                logger.info("Transfer %s waits for %s", job.id, away)
+                with _wake:
+                    job.status, job.waiting = "paused", away
+                return
             logger.warning("Transfer %s: %s failed: %s", job.id, item.source, exc)
             item.status, item.error = "failed", str(exc) or type(exc).__name__
     with _wake:
@@ -386,6 +405,32 @@ def _run_job(job: Transfer) -> None:
             )
         job.finished = time.time()
     downloaded.invalidate()
+
+
+def _away(source_key: str, to: str) -> str:
+    """What a file's transfer waits for: a share opened through a bridge, on
+    either side, that went away. Empty when nothing is away."""
+    for sid in (_split(source_key)[0], to):
+        try:
+            s = storage.get(sid)
+        except storage.Invalid:
+            continue
+        if s["kind"] == storage.BRIDGED and not storage.online(s):
+            via = storage.get(s["via"])["label"]
+            return f"{via} on {s['wifi']}" if s.get("wifi") else via
+    return ""
+
+
+def _resume_waiting() -> None:
+    """Transfers paused for a bridge go on once what they wait for is back."""
+    with _lock:
+        waiting = [j for j in _jobs.values() if j.status == "paused" and j.waiting]
+    for job in waiting:
+        if all(not _away(i.source, job.to) for i in job.items if i.status == "waiting"):
+            with _wake:
+                if job.status == "paused" and job.waiting:
+                    job.status, job.waiting = "running", ""
+                    _wake.notify_all()
 
 
 def _relative(s: dict[str, Any], target: Any) -> str:

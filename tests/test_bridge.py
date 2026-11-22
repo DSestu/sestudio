@@ -352,3 +352,64 @@ def test_a_bridge_only_touches_shares_it_holds(freebox):
         c.get("/api/share/bridge/stat", params={"path": f"t{s['id']}:x"}).status_code
         == 401
     )
+
+
+# --- the remembered Wi-Fi, and away (PR 23) -------------------------------------
+
+
+def _wifi(name):
+    (config_dir() / bridge.ANDROID_FILE).write_text(
+        json.dumps({"wifi": name, "permission": True})
+    )
+    bridge.forget()
+    storage._state.clear()
+    storage._networks.clear()
+
+
+def test_back_on_the_same_wifi_it_opens_by_itself(freebox):
+    c, b, _, _ = freebox
+    s = _open(c, b).json()
+    # The phone's app restarted, or it left: nothing is open there any more.
+    storage.close_temporary("t" + s["id"])
+    _wifi("Other-Wifi")
+    assert storage.state(storage.get(s["id"]))["state"] == "offline"
+    assert storage._temporary == {}
+    _wifi("Freebox-1A2B3C")
+    assert storage.state(storage.get(s["id"]))["state"] == "online"
+    assert list(storage._temporary) == ["t" + s["id"]]
+
+
+def test_a_disconnected_share_stays_closed_on_its_wifi(freebox):
+    c, b, _, _ = freebox
+    s = _open(c, b).json()
+    c.patch(f"/api/storages/{s['id']}", json={"connected": False})
+    _wifi("Freebox-1A2B3C")
+    assert storage.state(storage.get(s["id"]))["state"] == "closed"
+    assert storage._temporary == {}
+
+
+def test_a_copy_waits_for_the_phone_and_goes_on(freebox, tmp_path):
+    from sestudio import transfers
+
+    c, b, _, _ = freebox
+    s = _open(c, b).json()
+    home = tmp_path / "home"
+    home.mkdir()
+    disk = storage.add("folder", ["video"], "Home disk", str(home))
+    job = transfers.create([f"{s['id']}:Films/Heat (1995).mkv"], disk["id"], "copy")
+    transfers.control(job.id, "pause")
+    # The phone leaves their Wi-Fi before the copy starts.
+    storage.close_temporary("t" + s["id"])
+    _wifi("Other-Wifi")
+    transfers.control(job.id, "resume")
+    for _ in range(300):
+        now = next(j for j in transfers.all_jobs() if j["id"] == job.id)
+        if now["waiting"]:
+            break
+        time.sleep(0.02)
+    assert now["status"] == "paused" and now["waiting"] == "Pixel 7 on Freebox-1A2B3C"
+    assert now["items"][0]["status"] == "waiting"
+    _wifi("Freebox-1A2B3C")  # back: it opens again, and the copy goes on
+    transfers._resume_waiting()
+    assert _done(job.id)["status"] == "done"
+    assert (home / "Films/Heat (1995).mkv").read_bytes() == b"0123456789"

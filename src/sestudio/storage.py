@@ -450,9 +450,19 @@ def _reachable(s: dict[str, Any]) -> bool:
         return Path(s["path"]).is_dir()
     if s["kind"] == BRIDGED:  # its bridge is up, and has it open
         b = get(s["via"])
-        return online(b) and temp_id(s) in (
-            (_networks.get(b["id"]) or {}).get("open") or []
-        )
+        if not online(b):
+            return False
+        said = _networks.get(b["id"]) or {}
+        if temp_id(s) in (said.get("open") or []):
+            return True
+        # Back on the Wi-Fi it was opened on: opened again with the saved login (B8).
+        if s.get("auto") and s.get("wifi") and said.get("wifi") == s["wifi"]:
+            try:
+                _bridge_open(s, vault.get(s["id"]).get("password", ""))
+                return True
+            except Invalid:
+                return False
+        return False
     if s["kind"] == REMOTE:  # another sestudio: any answer means it is up
         try:
             with httpx.Client(timeout=NET_CHECK_TIMEOUT) as client:
