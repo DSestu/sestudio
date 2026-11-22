@@ -231,10 +231,14 @@ connection is remembered for that Wi-Fi.
 ### 10.1 Stories
 
 Pairing (once)
-- **B1.** At home, once, I add my phone's sestudio to my home server as a bridge, the way I add
-  another sestudio today (X3). After that the home server reaches it whenever the phone is on.
-- **B2.** The phone's card in Settings › Storage says whether it answers now and which network
-  it is on: "Pixel 7 · online · on Freebox-1A2B3C".
+- **B1′** (replaces B1, 2026-11-22: nothing to do on the desktop). When my phone's sestudio is
+  connected to my home server (Settings › Servers), Nearby's **Look from** shows **This phone**
+  beside the home server, with no setup anywhere.
+- **B1″.** The first time I pick **This phone**, it asks once: "Let your home server reach this
+  phone to look around and open shares here?" On **Allow** the phone turns its own sharing on and
+  registers itself at home as a bridge, with its Tailscale address and its token. Nothing typed.
+- **B2′.** The phone's card at home works as before: "Pixel 7 · online · on Freebox-1A2B3C".
+  **Stop bridging**, on the phone, removes it from home.
 
 Finding
 - **B3.** At the family house, in my home server's UI (on my phone, over Tailscale), I tap
@@ -369,6 +373,15 @@ Without the phone (were N1 and N3, wanted)
   guest session only).
 - Not done: music through a bridge (O's Music is shown, off); a media server found by Nearby is
   listed but not opened (its box's SMB or FTP share is).
+- B1′, B1″, B2′ (mockups round 5: P1 + S2): a sestudio connected to a server (Settings › Servers)
+  offers itself in Nearby's Look from as **This phone** (This machine off Android). The first pick
+  asks in place; **Allow** issues a share token and adds this machine at the server as a bridge,
+  at its address on the route to it (the 100.x one over Tailscale) and over http, since Tailscale
+  encrypts and the server would refuse a self-signed certificate. **Stop**, beside the switch or
+  on the server's row in Servers, removes it there (what was opened through it closes) and
+  revokes the token. `/api/share` now stays on this machine while switched. The app writes the
+  phone's model to `network.json`, so the bridge is named "Pixel 7", not "localhost". Checked with
+  two servers on one machine; not on a real phone over Tailscale.
 
 ## 11. Modern boxes (asked 2026-11-22: all four)
 

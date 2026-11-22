@@ -95,6 +95,7 @@ def test_the_local_set_and_the_frontend_stay_here(switched):
     assert switched.get("/api/health").json()["version"] == servers.version()
     assert all(r.url.host != "pc.test" for r in switched.seen)
     assert forward.is_local("/api/cast/dlna/renderers")
+    assert forward.is_local("/api/share/bridge/nearby")  # a bridge serves this machine
     assert not forward.is_local("/api/cast/tracks")
     assert not forward.is_local("/api/healthcheck")
 

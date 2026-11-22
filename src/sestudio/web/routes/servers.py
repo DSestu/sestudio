@@ -13,6 +13,7 @@ import hashlib
 import importlib.metadata
 import logging
 import secrets
+import socket
 import time
 from typing import Any
 
@@ -114,6 +115,7 @@ def _row(
         "fingerprint": seen if seen is not None else pinned,
         "trusted": trusted,
         "error": checked.get("error", ""),
+        "bridge": server.get("bridge", {}).get("storage_id"),
     }
 
 
@@ -264,3 +266,89 @@ def restore(app) -> None:
                     "url": server["url"],
                     "fingerprint": server["fingerprint"],
                 }
+
+
+# --- this machine as a bridge for a server (SPEC-storage §10, B1′, B1″, B2′) -------
+
+
+def _address_toward(url: str) -> str:
+    """This machine's address on the route to *url*: over Tailscale, its 100.x one,
+    which is where that server reaches it back. Nothing is sent (UDP connect)."""
+    host = httpx.URL(url).host
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.connect((host, 9))
+        return s.getsockname()[0]
+
+
+def _upstream(server: dict[str, Any], checked: dict[str, Any] | None) -> dict[str, Any]:
+    if not _row(server, checked, "")["trusted"]:
+        raise HTTPException(409, "Trust that server first")
+    return {k: server[k] for k in ("id", "name", "url", "fingerprint")}
+
+
+@router.post("/{server_id}/bridge")
+async def start_bridge(server_id: str, request: Request) -> dict[str, Any]:
+    """Let *server* reach this machine to look around its network and open shares
+    here: this machine's sharing is turned on for it and it is added there as a
+    bridge, with nothing done on the other side."""
+    from sestudio import bridge
+    from sestudio.music import libraries
+    from sestudio.web import forward
+
+    cfg = load_config()
+    server = _find(cfg, server_id)
+    if server.get("bridge"):
+        return _row(server, _state(request).get(server_id), cfg.active_server)
+    upstream = _upstream(server, _state(request).get(server_id))
+    # http: Tailscale already encrypts, and the other side would refuse our own certificate.
+    state = request.app.state
+    scheme, port = (
+        ("http", state.http_port) if state.http_port else ("https", state.https_port)
+    )
+    try:
+        here = await asyncio.to_thread(_address_toward, server["url"])
+    except OSError as exc:
+        raise HTTPException(502, f"{server['name']} is not reachable: {exc}") from None
+    record, secret = libraries.issue_token(f"Bridge for {server['name']}")
+    body = {"kind": "remote_sestudio", "roles": ["video"], "url": f"{scheme}://{here}:{port}",
+            "token": secret, "label": bridge.device_name(), "bridge": True}  # fmt: skip
+    try:
+        r = await forward.request(upstream, "POST", "/api/storages", json=body)
+        r.raise_for_status()
+        storage_id = r.json()["id"]
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        libraries.revoke_token(record["id"])
+        raise HTTPException(
+            502, f"{server['name']} did not add this machine: {exc}"
+        ) from None
+    cfg = load_config()
+    server = _find(cfg, server_id)
+    server["bridge"] = {"storage_id": storage_id, "token_id": record["id"]}
+    save_config(cfg)
+    return _row(server, _state(request).get(server_id), cfg.active_server)
+
+
+@router.delete("/{server_id}/bridge")
+async def stop_bridge(server_id: str, request: Request) -> dict[str, Any]:
+    """Undo it: removed from that server (what was opened through it closes there),
+    and this machine's sharing for it turned off, even when the server is away."""
+    from sestudio.music import libraries
+    from sestudio.web import forward
+
+    cfg = load_config()
+    server = _find(cfg, server_id)
+    held = server.pop("bridge", None)
+    save_config(cfg)
+    if held:
+        try:
+            await forward.request(
+                _upstream(server, _state(request).get(server_id)),
+                "DELETE", f"/api/storages/{held['storage_id']}",
+            )  # fmt: skip
+        except (httpx.HTTPError, HTTPException) as exc:
+            logger.info("%s kept this bridge: %s", server["name"], exc)
+        try:
+            libraries.revoke_token(held["token_id"])
+        except Exception:  # noqa: BLE001 - already revoked by hand
+            pass
+    return _row(server, _state(request).get(server_id), cfg.active_server)

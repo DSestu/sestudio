@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 #: Paths that are about this machine, and stay here while switched.
 LOCAL = (
     "/api/servers",
+    # What this machine shares with others (a bridge, its videos): never forwarded.
+    "/api/share",
     "/api/cast/dlna",
     "/api/cast/http-port",
     "/api/server/lan",
