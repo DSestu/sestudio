@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { transfersApi, type OnConflict, type StorageInfo } from '../../api'
 import { fmtSize } from '../../downloadedLibrary'
 import { sinceLabel, useStorages, whereOf } from '../../storageChoice'
-import { commonDir, destFor, refreshTransfers, relOf, writable, type TransferRequest } from '../../transfers'
+import { commonDir, destFor, readOnly, refreshTransfers, relOf, writable, type TransferRequest } from '../../transfers'
 import { useModalBack } from '../../useModalBack'
 import ResponsiveModal from '../ResponsiveModal'
 import { StorageGlyph } from '../downloaded/StorageSwitcher'
@@ -29,7 +29,14 @@ function fit(s: StorageInfo, bytes: number): { ok: boolean; text: string } {
  */
 export default function TransferPicker({ request, onClose }: { request: TransferRequest; onClose: () => void }) {
   useModalBack(true, onClose)
-  const { mode, name, entries } = request
+  const { name, entries } = request
+  const allStorages = useStorages()
+  // A media server is read only: what is asked to move from it is copied (SPEC-storage §11, M5).
+  const fromReadOnly = entries.some(e => {
+    const s = allStorages.find(x => x.id === (e.file.storage ?? 'local'))
+    return s ? readOnly(s) : false
+  })
+  const mode = fromReadOnly ? 'copy' : request.mode
   const verb = mode === 'copy' ? 'Copy' : 'Move'
   const all = useStorages()
   const sources = useMemo(() => new Set(entries.map(e => e.file.storage ?? 'local')), [entries])
@@ -229,6 +236,9 @@ export default function TransferPicker({ request, onClose }: { request: Transfer
             ))}
           </div>
           <p className="text-xs text-base-content/50 mt-1.5">{CLASH.find(c => c[0] === clash)?.[2]}</p>
+          {fromReadOnly && request.mode === 'move' && (
+            <p className="text-xs text-base-content/60 mt-3">It is on a media server, which is read only: its files are copied, never moved.</p>
+          )}
           {mode === 'move' && (
             <p className="flex items-start gap-1.5 text-xs text-success mt-3">
               <svg className="w-3.5 h-3.5 shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>

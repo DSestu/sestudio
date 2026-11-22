@@ -372,6 +372,8 @@ class BridgeOpen(BaseModel):
     domain: str = ""
     tls: bool = False
     password: str = ""
+    #: A media server's description address.
+    url: str = ""
 
 
 @bridge_share.post("/open")
@@ -447,7 +449,7 @@ def _held(key: str) -> remotefs.RemoteFile:
     parts = [p for p in rel.replace("\\", "/").split("/") if p not in ("", ".")]
     if not parts or ".." in parts:
         raise HTTPException(403, "Path outside the share")
-    return remotefs.top(storage.get(sid)).joinpath(*parts)
+    return storage.top_of(storage.get(sid)).joinpath(*parts)
 
 
 @bridge_share.get("/stat")

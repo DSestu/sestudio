@@ -140,8 +140,9 @@ def merge(
     """One row per (address, kind); a name from an announcement beats an address,
     and an address that announced a name lends it to its other services. *hints*
     name addresses without adding rows: a name says nothing of what is shared."""
-    names = dict(hints or {})
-    names.update({f["host"]: f["name"] for f in found if f["name"] != f["host"]})
+    names = {f["host"]: f["name"] for f in found if f["name"] != f["host"]}
+    # A hint names the machine itself ("Freebox Pop", a PC's own name), not one of its services.
+    names.update(hints or {})
     rows: dict[tuple[str, str], dict[str, Any]] = {}
     for f in found:
         key = (f["host"], f["kind"])
@@ -188,6 +189,11 @@ def scan(seconds: float = 4.0) -> dict[str, Any]:
     looks.append(threading.Thread(target=hint, args=(_box_names,), daemon=True))
     looks.append(
         threading.Thread(target=hint, args=(_freebox_names, _boxes(ips)), daemon=True)
+    )
+    looks.append(
+        threading.Thread(
+            target=collect, args=(_freebox_media, _boxes(ips)), daemon=True
+        )
     )
     looks.append(
         threading.Thread(target=collect, args=(_probe, _boxes(ips)), daemon=True)
@@ -377,6 +383,38 @@ def _freebox_names(hosts: list[str]) -> dict[str, str]:
             return
         if name:
             out[host] = name
+
+    threads = [threading.Thread(target=ask, args=(h,), daemon=True) for h in hosts]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(3.0)
+    return out
+
+
+#: Where a Freebox's media server describes itself, whether SSDP gets through or not.
+FREEBOX_MEDIA = "http://{host}:52424/device.xml"
+
+
+def _freebox_media(hosts: list[str]) -> list[dict[str, Any]]:
+    """A Freebox's media server, asked at its usual address: SSDP can be blocked
+    (WSL, some Wi-Fi), the box still answers there."""
+    import re
+
+    import httpx
+
+    out = []
+
+    def ask(host: str) -> None:
+        location = FREEBOX_MEDIA.format(host=host)
+        try:
+            r = httpx.get(location, timeout=2.0)
+        except httpx.HTTPError:
+            return
+        if r.status_code == 200 and "MediaServer" in r.text:
+            name = re.search(r"<friendlyName>([^<]*)</friendlyName>", r.text)
+            out.append({"name": name.group(1) if name else host, "kind": "media",
+                        "host": host, "port": None, "location": location})  # fmt: skip
 
     threads = [threading.Thread(target=ask, args=(h,), daemon=True) for h in hosts]
     for t in threads:

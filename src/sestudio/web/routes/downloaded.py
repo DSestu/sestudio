@@ -64,7 +64,13 @@ def video_storages() -> list[dict[str, Any]]:
         s
         for s in storages.all_storages()
         if s["kind"]
-        in (storages.FOLDER, storages.REMOTE, *storages.NETWORK, storages.BRIDGED)
+        in (
+            storages.FOLDER,
+            storages.REMOTE,
+            *storages.NETWORK,
+            storages.BRIDGED,
+            storages.UPNP,
+        )
         and "video" in s["roles"]
         and s.get("connected", True)  # a disconnected share is not listed (B14)
     ]
@@ -268,7 +274,7 @@ def _resolved(path: str, storage_id: str = storages.LOCAL) -> Any:
         root = storages.get(storage_id)
     except storages.Invalid:
         raise HTTPException(status_code=404, detail="No such storage") from None
-    if root["kind"] in storages.NETWORK:
+    if root["kind"] in (*storages.NETWORK, storages.UPNP):
         return _resolved_remote(root, path)
     if root["kind"] in (storages.REMOTE, storages.BRIDGED) and "video" in root["roles"]:
         return _resolved_peer(root, path)
@@ -293,7 +299,7 @@ def _resolved_remote(root: dict[str, Any], path: str) -> remotefs.RemoteFile:
         raise HTTPException(status_code=403, detail="Path outside the storage")
     if not storages.online(root):
         raise HTTPException(status_code=503, detail=f"{root['label']} is offline")
-    target = remotefs.top(root).joinpath(*parts)
+    target = storages.top_of(root).joinpath(*parts)
     try:
         found = target.is_file()
     except Exception:  # noqa: BLE001 - the server failing mid-request

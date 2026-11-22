@@ -99,13 +99,13 @@ def _opener(s: dict[str, Any], rel: str) -> Any:
     """Something with ``open``, ``stat``, ``unlink`` for a file of storage *s*."""
     if s["kind"] == storage.FOLDER:
         return downloaded.resolve(s["path"], rel)
-    if s["kind"] in (*storage.NETWORK, storage.BRIDGED):
+    if s["kind"] in (*storage.NETWORK, storage.BRIDGED, storage.UPNP):
         parts = [p for p in rel.split("/") if p not in ("", ".")]
         if not parts or ".." in parts:
             raise Invalid("Path outside the storage")
         if s["kind"] == storage.BRIDGED:  # through its bridge (SPEC-storage §10)
             return remotefs.BridgedFile("/".join(parts), storage=s)
-        return remotefs.top(s).joinpath(*parts)
+        return storage.top_of(s).joinpath(*parts)
     raise Invalid(f"Files cannot be written to or read from {s['label']} here")
 
 
@@ -186,8 +186,12 @@ def create(
         raise Invalid("One destination per file")
     where = dict(zip(keys, dests)) if dests is not None else {}
     dest = storage.get(to)
-    if dest["kind"] not in (storage.FOLDER, *storage.NETWORK, storage.BRIDGED):
-        raise Invalid(f"Files cannot be written to {dest['label']}")
+    if dest["kind"] not in (
+        storage.FOLDER,
+        *storage.NETWORK,
+        storage.BRIDGED,
+    ) or storage.is_read_only(dest):
+        raise Invalid(f"Files cannot be written to {dest['label']}: it is read only")
     if not storage.online(dest):
         raise Invalid(f"{dest['label']} is offline")
     items: list[Item] = []
@@ -198,6 +202,10 @@ def create(
             raise Invalid(f"Already on {dest['label']}")
         if src["kind"] == storage.REMOTE:
             raise Invalid("Files on another sestudio are read only here")
+        if mode == "move" and storage.is_read_only(src):
+            raise Invalid(
+                f"{src['label']} is read only: its files can be copied, not moved"
+            )
         if not storage.online(src):
             raise Invalid(f"{src['label']} is offline")
         source = _opener(src, rel)

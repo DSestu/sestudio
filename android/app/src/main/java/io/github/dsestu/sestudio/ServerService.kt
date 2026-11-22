@@ -31,6 +31,7 @@ class ServerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var wifiWatch: WifiWatch? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -70,6 +71,9 @@ class ServerService : Service() {
         wifiLock = getSystemService(WifiManager::class.java)
             .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "sestudio:server").apply { acquire() }
         wifiWatch = WifiWatch(this, File(Runtime(this).rootfs, "root/.config/sestudio")).apply { start() }
+        // Looking around (Nearby): Android drops incoming multicast (mDNS answers) without it.
+        multicastLock = getSystemService(WifiManager::class.java)
+            .createMulticastLock("sestudio:nearby").apply { setReferenceCounted(false); acquire() }
 
         launch()
     }
@@ -206,6 +210,7 @@ class ServerService : Service() {
         wakeLock?.release()
         wifiLock?.release()
         wifiWatch?.stop()
+        multicastLock?.release()
         super.onDestroy()
     }
 

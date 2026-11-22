@@ -39,7 +39,11 @@ NETWORK = ("ftp", "sftp", "smb")
 #: A share another sestudio (a bridge) opened on its own network for this one
 #: (SPEC-storage §10); read through that bridge.
 BRIDGED = "bridged"
-KINDS = (FOLDER, REMOTE, YTMUSIC, *NETWORK, BRIDGED)
+#: A UPnP media server, read only (SPEC-storage §11, M5): a Freebox's, a NAS's.
+UPNP = "upnp"
+KINDS = (FOLDER, REMOTE, YTMUSIC, *NETWORK, BRIDGED, UPNP)
+#: What files are read from but never written to.
+READ_ONLY = (REMOTE, UPNP)
 #: Kinds that only hold music (another sestudio holds video too: SPEC-storage §9, X3).
 MUSIC_ONLY = (YTMUSIC,)
 _PREFIX = {
@@ -50,6 +54,7 @@ _PREFIX = {
     "sftp": "n",
     "smb": "n",
     BRIDGED: "b",
+    UPNP: "u",
 }
 #: Shares this sestudio opened as a bridge for another one: in memory only, gone
 #: with the process or when that one disconnects (SPEC-storage §10, B16).
@@ -83,7 +88,7 @@ def _roles(kind: str, roles: list[str]) -> list[str]:
         raise Invalid("Say what it holds: video, music, or both")
     if kind in MUSIC_ONLY and clean != ["music"]:
         raise Invalid("This kind of storage can only hold music for now")
-    if kind == BRIDGED and clean != ["video"]:
+    if kind in (BRIDGED, UPNP) and clean != ["video"]:
         raise Invalid("A share opened through a bridge holds video only, for now")
     return clean
 
@@ -131,14 +136,22 @@ def add(
         s |= _network_fields(kind, path, network or {})
         password = str((network or {}).get("password") or "")
         label = label or f"{s['host']}{'/' + s['share'] if kind == 'smb' else ''}"
+    elif kind == UPNP:
+        s |= _media_server(url)
+        label = label or "Media server"
     elif kind == BRIDGED:
         b = get(via)
         if not b.get("bridge"):
             raise Invalid("A share is opened through a bridge")
         proto = str((network or {}).get("proto") or "")
-        if proto not in NETWORK:
-            raise Invalid("Open an SMB, SFTP or FTP share")
-        s |= {"via": via, "proto": proto, **_network_fields(proto, path, network or {})}
+        if proto not in (*NETWORK, UPNP):
+            raise Invalid("Open an SMB, SFTP or FTP share, or a media server")
+        fields = (
+            _media_server(url)
+            if proto == UPNP
+            else _network_fields(proto, path, network or {})
+        )
+        s |= {"via": via, "proto": proto, **fields}
         password = str((network or {}).get("password") or "")
         s |= {
             "wifi": (_networks.get(via) or {}).get("wifi"),
@@ -162,6 +175,32 @@ def add(
     cfg.storages.append(s)
     save_config(cfg)
     return s
+
+
+def _media_server(url: str) -> dict[str, Any]:
+    """A media server's fields: the address of its description (``…/device.xml``)."""
+    from urllib.parse import urlparse
+
+    url = url.strip()
+    host = urlparse(url).hostname
+    if not url.startswith(("http://", "https://")) or not host:
+        raise Invalid(
+            "A media server is opened by its description address, like http://192.168.1.254:52424/device.xml"
+        )
+    return {"url": url, "host": host}
+
+
+def is_read_only(s: dict[str, Any]) -> bool:
+    """Whether files are only read from it: another sestudio, a media server, or a
+    media server opened through a bridge."""
+    return s["kind"] in READ_ONLY or (s["kind"] == BRIDGED and s.get("proto") == UPNP)
+
+
+def top_of(s: dict[str, Any]) -> Any:
+    """A server's top folder, to walk or resolve paths from."""
+    from sestudio import upnpfs
+
+    return upnpfs.top(s) if s["kind"] == UPNP else remotefs.top(s)
 
 
 def _network_fields(kind: str, path: str, net: dict[str, Any]) -> dict[str, Any]:
@@ -303,7 +342,7 @@ def _bridge_call(
 
 
 def _bridge_open(s: dict[str, Any], password: str) -> None:
-    keys = ("host", "port", "share", "path", "username", "domain", "tls")
+    keys = ("host", "port", "share", "path", "username", "domain", "tls", "url")
     fields = {k: s[k] for k in keys if s.get(k) is not None}
     r = _bridge_call(s, "POST", "/open", json={
         "key": s["id"], "kind": s["proto"], "label": s.get("label", ""), "password": password, **fields,
@@ -377,16 +416,17 @@ def open_temporary(
     key: str, kind: str, net: dict[str, Any], label: str = ""
 ) -> dict[str, Any]:
     """On a bridge: open a share for the sestudio that asked, in memory only."""
-    if kind not in NETWORK:
-        raise Invalid("Open an SMB, SFTP or FTP share")
+    if kind not in (*NETWORK, UPNP):
+        raise Invalid("Open an SMB, SFTP or FTP share, or a media server")
     sid = "t" + "".join(ch for ch in key if ch.isalnum())[:24]
     if sid == "t":
         raise Invalid("A key is needed")
-    s: dict[str, Any] = {
-        "id": sid,
-        "kind": kind,
-        **_network_fields(kind, str(net.get("path") or ""), net),
-    }
+    fields = (
+        _media_server(str(net.get("url") or ""))
+        if kind == UPNP
+        else _network_fields(kind, str(net.get("path") or ""), net)
+    )
+    s: dict[str, Any] = {"id": sid, "kind": kind, **fields}
     s |= {
         "label": label.strip() or s["host"],
         "roles": ["video"],
@@ -394,10 +434,14 @@ def open_temporary(
         "temporary": True,
     }
     password = str(net.get("password") or "")
-    try:
-        remotefs.check_with(s, password)
-    except Exception as exc:  # noqa: BLE001 - the server's own words are the answer
-        raise Invalid(f"Could not open it: {exc}") from None
+    if kind == UPNP:
+        if not _media_server_up(s):
+            raise Invalid("The media server did not answer")
+    else:
+        try:
+            remotefs.check_with(s, password)
+        except Exception as exc:  # noqa: BLE001 - the server's own words are the answer
+            raise Invalid(f"Could not open it: {exc}") from None
     remotefs.forget(sid)
     _forget(sid)
     vault.hold(sid, {"password": password})
@@ -445,9 +489,18 @@ _lists: dict[str, dict[str, Any]] = {}
 _networks: dict[str, dict[str, Any]] = {}
 
 
+def _media_server_up(s: dict[str, Any]) -> bool:
+    try:
+        return httpx.get(s["url"], timeout=NET_CHECK_TIMEOUT).status_code < 400
+    except httpx.HTTPError:
+        return False
+
+
 def _reachable(s: dict[str, Any]) -> bool:
     if s["kind"] == FOLDER:
         return Path(s["path"]).is_dir()
+    if s["kind"] == UPNP:
+        return _media_server_up(s)
     if s["kind"] == BRIDGED:  # its bridge is up, and has it open
         b = get(s["via"])
         if not online(b):
@@ -521,7 +574,7 @@ def state(s: dict[str, Any]) -> dict[str, Any]:
 
 
 def _state_of(s: dict[str, Any]) -> dict[str, Any]:
-    if s["kind"] not in (FOLDER, REMOTE, *NETWORK, BRIDGED):
+    if s["kind"] not in (FOLDER, REMOTE, *NETWORK, BRIDGED, UPNP):
         return {"state": "online", "since": None}
     now = time.time()
     with _lock:
@@ -587,6 +640,11 @@ def _scan_into(s: dict[str, Any], entry: dict[str, Any]) -> None:
 
     if s["kind"] in (REMOTE, BRIDGED):
         files = _peer_files(s)
+    elif s["kind"] == UPNP:
+        from sestudio import upnpfs
+
+        upnpfs.load(s)  # browsed again: its index is what the files are read by
+        files = downloaded.scan(upnpfs.top(s))
     else:
         files = downloaded.scan(remotefs.top(s) if s["kind"] in NETWORK else s["path"])
     if files != entry["files"]:
@@ -664,7 +722,10 @@ def invalidate(storage_id: str | None = None) -> None:
 
 
 def _forget(storage_id: str) -> None:
+    from sestudio import upnpfs
+
     with _lock:
         _state.pop(storage_id, None)
         _lists.pop(storage_id, None)
     _list_file(storage_id).unlink(missing_ok=True)
+    upnpfs.forget(storage_id)
