@@ -36,10 +36,24 @@ LOCAL, FOLDER = LOCAL_STORAGE, FOLDER_STORAGE
 REMOTE, YTMUSIC = "remote_sestudio", "ytmusic_account"
 #: Servers read in the app over their protocol (SPEC-storage §9, X1).
 NETWORK = ("ftp", "sftp", "smb")
-KINDS = (FOLDER, REMOTE, YTMUSIC, *NETWORK)
+#: A share another sestudio (a bridge) opened on its own network for this one
+#: (SPEC-storage §10); read through that bridge.
+BRIDGED = "bridged"
+KINDS = (FOLDER, REMOTE, YTMUSIC, *NETWORK, BRIDGED)
 #: Kinds that only hold music (another sestudio holds video too: SPEC-storage §9, X3).
 MUSIC_ONLY = (YTMUSIC,)
-_PREFIX = {FOLDER: "f", REMOTE: "r", YTMUSIC: "y", "ftp": "n", "sftp": "n", "smb": "n"}
+_PREFIX = {
+    FOLDER: "f",
+    REMOTE: "r",
+    YTMUSIC: "y",
+    "ftp": "n",
+    "sftp": "n",
+    "smb": "n",
+    BRIDGED: "b",
+}
+#: Shares this sestudio opened as a bridge for another one: in memory only, gone
+#: with the process or when that one disconnects (SPEC-storage §10, B16).
+_temporary: dict[str, dict[str, Any]] = {}
 
 
 class Invalid(ValueError):
@@ -47,8 +61,9 @@ class Invalid(ValueError):
 
 
 def all_storages() -> list[dict[str, Any]]:
-    """``local`` first, then the others in the order they were added."""
-    return list(load_config().storages)
+    """``local`` first, then the others in the order they were added, then the
+    shares opened here as a bridge."""
+    return [*load_config().storages, *_temporary.values()]
 
 
 def get(storage_id: str) -> dict[str, Any]:
@@ -68,6 +83,8 @@ def _roles(kind: str, roles: list[str]) -> list[str]:
         raise Invalid("Say what it holds: video, music, or both")
     if kind in MUSIC_ONLY and clean != ["music"]:
         raise Invalid("This kind of storage can only hold music for now")
+    if kind == BRIDGED and clean != ["video"]:
+        raise Invalid("A share opened through a bridge holds video only, for now")
     return clean
 
 
@@ -80,6 +97,8 @@ def add(
     token: str = "",
     network: dict[str, Any] | None = None,
     bridge: bool = False,
+    via: str = "",
+    auto: bool = True,
 ) -> dict[str, Any]:
     """Add a storage. *bridge* marks another sestudio that opens shares on its
     own network for this one (SPEC-storage §10). *network* carries an FTP, SFTP or SMB server's fields
@@ -112,6 +131,21 @@ def add(
         s |= _network_fields(kind, path, network or {})
         password = str((network or {}).get("password") or "")
         label = label or f"{s['host']}{'/' + s['share'] if kind == 'smb' else ''}"
+    elif kind == BRIDGED:
+        b = get(via)
+        if not b.get("bridge"):
+            raise Invalid("A share is opened through a bridge")
+        proto = str((network or {}).get("proto") or "")
+        if proto not in NETWORK:
+            raise Invalid("Open an SMB, SFTP or FTP share")
+        s |= {"via": via, "proto": proto, **_network_fields(proto, path, network or {})}
+        password = str((network or {}).get("password") or "")
+        s |= {
+            "wifi": (_networks.get(via) or {}).get("wifi"),
+            "auto": bool(auto),
+            "connected": True,
+        }
+        label = label or f"{s['host']}{'/' + s['share'] if proto == 'smb' else ''}"
     else:
         raise Invalid(f"unknown storage kind: {kind}")
     s |= {
@@ -120,6 +154,8 @@ def add(
         "roles": _roles(kind, roles),
         "download": False,
     }
+    if kind == BRIDGED:
+        _bridge_open(s, password)  # refused there: nothing is saved here
     if password:
         vault.put(s["id"], {"password": password})
     cfg = load_config()
@@ -211,16 +247,176 @@ def remove(storage_id: str) -> dict[str, Any]:
     """Forget a storage; its files are never touched. The download target moves to ``local``."""
     if storage_id == LOCAL:
         raise Invalid("This PC cannot be removed")
+    if storage_id in _temporary:
+        return close_temporary(storage_id)
     cfg = load_config()
     gone = next((s for s in cfg.storages if s["id"] == storage_id), None)
     if gone is None:
         raise Invalid(f"unknown storage: {storage_id}")
     cfg.storages = [s for s in cfg.storages if s is not gone]
     save_config(cfg)  # with no target left, `reconcile` gives it back to `local`
+    if gone["kind"] == BRIDGED:
+        _bridge_close(gone)
+        _drop_listing(gone)
     _forget(storage_id)
     vault.drop(storage_id)
     remotefs.forget(storage_id)
     return gone
+
+
+# --- shares opened through a bridge (SPEC-storage §10) --------------------------
+#
+# Home keeps the share (address and login) and asks the bridge to open it; the
+# bridge holds it in memory as a temporary storage, ``t<home id>``, lists it in
+# its share and gives its files with the same token. Nothing of it is written on
+# the bridge.
+
+BRIDGE_TIMEOUT = 20.0
+
+
+def peer_of(s: dict[str, Any]) -> dict[str, Any]:
+    """The sestudio a storage's files are asked of: itself, or its bridge."""
+    return get(s["via"]) if s["kind"] == BRIDGED else s
+
+
+def temp_id(s: dict[str, Any]) -> str:
+    """What the bridge calls a share it opened for this one."""
+    return "t" + s["id"]
+
+
+def remote_key(s: dict[str, Any], path: str) -> str:
+    """The key the peer gives a file by: a bridge prefixes its temporary storage."""
+    return f"{temp_id(s)}:{path}" if s["kind"] == BRIDGED else path
+
+
+def _bridge_call(
+    s: dict[str, Any], method: str, path: str, **kw: Any
+) -> httpx.Response:
+    b = get(s["via"])
+    try:
+        with httpx.Client(timeout=BRIDGE_TIMEOUT) as client:
+            return client.request(
+                method, f"{b['url']}/api/share/bridge{path}", headers=_bearer(b), **kw
+            )
+    except httpx.HTTPError:
+        raise Invalid(f"{b['label']} did not answer") from None
+
+
+def _bridge_open(s: dict[str, Any], password: str) -> None:
+    keys = ("host", "port", "share", "path", "username", "domain", "tls")
+    fields = {k: s[k] for k in keys if s.get(k) is not None}
+    r = _bridge_call(s, "POST", "/open", json={
+        "key": s["id"], "kind": s["proto"], "label": s.get("label", ""), "password": password, **fields,
+    })  # fmt: skip
+    if r.status_code == 404:
+        raise Invalid(
+            f"{get(s['via'])['label']} runs an older sestudio: update it to open shares"
+        )
+    if r.status_code != 200:
+        try:
+            detail = r.json().get("detail")
+        except ValueError:
+            detail = None
+        raise Invalid(detail or f"The share did not open ({r.status_code})")
+    _networks.pop(s["via"], None)  # its list of open shares changed
+    with _lock:
+        _state.pop(s["via"], None)
+        _state.pop(s["id"], None)
+
+
+def _bridge_close(s: dict[str, Any]) -> None:
+    try:
+        _bridge_call(s, "DELETE", f"/open/{temp_id(s)}")
+    except Invalid:
+        pass  # a bridge that is away has nothing open anyway
+
+
+def _drop_listing(s: dict[str, Any]) -> None:
+    """Nothing of theirs is kept after a disconnect (B16): the listing and the stills."""
+    from sestudio import downloaded
+
+    files = _entry(s)["files"] or _kept(s["id"])
+    downloaded.drop_thumbnails(
+        [(f"{s['id']}:{f.path}", f.mtime, f.size) for f in files]
+    )
+    _forget(s["id"])
+
+
+def set_connected(storage_id: str, on: bool) -> dict[str, Any]:
+    """Open a share through its bridge again with the saved login, or close it
+    and drop what was listed (B14, B16). The login stays saved."""
+    s = get(storage_id)
+    if s["kind"] != BRIDGED:
+        raise Invalid("Only a share opened through a bridge connects and disconnects")
+    if on:
+        _bridge_open(s, vault.get(storage_id).get("password", ""))
+    else:
+        _bridge_close(s)
+        _drop_listing(s)
+
+    def change(_cfg, x):
+        x["connected"] = on
+        if on:
+            x["wifi"] = (_networks.get(x["via"]) or {}).get("wifi") or x.get("wifi")
+
+    return _edit(storage_id, change)
+
+
+def set_auto(storage_id: str, on: bool) -> dict[str, Any]:
+    """Whether a share opens by itself when its bridge is back on the same Wi-Fi (B8)."""
+
+    def change(_cfg, x):
+        if x["kind"] != BRIDGED:
+            raise Invalid("Only a share opened through a bridge opens by itself")
+        x["auto"] = on
+
+    return _edit(storage_id, change)
+
+
+def open_temporary(
+    key: str, kind: str, net: dict[str, Any], label: str = ""
+) -> dict[str, Any]:
+    """On a bridge: open a share for the sestudio that asked, in memory only."""
+    if kind not in NETWORK:
+        raise Invalid("Open an SMB, SFTP or FTP share")
+    sid = "t" + "".join(ch for ch in key if ch.isalnum())[:24]
+    if sid == "t":
+        raise Invalid("A key is needed")
+    s: dict[str, Any] = {
+        "id": sid,
+        "kind": kind,
+        **_network_fields(kind, str(net.get("path") or ""), net),
+    }
+    s |= {
+        "label": label.strip() or s["host"],
+        "roles": ["video"],
+        "download": False,
+        "temporary": True,
+    }
+    password = str(net.get("password") or "")
+    try:
+        remotefs.check_with(s, password)
+    except Exception as exc:  # noqa: BLE001 - the server's own words are the answer
+        raise Invalid(f"Could not open it: {exc}") from None
+    remotefs.forget(sid)
+    _forget(sid)
+    vault.hold(sid, {"password": password})
+    _temporary[sid] = s
+    return s
+
+
+def close_temporary(storage_id: str) -> dict[str, Any]:
+    gone = _temporary.pop(storage_id, None)
+    if gone is None:
+        raise Invalid(f"unknown storage: {storage_id}")
+    vault.release(storage_id)
+    remotefs.forget(storage_id)
+    _forget(storage_id)
+    return gone
+
+
+def temporary_ids() -> list[str]:
+    return list(_temporary)
 
 
 # --- reachability and listings (SPEC-storage PR 4) ------------------------------
@@ -252,6 +448,11 @@ _networks: dict[str, dict[str, Any]] = {}
 def _reachable(s: dict[str, Any]) -> bool:
     if s["kind"] == FOLDER:
         return Path(s["path"]).is_dir()
+    if s["kind"] == BRIDGED:  # its bridge is up, and has it open
+        b = get(s["via"])
+        return online(b) and temp_id(s) in (
+            (_networks.get(b["id"]) or {}).get("open") or []
+        )
     if s["kind"] == REMOTE:  # another sestudio: any answer means it is up
         try:
             with httpx.Client(timeout=NET_CHECK_TIMEOUT) as client:
@@ -295,12 +496,14 @@ def _probe(
 
 def _where(s: dict[str, Any]) -> tuple:
     """What a check's answer is about: a changed address is checked again."""
-    return (s.get("host"), s.get("share"), s.get("port"), s.get("path"))
+    return (s.get("host"), s.get("share"), s.get("port"), s.get("path"), s.get("via"))
 
 
 def state(s: dict[str, Any]) -> dict[str, Any]:
     """``{state: online | offline, since}``: ``since`` is when it went away. A
     bridge adds ``network``: what it said about the network it is on."""
+    if s["kind"] == BRIDGED and not s.get("connected", True):
+        return {"state": "closed", "since": None}
     out = _state_of(s)
     if s.get("bridge"):
         out["network"] = _networks.get(s["id"]) if out["state"] == "online" else None
@@ -308,7 +511,7 @@ def state(s: dict[str, Any]) -> dict[str, Any]:
 
 
 def _state_of(s: dict[str, Any]) -> dict[str, Any]:
-    if s["kind"] not in (FOLDER, REMOTE, *NETWORK):
+    if s["kind"] not in (FOLDER, REMOTE, *NETWORK, BRIDGED):
         return {"state": "online", "since": None}
     now = time.time()
     with _lock:
@@ -372,7 +575,7 @@ def _entry(s: dict[str, Any]) -> dict[str, Any]:
 def _scan_into(s: dict[str, Any], entry: dict[str, Any]) -> None:
     from sestudio import downloaded
 
-    if s["kind"] == REMOTE:
+    if s["kind"] in (REMOTE, BRIDGED):
         files = _peer_files(s)
     else:
         files = downloaded.scan(remotefs.top(s) if s["kind"] in NETWORK else s["path"])
@@ -390,12 +593,17 @@ def _peer_files(s: dict[str, Any]) -> list[Any]:
     keeps that server's own key as its path."""
     from sestudio import downloaded
 
+    peer = peer_of(s)
+    params = {"storage": temp_id(s)} if s["kind"] == BRIDGED else None
+    prefix = f"{temp_id(s)}:" if s["kind"] == BRIDGED else ""
     with httpx.Client(timeout=30.0) as client:
-        r = client.get(f"{s['url']}/api/share/video", headers=_bearer(s))
+        r = client.get(
+            f"{peer['url']}/api/share/video", headers=_bearer(peer), params=params
+        )
     r.raise_for_status()
     return [
         downloaded.DownloadedFile(
-            path=f["path"],
+            path=f["path"].removeprefix(prefix),
             series=t.get("series", ""),
             season=int(t.get("season") or 0),
             number=int(f.get("number") or 0),

@@ -15,7 +15,15 @@ async function refreshAll() {
   await Promise.all([refreshStorages(), refreshDownloadedLibrary(), reloadLibraries().catch(() => {})])
 }
 
-function DiskCard({ s, titles, tracks, onLookAround }: { s: StorageInfo; titles: number; tracks?: number; onLookAround: () => void }) {
+function DiskCard({ s, titles, tracks, onLookAround, opened = [], titleCounts: openedTitles }: {
+  s: StorageInfo
+  titles: number
+  tracks?: number
+  onLookAround: () => void
+  /** For a bridge: the shares opened through it (SPEC-storage §10.5, K1). */
+  opened?: StorageInfo[]
+  titleCounts?: Map<string, number>
+}) {
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(s.label)
   const [removing, setRemoving] = useState(false)
@@ -137,6 +145,18 @@ function DiskCard({ s, titles, tracks, onLookAround }: { s: StorageInfo; titles:
         </label>
       )}
 
+      {s.bridge && opened.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-base-content/55">Opened through {s.label}</p>
+          {opened.map(o => <OpenedRow key={o.id} o={o} titles={openedTitles?.get(o.id) ?? 0} bridge={s} onError={setError} />)}
+          {opened.some(o => o.auto && o.wifi) && (
+            <p className="text-xs text-base-content/50">
+              Saved for {[...new Set(opened.filter(o => o.auto && o.wifi).map(o => o.wifi))].map((w, i) => <span key={w}>{i > 0 && ', '}<b className="text-base-content/70">{w}</b></span>)}: opens by itself when {s.label} joins it again.
+            </p>
+          )}
+        </div>
+      )}
+
       {removing && (
         <div className="rounded-lg bg-base-300 p-3 flex flex-col gap-2">
           <p className="text-sm">Remove “{s.label}”? Its files are not touched; they just stop being listed.</p>
@@ -147,6 +167,47 @@ function DiskCard({ s, titles, tracks, onLookAround }: { s: StorageInfo; titles:
         </div>
       )}
       {error && <p role="alert" className="text-xs text-error">{error}</p>}
+    </div>
+  )
+}
+
+/** A share opened through a bridge, inside the bridge's card (K1): Disconnect
+ *  closes it and keeps its login; Open opens it again; Forget drops the login. */
+function OpenedRow({ o, titles, bridge, onError }: { o: StorageInfo; titles: number; bridge: StorageInfo; onError: (e: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [forgetting, setForgetting] = useState(false)
+  const act = (p: Promise<unknown>) => {
+    setBusy(true)
+    onError('')
+    return p.then(refreshAll, e => onError((e as Error).message)).finally(() => setBusy(false))
+  }
+  const closed = o.state === 'closed'
+  const away = o.state === 'offline'
+  return (
+    <div className={`rounded-[10px] border border-base-300 bg-base-100 px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 ${closed ? 'opacity-75' : ''}`}>
+      <StorageGlyph storage={o} className="w-5 h-5 text-base-content/60" />
+      <div className="min-w-0 flex-1 basis-40">
+        <p className="text-sm font-semibold truncate">{o.label}</p>
+        <p className="font-mono text-xs text-base-content/55 break-all">{o.proto}://{o.host}{o.share ? `/${o.share}` : ''}</p>
+        <p className={`text-xs ${away ? 'text-warning' : 'text-base-content/55'}`}>
+          {closed
+            ? 'Disconnected · its login is kept'
+            : away
+              ? `Away${o.since ? ` since ${sinceLabel(o.since)}` : ''}${o.wifi ? ` · join ${o.wifi} on ${bridge.label}` : ''}`
+              : `${titles} ${titles === 1 ? 'title' : 'titles'}`}
+        </p>
+      </div>
+      <div className="flex gap-1.5 max-sm:ml-8">
+        {closed
+          ? <button type="button" disabled={busy} onClick={() => void act(storagesApi.edit(o.id, { connected: true }))} className="btn btn-sm btn-primary">{busy ? 'Opening…' : 'Open'}</button>
+          : <button type="button" disabled={busy} onClick={() => void act(storagesApi.edit(o.id, { connected: false }))} className="btn btn-sm btn-outline gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden="true"><path d="M12 5l7 8H5zM5 18h14" /></svg>
+              Disconnect
+            </button>}
+        {forgetting
+          ? <button type="button" disabled={busy} onClick={() => void act(storagesApi.remove(o.id))} className="btn btn-sm btn-error">Forget it</button>
+          : <button type="button" onClick={() => setForgetting(true)} className="btn btn-sm btn-ghost" title="Forget this share and its login">Forget</button>}
+      </div>
     </div>
   )
 }
@@ -178,8 +239,17 @@ export default function Storage() {
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {list.map(s => (
-          <DiskCard key={`${s.id}:${s.label}`} s={s} titles={counts.get(s.id) ?? 0} tracks={tracks.get(s.id)} onLookAround={() => setAdding({ kind: 'nearby', from: s.id })} />
+        {/* A share opened through a bridge sits inside the bridge's card (K1). */}
+        {list.filter(s => s.kind !== 'bridged').map(s => (
+          <DiskCard
+            key={`${s.id}:${s.label}`}
+            s={s}
+            titles={counts.get(s.id) ?? 0}
+            tracks={tracks.get(s.id)}
+            onLookAround={() => setAdding({ kind: 'nearby', from: s.id })}
+            opened={list.filter(o => o.kind === 'bridged' && o.via === s.id)}
+            titleCounts={counts}
+          />
         ))}
       </div>
       <button

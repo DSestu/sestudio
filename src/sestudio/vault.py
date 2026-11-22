@@ -16,6 +16,9 @@ from typing import Any
 from sestudio.config import config_dir
 
 _lock = threading.Lock()
+#: Secrets held in memory only: a share a bridge opened for another sestudio
+#: (SPEC-storage §10) never reaches this machine's disk.
+_memory: dict[str, dict[str, Any]] = {}
 
 
 def _path() -> Path:
@@ -43,7 +46,20 @@ def _write(data: dict[str, dict[str, Any]]) -> None:
 
 def get(storage_id: str) -> dict[str, Any]:
     with _lock:
+        if storage_id in _memory:
+            return dict(_memory[storage_id])
         return dict(_read().get(storage_id, {}))
+
+
+def hold(storage_id: str, values: dict[str, Any]) -> None:
+    """Keep *values* in memory only, until :func:`release` or the end of the process."""
+    with _lock:
+        _memory[storage_id] = dict(values)
+
+
+def release(storage_id: str) -> None:
+    with _lock:
+        _memory.pop(storage_id, None)
 
 
 def put(storage_id: str, values: dict[str, Any]) -> None:
