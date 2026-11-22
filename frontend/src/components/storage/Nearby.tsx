@@ -134,6 +134,8 @@ function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpe
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [checking, setChecking] = useState(row.kind !== 'media')
+  // A share turned the guest away: its login can be typed even though others let it in.
+  const [asking, setAsking] = useState(false)
   const media = row.kind === 'media'
 
   function check(user = '', pass = '') {
@@ -192,11 +194,15 @@ function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpe
             <li key={sh.name} className="flex items-center gap-2.5 rounded-box bg-base-200 px-2.5 py-1.5">
               <span className="min-w-0 flex-1">
                 <span className="block font-mono text-sm truncate">{row.kind === 'smb' ? sh.name : 'Top folder'}</span>
-                <span className={`block text-xs ${!sh.read ? 'text-error' : sh.write ? 'text-success' : 'text-base-content/60'}`}>
-                  {!sh.read ? 'No access' : sh.write ? 'Read & write' : sh.write === null ? 'Can read · writing not checked' : 'Read only'}
+                <span className={`block text-xs ${sh.login ? 'text-warning' : !sh.read ? 'text-error' : sh.write ? 'text-success' : 'text-base-content/60'}`}>
+                  {sh.login ? 'Needs a login' : !sh.read ? 'No access' : sh.write ? 'Read & write' : sh.write === null ? 'Can read · writing not checked' : 'Read only'}
+                  {sh.encrypted && <span className="text-base-content/60"> · encrypted</span>}
                 </span>
               </span>
-              <button
+              {sh.login && !asking && (
+                <button type="button" onClick={() => setAsking(true)} className="btn btn-xs btn-outline">Log in</button>
+              )}
+              {!sh.login && <button
                 type="button"
                 disabled={!sh.read}
                 onClick={() => onOpen({
@@ -208,7 +214,7 @@ function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpe
                 className="btn btn-xs btn-outline"
               >
                 Open
-              </button>
+              </button>}
             </li>
           ))}
         </ul>
@@ -217,7 +223,7 @@ function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpe
         <p className="ml-8 text-xs text-base-content/55">Lets {who} in, but shares nothing.</p>
       )}
 
-      {access?.login === 'needed' && (
+      {(access?.login === 'needed' || asking) && (
         // Not a <form>: Nearby sits inside Add a storage's own form, and a form in a form submits the outer one.
         <div
           role="group"
