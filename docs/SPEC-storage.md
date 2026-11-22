@@ -218,3 +218,134 @@ phase 1 background scan, depth 6, kept on disk.
   "Pick another folder" keeps what is under the item picked: a folder lands as itself, a title keeps its own folder and seasons, a lone file lands by its name (`dests` on `POST /api/transfers`, folders from `GET /api/storages/{id}/folders`).
 - 17: the new dependencies resolve to binary wheels on `aarch64` (`uv pip compile --only-binary :all:`), so `uvx sestudio` installs them on the phone; not yet run on a phone build.
 - Not done: a sidecar subtitle beside another sestudio's film is not listed (embedded tracks play); a TV burning a sidecar subtitle of a file on a server is not tried.
+
+## 10. Phase 3: a phone as a bridge to another home's network (draft, 2026-11-22)
+
+At the family house their films sit on a Freebox. My home server can't reach their network,
+but my phone, on their Wi-Fi, can. The phone's sestudio opens the Freebox and the home server
+reaches it through the phone over Tailscale (option 1, picked over a subnet router or the
+Freebox VPN). Answers that shaped this: the home server's UI drives it; watch, cast, copy home
+and copy to their Freebox are all wanted; Disconnect ends it, the login is kept and the
+connection is remembered for that Wi-Fi.
+
+### 10.1 Stories
+
+Pairing (once)
+- **B1.** At home, once, I add my phone's sestudio to my home server as a bridge, the way I add
+  another sestudio today (X3). After that the home server reaches it whenever the phone is on.
+- **B2.** The phone's card in Settings › Storage says whether it answers now and which network
+  it is on: "Pixel 7 · online · on Freebox-1A2B3C".
+
+Finding
+- **B3.** At the family house, in my home server's UI (on my phone, over Tailscale), I tap
+  **Look around Pixel 7** and see what the phone finds on its Wi-Fi: "Freebox Server · SMB ·
+  192.168.1.254".
+- **B4.** The scan takes seconds and says what it is doing. When it finds nothing, it says so
+  and lets me type an address.
+- **B5.** Only what can hold files is listed: SMB, FTP and SFTP shares, and media servers. TVs,
+  speakers and printers are not.
+
+Opening
+- **B6.** I tap **Open**. If the share wants a login I type it once. It opens as a storage named
+  after the device and the place ("Freebox · Mum's"), shown as **via Pixel 7**, and I can rename it.
+- **B7.** The login is saved, and never shown again or sent to a browser.
+- **B8.** Another day, back on the same Wi-Fi, the Freebox opens again by itself with the saved
+  login: no scan, no typing.
+
+Using
+- **B9.** Its films show in Media like any storage: in the switcher, in All storages, in Tree and
+  Browse, with "via Pixel 7".
+- **B10.** I play one of its films on my phone, with seeking, like any other storage file.
+- **B11.** I cast one of its films to their TV. The TV gets it from my phone on their Wi-Fi, not
+  from my home server across the internet.
+- **B12.** I copy films from their Freebox to my home disks with the copy screens; the Queue
+  shows it going.
+- **B13.** I copy films from my home disks onto their Freebox, so they can watch them later.
+
+Ending
+- **B14.** I tap **Disconnect**: the Freebox leaves my lists. Its login stays saved.
+- **B15.** When the phone leaves their Wi-Fi or stops, the Freebox shows "away since 21:04" like
+  any offline storage (S13–S15), with the Wi-Fi it needs: "join Freebox-1A2B3C on Pixel 7".
+  A running copy pauses and resumes when it is back.
+- **B16.** After Disconnect nothing of theirs stays at home except what I copied: no listing and
+  no thumbnails are kept.
+
+Without the phone (were N1 and N3, wanted)
+- **B17.** I can also reach their network without my phone there: through a Tailscale subnet
+  router at their house, or by joining their Freebox's VPN. Their Freebox then opens from my home
+  server directly, as a plain SMB or FTP storage, with the address typed once.
+- **B18.** A laptop running sestudio at their house can be the bridge instead of my phone, the
+  same way (B1–B16).
+
+### 10.2 Not in scope
+
+- **N2.** Scanning anything beyond the bridge's own Wi-Fi, or devices that hold no files.
+
+### 10.3 Open questions
+
+- **Q4.** When the phone leaves their Wi-Fi, the Freebox: stays listed, greyed "away"
+  (proposed, matches B8 and B15), or disappears until opened again.
+- **Q5.** "The same Wi-Fi" is recognised by: the Freebox itself answering at its address with the
+  same identity (proposed: no Android permission needed), or the Wi-Fi name (Android then asks
+  for location permission).
+- **Q6.** Move to or from their Freebox: off, Copy only (proposed: a move deletes their files or
+  mine across a phone link), or allowed with a confirmation.
+- **Q7.** Where their login is kept: on the phone only (proposed: my home server never holds
+  their password), or in the home server's `secrets.json`.
+
+### 10.4 Answers (2026-11-22, story review)
+
+- B1–B14 and B16 kept as written. B15 changed: an away bridge storage names the Wi-Fi to join.
+- N1 and N3 wanted: now B17 (subnet router or Freebox VPN, no phone) and B18 (a laptop as the
+  bridge). N2 stays out.
+- **Q4.** When the phone leaves their Wi-Fi, the Freebox stays listed, greyed "away".
+- **Q5.** "The same Wi-Fi" is recognised by its name. The Android app asks for location
+  permission (Android only gives the Wi-Fi name with it), and says why when it asks.
+- **Q6.** Move to or from their Freebox is allowed, after a confirmation.
+- **Q7.** Their login is kept in the home server's `secrets.json`, sent to the phone when it opens
+  the share, and never to a browser.
+
+### 10.5 Screens (mockups round 3, 2026-11-22: `docs/proto/storage/mockups-round3.html`)
+
+- **Settings › Storage: K1, nested.** The bridge phone has its own card (name, Bridge, online and
+  the Wi-Fi it is on, **Look around**). What it opened sits inside that card, each with
+  **Disconnect**; under them, "Saved for <Wi-Fi>: opens by itself when <phone> joins it again".
+  On a phone the button goes full width and Disconnect drops under the row.
+- **Look around: L2, a Nearby tab in Add a storage.** Tabs Folder · Server · Another sestudio ·
+  **Nearby**. A **Look from** switch picks this server or a bridge. It says how long it has looked,
+  lists what holds files (name, kind, share, address, a lock when a login is needed) with **Open**,
+  and takes a typed address under "Not listed?". The phone card's **Look around** opens this tab
+  with the phone picked.
+- **Open a share: O.** Name (filled in from the device and the place), user and password (empty
+  for a guest share), "Saved on your home server, never shown again", Video / Music, and **Open by
+  itself on <Wi-Fi>** on by default.
+- **In Media: M.** The storage is in the switcher as "<name> · via <phone>". Away, it stays,
+  greyed, under a banner: "Away since 21:04. It opens again when <phone> joins <Wi-Fi>."
+- **Asks: A.** Android's location question the first time the phone looks around, with sestudio's
+  reason in it; a move to or from a bridged storage confirms first: it names whose files are
+  deleted, the time through the phone, and offers **Copy instead**.
+
+### 10.6 Build plan (phase 3)
+
+18. **Bridge pairing and status** (B1, B2, K1): a sestudio says what network it is on
+    (`/api/share/bridge`: Wi-Fi name, address; Android reads the Wi-Fi name with the location
+    permission, Windows and Linux from the OS for B18). A remote sestudio can be marked a bridge;
+    its card shows online and Wi-Fi.
+19. **Nearby scan** (B3–B5, L2): `GET /api/nearby` on any sestudio: mDNS (`_smb._tcp`, `_ftp._tcp`,
+    `_sftp-ssh._tcp`), SSDP media servers, and a port probe of the gateway; TVs, speakers and
+    printers left out. Add a storage › Nearby with **Look from**, which asks the bridge when picked.
+20. **Open through a bridge** (B6, B7, B9, B14, B16, O): the home server keeps the login in
+    `secrets.json` and asks the bridge to open the share in memory only; the bridge lists it through
+    its share API; the home server shows it "via <phone>" inside the bridge card. Disconnect closes
+    it on the bridge and drops its listing and thumbnails at home.
+21. **Play and cast through a bridge** (B10, B11): played through the home relay from the
+    bridge's relay; a cast to a TV on their network is started by the bridge, which streams to it
+    itself.
+22. **Copy and move through a bridge** (B12, B13, A): the transfer engine reads and writes a
+    bridged storage through the bridge's API (writes need the share token); a move confirms first.
+23. **Remembered Wi-Fi and away** (B8, B15, Q4, Q5, M): the bridge reopens saved shares when it
+    joins a saved Wi-Fi; away storages stay, greyed, with the Wi-Fi to join; a running copy pauses
+    and resumes.
+24. **Without the phone** (B17): a share reached through a subnet router or the Freebox VPN is a
+    plain SMB or FTP storage with a typed address (works today); Settings says how, in a short help
+    line.
