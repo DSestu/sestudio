@@ -98,12 +98,12 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
   const inView = useMemo(() => (searching ? base.filter(t => matches(t, facts, query)) : base), [base, facts, query, searching])
   const viewTree = useMemo(() => (source || searching ? treeOf(inView, grouping, facts) : tree), [source, searching, inView, tree, grouping, facts])
   const groups = useMemo(() => tapeGroupsOf(viewTree, grouping), [viewTree, grouping])
-  // Grouped by default, whatever opens (§2.4); Best blend asks the server for the order and the joins.
-  const [order, setOrder] = useState<Order>('grouped')
+  // A source (folder, album, artist...) opens in Best blend, the whole library Grouped; Best blend asks the server for the order and the joins.
+  const [order, setOrder] = useState<Order>(sourceKey ? 'blend' : 'grouped')
   const [shape, setShape] = useState<Shape>('Arc')
   const sourceName = source ? source.name : 'Whole library'
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- a new source opens Grouped
-  useEffect(() => { setOrder('grouped') }, [sourceKey])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- a new source opens in its default order
+  useEffect(() => { setOrder(sourceKey ? 'blend' : 'grouped') }, [sourceKey])
   const blend = useBlendOrder(order === 'blend' ? inView.slice(0, BLEND_CAP) : undefined, shape)
   const blendGroups = useMemo<TapeGroup[] | undefined>(() => blend && [{ key: 'blend', head: `Best blend · ${shape}`, name: sourceName, tracks: blend.tracks }], [blend, shape, sourceName])
   const [selectedId, setSelectedId] = useState<string>()
