@@ -1211,7 +1211,7 @@ export default function WatchView({
         <div
           className={`flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 lg:transition-[grid-template-columns] lg:duration-[360ms] ease-smooth motion-reduce:transition-none ${
             isSingle
-              ? side ? 'lg:grid-cols-[minmax(0,1fr)_20rem] lg:[--col-w:20rem]' : about ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,55rem)] lg:justify-center'
+              ? side ? 'lg:grid-cols-[minmax(0,1fr)_20rem] lg:[--col-w:20rem]' : 'lg:grid-cols-[minmax(0,1fr)]'
               : collapsed ? 'lg:grid-cols-[minmax(0,1fr)_5.25rem] lg:[--col-w:5.25rem]' : 'lg:grid-cols-[minmax(0,1fr)_24rem] lg:[--col-w:24rem]'
           }`}
         >
