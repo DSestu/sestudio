@@ -48,6 +48,8 @@ export default function AddStorage({ onClose, onAdded, initial }: {
   /** Set when Nearby found it through a bridge: it is opened by that bridge (SPEC-storage §10). */
   const [through, setThrough] = useState('')
   const [auto, setAuto] = useState(true)
+  /** A media server found by Nearby: opened read only, with no login (SPEC-storage §11, M5). */
+  const [media, setMedia] = useState<NearbyRow | null>(null)
   const bridges = useStorages().filter(s => s.bridge)
   const [path, setPath] = useState('')
   const [browsing, setBrowsing] = useState(false)
@@ -93,7 +95,13 @@ export default function AddStorage({ onClose, onAdded, initial }: {
 
   /** Open from Nearby: the Server tab, filled in with what was found. */
   function openFound(row: NearbyRow, via: string) {
-    if (row.kind === 'media') return
+    setMedia(row.kind === 'media' && row.location ? row : null)
+    if (row.kind === 'media') {
+      setThrough(via)
+      setKind('server')
+      setLabel(row.name)
+      return
+    }
     setThrough(via)
     setKind('server')
     setProtocol(row.kind)
@@ -122,7 +130,9 @@ export default function AddStorage({ onClose, onAdded, initial }: {
       e => setTested({ key: serverKey, error: (e as Error).message }),
     )
   }
-  const ready = kind === 'folder'
+  const ready = media
+    ? kind === 'server'
+    : kind === 'folder'
     ? !!checked?.ok && !!roles
     : kind === 'server' ? !!host.trim() && (protocol !== 'smb' || !!share.trim()) && (!!roles || !!through)
       : kind === 'remote_sestudio' ? !!url.trim() && !!token.trim() : true
@@ -138,7 +148,11 @@ export default function AddStorage({ onClose, onAdded, initial }: {
           body: JSON.stringify({ ytmusic_cookies: cookies }),
         })
       }
-      const body: NewStorage = kind === 'folder'
+      const body: NewStorage = kind === 'server' && media
+        ? through
+          ? { kind: 'bridged', proto: 'upnp', url: media.location, via: through, label, roles: ['video'], auto }
+          : { kind: 'upnp', url: media.location, label, roles: ['video'] }
+        : kind === 'folder'
         ? { kind, path: path.trim(), label, roles: [...(roles ?? [])], download }
         : kind === 'server' && through
           // Opened by the bridge; the login is kept here (SPEC-storage §10, Q7).
@@ -166,7 +180,7 @@ export default function AddStorage({ onClose, onAdded, initial }: {
             key={k.id}
             role="tab"
             aria-selected={kind === k.id}
-            onClick={() => { setKind(k.id); setThrough('') }}
+            onClick={() => { setKind(k.id); setThrough(''); setMedia(null) }}
             // The row scrolls on a phone: the open tab stays in sight.
             ref={el => { if (el && kind === k.id) el.scrollIntoView({ inline: 'nearest', block: 'nearest' }) }}
             className={`tab flex-1 whitespace-nowrap ${kind === k.id ? 'tab-active' : ''}`}
@@ -237,7 +251,26 @@ export default function AddStorage({ onClose, onAdded, initial }: {
             </p>
           </>
         )}
-        {kind === 'server' && through && (() => {
+        {kind === 'server' && media && (
+          <>
+            <div className="flex items-start gap-2.5 rounded-box bg-base-200 px-3 py-2.5 text-sm">
+              <svg className="w-4 h-4 mt-0.5 shrink-0 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 5h18v12H3zM10 9l4 2-4 2zM8 21h8" /></svg>
+              <span className="min-w-0">
+                <span className="block font-medium">{media.name} · media server</span>
+                <span className="block text-xs text-base-content/60">
+                  Read only: its films play and can be copied, never changed.
+                  {through ? ` Opened through ${bridges.find(b => b.id === through)?.label ?? 'the bridge'}.` : ''}
+                </span>
+              </span>
+              <button type="button" onClick={() => { setMedia(null); setThrough(''); setKind('nearby') }} className="ml-auto link link-primary text-xs no-underline shrink-0">Back</button>
+            </div>
+            <label className="block">
+              <span className="text-sm text-base-content/60">Name</span>
+              <input value={label} onChange={e => setLabel(e.target.value)} className={field} placeholder="Freebox · Mum's" autoFocus />
+            </label>
+          </>
+        )}
+        {kind === 'server' && through && !media && (() => {
           const bridge = bridges.find(b => b.id === through)
           const wifi = bridge?.network?.wifi
           return (
@@ -290,7 +323,7 @@ export default function AddStorage({ onClose, onAdded, initial }: {
             </>
           )
         })()}
-        {kind === 'server' && !through && (
+        {kind === 'server' && !through && !media && (
           <>
             <div className="join w-full" role="group" aria-label="Protocol">
               {PROTOCOLS.map(p => (

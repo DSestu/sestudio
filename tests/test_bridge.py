@@ -627,3 +627,100 @@ def test_a_guest_turned_away_is_told_to_log_in_and_encryption_is_said(monkeypatc
     }  # fmt: skip
     assert smbshares._share_access("david", "box", "ENC", False)["encrypted"] is True
     assert smbshares._share_access("david", "box", "FILMS", False)["encrypted"] is False
+
+
+# --- a media server as a read-only storage (PR 28) ------------------------------
+
+
+def test_a_media_server_lists_its_files_plays_copies_and_is_never_written(
+    phone, tmp_path
+):
+    from sestudio import transfers
+
+    from .fake_media_server import FILM, start
+
+    c, _, _ = phone
+    server, location = start()
+    try:
+        s = c.post("/api/storages", json={"kind": "upnp", "url": location, "roles": ["video"],
+                   "label": "Freebox Server"}).json()  # fmt: skip
+        assert s["kind"] == "upnp" and s["state"] == "online"
+        files = []
+        for _ in range(100):
+            files = [
+                f
+                for t in c.get("/api/downloaded").json()
+                for f in t["files"]
+                if f.get("storage") == s["id"]
+            ]
+            if files:
+                break
+            time.sleep(0.05)
+        assert [f["rel"] for f in files] == [
+            "Fichiers/Heat (1995).mkv"
+        ]  # the live channel is not a file
+        got = c.get(
+            "/api/downloaded/file",
+            params={"path": files[0]["path"]},
+            headers={"Range": "bytes=10-19"},
+        )
+        assert got.status_code == 206 and got.content == FILM[10:20]
+        home = tmp_path / "home"
+        home.mkdir()
+        disk = storage.add("folder", ["video"], "Home disk", str(home))
+        with pytest.raises(transfers.Invalid, match="read only"):
+            transfers.create([files[0]["path"]], disk["id"], "move")
+        with pytest.raises(transfers.Invalid, match="read only"):
+            transfers.create([f"{disk['id']}:x.mkv"], s["id"], "copy")
+        job = _done(transfers.create([files[0]["path"]], disk["id"], "copy").id)
+        assert job["status"] == "done", job["items"]
+        assert (home / "Fichiers/Heat (1995).mkv").read_bytes() == FILM
+    finally:
+        server.shutdown()
+
+
+def test_media_server_names_and_streams():
+    from sestudio import upnpfs
+
+    didl = ('<DIDL-Lite><item id="1"><dc:title>Mr. Robot</dc:title>'
+            '<res protocolInfo="http-get:*:video/mp4:*" size="5">http://b/1</res></item>'
+            '<item id="2"><dc:title>Live</dc:title><res protocolInfo="http-get:*:video/mpeg:*" size="0">'
+            'http://b/live</res></item><item id="3"><dc:title>Heat.avi</dc:title>'
+            '<res size="9">http://b/x.avi?t=1</res></item></DIDL-Lite>')  # fmt: skip
+    entries = [e for e in upnpfs.parse_didl(didl) if e.get("url")]
+    assert [upnpfs._file_name(e) for e in entries] == ["Mr. Robot.mp4", "Heat.avi"]
+
+
+def test_a_media_server_opens_through_the_bridge(phone):
+    from .fake_media_server import FILM, start
+
+    c, url, token = phone
+    server, location = start()
+    try:
+        b = c.post("/api/storages", json={"kind": "remote_sestudio", "roles": ["video"], "url": url,
+                   "token": token, "label": "Pixel 7", "bridge": True}).json()  # fmt: skip
+        s = c.post("/api/storages", json={"kind": "bridged", "via": b["id"], "proto": "upnp",
+                   "url": location, "label": "Freebox Server", "roles": ["video"]}).json()  # fmt: skip
+        assert s["kind"] == "bridged" and s["proto"] == "upnp", s
+        files = []
+        for _ in range(100):
+            files = [
+                f
+                for t in c.get("/api/downloaded").json()
+                for f in t["files"]
+                if f.get("storage") == s["id"]
+            ]
+            if files:
+                break
+            time.sleep(0.05)
+        assert [f["rel"] for f in files] == ["Fichiers/Heat (1995).mkv"]
+        got = c.get(
+            "/api/downloaded/file",
+            params={"path": files[0]["path"]},
+            headers={"Range": "bytes=0-9"},
+        )
+        assert got.status_code == 206 and got.content == FILM[:10]
+    finally:
+        for sid in list(storage._temporary):
+            storage.close_temporary(sid)
+        server.shutdown()

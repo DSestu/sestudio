@@ -1104,7 +1104,7 @@ export interface StorageInfo {
   /** A share opened through a bridge (SPEC-storage §10): which one, and how. */
   via?: string
   via_label?: string
-  proto?: 'smb' | 'ftp' | 'sftp'
+  proto?: 'smb' | 'ftp' | 'sftp' | 'upnp'
   connected?: boolean
   /** Opens by itself when its bridge is back on `wifi` (B8). */
   auto?: boolean
@@ -1141,6 +1141,8 @@ export interface NearbyRow {
   kind: 'smb' | 'ftp' | 'sftp' | 'media'
   host: string
   port: number | null
+  /** A media server's description address (SPEC-storage §11, M5). */
+  location?: string
   /** Set when a share was picked from what the check found, with the login that got in. */
   share?: string
   username?: string
@@ -1164,10 +1166,10 @@ export interface NearbyScan {
 }
 
 export interface NewStorage {
-  kind: 'folder' | 'remote_sestudio' | 'ytmusic_account' | 'ftp' | 'sftp' | 'smb' | 'bridged'
+  kind: 'folder' | 'remote_sestudio' | 'ytmusic_account' | 'ftp' | 'sftp' | 'smb' | 'bridged' | 'upnp'
   /** A share opened through a bridge: the bridge, the share's protocol, opening by itself. */
   via?: string
-  proto?: 'smb' | 'ftp' | 'sftp'
+  proto?: 'smb' | 'ftp' | 'sftp' | 'upnp'
   auto?: boolean
   roles: ('video' | 'music')[]
   label?: string

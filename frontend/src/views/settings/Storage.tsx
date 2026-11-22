@@ -31,7 +31,7 @@ function DiskCard({ s, titles, tracks, onLookAround, opened = [], titleCounts: o
   const menu = useRef<HTMLDetailsElement>(null)
   const folder = s.kind === 'folder'
   // A folder or a server read in the app: both hold video (SPEC-storage §9).
-  const files = folder || NETWORK_KINDS.includes(s.kind) || s.kind === 'remote_sestudio'
+  const files = folder || NETWORK_KINDS.includes(s.kind) || s.kind === 'remote_sestudio' || s.kind === 'upnp'
   const away = s.state === 'offline'
 
   const act = (p: Promise<unknown>) =>
@@ -63,6 +63,7 @@ function DiskCard({ s, titles, tracks, onLookAround, opened = [], titleCounts: o
           <span className="font-semibold flex-1 min-w-0 truncate">
             {s.label}
             {s.bridge && <span className="ml-2 align-middle text-[11px] font-medium rounded-full px-2 py-0.5 bg-base-300 text-base-content/80">Bridge</span>}
+            {s.kind === 'upnp' && <span className="ml-2 align-middle text-[11px] font-medium rounded-full px-2 py-0.5 bg-base-300 text-base-content/80">Read only</span>}
           </span>
         )}
         {away
@@ -122,8 +123,9 @@ function DiskCard({ s, titles, tracks, onLookAround, opened = [], titleCounts: o
             key={role}
             type="button"
             aria-pressed={s.roles.includes(role)}
-            disabled={!files && role === 'video'}
-            title={!files && role === 'video' ? 'This kind of storage holds music only, for now' : undefined}
+            disabled={(!files && role === 'video') || (s.kind === 'upnp' && role === 'music')}
+            title={!files && role === 'video' ? 'This kind of storage holds music only, for now'
+              : s.kind === 'upnp' && role === 'music' ? 'A media server holds video only, for now' : undefined}
             onClick={() => toggleRole(role)}
             className={`btn btn-sm flex-1 ${s.roles.includes(role) ? 'btn-primary btn-soft' : 'btn-ghost bg-base-300'}`}
           >
@@ -188,7 +190,9 @@ function OpenedRow({ o, titles, bridge, onError }: { o: StorageInfo; titles: num
       <StorageGlyph storage={o} className="w-5 h-5 text-base-content/60" />
       <div className="min-w-0 flex-1 basis-40">
         <p className="text-sm font-semibold truncate">{o.label}</p>
-        <p className="font-mono text-xs text-base-content/55 break-all">{o.proto}://{o.host}{o.share ? `/${o.share}` : ''}</p>
+        <p className="font-mono text-xs text-base-content/55 break-all">
+          {o.proto === 'upnp' ? `media server · ${o.host} · read only` : `${o.proto}://${o.host}${o.share ? `/${o.share}` : ''}`}
+        </p>
         <p className={`text-xs ${away ? 'text-warning' : 'text-base-content/55'}`}>
           {closed
             ? 'Disconnected · its login is kept'

@@ -387,6 +387,10 @@ Without the phone (were N1 and N3, wanted)
   and shares through Freebox OS, and can turn its file sharing on, after asking me. Its token is
   kept like a password (home `secrets.json`, sent to the bridge when it is used).
 
+- **M5. The box's media server** (asked 2026-11-22). A Freebox's "Freebox Server" (or a NAS's
+  DLNA server) opens as a read-only storage, here or through a bridge: its folders and films are
+  listed, they play and can be copied home; never moved or written. Live TV channels are left out.
+
 ### 11.2 Build plan
 
 26. M1 + M2: WS-Discovery in the scan; boxes named by brand; their usual host names looked up.
@@ -406,3 +410,11 @@ Without the phone (were N1 and N3, wanted)
   "Needs a login", with Log in on it even when other shares let the guest in; a share reached
   with a login says "encrypted" when SMB3 encryption is on. Encrypted shares already opened with a
   login (smbprotocol encrypts on its own). Checked on Samba 4.25 with `smb encrypt = required`.
+- 28 (M5): a UPnP media server is a storage kind (`upnp`), read only: its ContentDirectory is
+  browsed into a folder tree of the items that have a size (live TV, size 0, left out), files are
+  read over HTTP in byte ranges, so they play, seek and copy; a move from it becomes a copy, and
+  nothing is written to it. Opens here or through a bridge. A Freebox's media server is also found
+  at `http://<box>:52424/device.xml` when SSDP gets nothing (WSL, some Wi-Fi). On Android the app
+  holds a multicast lock so mDNS answers reach the scan. Checked on a real Freebox Pop: found,
+  named, opened (no disk: 0 titles; TV left out); playing and copying checked on a fake server.
+- M4 (the Freebox OS API) waits on its screens: docs/proto/storage/mockups-round4.html.

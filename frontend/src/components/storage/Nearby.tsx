@@ -176,8 +176,7 @@ function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpe
         {(media || access?.error) && (
           <button
             type="button"
-            disabled={media}
-            title={media ? 'A media server is not opened yet: open the same box’s SMB or FTP share' : undefined}
+            disabled={media && !row.location}
             onClick={() => onOpen(row)}
             className="btn btn-sm btn-outline"
           >
@@ -220,7 +219,9 @@ function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpe
         </ul>
       )}
       {access?.shares && access.shares.length === 0 && access.login !== 'needed' && (
-        <p className="ml-8 text-xs text-base-content/55">Lets {who} in, but shares nothing.</p>
+        <p className="ml-8 text-xs text-base-content/55">
+          Lets {access.user === 'guest' ? 'a guest' : access.user === 'anonymous' ? 'anonymous users' : access.user || 'anyone'} in, but shares nothing.
+        </p>
       )}
 
       {(access?.login === 'needed' || asking) && (

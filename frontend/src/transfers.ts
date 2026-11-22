@@ -68,12 +68,15 @@ export function titleEntries(files: DownloadedFile[]): TransferEntry[] {
 
 /** A storage files can be written to and read from here. */
 export const writable = (s: StorageInfo) =>
-  s.kind === 'folder' || s.kind === 'bridged' || NETWORK_KINDS.includes(s.kind)
+  (s.kind === 'folder' || s.kind === 'bridged' || NETWORK_KINDS.includes(s.kind)) && !readOnly(s)
 
-/** Whether files on `id` can be copied anywhere: it is writable and another one is. */
+/** Files are only read from it: a media server, here or through a bridge (SPEC-storage §11, M5). */
+export const readOnly = (s: StorageInfo) => s.kind === 'upnp' || (s.kind === 'bridged' && s.proto === 'upnp')
+
+/** Whether files on `id` can be copied anywhere: it is read from here, and another one is writable. */
 export function canSendFrom(list: StorageInfo[], id: string): boolean {
   const from = list.find(s => s.id === id)
-  return Boolean(from && writable(from) && list.some(s => s.id !== id && writable(s)))
+  return Boolean(from && (writable(from) || readOnly(from)) && list.some(s => s.id !== id && writable(s)))
 }
 
 // --- the server's transfers, polled while something shows them -----------------

@@ -52,13 +52,17 @@ export const NETWORK_KINDS = ['ftp', 'sftp', 'smb']
 export function videoStorages(list: StorageInfo[]): StorageInfo[] {
   // Another sestudio holds video too, once its Video is turned on (SPEC-storage §9, X3).
   // A share opened through a bridge, once disconnected, is not listed (SPEC-storage §10, B14).
-  return list.filter(s => (s.kind === 'folder' || s.kind === 'remote_sestudio' || s.kind === 'bridged' || NETWORK_KINDS.includes(s.kind))
+  return list.filter(s => (s.kind === 'folder' || s.kind === 'remote_sestudio' || s.kind === 'bridged' || s.kind === 'upnp' || NETWORK_KINDS.includes(s.kind))
     && s.roles.includes('video') && s.state !== 'closed')
 }
 
 /** Where a storage is, as shown under its name: a path, or `sftp://host/path`. */
 export function whereOf(s: Pick<StorageInfo, 'kind' | 'path' | 'url'> & { host?: string; share?: string; proto?: string; via_label?: string }): string {
   const proto = s.kind === 'bridged' ? s.proto ?? 'smb' : s.kind
+  if (proto === 'upnp') {
+    const at = `media server · ${s.host ?? ''}`
+    return s.kind === 'bridged' && s.via_label ? `via ${s.via_label} · ${at}` : at
+  }
   if (NETWORK_KINDS.includes(proto)) {
     const share = s.share ? `/${s.share}` : ''
     const at = `${proto}://${s.host ?? ''}${share}${s.path && s.path !== '/' ? s.path : ''}`
@@ -139,7 +143,7 @@ export function offlineIds(list: StorageInfo[]): Set<string> {
 export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'> & { kind?: string; bridge?: boolean }): 'pc' | 'share' | 'folder' | 'phone' {
   if (s.id === 'local') return 'pc'
   if (s.bridge) return 'phone'
-  if (s.kind && (NETWORK_KINDS.includes(s.kind) || s.kind === 'remote_sestudio' || s.kind === 'bridged')) return 'share'
+  if (s.kind && (NETWORK_KINDS.includes(s.kind) || s.kind === 'remote_sestudio' || s.kind === 'bridged' || s.kind === 'upnp')) return 'share'
   return /^(\\\\|\/\/)/.test(s.path ?? '') ? 'share' : 'folder'
 }
 
