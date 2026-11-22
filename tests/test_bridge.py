@@ -515,3 +515,88 @@ def test_a_cut_copy_leaves_no_part_file_even_after_its_storage_was_away():
     tmp.away = False
     transfers._sweep()  # back: removed
     assert tmp.gone and transfers._leftovers == []
+
+
+# --- modern boxes: WS-Discovery and names (PR 26) -------------------------------
+
+_MATCHES = """<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
+ xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+ xmlns:wsd="http://schemas.xmlsoap.org/ws/2005/04/discovery"><soap:Body><wsd:ProbeMatches>
+<wsd:ProbeMatch><wsa:EndpointReference><wsa:Address>urn:uuid:6ace</wsa:Address></wsa:EndpointReference>
+<wsd:Types>wsdp:Device pub:Computer</wsd:Types><wsd:XAddrs>{xaddr}</wsd:XAddrs>
+<wsd:MetadataVersion>1</wsd:MetadataVersion></wsd:ProbeMatch></wsd:ProbeMatches></soap:Body></soap:Envelope>"""
+_METADATA = """<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
+ xmlns:pub="http://schemas.microsoft.com/windows/pub/2005/07"><soap:Body><wsx:Metadata
+ xmlns:wsx="http://schemas.xmlsoap.org/ws/2004/09/mex"><wsx:MetadataSection>
+<wsdp:Relationship xmlns:wsdp="http://schemas.xmlsoap.org/ws/2006/02/devprof"><wsdp:Host>
+<pub:Computer>DESKTOP-MAMAN/Workgroup:WORKGROUP</pub:Computer></wsdp:Host></wsdp:Relationship>
+</wsx:MetadataSection></wsx:Metadata></soap:Body></soap:Envelope>"""
+
+
+def test_ws_discovery_answers_are_read():
+    from sestudio import nearby
+
+    xml = _MATCHES.format(
+        xaddr="http://192.168.1.31:5357/6ace http://[fe80::1]:5357/6ace"
+    )
+    assert nearby.parse_probe_matches(xml) == [
+        ("urn:uuid:6ace", "http://192.168.1.31:5357/6ace")
+    ]
+    assert nearby.parse_computer(_METADATA) == "DESKTOP-MAMAN"
+    assert nearby.parse_computer("<x/>") is None
+
+
+def test_a_windows_pc_is_found_and_named(monkeypatch):
+    """A PC that only speaks WS-Discovery: probed, it answers, its metadata names it."""
+    import http.server
+
+    from sestudio import nearby
+
+    class Meta(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802
+            self.rfile.read(int(self.headers["Content-Length"]))
+            body = _METADATA.encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    web = http.server.HTTPServer(("127.0.0.1", 0), Meta)
+    threading.Thread(target=web.serve_forever, daemon=True).start()
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.bind(("127.0.0.1", 0))
+
+    def answer():
+        data, sender = udp.recvfrom(65535)
+        assert b"Probe" in data
+        xaddr = f"http://127.0.0.1:{web.server_address[1]}/6ace"
+        udp.sendto(_MATCHES.format(xaddr=xaddr).encode(), sender)
+
+    threading.Thread(target=answer, daemon=True).start()
+    monkeypatch.setattr(
+        nearby, "_WSD_GROUP", udp.getsockname()
+    )  # unicast stands in for the group
+    monkeypatch.setattr(nearby, "_lan_ipv4s", lambda: ["127.0.0.1"])
+    assert nearby._wsd(2) == {"127.0.0.1": "DESKTOP-MAMAN"}
+    web.shutdown()
+    udp.close()
+
+
+def test_a_name_labels_an_address_but_adds_no_row():
+    from sestudio import nearby
+
+    rows = nearby.merge(
+        [
+            {
+                "name": "192.168.1.254",
+                "kind": "smb",
+                "host": "192.168.1.254",
+                "port": 445,
+            }
+        ],
+        {"192.168.1.254": "Freebox", "192.168.1.31": "DESKTOP-MAMAN"},
+    )
+    assert [(r["name"], r["host"]) for r in rows] == [("Freebox", "192.168.1.254")]

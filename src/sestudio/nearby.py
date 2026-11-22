@@ -4,8 +4,13 @@ Three ways of looking, run side by side for a few seconds:
 
 - mDNS: NAS boxes and Macs announce ``_smb._tcp``, ``_ftp._tcp``, ``_sftp-ssh._tcp``;
 - SSDP: UPnP media servers (a Freebox announces itself as "Freebox Server");
+- WS-Discovery: Windows 10/11 and NAS boxes with SMB1 and NetBIOS off announce
+  themselves only this way (SPEC-storage §11, M2);
 - a port check of the box (the ``.1`` and ``.254`` of each local network) and of
   every address found above, for SMB, FTP and SFTP: boxes that announce nothing.
+
+Boxes are named by brand (§11, M1): by their UPnP gateway announcement, and by the
+name each one answers to on its own network.
 
 Only what holds files is kept: TVs, speakers and printers never answer these.
 """
@@ -129,10 +134,14 @@ def _probe(hosts: list[str]) -> list[dict[str, Any]]:
             for (h, kind, port), ok in zip(checks, answers) if ok]  # fmt: skip
 
 
-def merge(found: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def merge(
+    found: list[dict[str, Any]], hints: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     """One row per (address, kind); a name from an announcement beats an address,
-    and an address that announced a name lends it to its other services."""
-    names = {f["host"]: f["name"] for f in found if f["name"] != f["host"]}
+    and an address that announced a name lends it to its other services. *hints*
+    name addresses without adding rows: a name says nothing of what is shared."""
+    names = dict(hints or {})
+    names.update({f["host"]: f["name"] for f in found if f["name"] != f["host"]})
     rows: dict[tuple[str, str], dict[str, Any]] = {}
     for f in found:
         key = (f["host"], f["kind"])
@@ -160,8 +169,26 @@ def scan(seconds: float = 4.0) -> dict[str, Any]:
             found.extend(rows)
 
     ips = _lan_ipv4s()
+    hints: dict[str, str] = {}
+
+    def hint(fn, *args):
+        try:
+            got = fn(*args)
+        except Exception as exc:  # noqa: BLE001 - one way of looking failing leaves the others
+            logger.info("Nearby: %s failed: %s", fn.__name__, exc)
+            return
+        with lock:
+            for host, name in got.items():
+                hints.setdefault(host, name)
+
     looks = [threading.Thread(target=collect, args=(f, seconds), daemon=True)
              for f in (_mdns, _ssdp)]  # fmt: skip
+    looks += [threading.Thread(target=hint, args=(f, seconds), daemon=True)
+              for f in (_wsd, _gateway_names)]  # fmt: skip
+    looks.append(threading.Thread(target=hint, args=(_box_names,), daemon=True))
+    looks.append(
+        threading.Thread(target=hint, args=(_freebox_names, _boxes(ips)), daemon=True)
+    )
     looks.append(
         threading.Thread(target=collect, args=(_probe, _boxes(ips)), daemon=True)
     )
@@ -171,10 +198,214 @@ def scan(seconds: float = 4.0) -> dict[str, Any]:
         t.join(seconds + 4)
     # What was announced gets its ports checked too: a Freebox found by SSDP has SMB.
     with lock:
-        announced = sorted({f["host"] for f in found} - set(_boxes(ips)))
+        announced = sorted(({f["host"] for f in found} | set(hints)) - set(_boxes(ips)))
     if announced:
         collect(_probe, announced)
-    return {"found": merge(found), "seconds": round(time.monotonic() - started, 1)}
+    return {
+        "found": merge(found, hints),
+        "seconds": round(time.monotonic() - started, 1),
+    }
+
+
+# --- names: WS-Discovery, the gateway, the boxes' own names (§11, M1, M2) -------
+
+_WSD_GROUP = ("239.255.255.250", 3702)
+_WSD_PROBE = """<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
+ xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+ xmlns:wsd="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+ xmlns:wsdp="http://schemas.xmlsoap.org/ws/2006/02/devprof"
+ xmlns:pub="http://schemas.microsoft.com/windows/pub/2005/07">
+<soap:Header><wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>
+<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>
+<wsa:MessageID>urn:uuid:{id}</wsa:MessageID></soap:Header>
+<soap:Body><wsd:Probe><wsd:Types>wsdp:Device pub:Computer</wsd:Types></wsd:Probe></soap:Body>
+</soap:Envelope>"""
+_WSD_GET = """<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
+ xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing">
+<soap:Header><wsa:To>{to}</wsa:To>
+<wsa:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</wsa:Action>
+<wsa:MessageID>urn:uuid:{id}</wsa:MessageID>
+<wsa:ReplyTo><wsa:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa:Address></wsa:ReplyTo>
+</soap:Header><soap:Body/></soap:Envelope>"""
+
+#: What each French box answers to on its own network (§11, M1).
+BOX_HOSTS = {
+    "mafreebox.freebox.fr": "Freebox",
+    "gestionbbox.lan": "Bbox",
+    "livebox.home": "Livebox",
+}
+
+
+def parse_probe_matches(xml: str) -> list[tuple[str, str]]:
+    """(endpoint address, first XAddr) of each match in a WS-Discovery answer."""
+    import re
+
+    out = []
+    for match in re.findall(
+        r"<(?:\w+:)?ProbeMatch\b.*?</(?:\w+:)?ProbeMatch>", xml, re.S
+    ):
+        address = re.search(r"<(?:\w+:)?Address>\s*([^<\s]+)", match)
+        xaddrs = re.search(r"<(?:\w+:)?XAddrs>\s*([^<]+)", match)
+        if address and xaddrs:
+            out.append((address.group(1), xaddrs.group(1).split()[0]))
+    return out
+
+
+def parse_computer(xml: str) -> str | None:
+    """The machine's name in a WS-Discovery metadata answer: ``NAME/Workgroup:…``."""
+    import re
+
+    found = re.search(r"<(?:\w+:)?Computer>\s*([^<]+?)\s*</", xml)
+    return found.group(1).split("/")[0] if found else None
+
+
+def _wsd(seconds: float) -> dict[str, str]:
+    import urllib.parse
+    import uuid
+
+    import httpx
+
+    sources = _lan_ipv4s() or [""]
+    socks = []
+    for ip in sources:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+            if ip:
+                s.setsockopt(
+                    socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(ip)
+                )
+            s.bind((ip, 0))
+            s.sendto(_WSD_PROBE.format(id=uuid.uuid4()).encode(), _WSD_GROUP)
+            socks.append(s)
+        except OSError:
+            s.close()
+    matches: dict[str, tuple[str, str]] = {}
+    deadline = time.monotonic() + min(seconds, 3.0)
+    try:
+        while socks and (left := deadline - time.monotonic()) > 0:
+            import select
+
+            ready, _, _ = select.select(socks, [], [], left)
+            for s in ready:
+                data, (addr, _port) = s.recvfrom(65535)
+                for endpoint, xaddr in parse_probe_matches(
+                    data.decode("utf-8", "replace")
+                ):
+                    matches.setdefault(addr, (endpoint, xaddr))
+    finally:
+        for s in socks:
+            s.close()
+    names: dict[str, str] = {}
+    for addr, (endpoint, xaddr) in matches.items():
+        name = None
+        if urllib.parse.urlparse(xaddr).scheme == "http":
+            try:
+                r = httpx.post(xaddr, timeout=2.0, content=_WSD_GET.format(to=endpoint, id=uuid.uuid4()),
+                               headers={"Content-Type": "application/soap+xml"})  # fmt: skip
+                name = parse_computer(r.text)
+            except httpx.HTTPError:
+                pass
+        names[addr] = name or addr
+    return names
+
+
+def _gateway_names(seconds: float) -> dict[str, str]:
+    """The box's own name, from its UPnP gateway announcement ("Livebox 6", "Bbox")."""
+    from async_upnp_client.aiohttp import AiohttpRequester
+    from async_upnp_client.client_factory import UpnpFactory
+    from async_upnp_client.search import async_search
+
+    async def run() -> dict[str, str]:
+        locations: set[str] = set()
+
+        async def on_response(headers: Any) -> None:
+            if headers.get("location"):
+                locations.add(headers["location"])
+
+        await async_search(on_response, timeout=int(min(seconds, 3)),
+                           search_target="urn:schemas-upnp-org:device:InternetGatewayDevice:1")  # fmt: skip
+        factory = UpnpFactory(AiohttpRequester(timeout=3))
+        out = {}
+        for location in locations:
+            try:
+                device = await factory.async_create_device(location)
+            except Exception:  # noqa: BLE001 - an odd device is skipped
+                continue
+            host = location.split("//", 1)[-1].split("/", 1)[0].split(":")[0]
+            out[host] = device.friendly_name
+        return out
+
+    return asyncio.run(run())
+
+
+#: Freebox generations by the number in ``box_model_name`` ("Freebox v8 (r1)").
+FREEBOX_MODELS = {
+    6: "Freebox Revolution",
+    7: "Freebox Delta",
+    8: "Freebox Pop",
+    9: "Freebox Ultra",
+}
+
+
+def freebox_name(answer: dict[str, Any]) -> str | None:
+    """A Freebox's name from its ``/api_version`` answer; None for anything else."""
+    import re
+
+    model = str(answer.get("box_model_name") or "")
+    if not model.lower().startswith("freebox") and "Freebox" not in str(
+        answer.get("device_name") or ""
+    ):
+        return None
+    found = re.search(r"v(\d+)", model)
+    return FREEBOX_MODELS.get(int(found.group(1)), "Freebox") if found else "Freebox"
+
+
+def _freebox_names(hosts: list[str]) -> dict[str, str]:
+    """Which of *hosts* is a Freebox: each says so at ``/api_version``, whatever its DNS name."""
+    import httpx
+
+    out = {}
+
+    def ask(host: str) -> None:
+        try:
+            r = httpx.get(f"http://{host}/api_version", timeout=2.0)
+            name = freebox_name(r.json()) if r.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return
+        if name:
+            out[host] = name
+
+    threads = [threading.Thread(target=ask, args=(h,), daemon=True) for h in hosts]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(3.0)
+    return out
+
+
+def _box_names() -> dict[str, str]:
+    """The boxes whose usual name answers here, by address."""
+    out = {}
+
+    def look(name: str) -> None:
+        try:
+            address = socket.gethostbyname(name)
+        except OSError:
+            return
+        if address.startswith(
+            ("10.", "172.", "192.168.")
+        ):  # their own network, not the internet
+            out[address] = BOX_HOSTS[name]
+
+    threads = [threading.Thread(target=look, args=(n,), daemon=True) for n in BOX_HOSTS]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(3.0)
+    return out
 
 
 # --- what a found place lets in (SPEC-storage §10, B5–B6) -----------------------
