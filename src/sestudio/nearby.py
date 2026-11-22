@@ -179,25 +179,20 @@ def scan(seconds: float = 4.0) -> dict[str, Any]:
 
 # --- what a found place lets in (SPEC-storage §10, B5–B6) -----------------------
 #
-# Tried with no login first, as boxes usually share as a guest: SMB with an empty
-# login then the "guest" account, FTP as "anonymous". Each share is checked for
-# reading (its top folder is listed) and writing (a hidden folder is made and
-# removed at once): what Open needs to know before asking for anything.
+# Tried with no login first, as boxes usually share as a guest: SMB as "guest",
+# FTP as "anonymous". Nothing is ever written on a share to find out what it
+# allows: SMB is asked (see ``smbshares``), FTP and SFTP are listed for reading
+# and have no such question for writing, which stays unknown (None) there.
 
 #: Logins tried when none is given, in order.
 NO_LOGIN = {
-    "smb": [("", ""), ("guest", "")],
+    # "guest": what the files are then read with (an empty login cannot be).
+    "smb": [("guest", "")],
     "ftp": [("anonymous", "anonymous@")],
     "sftp": [],
 }
 #: How long one step of a check may take.
 PROBE_STEP = 6.0
-
-
-def _check_name() -> str:
-    import secrets
-
-    return f".sestudio-check-{secrets.token_hex(3)}"
 
 
 def _try(fn) -> bool:
@@ -213,40 +208,12 @@ class _Refused(Exception):
 
 
 def _smb_shares(host: str, port: int, user: str, password: str) -> list[dict[str, Any]]:
-    from smb.SMBConnection import SMBConnection
-    from smb.base import NotConnectedError, OperationFailure, SMBTimeout
+    from sestudio import smbshares
 
-    conn = SMBConnection(
-        user, password, "sestudio", host, use_ntlm_v2=True, is_direct_tcp=True
-    )
     try:
-        if not conn.connect(host, port, timeout=PROBE_STEP):
-            raise _Refused
-    except (NotConnectedError, OperationFailure):
+        return smbshares.shares(host, port, user, password, PROBE_STEP)
+    except smbshares.Refused:
         raise _Refused from None
-    except SMBTimeout:
-        raise OSError("it did not answer") from None
-    try:
-        out = []
-        for share in conn.listShares(timeout=PROBE_STEP):
-            # Disk shares only: not IPC$, not the admin shares (C$, ADMIN$), not printers.
-            if (
-                share.isSpecial
-                or share.name.endswith("$")
-                or share.type != share.DISK_TREE
-            ):
-                continue
-            read = _try(lambda: conn.listPath(share.name, "/", timeout=PROBE_STEP))
-            name = _check_name()
-            write = read and _try(
-                lambda: conn.createDirectory(share.name, name, timeout=PROBE_STEP)
-            )
-            if write:
-                _try(lambda: conn.deleteDirectory(share.name, name, timeout=PROBE_STEP))
-            out.append({"name": share.name, "read": read, "write": write})
-        return out
-    finally:
-        conn.close()
 
 
 def _ftp_shares(host: str, port: int, user: str, password: str) -> list[dict[str, Any]]:
@@ -260,11 +227,7 @@ def _ftp_shares(host: str, port: int, user: str, password: str) -> list[dict[str
         except ftplib.error_perm:
             raise _Refused from None
         read = _try(lambda: ftp.nlst("/"))
-        name = _check_name()
-        write = read and _try(lambda: ftp.mkd(f"/{name}"))
-        if write:
-            _try(lambda: ftp.rmd(f"/{name}"))
-        return [{"name": "/", "read": read, "write": write}]
+        return [{"name": "/", "read": read, "write": None}]
     finally:
         _try(ftp.close)
 
@@ -287,11 +250,7 @@ def _sftp_shares(
     except Exception:  # noqa: BLE001 - paramiko words a refused login many ways
         raise _Refused from None
     read = _try(lambda: fs.ls("/"))
-    name = _check_name()
-    write = read and _try(lambda: fs.mkdir(f"/{name}"))
-    if write:
-        _try(lambda: fs.rmdir(f"/{name}"))
-    return [{"name": "/", "read": read, "write": write}]
+    return [{"name": "/", "read": read, "write": None}]
 
 
 _SHARES = {"smb": _smb_shares, "ftp": _ftp_shares, "sftp": _sftp_shares}

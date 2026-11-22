@@ -1152,7 +1152,8 @@ export interface NearbyAccess {
   /** `none`: anonymous or guest got in; `given`: the login typed; `needed`: neither. */
   login?: 'none' | 'given' | 'needed'
   user?: string
-  shares?: { name: string; read: boolean; write: boolean }[]
+  /** `write` null: not asked (FTP, SFTP); nothing is written on a share to find out. */
+  shares?: { name: string; read: boolean; write: boolean | null }[]
   error?: string
 }
 

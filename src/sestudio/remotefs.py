@@ -55,10 +55,43 @@ def _open(s: dict[str, Any], secret: str | None = None) -> Any:
             "sftp", host=host, port=port, username=user, password=secret,
             timeout=TIMEOUT, skip_instance_cache=True,
         )  # fmt: skip
+    if user in (None, "guest") and not secret:
+        # A guest share (a Freebox's): the session is opened here, as smbprotocol
+        # refuses a guest one with its default checks, and fsspec reuses it.
+        guest_session(host, port, s.get("share") or "")
+        return fsspec.filesystem(
+            "smb", host=host, port=port, username="guest", password="",
+            timeout=TIMEOUT, skip_instance_cache=True, register_session_retries=-1,
+        )  # fmt: skip
     return fsspec.filesystem(
         "smb", host=host, port=port, username=user, password=secret,
         timeout=TIMEOUT, skip_instance_cache=True,
     )  # fmt: skip
+
+
+def guest_session(host: str, port: int, share: str) -> None:
+    """An SMB session as "guest" with *host*, kept by smbclient for what follows.
+
+    A guest session has no key to sign with, so signing is not asked for, and the
+    check of the negotiation (which needs that key) is turned off while the session
+    and its share's connection are made: smbclient keeps and reuses both, and the
+    setting is global, so it is put back at once.
+    """
+    import smbclient
+
+    config = smbclient.ClientConfig()
+    before = config.require_secure_negotiate
+    with _lock:
+        config.require_secure_negotiate = False
+        try:
+            smbclient.register_session(
+                host, username="guest", password="", port=port, require_signing=False,
+                auth_protocol="ntlm", connection_timeout=TIMEOUT,
+            )  # fmt: skip
+            if share:
+                smbclient.listdir(rf"\\{host}\{share}", port=port)  # connects the share
+        finally:
+            config.require_secure_negotiate = before
 
 
 def filesystem(s: dict[str, Any]) -> Any:

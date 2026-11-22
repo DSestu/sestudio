@@ -431,7 +431,7 @@ def test_anonymous_then_guest_is_tried_and_each_share_checked(monkeypatch):
 
     monkeypatch.setitem(nearby._SHARES, "smb", fake)
     got = nearby.probe("smb", "192.168.1.254")
-    assert tried == ["", "guest"]
+    assert tried == ["guest"]
     assert got == {"login": "none", "user": "guest",
                    "shares": [{"name": "Disque dur", "read": True, "write": True}]}  # fmt: skip
     assert (
@@ -461,3 +461,57 @@ def test_home_asks_the_bridge_to_check_a_place(phone, monkeypatch):
     )
     assert seen[-1] == ("smb", "192.168.1.254", None, "me", "pw")
     assert c.post("/api/nearby/probe", json=body).json()["login"] == "needed"
+
+
+# --- nothing of sestudio on a share (2026-11-22) --------------------------------
+
+
+def test_the_share_list_is_read_from_the_box_answer():
+    import struct
+
+    from sestudio import smbshares
+
+    def entry_strings(name, remark):
+        return smbshares._wstr(name) + smbshares._wstr(remark)
+
+    entries = [
+        ("Disque dur", 0, "Freebox"),
+        ("IPC$", 0x80000003, "IPC"),
+        ("print$", 0, ""),
+    ]
+    stub = struct.pack("<IIIII", 1, 1, 0x20000, len(entries), 0x20004) + struct.pack(
+        "<I", len(entries)
+    )
+    for i, (_n, kind, _r) in enumerate(entries):
+        stub += struct.pack("<III", 0x20008 + 8 * i, kind, 0x2000C + 8 * i)
+    for name, _k, remark in entries:
+        stub += entry_strings(name, remark)
+    stub += struct.pack("<III", len(entries), 0, 0)
+    answer = b"\0" * 24 + stub
+    assert smbshares.parse_shares(answer) == [
+        ("Disque dur", 0), ("IPC$", 0x80000003), ("print$", 0),
+    ]  # fmt: skip
+
+
+def test_a_cut_copy_leaves_no_part_file_even_after_its_storage_was_away():
+    from sestudio import transfers
+
+    class Tmp:
+        def __init__(self):
+            self.away, self.gone = True, False
+
+        def unlink(self, missing_ok=False):
+            if self.away:
+                raise OSError("away")
+            self.gone = True
+
+    job = transfers.Transfer(id="j", mode="copy", to="x", to_label="X", label="", on_conflict="skip",
+                             items=[], total_bytes=0)  # fmt: skip
+    tmp = Tmp()
+    transfers._drop(job, tmp)
+    assert transfers._leftovers == [tmp]
+    transfers._sweep()  # still away
+    assert transfers._leftovers == [tmp] and not tmp.gone
+    tmp.away = False
+    transfers._sweep()  # back: removed
+    assert tmp.gone and transfers._leftovers == []
