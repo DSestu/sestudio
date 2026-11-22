@@ -4,7 +4,7 @@ import { Ic } from './icons'
 
 // Harmony moves (SPEC-music-library §2.7): inside Blend by, how welcome each key move is,
 // 0 (avoid) to 100 (as good as the same key). A slider per move with a two-scale picture and
-// how many joins of the set make that move; 9 presets.
+// how many joins of the playlist make that move; 9 presets.
 
 const MAJOR = [0, 2, 4, 5, 7, 9, 11]
 const DORIAN = [0, 2, 3, 5, 7, 9, 10]
@@ -22,12 +22,12 @@ function Picture({ move }: { move: Move }) {
 }
 
 export default function HarmonyMoves({ counts }: {
-  /** Joins of the set per move. */
+  /** Joins of the playlist per move. */
   counts: Partial<Record<Move, number>>
 }) {
   const { welcome } = useBlendWeights()
   const [open, setOpen] = useState(() => localStorage.getItem('music.harmonyMovesOpen') === '1')
-  // The slider moves freely; the set re-orders once it is let go.
+  // The slider moves freely; the playlist re-orders once it is let go.
   const [draft, setDraft] = useState<Partial<Record<Move, number>>>({})
   const toggle = () => { setOpen(o => { localStorage.setItem('music.harmonyMovesOpen', o ? '0' : '1'); return !o }) }
   const commit = (k: Move) => {
@@ -62,7 +62,7 @@ export default function HarmonyMoves({ counts }: {
                   onChange={e => setDraft(d => ({ ...d, [k]: +e.target.value / 100 }))} onPointerUp={() => commit(k)} onKeyUp={() => commit(k)}
                   className="range range-xs range-primary" />
                 <em className="text-right not-italic tabular-nums">{v}</em>
-                <span className="text-right tabular-nums text-base-content/45" title="Joins like this in your set">{counts[k] ? `${counts[k]}×` : ''}</span>
+                <span className="text-right tabular-nums text-base-content/45" title="Joins like this in your playlist">{counts[k] ? `${counts[k]}×` : ''}</span>
               </label>
             )
           })}

@@ -49,12 +49,11 @@ export default function Orbit({ focus, all, facts, get, colour, inSet, onFocus, 
   return (
     <section className="flex flex-col gap-2 p-3">
       <div className="relative overflow-hidden rounded-2xl" style={{ background: 'radial-gradient(60% 60% at 50% 50%, oklch(21% .035 250), oklch(15% .02 245) 85%)' }}>
-        <span className="absolute inset-x-3 top-2.5 truncate text-[11px] text-base-content/40">Around {focus.title} · click a dot to move there</span>
         <svg viewBox={`0 0 ${W} ${W}`} className="block w-full" aria-label="Tracks around the focused one">
           {RINGS.map(([f, label], k) => (
             <g key={label}>
               <circle cx={W / 2} cy={W / 2} r={R0 + f * (R - R0)} fill="none" stroke={`oklch(60% .03 240 / ${k ? 0.16 : 0.5})`} strokeDasharray={k ? '2 5' : undefined} />
-              <text x={W / 2 + 4} y={W / 2 - (R0 + f * (R - R0)) + 10} fontSize="9" fill="oklch(70% .02 240 / .5)">{label}</text>
+              <text x={W / 2 + 4} y={W / 2 - (R0 + f * (R - R0)) + 12} fontSize="11" fill="oklch(70% .02 240 / .5)">{label}</text>
             </g>
           ))}
           {placed.map(({ t, f, d, x, y }) => (
@@ -69,6 +68,7 @@ export default function Orbit({ focus, all, facts, get, colour, inSet, onFocus, 
             <path d={silhouette(p.curve, 4, 36, 22, 14)} fill={trackColor(p, colour)} />
           </g>
         </svg>
+        <p className="truncate px-3 pb-2 text-[11px] text-base-content/50">Around {focus.title} · click a dot to move there</p>
       </div>
       <h4 className="flex items-baseline gap-1.5 text-[13px] font-semibold">Fits after it <small className="font-normal text-base-content/50">{fitsN} tracks</small></h4>
       <ul className="flex flex-col">

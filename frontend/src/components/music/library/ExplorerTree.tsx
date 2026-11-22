@@ -79,7 +79,7 @@ export function Row({ depth, chevron, onChevron, icon, label, count, onClick, on
       {tool && <span className="hidden group-hover:contents group-focus-within:contents">{tool}</span>}
       {count !== undefined && <span className={`shrink-0 tabular-nums text-[11px] text-base-content/50 ${onAdd ? 'group-hover:hidden group-focus-within:hidden' : ''}`}>{count}</span>}
       {onAdd && (
-        <button onClick={onAdd} aria-label="Add to your set" title="Add to your set" className="hidden size-6 shrink-0 place-items-center rounded-md text-base-content/70 hover:bg-white/10 hover:text-base-content group-hover:grid group-focus-within:grid">
+        <button onClick={onAdd} aria-label="Add to the open playlist" title="Add to the open playlist" className="hidden size-6 shrink-0 place-items-center rounded-md text-base-content/70 hover:bg-white/10 hover:text-base-content group-hover:grid group-focus-within:grid">
           <Ic name="plus" size={13} width={2.2} />
         </button>
       )}

@@ -488,6 +488,16 @@ def apply_batch(
 # --- preferences ------------------------------------------------------------ #
 
 
+def get_pref(key: str, default: Any = None) -> Any:
+    with _lock:
+        row = (
+            _connect()
+            .execute("SELECT value FROM preferences WHERE key = ?", (key,))
+            .fetchone()
+        )
+    return default if row is None else json.loads(row["value"])
+
+
 def set_pref(key: str, value: Any) -> None:
     with _lock:
         conn = _connect()

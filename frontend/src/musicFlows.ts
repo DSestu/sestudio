@@ -3,7 +3,7 @@ import { startPlayback } from './components/music/player'
 import type { Lean, Layer, Setting } from './blend'
 import type { QueueState } from './musicQueue'
 
-// Flows and mixes (docs/SPEC-music-flows.md): the server's documents, the calls
+// Flows (docs/SPEC-music-flows.md): the server's documents, the calls
 // that play them, and the pure helpers the cards and the path strip draw from.
 
 const BASE = '/api/music'
@@ -59,17 +59,6 @@ export interface Flow {
   allowOnline: boolean
   preset: boolean
 }
-export interface Mix {
-  id: string
-  name: string
-  created: number
-  flow: string | null
-  choices: Record<string, string>
-  minutes: number | null
-  seed: number
-  pins: Record<string, string>
-  frozen: string[] | null
-}
 
 export const KINDS: Record<string, string> = {
   match: 'Match', relative: 'Relative', up: 'Up a fifth', down: 'Down a fifth',
@@ -81,7 +70,7 @@ export const LENGTHS: { id: Flow['length']; label: string }[] = [
 
 // --- the store -----------------------------------------------------------------
 
-let snap: { flows: Flow[]; mixes: Mix[]; loaded: boolean } = { flows: [], mixes: [], loaded: false }
+let snap: { flows: Flow[]; loaded: boolean } = { flows: [], loaded: false }
 const listeners = new Set<() => void>()
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
@@ -94,14 +83,13 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function refreshFlows() {
-  const [flows, mixes] = await Promise.all([json<Flow[]>('/flows'), json<Mix[]>('/mixes')])
-  snap = { flows, mixes, loaded: true }
+  snap = { flows: await json<Flow[]>('/flows'), loaded: true }
   listeners.forEach(l => l())
 }
 
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
 
-/** The saved flows (presets included) and mixes, loaded on first use. */
+/** The saved flows (presets included), loaded on first use. */
 export function useFlows() {
   useEffect(() => { if (!snap.loaded) void refreshFlows().catch(() => {}) }, [])
   return useSyncExternalStore(subscribe, () => snap)
@@ -112,9 +100,6 @@ export interface ScopeBody { sources?: { kind: string; value: string; rule: stri
 
 export const playFlow = (id: string, body: { choices?: Record<string, string>; minutes?: number; seed?: number } & ScopeBody = {}) =>
   startPlayback(async () => { await json(`/flows/${id}/play`, { method: 'POST', body: JSON.stringify(body) }) })
-
-export const playMix = (id: string) =>
-  startPlayback(async () => { await json(`/mixes/${id}/play`, { method: 'POST' }) })
 
 export async function saveFlow(name: string, flow: Partial<Flow>, id?: string): Promise<Flow> {
   const out = id

@@ -360,39 +360,6 @@ async def order_set(body: OrderBody) -> dict[str, Any]:
     return await asyncio.to_thread(run)
 
 
-class FixBody(BaseModel):
-    ids: list[str]
-    #: Joins the user keeps as they are, as ``"<a>><b>"``.
-    kept: list[str] = []
-    #: Where bridges come from; omitted means every analysed local track.
-    pool: list[str] | None = None
-    weights: dict[str, float] | None = None
-    harmony: dict[str, float] | None = None
-
-
-@router.post("/music/set/fix")
-async def fix_set(body: FixBody) -> dict[str, Any]:
-    """Fix all: a bridge inserted where one leaves no problem, else a track moved to a better spot."""
-
-    def run() -> dict[str, Any]:
-        r = builder.fix_set(
-            _set_tracks(body.ids),
-            _pool(body.pool),
-            body.kept,
-            body.weights,
-            body.harmony,
-        )
-        return {
-            "order": [t["id"] for t in r["order"]],
-            "joins": _joins(r["order"], body.weights, body.harmony),
-            "inserted": r["inserted"],
-            "moved": r["moved"],
-            "left": r["left"],
-        }
-
-    return await asyncio.to_thread(run)
-
-
 @router.get("/music/online/link")
 async def online_link(url: str = Query(...)) -> dict[str, Any]:
     """A pasted YouTube / YouTube Music link as queue items (a playlist: all its entries)."""

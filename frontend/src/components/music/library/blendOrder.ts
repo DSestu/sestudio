@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { MusicTrack } from '../../../musicLibrary'
 import { toast } from '../toast'
 import { useBlendWeights, type Move } from '../../../musicBlendWeights'
@@ -63,18 +63,6 @@ export function useBlendOrder(tracks: MusicTrack[] | undefined, shape: Shape, pi
     return () => ctrl.abort()
   }, [key]) // eslint-disable-line react-hooks/exhaustive-deps -- `key` names the request
   return out?.key === key ? out.result : undefined
-}
-
-/** The set as shown (Your order, or Best blend around the pins) and its joins, asked once for the lane and the list. */
-export function useSetOrder(s: { tracks: MusicTrack[]; pinned: string[]; mode: 'mine' | 'blend'; shape: Shape }) {
-  const blend = s.mode === 'blend'
-  const pins = useMemo(
-    () => (blend ? Object.fromEntries(s.tracks.flatMap((t, i) => (s.pinned.includes(t.id) ? [[i, t.id]] : []))) : keepOrder(s.tracks)),
-    [blend, s.tracks, s.pinned],
-  )
-  const res = useBlendOrder(s.tracks, s.shape, pins)
-  const shown = res?.tracks ?? s.tracks
-  return { res, shown, joins: res && res.tracks === shown ? res.joins : undefined }
 }
 
 

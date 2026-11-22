@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sestudio import library
-from sestudio.music import queue
+from sestudio.music import mixes, queue
 from sestudio.music.modes import NAMES
 from sestudio.web.app import create_app
 from sestudio.web.routes import music_flows as route
@@ -105,16 +105,6 @@ def test_a_hand_made_queue_has_no_source_and_cannot_reroute(client):
     assert client.get("/api/music/queue").json()["source"] is None
 
 
-def test_playing_a_frozen_mix_plays_its_tracks(client):
-    f = flow(client)
-    m = client.post("/api/music/mixes", json={"name": "Fri", "flow": f["id"]}).json()
-    frozen = client.post(f"/api/music/mixes/{m['id']}/freeze").json()["frozen"]
-    s = client.post(f"/api/music/mixes/{m['id']}/play").json()
-    assert [i["track_id"] for i in s["items"]] == frozen
-    assert s["source"]["mix"] == m["id"] and s["source"]["frozen"]
-    assert client.post("/api/music/queue/reroute", json={}).status_code == 400
-
-
 def test_read_the_queue_as_a_flow(client):
     f = flow(client)
     s = client.post(f"/api/music/flows/{f['id']}/play", json={}).json()
@@ -125,7 +115,7 @@ def test_read_the_queue_as_a_flow(client):
     s = client.post("/api/music/queue/read", json={"name": "Mine"}).json()
     assert s["source"]["flow"] and s["source"]["mix"]
     assert [i["track_id"] for i in s["items"]] == before[:4]
-    mix = client.get(f"/api/music/mixes/{s['source']['mix']}").json()
+    mix = mixes.mix_get(s["source"]["mix"])
     assert mix["pins"] == {str(k): t for k, t in enumerate(before[:4])}
 
 
@@ -154,3 +144,11 @@ def test_next_well_before_the_end_counts_as_a_skip(client):
     client.post("/api/music/queue/transport", json={"action": "seek", "position": 290})
     client.post("/api/music/queue/transport", json={"action": "next"})
     assert client.get("/api/music/queue").json()["skips"] == [True, False]
+
+
+def test_saving_a_mix_makes_a_blend_playlist(client):
+    f = flow(client)
+    m = client.post("/api/music/mixes", json={"name": "Fri", "flow": f["id"]}).json()
+    nodes = client.get("/api/music/playlists").json()
+    made = [n for n in nodes if n.get("from_mix") == m["id"]]
+    assert len(made) == 1 and made[0]["blend"] and made[0]["name"] == "Fri"

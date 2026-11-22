@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from sestudio import downloaded
-from sestudio.music import flows, libraries, mixes, queue, store
+from sestudio.music import flows, libraries, mixes, playlists, queue, store
 
 router = APIRouter(prefix="/music")
 
@@ -56,10 +56,6 @@ class MixBody(BaseModel):
     seed: int | None = None
     pins: dict[str, str] | None = None
     tracks: list[str] | None = None
-
-
-class ReadBody(BaseModel):
-    name: str
 
 
 def _run(fn: Any, *args: Any, **kw: Any) -> Any:
@@ -261,14 +257,10 @@ def flow_fits(body: FitsBody) -> dict[str, Any]:
     return {"stretches": out, "genres": genres}
 
 
-@router.get("/mixes")
-def list_mixes() -> list[dict[str, Any]]:
-    return mixes.mixes_list()
-
-
 @router.post("/mixes")
 def create_mix(body: MixBody) -> dict[str, Any]:
-    return _run(
+    """Save a playing flow as a mix; it lands as a blend playlist in "Mixes" (SPEC-blend-playlists §4.3)."""
+    mix = _run(
         mixes.mix_create,
         body.name or "Mix",
         body.flow,
@@ -278,54 +270,8 @@ def create_mix(body: MixBody) -> dict[str, Any]:
         body.pins,
         body.tracks,
     )
-
-
-@router.get("/mixes/{mix_id}")
-def get_mix(mix_id: str) -> dict[str, Any]:
-    return _run(mixes.mix_get, mix_id)
-
-
-@router.patch("/mixes/{mix_id}")
-def update_mix(mix_id: str, body: MixBody) -> dict[str, Any]:
-    fields = {
-        k: v for k, v in body.model_dump().items() if v is not None and k != "tracks"
-    }
-    return _run(mixes.mix_update, mix_id, **fields)
-
-
-@router.delete("/mixes/{mix_id}")
-def delete_mix(mix_id: str) -> dict[str, bool]:
-    _run(mixes.mix_delete, mix_id)
-    return {"ok": True}
-
-
-@router.post("/mixes/{mix_id}/render")
-def render_mix(mix_id: str) -> dict[str, Any]:
-    return _run(mixes.render_mix, _run(mixes.mix_get, mix_id), _pool())
-
-
-@router.post("/mixes/{mix_id}/freeze")
-def freeze_mix(mix_id: str) -> dict[str, Any]:
-    """Snapshot the live mix's tracks; the flow may change, this mix will not (§7)."""
-    mix = _run(mixes.mix_get, mix_id)
-    if mix.get("frozen") is not None:
-        return mix
-    rendered = mixes.render_mix(mix, _pool())
-    return mixes.mix_update(mix_id, frozen=[m["track_id"] for m in rendered["mix"]])
-
-
-@router.post("/mixes/{mix_id}/thaw")
-def thaw_mix(mix_id: str) -> dict[str, Any]:
-    mix = _run(mixes.mix_get, mix_id)
-    if not mix.get("flow"):
-        raise HTTPException(400, "this mix has no flow yet: read one from it first")
-    return mixes.mix_update(mix_id, frozen=None)
-
-
-@router.post("/mixes/{mix_id}/read")
-def read_mix(mix_id: str, body: ReadBody) -> dict[str, Any]:
-    """Give a hand list a flow inferred from its tracks, every track pinned (§7)."""
-    return _run(mixes.read_as_flow, mix_id, body.name, _pool())
+    _run(playlists.save_mix, mix, _pool())
+    return mix
 
 
 class PlayBody(Scoped):
@@ -356,25 +302,6 @@ def play_flow(flow_id: str, body: PlayBody) -> dict[str, Any]:
         seed=body.seed,
         **body.scope(),
     )
-    return _queue_run(queue.add, _items(rendered, pool), replace=True, source=source)
-
-
-@router.post("/mixes/{mix_id}/play")
-def play_mix(mix_id: str, body: Scoped | None = None) -> dict[str, Any]:
-    mix = _run(mixes.mix_get, mix_id)
-    pool = _pool()
-    scope = (body or Scoped()).scope()
-    rendered = _run(mixes.render_mix, mix, pool, **scope)
-    source = _source(
-        rendered,
-        flow=mix.get("flow"),
-        mix=mix_id,
-        choices=mix.get("choices") or {},
-        seed=mix.get("seed", 1),
-        **scope,
-    )
-    if mix.get("frozen") is not None:
-        source["frozen"] = True
     return _queue_run(queue.add, _items(rendered, pool), replace=True, source=source)
 
 
@@ -449,21 +376,3 @@ def read_queue(body: ReadBody2) -> dict[str, Any]:
     source = _source(rendered, flow=mix["flow"], mix=mix["id"], choices={}, seed=1)
     keep = state["current"] + 1
     return _queue_run(queue.future, _items(rendered, pool)[keep : len(ids)], source)
-
-
-class SetFlowBody(BaseModel):
-    ids: list[str]
-    name: str = "Your set"
-
-
-@router.post("/set/flow")
-def play_set_as_flow(body: SetFlowBody) -> dict[str, Any]:
-    """The Music page's set as a flow (SPEC-music-library §2.6): its shape read from its
-    tracks in their order, played with every one of them as a Lean source."""
-    by = {t["id"]: t for t in _pool()}
-    tracks = [by[i] for i in body.ids if i in by]
-    if not tracks:
-        raise HTTPException(400, "no analysed track in the set")
-    flow = _run(mixes.flow_create, body.name, flows.read(tracks))
-    lean = [Source(kind="id", value=t["id"], rule="lean") for t in tracks]
-    return play_flow(flow["id"], PlayBody(sources=lean))

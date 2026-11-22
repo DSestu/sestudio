@@ -163,10 +163,6 @@ def test_order_and_fix_api(monkeypatch):
         c.post("/api/music/set/order", json={"ids": ids, "shape": "Zig"}).status_code
         == 400
     )
-    f = c.post(
-        "/api/music/set/fix", json={"ids": ids[:4], "kept": [f"{ids[0]}>{ids[1]}"]}
-    ).json()
-    assert {"order", "joins", "inserted", "moved", "left"} <= set(f)
     s = c.post("/api/music/set/spot", json={"ids": ids[:5], "id": ids[1]}).json()
     assert (
         sorted(s["order"]) == sorted(ids[:5]) and len(s["joins"]) == 4 and "left" in s
@@ -218,3 +214,62 @@ def test_clash_penalty_follows_harmony_only_upwards():
     energy = {"harmony": 0.05, "mood": 0.05, "energy": 1, "genre": 0.05}
     assert builder.clash_penalty(keys) > builder.SWAP_CLASH
     assert builder.clash_penalty(energy) == pytest.approx(builder.SWAP_CLASH)
+
+
+def _moved(before, after, pinned):
+    """The fewest rows that moved: those outside the longest common subsequence."""
+    a = [t["id"] for t in before if t["id"] != pinned]
+    b = [t["id"] for t in after if t["id"] != pinned]
+    lcs = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i, x in enumerate(a):
+        for j, y in enumerate(b):
+            lcs[i + 1][j + 1] = (
+                lcs[i][j] + 1 if x == y else max(lcs[i][j + 1], lcs[i + 1][j])
+            )
+    return len(a) - lcs[-1][-1]
+
+
+def test_stay_keeps_a_pin_local():
+    """A pin on a blended list moves a few neighbours, not the whole list (SPEC-blend-playlists §4.1)."""
+    keys = [
+        ("A", "Aeolian"),
+        ("E", "Aeolian"),
+        ("C", "Ionian"),
+        ("F#", "Locrian"),
+        ("D", "Dorian"),
+        ("G#", "Dorian"),
+    ]
+    tracks = [trk(i, *keys[(i * 5) % 6], e=8 + 6 * ((i * 7) % 13)) for i in range(13)]  # fmt: skip
+    base = builder.order_set(tracks, None, "Lift")
+    stay, full, clash = [], [], [0, 0]
+    for src in range(13):
+        for dst in (0, 4, 8, 12):
+            if src == dst:
+                continue
+            tid = base[src]["id"]
+            # the list as the user left it: the track dragged to *dst*, the rest shifted by one
+            shifted = [t for t in base if t["id"] != tid]
+            shifted.insert(dst, base[src])
+            kept = builder.order_set(shifted, {dst: tid}, "Lift", stay=True)
+            free = builder.order_set(shifted, {dst: tid}, "Lift")
+            assert kept[dst]["id"] == tid and len(kept) == 13
+            stay.append(_moved(shifted, kept, tid))
+            full.append(_moved(shifted, free, tid))
+            clash[0] += clashes(shifted)
+            clash[1] += clashes(kept)
+    # 48 drops on a clash-heavy list: most move nothing, none moves more than 4, far
+    # fewer than a full re-order, and the clashes the drops made are mostly mended
+    assert max(stay) <= 4 and sum(stay) * 4 < sum(full)
+    assert stay.count(0) >= 36
+    assert clash[1] < 0.7 * clash[0]
+
+
+def test_start_and_curve():
+    tracks = [trk(i, "A", "Aeolian", e=10 + 9 * i) for i in range(10)]
+    out = builder.order_set(tracks, None, "Ease", start=4)
+    assert [t["id"] for t in out[:4]] == ["t0", "t1", "t2", "t3"]
+    e = lambda t: t["energyScale"]["track"]  # noqa: E731
+    up = [e(t) for t in builder.order_set(tracks, None, [10.0, 100.0])]
+    down = [e(t) for t in builder.order_set(tracks, None, [100.0, 10.0])]
+    assert up[0] < up[-1] and down[0] > down[-1]
+    assert builder._along([0.0, 100.0], 0.25) == 25.0

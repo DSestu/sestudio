@@ -1,0 +1,336 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blend playlists</title>
+<style>
+:root{
+  --house:oklch(16% .015 240);--aisle:oklch(20% .02 240);--row:oklch(26% .025 240);
+  --ink:oklch(92% .01 240);--dim:oklch(92% .01 240 / .7);--faint:oklch(92% .01 240 / .55);
+  --blue:oklch(72% .16 230);--blue-ink:oklch(18% .05 230);--good:oklch(76% .17 155);--mixed:oklch(83% .16 85);--bad:oklch(68% .19 25);
+  --pg:oklch(13% .012 240);--pg-ink:oklch(90% .01 240);--pg-dim:oklch(90% .01 240 / .68);
+}
+*{box-sizing:border-box;margin:0}
+html{background:var(--background,var(--pg))}
+body{font-family:ui-sans-serif,system-ui,sans-serif;color:var(--foreground,var(--pg-ink));padding:8px;max-width:1320px;margin:0 auto}
+h1{font-size:18px;font-weight:600;margin:6px 0 4px}
+h2{font-size:15px;font-weight:600;margin:26px 0 6px}
+.note{font-size:13px;color:var(--muted-foreground,var(--pg-dim));line-height:1.5;max-width:75ch}
+.note b{color:var(--foreground,var(--pg-ink))}
+ol.st{font-size:13px;line-height:1.5;padding-left:22px;color:var(--muted-foreground,var(--pg-dim));columns:2 320px;column-gap:28px}
+ol.st li{break-inside:avoid;margin-bottom:4px}ol.st b{color:var(--foreground,var(--pg-ink))}
+.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:9px;background:oklch(72% .16 230 / .18);color:var(--blue);margin-left:2px}
+.cap{font-size:12.5px;margin:8px 2px 0;line-height:1.45;color:var(--muted-foreground,var(--pg-dim))}.cap b{color:var(--foreground,var(--pg-ink))}
+.phones{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:10px}
+
+/* scaled desktop */
+.dwrap{width:100%;overflow:hidden;border-radius:14px;border:1px solid oklch(100% 0 0 / .1);margin-top:10px;position:relative}
+.dk{width:1280px;height:800px;transform-origin:0 0;position:absolute;left:0;top:0}
+
+/* app look */
+.app{background:oklch(14% .015 240);color:var(--ink);font-size:13px}
+.r{position:relative;display:flex;align-items:center;gap:9px;min-height:46px;padding:4px 8px;border-radius:10px}
+.n{width:18px;text-align:right;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;flex:none}
+.m{flex:1;min-width:0;line-height:1.25}.m b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m i{font-style:normal;font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.sig{width:34px;height:18px;flex:none;border-radius:3px;background:linear-gradient(90deg,oklch(55% .12 var(--h)/.5),oklch(70% .15 var(--h)),oklch(55% .12 var(--h)/.5));clip-path:polygon(0 50%,15% 20%,35% 30%,55% 5%,75% 25%,100% 45%,100% 55%,75% 75%,55% 95%,35% 70%,15% 80%,0 50%)}
+.pin{color:var(--blue);flex:none;display:grid;place-items:center}
+.pinned{background:oklch(72% .16 230 / .1)}
+.moved::before{content:"";position:absolute;left:-1px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--blue)}
+.now{background:oklch(76% .17 155 / .12)}
+.join{display:flex;align-items:center;gap:8px;height:20px;margin-left:36px;font-size:11px;color:var(--faint)}
+.dia{width:8px;height:8px;transform:rotate(45deg);background:var(--good);flex:none}
+.dia.w{background:var(--mixed)}.dia.x{background:var(--bad)}
+.join .fix{color:var(--mixed);border:1px solid oklch(83% .16 85 / .4);border-radius:6px;padding:1px 9px}
+.chip{height:30px;padding:0 11px;border-radius:9px;background:oklch(100% 0 0 / .06);display:inline-flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;color:var(--ink)}
+.chip.p{background:var(--blue);color:var(--blue-ink);font-weight:600}
+.chip.on{background:oklch(72% .16 230 / .18);color:var(--blue)}
+.chip.ghost{background:transparent;border:1px solid oklch(100% 0 0 / .12)}
+.seg{display:inline-flex;background:oklch(100% 0 0 / .05);border-radius:9px;padding:2px}
+.seg span{height:26px;padding:0 12px;border-radius:7px;display:grid;place-items:center;font-size:12px;color:var(--dim)}
+.seg span.on{background:oklch(72% .16 230 / .2);color:var(--blue)}
+.lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.toast{position:absolute;left:50%;transform:translateX(-50%);height:38px;border-radius:12px;background:oklch(27% .025 240);border:1px solid oklch(100% 0 0 / .12);display:flex;align-items:center;gap:14px;padding:0 14px;font-size:12.5px;white-space:nowrap;z-index:5;box-shadow:0 8px 24px oklch(0% 0 0 / .5)}
+.toast b{color:var(--blue)}
+.lock{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--good)}
+
+/* desktop shell */
+.dk.app{display:grid;grid-template-columns:72px 1fr;gap:12px;padding:12px}
+.side{border-radius:18px;background:oklch(19% .02 240);display:flex;flex-direction:column;align-items:center;gap:20px;padding-top:14px;font-size:11px;color:var(--dim)}
+.side .s{width:44px;height:44px;border-radius:13px;background:var(--blue)}
+.side .on{color:var(--ink);background:oklch(72% .16 230 / .15);padding:6px 8px;border-radius:9px}
+.main{display:flex;flex-direction:column;gap:10px;min-width:0;position:relative}
+.top{height:52px;border-radius:16px;background:linear-gradient(160deg,oklch(26% .04 235 / .9),oklch(20% .03 240 / .9));display:flex;align-items:center;gap:14px;padding:0 14px}
+.search{flex:1;height:36px;border-radius:10px;border:1px solid oklch(72% .16 230 / .7);display:flex;align-items:center;padding:0 12px;color:var(--faint)}
+.cols{display:grid;grid-template-columns:260px 1fr 300px;gap:10px;flex:1;min-height:0}
+.pane{border-radius:16px;background:oklch(18% .018 240);padding:12px;overflow:hidden;position:relative}
+.ex .it{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;color:var(--dim)}
+.ex .it span:last-child{margin-left:auto;font-size:11.5px;color:var(--faint)}
+.ex .it.on{background:oklch(72% .16 230 / .14);color:var(--ink)}
+.ex .sec{margin:12px 8px 4px;display:flex;justify-content:space-between}
+.bl{width:14px;height:10px;flex:none;border-radius:2px;background:linear-gradient(90deg,var(--good),var(--blue))}
+.hand{width:14px;height:10px;flex:none;border-radius:2px;border:1px solid var(--faint)}
+.tape{height:84px;border-radius:12px;background:var(--aisle);position:relative;overflow:hidden;display:flex;align-items:flex-end;gap:3px;padding:0 10px 22px}
+.tape i{display:block;height:var(--y);flex:var(--w);border-radius:2px 2px 0 0;background:oklch(60% .12 var(--h)/.75)}
+.tape em{position:absolute;left:10px;top:8px;font-style:normal;font-size:11.5px;color:var(--dim)}
+.plh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.plh .t{margin-right:auto}.plh .t b{font-size:17px;font-weight:600}.plh .t i{font-style:normal;font-size:12px;color:var(--dim);display:block}
+.curve{height:70px;border-radius:12px;background:var(--aisle);position:relative;margin:10px 0 6px;overflow:hidden}
+.curve svg{position:absolute;inset:0;width:100%;height:100%}
+.ib{width:36px;height:36px;border-radius:11px;background:oklch(100% 0 0 / .06);display:grid;place-items:center;flex:none;color:var(--ink)}
+.bar{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim);margin:5px 0}
+.bar .b{flex:1;height:5px;border-radius:3px;background:oklch(100% 0 0 / .07);overflow:hidden}.bar .b i{display:block;height:100%;background:var(--good)}
+.fit{display:flex;align-items:center;gap:9px;min-height:44px;padding:4px 6px;border-radius:10px}
+.sc{font-size:11.5px;color:var(--good);font-variant-numeric:tabular-nums}
+.pop{position:absolute;z-index:4;border-radius:14px;background:oklch(23% .025 240);border:1px solid oklch(100% 0 0 / .12);box-shadow:0 16px 40px oklch(0% 0 0 / .55);padding:14px}
+.radio{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px}
+.radio.on{background:oklch(72% .16 230 / .12)}
+.radio .o{width:16px;height:16px;border-radius:50%;border:2px solid var(--faint);flex:none}.radio.on .o{border:5px solid var(--blue)}
+.pbar{height:54px;border-radius:18px;background:oklch(22% .03 235 / .92);border:1px solid oklch(80% .1 170 / .35);display:flex;align-items:center;gap:12px;padding:0 12px;width:560px;align-self:center;font-size:12px}
+.pbar .pl{width:38px;height:38px;border-radius:12px;background:var(--blue);display:grid;place-items:center;color:var(--blue-ink)}
+
+/* phone */
+.ph{position:relative;width:100%;max-width:360px;height:720px;border-radius:28px;overflow:hidden;border:1px solid oklch(100% 0 0 / .1)}
+.ph .hd{margin:10px;padding:10px 12px;border-radius:18px;background:linear-gradient(160deg,oklch(26% .04 235 / .9),oklch(20% .03 240 / .9));border:1px solid oklch(100% 0 0 / .07);display:flex;align-items:center;gap:10px}
+.ph .hd .t{flex:1;min-width:0}.ph .hd .t b{display:block;font-size:17px;font-weight:600}.ph .hd .t i{font-style:normal;font-size:11.5px;color:var(--dim)}
+.ph .tools{display:flex;gap:6px;margin:0 12px 8px;overflow:hidden}
+.ph .curve{margin:0 12px 6px;height:56px}
+.ph .list{margin:0 6px}
+.ph .act{position:absolute;left:10px;right:10px;bottom:84px;display:flex;gap:8px;z-index:3}
+.play{flex:1;height:48px;border-radius:14px;background:var(--blue);color:var(--blue-ink);font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px}
+.more{width:48px;height:48px;border-radius:14px;background:oklch(26% .025 240);display:grid;place-items:center;border:1px solid oklch(100% 0 0 / .1)}
+.dock{position:absolute;left:10px;right:10px;bottom:10px;height:62px;border-radius:20px;background:oklch(22% .03 235 / .95);border:1px solid oklch(80% .1 170 / .35);display:flex;align-items:center;justify-content:space-around;font-size:11px;color:var(--dim);z-index:3}
+.dock .s{width:46px;height:46px;border-radius:15px;background:var(--blue)}.dock .on{color:var(--ink)}
+.fade{position:absolute;left:0;right:0;bottom:0;height:170px;background:linear-gradient(transparent,oklch(14% .015 240) 50%);z-index:2}
+.scrim{position:absolute;inset:0;background:oklch(0% 0 0 / .55);z-index:6}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:7;border-radius:22px 22px 0 0;background:oklch(21% .022 240);border-top:1px solid oklch(100% 0 0 / .1);padding:8px 14px 18px}
+.grab{width:36px;height:4px;border-radius:2px;background:oklch(100% 0 0 / .2);margin:0 auto 10px}
+.btn4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0}
+.btn4 div{height:58px;border-radius:12px;background:oklch(100% 0 0 / .05);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px}
+.ghostrow{opacity:.55;border:1px dashed oklch(72% .16 230 / .5)}
+</style></head><body>
+
+<h1>Blend playlists: one object for mixes, playlists and the set</h1>
+<p class="note">From your answers: a mix is a playlist in <b>blend</b> mode · Blend orders it, your pins win · the order changes as you edit and <b>locks when you press Play</b> · a flow can add tracks and shape the order · built in the board · <b>Your set</b> and the <b>Mixes</b> list go away. The set's machinery (pins, Blend by, energy line, join problems + Fix) moves onto the open playlist.</p>
+
+<h2>Stories</h2>
+<ol class="st">
+  <li><b>Start one.</b> "New playlist" in the board opens it in the centre, empty, blend on. Tape and explorer stay for picking.</li>
+  <li><b>Add a track.</b> Drag or + from the tape/explorer: it lands where it blends best; dropped between two rows, it's pinned there.</li>
+  <li><b>Pin / move.</b> Drag a row → pinned at its new place; the rest re-orders; moved rows marked; Undo.</li>
+  <li><b>Fill from a flow.</b> Pick a flow + minutes: it adds tracks that fit, around your pins.</li>
+  <li><b>Shape the order.</b> Hold / Lift / Ease / Arc, or a flow's energy curve.</li>
+  <li><b>Fix a weak join.</b> Existing Fix panel: bridge, move, or keep.</li>
+  <li><b>Play.</b> What you see is what plays: the order locks. Editing while it plays re-blends only what's after the playing track.</li>
+  <li><b>Hand order.</b> Turn blend off: the current order freezes and stays yours (old playlists open like this).</li>
+  <li><b>On the couch.</b> Phone: open, tap a row to swap/pin/move, hold to drag, Play in thumb reach.</li>
+</ol>
+
+<!-- ======================= DESKTOP ======================= -->
+<h2>D1 · Desktop: a blend playlist open in the board <span class="tag">1</span><span class="tag">2</span><span class="tag">3</span><span class="tag">5</span><span class="tag">6</span></h2>
+<p class="note">The centre's lower half, where Your set was, is now the open playlist. The tape stays above it as the source. The right column follows what you select: here the join 6→7, with its breakdown and tracks that would fix it. After a drag, moved rows get a dot and the toast offers Undo.</p>
+<div class="dwrap" data-h="800"><div class="dk app">
+  <div class="side"><div class="s"></div><span>Home</span><span>Media</span><span>Discover</span><span class="on">Music</span><span>Library</span></div>
+  <div class="main">
+    <div class="top"><b style="font-size:17px">Music</b><span style="font-size:12px;color:var(--dim)">566 tracks</span><div class="search">Search names or sounds…</div><span class="chip p">+ New playlist</span></div>
+    <div class="cols">
+      <div class="pane ex">
+        <div style="font-weight:600;margin-bottom:6px">Explorer</div>
+        <div class="sec"><span class="lbl">Library</span></div>
+        <div class="it"><span>›</span>Album<span>8</span></div><div class="it"><span>›</span>Artist<span>112</span></div><div class="it"><span>›</span>Mood<span>6</span></div>
+        <div class="sec"><span class="lbl">Playlists</span><span style="font-size:11.5px;color:var(--blue)">New</span></div>
+        <div class="it on"><span class="bl"></span>Friday warm-up<span>13</span></div>
+        <div class="it"><span class="bl"></span>Late set · 14/11<span>18</span></div>
+        <div class="it"><span class="hand"></span>perso<span>24</span></div>
+        <div class="it"><span class="hand"></span>Queue<span>46</span></div>
+        <div class="sec"><span class="lbl">Flows</span><span style="font-size:11.5px;color:var(--faint)">fill a playlist</span></div>
+        <div class="it"><span>~</span>Warm-up<span>flow</span></div><div class="it"><span>~</span>Peak hour<span>flow</span></div>
+        <p class="cap" style="margin-top:14px">Gradient = blend, outline = hand order. No Mixes section.</p>
+      </div>
+      <div class="pane" style="display:flex;flex-direction:column;gap:10px">
+        <div class="tape"><em>Tape · Album · natural order — drag from here into the playlist</em>
+          <i style="--y:40%;--w:3;--h:300"></i><i style="--y:62%;--w:4;--h:300"></i><i style="--y:55%;--w:3;--h:20"></i><i style="--y:75%;--w:5;--h:20"></i><i style="--y:48%;--w:3;--h:160"></i><i style="--y:80%;--w:4;--h:160"></i><i style="--y:66%;--w:3;--h:230"></i><i style="--y:52%;--w:4;--h:230"></i><i style="--y:70%;--w:3;--h:60"></i><i style="--y:44%;--w:4;--h:60"></i><i style="--y:58%;--w:3;--h:300"></i><i style="--y:72%;--w:5;--h:20"></i>
+        </div>
+        <div>
+          <div class="plh">
+            <div class="t"><b>Friday warm-up</b><i>13 tracks · 47 min · 84 blend · 1 rough join</i></div>
+            <span class="seg"><span class="on">Blend</span><span>Hand order</span></span>
+            <span class="chip">Shape · <b style="font-weight:500">Lift</b> ⌄</span>
+            <span class="chip">Blend by · Harmony first ⌄</span>
+            <span class="chip">Fill from a flow</span>
+            <span class="chip p">▶ Play</span>
+          </div>
+          <div class="curve"><svg viewBox="0 0 800 70" preserveAspectRatio="none"><path d="M0 62 C150 60 230 48 340 40 S560 18 800 10" fill="none" stroke="oklch(92% .01 240 / .35)" stroke-width="1.5" stroke-dasharray="5 5"/><path d="M0 60 L62 58 L123 55 L185 50 L246 46 L308 44 L369 33 L431 38 L492 28 L554 24 L615 20 L677 15 L738 12 L800 11" fill="none" stroke="oklch(72% .16 230)" stroke-width="2"/><circle cx="185" cy="50" r="5" fill="oklch(72% .16 230)"/><text x="8" y="14" fill="oklch(92% .01 240 / .55)" font-size="11">energy · dashed = Lift shape · ● pin</text></svg></div>
+        </div>
+        <div style="overflow:hidden;flex:1">
+          <div class="r"><span class="n">1</span><span class="sig" style="--h:300"></span><div class="m"><b>Hear Me</b><i>172 BPM · B harmonic minor</i></div></div>
+          <div class="join"><span class="dia w"></span>Drop · 71</div>
+          <div class="r"><span class="n">2</span><span class="sig" style="--h:20"></span><div class="m"><b>Mesmer</b><i>174 BPM · A# harmonic minor</i></div></div>
+          <div class="join"><span class="dia"></span>Relative · 88</div>
+          <div class="r"><span class="n">3</span><span class="sig" style="--h:160"></span><div class="m"><b>Concussion (Mefjus Remix)</b><i>172 BPM · F Phrygian dominant</i></div></div>
+          <div class="join"><span class="dia"></span>Match · 92</div>
+          <div class="r pinned"><span class="n">4</span><span class="sig" style="--h:160"></span><div class="m"><b>Damage ft. Shaquille O'Neal</b><i>174 BPM · D# Phrygian · you placed it</i></div><span class="pin">●</span></div>
+          <div class="join"><span class="dia"></span>Match · 90</div>
+          <div class="r moved"><span class="n">5</span><span class="sig" style="--h:230"></span><div class="m"><b>Sinkhole (OUT NOW)</b><i>172 BPM · F Phrygian dominant</i></div></div>
+          <div class="join"><span class="dia"></span>Match · 86</div>
+          <div class="r moved"><span class="n">6</span><span class="sig" style="--h:230"></span><div class="m"><b>Sunder</b><i>174 BPM · D# Phrygian dominant</i></div></div>
+          <div class="join" style="background:oklch(83% .16 85 / .08);border-radius:6px"><span class="dia w"></span>Brighter mode · 58 · energy jump <span class="fix">Fix</span></div>
+          <div class="r"><span class="n">7</span><span class="sig" style="--h:60"></span><div class="m"><b>Left</b><i>172 BPM · D# Aeolian</i></div></div>
+        </div>
+        <div class="toast" style="bottom:14px">Damage pinned at 4 · 2 tracks moved <b>Undo</b></div>
+      </div>
+      <div class="pane">
+        <div class="lbl">Join 6 → 7</div>
+        <div style="font-size:15px;font-weight:600;margin:6px 0 2px">Sunder → Left</div>
+        <div style="font-size:12px;color:var(--dim)">Brighter mode · blend 58 · energy jumps 31</div>
+        <div style="margin:10px 0 14px"><div class="bar"><span style="width:58px">Energy</span><span class="b"><i style="width:30%;background:var(--mixed)"></i></span></div><div class="bar"><span style="width:58px">Tempo</span><span class="b"><i style="width:92%"></i></span></div><div class="bar"><span style="width:58px">Harmony</span><span class="b"><i style="width:60%;background:var(--mixed)"></i></span></div><div class="bar"><span style="width:58px">Genre</span><span class="b"><i style="width:100%"></i></span></div></div>
+        <div class="lbl">Put one between</div>
+        <div class="fit"><span class="sig" style="--h:60"></span><div class="m"><b>Twerp</b><i>175 · D# Aeolian · fixes it</i></div><span class="sc">+ </span></div>
+        <div class="fit"><span class="sig" style="--h:300"></span><div class="m"><b>Aurora</b><i>173 · D# Phrygian · fixes it</i></div><span class="sc">+</span></div>
+        <div class="lbl" style="margin-top:10px">Or</div>
+        <div class="fit"><div class="m"><b>Move Left to #10</b><i>fewest problems there</i></div></div>
+        <div class="fit"><div class="m"><b>Keep, I like it</b><i>stops counting this join</i></div></div>
+      </div>
+    </div>
+    <div class="pbar"><span class="pl">▶</span><span>Warm · 164 BPM</span></div>
+  </div>
+</div></div>
+
+<h2>D2 · Desktop: fill from a flow <span class="tag">4</span><span class="tag">5</span></h2>
+<p class="note">A popover from <b>Fill from a flow</b>. You pick the flow and how much to add; the preview shows the new tracks as dashed rows and the flow's curve on the energy line. <b>Use its shape</b> makes the flow's curve the target for the whole order. Pins never move.</p>
+<div class="dwrap" data-h="560"><div class="dk app" style="height:560px;grid-template-columns:1fr;padding:16px">
+  <div class="pane" style="height:528px">
+    <div class="plh"><div class="t"><b>Friday warm-up</b><i>13 tracks · 47 min → <span style="color:var(--blue)">22 tracks · 80 min</span></i></div><span class="seg"><span class="on">Blend</span><span>Hand order</span></span><span class="chip">Shape · Warm-up flow ⌄</span><span class="chip on">Fill from a flow</span><span class="chip p">▶ Play</span></div>
+    <div class="curve"><svg viewBox="0 0 1200 70" preserveAspectRatio="none"><path d="M0 62 C200 60 300 46 500 38 S800 30 900 14 S1100 20 1200 26" fill="none" stroke="oklch(72% .16 230 / .6)" stroke-width="1.5" stroke-dasharray="5 5"/><path d="M0 60 L90 58 L180 52 L270 47 L360 44 L450 40 L540 37 L630 36 L720 33" fill="none" stroke="oklch(72% .16 230)" stroke-width="2"/><path d="M720 33 L810 26 L900 16 L990 14 L1080 19 L1200 25" fill="none" stroke="oklch(72% .16 230)" stroke-width="2" stroke-dasharray="3 4"/><circle cx="270" cy="47" r="5" fill="oklch(72% .16 230)"/><text x="10" y="14" fill="oklch(92% .01 240 / .55)" font-size="11">dashed line = Warm-up flow's curve · dotted = what the fill adds</text></svg></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px">
+      <div class="r"><span class="n">12</span><span class="sig" style="--h:20"></span><div class="m"><b>Hear The Lies [Premiere]</b><i>172 BPM · F Aeolian</i></div></div>
+      <div class="r ghostrow"><span class="n">16</span><span class="sig" style="--h:300"></span><div class="m"><b>Aurora</b><i>new · 173 BPM · D# Phrygian</i></div></div>
+      <div class="r"><span class="n">13</span><span class="sig" style="--h:60"></span><div class="m"><b>Dune</b><i>174 BPM · F Aeolian</i></div></div>
+      <div class="r ghostrow"><span class="n">17</span><span class="sig" style="--h:160"></span><div class="m"><b>Closer</b><i>new · 174 BPM · G Aeolian</i></div></div>
+      <div class="r ghostrow"><span class="n">14</span><span class="sig" style="--h:230"></span><div class="m"><b>Failbait</b><i>new · 172 BPM · F Phrygian</i></div></div>
+      <div class="r ghostrow"><span class="n">18</span><span class="sig" style="--h:20"></span><div class="m"><b>Maths</b><i>new · 175 BPM · G# Aeolian</i></div></div>
+      <div class="r ghostrow"><span class="n">15</span><span class="sig" style="--h:60"></span><div class="m"><b>October</b><i>new · 174 BPM · F Aeolian</i></div></div>
+      <div class="r" style="color:var(--faint);font-size:12px">… 4 more</div>
+    </div>
+    <div class="pop" style="right:150px;top:52px;width:330px">
+      <div style="font-weight:600;margin-bottom:8px">Fill from a flow</div>
+      <div class="radio on"><span class="o"></span><div class="m"><b>Warm-up</b><i>Lift · Drum &amp; Bass · 41 tracks fit</i></div></div>
+      <div class="radio"><span class="o"></span><div class="m"><b>Peak hour</b><i>Hold high · 23 tracks fit</i></div></div>
+      <div style="display:flex;align-items:center;gap:10px;margin:12px 0 6px;font-size:12.5px"><span>Add</span><span class="seg"><span>15 min</span><span class="on">30 min</span><span>1 h</span></span><span style="color:var(--dim)">≈ 9 tracks</span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:10px 0"><span style="width:30px;height:18px;border-radius:9px;background:var(--blue);position:relative"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--blue-ink)"></span></span>Use its shape for the whole order</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><span class="chip ghost">Cancel</span><span class="chip p">Add 9 tracks</span></div>
+    </div>
+  </div>
+</div></div>
+
+<h2>D3 · Desktop: playing, order locked <span class="tag">7</span></h2>
+<p class="note">Play locks the order: the header says so and the playing row is marked. Editing is still allowed. An edit re-blends only the rows after the playing one, then locks again.</p>
+<div class="dwrap" data-h="330"><div class="dk app" style="height:330px;grid-template-columns:1fr;padding:16px">
+  <div class="pane" style="height:298px">
+    <div class="plh"><div class="t"><b>Friday warm-up</b><i>13 tracks · 47 min · <span class="lock">● Playing · order locked</span></i></div><span class="seg"><span class="on">Blend</span><span>Hand order</span></span><span class="chip">Shape · Lift ⌄</span><span class="chip">Fill from a flow</span><span class="chip">❚❚ Pause</span></div>
+    <div style="margin-top:12px">
+      <div class="r" style="opacity:.55"><span class="n">2</span><span class="sig" style="--h:20"></span><div class="m"><b>Mesmer</b><i>played</i></div></div>
+      <div class="r now"><span class="n">3</span><span class="sig" style="--h:160"></span><div class="m"><b>Concussion (Mefjus Remix)</b><i>playing · 2:14 / 4:05</i></div></div>
+      <div class="r"><span class="n">4</span><span class="sig" style="--h:160"></span><div class="m"><b>Damage ft. Shaquille O'Neal</b><i>next · 174 BPM · D# Phrygian</i></div><span class="pin">●</span></div>
+      <div class="r"><span class="n">5</span><span class="sig" style="--h:230"></span><div class="m"><b>Sinkhole (OUT NOW)</b><i>172 BPM · F Phrygian dominant</i></div></div>
+    </div>
+    <div class="toast" style="bottom:16px;left:auto;right:16px;transform:none">You moved Left: re-blended 5–13 · playing track unchanged <b>Undo</b></div>
+  </div>
+</div></div>
+
+<!-- ======================= PHONE ======================= -->
+<h2>Phone</h2>
+<div class="phones">
+  <div>
+    <div class="ph app">
+      <div class="hd"><div class="ib">‹</div><div class="t"><b>Friday warm-up</b><i>Blend · 13 tracks · 47 min</i></div><div class="ib">⋯</div></div>
+      <div class="tools"><span class="chip">Shape · Lift</span><span class="chip">Fill</span><span class="chip">+ Add</span></div>
+      <div class="curve"><svg viewBox="0 0 340 56" preserveAspectRatio="none"><path d="M0 50 C70 48 110 38 160 32 S260 14 340 8" fill="none" stroke="oklch(92% .01 240 / .35)" stroke-width="1.5" stroke-dasharray="4 4"/><path d="M0 49 L28 47 L56 44 L84 40 L113 37 L141 35 L170 27 L198 30 L226 22 L254 19 L283 16 L311 12 L340 9" fill="none" stroke="oklch(72% .16 230)" stroke-width="2"/><circle cx="84" cy="40" r="4.5" fill="oklch(72% .16 230)"/></svg></div>
+      <div class="list">
+        <div class="r"><span class="n">1</span><div class="m"><b>Hear Me</b><i>172 · B harm. minor</i></div></div>
+        <div class="join"><span class="dia w"></span>Drop · 71</div>
+        <div class="r"><span class="n">2</span><div class="m"><b>Mesmer</b><i>174 · A# harm. minor</i></div></div>
+        <div class="join"><span class="dia"></span>Relative · 88</div>
+        <div class="r"><span class="n">3</span><div class="m"><b>Concussion (Mefjus Remix)</b><i>172 · F Phrygian dom.</i></div></div>
+        <div class="join"><span class="dia"></span>Match · 92</div>
+        <div class="r pinned"><span class="n">4</span><div class="m"><b>Damage ft. Shaquille O'Neal</b><i>174 · D# Phrygian · pinned</i></div><span class="pin">●</span></div>
+        <div class="join"><span class="dia"></span>Match · 90</div>
+        <div class="r moved"><span class="n">5</span><div class="m"><b>Sinkhole (OUT NOW)</b><i>172 · F Phrygian dom.</i></div></div>
+        <div class="join"><span class="dia w"></span>Brighter mode · 58 <span class="fix">Fix</span></div>
+        <div class="r"><span class="n">6</span><div class="m"><b>Left</b><i>172 · D# Aeolian</i></div></div>
+      </div>
+      <div class="fade"></div>
+      <div class="act"><div class="play">▶ Play</div></div>
+      <div class="dock"><span>Home</span><span>Media</span><span class="s"></span><span class="on">Music</span><span>Library</span></div>
+    </div>
+    <p class="cap"><b>P1 · Open.</b> Shape, Fill and Add as chips; ⋯ holds Blend/Hand order, Blend by, Rename, Delete. Play sits above the dock. <span class="tag">1</span><span class="tag">5</span><span class="tag">9</span></p>
+  </div>
+  <div>
+    <div class="ph app">
+      <div class="hd"><div class="ib">‹</div><div class="t"><b>Friday warm-up</b><i>Blend · 13 tracks · 47 min</i></div><div class="ib">⋯</div></div>
+      <div class="list" style="margin-top:6px">
+        <div class="r"><span class="n">4</span><div class="m"><b>Damage ft. Shaquille O'Neal</b><i>174 · D# Phrygian</i></div><span class="pin">●</span></div>
+        <div class="r"><span class="n">5</span><div class="m"><b>Sinkhole (OUT NOW)</b><i>172 · F Phrygian dom.</i></div></div>
+      </div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <b style="font-size:15px">6 · Left</b><div style="font-size:11.5px;color:var(--dim)">From Sinkhole: Brighter mode · blend 58 · energy jump</div>
+        <div class="btn4"><div>▶<span>Play from here</span></div><div>●<span>Pin here</span></div><div>↑<span>Earlier</span></div><div>✕<span>Remove</span></div></div>
+        <div class="lbl" style="margin:4px 2px">Swap for · fits between Sinkhole and Twerp</div>
+        <div class="fit"><span class="sig" style="--h:300"></span><div class="m"><b>Aurora</b><i>173 · D# Phrygian</i></div><span class="sc">91</span></div>
+        <div class="fit"><span class="sig" style="--h:160"></span><div class="m"><b>Closer</b><i>174 · G Aeolian</i></div><span class="sc">84</span></div>
+        <div class="fit"><span class="sig" style="--h:20"></span><div class="m"><b>Stargazer</b><i>172 · C Aeolian</i></div><span class="sc">80</span></div>
+        <div class="cap" style="margin:6px 4px 0">A swap pins the new track here. Hold a row in the list to drag it.</div>
+      </div>
+    </div>
+    <p class="cap"><b>P2 · Tap a row.</b> Everything for that spot in one sheet; swap is the main content. <span class="tag">3</span><span class="tag">6</span><span class="tag">9</span></p>
+  </div>
+  <div>
+    <div class="ph app">
+      <div class="hd"><div class="ib">‹</div><div class="t"><b>Friday warm-up</b><i>Blend · 13 tracks · 47 min</i></div><div class="ib">⋯</div></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <b style="font-size:15px">Fill from a flow</b>
+        <div class="radio on" style="margin-top:8px"><span class="o"></span><div class="m"><b>Warm-up</b><i>Lift · Drum &amp; Bass · 41 fit</i></div></div>
+        <div class="radio"><span class="o"></span><div class="m"><b>Peak hour</b><i>Hold high · 23 fit</i></div></div>
+        <div style="margin:12px 2px 6px;font-size:12.5px">Add</div>
+        <div class="seg" style="width:100%;display:grid;grid-template-columns:repeat(3,1fr)"><span style="height:40px">15 min</span><span class="on" style="height:40px">30 min</span><span style="height:40px">1 h</span></div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:13px;margin:16px 2px"><span style="width:40px;height:24px;border-radius:12px;background:var(--blue);position:relative;flex:none"><span style="position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:var(--blue-ink)"></span></span>Use its shape for the whole order</div>
+        <div class="play" style="margin-top:8px">Add 9 tracks</div>
+      </div>
+    </div>
+    <p class="cap"><b>P3 · Fill.</b> Same choices as desktop; after Add, the new rows are marked and Undo shows. <span class="tag">4</span></p>
+  </div>
+  <div>
+    <div class="ph app">
+      <div class="hd"><div class="ib">‹</div><div class="t"><b>Friday warm-up</b><i class="lock">● Playing · order locked</i></div><div class="ib">⋯</div></div>
+      <div class="list" style="margin-top:6px">
+        <div class="r" style="opacity:.55"><span class="n">2</span><div class="m"><b>Mesmer</b><i>played</i></div></div>
+        <div class="r now"><span class="n">3</span><div class="m"><b>Concussion (Mefjus Remix)</b><i>playing · 2:14 / 4:05</i></div></div>
+        <div class="join"><span class="dia"></span>Match · 92</div>
+        <div class="r"><span class="n">4</span><div class="m"><b>Damage ft. Shaquille O'Neal</b><i>next</i></div><span class="pin">●</span></div>
+        <div class="join"><span class="dia"></span>Match · 90</div>
+        <div class="r"><span class="n">5</span><div class="m"><b>Sinkhole (OUT NOW)</b><i>172 · F Phrygian dom.</i></div></div>
+        <div class="join"><span class="dia w"></span>Brighter mode · 58</div>
+        <div class="r"><span class="n">6</span><div class="m"><b>Left</b><i>172 · D# Aeolian</i></div></div>
+      </div>
+      <div class="fade"></div>
+      <div class="toast" style="bottom:140px;font-size:12px">Re-blended after the playing track <b>Undo</b></div>
+      <div class="act"><div class="play">❚❚ Pause</div></div>
+      <div class="dock"><span>Home</span><span>Media</span><span class="s"></span><span class="on">Music</span><span>Library</span></div>
+    </div>
+    <p class="cap"><b>P4 · Playing.</b> Locked; an edit re-blends only what's after the playing row. <span class="tag">7</span></p>
+  </div>
+</div>
+
+<h2>Questions for this round</h2>
+<ol class="st" style="columns:1">
+  <li><b>Drop without a target:</b> a track dropped on the list (not between two rows) lands where it blends best, unpinned. OK, or always pinned where it's dropped?</li>
+  <li><b>Lock on Play:</b> an edit while playing re-blends only after the playing track (D3/P4). OK?</li>
+  <li><b>Old hand playlists</b> open in Hand order; switching one to Blend reorders the whole list (Undo available). OK?</li>
+  <li><b>The queue:</b> playing a blend playlist replaces what's after the playing track, as Play the set does today. Should the queue show the playlist as one block or as its tracks?</li>
+</ol>
+<script>
+function fit(){document.querySelectorAll('.dwrap').forEach(w=>{const d=w.firstElementChild;const k=Math.min(1,w.clientWidth/1280);d.style.transform=`scale(${k})`;w.style.height=(+w.dataset.h*k)+'px'})}
+addEventListener('resize',fit);fit();
+</script>
+</body></html>

@@ -1,4 +1,5 @@
 import Layer from './Layer'
+import ToastBar from './ToastBar'
 import PlayerBar from './PlayerBar'
 import { useLayerMounted, useMusicHost } from './player'
 
@@ -9,7 +10,7 @@ export default function MusicPlayer({ onMusicPage }: { onMusicPage: boolean }) {
   return (
     <>
       <PlayerBar onMusicPage={onMusicPage} />
-      {layer && <Layer />}
+      {layer ? <Layer /> : <ToastBar />}{/* the layer carries the toast once it is mounted; before, nothing would show an Undo */}
     </>
   )
 }

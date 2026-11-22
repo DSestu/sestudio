@@ -18,14 +18,12 @@ import { closeFits, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
 import { currentParams, replaceParams, type Navigate } from '../nav'
 import FlowsHome from '../components/music/flows/FlowsHome'
-import MixesList from '../components/music/flows/MixesList'
 import FlowLanes from '../components/music/flows/FlowLanes'
-import MixView from '../components/music/flows/MixView'
 import { useFlows } from '../musicFlows'
 import Sources, { type SourceTab } from '../components/music/edit/Sources'
 import { refOf, resetFocus, setSheet as setEditSheet, songKey, useFocus } from '../components/music/edit/focus'
 import { toast } from '../components/music/toast'
-import { createWithTracks, freshName, itemsOf, playlistApi, usePlaylists } from '../musicPlaylists'
+import { createWithTracks, freshName, isSet, itemsOf, playlistApi, usePlaylists } from '../musicPlaylists'
 import MusicSurface from '../components/music/library/MusicSurface'
 import QueryChips from '../components/music/library/QueryChips'
 
@@ -66,13 +64,11 @@ const useWide = () => useSyncExternalStore(
   () => matchMedia(WIDE).matches,
 )
 
-const KIND_LABEL = { folder: 'Folder', playlist: 'Playlist', smart: 'Smart list' } as const
-
 export default function MusicView({ params, navigate }: { params: URLSearchParams; navigate: Navigate }) {
   const titles = useDownloadedLibrary()
-  // Flows and mixes open in the centre from the explorer (SPEC-music-library §2.2); `?tab=` names them, so old links and Back still work.
-  const centre = params.get('tab') === 'flows' ? 'flows' : params.get('tab') === 'mixes' ? 'mixes' : 'library'
-  const openCentre = (c: 'library' | 'flows' | 'mixes') => navigate('music', { ...Object.fromEntries(currentParams()), tab: c === 'library' ? undefined : c })
+  // Flows open in the centre from the explorer (SPEC-music-library §2.2); `?tab=` names them, so old links and Back still work.
+  const centre = params.get('tab') === 'flows' ? 'flows' : 'library'
+  const openCentre = (c: 'library' | 'flows') => navigate('music', { ...Object.fromEntries(currentParams()), tab: c === 'library' ? undefined : c })
   const query = useMusicQuery()
   const fitsFor = useFitsFor()
   const wide = useWide()
@@ -82,14 +78,13 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const nodeId = params.get('pl') ?? ''
   const drafting = nodeId === 'new'
   const flowEdit = params.get('fl') ?? ''
-  const mixOpen = params.get('mx') ?? ''
-  const { flows: allFlows, mixes: allMixes } = useFlows()
-  const go = (open: { pl?: string; seed?: string; fl?: string; mx?: string }) =>
+  const { flows: allFlows } = useFlows()
+  const go = (open: { pl?: string; seed?: string; fl?: string }) =>
     navigate('music', { ...Object.fromEntries(currentParams()), pl: undefined, seed: undefined, fl: undefined, mx: undefined, edit: undefined, ...open })
   const newPlaylist = (seed?: string) => go({ pl: 'new', seed })
   /** The new playlist exists: its editor replaces the `pl=new` history entry. */
   const opened = (id: string) => {
-    const next = { ...Object.fromEntries(currentParams()), pl: id, seed: undefined, edit: '1' }
+    const next = { ...Object.fromEntries(currentParams()), pl: id, seed: undefined }
     replaceParams('music', next)
     navigate('music', next)
   }
@@ -97,6 +92,15 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   useModalBack(adding, () => setAdding(false))
   const playlists = usePlaylists()
   const node = playlists.find(n => n.id === nodeId)
+  // An old `?mx=<id>` link opens the playlist its mix became (SPEC-blend-playlists §5); no match: the board.
+  const mixLink = params.get('mx') ?? ''
+  const migrated = mixLink ? playlists.find(n => n.from_mix === mixLink) : undefined
+  useEffect(() => {
+    if (!mixLink || !migrated) return
+    const next = { ...Object.fromEntries(currentParams()), mx: undefined, pl: migrated?.id }
+    replaceParams('music', next)
+    navigate('music', next)
+  }, [mixLink, migrated?.id]) // eslint-disable-line react-hooks/exhaustive-deps -- once per link
   // The playlist editor (SPEC-playlist-edit): Edit opens it, Done closes it, Back leaves it.
   const editing = node?.kind === 'playlist' && params.get('edit') === '1'
   const setEditing = (on: boolean) => navigate('music', { ...Object.fromEntries(currentParams()), edit: on ? '1' : undefined })
@@ -120,7 +124,13 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
 
   const ids = useMemo(() => all.filter(t => t.library !== 'online').map(t => t.id), [all])
   const { get, v } = useSummaries(ids)
-  const page = (node ?? drafting) || !!flowEdit || !!mixOpen
+  // A hand or blend playlist opens in the board; a set (parts), a folder, a smart list or the old editor keep their page.
+  const onBoard = node?.kind === 'playlist' && !editing && !isSet(node)
+  // Every list (a set, a smart list, a folder, the editor) opens in the board's centre column too; only a flow and a draft are pages.
+  const page = drafting || !!flowEdit
+  const [fitsEl, setFitsEl] = useState<HTMLDivElement | null>(null)
+  // A phone with a playlist open: the playlist card is the page header (back, name, status, options), so no Music header or search above it (SPEC-blend-playlists P1).
+  const phoneList = onBoard && !wide
 
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   // `pl=new` makes the playlist at once (empty, or with the track of "New playlist from this") and opens its editor.
@@ -129,7 +139,8 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     if (!drafting || making.current) return
     making.current = true
     const seed = byId.get(params.get('seed') ?? '')
-    const made = seed ? createWithTracks([refOf(seed)]) : playlistApi.create('playlist', freshName(playlists.map(n => n.name)))
+    const made = (seed ? createWithTracks([refOf(seed)]) : playlistApi.create('playlist', freshName(playlists.map(n => n.name))))
+      .then(n => playlistApi.patch(n.id, { blend: true })) // a new playlist keeps itself in Blend order
     made.then(n => opened(n.id), (e: Error) => { toast(e.message); go({}) }).finally(() => { making.current = false })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per `pl=new`, with the state of that moment
   }, [drafting])
@@ -153,19 +164,21 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   )
   const body = flowEdit ? (
     <FlowLanes key={flowEdit} flowId={flowEdit} byId={byId} onOpen={id => go({ fl: id })} />
-  ) : mixOpen ? (
-    <MixView key={mixOpen} mixId={mixOpen} byId={byId} onEditFlow={id => go({ fl: id })} />
-  ) : drafting ? null : node ? (
-    <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} edit={editing} onEdit={node.kind === 'playlist' ? () => setEditing(true) : undefined} onSource={t => { setSourceTab(t); setEditSheet(t) }} />
-  ) : !all.length ? (
+  ) : drafting ? null : !all.length ? (
     <EmptyState title="No music yet" message="Audio files in your downloads folder show up here." />
   ) : (
     <MusicSurface
       all={all} libraries={libraries} get={get} v={v} wide={wide} right={fitsPanel || undefined}
-      onList={id => go({ pl: id })} onNewList={() => newPlaylist()} onFlow={id => go({ fl: id })} onMix={id => go({ mx: id })} onFlows={() => openCentre('flows')} onMixes={() => openCentre('mixes')} onAddLibrary={() => setAdding(true)}
-      centreView={centre !== 'library' && !searching ? {
-        label: centre === 'flows' ? 'Flows' : 'Mixes',
-        node: centre === 'flows' ? <FlowsHome onOpen={id => go({ fl: id })} byId={byId} /> : <MixesList onOpen={id => go({ mx: id })} />,
+      openList={onBoard ? node : undefined} onCloseList={() => go({})}
+      onList={id => go({ pl: id })} onNewList={() => newPlaylist()} onFlow={id => go({ fl: id })} onFlows={() => openCentre('flows')} onAddLibrary={() => setAdding(true)}
+      rightTop={node && !onBoard ? <div data-fits ref={setFitsEl} className="h-full empty:hidden" /> : undefined}
+      centreView={node && !onBoard ? {
+        label: editing ? `Editing ${node.name}` : node.name,
+        node: <PlaylistView key={node.id} node={node} byId={byId} onPlaylist={setPickFor} edit={editing} onEdit={node.kind === 'playlist' ? () => setEditing(true) : undefined} onSource={t => { setSourceTab(t); setEditSheet(t) }} fitsInto={fitsEl} />,
+        onClose: () => go({}),
+      } : centre !== 'library' && !searching ? {
+        label: 'Flows',
+        node: <FlowsHome onOpen={id => go({ fl: id })} byId={byId} />,
         onClose: () => openCentre('library'),
       } : undefined}
     />
@@ -175,15 +188,11 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     <div className="flex flex-col gap-4">
       {flowEdit ? (
         <PageHeader title={allFlows.find(f => f.id === flowEdit)?.name ?? 'Flow'} status="Flow · Music" onBack={() => go({})} />
-      ) : mixOpen ? (
-        <PageHeader title={allMixes.find(m => m.id === mixOpen)?.name ?? 'Mix'} status="Mix · Music" onBack={() => go({})} />
-      ) : drafting ? (
+       ) : drafting ? (
         <PageHeader title="New playlist" status="Music" onBack={() => go({})} />
       ) : node && editing ? (
         <PageHeader title={node.name} status="Editing · Playlist" onBack={() => go({})} action={{ label: 'Done', onClick: () => setEditing(false), icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 12l5 5 9-10" /></svg> }} />
-      ) : node ? (
-        <PageHeader title={node.name} status={`${KIND_LABEL[node.kind]} · Music`} onBack={() => go({})} />
-      ) : (
+      ) : phoneList ? null : (
         <PageHeader
           title="Music"
           status={<><em>{all.length}</em> tracks</>}
@@ -191,13 +200,8 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
         />
       )}
       <div className="flex gap-6 items-start">
-        {editing && wide && (
-          <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-88 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">
-            {sources}
-          </aside>
-        )}
         <div className="flex-1 min-w-0 flex flex-col gap-4">
-          {!page && (
+          {!page && !phoneList && !node && (
             <label className="input input-bordered flex w-full items-center gap-1 md:hidden">
               <QueryChips />
               <input
@@ -224,9 +228,9 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
           {body}
         </div>
         {/* The surface shows Fits in its right column; a playlist page has its own Fits next aside, so a second one opens as a dialog. */}
-        {fitsPanel && wide && !node && !surface && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{fitsPanel}</aside>}
+        {fitsPanel && wide && !surface && <aside className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{fitsPanel}</aside>}
       </div>
-      {fitsPanel && (!wide || node) && (
+      {fitsPanel && !wide && (
         <ResponsiveModal onClose={closeFits} boxClassName="flex h-[60vh] flex-col p-0">{fitsPanel}</ResponsiveModal>
       )}
       {editing && !wide && (focus.sheet === 'lib' || focus.sheet === 'online') && (

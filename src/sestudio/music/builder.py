@@ -213,6 +213,9 @@ SHAPES: Final[dict[str, Callable[[float], float]]] = {
 }
 #: How hard the shape pulls against the join's Blend.
 SHAPE_PULL: Final = 0.8
+#: With *stay*, what moving a track across the whole list costs (scaled by the share of
+#: the list it moves): a pin then moves a few neighbours instead of re-ordering everything.
+STAY: Final = 1.0
 #: Above this many tracks only the greedy pass runs (the swaps are quadratic).
 ORDER_CAP: Final = 200
 #: Swap passes, and the extra a clash weighs in them.
@@ -269,22 +272,18 @@ def _pair_cost(
 def _swaps(
     out: list[dict[str, Any]],
     pinned: set[str],
-    wants: list[float],
+    pull: Callable[[dict[str, Any], int], float],
     c: Callable[[dict[str, Any], dict[str, Any]], float],
 ) -> None:
-    """2-opt in place: reverse a run of free tracks when its two outer joins plus its
-    distance from the shape (*wants*: the energy wanted at each index) get cheaper; then
-    move a free track off a clash when that makes the whole order cheaper."""
+    """2-opt in place: reverse a run of free tracks when its two outer joins plus what
+    each costs at its slot (*pull*: distance from the shape, plus the stay-put cost) get
+    cheaper; then move a free track off a clash when that makes the whole order cheaper."""
     n = len(out)
     if n < 4:
         return
     prefix = [0]
     for t in out:
         prefix.append(prefix[-1] + (t["id"] in pinned))
-
-    def pull(t: dict[str, Any], k: int) -> float:
-        e = _energy(t)
-        return 0.0 if e is None else SHAPE_PULL * abs(e - wants[k]) / 60
 
     def total(arr: list[dict[str, Any]]) -> float:
         return sum(c(x, y) for x, y in zip(arr, arr[1:])) + sum(
@@ -334,25 +333,48 @@ def _swaps(
             return
 
 
+def _along(curve: list[float], x: float) -> float:
+    """The *curve* (values spread evenly over 0..1) at *x*, linearly between its points."""
+    if not curve:
+        return 50.0
+    if len(curve) == 1:
+        return curve[0]
+    p = x * (len(curve) - 1)
+    i = min(int(p), len(curve) - 2)
+    return curve[i] + (curve[i + 1] - curve[i]) * (p - i)
+
+
 def order_set(
     tracks: list[dict[str, Any]],
     pins: dict[int | str, str] | None = None,
-    shape: str = "Arc",
+    shape: str | list[float] = "Arc",
     weights: Weights = None,
     welcome: Weights = None,
+    stay: bool = False,
+    start: int = 0,
 ) -> list[dict[str, Any]]:
     """*tracks* in their best succession: each free slot takes the free track that
     blends best after the one before, pulled towards the *shape*'s energy there;
     pinned tracks (``{index: id}``) keep their index. Then runs of free tracks are
     reversed while that cuts the join distances. Ids without an analysis are
     ordered as unknowns.
+
+    *shape* is a name in :data:`SHAPES` or a curve: energies 0..100 spread evenly over
+    the list (a flow's shape). With *stay*, the order *tracks* come in is the current
+    one and moving a track away from its index costs :data:`STAY` times the share of
+    the list it moves (SPEC-blend-playlists §4.1). The first *start* tracks stay where
+    they are (played, and playing, when the order is locked).
     """
     n = len(tracks)
     if n < 3:
         return list(tracks)
     by_id = {t["id"]: t for t in tracks}
+    was = {t["id"]: i for i, t in enumerate(tracks)}
     out: list[dict[str, Any] | None] = [None] * n
     pinned: set[str] = set()
+    for i, t in enumerate(tracks[: max(0, start)]):
+        out[i] = t
+        pinned.add(t["id"])
     for key, tid in (pins or {}).items():
         i = int(key)
         if 0 <= i < n and tid in by_id and tid not in pinned and out[i] is None:
@@ -362,13 +384,17 @@ def order_set(
     energies = [e for t in tracks if (e := _energy(t)) is not None]
     lo, hi = (min(energies), max(energies)) if energies else (0.0, 100.0)
     span = (hi - lo) or 1.0
-    f = SHAPES.get(shape, SHAPES["Arc"])
     cost = _pair_cost(weights, welcome)
-    wants = [lo + f(k / (n - 1)) * span for k in range(n)]
+    if isinstance(shape, str):
+        f = SHAPES.get(shape, SHAPES["Arc"])
+        wants = [lo + f(k / (n - 1)) * span for k in range(n)]
+    else:
+        wants = [_along(shape, k / (n - 1)) for k in range(n)]
 
     def pull(t: dict[str, Any], k: int) -> float:
         e = _energy(t)
-        return 0.0 if e is None else SHAPE_PULL * abs(e - wants[k]) / 60
+        moved = STAY * abs(k - was[t["id"]]) / n if stay else 0.0
+        return moved + (0.0 if e is None else SHAPE_PULL * abs(e - wants[k]) / 60)
 
     def build(opener: dict[str, Any] | None) -> list[dict[str, Any]]:
         slots, left = list(out), list(free)
@@ -393,13 +419,22 @@ def order_set(
             prev = best
         done = [t for t in slots if t is not None] + left
         if len(done) <= ORDER_CAP:
-            _swaps(done, pinned, wants, cost)
+            _swaps(done, pinned, pull, cost)
         return done
 
     def total(arr: list[dict[str, Any]]) -> float:
         return sum(cost(x, y) for x, y in zip(arr, arr[1:])) + sum(
             pull(t, k) for k, t in enumerate(arr)
         )
+
+    if stay:
+        # Start from the order as it is (pins in their slots, the rest in their order) and
+        # only take changes that pay for the moves: nothing moves unless it clearly helps.
+        rest = iter(free)
+        done = [t if t is not None else next(rest) for t in out]
+        if n <= ORDER_CAP:
+            _swaps(done, pinned, pull, cost)
+        return done
 
     # A greedy order can corner a track that fits few others; a few openers near the
     # shape's start give it other paths, and the cheapest whole order wins.

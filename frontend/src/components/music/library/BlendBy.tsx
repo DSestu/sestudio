@@ -56,14 +56,15 @@ function Radar({ value, onDrag, onRelease }: { value: Importance; onDrag: (v: Im
   )
 }
 
-export default function BlendBy({ joins, score, hasSet, sheet = false }: { joins?: Join[]; score?: number; hasSet: boolean; /** A phone: the panel is a bottom sheet over the page. */ sheet?: boolean }) {
+export default function BlendBy({ joins, score, hasSet, sheet = false, noun = 'playlist', bar = true, signal = 0 }: { joins?: Join[]; score?: number; hasSet: boolean; /** A phone: the panel is a bottom sheet over the page. */ sheet?: boolean; /** What it reads back: the open playlist, or the tape's list. */ noun?: string; /** False: no bar, only the panel, which `signal` (a count that goes up) opens. */ bar?: boolean; signal?: number }) {
   const { importance, welcome } = useBlendWeights()
   const [open, setOpen] = useState(false)
+  useEffect(() => { if (signal) setOpen(true) }, [signal]) // eslint-disable-line react-hooks/set-state-in-effect -- an outside button asks for the panel
   const opener = useRef<HTMLButtonElement>(null)
   // Closing hands focus back to the bar (§6 keyboard).
   const wasOpen = useRef(false)
   useEffect(() => { if (wasOpen.current && !open) opener.current?.focus(); wasOpen.current = open }, [open])
-  // The radar moves freely; the set re-orders once the dot is let go.
+  // The radar moves freely; the playlist re-orders once the dot is let go.
   const [draft, setDraft] = useState<Importance | null>(null)
   const shown = draft ?? importance
   const eff = effectOf(joins, score)
@@ -75,10 +76,10 @@ export default function BlendBy({ joins, score, hasSet, sheet = false }: { joins
   }, [open])
   const name = importanceName(shown)
   const s = shares(shown)
-  const short = hasSet && joins ? `set ${eff.score ?? '…'} blend · ${eff.clashes} ${eff.clashes === 1 ? 'clash' : 'clashes'}` : 'your set is empty'
+  const short = hasSet && joins ? `${noun} ${eff.score ?? '…'} blend · ${eff.clashes} ${eff.clashes === 1 ? 'clash' : 'clashes'}` : `your ${noun} is empty`
   return (
     <div className="sticky top-[calc(var(--top-card-h,4.25rem)+env(safe-area-inset-top)+0.5rem)] z-20 md:top-0">
-      <button ref={opener} onClick={() => setOpen(o => !o)} aria-expanded={open} className={`flex w-full items-center gap-2 rounded-xl px-3 py-1.5 text-left text-xs backdrop-blur ${open ? 'bg-base-300' : 'bg-base-300/90 hover:bg-base-300'}`}>
+      <button ref={opener} onClick={() => setOpen(o => !o)} aria-expanded={open} className={`${bar ? 'flex' : 'hidden'} w-full items-center gap-2 rounded-xl px-3 py-1.5 text-left text-xs backdrop-blur ${open ? 'bg-base-300' : 'bg-base-300/90 hover:bg-base-300'}`}>
         <Bars i={shown} />
         <span className="text-base-content/60">Blend by</span>
         <b className="font-semibold">{leadOf(shown)}</b>
@@ -110,8 +111,8 @@ export default function BlendBy({ joins, score, hasSet, sheet = false }: { joins
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <p className="text-base-content/70">
               {hasSet && joins
-                ? <>Your set: <b className="tabular-nums">{eff.score ?? '…'}</b> blend · <b className="tabular-nums">{eff.clashes}</b> {eff.clashes === 1 ? 'clash' : 'clashes'} · <b className="tabular-nums">{eff.transposed}</b> lift/drop · <b className="tabular-nums">{eff.genreChanges}</b> genre {eff.genreChanges === 1 ? 'change' : 'changes'}</>
-                : 'Add tracks to your set to see what this changes.'}
+                ? <>Your {noun}: <b className="tabular-nums">{eff.score ?? '…'}</b> blend · <b className="tabular-nums">{eff.clashes}</b> {eff.clashes === 1 ? 'clash' : 'clashes'} · <b className="tabular-nums">{eff.transposed}</b> lift/drop · <b className="tabular-nums">{eff.genreChanges}</b> genre {eff.genreChanges === 1 ? 'change' : 'changes'}</>
+                : `Add tracks to your ${noun} to see what this changes.`}
             </p>
             <span className="flex-1" />
             <span className="text-[11px] text-base-content/45">Tempo is kept close on its own.</span>
