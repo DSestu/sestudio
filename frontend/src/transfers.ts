@@ -67,7 +67,8 @@ export function titleEntries(files: DownloadedFile[]): TransferEntry[] {
 }
 
 /** A storage files can be written to and read from here. */
-export const writable = (s: StorageInfo) => s.kind === 'folder' || NETWORK_KINDS.includes(s.kind)
+export const writable = (s: StorageInfo) =>
+  s.kind === 'folder' || s.kind === 'bridged' || NETWORK_KINDS.includes(s.kind)
 
 /** Whether files on `id` can be copied anywhere: it is writable and another one is. */
 export function canSendFrom(list: StorageInfo[], id: string): boolean {

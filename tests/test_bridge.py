@@ -287,3 +287,68 @@ def test_the_phone_serves_a_held_share_itself_while_switched_to_home(freebox):
     finally:
         c.app.state.upstream = None
     assert r.status_code == 206 and r.content == b"0123"
+
+
+# --- copying and moving through a bridge (PR 22) -------------------------------
+
+
+def _done(job_id):
+    from sestudio import transfers
+
+    for _ in range(300):
+        job = next(j for j in transfers.all_jobs() if j["id"] == job_id)
+        if job["status"] in ("done", "failed", "cancelled"):
+            return job
+        time.sleep(0.02)
+    raise AssertionError("the transfer never finished")
+
+
+def test_copy_both_ways_and_move_home_through_the_bridge(freebox, tmp_path):
+    from sestudio import transfers
+
+    c, b, fs, _ = freebox
+    s = _open(c, b).json()
+    home = tmp_path / "home"
+    home.mkdir()
+    disk = storage.add("folder", ["video"], "Home disk", str(home))
+    films = f"{s['id']}:Films/Heat (1995).mkv"
+
+    # their Freebox → my disk
+    job = _done(transfers.create([films], disk["id"], "copy").id)
+    assert job["status"] == "done", job["items"]
+    assert (home / "Films/Heat (1995).mkv").read_bytes() == b"0123456789"
+
+    # my disk → their Freebox, into another folder
+    (home / "Mine.mkv").write_bytes(b"abcdef")
+    key = f"{disk['id']}:Mine.mkv"
+    job = _done(transfers.create([key], s["id"], "copy", dests=["For Mum/Mine.mkv"]).id)
+    assert job["status"] == "done", job["items"]
+    assert fs.cat("/Disque dur/For Mum/Mine.mkv") == b"abcdef"
+    assert not [p for p in fs.find("/Disque dur") if p.endswith(".part")]
+
+    # a move off their Freebox deletes it there, after the copy checked out
+    job = _done(transfers.create([films], disk["id"], "move", "replace").id)
+    assert job["status"] == "done", job["items"]
+    assert not fs.exists("/Disque dur/Films/Heat (1995).mkv")
+
+
+def test_a_bridge_only_touches_shares_it_holds(freebox):
+    c, b, _, _ = freebox
+    token = storage.get(b["id"])["token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    assert (
+        c.get(
+            "/api/share/bridge/stat", params={"path": "local:x.mkv"}, headers=auth
+        ).status_code
+        == 404
+    )
+    s = _open(c, b).json()
+    held = f"t{s['id']}:../escape"
+    assert (
+        c.get("/api/share/bridge/stat", params={"path": held}, headers=auth).status_code
+        == 403
+    )
+    assert (
+        c.get("/api/share/bridge/stat", params={"path": f"t{s['id']}:x"}).status_code
+        == 401
+    )

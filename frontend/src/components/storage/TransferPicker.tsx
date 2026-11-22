@@ -35,6 +35,9 @@ export default function TransferPicker({ request, onClose }: { request: Transfer
   const sources = useMemo(() => new Set(entries.map(e => e.file.storage ?? 'local')), [entries])
   const total = entries.reduce((n, e) => n + e.file.size, 0)
   const dests = all.filter(s => writable(s) && !sources.has(s.id))
+  // A share opened through a bridge on either side: whose files a move deletes.
+  const bridgedFrom = [...sources].map(id => all.find(s => s.id === id)).find(s => s?.kind === 'bridged')
+  const bridgedSide = bridgedFrom ?? (dests.find(s => s.id === to)?.kind === 'bridged' ? dests.find(s => s.id === to) : undefined)
   const fromLabel = [...sources].map(id => all.find(s => s.id === id)?.label ?? id).join(' + ')
 
   const [to, setTo] = useState(() => dests.find(s => fit(s, total).ok)?.id ?? '')
@@ -50,6 +53,8 @@ export default function TransferPicker({ request, onClose }: { request: Transfer
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [started, setStarted] = useState(false)
+  // A move to or from a share opened through a bridge asks first (SPEC-storage §10.5, A).
+  const [confirming, setConfirming] = useState(false)
 
   useEffect(() => {
     if (!other || !to) return
@@ -64,7 +69,7 @@ export default function TransferPicker({ request, onClose }: { request: Transfer
   const here = commonDir(entries.map(e => relOf(e.file)))
   const files = entries.length === 1 ? '1 file' : `${entries.length} files`
 
-  async function start() {
+  async function start(as: 'copy' | 'move' = mode) {
     if (!dest) return
     setBusy(true)
     setError(null)
@@ -72,7 +77,7 @@ export default function TransferPicker({ request, onClose }: { request: Transfer
       await transfersApi.start({
         files: entries.map(e => e.file.path),
         to: dest.id,
-        mode,
+        mode: as,
         on_conflict: clash,
         dests: other ? entries.map(e => destFor(e, path.join('/'))) : undefined,
         label: name,
@@ -233,10 +238,28 @@ export default function TransferPicker({ request, onClose }: { request: Transfer
         </section>
       </div>
 
+      {confirming && bridgedSide && (
+        <div role="alert" className="mt-3 flex flex-col gap-2 rounded-box border border-error/40 bg-error/10 px-3 py-2.5 text-sm">
+          <p>
+            {bridgedFrom
+              ? <>They are <b>deleted from {bridgedFrom.label}</b>, one by one, after each copy is checked. This is their {bridgedFrom.label.split(' · ')[0]}, not yours.</>
+              : <>They are deleted from {fromLabel}, one by one, after each copy on {dest?.label} is checked.</>}
+          </p>
+          <p className="text-xs text-base-content/70">
+            It goes through {bridgedSide.via_label} and their internet, so it can take a while.
+            {bridgedSide.wifi ? ` ${bridgedSide.via_label} has to stay on ${bridgedSide.wifi} until it ends.` : ''}
+          </p>
+        </div>
+      )}
       {error && <p role="alert" className="text-error text-sm mt-3">{error}</p>}
       <div className="modal-action mt-4">
         <button onClick={onClose} className="btn btn-sm">Cancel</button>
-        <button onClick={() => void start()} disabled={!dest || busy} className="btn btn-sm btn-primary">
+        {confirming && <button onClick={() => void start('copy')} disabled={busy} className="btn btn-sm btn-outline">Copy instead</button>}
+        <button
+          onClick={() => (mode === 'move' && bridgedSide && !confirming ? setConfirming(true) : void start())}
+          disabled={!dest || busy}
+          className={`btn btn-sm ${confirming ? 'btn-error' : 'btn-primary'}`}
+        >
           {busy ? '…' : `${verb} ${files}`}
         </button>
       </div>
