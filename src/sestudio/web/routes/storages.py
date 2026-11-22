@@ -552,3 +552,126 @@ async def probe_through(storage_id: str, body: Probe) -> dict[str, Any]:
     if r.status_code != 200:
         raise HTTPException(502, f"{s['label']} could not check it ({r.status_code})")
     return r.json()
+
+
+# --- a Freebox through Freebox OS (SPEC-storage §11, M4) --------------------------
+
+
+class FreeboxCall(BaseModel):
+    op: str
+    host: str
+    app_token: str = ""
+    track_id: int = 0
+    device_name: str = "sestudio"
+    user: str = ""
+    password: str = ""
+
+
+def _freebox_run(body: FreeboxCall) -> Any:
+    """Run one Freebox OS call here, where the box is reachable."""
+    from sestudio import freebox
+
+    ops = {
+        "info": lambda: freebox.info(body.host),
+        "pair": lambda: freebox.pair(body.host, body.device_name),
+        "pair_status": lambda: {
+            "status": freebox.pair_status(body.host, body.track_id)
+        },
+        "disks": lambda: freebox.disks(body.host, body.app_token),
+        "sharing": lambda: freebox.sharing(body.host, body.app_token),
+        "turn_on_sharing": lambda: freebox.turn_on_sharing(
+            body.host, body.app_token, body.user, body.password
+        ),
+    }
+    if body.op not in ops:
+        raise HTTPException(400, "Unknown Freebox call")
+    try:
+        return ops[body.op]()
+    except freebox.FreeboxError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@bridge_share.post("/freebox")
+async def bridge_freebox(body: FreeboxCall) -> Any:
+    """On a bridge: a Freebox OS call to the box on its network, for the sestudio
+    that asked, with the token it keeps."""
+    return await asyncio.to_thread(_freebox_run, body)
+
+
+class FreeboxAsk(BaseModel):
+    #: '' for this server's network, else a bridge's id.
+    via: str = ""
+    op: str
+    host: str
+    track_id: int = 0
+    user: str = ""
+    password: str = ""
+
+
+def _freebox_through(ask: FreeboxAsk, call: FreeboxCall) -> Any:
+    if not ask.via:
+        return _freebox_run(call)
+    b = _run(storage.get, ask.via)
+    try:
+        r = httpx.post(f"{b['url']}/api/share/bridge/freebox", headers=storage._bearer(b),
+                       json=call.model_dump(), timeout=30.0)  # fmt: skip
+    except httpx.HTTPError:
+        raise HTTPException(503, f"{b['label']} did not answer") from None
+    if r.status_code == 404:
+        raise HTTPException(409, f"{b['label']} runs an older sestudio: update it")
+    if r.status_code != 200:
+        try:
+            detail = r.json().get("detail")
+        except ValueError:
+            detail = None
+        raise HTTPException(
+            r.status_code if r.status_code < 500 else 502,
+            detail or "The Freebox call failed",
+        )
+    return r.json()
+
+
+def _freebox(ask: FreeboxAsk) -> Any:
+    """A Freebox OS step, here or through a bridge. The box's token is kept here
+    (``secrets.json``, by the box's id), never sent to the browser."""
+    from sestudio import vault
+
+    def call(op: str, **kw: Any) -> Any:
+        return _freebox_through(ask, FreeboxCall(op=op, host=ask.host, **kw))
+
+    box = call("info")
+    uid = str(box.get("uid") or ask.host)
+    key = f"freebox:{uid}"
+    kept = vault.get(key)
+    if ask.op == "status":
+        return {"paired": bool(kept.get("granted")), "name": box.get("device_name") or "Freebox",
+                "model": box.get("box_model_name") or ""}  # fmt: skip
+    if ask.op == "unpair":
+        vault.drop(key)
+        return {"paired": False}
+    if ask.op == "pair":
+        label = storage.get(ask.via)["label"] if ask.via else "this server"
+        got = call("pair", device_name=f"sestudio ({label})")
+        vault.put(key, {"app_token": got["app_token"], "granted": False})
+        return {"track_id": got["track_id"]}
+    if ask.op == "pair_status":
+        status = call("pair_status", track_id=ask.track_id)["status"]
+        if status == "granted":
+            vault.put(key, {"granted": True})
+        return {"status": status}
+    if not kept.get("granted"):
+        raise HTTPException(409, "Pair with the Freebox first")
+    token = kept["app_token"]
+    if ask.op in ("disks", "sharing"):
+        return call(ask.op, app_token=token)
+    if ask.op == "turn_on_sharing":
+        return call(
+            "turn_on_sharing", app_token=token, user=ask.user, password=ask.password
+        )
+    raise HTTPException(400, "Unknown Freebox step")
+
+
+@router.post("/nearby/freebox")
+async def freebox_step(ask: FreeboxAsk) -> Any:
+    """Pair with a Freebox, read its disks and sharing, turn its sharing on (§11, M4)."""
+    return await asyncio.to_thread(_freebox, ask)

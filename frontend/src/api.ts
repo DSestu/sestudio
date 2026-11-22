@@ -1160,6 +1160,21 @@ export interface NearbyAccess {
   error?: string
 }
 
+export interface FreeboxDisk {
+  name: string
+  kind: string
+  model: string
+  total: number
+  free: number
+  ready: boolean
+}
+
+export interface FreeboxSharing {
+  smb: boolean
+  logon: boolean
+  user: string
+}
+
 export interface NearbyScan {
   found: NearbyRow[]
   seconds: number
@@ -1204,6 +1219,9 @@ export const storagesApi = {
       if (!r.ok) throw new Error(`Looking around failed (${r.status})`)
       return r.json()
     }),
+  /** A Freebox through Freebox OS (SPEC-storage §11, M4): pair, read its disks and sharing, turn sharing on. */
+  freebox: <T,>(body: { via: string; op: string; host: string; track_id?: number; user?: string; password?: string }) =>
+    storageCall<T>('/../nearby/freebox', { method: 'POST', body: JSON.stringify(body) }),
   /** Who gets into a found place, and what each of its shares allows. */
   probe: (from: string, body: { kind: string; host: string; port: number | null; username?: string; password?: string }) =>
     storageCall<NearbyAccess>(from ? `/${encodeURIComponent(from)}/nearby/probe` : '/../nearby/probe', { method: 'POST', body: JSON.stringify(body) }),

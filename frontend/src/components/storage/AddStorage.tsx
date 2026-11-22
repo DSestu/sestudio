@@ -189,7 +189,8 @@ export default function AddStorage({ onClose, onAdded, initial }: {
           </button>
         ))}
       </div>
-      <form onSubmit={e => { e.preventDefault(); if (ready && !busy) void submit() }} className="flex flex-col gap-3">
+      {/* Nearby has no submit: Enter in one of its fields must not add anything. */}
+      <form onSubmit={e => { e.preventDefault(); if (kind !== 'nearby' && ready && !busy) void submit() }} className="flex flex-col gap-3">
         {kind === 'folder' && (
           <>
             <p className="text-sm text-base-content/60">
