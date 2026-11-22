@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { storagesApi, type NearbyAccess, type NearbyRow, type StorageInfo } from '../../api'
 import { StorageGlyph } from '../downloaded/StorageSwitcher'
 import { parseAddress } from '../../storageChoice'
+import FreeboxPanel from './FreeboxPanel'
 
 const KIND_LINE: Record<NearbyRow['kind'], string> = {
   smb: 'SMB share',
@@ -186,6 +187,11 @@ function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpe
       </div>
 
       {access?.error && <p className="text-xs text-error ml-8">{access.error}</p>}
+
+      {/* A Freebox: its own API says what an SMB guest cannot see (SPEC-storage §11, M4). */}
+      {row.kind === 'smb' && row.name.startsWith('Freebox') && (
+        <FreeboxPanel host={row.host} via={from} onSharingChanged={() => check()} />
+      )}
 
       {access?.shares && access.shares.length > 0 && (
         <ul className="ml-8 flex flex-col gap-1.5">

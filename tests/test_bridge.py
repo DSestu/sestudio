@@ -724,3 +724,70 @@ def test_a_media_server_opens_through_the_bridge(phone):
         for sid in list(storage._temporary):
             storage.close_temporary(sid)
         server.shutdown()
+
+
+# --- a Freebox through Freebox OS (PR 29) --------------------------------------
+
+
+@pytest.mark.parametrize("through_phone", [False, True])
+def test_pair_read_disks_and_turn_sharing_on(phone, through_phone):
+    from sestudio import vault
+
+    from .fake_freebox import start
+
+    c, url, token = phone
+    server, host, state = start()
+    via = ""
+    if through_phone:
+        via = c.post("/api/storages", json={"kind": "remote_sestudio", "roles": ["video"], "url": url,
+                     "token": token, "label": "Pixel 7", "bridge": True}).json()["id"]  # fmt: skip
+
+    def step(op, **kw):
+        return c.post(
+            "/api/nearby/freebox", json={"via": via, "op": op, "host": host, **kw}
+        )
+
+    try:
+        assert step("status").json()["paired"] is False
+        assert step("disks").status_code == 409  # not paired yet
+        track = step("pair").json()["track_id"]
+        assert step("pair_status", track_id=track).json()["status"] == "pending"
+        assert step("pair_status", track_id=track).json()["status"] == "granted"
+        assert step("status").json()["paired"] is True
+        assert (
+            vault.get("freebox:box-uid-1")["app_token"] == "apptoken123"
+        )  # kept at home only
+        disks = step("disks").json()
+        assert disks == [{"name": "Disque dur", "kind": "usb", "model": "Samsung T7", "total": 1000,
+                          "free": 400, "path": "/Disque dur", "ready": True}]  # fmt: skip
+        assert step("sharing").json() == {
+            "smb": False,
+            "logon": False,
+            "user": "freebox",
+        }
+        on = step("turn_on_sharing", user="mum", password="pw").json()
+        assert on == {"smb": True, "logon": True, "user": "mum"}
+        assert state["smb"]["logon_password"] == "pw"
+        step("unpair")
+        assert step("status").json()["paired"] is False
+    finally:
+        server.shutdown()
+
+
+def test_without_the_right_the_box_says_what_to_grant(phone):
+    from .fake_freebox import start
+
+    c, _, _ = phone
+    server, host, _ = start(rights=False)
+
+    def step(op, **kw):
+        return c.post("/api/nearby/freebox", json={"op": op, "host": host, **kw})
+
+    try:
+        track = step("pair").json()["track_id"]
+        step("pair_status", track_id=track)
+        step("pair_status", track_id=track)
+        r = step("turn_on_sharing")
+        assert r.status_code == 400 and "Gestion des accès" in r.json()["detail"]
+    finally:
+        server.shutdown()

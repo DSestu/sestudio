@@ -417,4 +417,12 @@ Without the phone (were N1 and N3, wanted)
   at `http://<box>:52424/device.xml` when SSDP gets nothing (WSL, some Wi-Fi). On Android the app
   holds a multicast lock so mDNS answers reach the scan. Checked on a real Freebox Pop: found,
   named, opened (no disk: 0 titles; TV left out); playing and copying checked on a fake server.
-- M4 (the Freebox OS API) waits on its screens: docs/proto/storage/mockups-round4.html.
+- 29 (M4, mockups round 4: F1 + S): a Freebox in Nearby offers **Pair**; the app token is asked
+  through Freebox OS (`login/authorize`), confirmed on the box, and kept in the home vault
+  (`freebox:<box uid>`). Once paired, its row lists the disks read through Freebox OS and whether
+  its Windows sharing is on; **Turn on sharing…** asks first (guest, or a login set on the box).
+  Works here or through a bridge (the token is sent with each call). Deviation from mockup S:
+  Freebox OS turns SMB on for the whole box, not per disk, so the ask is box-wide and the disks
+  have no Share… button each. Checked against a fake Freebox OS (pairing, disks, sharing, missing
+  rights) and in the browser with stubbed answers; the real box was only read (`/api_version`),
+  never paired: how a Pop without a screen approves is not checked.
