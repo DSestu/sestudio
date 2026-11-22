@@ -102,6 +102,10 @@ export interface AppSettings {
   callmebot_apikey?: string
   /** Whether a CallMeBot number and key are both stored. Read-only. */
   callmebot_configured?: boolean
+  /** Write-only: the `auth-token` cookie of a signed-in Twitch session, for subscriber-only VODs. */
+  twitch_auth_token?: string
+  /** Whether a Twitch token is stored. Read-only. */
+  twitch_configured?: boolean
   /** Path of a cookies.txt from a signed-in YouTube session, for the YouTube Music library. */
   ytmusic_cookies?: string
   /** Detect music genres with the offline Discogs model. */

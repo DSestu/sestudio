@@ -46,6 +46,7 @@ class SettingsBody(BaseModel):
     frame_interpolation: bool | None = None
     ai_max_hold: int | None = Field(default=None, ge=0, le=4)
     ytmusic_cookies: str | None = None
+    twitch_auth_token: str | None = None
     station_fps: int | None = Field(default=None, ge=10, le=30)
     station_browser: str | None = None
     music_genre_model: bool | None = None
@@ -86,6 +87,9 @@ def _public(cfg, request: Request) -> dict[str, Any]:
     # it will message.
     data.pop("callmebot_apikey", None)
     data["callmebot_configured"] = bool(cfg.callmebot_apikey and cfg.callmebot_phone)
+    # A Twitch session token is a password in all but name: never sent back.
+    data.pop("twitch_auth_token", None)
+    data["twitch_configured"] = bool(cfg.twitch_auth_token)
     # What the client can offer to rank, and what "reset" restores.
     data["known_hosts"] = _known_hosts(request)
     data["default_hosts"] = list(DEFAULT_DOWNLOAD_ORDER)
@@ -174,6 +178,12 @@ async def put_settings(body: SettingsBody, request: Request) -> dict[str, Any]:
         cfg.callmebot_apikey = body.callmebot_apikey.strip()
     if body.ytmusic_cookies is not None:
         cfg.ytmusic_cookies = body.ytmusic_cookies.strip().strip('"')
+    if body.twitch_auth_token is not None:
+        cfg.twitch_auth_token = body.twitch_auth_token.strip().strip('"')
+        # Videos that were locked without it may play now: look them up again.
+        twitch = request.app.state.sites.get("twitch")
+        if twitch is not None:
+            twitch._failed.clear()
     if body.station_fps is not None:
         cfg.station_fps = body.station_fps
     if body.station_browser is not None:

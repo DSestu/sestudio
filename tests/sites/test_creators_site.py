@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from sestudio.config import AppConfig
 from sestudio.sites import creators
 from sestudio.sites.base import SiteError, StreamCandidate
 from sestudio.sites.creators import TwitchSite, YouTubeSite, stream_url
@@ -396,3 +397,43 @@ def test_a_failed_video_lookup_is_remembered_and_its_page_still_loads(monkeypatc
 
     assert page.episodes[0].embed_urls == {"twitch": url}
     assert calls == [url]
+
+
+@pytest.mark.parametrize(
+    ("token", "says"), [("", "add your Twitch token"), ("tok", "isn't subscribed")]
+)
+def test_twitch_sends_the_saved_token_and_says_what_a_locked_vod_needs(
+    monkeypatch, token, says
+):
+    """Sub-only VODs play with the account's `auth-token` cookie; without one,
+    the error points at Settings."""
+    monkeypatch.setattr(
+        creators, "load_config", lambda: AppConfig(twitch_auth_token=token)
+    )
+    sent: list[str | None] = []
+
+    class Ydl:
+        def __init__(self, opts):
+            self.cookiejar = __import__("http.cookiejar").cookiejar.CookieJar()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        sanitize_info = staticmethod(lambda info: info)
+
+        def extract_info(self, url, download):
+            sent.append(next((c.value for c in self.cookiejar), None))
+            raise creators.yt_dlp.utils.DownloadError(
+                "This video is only available for subscriber-only"
+            )
+
+    monkeypatch.setattr(creators.yt_dlp, "YoutubeDL", Ydl)
+    with pytest.raises(SiteError, match=says):
+        creators._extract({}, "https://www.twitch.tv/videos/1")
+    with pytest.raises(SiteError):
+        creators._extract({}, "https://www.youtube.com/watch?v=x")
+
+    assert sent == [token or None, None]
