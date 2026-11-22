@@ -61,6 +61,30 @@ def ids(items):
     return [i["track_id"] for i in items]
 
 
+def test_draft_queue_is_saved_as_a_playlist(client):
+    q = mk(client, "playlist", "Queue", draft=True)
+    assert q["draft"] is True
+    add(client, q["id"], A, B)
+    r = client.patch(
+        f"/api/music/playlists/{q['id']}", json={"name": "Friday", "draft": False}
+    )
+    assert r.status_code == 200, r.text
+    saved = r.json()
+    assert (saved["name"], saved["draft"], ids(saved["items"])) == (
+        "Friday",
+        False,
+        [A, B],
+    )
+    assert "draft" not in mk(client, "playlist", "Plain")
+    folder = mk(client, "folder", "F")
+    assert (
+        client.patch(
+            f"/api/music/playlists/{folder['id']}", json={"draft": True}
+        ).status_code
+        == 400
+    )
+
+
 def test_tree_create_rename_move_delete(client):
     f1, f2 = mk(client, "folder", "Sets"), mk(client, "folder", "Chill")
     pl = mk(client, "playlist", "Friday", parent=f1["id"])

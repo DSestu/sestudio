@@ -320,6 +320,17 @@
   .ep-in { animation-name: ep-fade; animation-duration: 120ms; animation-delay: 0s; }
 }
 
+/* The music explorer (Explorer.tsx): an opened group's rows settle out of it; the rail's lit pill
+   slides to the grouping. Content starts visible and nothing waits: this is a tool, not a show. */
+@keyframes xp-in { from { opacity: .4; translate: 0 -3px; } }
+.xp-kids > * { animation: xp-in 140ms var(--ease-smooth) both; }
+.rail-pill { transition: translate 180ms var(--ease-smooth), height 180ms var(--ease-smooth); }
+@media (prefers-reduced-motion: reduce) {
+  .xp-kids > * { animation: none; }
+  .rail-pill { transition: none; }
+}
+
+
 /* The playlist sheet's rows follow it in, top to bottom, and leave together:
    the same motion as .rows-follow, from the other side (docs/SPEC-watch-page.md). */
 .follow-row {

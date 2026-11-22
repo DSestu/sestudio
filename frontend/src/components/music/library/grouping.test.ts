@@ -17,11 +17,11 @@ const T = [
 const BPM: Record<string, number> = { Bot: 128, Arguru: 126, Strobe: 128, Ghosts: 130, Hope: 174, Deep: 172 }
 const MODE: Record<string, string> = { Bot: 'Dorian', Arguru: 'Lydian', Strobe: 'Aeolian', Ghosts: 'Dorian', Hope: 'Phrygian' }
 const facts: Facts = id => factsOf(MODE[id] ? { bpm: BPM[id], harmony: { track: { tonic: 'F', mode: MODE[id], notes: [] } }, energyScale: { track: BPM[id] - 100 }, genre: BPM[id] > 150 ? 'Drum & bass' : 'Progressive house' } : { bpm: BPM[id] })
-const g = (p: Partial<Grouping>): Grouping => ({ ...DEFAULT_GROUPING, ...p })
+const g = (p: Partial<Grouping>): Grouping => ({ ...DEFAULT_GROUPING, files: false, ...p })
 
 describe('grouping', () => {
   it('albums A–Z, tracks by title inside', () => {
-    const t = treeOf(T, DEFAULT_GROUPING, facts)
+    const t = treeOf(T, g({}), facts)
     expect(t.map(n => n.name)).toEqual(['deeper', 'FLOAN', 'neuro soundcloud', 'RFTF', 'Vexillology'])
     expect(findNode(t, 'Vexillology')!.all.map(x => x.title)).toEqual(['Arguru', 'Bot'])
     expect(t.every(n => n.kids === null)).toBe(true)
@@ -53,7 +53,7 @@ describe('grouping', () => {
     const flat = treeOf(T, g({ dims: [] }), facts)
     expect(flat).toHaveLength(1)
     expect(flat[0].all.map(t => t.title)).toEqual(['Arguru', 'Bot', 'Deep', 'Ghosts', 'Hope', 'Strobe'])
-    expect(presetOf(DEFAULT_GROUPING)).toBe('album')
+    expect(presetOf(DEFAULT_GROUPING)).toBe('files')
     expect(presetOf(g({ dims: ['artist', 'album'] }))).toBe('artist')
     expect(presetOf(g({ dims: ['mood', 'artist'] }))).toBeUndefined()
     expect(presetOf(g({ files: true }))).toBe('files')

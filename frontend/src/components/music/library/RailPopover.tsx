@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom'
 
 // A rail button's panel (Custom, Sort): drawn over the page beside the button, so the explorer's
-// edges never clip it; kept on screen; Esc or a click outside closes it and focus returns.
+// edges never clip it, above the phone sheet (daisyUI .modal is z 999); kept on screen; Esc or a click outside closes it and focus returns.
 
 export default function RailPopover({ icon, label, title, pressed, className, width, children }: {
   icon: ReactNode
@@ -21,8 +21,13 @@ export default function RailPopover({ icon, label, title, pressed, className, wi
     if (!open) { setPos(null); return } // eslint-disable-line react-hooks/set-state-in-effect -- closed: forget the spot
     const b = button.current!.getBoundingClientRect()
     const h = panel.current?.offsetHeight ?? 0
-    setPos({ left: b.right + 6, top: Math.max(8, Math.min(b.top, window.innerHeight - h - 8)) })
+    const w = panel.current?.offsetWidth ?? 0
+    setPos({ left: Math.max(8, Math.min(b.right + 6, window.innerWidth - w - 8)), top: Math.max(8, Math.min(b.top, window.innerHeight - h - 8)) })
   }, [open])
+  // Placed: focus goes in, on the lit choice if there is one.
+  useEffect(() => {
+    if (pos) (panel.current?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? panel.current?.querySelector<HTMLElement>('button'))?.focus()
+  }, [pos])
   useEffect(() => {
     if (!open) return
     const away = (e: PointerEvent) => {
@@ -39,7 +44,7 @@ export default function RailPopover({ icon, label, title, pressed, className, wi
         {icon}<span>{label}</span>
       </button>
       {open && createPortal(
-        <div ref={panel} role="dialog" aria-label={label} className={`fixed z-50 rounded-xl bg-base-300 p-2 shadow-xl outline-1 outline-white/10 ${width}`}
+        <div ref={panel} role="dialog" aria-label={label} className={`scroll-thin fixed z-1000 max-h-[calc(100dvh-16px)] overflow-y-auto rounded-xl bg-base-300 p-2 shadow-xl outline-1 outline-white/10 ${width}`}
           style={pos ?? { left: -9999, top: 0 }}>
           {children}
         </div>,
