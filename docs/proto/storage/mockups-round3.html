@@ -1,0 +1,561 @@
+<title>Bridge Mockups R3</title>
+<style>
+/* Review page: one column of mockup sections; each shows a phone frame and a scaled desktop frame, then a pick + note. Mock colours are the app's daisyUI theme. */
+:root{
+  --page:oklch(11% .012 240); --b1:oklch(16% .015 240); --b2:oklch(20% .02 240); --b3:oklch(26% .025 240);
+  --card:oklch(21% .035 235); --fg:oklch(92% .01 240); --muted:oklch(68% .02 240); --dim:oklch(52% .02 240);
+  --primary:oklch(72% .16 230); --primary-soft:oklch(34% .08 232); --ok:oklch(76% .17 155); --warn:oklch(83% .16 85); --err:oklch(68% .19 25);
+  --line:oklch(28% .025 240);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--page);color:var(--fg);font:14px/1.45 ui-sans-serif,system-ui,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+h1{font-size:22px;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 8px;max-width:70ch}
+.status{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--page);padding:8px 0;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
+.status b{color:var(--ok)}
+section.round{margin-top:36px;padding-top:20px;border-top:1px solid var(--line)}
+section.round>h2{font-size:18px;margin:0 0 4px}
+.story{color:var(--muted);font-size:13px;margin:0 0 16px}
+.opt{margin:22px 0 10px}
+.opt h3{font-size:16px;margin:0 0 4px;display:flex;gap:10px;align-items:center}
+.opt h3 .tag{font-size:12px;background:var(--primary-soft);color:var(--primary);padding:2px 8px;border-radius:99px}
+.opt p.how{color:var(--muted);margin:0 0 12px;max-width:80ch}
+.frames{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.deskwrap{flex:1 1 560px;min-width:0}
+.deskscale{width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line)}
+.desk{width:1200px;transform-origin:top left}
+.phonewrap{flex:0 0 auto;margin-inline:auto}
+.phone{width:360px;max-width:100%;border:1px solid var(--line);border-radius:28px;overflow:hidden;background:var(--b1);position:relative}
+.cap{font-size:12px;color:var(--dim);margin:6px 2px 0}
+/* ---- app chrome ---- */
+.app{background:var(--b1);color:var(--fg);display:flex;min-height:640px}
+.rail{width:84px;margin:10px;border-radius:14px;background:var(--b2);display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0;flex:none}
+.rail .logo{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#fff,var(--primary));margin-bottom:6px}
+.rail .sbtn{width:46px;height:46px;border-radius:12px;background:var(--primary);display:grid;place-items:center;color:#04121c;margin-bottom:6px}
+.rail .it{width:64px;padding:6px 0;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted)}
+.rail .it.on{background:var(--primary-soft);color:var(--fg)}
+.rail .it.on svg{color:var(--primary)}
+.rail .sp{flex:1}
+.main{flex:1;min-width:0;padding:10px 20px 20px 10px}
+.hcard{background:linear-gradient(180deg,oklch(23% .045 235),oklch(19% .035 238));border:1px solid oklch(30% .05 235);border-radius:16px;padding:14px 18px 10px}
+.hrow{display:flex;align-items:center;gap:16px}
+.hrow h2{font-size:20px;font-weight:500;margin:0}
+.search{flex:1;height:38px;border:1.5px solid var(--primary);border-radius:9px;display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--dim);font-size:13px;background:var(--b1)}
+.kbd{margin-left:auto;font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--muted)}
+.bell{width:36px;height:36px;border-radius:10px;background:var(--b3);display:grid;place-items:center;position:relative;color:var(--fg)}
+.bell i{position:absolute;top:-7px;right:-6px;background:var(--primary);color:#04121c;font:600 10px/1 system-ui;font-style:normal;padding:2px 6px;border-radius:99px}
+.tabs{display:inline-flex;background:var(--b1);border-radius:10px;padding:3px;margin-top:10px}
+.tabs span{padding:6px 40px;border-radius:8px;color:var(--muted);font-size:13px}
+.tabs span.on{background:oklch(36% .08 232);color:var(--fg)}
+.tools{display:flex;align-items:center;gap:12px;margin:14px 0 10px;flex-wrap:wrap}
+.filter{width:200px;height:30px;border:1px solid var(--line);border-radius:5px;padding:0 10px;color:var(--dim);font-size:12px;display:flex;align-items:center;background:var(--b1)}
+.count{color:var(--muted);font-size:13px}
+.lay{margin-left:auto;display:flex;gap:2px;font-size:12px;color:var(--muted)}
+.lay span{padding:5px 10px;border-radius:6px}
+.lay span.on{background:var(--b2);color:var(--fg)}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+.pc{min-width:0}
+.poster{aspect-ratio:2/3;border-radius:8px;background:var(--b3) center/cover no-repeat;position:relative;overflow:hidden}
+.rate{position:absolute;top:6px;right:6px;background:var(--ok);color:#06210f;font:600 11px/1 system-ui;padding:3px 7px;border-radius:99px}
+.where{position:absolute;left:6px;bottom:6px;display:flex;gap:3px;flex-wrap:wrap}
+.where b{font:600 10px/1 system-ui;padding:3px 6px;border-radius:5px;background:oklch(14% .02 240 / .85);color:var(--fg);backdrop-filter:blur(4px)}
+.where b.off{color:var(--err)}
+.pc .t{font-size:13px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc .m{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc.offline .poster{filter:grayscale(1) brightness(.45)}
+.pc.offline .t{color:var(--dim)}
+.offtag{position:absolute;inset:auto 0 0 0;padding:6px;background:linear-gradient(transparent,oklch(10% .02 25 / .9));font:600 10px/1.2 system-ui;color:var(--err)}
+/* storage chips */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px}
+.chip{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:var(--b2);color:var(--fg);font-size:13px;white-space:nowrap}
+.chip small{color:var(--muted)}
+.chip.on{background:var(--primary-soft);outline:1.5px solid var(--primary)}
+.chip.off{color:var(--dim)}
+.chip.off small{color:var(--err)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+.dot.off{background:var(--err)}
+.locline{font:12px ui-monospace,monospace;color:var(--muted);margin:0 0 12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.locline .bar{width:120px;height:5px;border-radius:3px;background:var(--b3);overflow:hidden;display:inline-block;vertical-align:middle}
+.locline .bar i{display:block;height:100%;background:var(--primary)}
+/* sections */
+.sect{margin:6px 0 18px}
+.shead{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);margin-bottom:10px}
+.shead .nm{font-weight:600;font-size:14px}
+.shead .pth{font:12px ui-monospace,monospace;color:var(--muted)}
+.shead .meta{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+.shead .all{color:var(--primary);font-size:12px;white-space:nowrap}
+.sect.off .shead .nm{color:var(--dim)}
+.rowscroll{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 70px)/6);gap:14px;overflow:hidden}
+/* header switcher */
+.switch{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:9px;background:var(--b1);border:1px solid oklch(34% .06 235);font-size:13px;white-space:nowrap}
+.switch .pth{font:11px ui-monospace,monospace;color:var(--muted)}
+.menu{position:absolute;z-index:3;background:var(--b2);border:1px solid var(--line);border-radius:10px;padding:6px;width:330px;box-shadow:0 12px 30px #0009}
+.menu .mi{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:7px}
+.menu .mi.on{background:var(--primary-soft)}
+.menu .mi .tx{min-width:0}
+.menu .mi .tx div:first-child{font-size:13px}
+.menu .mi .tx div+div{font:11px ui-monospace,monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.tree{border:1px solid var(--line);border-radius:10px;padding:6px 0;font-size:13px}
+.tree .r{display:flex;align-items:center;gap:8px;padding:6px 14px}
+.tree .r .sz{margin-left:auto;color:var(--muted);font-size:12px}
+.tree .r.root{font-weight:600}
+.tree .r.root .p{font:11px ui-monospace,monospace;color:var(--muted);font-weight:400}
+.tree .r.off{color:var(--dim)}
+/* phone */
+.ph{padding:10px 10px 90px;min-height:700px}
+.ph .hcard{padding:12px 14px 10px;border-radius:18px}
+.ph .hrow h2{font-size:19px;flex:1}
+.ph .tabs{display:flex}
+.ph .tabs span{flex:1;text-align:center;padding:7px 0}
+.ph .grid{grid-template-columns:repeat(2,1fr);gap:10px}
+.ph .chips{flex-wrap:nowrap;overflow:hidden}
+.ph .rowscroll{grid-auto-columns:42%}
+.ph .tools{margin:12px 0 8px}
+.ph .filter{width:130px}
+.nav{position:absolute;left:10px;right:10px;bottom:10px;height:62px;border-radius:18px;background:var(--b2);border:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;font-size:10px;color:var(--muted)}
+.nav div{display:flex;flex-direction:column;align-items:center;gap:2px}
+.nav .s{width:52px;height:52px;border-radius:14px;background:var(--primary);color:#04121c;display:grid;place-items:center}
+.nav .on{color:var(--fg)} .nav .on svg{color:var(--primary)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--b2);border-radius:18px 18px 0 0;border-top:1px solid var(--line);padding:10px 14px 20px;z-index:4;box-shadow:0 -12px 30px #000a}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--b3);margin:0 auto 10px}
+.scrim{position:absolute;inset:0;background:#0008;z-index:3}
+/* settings */
+.set{display:flex;gap:18px}
+.cats{width:250px;flex:none}
+.cats .g{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:14px 8px 4px}
+.cats .c{padding:8px 10px;border-radius:8px;font-size:13px;color:var(--muted);display:flex;justify-content:space-between}
+.cats .c.on{background:var(--primary-soft);color:var(--fg)}
+.setmain{flex:1;min-width:0}
+.gh{color:var(--muted);font-size:13px;margin:14px 4px 6px}
+.box{background:var(--b2);border-radius:14px;padding:0 14px}
+.srow{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.srow:last-child{border-bottom:0}
+.srow .tx{flex:1;min-width:0}
+.srow .nm{font-size:14px}
+.srow .nm small{color:var(--muted);font-size:13px}
+.srow .pth{font:12px ui-monospace,monospace;color:var(--muted);word-break:break-all}
+.srow .sub{font-size:12px;color:var(--muted)}
+.btn{font-size:13px;color:var(--fg);padding:6px 10px;border-radius:7px;white-space:nowrap}
+.btn.p{color:var(--primary)}
+.btn.solid{background:var(--primary);color:#04121c;font-weight:600}
+.roles{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.role{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--b3);color:var(--fg)}
+.role.dl{background:oklch(32% .07 155);color:var(--ok)}
+.role.offl{background:oklch(30% .08 25);color:var(--err)}
+.link{color:var(--primary);padding:14px 0;font-size:14px;border-bottom:1px solid var(--line)}
+.disk{background:var(--b2);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;border:1.5px solid transparent}
+.disk.target{border-color:oklch(50% .12 155)}
+.disk.off{opacity:.75}
+.disks{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.ph .disks{grid-template-columns:1fr}
+.disk .top{display:flex;gap:10px;align-items:center}
+.disk .top .nm{font-weight:600;flex:1;min-width:0}
+.usage{height:8px;border-radius:4px;background:var(--b3);overflow:hidden;display:flex}
+.usage i{background:var(--primary)}
+.usage.off i{background:var(--dim)}
+.disk .nums{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.tog{display:flex;gap:4px}
+.tog span{flex:1;text-align:center;font-size:12px;padding:6px 0;border-radius:7px;background:var(--b3);color:var(--muted)}
+.tog span.on{background:var(--primary-soft);color:var(--fg);outline:1px solid var(--primary)}
+.dltgt{font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted)}
+.dltgt .rb{width:14px;height:14px;border-radius:50%;border:2px solid var(--dim)}
+.dltgt.on{color:var(--ok)} .dltgt.on .rb{border-color:var(--ok);background:radial-gradient(var(--ok) 40%,transparent 45%)}
+.field{display:flex;flex-direction:column;gap:4px;margin:10px 0}
+.field label{font-size:12px;color:var(--muted)}
+.inp{height:36px;border:1px solid var(--line);border-radius:7px;background:var(--b1);display:flex;align-items:center;padding:0 10px;font:13px ui-monospace,monospace;gap:8px}
+.inp .btn{margin-left:auto;padding:3px 8px;background:var(--b3);font-family:system-ui}
+.hint{font-size:12px;color:var(--dim)}
+.addpanel{background:var(--b2);border-radius:14px;padding:14px;border:1px solid var(--line)}
+.addpanel h4{margin:0 0 4px;font-size:15px}
+.ok{color:var(--ok);font-size:12px}
+/* review controls */
+.pick{margin-top:18px;background:oklch(15% .02 240);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.pick .q{font-weight:600}
+.pbtns{display:flex;gap:8px;flex-wrap:wrap}
+.pbtns button{font:inherit;font-size:14px;min-height:44px;padding:8px 16px;border-radius:9px;border:1px solid var(--line);background:var(--b2);color:var(--fg);cursor:pointer}
+.pbtns button[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary);color:var(--primary);font-weight:600}
+.pbtns button:focus-visible,textarea:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+textarea{font:inherit;font-size:15px;width:100%;min-height:70px;padding:10px;border-radius:9px;border:1px solid var(--line);background:var(--b1);color:var(--fg);resize:vertical}
+@media (max-width:700px){.deskwrap{flex-basis:100%}}
+/* ---- round 2 additions ---- */
+.btn{display:inline-flex;align-items:center;gap:6px}
+.btn.out{border:1px solid var(--line);background:var(--b1)}
+.app.tall{min-height:740px;position:relative}
+.ib{width:32px;height:32px;border-radius:9px;background:var(--b3);display:grid;place-items:center;color:var(--muted);flex:none}
+.phone .ib{width:28px;height:28px}
+.cb{width:18px;height:18px;border-radius:5px;border:2px solid var(--dim);display:grid;place-items:center;flex:none;color:#04121c}
+.cb.on{background:var(--primary);border-color:var(--primary)}
+.dfm{position:absolute;left:50%;top:30px;transform:translateX(-50%);width:680px;background:var(--b2);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 50px #000b;z-index:4;padding:16px 18px 18px;min-height:640px}
+.pfm{position:absolute;left:0;right:0;bottom:0;top:40px;border-radius:18px 18px 0 0;background:var(--b2);z-index:4;padding:12px 12px 0;overflow:hidden;border-top:1px solid var(--line)}
+.fmh{display:flex;align-items:center;gap:10px}
+.fmh .tx{flex:1;min-width:0}
+.fmh h4{margin:0;font-size:17px}
+.sub{font-size:12px;color:var(--muted)}
+.fbtns{display:flex;gap:8px;margin:12px 0 4px}
+.phone .fbtns .btn{flex:1;justify-content:center}
+.seas{display:flex;align-items:center;gap:8px;padding:12px 0 4px;font-weight:600;font-size:13px}
+.seas small{font-weight:400;color:var(--muted);font-size:12px}
+.frow{position:relative;display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.frow .tx{flex:1;min-width:0}
+.frow .nm{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow.sel{background:oklch(24% .05 235);margin:0 -8px;padding-inline:8px;border-radius:8px}
+.pm{position:absolute;right:8px;top:calc(100% - 4px);z-index:6;width:170px;background:var(--b3);border:1px solid oklch(34% .03 240);border-radius:10px;padding:5px;box-shadow:0 12px 30px #000c}
+.pm .mi{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:7px;font-size:13px}
+.pm .mi.on{background:var(--primary-soft)}
+.selstrip{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;border-bottom:1px solid var(--line)}
+.selstrip .n{margin-left:auto;color:var(--muted)}
+.selbar{position:absolute;left:12px;right:12px;bottom:12px;z-index:7;background:var(--b3);border:1px solid var(--primary);border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 10px 30px #000c;flex-wrap:wrap}
+.selbar .n{flex:1;min-width:120px}
+.selbar .n small{display:block;color:var(--muted);font-size:12px}
+.crumb{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);margin:4px 0 12px;flex-wrap:wrap}
+.crumb b{color:var(--fg);font-weight:500}
+.pc{position:relative}
+.pc .dots{position:absolute;top:6px;left:6px;width:28px;height:28px;border-radius:8px;background:oklch(14% .02 240 / .85);display:grid;place-items:center;color:var(--fg)}
+.pc .cb{position:absolute;top:6px;left:6px;background:oklch(14% .02 240 / .85)}
+.pc .cb.on{background:var(--primary)}
+.pc.pick .poster{outline:2.5px solid var(--primary);outline-offset:-2.5px}
+.pc .pm{top:36px;left:6px;right:auto}
+.tree .r{position:relative}
+.tree .r .nmx{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree .r .sz{white-space:nowrap}
+.tree .r.pickrow{background:oklch(24% .05 235)}
+.tree .r.src{opacity:.45}
+.tree .r.drop{background:var(--primary-soft);outline:2px dashed var(--primary);outline-offset:-2px;border-radius:8px}
+.tree .r.nodrop{opacity:.5;cursor:not-allowed}
+.dropnote{font:600 11px system-ui;background:var(--primary);color:#04121c;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.ghost{position:absolute;z-index:8;display:flex;gap:8px;align-items:center;padding:7px 12px;border-radius:10px;background:var(--b3);border:1px solid var(--primary);box-shadow:0 12px 28px #000c;font-size:13px;transform:rotate(-2deg)}
+.ghost small{color:var(--muted)}
+.ph .tree .r{padding-inline:10px;gap:6px}
+.ph .tree .r .sz{font-size:11px}
+.ph .tree .r .p{display:none}
+.lbl{font-size:12px;color:var(--muted);margin:14px 0 6px}
+.dests{display:flex;flex-direction:column;gap:6px}
+.dest{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:10px;border:1.5px solid transparent;background:var(--b1)}
+.dest.on{border-color:var(--primary);background:var(--primary-soft)}
+.dest.dis{opacity:.55}
+.dest .tx{flex:1;min-width:0}
+.dest .nm{font-size:14px;font-weight:600}
+.dest .pth{font:11px ui-monospace,monospace;color:var(--muted);word-break:break-all}
+.fit{font-size:12px;margin-top:3px;display:flex;gap:5px;align-items:flex-start}
+.fit.ok{color:var(--ok)} .fit.bad{color:var(--err)} .fit.off{color:var(--dim)}
+.rbx{width:16px;height:16px;border-radius:50%;border:2px solid var(--dim);flex:none;margin-top:2px}
+.rbx.on{border-color:var(--primary);background:radial-gradient(var(--primary) 40%,transparent 45%)}
+.note{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--muted);margin:12px 0 0}
+.note svg{color:var(--ok);flex:none;margin-top:1px}
+.acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;align-items:center}
+.pop{position:absolute;z-index:5;width:430px;background:var(--b2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 20px 50px #000b}
+.pop:before{content:"";position:absolute;top:-7px;left:60px;width:12px;height:12px;background:var(--b2);border-left:1px solid var(--line);border-top:1px solid var(--line);transform:rotate(45deg)}
+.fopt{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:9px;background:var(--b1);margin-bottom:6px;font-size:13px}
+.fopt.on{outline:1.5px solid var(--primary);background:var(--primary-soft)}
+.fopt .pth{font:11px ui-monospace,monospace;color:var(--muted);word-break:break-all}
+.fb{border:1px solid var(--line);border-radius:10px;padding:4px 10px;background:var(--b1)}
+.fb .fr{display:flex;gap:8px;align-items:center;padding:7px 0;font-size:13px;border-bottom:1px solid var(--line)}
+.fb .fr:last-child{border:0;color:var(--primary)}
+.fb .fr small{margin-left:auto;color:var(--muted)}
+.pfull{background:var(--b2);padding:12px;min-height:700px}
+.qrow{display:flex;gap:12px;background:var(--b2);border-radius:12px;padding:10px 12px;margin-bottom:8px;align-items:flex-start}
+.qth{width:38px;height:56px;border-radius:6px;background:var(--b3) center/cover no-repeat;flex:none;display:grid;place-items:center;color:var(--primary)}
+.qrow .tx{flex:1;min-width:0}
+.qrow .t{font-size:14px;font-weight:600}
+.qrow .s{font-size:12px;color:var(--muted);margin-top:2px}
+.kind{display:inline-block;font:600 10px/1 system-ui;padding:3px 7px;border-radius:99px;background:var(--b3);color:var(--muted);margin-right:6px;vertical-align:1px;text-transform:uppercase;letter-spacing:.04em}
+.kind.x{background:var(--primary-soft);color:var(--primary)}
+.pbar{height:6px;border-radius:3px;background:var(--b3);overflow:hidden;margin:8px 0 4px}
+.pbar i{display:block;height:100%;background:var(--primary)}
+.qrow.done .s b{color:var(--ok);font-weight:600}
+.qrow.fail .s b{color:var(--warn);font-weight:600}
+.qact{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.qact .btn{padding:4px 10px;border:1px solid var(--line);background:var(--b1);font-size:12px}
+.qh{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin:14px 2px 6px}
+/* round 3: bridge */
+.mono{font:12px ui-monospace,monospace;color:var(--muted)}
+.via{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+.warn{color:var(--warn)}
+.state{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ok)}
+.state b{color:var(--fg);font-weight:600}
+.bridge{background:var(--b2);border-radius:14px;padding:14px;border:1px solid oklch(34% .06 235)}
+.bridge .top{display:flex;gap:12px;align-items:center}
+.bridge .top .tx{flex:1;min-width:0}
+.bridge .top .nm{font-weight:600;display:flex;gap:8px;align-items:center}
+.child{display:flex;gap:12px;align-items:center;background:var(--b1);border-radius:10px;padding:10px 12px;border:1px solid var(--line)}
+.child .tx{flex:1;min-width:0}
+.child .nm{font-size:14px;font-weight:600}
+.child .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.child.away>svg{color:var(--dim)}
+.ph .child{flex-wrap:wrap}
+.ph .child .tx{flex-basis:calc(100% - 40px)}
+.ph .child .btn{margin-left:32px}
+.ph .bridge .top{flex-wrap:wrap}
+.ph .bridge .top .btn{flex-basis:100%;justify-content:center}
+.hint b{color:var(--muted)}
+.scanning{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin:14px 0 6px}
+.scanning svg{color:var(--ok)}
+.scanning .again{margin-left:auto;color:var(--primary)}
+.scanbar{height:3px;border-radius:2px;background:var(--b3);overflow:hidden}
+.scanbar i{display:block;height:100%;background:var(--primary)}
+.srs{margin-top:6px}
+.sr{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.sr>svg{color:var(--muted);flex:none}
+.sr .tx{flex:1;min-width:0}
+.sr .nm{font-size:14px;font-weight:600;display:flex;gap:6px;align-items:center}
+.sr .sub{font-size:12px;color:var(--muted)}
+.sr .ip{margin-top:2px}
+.lk{color:var(--muted);display:inline-flex}
+.atabs{display:flex;gap:4px;margin:10px 0 2px;border-bottom:1px solid var(--line);font-size:13px;overflow:hidden}
+.atabs span{padding:8px 10px;color:var(--muted);white-space:nowrap}
+.atabs span.on{color:var(--fg);box-shadow:inset 0 -2px 0 var(--primary)}
+.tog span{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.saved{display:flex;gap:12px;align-items:flex-start;margin-top:16px;padding:12px;border-radius:10px;background:var(--b1);border:1px solid var(--line);font-size:13px}
+.saved>svg{color:var(--primary);flex:none;margin-top:1px}
+.saved>div{flex:1;min-width:0}
+.saved .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.sw{width:36px;height:20px;border-radius:99px;background:var(--b3);position:relative;flex:none}
+.sw i{position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--fg)}
+.sw.on{background:var(--primary)}
+.sw.on i{left:19px;background:#04121c}
+.banner{display:flex;gap:10px;align-items:flex-start;margin:12px 0;padding:10px 12px;border-radius:10px;background:oklch(26% .045 85);border:1px solid oklch(42% .08 85);font-size:13px}
+.banner>svg{color:var(--warn);flex:none;margin-top:1px}
+.banner .sub{font-size:12px;color:oklch(80% .04 85);margin-top:2px}
+.warnbox{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:10px 12px;border-radius:10px;background:oklch(25% .05 25);border:1px solid oklch(40% .1 25);font-size:13px}
+.warnbox svg{color:var(--err);flex:none;margin-top:1px}
+.btn.danger{background:var(--err);color:#1a0606;font-weight:600}
+.droid{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:20px}
+.dscrim{position:absolute;inset:0;background:#000a}
+.dlg{position:relative;background:oklch(27% .012 260);border-radius:26px;padding:22px 20px 14px;text-align:center}
+.dlg>svg{color:oklch(80% .08 250)}
+.dlg h5{font-size:17px;font-weight:500;margin:10px 0 8px;line-height:1.35}
+.dlg p{font-size:13px;color:oklch(80% .01 260);margin:0 0 14px;text-align:left;background:oklch(22% .01 260);padding:10px 12px;border-radius:12px}
+.dbtn{background:oklch(36% .05 250);color:oklch(92% .03 250);border-radius:99px;padding:11px;font-size:14px;margin-top:8px}
+</style>
+
+<div class="wrap">
+  <div class="status" id="status">Loading…</div>
+  <h1>Storage: phone bridge, round 3</h1>
+  <p class="lead">Your phone, <b>Pixel 7</b>, is on the family's Wi-Fi <b>Freebox-1A2B3C</b>. Your home server reaches it over Tailscale and opens their <b>Freebox</b> through it (SPEC-storage §10). Five screens, each with a phone and a desktop frame. Pick one option per screen, or say what to change. Answers save as you tap.</p>
+  <div id="rounds"></div>
+  <section class="round">
+    <h2>Anything else</h2>
+    <textarea id="general" placeholder="Other remarks…"></textarea>
+  </section>
+</div>
+
+<script>
+const I = {
+  home:'<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
+  tv:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="m10 8 5 2.5-5 2.5zM8 21h8"/>',
+  comp:'<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+  music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  heart:'<path d="M12 20s-7-4.4-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.6-9 9-9 9z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  bell:'<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>',
+  sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  pc:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  nas:'<rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5"/><path d="M8 6.5h.01M8 17.5h.01"/>',
+  cloud:'<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1 0 10z"/>',
+  folder:'<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>',
+  chev:'<path d="m9 6 6 6-6 6"/>', down:'<path d="m6 9 6 6 6-6"/>', back:'<path d="m15 6-6 6 6 6"/>',
+  layers:'<path d="m12 3 9 5-9 5-9-5zM3 13l9 5 9-5"/>', plus:'<path d="M12 5v14M5 12h14"/>', check:'<path d="m5 12 5 5 9-10"/>',
+};
+const ic = (n,s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
+const T = 'https://image.tmdb.org/t/p/w342/';
+// real titles from the collection; `on` = which storages hold it (example split)
+const TITLES = [
+  ['Bleach','Season 2 · 14 files · 3.1 GB','e0kKmeM8R7Kersh5N2PPzIRNRhr','8.4',['pc']],
+  ['Erased','Season 1 · 12 files · 1.2 GB','2xo5jNOwXGP41umcmxzZgPxGpaI','8.5',['pc']],
+  ['Stargate SG-1','S1–S10 · 213 files · 50.4 GB','i1pG8vJvGZnYdlFeldq9PvnJC9B','8.3',['pc','nas']],
+  ['M.A.S.H.','S1–S4 · 86 files · 8.8 GB','9dIHQnqE2v7Bi1ze0hPeBZDAWJt','7.9',['nas']],
+  ['Neon Genesis Evangelion','Season 1 · 26 files','kfQKPQSAOmFd6vflaElwVeTLay7','8.6',['seed']],
+  ['TENGOKU-DAIMAKYO','Season 1 · 13 files · 1.8 GB','kstoMA74FLD1rWV3PwJuIgMlvAl','8.0',['pc']],
+  ['Stargate Atlantis','S1–S5 · 99 files · 19.0 GB','81z6ZRDxRiXZd4mioDuzLEU8USH','8.0',['nas']],
+  ['One-Punch Man','S1–S3 · 41 files · 5.2 GB','a8BknzvFVK5EZ83rKg1a83iwaj0','8.4',['pc']],
+  ['Texhnolyze','Season 1 · 22 files · 2.3 GB','kNHeuQIczfl3CIJOiF8yFu1Hz9I','7.0',['seed']],
+  ['Stargate Universe','S1–S2 · 40 files · 6.9 GB','dHOaOZGUhnoRXeK9mhYeSRPh59H','7.4',['nas']],
+  ['Sakamoto Days','Season 1 · 22 files · 3.8 GB','lRNXHxuOVO9TWIs98IOHTjY8XN7','8.0',['pc']],
+  ['Star Wars : Maul','Season 1 · 10 files · 4.5 GB','Av4nP5DgAjRpPWOe81SoE0oc8D0','8.6',['pc']],
+];
+const ST = {
+  pc:{nm:'This PC',short:'PC',icon:'pc',path:'R:\\Video\\films-series',count:1116,free:'2.1 TB free of 7.3 TB',use:71,state:'on'},
+  nas:{nm:'NAS films',short:'NAS',icon:'nas',path:'\\\\nas\\films',count:412,free:'5.8 TB free of 12 TB',use:52,state:'on'},
+  seed:{nm:'Seedbox',short:'Seedbox',icon:'cloud',path:'M:\\  (rclone · ftp://seedbox)',count:87,free:'offline since 21:04',use:40,state:'off'},
+};
+const pcard = (t, opts={}) => {
+  const off = t[4].every(s=>ST[s].state==='off');
+  const badges = opts.badges ? `<div class="where">${t[4].map(s=>`<b class="${ST[s].state==='off'?'off':''}">${ST[s].short}</b>`).join('')}</div>` : '';
+  return `<div class="pc ${off?'offline':''}"><div class="poster" style="background-image:url(${T}${t[2]}.jpg)"><span class="rate">★ ${t[3]}</span>${off&&opts.offtag!==false?'<div class="offtag">On Seedbox · offline</div>':badges}</div><div class="t">${t[0]}</div><div class="m">${t[1]}</div></div>`;
+};
+const rail = () => `<div class="rail"><div class="logo"></div><div class="sbtn">${ic('search',20)}</div>
+  ${[['home','Home'],['tv','Media',1],['comp','Discover'],['music','Music'],['heart','Library']].map(([i,l,on])=>`<div class="it ${on?'on':''}">${ic(i)}${l}</div>`).join('')}
+  <div class="sp"></div><div class="it">${ic('sliders')}Settings</div></div>`;
+const head = (extra='') => `<div class="hcard"><div class="hrow"><h2>Media</h2>${extra}<div class="search">${ic('search',15)} Search titles, or paste a YouTube or Twitch link<span class="kbd">Ctrl K</span></div><div class="bell">${ic('bell')}<i>132</i></div></div><div class="tabs"><span class="on">Collection</span><span>Queue</span></div></div>`;
+const phead = (extra='') => `<div class="hcard"><div class="hrow"><h2>Media</h2><div class="bell">${ic('bell')}<i>132</i></div><div class="bell">${ic('sliders')}</div></div>${extra}<div class="tabs"><span class="on">Collection</span><span>Queue</span></div></div>`;
+const pnav = (on='Media') => `<div class="nav">${[['home','Home'],['tv','Media']].map(([i,l])=>`<div class="${l===on?'on':''}">${ic(i,20)}${l}</div>`).join('')}<div class="s">${ic('search',22)}</div>${[['music','Music'],['heart','Library']].map(([i,l])=>`<div class="${l===on?'on':''}">${ic(i,20)}${l}</div>`).join('')}</div>`;
+const tools = (count, phone) => `<div class="tools"><div class="filter">Filter…</div><span class="count">${count}</span>${phone?'':'<div class="lay"><span class="on">Grid</span><span>Details</span><span>Browse</span><span>Tree</span></div>'}</div>`;
+const chipRow = (sel, phone) => `<div class="chips"><span class="chip ${sel==='all'?'on':''}">${ic('layers',14)} All <small>1,615</small></span>${Object.entries(ST).map(([k,s])=>`<span class="chip ${sel===k?'on':''} ${s.state==='off'?'off':''}"><span class="dot ${s.state==='off'?'off':''}"></span>${s.nm} <small>${s.state==='off'?'offline':s.count.toLocaleString('en')}</small></span>`).join('')}</div>`;
+const sect = (k, n, phone) => { const s = ST[k]; const ts = TITLES.filter(t=>t[4].includes(k)).slice(0,n);
+  return `<div class="sect ${s.state==='off'?'off':''}"><div class="shead">${ic(s.icon,18)}<div><div class="nm">${s.nm}</div><div class="pth">${s.path}</div></div><div class="meta">${s.state==='off'?'<span style="color:var(--err)">Offline since 21:04</span>':s.count+' titles'+(phone?'':' · '+s.free)}</div>${phone?'':'<span class="all">Show all ›</span>'}</div><div class="rowscroll">${ts.map(t=>pcard(t,{offtag:false})).join('')}</div></div>`; };
+
+
+// ---- round 2 ----
+Object.assign(I,{
+  play:'<path d="M7 4v16l13-8z"/>',
+  trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  dots:'<path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/>',
+  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  move:'<path d="M3 12h14M12 6l6 6-6 6M21 4v16"/>',
+  x:'<path d="m6 6 12 12M18 6 6 18"/>',
+  warn:'<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>',
+  pause:'<path d="M8 5v14M16 5v14"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  file:'<path d="M6 3h8l4 4v14H6zM14 3v4h4"/>',
+  minus:'<path d="M6 12h12"/>',
+});
+const cb = on => `<span class="cb ${on?'on':''}">${on==='part'?ic('minus',12):on?ic('check',12):''}</span>`;
+const ib = n => `<span class="ib">${ic(n,16)}</span>`;
+const menu2 = (a,b) => `<div class="pm"><div class="mi ${a?'on':''}">${ic('copy',16)} Copy to…</div><div class="mi ${b?'on':''}">${ic('move',16)} Move to…</div></div>`;
+const rail2 = rail;
+const qhead = () => head().replace('<span class="on">Collection</span><span>Queue</span>','<span>Collection</span><span class="on">Queue</span>');
+const qphead = () => phead().replace('<span class="on">Collection</span><span>Queue</span>','<span>Collection</span><span class="on">Queue</span>');
+const PCT = TITLES.filter(t=>t[4].includes('pc'));
+const bgGrid = (phone) => `<div class="grid">${PCT.slice(0,phone?4:6).map(t=>pcard(t)).join('')}</div>`;
+
+const setDesk = (content, side='') => `<div class="app">${rail()}<div class="main"><div class="hcard"><div class="hrow"><h2>Settings</h2></div></div><div class="set" style="margin-top:12px"><div class="cats"><div class="g">Server</div><div class="c on">Storage <span>3</span></div><div class="c">Downloads</div><div class="c">Servers</div><div class="c">Share</div><div class="g">Watching</div><div class="c">Playback</div><div class="c">Subtitles</div><div class="c">Sources &amp; search</div><div class="g">Music</div><div class="c">Music</div><div class="c">Notifications</div></div><div class="setmain">${side?`<div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0">${content}</div><div style="width:340px;flex:none;margin-top:36px">${side}</div></div>`:content}</div></div></div></div>`;
+const setPhoneHead = () => `<div class="hcard"><div class="hrow"><div class="bell">${ic('back')}</div><div><h2>Storage</h2><div style="font-size:12px;color:var(--muted)">Settings</div></div></div></div>`;
+// ---- round 3: a phone as a bridge (SPEC-storage §10) ----
+Object.assign(I,{
+  phone:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  wifi:'<path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 15.9a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19" r="1"/>',
+  box:'<rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 12h.01M11 12h6"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  media:'<rect x="3" y="5" width="18" height="12" rx="2"/><path d="m10 9 4 2-4 2zM8 21h8"/>',
+  link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  pin:'<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/>',
+  eject:'<path d="m12 5 7 8H5zM5 18h14"/>',
+});
+const PH = {nm:'Pixel 7', wifi:'Freebox-1A2B3C'};
+const FB = {nm:"Freebox · Mum's", where:'smb://192.168.1.254/Disque dur', free:'812 GB free of 1 TB', use:19, count:64};
+// Films on their Freebox: posters from the round-2 set, standing in for theirs.
+const FBT = [TITLES[3], TITLES[6], TITLES[9], TITLES[1], TITLES[11], TITLES[5]];
+const via = (extra='') => `<span class="via">${ic('phone',13)} via ${PH.nm}${extra}</span>`;
+
+/* 1. Settings › Storage */
+const diskOf = (k) => { const s = ST[k]; return `<div class="disk ${k==='pc'?'target':''}"><div class="top">${ic(s.icon,20)}<span class="nm">${s.nm}</span><span class="dot"></span></div><div class="pth mono">${s.path}</div><div class="usage"><i style="width:${s.use}%"></i></div><div class="nums"><span>${s.count} titles</span><span>${s.free}</span></div></div>`; };
+const fbChild = (away) => `<div class="child ${away?'away':''}">${ic('box',20)}<div class="tx"><div class="nm">${FB.nm}</div><div class="pth mono">${FB.where}</div><div class="sub">${away?`<span class="warn">Away since 21:04 · join ${PH.wifi} on ${PH.nm}</span>`:`${FB.count} titles · ${FB.free}`}</div></div><span class="btn out">${ic('eject',14)} Disconnect</span></div>`;
+const bridgeCard = (away) => `<div class="bridge"><div class="top">${ic('phone',20)}<div class="tx"><div class="nm">${PH.nm} <span class="role">Bridge</span></div><div class="state">${ic('wifi',13)} Online · on <b>${PH.wifi}</b></div></div><span class="btn solid">${ic('search',14)} Look around</span></div>
+  <div class="lbl" style="margin:12px 0 6px">Opened through ${PH.nm}</div>${fbChild(away)}
+  <div class="hint" style="margin-top:8px">${ic('wifi',12)} Saved for <b>${PH.wifi}</b>: opens by itself when ${PH.nm} joins it again.</div></div>`;
+const fbDisk = () => `<div class="disk"><div class="top">${ic('box',20)}<span class="nm">${FB.nm}</span><span class="dot"></span></div><div class="pth mono">${FB.where}</div>${via(` · on ${PH.wifi}`)}<div class="usage"><i style="width:${FB.use}%"></i></div><div class="nums"><span>${FB.count} titles</span><span>${FB.free}</span></div><div class="tog"><span class="on">Video</span><span>Music</span></div><div class="dltgt"><span class="btn out" style="margin-left:auto">${ic('eject',14)} Disconnect</span></div></div>`;
+const phoneDisk = () => `<div class="disk"><div class="top">${ic('phone',20)}<span class="nm">${PH.nm}</span><span class="role">Bridge</span></div><div class="state">${ic('wifi',13)} Online · on <b>${PH.wifi}</b></div><div class="nums"><span>1 storage open through it</span><span>Tailscale</span></div><div class="dltgt"><span class="btn solid" style="margin-left:auto">${ic('search',14)} Look around</span></div></div>`;
+const SETTINGS = [
+  { id:'K1', name:'The phone holds what it opened', tag:'nested', how:`${PH.nm} gets its own card, below your disks, with <b>Look around</b> on it. What it opened sits inside that card, so it is plain that the Freebox only exists through the phone. Disconnect is on the Freebox row; the saved Wi-Fi is said once, under it.`,
+    desk: () => setDesk(`<div class="disks">${diskOf('pc')}${diskOf('nas')}</div><div style="margin-top:12px">${bridgeCard()}</div>`),
+    phone: () => `<div class="ph">${setPhoneHead()}<div class="disks" style="margin-top:10px">${diskOf('pc')}</div><div style="margin-top:10px">${bridgeCard(1)}</div></div>${pnav('')}`,
+    cap:['Desktop: the Freebox open, inside the Pixel 7 card','Phone: the same, with the Freebox away'] },
+  { id:'K2', name:'The Freebox is a disk like the others', tag:'flat', how:`The Freebox gets an ordinary disk card, with Video / Music and room left, and one more line: <b>via ${PH.nm} · on ${PH.wifi}</b>. ${PH.nm} has its own small card with <b>Look around</b>. Same shape as every storage, but the link between the two is only that one line.`,
+    desk: () => setDesk(`<div class="disks">${diskOf('pc')}${diskOf('nas')}${fbDisk()}${phoneDisk()}</div>`),
+    phone: () => `<div class="ph">${setPhoneHead()}<div class="disks" style="margin-top:10px">${fbDisk()}${phoneDisk()}</div></div>${pnav('')}`,
+    cap:['Desktop: four cards, the Freebox third','Phone: the Freebox and Pixel 7 cards'] },
+];
+
+/* 2. Look around */
+const scanRows = () => [
+  ['box','Freebox Server','SMB share “Disque dur” · 1 TB','192.168.1.254','Open',''],
+  ['media','Freebox Server','Media server · read only','192.168.1.254','Open',''],
+  ['pc','DESKTOP-MAMAN','SMB share “Videos” · asks for a login','192.168.1.31','Open','lock'],
+].map(([i,n,d,ip,a,l])=>`<div class="sr">${ic(i,20)}<div class="tx"><div class="nm">${n}${l?` <span class="lk">${ic('lock',12)}</span>`:''}</div><div class="sub">${d}</div><div class="ip mono">${ip}</div></div><span class="btn out">${a}</span></div>`).join('');
+const scanHead = () => `<div class="fmh"><div class="tx"><h4>Look around ${PH.nm}</h4><div class="sub">${ic('wifi',12)} ${PH.nm} is on <b>${PH.wifi}</b></div></div>${ib('x')}</div>`;
+const scanning = (done) => `<div class="scanning">${done?`${ic('check',14)} Found 3 places that hold files · 6 s`:'Looking… 4 s'}<span class="again">${done?'Look again':''}</span></div><div class="scanbar"><i style="width:${done?100:60}%"></i></div>`;
+const typeAddr = () => `<div class="lbl">Not listed?</div><div class="inp">smb://, ftp:// or an address<span class="btn">Open</span></div><div class="hint" style="margin-top:6px">TVs, speakers and printers are left out.</div>`;
+const addTabs = (on) => `<div class="atabs">${['Folder','Server','Another sestudio','Nearby'].map(t=>`<span class="${t===on?'on':''}">${t}</span>`).join('')}</div>`;
+const lookFrom = () => `<div class="lbl">Look from</div><div class="tog"><span>${ic('pc',13)} This server</span><span class="on">${ic('phone',13)} ${PH.nm}</span></div>`;
+const LOOK = [
+  { id:'L1', name:'Its own window, from the phone card', tag:'window', how:`<b>Look around</b> on the ${PH.nm} card opens a window that says which Wi-Fi the phone is on, looks for a few seconds, and lists what holds files, with <b>Open</b> on each. A line at the bottom takes an address when nothing is found. A full page on a phone.`,
+    desk: () => `<div class="app tall">${rail()}<div class="main"><div class="hcard"><div class="hrow"><h2>Settings</h2></div></div></div><div class="scrim"></div><div class="dfm" style="min-height:0">${scanHead()}${scanning(1)}<div class="srs">${scanRows()}</div>${typeAddr()}</div></div>`,
+    phone: () => `<div class="pfull">${scanHead().replace(ib('x'),'')}${scanning(0)}<div class="srs">${scanRows().split('<div class="sr">').slice(0,2).join('<div class="sr">')}</div><div class="hint" style="margin:10px 0">Still looking: SMB, FTP, SFTP and media servers.</div>${typeAddr()}</div>`,
+    cap:['Desktop: done, three found','Phone: still looking, one found so far'] },
+  { id:'L2', name:'A Nearby tab in Add a storage', tag:'tab', how:`Finding sits with the other ways to add a storage: <b>Add a storage › Nearby</b>. A <b>Look from</b> switch picks this server or a bridge phone, so the same tab also finds things on your own network at home.`,
+    desk: () => setDesk(`<div class="addpanel"><h4>Add a storage</h4>${addTabs('Nearby')}${lookFrom()}${scanning(1)}<div class="srs">${scanRows()}</div>${typeAddr()}</div>`),
+    phone: () => `<div class="ph">${setPhoneHead()}<div class="addpanel" style="margin-top:10px"><h4>Add a storage</h4>${addTabs('Nearby')}${lookFrom()}${scanning(0)}<div class="srs">${scanRows().split('<div class="sr">').slice(0,2).join('<div class="sr">')}</div></div></div>${pnav('')}`,
+    cap:['Desktop: Nearby tab, looking from Pixel 7','Phone: same tab, still looking'] },
+];
+
+/* 3. Open */
+const openBody = (phone) => `<div class="fmh"><div class="tx"><h4>Open Freebox Server</h4><div class="sub mono">smb://192.168.1.254/Disque dur · through ${PH.nm}</div></div>${phone?'':ib('x')}</div>
+  <div class="field"><label>Name</label><div class="inp">${FB.nm}</div></div>
+  <div class="row2"><div class="field"><label>User</label><div class="inp">freebox</div></div><div class="field"><label>Password</label><div class="inp">••••••••</div></div></div>
+  <div class="hint">Saved on your home server, never shown again. Leave both empty for a guest share.</div>
+  <div class="lbl">It holds</div><div class="tog"><span class="on">Video</span><span>Music</span></div>
+  <div class="saved">${ic('wifi',16)}<div><div>Open by itself on <b>${PH.wifi}</b></div><div class="sub">Next time ${PH.nm} joins this Wi-Fi, the Freebox opens with this login.</div></div><span class="sw on"><i></i></span></div>
+  <div class="acts"><span class="btn">Cancel</span><span class="btn solid">Open</span></div>`;
+const OPEN = [
+  { id:'O', name:'Name, login, what it holds, remember the Wi-Fi', tag:'one form', how:`One short form after <b>Open</b>: the name is filled in from the device and where it is, the login is asked only when the share wants one, and <b>Open by itself on ${PH.wifi}</b> is on by default (B8). The Android location question is not here: it comes the first time ${PH.nm} looks around (screen 5).`,
+    desk: () => `<div class="app tall">${rail()}<div class="main"><div class="hcard"><div class="hrow"><h2>Settings</h2></div></div></div><div class="scrim"></div><div class="dfm" style="min-height:0;width:560px">${openBody()}</div></div>`,
+    phone: () => `<div class="pfull">${openBody(1)}</div>`,
+    cap:['Desktop: a window over Settings','Phone: a full page'] },
+];
+
+/* 4. Media */
+const mediaSwitchMenu = () => `<div class="menu" style="left:250px;top:76px">
+  ${[['pc','This PC','R:\\Video\\films-series','1,116 titles'],['nas','NAS films','\\\\nas\\films','412 titles'],['box',FB.nm,`via ${PH.nm} · ${FB.where}`,`${FB.count} titles`,1]].map(([i,n,p,c,on])=>`<div class="mi ${on?'on':''}">${ic(i,18)}<div class="tx"><div>${n} <span style="color:var(--muted);font-size:12px">· ${c}</span></div><div>${p}</div></div></div>`).join('')}<hr><div class="mi">${ic('layers',18)}<div class="tx"><div>All storages</div><div style="font-family:inherit">1,592 titles</div></div></div></div>`;
+const mediaHead = (away) => head(`<div class="switch">${ic('box',16)} ${FB.nm} ${away?'<span class="warn">away</span>':''}<span class="pth">via ${PH.nm}</span>${ic('down',12)}</div>`);
+const pmediaHead = (away) => phead(`<div class="switch" style="margin-top:8px">${ic('box',16)} ${FB.nm} ${away?'<span class="warn">away</span>':''}<span class="pth">via ${PH.nm}</span>${ic('down',12)}</div>`);
+const awayBanner = () => `<div class="banner">${ic('wifi',18)}<div><b>Away since 21:04.</b> It opens again when ${PH.nm} joins <b>${PH.wifi}</b>.<div class="sub">Its titles stay here, greyed, until then.</div></div></div>`;
+const fbGrid = (n, away) => `<div class="grid">${FBT.slice(0,n).map(t=>pcard(away?[t[0],t[1],t[2],t[3],['seed']]:[t[0],t[1],t[2],t[3],['pc']],{offtag:false})).join('')}</div>`;
+const MEDIA = [
+  { id:'M', name:'The Freebox in the switcher, away greyed with its Wi-Fi', tag:'switcher', how:`The Freebox is one more storage in the Media switcher, its row saying <b>via ${PH.nm}</b>. When the phone leaves their Wi-Fi it stays listed, greyed, with a line that says which Wi-Fi brings it back (B15, Q4).`,
+    desk: () => `<div class="app tall">${rail()}<div class="main">${mediaHead()}${tools(`${FB.count} titles on ${FB.nm}`)}${fbGrid(6)}</div>${mediaSwitchMenu()}</div>`,
+    phone: () => `<div class="ph">${pmediaHead(1)}${awayBanner()}${fbGrid(4,1)}</div>${pnav()}`,
+    cap:['Desktop: switcher open, the Freebox picked','Phone: the Freebox away'] },
+];
+
+/* 5. Asks */
+const androidAsk = () => `<div class="droid"><div class="dscrim"></div><div class="dlg">${ic('pin',22)}<h5>Allow sestudio to access this device's location?</h5><p>sestudio reads the name of the Wi-Fi ${PH.nm} is on, to open the storages you saved for it. It does not track where you are.</p><div class="dbtn">While using the app</div><div class="dbtn">Only this time</div><div class="dbtn">Don't allow</div></div></div>`;
+const askDesk = () => `<div class="app tall">${rail()}<div class="main">${head()}${tools(`${FB.count} titles on ${FB.nm}`)}${fbGrid(6)}</div><div class="scrim"></div><div class="dfm" style="min-height:0;width:560px"><div class="fmh"><div class="tx"><h4>Move 3 films to NAS films?</h4><div class="sub">Heat · Stargate Atlantis · M.A.S.H. · 9.1 GB, now on ${FB.nm}</div></div></div>
+  <div class="warnbox">${ic('warn',16)}<div>They are <b>deleted from ${FB.nm}</b>, one by one, after each copy is checked. This is their Freebox, not yours.</div></div>
+  <div class="note">${ic('phone',14)}<span>It goes through ${PH.nm} and their internet: about 40 min. ${PH.nm} has to stay on ${PH.wifi} until it ends; if it leaves, the move pauses.</span></div>
+  <div class="acts"><span class="btn">Cancel</span><span class="btn out">Copy instead</span><span class="btn danger">Move 3 films</span></div></div></div>`;
+const ASKS = [
+  { id:'A', name:'Two questions: Android location, and a move off their Freebox', tag:'confirm', how:`<b>Phone:</b> the first time ${PH.nm} looks around, Android asks for location, which it needs to give the Wi-Fi name (Q5); the line above the buttons is ours and says why. <b>Desktop:</b> a move to or from their Freebox asks first (Q6), says it deletes their files, how long it takes through the phone, and offers <b>Copy instead</b>.`,
+    desk: askDesk,
+    phone: () => `<div class="ph">${pmediaHead()}${fbGrid(4)}</div>${pnav()}${androidAsk()}`,
+    cap:['Desktop: confirming a move off their Freebox','Phone: Android asks for location, once'] },
+];
+
+let state = {settings:{pick:'',note:''}, look:{pick:'',note:''}, open:{pick:'',note:''}, media:{pick:'',note:''}, asks:{pick:'',note:''}, general:''};
+const SCREENS = [
+  ['settings','Settings › Storage: the phone and what it opened','B1, B2, B6, B14: the bridge phone, what it opened, Disconnect, the saved Wi-Fi.', SETTINGS],
+  ['look','Look around','B3, B4, B5: what the phone finds on their Wi-Fi, and typing an address when nothing is found.', LOOK],
+  ['open','Open a share','B6, B7, B8: name it, log in once, open by itself on that Wi-Fi next time.', OPEN],
+  ['media','In Media','B9, B15, Q4: the Freebox beside your storages, and away with the Wi-Fi it needs.', MEDIA],
+  ['asks','The two questions','Q5, Q6: Android location for the Wi-Fi name, and moving their files.', ASKS],
+];
+function build(){
+  const root = document.getElementById('rounds');
+  root.innerHTML = SCREENS.map(([key,title,story,opts])=>`<section class="round" id="r-${key}"><h2>${title}</h2><p class="story">${story}</p>
+    ${opts.map(o=>`<div class="opt"><h3>${o.id}. ${o.name} <span class="tag">${o.tag}</span></h3><p class="how">${o.how}</p>
+      <div class="frames"><div class="phonewrap"><div class="phone">${o.phone()}</div><div class="cap">${o.cap[1]}</div></div>
+      <div class="deskwrap"><div class="deskscale"><div class="desk">${o.desk()}</div></div><div class="cap">${o.cap[0]}</div></div></div></div>`).join('')}
+    <div class="pick"><div class="q">Which one for ${title}?</div><div class="pbtns" data-key="${key}">${opts.map(o=>`<button type="button" data-v="${o.id}">${o.id}</button>`).join('')}<button type="button" data-v="mix">Mix</button><button type="button" data-v="none">None</button></div>
+    <textarea id="note-${key}" placeholder="What to change or mix (e.g. B on desktop, A on phone)…"></textarea></div></section>`).join('');
+  document.querySelectorAll('.pbtns').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return; const k=g.dataset.key; state[k].pick = state[k].pick===b.dataset.v?'':b.dataset.v; paint(); save();}));
+  SCREENS.forEach(([k])=>document.getElementById('note-'+k).addEventListener('input',e=>{state[k].note=e.target.value; save();}));
+  document.getElementById('general').addEventListener('input',e=>{state.general=e.target.value; save();});
+  fit(); addEventListener('resize',fit);
+}
+function paint(){
+  document.querySelectorAll('.pbtns').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(state[g.dataset.key].pick===b.dataset.v))));
+  SCREENS.forEach(([k])=>{document.getElementById('note-'+k).value=state[k].note||'';});
+  document.getElementById('general').value = state.general||'';
+}
+function fit(){ document.querySelectorAll('.deskscale').forEach(w=>{const d=w.firstElementChild; const s=Math.min(1,w.clientWidth/1200); d.style.transform=`scale(${s})`; w.style.height=(d.offsetHeight*s)+'px';}); }
+const st = document.getElementById('status');
+let t=null;
+function save(){ st.textContent='Saving…'; clearTimeout(t); t=setTimeout(async()=>{ try{ const r=await fetch('answers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)}); if(!r.ok) throw 0; st.innerHTML='<b>Saved</b> · Claude reads it from the server'; }catch(e){ st.textContent='Not saved: server unreachable'; } },600); }
+build();
+fetch('answers').then(r=>r.json()).then(d=>{ if(d){ SCREENS.forEach(([k])=>{ if(d[k]) state[k]=d[k]; }); if(typeof d.general==='string') state.general=d.general; } paint(); st.innerHTML='<b>Synced</b> · answers save as you tap'; }).catch(()=>{ paint(); st.textContent='Server unreachable: answers won\'t save'; });
+addEventListener('load',fit);
+</script>
