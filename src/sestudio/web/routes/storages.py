@@ -431,3 +431,70 @@ async def look_around_bridge(storage_id: str) -> dict[str, Any]:
             502, f"{s['label']} could not look around ({r.status_code})"
         )
     return r.json()
+
+
+# --- files of a share held here, for the sestudio that opened it (SPEC-storage §10, B12, B13)
+#
+# What its copy engine needs to write into the share, or move out of it: whether a
+# file is there, writing one, renaming one, deleting one. Only a share held here
+# for it: never this server's own storages.
+
+
+def _held(key: str) -> remotefs.RemoteFile:
+    sid, colon, rel = key.partition(":")
+    if not colon or sid not in storage.temporary_ids():
+        raise HTTPException(404, "No such share open here")
+    parts = [p for p in rel.replace("\\", "/").split("/") if p not in ("", ".")]
+    if not parts or ".." in parts:
+        raise HTTPException(403, "Path outside the share")
+    return remotefs.top(storage.get(sid)).joinpath(*parts)
+
+
+@bridge_share.get("/stat")
+def held_stat(path: str) -> dict[str, Any]:
+    target = _held(path)
+    try:
+        st = target.stat()
+    except (OSError, FileNotFoundError):
+        return {"exists": False}
+    return {"exists": True, "size": st.st_size, "mtime": st.st_mtime}
+
+
+@bridge_share.put("/file")
+async def held_write(path: str, request: Request) -> dict[str, Any]:
+    """The request's body, written to *path*; its folders are made first."""
+    target = _held(path)
+    await asyncio.to_thread(target.fs.makedirs, str(target.parent), exist_ok=True)
+    out = await asyncio.to_thread(target.open, "wb")
+    size = 0
+    try:
+        async for chunk in request.stream():
+            if chunk:
+                await asyncio.to_thread(out.write, chunk)
+                size += len(chunk)
+    finally:
+        await asyncio.to_thread(out.close)
+    return {"size": size}
+
+
+@bridge_share.delete("/file")
+def held_delete(path: str) -> dict[str, bool]:
+    _held(path).unlink(missing_ok=True)
+    return {"ok": True}
+
+
+class HeldMove(BaseModel):
+    source: str
+    target: str
+
+
+@bridge_share.post("/move")
+def held_move(body: HeldMove) -> dict[str, bool]:
+    """Rename inside one share held here; whatever was at *target* is replaced."""
+    src, dst = _held(body.source), _held(body.target)
+    if src.storage["id"] != dst.storage["id"]:
+        raise HTTPException(400, "Both inside the same share")
+    if dst.exists():
+        dst.unlink()
+    src.fs.mv(str(src), str(dst))
+    return {"ok": True}

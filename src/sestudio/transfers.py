@@ -92,10 +92,12 @@ def _opener(s: dict[str, Any], rel: str) -> Any:
     """Something with ``open``, ``stat``, ``unlink`` for a file of storage *s*."""
     if s["kind"] == storage.FOLDER:
         return downloaded.resolve(s["path"], rel)
-    if s["kind"] in storage.NETWORK:
+    if s["kind"] in (*storage.NETWORK, storage.BRIDGED):
         parts = [p for p in rel.split("/") if p not in ("", ".")]
         if not parts or ".." in parts:
             raise Invalid("Path outside the storage")
+        if s["kind"] == storage.BRIDGED:  # through its bridge (SPEC-storage §10)
+            return remotefs.BridgedFile("/".join(parts), storage=s)
         return remotefs.top(s).joinpath(*parts)
     raise Invalid(f"Files cannot be written to or read from {s['label']} here")
 
@@ -126,6 +128,8 @@ def _beside(target: Any) -> Any:
 
 
 def _mkdirs(target: Any) -> None:
+    if isinstance(target, remotefs.BridgedFile):
+        return  # the bridge makes the folders as it writes
     if isinstance(target, remotefs.RemoteFile):
         target.fs.makedirs(str(target.parent), exist_ok=True)
     else:
@@ -133,7 +137,9 @@ def _mkdirs(target: Any) -> None:
 
 
 def _rename(tmp: Any, target: Any) -> None:
-    if isinstance(target, remotefs.RemoteFile):
+    if isinstance(target, remotefs.BridgedFile):
+        tmp.rename_to(target)
+    elif isinstance(target, remotefs.RemoteFile):
         if _exists(target):
             target.unlink()
         target.fs.mv(str(tmp), str(target))
@@ -173,7 +179,7 @@ def create(
         raise Invalid("One destination per file")
     where = dict(zip(keys, dests)) if dests is not None else {}
     dest = storage.get(to)
-    if dest["kind"] not in (storage.FOLDER, *storage.NETWORK):
+    if dest["kind"] not in (storage.FOLDER, *storage.NETWORK, storage.BRIDGED):
         raise Invalid(f"Files cannot be written to {dest['label']}")
     if not storage.online(dest):
         raise Invalid(f"{dest['label']} is offline")
@@ -383,7 +389,7 @@ def _run_job(job: Transfer) -> None:
 
 
 def _relative(s: dict[str, Any], target: Any) -> str:
-    if isinstance(target, remotefs.RemoteFile):
+    if isinstance(target, (remotefs.RemoteFile, remotefs.BridgedFile)):
         return target.relative()
     return Path(target).resolve().relative_to(Path(s["path"]).resolve()).as_posix()
 
