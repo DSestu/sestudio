@@ -600,3 +600,30 @@ def test_a_name_labels_an_address_but_adds_no_row():
         {"192.168.1.254": "Freebox", "192.168.1.31": "DESKTOP-MAMAN"},
     )
     assert [(r["name"], r["host"]) for r in rows] == [("Freebox", "192.168.1.254")]
+
+
+# --- encrypted SMB3 (PR 27) -----------------------------------------------------
+
+
+def test_a_guest_turned_away_is_told_to_log_in_and_encryption_is_said(monkeypatch):
+    import smbprotocol.tree
+
+    from sestudio import smbshares
+
+    class Tree:
+        def __init__(self, session, path):
+            self.session = session
+            self.share = path.rsplit("\\", 1)[-1]
+            self.encrypt_data = self.share == "ENC"
+
+        def connect(self, require_secure_negotiate=True):
+            if self.share == "ENC" and self.session == "guest":
+                raise PermissionError("access denied")
+
+    monkeypatch.setattr(smbprotocol.tree, "TreeConnect", Tree)
+    monkeypatch.setattr(smbshares, "_may", lambda tree, access: True)
+    assert smbshares._share_access("guest", "box", "ENC", True) == {
+        "name": "ENC", "read": False, "write": False, "login": True,
+    }  # fmt: skip
+    assert smbshares._share_access("david", "box", "ENC", False)["encrypted"] is True
+    assert smbshares._share_access("david", "box", "FILMS", False)["encrypted"] is False

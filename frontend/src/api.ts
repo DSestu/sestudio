@@ -1153,7 +1153,8 @@ export interface NearbyAccess {
   login?: 'none' | 'given' | 'needed'
   user?: string
   /** `write` null: not asked (FTP, SFTP); nothing is written on a share to find out. */
-  shares?: { name: string; read: boolean; write: boolean | null }[]
+  /** `login`: turned away as a guest (named users only, or it encrypts); `encrypted`: SMB3 encryption is on. */
+  shares?: { name: string; read: boolean; write: boolean | null; login?: boolean; encrypted?: boolean }[]
   error?: string
 }
 

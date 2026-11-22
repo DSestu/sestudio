@@ -402,3 +402,7 @@ Without the phone (were N1 and N3, wanted)
   on a file port; it adds no row by itself. Checked on a real Freebox Pop (v8, API 16.1): named
   "Freebox Pop"; as guest it shares nothing without a USB disk. WS-Discovery is tested with a fake
   responder (multicast could not be tested in WSL without announcing on the home network).
+- 27: a share that turns a guest away (named users only, or SMB3 encryption required) says
+  "Needs a login", with Log in on it even when other shares let the guest in; a share reached
+  with a login says "encrypted" when SMB3 encryption is on. Encrypted shares already opened with a
+  login (smbprotocol encrypts on its own). Checked on Samba 4.25 with `smb encrypt = required`.

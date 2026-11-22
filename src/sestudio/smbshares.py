@@ -168,7 +168,6 @@ def shares(
     from smbprotocol.open import (
         CreateDisposition,
         CreateOptions,
-        DirectoryAccessMask,
         FileAttributes,
         FilePipePrinterAccessMask,
         ImpersonationLevel,
@@ -201,22 +200,34 @@ def shares(
             # Disk shares only: not IPC$, not the admin shares (C$, ADMIN$), not printers.
             if kind & 0x0FFFFFFF != _DISK or name.endswith("$"):
                 continue
-            tree = TreeConnect(session, rf"\\{host}\{name}")
-            try:
-                tree.connect(require_secure_negotiate=not guest)
-            except Exception:  # noqa: BLE001 - not for this login
-                out.append({"name": name, "read": False, "write": False})
-                continue
-            read = _may(tree, DirectoryAccessMask.FILE_LIST_DIRECTORY)
-            write = _may(
-                tree,
-                DirectoryAccessMask.FILE_ADD_FILE
-                | DirectoryAccessMask.FILE_ADD_SUBDIRECTORY,
-            )
-            out.append({"name": name, "read": read, "write": write})
+            out.append(_share_access(session, host, name, guest))
         return out
     finally:
         try:
             conn.disconnect()
         except Exception:  # noqa: BLE001
             pass
+
+
+def _share_access(session: Any, host: str, name: str, guest: bool) -> dict[str, Any]:
+    """What a login may do in one share. A guest turned away is told to log in: the
+    share is for named users, or it encrypts, which a guest session cannot."""
+    from smbprotocol.open import DirectoryAccessMask
+    from smbprotocol.tree import TreeConnect
+
+    tree = TreeConnect(session, rf"\\{host}\{name}")
+    try:
+        tree.connect(require_secure_negotiate=not guest)
+    except Exception:  # noqa: BLE001 - not for this login
+        return {"name": name, "read": False, "write": False, "login": guest}
+    read = _may(tree, DirectoryAccessMask.FILE_LIST_DIRECTORY)
+    write = _may(
+        tree,
+        DirectoryAccessMask.FILE_ADD_FILE | DirectoryAccessMask.FILE_ADD_SUBDIRECTORY,
+    )
+    return {
+        "name": name,
+        "read": read,
+        "write": write,
+        "encrypted": bool(tree.encrypt_data),
+    }
