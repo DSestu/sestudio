@@ -1096,6 +1096,18 @@ export interface StorageInfo {
   since?: number | null
   /** Room on its disk, bytes; null when it is not a folder or is away. */
   usage?: { total: number; free: number } | null
+  /** Another sestudio that opens shares on its own network (SPEC-storage §10). */
+  bridge?: boolean
+  /** What a bridge said about the network it is on; null while it is away. */
+  network?: BridgeNetwork | null
+}
+
+export interface BridgeNetwork {
+  name: string
+  /** The Wi-Fi it is on; null when not on one, or when it may not say. */
+  wifi: string | null
+  /** The phone has not allowed reading the Wi-Fi name yet. */
+  wifi_blocked?: boolean
 }
 
 export async function getStorages(): Promise<StorageInfo[]> {
@@ -1122,6 +1134,7 @@ export interface NewStorage {
   url?: string
   token?: string
   download?: boolean
+  bridge?: boolean
   /** An FTP, SFTP or SMB server (SPEC-storage §9); the password stays on the server. */
   host?: string
   port?: number | null
@@ -1137,7 +1150,7 @@ export interface FolderCheck { path: string; name: string; folders: number; tota
 
 export const storagesApi = {
   add: (body: NewStorage) => storageCall<StorageInfo>('', { method: 'POST', body: JSON.stringify(body) }),
-  edit: (id: string, patch: { label?: string; roles?: StorageInfo['roles']; download?: true }) =>
+  edit: (id: string, patch: { label?: string; roles?: StorageInfo['roles']; download?: true; bridge?: boolean }) =>
     storageCall<StorageInfo>(`/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   remove: (id: string) => storageCall<{ ok: boolean }>(`/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   check: (path: string) => storageCall<FolderCheck>(`/check?path=${encodeURIComponent(path)}`),

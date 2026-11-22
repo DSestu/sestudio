@@ -9,10 +9,11 @@ const ICONS = {
   pc: 'M3 5a1 1 0 011-1h16a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1zM8 20h8M12 16v4',
   share: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
   folder: 'M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6L9 5H6a2 2 0 00-2 2z',
+  phone: 'M7 3.5A1.5 1.5 0 018.5 2h7A1.5 1.5 0 0117 3.5v17a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 017 20.5zM11 18.5h2',
   all: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
 }
 
-export function StorageGlyph({ storage, className = 'w-4 h-4' }: { storage?: Pick<StorageInfo, 'id' | 'path' | 'kind'>; className?: string }) {
+export function StorageGlyph({ storage, className = 'w-4 h-4' }: { storage?: Pick<StorageInfo, 'id' | 'path' | 'kind' | 'bridge'>; className?: string }) {
   const d = storage ? ICONS[storageIcon(storage)] : ICONS.all
   return (
     <svg className={`${className} shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

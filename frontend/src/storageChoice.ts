@@ -132,8 +132,9 @@ export function offlineIds(list: StorageInfo[]): Set<string> {
 }
 
 /** Which icon a storage gets: this machine, a network share, or another folder. */
-export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'> & { kind?: string }): 'pc' | 'share' | 'folder' {
+export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'> & { kind?: string; bridge?: boolean }): 'pc' | 'share' | 'folder' | 'phone' {
   if (s.id === 'local') return 'pc'
+  if (s.bridge) return 'phone'
   if (s.kind && (NETWORK_KINDS.includes(s.kind) || s.kind === 'remote_sestudio')) return 'share'
   return /^(\\\\|\/\/)/.test(s.path ?? '') ? 'share' : 'folder'
 }
