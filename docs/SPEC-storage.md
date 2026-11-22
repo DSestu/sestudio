@@ -349,3 +349,15 @@ Without the phone (were N1 and N3, wanted)
 24. **Without the phone** (B17): a share reached through a subnet router or the Freebox VPN is a
     plain SMB or FTP storage with a typed address (works today); Settings says how, in a short help
     line.
+
+### 10.7 Progress (2026-11-22)
+
+- Shipped: docs (#587), 18 (#588), 19 (#591, replacing #590 after a `frontend/dist` conflict), 20 (#592); 21–24 follow in order.
+- 21: B11 works with the phone's sestudio switched to home (remote servers, Settings › Servers): its
+  TV is found there, and a film of a share the phone holds is served by the phone itself, not fetched
+  back from home. From the home UI in a browser over Tailscale, a TV on their network is not reachable.
+- 22: the move confirmation says "it can take a while" but gives no time: nothing measures the link
+  through the phone before the move starts.
+- Not done: music through a bridge (O's Music is shown, off); a media server found by Nearby is
+  listed but not opened (its box's SMB or FTP share is); Nearby lists SMB hosts, not their share
+  names, so the share is typed in the Open form.

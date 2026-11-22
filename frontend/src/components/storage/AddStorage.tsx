@@ -294,6 +294,14 @@ export default function AddStorage({ onClose, onAdded, initial }: {
               ))}
             </div>
             <p className="text-xs text-base-content/50">{PROTOCOLS.find(p => p.id === protocol)!.hint}. Read by this server directly: nothing to mount.</p>
+            <details className="text-xs text-base-content/50">
+              <summary className="cursor-pointer list-none text-primary">On another home's network, without a phone there?</summary>
+              <p className="mt-1">
+                Reach their network first: a Tailscale subnet router on a device left on at their place, or the VPN of
+                their box (a Freebox has one). Then type the box's address here, like 192.168.1.254 for a Freebox.
+                With your phone there, use Nearby and look from the phone instead.
+              </p>
+            </details>
             <div className="flex gap-2">
               <label className="block flex-1 min-w-0">
                 <span className="text-sm text-base-content/60">Server</span>
