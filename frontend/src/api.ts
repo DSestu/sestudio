@@ -1792,6 +1792,8 @@ export interface TransferJob {
   created: number
   counts: { done: number; skipped: number; failed: number }
   bytes_per_second: number
+  /** Paused by itself: what it waits for (a bridge back on its Wi-Fi, SPEC-storage §10). */
+  waiting?: string
 }
 
 export type OnConflict = 'skip' | 'replace' | 'keep_both'

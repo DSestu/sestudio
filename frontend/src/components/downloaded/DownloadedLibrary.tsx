@@ -260,12 +260,32 @@ export default function DownloadedLibrary({
     }
   }
 
+  // A share opened through a bridge, away (SPEC-storage §10.5, M): what brings it back.
+  const awayBanner = here?.kind === 'bridged' && here.state === 'offline' ? (
+    <div role="status" className="flex items-start gap-2.5 rounded-box border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm">
+      <svg className="w-4.5 h-4.5 mt-0.5 shrink-0 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+        <path d="M2.5 9a14 14 0 0119 0M5.5 12.5a9.5 9.5 0 0113 0M8.6 15.9a5 5 0 016.8 0M12 19h.01" />
+      </svg>
+      <div>
+        <p>
+          <b>Away{here.since ? ` since ${sinceLabel(here.since)}` : ''}.</b>{' '}
+          {here.wifi
+            ? <>It opens again when {here.via_label} joins <b>{here.wifi}</b>.</>
+            : <>It opens again when {here.via_label} is back on its network.</>}
+        </p>
+        <p className="text-xs text-base-content/60 mt-0.5">Its titles stay here, greyed, until then.</p>
+      </div>
+    </div>
+  ) : null
+
   if (titles.length === 0 && everything.length > 0) {
     return (
       <EmptyState
         title={`Nothing on ${here?.label ?? 'this storage'} yet`}
         message={here?.state === 'offline'
-          ? `${here.label} is offline: ${here.path} cannot be reached.`
+          ? here.kind === 'bridged'
+            ? `${here.label} is away: it opens again when ${here.via_label} joins ${here.wifi ?? 'its network'}.`
+            : `${here.label} is offline: ${here.path} cannot be reached.`
           : `No video file sits in ${here?.path ?? 'this storage'}.`}
         action={{ label: 'Show all storages', onClick: () => setStorageChoice(ALL_STORAGES) }}
       />
@@ -364,6 +384,7 @@ export default function DownloadedLibrary({
 
   return (
     <div className="flex flex-col gap-4">
+      {awayBanner}
       <div className="flex items-center gap-3 flex-wrap">
         {/* A shelf this size is searched, not scanned. Filters what is already
             loaded, so it costs nothing and answers on every keystroke. */}

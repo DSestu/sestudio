@@ -48,6 +48,7 @@ export default function TransferRow({ job }: { job: TransferJob }) {
 
   let line: ReactNode
   if (job.status === 'queued') line = 'Waiting · starts after the current transfer'
+  else if (job.status === 'paused' && job.waiting) line = <span className="text-warning">Paused · waiting for {job.waiting} · it goes on by itself</span>
   else if (job.status === 'paused') line = `Paused · ${fmtSize(job.done_bytes)} of ${fmtSize(job.total_bytes)}`
   else if (job.status === 'running') line = `${fmtSize(job.done_bytes)} of ${fmtSize(job.total_bytes)} · ${fmtSize(job.bytes_per_second)}/s${left(job)}`
   else if (job.status === 'cancelled') line = `Cancelled · ${done} of ${files(job.items.length)} ${verb.toLowerCase()}`
