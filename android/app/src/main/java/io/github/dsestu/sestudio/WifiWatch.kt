@@ -75,7 +75,7 @@ class WifiWatch(private val context: Context, private val dir: File) {
     private fun write(ssid: String?) {
         runCatching {
             File(dir, FILE).writeText(
-                JSONObject().put("wifi", ssid ?: JSONObject.NULL).put("permission", allowed(context)).toString(),
+                JSONObject().put("wifi", ssid ?: JSONObject.NULL).put("device", android.os.Build.MODEL).put("permission", allowed(context)).toString(),
             )
         }
     }

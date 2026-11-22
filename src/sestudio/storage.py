@@ -294,6 +294,9 @@ def remove(storage_id: str) -> dict[str, Any]:
         raise Invalid(f"unknown storage: {storage_id}")
     cfg.storages = [s for s in cfg.storages if s is not gone]
     save_config(cfg)  # with no target left, `reconcile` gives it back to `local`
+    if gone.get("bridge"):  # what was opened through it goes with it
+        for child in [s for s in cfg.storages if s.get("via") == storage_id]:
+            remove(child["id"])
     if gone["kind"] == BRIDGED:
         _bridge_close(gone)
         _drop_listing(gone)

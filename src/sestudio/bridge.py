@@ -100,10 +100,22 @@ def info() -> dict[str, Any]:
         if time.monotonic() - _cache["at"] < TTL and _cache["value"] is not None:
             return _cache["value"]
     wifi, readable = _from_os()
-    value = {"name": socket.gethostname(), "wifi": wifi, "wifi_blocked": not readable}
+    value = {"name": device_name(), "wifi": wifi, "wifi_blocked": not readable}
     with _lock:
         _cache.update(at=time.monotonic(), value=value)
     return value
+
+
+def device_name() -> str:
+    """This machine's name for people: the phone's model on Android (its host name
+    there is "localhost"), else the host name."""
+    try:
+        data = json.loads((config_dir() / ANDROID_FILE).read_text("utf-8"))
+        if data.get("device"):
+            return str(data["device"])
+    except (OSError, ValueError):
+        pass
+    return socket.gethostname()
 
 
 def forget() -> None:

@@ -1751,6 +1751,8 @@ export interface ServerRow {
   /** Pinned and matching (always true over http). */
   trusted: boolean
   error: string
+  /** The storage id this machine has there as its bridge, once allowed (SPEC-storage §10, B1″). */
+  bridge: string | null
 }
 
 export interface ServersList {
@@ -1789,6 +1791,13 @@ export async function checkServer(id: string): Promise<ServerRow> {
 
 export async function trustServer(id: string): Promise<ServerRow> {
   const res = await fetch(`${BASE}/servers/${id}/trust`, { method: 'POST' })
+  if (!res.ok) throw new Error(await errorDetail(res))
+  return res.json()
+}
+
+/** Let a server reach this machine as its bridge, or stop it (SPEC-storage §10, B1″, B2′). */
+export async function setServerBridge(id: string, on: boolean): Promise<ServerRow> {
+  const res = await fetch(`${BASE}/servers/${id}/bridge`, { method: on ? 'POST' : 'DELETE' })
   if (!res.ok) throw new Error(await errorDetail(res))
   return res.json()
 }

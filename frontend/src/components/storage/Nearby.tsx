@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { storagesApi, type NearbyAccess, type NearbyRow, type StorageInfo } from '../../api'
+import { getServers, setServerBridge, storagesApi, type NearbyAccess, type NearbyRow, type ServerRow, type StorageInfo } from '../../api'
 import { StorageGlyph } from '../downloaded/StorageSwitcher'
-import { parseAddress } from '../../storageChoice'
+import { parseAddress, refreshStorages } from '../../storageChoice'
 import FreeboxPanel from './FreeboxPanel'
+import { thisMachine } from '../../servers'
 
 const KIND_LINE: Record<NearbyRow['kind'], string> = {
   smb: 'SMB share',
@@ -10,6 +11,10 @@ const KIND_LINE: Record<NearbyRow['kind'], string> = {
   sftp: 'SFTP server',
   media: 'Media server · read only',
 }
+
+/** "This phone" before it is a bridge: picking it asks first (SPEC-storage §10, B1″, P1). */
+const SELF = 'self'
+const SELF_LABEL = thisMachine()
 
 const ICON: Record<NearbyRow['kind'], string> = {
   smb: 'M4 7h16v10H4zM8 12h.01M11 12h5',
@@ -44,7 +49,31 @@ export default function Nearby({ from, onFrom, bridges, onOpen }: {
   const current = scan?.key === key ? scan : undefined
   const looking = !current
 
+  // Connected to another server: this machine can be its bridge (SPEC-storage §10, B1′).
+  const [home, setHome] = useState<ServerRow>()
+  const [asking, setAsking] = useState<'' | 'busy' | string>('')
   useEffect(() => {
+    let live = true
+    getServers().then(r => { if (live) setHome(r.servers.find(s => s.in_use)) }, () => {})
+    return () => { live = false }
+  }, [])
+  const own = home?.bridge ?? ''
+  async function bridgeHere(on: boolean) {
+    if (!home) return
+    setAsking('busy')
+    try {
+      const row = await setServerBridge(home.id, on)
+      await refreshStorages()
+      setHome(row)
+      setAsking('')
+      onFrom(on ? row.bridge ?? '' : '')
+    } catch (e) {
+      setAsking((e as Error).message)
+    }
+  }
+
+  useEffect(() => {
+    if (from === SELF) return
     let live = true
     const started = Date.now()
     const tick = window.setInterval(() => { if (live) setElapsed(Math.round((Date.now() - started) / 1000)) }, 500)
@@ -61,11 +90,15 @@ export default function Nearby({ from, onFrom, bridges, onOpen }: {
 
   return (
     <div className="flex flex-col gap-3">
-      {bridges.length > 0 && (
+      {(bridges.length > 0 || home) && (
         <div>
           <p className="text-sm text-base-content/60 mb-1.5">Look from</p>
           <div className="join w-full" role="radiogroup" aria-label="Look from">
-            {[{ id: '', label: 'This server', s: undefined as StorageInfo | undefined }, ...bridges.map(b => ({ id: b.id, label: b.label, s: b }))].map(o => (
+            {[
+              { id: '', label: home?.name ?? 'This server', s: undefined as StorageInfo | undefined },
+              ...bridges.filter(b => b.id !== own).map(b => ({ id: b.id, label: b.label, s: b })),
+              ...(home ? [{ id: own || SELF, label: SELF_LABEL, s: { id: 'phone', kind: 'remote_sestudio', bridge: true } as StorageInfo }] : []),
+            ].map(o => (
               <button
                 key={o.id || 'here'}
                 type="button"
@@ -79,10 +112,37 @@ export default function Nearby({ from, onFrom, bridges, onOpen }: {
               </button>
             ))}
           </div>
-          {bridge?.network?.wifi && <p className="text-xs text-base-content/50 mt-1">{bridge.label} is on <b className="text-base-content/80">{bridge.network.wifi}</b></p>}
+          {bridge?.network?.wifi && <p className="text-xs text-base-content/50 mt-1">{from === own ? 'It' : bridge.label} is on <b className="text-base-content/80">{bridge.network.wifi}</b></p>}
+          {home && own && from === own && (
+            <p className="text-xs text-base-content/50 mt-1">
+              {home.name} reaches {SELF_LABEL.toLowerCase()} ·{' '}
+              <button type="button" disabled={asking === 'busy'} onClick={() => void bridgeHere(false)} className="link">Stop</button>
+            </p>
+          )}
         </div>
       )}
 
+      {home && from === SELF && (
+        <div role="group" aria-label={`Let ${home.name} reach ${SELF_LABEL.toLowerCase()}`} className="flex items-start gap-3 rounded-box border border-warning/40 bg-base-200 p-3">
+          <svg className="w-5 h-5 shrink-0 text-warning mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" /></svg>
+          <div className="min-w-0">
+            <p className="font-semibold">Let {home.name} reach {SELF_LABEL.toLowerCase()}?</p>
+            <p className="text-sm text-base-content/60 mt-0.5">
+              To look around this Wi-Fi and open the shares it finds, {home.name} reaches {SELF_LABEL.toLowerCase()} over
+              Tailscale. This turns on its sharing, for {home.name} only. Stop it any time here or in Settings › Servers.
+            </p>
+            {asking && asking !== 'busy' && <p role="alert" className="text-sm text-error mt-1">{asking}</p>}
+            <div className="flex gap-2 mt-2.5">
+              <button type="button" disabled={asking === 'busy'} onClick={() => void bridgeHere(true)} className="btn btn-sm btn-primary">
+                {asking === 'busy' ? 'Allowing…' : 'Allow'}
+              </button>
+              <button type="button" onClick={() => { setAsking(''); onFrom('') }} className="btn btn-sm btn-ghost">Not now</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {from !== SELF && <>
       <div>
         <div className="flex items-center gap-2 text-sm text-base-content/60" aria-live="polite">
           {looking
@@ -121,6 +181,7 @@ export default function Nearby({ from, onFrom, bridges, onOpen }: {
         </div>
         <p className="text-xs text-base-content/50 mt-1.5">TVs, speakers and printers are left out.</p>
       </div>
+      </>}
     </div>
   )
 }

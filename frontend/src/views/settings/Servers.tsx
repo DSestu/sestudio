@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { addServer, checkServer, getServers, removeServer, trustServer, type ServerRow, type ServersList } from '../../api'
+import { addServer, checkServer, getServers, removeServer, setServerBridge, trustServer, type ServerRow, type ServersList } from '../../api'
 import BottomSheet from '../../components/watch/BottomSheet'
 import { timeAgo } from '../../notifications'
 import { switchServer, thisMachine } from '../../servers'
@@ -73,6 +73,12 @@ export default function Servers() {
                 <span className="font-mono">{s.url}</span>
                 <br />
                 <State row={s} />
+                {s.bridge && (
+                  <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span>{self} is its bridge: it can look around and open shares here</span>
+                    <button className="btn btn-xs btn-outline" disabled={busy !== null} onClick={() => act(s.id, async () => replace(await setServerBridge(s.id, false)))}>Stop bridging</button>
+                  </span>
+                )}
               </>
             }
           >

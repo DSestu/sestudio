@@ -791,3 +791,60 @@ def test_without_the_right_the_box_says_what_to_grant(phone):
         assert r.status_code == 400 and "Gestion des accès" in r.json()["detail"]
     finally:
         server.shutdown()
+
+
+def test_the_phone_offers_itself_to_home_and_takes_it_back(phone, monkeypatch):
+    """B1′, B1″, B2′: from the phone, connected to home, nothing done at home."""
+    import httpx
+
+    from sestudio.web.routes import servers
+
+    c, _, _ = phone
+    (config_dir() / bridge.ANDROID_FILE).write_text(
+        json.dumps({"wifi": "Freebox-1A2B3C", "permission": True, "device": "Pixel 7"})
+    )
+    home: list[tuple[str, str, dict]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else {}
+        home.append((request.method, request.url.path, body))
+        if request.url.path == "/api/health":
+            return httpx.Response(200, json={"version": "test"})
+        if request.method == "POST" and request.url.path == "/api/storages":
+            return httpx.Response(200, json={"id": "rphone"})
+        return httpx.Response(200, json={"ok": True})
+
+    monkeypatch.setattr(servers, "transport", httpx.MockTransport(handle))
+    sid = c.post(
+        "/api/servers", json={"name": "Home PC", "url": "http://127.0.0.1:9"}
+    ).json()["id"]
+
+    row = c.post(f"/api/servers/{sid}/bridge").json()
+    assert row["bridge"] == "rphone"
+    added = next(b for m, p, b in home if (m, p) == ("POST", "/api/storages"))
+    assert added["kind"] == "remote_sestudio" and added["bridge"] is True
+    assert added["label"] == "Pixel 7" and added["url"] == "http://127.0.0.1:8080"
+    auth = {"Authorization": f"Bearer {added['token']}"}
+    assert (
+        c.get("/api/share/bridge", headers=auth).status_code == 200
+    )  # home can reach it
+    assert (
+        c.post(f"/api/servers/{sid}/bridge").json()["bridge"] == "rphone"
+    )  # asked once
+
+    row = c.delete(f"/api/servers/{sid}/bridge").json()
+    assert row["bridge"] is None
+    assert ("DELETE", "/api/storages/rphone", {}) in home
+    assert c.get("/api/share/bridge", headers=auth).status_code == 401  # sharing off
+
+
+def test_removing_a_bridge_at_home_closes_what_was_opened_through_it(phone):
+    c, url, token = phone
+    via = c.post("/api/storages", json={"kind": "remote_sestudio", "roles": ["video"], "url": url,
+                 "token": token, "label": "Pixel 7", "bridge": True}).json()["id"]  # fmt: skip
+    cfg = storage.load_config()
+    cfg.storages.append({"id": "bfree", "kind": "bridged", "via": via, "proto": "smb",
+                         "label": "Freebox", "roles": ["video"], "connected": False})  # fmt: skip
+    storage.save_config(cfg)
+    assert c.delete(f"/api/storages/{via}").status_code == 200
+    assert not [s for s in storage.load_config().storages if s["id"] in (via, "bfree")]
