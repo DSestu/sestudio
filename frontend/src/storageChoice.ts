@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { getStorages, type DownloadedTitle, type StorageInfo } from './api'
+import { getStorages, type DownloadedTitle, type NearbyRow, type StorageInfo } from './api'
 
 // Storages (SPEC-storage §8.1): the places files live, and which one the Media
 // page is on. The list is held once for the app; the choice is per device, like
@@ -137,4 +137,14 @@ export function storageIcon(s: Pick<StorageInfo, 'id' | 'path'> & { kind?: strin
   if (s.bridge) return 'phone'
   if (s.kind && (NETWORK_KINDS.includes(s.kind) || s.kind === 'remote_sestudio')) return 'share'
   return /^(\\\\|\/\/)/.test(s.path ?? '') ? 'share' : 'folder'
+}
+
+/** `smb://nas/films`, `ftp://seedbox`, or a bare address (taken as SMB). */
+export function parseAddress(text: string): NearbyRow | null {
+  const t = text.trim()
+  if (!t) return null
+  const m = /^(smb|ftp|sftp):\/\/([^/:\s]+)(?::(\d+))?/i.exec(t)
+  if (m) return { name: m[2], kind: m[1].toLowerCase() as NearbyRow['kind'], host: m[2], port: m[3] ? Number(m[3]) : null }
+  const bare = t.replace(/^\\\\/, '').split(/[\\/]/)[0]
+  return /^[\w.-]+$/.test(bare) ? { name: bare, kind: 'smb', host: bare, port: null } : null
 }

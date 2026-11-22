@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+
+import httpx
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from sestudio import bridge, remotefs, storage, transfers
+from sestudio import bridge, nearby, remotefs, storage, transfers
 from sestudio.config import load_config, save_config
 from sestudio.music import libraries, runner
 from sestudio.web.ranged import ranged
@@ -322,3 +324,45 @@ bridge_share = APIRouter(prefix="/share/bridge", dependencies=[Depends(require_t
 async def bridge_info() -> dict[str, Any]:
     """Its name and the Wi-Fi it is on, for the sestudio that uses it as a bridge."""
     return await asyncio.to_thread(bridge.info)
+
+
+@bridge_share.get("/nearby")
+async def bridge_nearby() -> dict[str, Any]:
+    """What holds files on this bridge's network (B3–B5)."""
+    return await asyncio.to_thread(nearby.scan)
+
+
+# --- looking around (SPEC-storage §10, B3–B5) -----------------------------------
+
+#: A bridge looks for a few seconds, then answers over Tailscale.
+NEARBY_SECONDS = 30.0
+
+
+@router.get("/nearby")
+async def look_around() -> dict[str, Any]:
+    """What holds files on this server's own network."""
+    return await asyncio.to_thread(nearby.scan)
+
+
+@router.get("/storages/{storage_id}/nearby")
+async def look_around_bridge(storage_id: str) -> dict[str, Any]:
+    """What a bridge finds on the network it is on."""
+    s = _run(storage.get, storage_id)
+    if not s.get("bridge"):
+        raise HTTPException(400, "Only a bridge looks around its network")
+    try:
+        async with httpx.AsyncClient(timeout=NEARBY_SECONDS) as client:
+            r = await client.get(
+                f"{s['url']}/api/share/bridge/nearby", headers=storage._bearer(s)
+            )
+    except httpx.HTTPError:
+        raise HTTPException(503, f"{s['label']} did not answer") from None
+    if r.status_code == 404:
+        raise HTTPException(
+            409, f"{s['label']} runs an older sestudio: update it to look around"
+        )
+    if r.status_code != 200:
+        raise HTTPException(
+            502, f"{s['label']} could not look around ({r.status_code})"
+        )
+    return r.json()
