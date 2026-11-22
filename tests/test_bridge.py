@@ -413,3 +413,51 @@ def test_a_copy_waits_for_the_phone_and_goes_on(freebox, tmp_path):
     transfers._resume_waiting()
     assert _done(job.id)["status"] == "done"
     assert (home / "Films/Heat (1995).mkv").read_bytes() == b"0123456789"
+
+
+# --- what a found place lets in (PR 25) -----------------------------------------
+
+
+def test_anonymous_then_guest_is_tried_and_each_share_checked(monkeypatch):
+    from sestudio import nearby
+
+    tried = []
+
+    def fake(host, port, user, password):
+        tried.append(user)
+        if user not in ("guest", "me"):
+            raise nearby._Refused
+        return [{"name": "Disque dur", "read": True, "write": True}]
+
+    monkeypatch.setitem(nearby._SHARES, "smb", fake)
+    got = nearby.probe("smb", "192.168.1.254")
+    assert tried == ["", "guest"]
+    assert got == {"login": "none", "user": "guest",
+                   "shares": [{"name": "Disque dur", "read": True, "write": True}]}  # fmt: skip
+    assert (
+        nearby.probe("smb", "192.168.1.254", username="me", password="x")["login"]
+        == "given"
+    )
+    monkeypatch.setitem(
+        nearby._SHARES, "smb", lambda *a: (_ for _ in ()).throw(nearby._Refused())
+    )
+    assert nearby.probe("smb", "192.168.1.254")["login"] == "needed"
+
+
+def test_home_asks_the_bridge_to_check_a_place(phone, monkeypatch):
+    from sestudio import nearby
+
+    seen = []
+    monkeypatch.setattr(
+        nearby, "probe", lambda *a: seen.append(a) or {"login": "needed", "shares": []}
+    )
+    c, url, token = phone
+    b = c.post("/api/storages", json={"kind": "remote_sestudio", "roles": ["video"], "url": url,
+               "token": token, "bridge": True}).json()  # fmt: skip
+    body = {"kind": "smb", "host": "192.168.1.254", "username": "me", "password": "pw"}
+    assert (
+        c.post(f"/api/storages/{b['id']}/nearby/probe", json=body).json()["login"]
+        == "needed"
+    )
+    assert seen[-1] == ("smb", "192.168.1.254", None, "me", "pw")
+    assert c.post("/api/nearby/probe", json=body).json()["login"] == "needed"

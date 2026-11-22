@@ -175,3 +175,152 @@ def scan(seconds: float = 4.0) -> dict[str, Any]:
     if announced:
         collect(_probe, announced)
     return {"found": merge(found), "seconds": round(time.monotonic() - started, 1)}
+
+
+# --- what a found place lets in (SPEC-storage §10, B5–B6) -----------------------
+#
+# Tried with no login first, as boxes usually share as a guest: SMB with an empty
+# login then the "guest" account, FTP as "anonymous". Each share is checked for
+# reading (its top folder is listed) and writing (a hidden folder is made and
+# removed at once): what Open needs to know before asking for anything.
+
+#: Logins tried when none is given, in order.
+NO_LOGIN = {
+    "smb": [("", ""), ("guest", "")],
+    "ftp": [("anonymous", "anonymous@")],
+    "sftp": [],
+}
+#: How long one step of a check may take.
+PROBE_STEP = 6.0
+
+
+def _check_name() -> str:
+    import secrets
+
+    return f".sestudio-check-{secrets.token_hex(3)}"
+
+
+def _try(fn) -> bool:
+    try:
+        fn()
+        return True
+    except Exception:  # noqa: BLE001 - refused, or not allowed: that is the answer
+        return False
+
+
+class _Refused(Exception):
+    """The login was not accepted."""
+
+
+def _smb_shares(host: str, port: int, user: str, password: str) -> list[dict[str, Any]]:
+    from smb.SMBConnection import SMBConnection
+    from smb.base import NotConnectedError, OperationFailure, SMBTimeout
+
+    conn = SMBConnection(
+        user, password, "sestudio", host, use_ntlm_v2=True, is_direct_tcp=True
+    )
+    try:
+        if not conn.connect(host, port, timeout=PROBE_STEP):
+            raise _Refused
+    except (NotConnectedError, OperationFailure):
+        raise _Refused from None
+    except SMBTimeout:
+        raise OSError("it did not answer") from None
+    try:
+        out = []
+        for share in conn.listShares(timeout=PROBE_STEP):
+            # Disk shares only: not IPC$, not the admin shares (C$, ADMIN$), not printers.
+            if (
+                share.isSpecial
+                or share.name.endswith("$")
+                or share.type != share.DISK_TREE
+            ):
+                continue
+            read = _try(lambda: conn.listPath(share.name, "/", timeout=PROBE_STEP))
+            name = _check_name()
+            write = read and _try(
+                lambda: conn.createDirectory(share.name, name, timeout=PROBE_STEP)
+            )
+            if write:
+                _try(lambda: conn.deleteDirectory(share.name, name, timeout=PROBE_STEP))
+            out.append({"name": share.name, "read": read, "write": write})
+        return out
+    finally:
+        conn.close()
+
+
+def _ftp_shares(host: str, port: int, user: str, password: str) -> list[dict[str, Any]]:
+    import ftplib
+
+    ftp = ftplib.FTP(timeout=PROBE_STEP)
+    try:
+        ftp.connect(host, port)
+        try:
+            ftp.login(user, password)
+        except ftplib.error_perm:
+            raise _Refused from None
+        read = _try(lambda: ftp.nlst("/"))
+        name = _check_name()
+        write = read and _try(lambda: ftp.mkd(f"/{name}"))
+        if write:
+            _try(lambda: ftp.rmd(f"/{name}"))
+        return [{"name": "/", "read": read, "write": write}]
+    finally:
+        _try(ftp.close)
+
+
+def _sftp_shares(
+    host: str, port: int, user: str, password: str
+) -> list[dict[str, Any]]:
+    from sestudio import remotefs
+
+    s = {
+        "id": "probe",
+        "kind": "sftp",
+        "host": host,
+        "port": port,
+        "username": user,
+        "path": "/",
+    }
+    try:
+        fs = remotefs._open(s, password or None)
+    except Exception:  # noqa: BLE001 - paramiko words a refused login many ways
+        raise _Refused from None
+    read = _try(lambda: fs.ls("/"))
+    name = _check_name()
+    write = read and _try(lambda: fs.mkdir(f"/{name}"))
+    if write:
+        _try(lambda: fs.rmdir(f"/{name}"))
+    return [{"name": "/", "read": read, "write": write}]
+
+
+_SHARES = {"smb": _smb_shares, "ftp": _ftp_shares, "sftp": _sftp_shares}
+
+
+def probe(
+    kind: str,
+    host: str,
+    port: int | None = None,
+    username: str = "",
+    password: str = "",
+) -> dict[str, Any]:
+    """Who gets in, and what each share lets them do.
+
+    ``{"login": "none" | "given", "user": ..., "shares": [{name, read, write}]}``
+    when a login worked; ``{"login": "needed"}`` when none did;
+    ``{"error": ...}`` when the place did not answer.
+    """
+    if kind not in _SHARES:
+        return {"error": "Only SMB, FTP and SFTP are checked"}
+    port = port or PORTS[kind]
+    given = bool(username or password)
+    logins = [(username, password)] if given else NO_LOGIN[kind]
+    for user, secret in logins:
+        try:
+            shares = _SHARES[kind](host, port, user, secret)
+        except _Refused:
+            continue
+        except Exception as exc:  # noqa: BLE001 - its own words are the answer
+            return {"error": f"Could not reach it: {exc}"}
+        return {"login": "given" if given else "none", "user": user, "shares": shares}
+    return {"login": "needed", "shares": []}

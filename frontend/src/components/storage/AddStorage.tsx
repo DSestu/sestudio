@@ -100,6 +100,10 @@ export default function AddStorage({ onClose, onAdded, initial }: {
     setHost(row.host)
     setPort(row.port && row.port !== PROTOCOLS.find(p => p.id === row.kind)?.port ? String(row.port) : '')
     setLabel(row.name !== row.host ? row.name : '')
+    // What the check found: the share, and the login that got in (guest, anonymous, or typed).
+    if (row.share !== undefined) setShare(row.share)
+    if (row.username !== undefined) setUsername(row.username)
+    if (row.password !== undefined) setPassword(row.password)
   }
 
   const roles = HOLDS.find(h => h.id === holds)?.roles
