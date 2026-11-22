@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from urllib.parse import urlencode
 
 import httpx
 from starlette.requests import Request
@@ -113,10 +114,33 @@ async def forward(request: Request, upstream: dict) -> Response:
     return StreamingResponse(body(), status_code=r.status_code, headers=out)
 
 
+def held_here(request: Request) -> bytes | None:
+    """The query for a file of a share this machine holds open as a bridge for the
+    server in use (SPEC-storage §10, B11): that server calls it ``b…``, this one
+    ``tb…``. Served from here, the bytes skip the round trip to that server and back,
+    which matters most for the TV next to this machine. None for any other file."""
+    from sestudio import storage
+
+    if not request.url.path.startswith("/api/downloaded/"):
+        return None
+    head, colon, rest = request.query_params.get("path", "").partition(":")
+    if not colon or f"t{head}" not in storage.temporary_ids():
+        return None
+    return urlencode(
+        [
+            (k, f"t{head}:{rest}" if k == "path" else v)
+            for k, v in request.query_params.multi_items()
+        ]
+    ).encode()
+
+
 async def middleware(request: Request, call_next):
     upstream = getattr(request.app.state, "upstream", None)
     path = request.url.path
     if upstream and path.startswith("/api/") and not is_local(path):
+        if (query := held_here(request)) is not None:
+            request.scope["query_string"] = query
+            return await call_next(request)
         return await forward(request, upstream)
     return await call_next(request)
 

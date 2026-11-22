@@ -263,3 +263,27 @@ def test_disconnect_closes_it_keeps_the_login_and_reconnects(freebox):
     assert on["connected"] and on["state"] == "online"
     c.delete(f"/api/storages/{s['id']}")
     assert storage._temporary == {} and vault.get(s["id"]) == {}
+
+
+# --- playing and casting through a bridge (PR 21) -----------------------------
+
+
+def test_the_phone_serves_a_held_share_itself_while_switched_to_home(freebox):
+    """Switched to home (remote servers), the phone's TV asks the phone for a film of
+    the share it holds: served from the phone, not fetched back from home."""
+    c, b, _, _ = freebox
+    s = _open(c, b).json()
+    c.app.state.upstream = {
+        "name": "Home",
+        "url": "http://127.0.0.1:9",
+        "fingerprint": None,
+    }
+    try:
+        r = c.get(
+            "/api/downloaded/file",
+            params={"path": f"{s['id']}:Films/Heat (1995).mkv"},
+            headers={"Range": "bytes=0-3"},
+        )
+    finally:
+        c.app.state.upstream = None
+    assert r.status_code == 206 and r.content == b"0123"
