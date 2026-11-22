@@ -8,14 +8,15 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from sestudio import remotefs, storage, transfers
+from sestudio import bridge, remotefs, storage, transfers
 from sestudio.config import load_config, save_config
 from sestudio.music import libraries, runner
 from sestudio.web.ranged import ranged
+from sestudio.web.routes.music_libraries import require_token
 
 router = APIRouter()
 
@@ -31,6 +32,8 @@ class NewStorage(BaseModel):
     url: str = ""
     token: str = ""
     download: bool = False
+    #: Another sestudio that opens shares on its own network (SPEC-storage §10).
+    bridge: bool = False
     # An FTP, SFTP or SMB server (SPEC-storage §9); the password goes to the vault.
     host: str = ""
     port: int | None = None
@@ -51,6 +54,7 @@ class StorageEdit(BaseModel):
     roles: list[str] | None = None
     #: Only `true`: downloads move *to* a storage, never away to nowhere.
     download: bool | None = None
+    bridge: bool | None = None
 
 
 def public(s: dict[str, Any]) -> dict[str, Any]:
@@ -145,6 +149,7 @@ def add_storage(body: NewStorage) -> dict[str, Any]:
         body.url,
         body.token,
         body.network() if body.kind in storage.NETWORK else None,
+        body.bridge,
     )
     if body.download:
         s = _run(storage.set_download, s["id"])
@@ -164,6 +169,8 @@ def edit_storage(storage_id: str, body: StorageEdit) -> dict[str, Any]:
             runner.kick(load_config().output_root)
     if body.download:
         s = _run(storage.set_download, storage_id)
+    if body.bridge is not None:
+        s = _run(storage.set_bridge, storage_id, body.bridge)
     return _row(s)
 
 
@@ -304,3 +311,14 @@ def control_transfer(job_id: str, action: str) -> dict[str, Any]:
     if action not in ("pause", "resume", "cancel", "clear"):
         raise HTTPException(404, "Pause, resume, cancel or clear")
     return _transfer(transfers.control, job_id, action)
+
+
+# --- this server as a bridge to the network it is on (SPEC-storage §10) ---------
+
+bridge_share = APIRouter(prefix="/share/bridge", dependencies=[Depends(require_token)])
+
+
+@bridge_share.get("")
+async def bridge_info() -> dict[str, Any]:
+    """Its name and the Wi-Fi it is on, for the sestudio that uses it as a bridge."""
+    return await asyncio.to_thread(bridge.info)

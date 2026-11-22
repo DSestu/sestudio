@@ -52,7 +52,10 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
             <button type="submit" className="btn btn-sm btn-primary">Save</button>
           </form>
         ) : (
-          <span className="font-semibold flex-1 min-w-0 truncate">{s.label}</span>
+          <span className="font-semibold flex-1 min-w-0 truncate">
+            {s.label}
+            {s.bridge && <span className="ml-2 align-middle text-[11px] font-medium rounded-full px-2 py-0.5 bg-base-300 text-base-content/80">Bridge</span>}
+          </span>
         )}
         {away
           ? <span className="text-xs rounded-full px-2 py-0.5 bg-error/15 text-error whitespace-nowrap">Offline{s.since ? ` since ${sinceLabel(s.since)}` : ''}</span>
@@ -61,6 +64,11 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
           <summary className="btn btn-ghost btn-sm btn-square list-none" aria-label={`More for ${s.label}`}>⋯</summary>
           <ul className="menu dropdown-content z-20 mt-1 w-44 p-1 bg-base-300 rounded-box shadow-lg">
             <li><button type="button" onClick={() => { close(); setName(s.label); setRenaming(true) }}>Rename</button></li>
+            {s.kind === 'remote_sestudio' && (
+              <li><button type="button" onClick={() => { close(); void act(storagesApi.edit(s.id, { bridge: !s.bridge })) }}>
+                {s.bridge ? 'Stop using as a bridge' : 'Use as a bridge'}
+              </button></li>
+            )}
             {folder && s.roles.includes('music') && (
               <li><button type="button" onClick={() => { close(); void act(librariesApi.reanalyse(s.id)) }}>Reanalyse music</button></li>
             )}
@@ -71,6 +79,7 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
         </details>
       </div>
 
+      {s.bridge && !away && <BridgeNetworkLine s={s} />}
       <div className="font-mono text-xs text-base-content/55 break-all">{KIND_LINE[s.kind] ?? whereOf(s)}</div>
 
       {folder && (
@@ -130,6 +139,23 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
         </div>
       )}
       {error && <p role="alert" className="text-xs text-error">{error}</p>}
+    </div>
+  )
+}
+
+/** Where a bridge is (SPEC-storage §10.5, K1): the Wi-Fi it is on, or why that is unknown. */
+function BridgeNetworkLine({ s }: { s: StorageInfo }) {
+  const wifi = s.network?.wifi
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-success">
+      <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+        <path d="M2.5 9a14 14 0 0119 0M5.5 12.5a9.5 9.5 0 0113 0M8.6 15.9a5 5 0 016.8 0M12 19h.01" />
+      </svg>
+      {wifi
+        ? <span>Online · on <b className="font-semibold text-base-content">{wifi}</b></span>
+        : s.network?.wifi_blocked
+          ? <span className="text-warning">Online · allow “Wi-Fi name” on {s.label} to see its network</span>
+          : <span>Online · not on Wi-Fi</span>}
     </div>
   )
 }

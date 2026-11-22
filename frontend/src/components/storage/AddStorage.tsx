@@ -42,6 +42,7 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
   const [holds, setHolds] = useState<(typeof HOLDS)[number]['id'] | ''>('')
   const [download, setDownload] = useState(false)
   const [url, setUrl] = useState('')
+  const [bridge, setBridge] = useState(false)
   const [token, setToken] = useState('')
   const [cookies, setCookies] = useState('')
   const [protocol, setProtocol] = useState<Protocol>('smb')
@@ -113,7 +114,7 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
         ? { kind, path: path.trim(), label, roles: [...(roles ?? [])], download }
         : kind === 'server' ? server
           : kind === 'remote_sestudio'
-            ? { kind, url, token, label, roles: ['music'] }
+            ? { kind, url, token, label, roles: bridge ? ['video'] : ['music'], bridge }
             : { kind, roles: ['music'] }
       await storagesApi.add(body)
       onAdded()
@@ -281,6 +282,13 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
             <label className="block">
               <span className="text-sm text-base-content/60">Name</span>
               <input value={label} onChange={e => setLabel(e.target.value)} className={field} />
+            </label>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={bridge} onChange={e => setBridge(e.target.checked)} className="checkbox checkbox-sm checkbox-primary mt-0.5" />
+              <span className="text-sm">
+                It's my phone or laptop, used as a bridge
+                <span className="block text-xs text-base-content/50">On another home's Wi-Fi, it finds and opens the shares there for this server.</span>
+              </span>
             </label>
           </>
         )}

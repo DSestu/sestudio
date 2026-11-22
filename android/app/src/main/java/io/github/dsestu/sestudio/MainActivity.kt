@@ -67,6 +67,27 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         boot(Runtime(this))
         Updater.checkDaily(this)
+        askLocationIfWanted(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        askLocationIfWanted(intent)
+    }
+
+    /** From WifiWatch's notification: say why, then let Android ask (SPEC-storage §10.5, A). */
+    private fun askLocationIfWanted(intent: Intent?) {
+        if (intent?.getBooleanExtra(WifiWatch.EXTRA_ASK, false) != true || WifiWatch.allowed(this)) return
+        intent.removeExtra(WifiWatch.EXTRA_ASK)
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Read the Wi-Fi name?")
+            .setMessage(
+                "sestudio reads the name of the Wi-Fi this phone is on, to open the storages you saved for it. " +
+                    "Android calls this location access. sestudio does not track where you are.",
+            )
+            .setPositiveButton("Continue") { _, _ -> requestPermissions(WifiWatch.PERMISSIONS, ASK_LOCATION) }
+            .setNegativeButton("Not now", null)
+            .show()
     }
 
     override fun onResume() {
@@ -77,6 +98,11 @@ class MainActivity : Activity() {
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        if (requestCode == ASK_LOCATION) {
+            // Asked once, from a notification: refusing is an answer, no settings page follows.
+            if (WifiWatch.allowed(this)) ServerService.wifiAllowed(this)
+            return
+        }
         // Refused for good, Android no longer shows its prompt: the setting is the only way left.
         if (permissions.any { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED && !shouldShowRequestPermissionRationale(it) }) {
             startActivity(
@@ -454,5 +480,6 @@ class MainActivity : Activity() {
         val SERVER_URL = "http://localhost:${BuildConfig.HTTP_PORT}"
         private const val ASK_NOTIFICATIONS = 1
         private const val ASK_FILES = 2
+        private const val ASK_LOCATION = 3
     }
 }

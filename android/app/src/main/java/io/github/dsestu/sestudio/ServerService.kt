@@ -30,6 +30,7 @@ class ServerService : Service() {
     private var process: Process? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var wifiWatch: WifiWatch? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -42,6 +43,7 @@ class ServerService : Service() {
             // Swiped away (Android 14+ allows it even here): it is the only Stop button, so it comes back.
             ACTION_REPOST -> if (process != null) getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
             ACTION_RESTART -> restart()
+            ACTION_WIFI -> wifiWatch?.refresh()
             else -> start()
         }
         return START_STICKY
@@ -67,6 +69,7 @@ class ServerService : Service() {
         @Suppress("DEPRECATION")
         wifiLock = getSystemService(WifiManager::class.java)
             .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "sestudio:server").apply { acquire() }
+        wifiWatch = WifiWatch(this, File(Runtime(this).rootfs, "root/.config/sestudio")).apply { start() }
 
         launch()
     }
@@ -202,6 +205,7 @@ class ServerService : Service() {
         if (server != null) killServer()
         wakeLock?.release()
         wifiLock?.release()
+        wifiWatch?.stop()
         super.onDestroy()
     }
 
@@ -209,6 +213,7 @@ class ServerService : Service() {
         const val ACTION_STOP = "io.github.dsestu.sestudio.STOP"
         private const val ACTION_REPOST = "io.github.dsestu.sestudio.REPOST"
         private const val ACTION_RESTART = "io.github.dsestu.sestudio.RESTART"
+        private const val ACTION_WIFI = "io.github.dsestu.sestudio.WIFI"
         private const val CHANNEL = "server"
         private const val NOTIFICATION_ID = 1
 
@@ -238,6 +243,11 @@ class ServerService : Service() {
         }
 
         fun logFile(context: Context) = File(context.filesDir, "server.log")
+
+        /** The location permission was just given: the Wi-Fi name can be told now. */
+        fun wifiAllowed(context: Context) {
+            if (running) context.startService(Intent(context, ServerService::class.java).setAction(ACTION_WIFI))
+        }
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, ServerService::class.java))

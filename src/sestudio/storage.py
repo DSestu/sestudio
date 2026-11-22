@@ -79,8 +79,10 @@ def add(
     url: str = "",
     token: str = "",
     network: dict[str, Any] | None = None,
+    bridge: bool = False,
 ) -> dict[str, Any]:
-    """Add a storage. *network* carries an FTP, SFTP or SMB server's fields
+    """Add a storage. *bridge* marks another sestudio that opens shares on its
+    own network for this one (SPEC-storage §10). *network* carries an FTP, SFTP or SMB server's fields
     (host, port, share, username, domain, tls) and its password, which goes to
     the vault, never the config."""
     label = label.strip()
@@ -99,6 +101,8 @@ def add(
         if not token.strip():
             raise Invalid("A token from the other server is needed")
         s |= {"url": url, "token": token.strip()}
+        if bridge:
+            s["bridge"] = True
         label = label or url.split("//", 1)[1]
     elif kind == YTMUSIC:
         if any(x["kind"] == YTMUSIC for x in all_storages()):
@@ -177,6 +181,20 @@ def set_roles(storage_id: str, roles: list[str]) -> dict[str, Any]:
     return _edit(storage_id, change)
 
 
+def set_bridge(storage_id: str, on: bool) -> dict[str, Any]:
+    """Mark another sestudio as a bridge to its network, or not (SPEC-storage §10)."""
+
+    def change(_cfg, s):
+        if s["kind"] != REMOTE:
+            raise Invalid("Only another sestudio can be a bridge")
+        if on:
+            s["bridge"] = True
+        else:
+            s.pop("bridge", None)
+
+    return _edit(storage_id, change)
+
+
 def set_download(storage_id: str) -> dict[str, Any]:
     """Make *storage_id* the one storage new downloads go to."""
 
@@ -227,6 +245,8 @@ FIRST_WAIT = 5.0
 _lock = threading.Lock()
 _state: dict[str, dict[str, Any]] = {}
 _lists: dict[str, dict[str, Any]] = {}
+#: What each bridge last said about its network (SPEC-storage §10): name, Wi-Fi.
+_networks: dict[str, dict[str, Any]] = {}
 
 
 def _reachable(s: dict[str, Any]) -> bool:
@@ -235,7 +255,17 @@ def _reachable(s: dict[str, Any]) -> bool:
     if s["kind"] == REMOTE:  # another sestudio: any answer means it is up
         try:
             with httpx.Client(timeout=NET_CHECK_TIMEOUT) as client:
-                r = client.get(f"{s['url']}/api/share/video/ping", headers=_bearer(s))
+                if s.get("bridge"):
+                    # A bridge also says what network it is on; an older one has no such route.
+                    r = client.get(f"{s['url']}/api/share/bridge", headers=_bearer(s))
+                    if r.status_code == 200:
+                        _networks[s["id"]] = r.json()
+                    else:
+                        _networks.pop(s["id"], None)
+                else:
+                    r = client.get(
+                        f"{s['url']}/api/share/video/ping", headers=_bearer(s)
+                    )
             return r.status_code < 500
         except httpx.HTTPError:
             return False
@@ -269,7 +299,15 @@ def _where(s: dict[str, Any]) -> tuple:
 
 
 def state(s: dict[str, Any]) -> dict[str, Any]:
-    """``{state: online | offline, since}``: ``since`` is when it went away."""
+    """``{state: online | offline, since}``: ``since`` is when it went away. A
+    bridge adds ``network``: what it said about the network it is on."""
+    out = _state_of(s)
+    if s.get("bridge"):
+        out["network"] = _networks.get(s["id"]) if out["state"] == "online" else None
+    return out
+
+
+def _state_of(s: dict[str, Any]) -> dict[str, Any]:
     if s["kind"] not in (FOLDER, REMOTE, *NETWORK):
         return {"state": "online", "since": None}
     now = time.time()

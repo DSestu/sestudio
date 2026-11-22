@@ -196,6 +196,7 @@ def create_app(live_domain: str | None = None) -> FastAPI:
     app.include_router(library.router, prefix="/api")
     app.include_router(downloaded.router, prefix="/api")
     app.include_router(downloaded.video_share, prefix="/api")
+    app.include_router(storages.bridge_share, prefix="/api")
     app.include_router(music_queue.router, prefix="/api")
     app.include_router(music_station.router, prefix="/api")
     app.include_router(music_playlists.router, prefix="/api")
