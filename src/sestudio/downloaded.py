@@ -2192,6 +2192,14 @@ def _thumb_path(file: Path, relative: str) -> Path | None:
     return _thumb_dir() / f"{key}.jpg"
 
 
+def drop_thumbnails(files: list[tuple[str, float, int]]) -> None:
+    """Delete the stills of *files* (``(key, mtime, size)``), made or not: what a
+    disconnected share leaves behind (SPEC-storage §10, B16)."""
+    for relative, mtime, size in files:
+        key = hashlib.sha1(f"{relative}|{int(mtime)}|{size}".encode()).hexdigest()
+        (_thumb_dir() / f"{key}.jpg").unlink(missing_ok=True)
+
+
 def cached_thumbnail(file: Path, relative: str) -> Path | None:
     """The still for *file* if it has already been made, else None. No ffmpeg."""
     out = _thumb_path(file, relative)

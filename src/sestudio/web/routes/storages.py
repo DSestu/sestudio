@@ -36,6 +36,11 @@ class NewStorage(BaseModel):
     download: bool = False
     #: Another sestudio that opens shares on its own network (SPEC-storage §10).
     bridge: bool = False
+    #: A share opened through that bridge: which bridge, which protocol, whether it
+    #: opens by itself on the same Wi-Fi.
+    via: str = ""
+    proto: str = ""
+    auto: bool = True
     # An FTP, SFTP or SMB server (SPEC-storage §9); the password goes to the vault.
     host: str = ""
     port: int | None = None
@@ -47,7 +52,16 @@ class NewStorage(BaseModel):
 
     def network(self) -> dict[str, Any]:
         return self.model_dump(
-            include={"host", "port", "share", "username", "domain", "tls", "password"}
+            include={
+                "host",
+                "port",
+                "share",
+                "username",
+                "domain",
+                "tls",
+                "password",
+                "proto",
+            }
         )
 
 
@@ -57,6 +71,9 @@ class StorageEdit(BaseModel):
     #: Only `true`: downloads move *to* a storage, never away to nowhere.
     download: bool | None = None
     bridge: bool | None = None
+    #: A share opened through a bridge: open it again, or disconnect it (B14).
+    connected: bool | None = None
+    auto: bool | None = None
 
 
 def public(s: dict[str, Any]) -> dict[str, Any]:
@@ -76,7 +93,13 @@ def _usage(s: dict[str, Any], state: dict[str, Any]) -> dict[str, int] | None:
 
 def _row(s: dict[str, Any]) -> dict[str, Any]:
     state = storage.state(s)
-    return public(s) | state | {"usage": _usage(s, state)}
+    row = public(s) | state | {"usage": _usage(s, state)}
+    if s["kind"] == storage.BRIDGED:
+        try:
+            row["via_label"] = storage.get(s["via"])["label"]
+        except storage.Invalid:
+            row["via_label"] = ""
+    return row
 
 
 def _run(fn, *args):
@@ -88,7 +111,10 @@ def _run(fn, *args):
 
 @router.get("/storages")
 async def list_storages() -> list[dict[str, Any]]:
-    return await asyncio.to_thread(lambda: [_row(s) for s in storage.all_storages()])
+    # A share opened here as a bridge belongs to the sestudio that asked for it.
+    return await asyncio.to_thread(
+        lambda: [_row(s) for s in storage.all_storages() if not s.get("temporary")]
+    )
 
 
 def _check(path: str) -> dict[str, Any]:
@@ -150,8 +176,10 @@ def add_storage(body: NewStorage) -> dict[str, Any]:
         body.path,
         body.url,
         body.token,
-        body.network() if body.kind in storage.NETWORK else None,
+        body.network() if body.kind in (*storage.NETWORK, storage.BRIDGED) else None,
         body.bridge,
+        body.via,
+        body.auto,
     )
     if body.download:
         s = _run(storage.set_download, s["id"])
@@ -173,6 +201,10 @@ def edit_storage(storage_id: str, body: StorageEdit) -> dict[str, Any]:
         s = _run(storage.set_download, storage_id)
     if body.bridge is not None:
         s = _run(storage.set_bridge, storage_id, body.bridge)
+    if body.connected is not None:
+        s = _run(storage.set_connected, storage_id, body.connected)
+    if body.auto is not None:
+        s = _run(storage.set_auto, storage_id, body.auto)
     return _row(s)
 
 
@@ -198,7 +230,7 @@ async def relay(storage_id: str, path: str, request: Request) -> Response:
     from sestudio.web.routes.downloaded import _resolved_remote
 
     s = _run(storage.get, storage_id)
-    if s["kind"] == storage.REMOTE and "video" in s["roles"]:
+    if s["kind"] in (storage.REMOTE, storage.BRIDGED) and "video" in s["roles"]:
         return await peer_stream(s, path, request)
     if s["kind"] not in storage.NETWORK:
         raise HTTPException(404, "Only a server's files are relayed")
@@ -218,17 +250,17 @@ _PASS = ("content-type", "content-length", "content-range", "accept-ranges")
 async def peer_stream(s: dict[str, Any], remote_key: str, request: Request) -> Response:
     """A film on another sestudio (spec §9, X3), asked of it with the share token
     and streamed on, ranges and all: what the relay answers for it."""
-    import httpx
-
+    peer = storage.peer_of(s)
+    remote_key = storage.remote_key(s, remote_key)
     headers = {
-        "Authorization": f"Bearer {s.get('token', '')}",
+        "Authorization": f"Bearer {peer.get('token', '')}",
         "Accept-Encoding": "identity",
     }
     if rng := request.headers.get("range"):
         headers["Range"] = rng
     client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=None))
     req = client.build_request(
-        request.method, f"{s['url']}/api/share/video/file",
+        request.method, f"{peer['url']}/api/share/video/file",
         params={"path": remote_key}, headers=headers,
     )  # fmt: skip
     try:
@@ -322,8 +354,41 @@ bridge_share = APIRouter(prefix="/share/bridge", dependencies=[Depends(require_t
 
 @bridge_share.get("")
 async def bridge_info() -> dict[str, Any]:
-    """Its name and the Wi-Fi it is on, for the sestudio that uses it as a bridge."""
-    return await asyncio.to_thread(bridge.info)
+    """Its name, the Wi-Fi it is on, and the shares it holds open for the
+    sestudio that uses it as a bridge."""
+    return {**await asyncio.to_thread(bridge.info), "open": storage.temporary_ids()}
+
+
+class BridgeOpen(BaseModel):
+    #: The asking sestudio's id for the share: the bridge calls it ``t<key>``.
+    key: str
+    kind: str
+    label: str = ""
+    host: str = ""
+    port: int | None = None
+    share: str = ""
+    path: str = ""
+    username: str = ""
+    domain: str = ""
+    tls: bool = False
+    password: str = ""
+
+
+@bridge_share.post("/open")
+async def bridge_open(body: BridgeOpen) -> dict[str, Any]:
+    """Open a share on this network for the sestudio that asked, in memory only."""
+    net = body.model_dump(exclude={"key", "kind", "label"})
+    s = await asyncio.to_thread(
+        _run, storage.open_temporary, body.key, body.kind, net, body.label
+    )
+    return public(s)
+
+
+@bridge_share.delete("/open/{storage_id}")
+def bridge_close(storage_id: str) -> dict[str, bool]:
+    if storage_id in storage.temporary_ids():
+        storage.close_temporary(storage_id)
+    return {"ok": True}
 
 
 @bridge_share.get("/nearby")

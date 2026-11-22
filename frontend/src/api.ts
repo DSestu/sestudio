@@ -1091,7 +1091,8 @@ export interface StorageInfo {
   roles: ('video' | 'music')[]
   /** The one storage new downloads go to. */
   download: boolean
-  state: 'online' | 'offline'
+  /** `closed`: a share opened through a bridge, disconnected (its login kept). */
+  state: 'online' | 'offline' | 'closed'
   /** When it went away (epoch seconds); null while it answers. */
   since?: number | null
   /** Room on its disk, bytes; null when it is not a folder or is away. */
@@ -1100,6 +1101,14 @@ export interface StorageInfo {
   bridge?: boolean
   /** What a bridge said about the network it is on; null while it is away. */
   network?: BridgeNetwork | null
+  /** A share opened through a bridge (SPEC-storage §10): which one, and how. */
+  via?: string
+  via_label?: string
+  proto?: 'smb' | 'ftp' | 'sftp'
+  connected?: boolean
+  /** Opens by itself when its bridge is back on `wifi` (B8). */
+  auto?: boolean
+  wifi?: string | null
 }
 
 export interface BridgeNetwork {
@@ -1140,7 +1149,11 @@ export interface NearbyScan {
 }
 
 export interface NewStorage {
-  kind: 'folder' | 'remote_sestudio' | 'ytmusic_account' | 'ftp' | 'sftp' | 'smb'
+  kind: 'folder' | 'remote_sestudio' | 'ytmusic_account' | 'ftp' | 'sftp' | 'smb' | 'bridged'
+  /** A share opened through a bridge: the bridge, the share's protocol, opening by itself. */
+  via?: string
+  proto?: 'smb' | 'ftp' | 'sftp'
+  auto?: boolean
   roles: ('video' | 'music')[]
   label?: string
   path?: string
@@ -1163,7 +1176,7 @@ export interface FolderCheck { path: string; name: string; folders: number; tota
 
 export const storagesApi = {
   add: (body: NewStorage) => storageCall<StorageInfo>('', { method: 'POST', body: JSON.stringify(body) }),
-  edit: (id: string, patch: { label?: string; roles?: StorageInfo['roles']; download?: true; bridge?: boolean }) =>
+  edit: (id: string, patch: { label?: string; roles?: StorageInfo['roles']; download?: true; bridge?: boolean; connected?: boolean; auto?: boolean }) =>
     storageCall<StorageInfo>(`/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   remove: (id: string) => storageCall<{ ok: boolean }>(`/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   check: (path: string) => storageCall<FolderCheck>(`/check?path=${encodeURIComponent(path)}`),

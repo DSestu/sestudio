@@ -45,6 +45,9 @@ export default function AddStorage({ onClose, onAdded, initial }: {
 }) {
   const [kind, setKind] = useState<Kind>(initial?.kind ?? 'folder')
   const [from, setFrom] = useState(initial?.from ?? '')
+  /** Set when Nearby found it through a bridge: it is opened by that bridge (SPEC-storage §10). */
+  const [through, setThrough] = useState('')
+  const [auto, setAuto] = useState(true)
   const bridges = useStorages().filter(s => s.bridge)
   const [path, setPath] = useState('')
   const [browsing, setBrowsing] = useState(false)
@@ -89,8 +92,9 @@ export default function AddStorage({ onClose, onAdded, initial }: {
   const checked = check && check.path === path.trim() ? check : undefined
 
   /** Open from Nearby: the Server tab, filled in with what was found. */
-  function openFound(row: NearbyRow) {
+  function openFound(row: NearbyRow, via: string) {
     if (row.kind === 'media') return
+    setThrough(via)
     setKind('server')
     setProtocol(row.kind)
     setHost(row.host)
@@ -116,7 +120,7 @@ export default function AddStorage({ onClose, onAdded, initial }: {
   }
   const ready = kind === 'folder'
     ? !!checked?.ok && !!roles
-    : kind === 'server' ? !!host.trim() && (protocol !== 'smb' || !!share.trim()) && !!roles
+    : kind === 'server' ? !!host.trim() && (protocol !== 'smb' || !!share.trim()) && (!!roles || !!through)
       : kind === 'remote_sestudio' ? !!url.trim() && !!token.trim() : true
 
   async function submit() {
@@ -132,7 +136,10 @@ export default function AddStorage({ onClose, onAdded, initial }: {
       }
       const body: NewStorage = kind === 'folder'
         ? { kind, path: path.trim(), label, roles: [...(roles ?? [])], download }
-        : kind === 'server' ? server
+        : kind === 'server' && through
+          // Opened by the bridge; the login is kept here (SPEC-storage §10, Q7).
+          ? { ...server, kind: 'bridged', proto: protocol, via: through, roles: ['video'], auto }
+          : kind === 'server' ? server
           : kind === 'remote_sestudio'
             ? { kind, url, token, label, roles: bridge ? ['video'] : ['music'], bridge }
             : { kind: 'ytmusic_account', roles: ['music'] }
@@ -155,7 +162,7 @@ export default function AddStorage({ onClose, onAdded, initial }: {
             key={k.id}
             role="tab"
             aria-selected={kind === k.id}
-            onClick={() => setKind(k.id)}
+            onClick={() => { setKind(k.id); setThrough('') }}
             // The row scrolls on a phone: the open tab stays in sight.
             ref={el => { if (el && kind === k.id) el.scrollIntoView({ inline: 'nearest', block: 'nearest' }) }}
             className={`tab flex-1 whitespace-nowrap ${kind === k.id ? 'tab-active' : ''}`}
@@ -226,7 +233,60 @@ export default function AddStorage({ onClose, onAdded, initial }: {
             </p>
           </>
         )}
-        {kind === 'server' && (
+        {kind === 'server' && through && (() => {
+          const bridge = bridges.find(b => b.id === through)
+          const wifi = bridge?.network?.wifi
+          return (
+            <>
+              <div className="flex items-start gap-2.5 rounded-box bg-base-200 px-3 py-2.5 text-sm">
+                <svg className="w-4 h-4 mt-0.5 shrink-0 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 3.5A1.5 1.5 0 018.5 2h7A1.5 1.5 0 0117 3.5v17a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 017 20.5zM11 18.5h2" /></svg>
+                <span className="min-w-0">
+                  <span className="block font-mono text-xs break-all">{protocol}://{host}{protocol === 'smb' && share ? `/${share}` : ''}</span>
+                  <span className="block text-xs text-base-content/60">Opened through {bridge?.label ?? 'the bridge'}{wifi ? ` on ${wifi}` : ''}</span>
+                </span>
+                <button type="button" onClick={() => { setThrough(''); setKind('nearby') }} className="ml-auto link link-primary text-xs no-underline shrink-0">Back</button>
+              </div>
+              <label className="block">
+                <span className="text-sm text-base-content/60">Name</span>
+                <input value={label} onChange={e => setLabel(e.target.value)} className={field} placeholder="Freebox · Mum's" autoFocus />
+              </label>
+              {protocol === 'smb' && (
+                <label className="block">
+                  <span className="text-sm text-base-content/60">Share</span>
+                  <input value={share} onChange={e => setShare(e.target.value)} className={`${field} font-mono`} placeholder="Disque dur" spellCheck={false} />
+                </label>
+              )}
+              <div className="flex gap-2">
+                <label className="block flex-1 min-w-0">
+                  <span className="text-sm text-base-content/60">User</span>
+                  <input value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" spellCheck={false} className={field} />
+                </label>
+                <label className="block flex-1 min-w-0">
+                  <span className="text-sm text-base-content/60">Password</span>
+                  <input value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete="new-password" className={field} />
+                </label>
+              </div>
+              <p className="text-xs text-base-content/50">Saved on this server, never shown again. Leave both empty for a guest share.</p>
+              <fieldset>
+                <legend className="text-sm text-base-content/60 mb-1">It holds</legend>
+                <div className="join w-full">
+                  <button type="button" aria-pressed="true" className="btn join-item flex-1 btn-primary">Video</button>
+                  <button type="button" disabled title="Music through a bridge is not supported yet" className="btn join-item flex-1">Music</button>
+                </div>
+              </fieldset>
+              {wifi && (
+                <label className="flex items-start gap-3 rounded-box border border-base-300 px-3 py-2.5 cursor-pointer">
+                  <span className="min-w-0 flex-1 text-sm">
+                    Open by itself on <b>{wifi}</b>
+                    <span className="block text-xs text-base-content/55">Next time {bridge?.label} joins this Wi-Fi, it opens with this login.</span>
+                  </span>
+                  <input type="checkbox" className="toggle toggle-primary toggle-sm mt-0.5" checked={auto} onChange={e => setAuto(e.target.checked)} />
+                </label>
+              )}
+            </>
+          )
+        })()}
+        {kind === 'server' && !through && (
           <>
             <div className="join w-full" role="group" aria-label="Protocol">
               {PROTOCOLS.map(p => (
@@ -327,11 +387,7 @@ export default function AddStorage({ onClose, onAdded, initial }: {
             from={from}
             onFrom={setFrom}
             bridges={bridges}
-            onOpen={(row, through) => {
-              if (through) { setError('Opening through a bridge comes in the next update.'); return }
-              setError('')
-              openFound(row)
-            }}
+            onOpen={(row, via) => { setError(''); openFound(row, via) }}
           />
         )}
         {kind === 'ytmusic_account' && (
@@ -344,7 +400,7 @@ export default function AddStorage({ onClose, onAdded, initial }: {
         {error && <p role="alert" className="text-sm text-error">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className="btn btn-ghost">Cancel</button>
-          {kind !== 'nearby' && <button type="submit" disabled={!ready || busy} className="btn btn-primary">Add storage</button>}
+          {kind !== 'nearby' && <button type="submit" disabled={!ready || busy} className="btn btn-primary">{busy && through ? 'Opening…' : through ? 'Open' : 'Add storage'}</button>}
         </div>
       </form>
     </ResponsiveModal>

@@ -63,13 +63,17 @@ def video_storages() -> list[dict[str, Any]]:
     return [
         s
         for s in storages.all_storages()
-        if s["kind"] in (storages.FOLDER, storages.REMOTE, *storages.NETWORK)
+        if s["kind"]
+        in (storages.FOLDER, storages.REMOTE, *storages.NETWORK, storages.BRIDGED)
         and "video" in s["roles"]
+        and s.get("connected", True)  # a disconnected share is not listed (B14)
     ]
 
 
-def _scanned() -> list[tuple[str, downloaded.DownloadedFile]]:
-    """Every file of every video storage, with the storage it is on.
+def _scanned(
+    only: set[str] | None = None,
+) -> list[tuple[str, downloaded.DownloadedFile]]:
+    """Every file of every video storage (or of those in *only*), with the storage it is on.
 
     Audio comes from ``local`` only: a music folder elsewhere is a music
     library, listed by the music page, not here.
@@ -77,12 +81,14 @@ def _scanned() -> list[tuple[str, downloaded.DownloadedFile]]:
     return [
         (s["id"], f)
         for s in video_storages()
+        # A share opened here as a bridge is listed only for the one that asked.
+        if (s["id"] in only if only is not None else not s.get("temporary"))
         for f in storages.files_of(s)
         if s["id"] == storages.LOCAL or f.kind != "audio"
     ]
 
 
-def _listing() -> list[dict[str, Any]]:
+def _listing(only: set[str] | None = None) -> list[dict[str, Any]]:
     """Downloaded files of every video storage, grouped into titles.
 
     Grouping is by the folder-derived (series, season): that is what the
@@ -93,7 +99,7 @@ def _listing() -> list[dict[str, Any]]:
     manifest = library.downloaded_files()
 
     groups: dict[tuple[str, int, str], dict[str, Any]] = {}
-    for storage_id, file in _scanned():
+    for storage_id, file in _scanned(only):
         path = _key(storage_id, file.path)
         meta = manifest.get(path, {})
         key = (file.series, file.season, file.kind)
@@ -264,7 +270,7 @@ def _resolved(path: str, storage_id: str = storages.LOCAL) -> Any:
         raise HTTPException(status_code=404, detail="No such storage") from None
     if root["kind"] in storages.NETWORK:
         return _resolved_remote(root, path)
-    if root["kind"] == storages.REMOTE and "video" in root["roles"]:
+    if root["kind"] in (storages.REMOTE, storages.BRIDGED) and "video" in root["roles"]:
         return _resolved_peer(root, path)
     if root["kind"] != storages.FOLDER:
         raise HTTPException(status_code=404, detail="That storage holds no files here")
@@ -1452,11 +1458,24 @@ def share_ping() -> dict[str, bool]:
     return {"ok": True}
 
 
+#: What reaches this one only through another sestudio: never shared on (no chaining).
+_PEERED = (storages.REMOTE, storages.BRIDGED)
+
+
 @video_share.get("")
-async def share_listing() -> list[dict[str, Any]]:
-    """The video titles of this server's own storages, keyed as it plays them."""
-    own = {s["id"] for s in video_storages() if s["kind"] != storages.REMOTE}
-    titles = await asyncio.to_thread(_listing)
+async def share_listing(storage: str | None = None) -> list[dict[str, Any]]:
+    """The video titles of this server's own storages, keyed as it plays them.
+    A share opened here as a bridge is listed only when asked for by *storage*
+    (SPEC-storage §10), so it does not show twice at home."""
+    own = {
+        s["id"]
+        for s in video_storages()
+        if s["kind"] not in _PEERED
+        and (s["id"] == storage if storage else not s.get("temporary"))
+    }
+    # Only its own storages are scanned: one reached through another sestudio is
+    # never shared on, so asking it would only cost a round trip.
+    titles = await asyncio.to_thread(_listing, own)
     out = []
     for t in titles:
         files = [f for f in t["files"] if f.get("storage") in own]
@@ -1469,7 +1488,7 @@ async def share_listing() -> list[dict[str, Any]]:
 async def share_file(request: Request, path: str = Query(...)) -> Response:
     """One of those files, with byte ranges: never another server's (no chaining)."""
     storage_id, rel = _split(path, storages.LOCAL)
-    own = {s["id"] for s in video_storages() if s["kind"] != storages.REMOTE}
+    own = {s["id"] for s in video_storages() if s["kind"] not in _PEERED}
     if storage_id not in own:
         raise HTTPException(status_code=404, detail="No such file")
     target = _resolved(rel, storage_id)

@@ -62,6 +62,8 @@ def phone(tmp_path, monkeypatch):
     )
     app = create_app()
     c = TestClient(app)
+    (tmp_path / "out").mkdir()
+    c.put("/api/settings", json={"output_root": str(tmp_path / "out")})
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -159,3 +161,105 @@ def test_home_asks_the_bridge_to_look_around(phone, monkeypatch):
     c.patch(f"/api/storages/{plain['id']}", json={"bridge": True})
     assert c.get(f"/api/storages/{plain['id']}/nearby").json() == found
     assert c.get("/api/nearby").json() == found
+
+
+# --- opening a share through a bridge (PR 20) -----------------------------------
+
+
+@pytest.fixture()
+def freebox(phone, monkeypatch):
+    """The family's Freebox: an in-memory server the bridge (the same app) opens."""
+    import fsspec
+
+    from sestudio import remotefs, vault
+
+    fs = fsspec.filesystem("memory", skip_instance_cache=True)
+    fs.store.clear()
+    fs.pseudo_dirs.clear()
+    fs.pipe("/Disque dur/Films/Heat (1995).mkv", b"0123456789")
+    logins: list[str | None] = []
+
+    def fake_open(s, secret=None):
+        password = secret or vault.get(s["id"]).get("password")
+        logins.append(password)
+        if password != "pw":
+            raise PermissionError("wrong password")
+        return fs
+
+    monkeypatch.setattr(remotefs, "_open", fake_open)
+    remotefs._cache.clear()
+    c, url, token = phone
+    b = c.post("/api/storages", json={"kind": "remote_sestudio", "roles": ["video"], "url": url,
+               "token": token, "label": "Pixel 7", "bridge": True}).json()  # fmt: skip
+    yield c, b, fs, logins
+    for sid in list(storage._temporary):
+        storage.close_temporary(sid)
+
+
+def _open(c, b, password="pw"):
+    return c.post("/api/storages", json={
+        "kind": "bridged", "via": b["id"], "proto": "smb", "host": "192.168.1.254",
+        "share": "Disque dur", "password": password, "label": "Freebox · Mum's", "roles": ["video"],
+    })  # fmt: skip
+
+
+def test_a_wrong_login_is_refused_and_nothing_is_saved(freebox):
+    c, b, _, _ = freebox
+    r = _open(c, b, "nope")
+    assert r.status_code == 400 and "wrong password" in r.json()["detail"]
+    assert not any(s["kind"] == "bridged" for s in c.get("/api/storages").json())
+    assert storage._temporary == {}
+
+
+def test_a_share_opens_through_the_bridge_and_its_films_play(freebox, tmp_path):
+    from sestudio import vault
+
+    c, b, _, logins = freebox
+    s = _open(c, b).json()
+    assert s["kind"] == "bridged" and s["via_label"] == "Pixel 7" and s["connected"]
+    assert s["wifi"] == "Freebox-1A2B3C"  # remembered for B8
+    # home keeps the login; the bridge holds it in memory only
+    assert vault.get(s["id"]) == {"password": "pw"}
+    assert "pw" not in (tmp_path / "config.json").read_text()
+    assert list(storage._temporary) == ["t" + s["id"]]
+    listed = c.get("/api/storages").json()
+    assert listed[-1]["state"] == "online"
+    assert not any(
+        x.get("temporary") for x in listed
+    )  # the bridge's own copy is not listed
+    # listed at home under its own name, with clean paths, once
+    for _ in range(100):
+        titles = c.get("/api/downloaded").json()
+        files = [f for t in titles for f in t["files"] if f.get("storage") == s["id"]]
+        if files:
+            break
+        time.sleep(0.05)
+    assert [f["rel"] for f in files] == ["Films/Heat (1995).mkv"]
+    others = [f for t in titles for f in t["files"] if f.get("storage") == b["id"]]
+    assert others == []  # not again under the phone itself
+    got = c.get(
+        "/api/downloaded/file",
+        params={"path": files[0]["path"]},
+        headers={"Range": "bytes=2-5"},
+    )
+    assert got.status_code == 206 and got.content == b"2345"
+    assert logins[-1] == "pw"
+
+
+def test_disconnect_closes_it_keeps_the_login_and_reconnects(freebox):
+    from sestudio import vault
+
+    c, b, _, _ = freebox
+    s = _open(c, b).json()
+    off = c.patch(f"/api/storages/{s['id']}", json={"connected": False}).json()
+    assert off["state"] == "closed" and storage._temporary == {}
+    assert vault.get(s["id"]) == {"password": "pw"}  # B14: kept for next time
+    assert not any(
+        f.get("storage") == s["id"]
+        for t in c.get("/api/downloaded").json()
+        for f in t["files"]
+    )
+    on = c.patch(f"/api/storages/{s['id']}", json={"connected": True}).json()
+    assert on["connected"] and on["state"] == "online"
+    c.delete(f"/api/storages/{s['id']}")
+    assert storage._temporary == {} and vault.get(s["id"]) == {}
