@@ -8,7 +8,7 @@ import { trackColor, type Colour } from './sigil'
 import { carryProps } from './carry'
 import { Ic, type IconName } from './icons'
 
-// The explorer's tree (SPEC-music-library §2.2): group rows with a chevron, an icon, the
+// The explorer's tree (SPEC-music-library Â§2.2): group rows with a chevron, an icon, the
 // name (click opens it on the tape), a count that turns into + on hover; track rows under
 // the leaves. Lists show 8 groups at the top then "N more"; Mood, Tempo and Energy show all.
 
@@ -35,13 +35,17 @@ export interface TreeHandlers {
   colour: Colour
   /** The playing track, lit in the tree. */
   playingId?: string
-  /** Play a group as a flow (§2.2 doors): albums, artists, libraries and genres. */
+  /** Play a group as a flow (Â§2.2 doors): albums, artists, libraries and genres. */
   onFlowDoor?: (n: GroupNode, at: DOMRect) => void
   hoverProps?: (t: MusicTrack) => object
+  /** The open playlist + and drops add to; none: + is disabled. */
+  addTo?: string
 }
 
-export function Row({ depth, chevron, onChevron, icon, label, count, onClick, onDouble, onAdd, active, dim, drag, title, extra, tool }: {
+export function Row({ depth, chevron, onChevron, name, icon, label, count, onClick, onDouble, onAdd, addTo, active, dim, drag, title, extra, tool }: {
   depth: number
+  /** For the chevron's label. */
+  name?: string
   /** undefined: no chevron (a track); else open or shut. */
   chevron?: boolean
   onChevron?: () => void
@@ -51,6 +55,8 @@ export function Row({ depth, chevron, onChevron, icon, label, count, onClick, on
   onClick?: () => void
   onDouble?: () => void
   onAdd?: () => void
+  /** Where + adds (the open playlist); none: + shows disabled. */
+  addTo?: string
   active?: boolean
   dim?: boolean
   drag?: Record<string, unknown>
@@ -61,25 +67,25 @@ export function Row({ depth, chevron, onChevron, icon, label, count, onClick, on
 }) {
   return (
     <div
-      className={`group flex h-8 items-center gap-1 rounded-lg pr-1 text-[13px] ${active ? 'bg-primary/15 text-primary' : 'hover:bg-white/5'} ${dim ? 'text-base-content/45' : ''}`}
+      className={`group flex h-8 items-center gap-1 rounded-lg pr-1 text-[13px] ${active ? 'bg-primary/15 text-primary' : 'hover:bg-white/5'} ${dim ? 'text-base-content/60' : ''}`}
       style={{ paddingLeft: 4 + depth * 14 }}
       {...drag}
       {...extra}
     >
-      <button
-        onClick={onChevron}
-        tabIndex={chevron === undefined ? -1 : 0}
-        aria-label={chevron === undefined ? undefined : chevron ? 'Fold' : 'Unfold'}
-        className={`grid size-5 shrink-0 place-items-center rounded text-base-content/50 ${chevron === undefined ? 'invisible' : 'hover:text-base-content'}`}
-      >
-        <Ic name="right" size={12} width={2.4} className={`transition-transform ${chevron ? 'rotate-90' : ''}`} />
-      </button>
+      {chevron === undefined ? <span className="size-5 shrink-0" /> : (
+        // out of the Tab order: → and ← on the row fold it (Explorer's arrows)
+        <button data-chev onClick={onChevron} tabIndex={-1} aria-expanded={chevron} aria-label={`${chevron ? 'Fold' : 'Unfold'}${name ? ` ${name}` : ''}`}
+          className="grid size-5 shrink-0 place-items-center rounded text-base-content/60 hover:text-base-content">
+          <Ic name="right" size={12} width={2.4} className={`transition-transform ${chevron ? 'rotate-90' : ''}`} />
+        </button>
+      )}
       <span className="grid size-5 shrink-0 place-items-center text-base-content/60">{icon}</span>
-      <button onClick={onClick} onDoubleClick={onDouble} title={title} className="min-w-0 flex-1 truncate text-left leading-tight">{label}</button>
-      {tool && <span className="hidden group-hover:contents group-focus-within:contents">{tool}</span>}
-      {count !== undefined && <span className={`shrink-0 tabular-nums text-[11px] text-base-content/50 ${onAdd ? 'group-hover:hidden group-focus-within:hidden' : ''}`}>{count}</span>}
+      <button data-row onClick={onClick} onDoubleClick={onDouble} title={title} className="min-w-0 flex-1 truncate text-left leading-tight">{label}</button>
+      {tool && <span className="hidden group-hover:contents group-focus-within:contents pointer-coarse:contents">{tool}</span>}
+      {count !== undefined && <span className={`shrink-0 tabular-nums text-[11px] text-base-content/60 ${onAdd ? 'group-hover:hidden group-focus-within:hidden' : ''}`}>{count}</span>}
       {onAdd && (
-        <button onClick={onAdd} aria-label="Add to the open playlist" title="Add to the open playlist" className="hidden size-6 shrink-0 place-items-center rounded-md text-base-content/70 hover:bg-white/10 hover:text-base-content group-hover:grid group-focus-within:grid">
+        <button onClick={onAdd} disabled={!addTo} aria-label={addTo ? `Add to ${addTo}` : 'Add: open a playlist first'} title={addTo ? `Add to ${addTo}` : 'Open a playlist first'}
+          className="hidden size-6 shrink-0 place-items-center rounded-md text-base-content/70 hover:bg-white/10 hover:text-base-content disabled:opacity-40 disabled:hover:bg-transparent group-hover:grid group-focus-within:grid pointer-coarse:grid">
           <Ic name="plus" size={13} width={2.2} />
         </button>
       )}
@@ -90,19 +96,24 @@ export function Row({ depth, chevron, onChevron, icon, label, count, onClick, on
 export function TrackRow({ t, depth, list, file, h, terms, sub }: { t: MusicTrack; depth: number; list: MusicTrack[]; file?: boolean; h: TreeHandlers; terms?: string[]; sub?: string }) {
   const f = h.facts(t.id)
   const name = file ? fileName(t) : t.title
+  // A filter hit that isn't in the name: show the artist or album it matched on.
+  const why = !sub && terms?.length && !terms.every(w => name.toLowerCase().includes(w))
+    ? [t.artist, t.album].find(x => x && terms.some(w => x.toLowerCase().includes(w))) : undefined
   return (
     <Row
       depth={depth}
       icon={<span className="size-2.5 rounded-sm" style={{ background: trackColor(f, h.colour) }} />}
       label={<>
         {file ? <FileLabel name={name} /> : <Lit text={name} terms={terms} />}
-        {sub && <i className="ml-1.5 text-[11px] not-italic text-base-content/50">{sub}</i>}
-        {file && t.title !== name.replace(/\.[^.]+$/, '') && <i className="ml-1.5 text-[11px] not-italic text-base-content/50">{t.title}</i>}
-        {f.bpm ? <i className="ml-1.5 text-[11px] not-italic tabular-nums text-base-content/50">{Math.round(f.bpm)}</i> : null}
+        {sub && <i className="ml-1.5 text-[11px] not-italic text-base-content/60">{sub}</i>}
+        {why && <i className="ml-1.5 text-[11px] not-italic text-base-content/60"><Lit text={why} terms={terms} /></i>}
+        {file && t.title !== name.replace(/\.[^.]+$/, '') && <i className="ml-1.5 text-[11px] not-italic text-base-content/60">{t.title}</i>}
+        {f.bpm ? <i className="ml-1.5 text-[11px] not-italic tabular-nums text-base-content/60">{Math.round(f.bpm)}</i> : null}
       </>}
       count={fmtTime(t.duration)}
       onClick={() => h.onTrack(t, list)}
       onAdd={() => h.onAdd([t], t.title)}
+      addTo={h.addTo}
       active={h.playingId === t.id}
       drag={dragProps(t)}
       title={t.path}
@@ -143,20 +154,26 @@ export function Nodes({ nodes, depth, prefix, h, filter }: { nodes: GroupNode[];
               depth={depth}
               chevron={on}
               onChevron={() => toggle(n.key)}
+              name={n.name}
               icon={<Ic name={ICON[n.kind]} size={14} />}
               label={<Lit text={n.name} terms={filter?.words} />}
               count={n.all.length}
               onClick={() => h.onOpen(n)}
               onAdd={() => h.onAdd(n.all, n.name)}
+              addTo={h.addTo}
               tool={h.onFlowDoor && FLOW_KINDS.has(n.kind) ? (
                 <button onClick={e => h.onFlowDoor!(n, e.currentTarget.getBoundingClientRect())} aria-label={`Play ${n.name} as a flow`} title="Play as a flow" className="grid size-6 shrink-0 place-items-center rounded-md text-base-content/70 hover:bg-white/10 hover:text-base-content"><Ic name="flow" size={13} /></button>
               ) : undefined}
               active={h.sourceKey === n.key}
               drag={carryProps(n.all, n.name)}
             />
-            {on && n.kids && <Nodes nodes={n.kids} depth={depth + 1} prefix={n.key} h={h} filter={filter} />}
-            {on && tracks.slice(0, shown).map(t => <TrackRow key={t.id} t={t} depth={depth + 1} list={tracks} file={!!files} h={h} terms={filter?.words} />)}
-            {on && tracks.length > shown && <More depth={depth + 1} n={tracks.length - shown} onClick={() => grow(n.key)} />}
+            {on && (
+              <div className="xp-kids">
+                {n.kids && <Nodes nodes={n.kids} depth={depth + 1} prefix={n.key} h={h} filter={filter} />}
+                {tracks.slice(0, shown).map(t => <TrackRow key={t.id} t={t} depth={depth + 1} list={tracks} file={!!files} h={h} terms={filter?.words} />)}
+                {tracks.length > shown && <More depth={depth + 1} n={tracks.length - shown} onClick={() => grow(n.key)} />}
+              </div>
+            )}
           </div>
         )
       })}

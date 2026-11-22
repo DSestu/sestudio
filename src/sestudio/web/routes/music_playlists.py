@@ -21,6 +21,7 @@ class CreateBody(BaseModel):
     name: str
     parent: str | None = None
     rules: dict[str, Any] | None = None
+    draft: bool = False
 
 
 class BlendBy(BaseModel):
@@ -37,6 +38,7 @@ class UpdateBody(BlendBy):
     rules: dict[str, Any] | None = None
     blend: bool | None = None
     shape: str | None = None
+    draft: bool | None = None
 
 
 class MoveBody(BaseModel):
@@ -183,14 +185,22 @@ def list_nodes() -> list[dict[str, Any]]:
 
 @router.post("")
 def create_node(body: CreateBody) -> dict[str, Any]:
-    return _run(playlists.create, body.kind, body.name, body.parent, body.rules)
+    return _run(
+        playlists.create, body.kind, body.name, body.parent, body.rules, body.draft
+    )
 
 
 @router.patch("/{node_id}")
 def update_node(node_id: str, body: UpdateBody) -> dict[str, Any]:
     was = _run(playlists.get, node_id)
     node = _run(
-        playlists.update, node_id, body.name, body.rules, body.blend, body.shape
+        playlists.update,
+        node_id,
+        body.name,
+        body.rules,
+        body.blend,
+        body.shape,
+        body.draft,
     )
     if not node.get("blend"):
         return node

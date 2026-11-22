@@ -145,7 +145,9 @@ def create(
     name: str,
     parent: str | None = None,
     rules: dict[str, Any] | None = None,
+    draft: bool = False,
 ) -> dict[str, Any]:
+    """*draft*: the Music page's unsaved Queue, a playlist the lists hide until it is saved."""
     if kind not in KINDS:
         raise Invalid("kind must be folder, playlist or smart")
     name = _name(name)
@@ -156,7 +158,18 @@ def create(
         conn.execute(
             "INSERT INTO music_playlists (id, parent, kind, name, position, data) "
             "VALUES (?, ?, ?, ?, 0, ?)",
-            (node_id, parent, kind, name, json.dumps(_empty(kind, rules))),
+            (
+                node_id,
+                parent,
+                kind,
+                name,
+                json.dumps(
+                    {
+                        **_empty(kind, rules),
+                        **({"draft": True} if draft and kind == "playlist" else {}),
+                    }
+                ),
+            ),
         )
         _place(conn, node_id, parent, None)
         conn.commit()
@@ -169,6 +182,7 @@ def update(
     rules: dict[str, Any] | None = None,
     blend: bool | None = None,
     shape: str | None = None,
+    draft: bool | None = None,
 ) -> dict[str, Any]:
     with library._lock:
         conn = library._connect()
@@ -188,6 +202,10 @@ def update(
                 node["shape"] = shape
             if blend is not None:
                 node["blend"] = blend
+        if draft is not None:
+            if node["kind"] != "playlist":
+                raise Invalid("only a playlist is a draft")
+            node["draft"] = draft  # False: saved, so it shows in the lists
         _save(conn, node)
         conn.commit()
         return node

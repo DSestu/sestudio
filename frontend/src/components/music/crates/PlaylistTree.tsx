@@ -140,10 +140,10 @@ export function SmartForm({ node, onClose }: { node?: PlaylistNode; onClose: () 
 
 /** PLAYLISTS (folders, playlists, sets) and SMART LISTS under the libraries. */
 /** `match`: the explorer filter (SPEC-music-library §2.2); only lists whose name it accepts show, without folders. */
-export default function PlaylistTree({ active, onPick, onNew, match }: { active: string; onPick: (id: string) => void; onNew: () => void; match?: (name: string) => boolean }) {
+/** The New… actions sit in the explorer's Lists header. */
+export default function PlaylistTree({ active, onPick, match }: { active: string; onPick: (id: string) => void; match?: (name: string) => boolean }) {
   const nodes = usePlaylists()
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
-  const [form, setForm] = useState(false)
   const { rows, smart, folders } = useMemo(() => {
     const roots = buildTree(nodes)
     const all = match ? visibleRows(roots, new Set()).filter(r => r.node.kind !== 'folder' && match(r.node.name)).map(r => ({ ...r, depth: 0 })) : visibleRows(roots, collapsed)
@@ -153,19 +153,16 @@ export default function PlaylistTree({ active, onPick, onNew, match }: { active:
     return { rows: all.filter(r => r.node.kind !== 'smart'), smart: nodes.filter(n => n.kind === 'smart' && (!match || match(n.name))).map(n => ({ ...n, children: [] })), folders: folderList }
   }, [nodes, collapsed, match])
   const toggle = (id: string) => setCollapsed(s => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n })
-  const newFolder = () => {
-    const name = window.prompt('New folder')
-    if (name?.trim()) run(playlistApi.create('folder', name))
-  }
   const cell = (n: TreeNode, depth: number, label: string) => (
     <li key={n.id} className="flex items-center" style={{ paddingLeft: depth * 14 }}>
       {n.kind === 'folder' ? (
-        <button onClick={() => toggle(n.id)} aria-expanded={!collapsed.has(n.id)} className="flex-1 min-w-0 flex items-center gap-2 rounded-xl px-3 h-9 text-sm text-left hover:bg-white/5 text-base-content/80">
+        <button data-row onClick={() => toggle(n.id)} aria-expanded={!collapsed.has(n.id)} className="flex-1 min-w-0 flex items-center gap-2 rounded-xl px-3 h-9 text-sm text-left hover:bg-white/5 text-base-content/80">
           <Chevron open={!collapsed.has(n.id)} />
           <span className="truncate">{n.name}</span>
         </button>
       ) : (
         <button
+          data-row
           onClick={() => onPick(n.id)}
           aria-current={n.id === active}
           className={`flex-1 min-w-0 flex items-center justify-between gap-2 rounded-xl px-3 h-9 text-sm text-left transition-colors ${
@@ -174,7 +171,7 @@ export default function PlaylistTree({ active, onPick, onNew, match }: { active:
         >
           {n.kind === 'playlist' && <i title={n.blend ? 'Blend: kept in order around your pins' : 'Hand order'} className={`size-2.5 shrink-0 rounded-full ${n.blend ? 'bg-linear-to-br from-primary to-secondary' : 'border border-base-content/50'}`} />}
           <span className="min-w-0 flex-1 truncate">{n.name}</span>
-          <span className="shrink-0 text-xs text-base-content/50">{label}</span>
+          <span className="shrink-0 text-xs text-base-content/60">{label}</span>
         </button>
       )}
       <RowMenu node={n} folders={folders} />
@@ -184,23 +181,13 @@ export default function PlaylistTree({ active, onPick, onNew, match }: { active:
   return (
     <>
       <div className="mt-4">
-        <div className="flex items-center justify-between px-3 pb-1">
-          <h3 className="text-[11px] font-semibold tracking-wider text-base-content/50">PLAYLISTS</h3>
-          <span className="flex gap-1">
-            <button onClick={onNew} className="btn btn-ghost btn-xs">New playlist</button>
-            <button onClick={newFolder} className="btn btn-ghost btn-xs">New folder</button>
-          </span>
-        </div>
+        <h3 className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-base-content/60">PLAYLISTS</h3>
         <ul className="flex flex-col gap-0.5">{rows.map(r => cell(r.node, r.depth, label(r.node)))}</ul>
       </div>
       <div className="mt-4">
-        <div className="flex items-center justify-between px-3 pb-1">
-          <h3 className="text-[11px] font-semibold tracking-wider text-base-content/50">SMART LISTS</h3>
-          <button onClick={() => setForm(true)} className="btn btn-ghost btn-xs">New smart list</button>
-        </div>
+        <h3 className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-base-content/60">SMART LISTS</h3>
         <ul className="flex flex-col gap-0.5">{smart.map(n => cell(n, 0, ''))}</ul>
       </div>
-      {form && <SmartForm onClose={() => setForm(false)} />}
     </>
   )
 }

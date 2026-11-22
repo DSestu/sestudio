@@ -3,6 +3,7 @@ import { LEVELS, MOOD_ORDER, type Facts } from './facts'
 
 // The explorer's grouping: a stack of up to 4 levels (Mood › Artist), built from
 // presets on the icon rail or the Custom popover, shared with the tape (SPEC-music-library §2.2).
+// Folders (the file explorer) is the default; `dims` keeps Album for when a level preset is picked.
 
 export type Dim = 'album' | 'artist' | 'library' | 'mood' | 'genre' | 'tempo' | 'energy' | 'key' | 'letter'
 export type Preset = 'album' | 'artist' | 'files' | 'mood' | 'genre' | 'tempo' | 'energy' | 'key' | 'az' | 'flat'
@@ -45,7 +46,7 @@ export const DIMS: Record<Dim, DimDef> = {
 export const PRESETS: { id: Preset; label: string; dims: Dim[] }[] = [
   { id: 'album', label: 'Album', dims: ['album'] },
   { id: 'artist', label: 'Artist', dims: ['artist', 'album'] },
-  { id: 'files', label: 'Library', dims: [] },
+  { id: 'files', label: 'Folders', dims: [] },
   { id: 'mood', label: 'Mood', dims: ['mood'] },
   { id: 'genre', label: 'Genre', dims: ['genre', 'artist'] },
   { id: 'tempo', label: 'Tempo', dims: ['tempo'] },
@@ -63,7 +64,7 @@ export interface Grouping {
   trackSort: TrackSort
 }
 
-export const DEFAULT_GROUPING: Grouping = { dims: ['album'], files: false, groupSort: 'natural', trackSort: 'natural' }
+export const DEFAULT_GROUPING: Grouping = { dims: ['album'], files: true, groupSort: 'natural', trackSort: 'natural' }
 
 /** The rail button lit for a grouping, if it is a preset. */
 export function presetOf(g: Grouping): Preset | undefined {

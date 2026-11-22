@@ -1,115 +1,123 @@
-import { useMemo, useState } from 'react'
-import { useFlows } from '../../../musicFlows'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MusicTrack } from '../../../musicLibrary'
-import { usePlaylists } from '../../../musicPlaylists'
 import { hitPayload, sourceLabel, useMusicSearch, type OnlineHit } from '../../../musicSearch'
 import { dragProps } from '../edit/focus'
 import { trackOfHit } from '../edit/onlineAnalysis'
 import { fmtTime } from '../format'
-import { playPayload } from '../player'
-import { Lit, Row, TrackRow, type TreeHandlers } from './ExplorerTree'
-import { DIMS, type Preset } from './grouping'
+import { playPayload, reducedMotion } from '../player'
+import { Lit, Row, type TreeHandlers } from './ExplorerTree'
 import { Ic } from './icons'
+import { mergeOnline, songKey, type Song } from './onlineMerge'
 import type { Query } from './searchWords'
 
-// The explorer while the search box has words (SPEC-music-library §2.2 Search mode): flat,
-// Online first (per source, 5 then "N more"), then In your library (artists, albums, tracks
-// with the words lit, 6 then "N more"), then the lists and flows that match.
+// The explorer's Online section while the search has name words (B in
+// docs/proto/music/online-search.html): one row per song, merged across the sites, previews
+// left out; loops and off-topic results fold into one row.
 
-const ONLINE_SOURCES = ['ytmusic', 'youtube', 'soundcloud'] as const
-const ONLINE_SHOWN = 5
-const TRACKS_SHOWN = 6
-const GROUPS_SHOWN = 4
+/** The chip naming where a song plays from. */
+const SHORT: Record<string, string> = { ytmusic: 'YTM', youtube: 'YT', soundcloud: 'SC' }
 /** Online search waits for typing to pause this long. */
 const ONLINE_DELAY = 550
+const EASE = 'cubic-bezier(.2, .8, .2, 1)'
 
-export default function ExplorerSearch({ query, matched, h, onOpenAs, onList, onFlow }: {
+export function OnlineSection({ query, matched, h }: {
   query: Query
-  /** The library tracks that answer the query. */
+  /** The library tracks that answer the query: an online song you own plays your copy. */
   matched: MusicTrack[]
   h: TreeHandlers
-  /** Open an artist or an album found here on the tape. */
-  onOpenAs: (preset: Preset, key: string) => void
-  onList: (id: string) => void
-  onFlow: (id: string) => void
 }) {
-  const names = query.terms.join(' ')
-  const online = useMusicSearch(names, 'all', ONLINE_DELAY)
-  const [more, setMore] = useState<ReadonlySet<string>>(new Set())
-  const grow = (k: string) => setMore(s => new Set(s).add(k))
-  const hit = (s: string) => query.terms.every(w => s.toLowerCase().includes(w))
-  const artists = useMemo(() => {
-    const n = new Map<string, number>()
-    for (const t of matched) if (hit(t.artist)) n.set(t.artist, (n.get(t.artist) ?? 0) + 1)
-    return query.terms.length ? [...n].sort((a, b) => b[1] - a[1]).slice(0, GROUPS_SHOWN) : []
-  }, [matched, query]) // eslint-disable-line react-hooks/exhaustive-deps -- `hit` reads `query`
-  const albums = useMemo(() => {
-    const n = new Map<string, { name: string; artist: string; count: number }>()
-    for (const t of matched) {
-      const name = DIMS.album.of(t, h.facts)
-      if (!hit(name)) continue
-      const a = n.get(name) ?? { name, artist: t.artist, count: 0 }
-      a.count++
-      n.set(name, a)
-    }
-    return query.terms.length ? [...n.values()].sort((a, b) => b.count - a.count).slice(0, GROUPS_SHOWN) : []
-  }, [matched, query, h.facts]) // eslint-disable-line react-hooks/exhaustive-deps -- `hit` reads `query`
-  const lists = usePlaylists().filter(n => n.kind !== 'folder' && query.terms.length && hit(n.name))
-  const flows = useFlows().flows.filter(f => query.terms.length && hit(f.name))
+  const online = useMusicSearch(query.terms.join(' '), 'all', ONLINE_DELAY)
+  const [open, setOpen] = useState(false)
   const hits = useMemo(() => {
     const seen = new Set<string>()
     return (online?.res.online ?? []).filter(x => !seen.has(x.track_id) && seen.add(x.track_id))
   }, [online])
+  const merged = useMemo(() => mergeOnline(hits, query.terms), [hits, query.terms])
+  const mine = useMemo(() => new Map(matched.map(t => [songKey(t.title), t])), [matched])
+  const rest = [...merged.long, ...merged.other]
   const errors = Object.entries(online?.res.errors ?? {}).filter(([k]) => k !== 'library')
-  const shownTracks = more.has('lib') ? matched : matched.slice(0, TRACKS_SHOWN)
+  const n = merged.songs.length
+  const list = useRef<HTMLDivElement>(null)
+  useGlide(list)
   return (
-    <div className="flex flex-col gap-1">
-      {names && (
-        <Group title="Online" hint={!online ? 'searching…' : undefined}>
-          {ONLINE_SOURCES.map(s => {
-            const mine = hits.filter(x => x.source === s)
-            const pending = !online || online.pending.includes(s)
-            const shown = more.has(s) ? mine : mine.slice(0, ONLINE_SHOWN)
-            return (
-              <div key={s}>
-                <Row depth={0} icon={<Ic name="search" size={13} />} label={sourceLabel(s)} count={pending ? <span className="loading loading-spinner loading-xs" /> : mine.length} dim={!pending && !mine.length} />
-                {shown.map(x => <OnlineRow key={x.track_id} hit={x} h={h} />)}
-                {mine.length > shown.length && <Row depth={1} icon={null} label={`${mine.length - shown.length} more on ${sourceLabel(s)}`} onClick={() => grow(s)} dim />}
-              </div>
-            )
-          })}
-          {errors.length > 0 && <p className="px-2 py-1 text-[11px] text-error/80">{errors.map(([k, v]) => `${sourceLabel(k)}: ${v}`).join(' · ')}</p>}
-        </Group>
-      )}
-      <Group title="In your library" hint={`${matched.length} tracks`}>
-        {artists.map(([name, n]) => (
-          <Row key={`ar:${name}`} depth={0} icon={<Ic name="user" size={14} />} label={<><Lit text={name} terms={query.terms} /><i className="ml-1.5 text-[11px] not-italic text-base-content/45">artist</i></>} count={n} onClick={() => onOpenAs('artist', name)} />
-        ))}
-        {albums.map(a => (
-          <Row key={`al:${a.name}`} depth={0} icon={<Ic name="album" size={14} />} label={<><Lit text={a.name} terms={query.terms} /><i className="ml-1.5 text-[11px] not-italic text-base-content/45">album · {a.artist}</i></>} count={a.count} onClick={() => onOpenAs('album', a.name)} />
-        ))}
-        {shownTracks.map(t => <TrackRow key={t.id} t={t} depth={0} list={matched} h={h} terms={query.terms} sub={t.album || t.albumName} />)}
-        {matched.length > shownTracks.length && <Row depth={0} icon={null} label={`${matched.length - shownTracks.length} more tracks`} onClick={() => grow('lib')} dim />}
-        {!matched.length && <p className="px-3 py-1.5 text-xs text-base-content/45">Nothing in your libraries</p>}
-      </Group>
-      {(lists.length > 0 || flows.length > 0) && (
-        <Group title="Lists and flows">
-          {lists.map(n => <Row key={n.id} depth={0} icon={<Ic name="list" size={14} />} label={<Lit text={n.name} terms={query.terms} />} onClick={() => onList(n.id)} />)}
-          {flows.map(f => <Row key={f.id} depth={0} icon={<Ic name="flow" size={14} />} label={<Lit text={f.name} terms={query.terms} />} onClick={() => onFlow(f.id)} />)}
-        </Group>
-      )}
-    </div>
+    <>
+      <p className="truncate px-3 pb-1 text-[11px] text-base-content/60">
+        {/* The pending part first: the column truncates the line. */}
+        {!online ? 'searching…' : `${n} ${n === 1 ? 'song' : 'songs'} · ${online.pending.length ? 'more coming' : 'merged, previews left out'}`}
+      </p>
+      <div ref={list} className="relative">
+        {merged.songs.map(s => <div key={s.key} data-ids={s.hits.map(x => x.track_id).join(' ')}><SongRow s={s} own={mine.get(s.key)} h={h} terms={query.terms} /></div>)}
+      </div>
+      {online && !online.pending.length && !n && <p className="px-3 py-1.5 text-xs text-base-content/60">Nothing online</p>}
+      {rest.length > 0 && (open
+        ? rest.map(x => <OnlineRow key={x.track_id} hit={x} h={h} />)
+        : <Row depth={0} icon={null} onClick={() => setOpen(true)} dim
+            label={[merged.long.length && `${merged.long.length} long ${merged.long.length === 1 ? 'version' : 'versions'}`, merged.other.length && `${merged.other.length} other ${merged.other.length === 1 ? 'result' : 'results'}`].filter(Boolean).join(' · ')} />)}
+      {errors.length > 0 && <p className="px-2 py-1 text-[11px] text-error/80">{errors.map(([k, v]) => `${sourceLabel(k)}: ${v}`).join(' · ')}</p>}
+    </>
   )
 }
 
-function Group({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+/** Where a row shows now: its slot plus whatever glide is still moving it. */
+const shownY = (el: HTMLElement, slot: number) => slot + (parseFloat(getComputedStyle(el).translate.split(' ')[1] ?? '') || 0)
+
+/**
+ * As sites answer, songs arrive and re-sort. A row is known by the site results in it, not its
+ * title (a late artist can retitle and remount it): one holding a result seen before glides from
+ * where that result showed (FLIP, from mid-glide too); a new one settles in, already visible.
+ * A row climbing passes over the ones it overtakes, which dim while they slide down.
+ * Reduced motion: nothing animates.
+ */
+function useGlide(ref: React.RefObject<HTMLDivElement | null>) {
+  const last = useRef(new Map<string, { slot: number; el: HTMLElement }>())
+  useLayoutEffect(() => {
+    const now = new Map<string, { slot: number; el: HTMLElement }>()
+    const still = reducedMotion()
+    const rows = [...ref.current?.children ?? []].map(el => {
+      const row = el as HTMLElement, ids = row.dataset.ids!.split(' '), top = row.offsetTop
+      const prev = ids.map(id => last.current.get(id)).find(Boolean)
+      const was = prev && (prev.el.isConnected ? shownY(prev.el, prev.slot) : prev.slot)
+      ids.forEach(id => now.set(id, { slot: top, el: row }))
+      return { row, top, was }
+    })
+    for (const { row, top, was } of rows) {
+      if (was === undefined) {
+        if (!still) row.animate([{ opacity: 0.4, translate: '0 -3px' }, { opacity: 1, translate: '0 0' }], { duration: 140, easing: EASE })
+      } else if (!still && Math.abs(was - top) > 0.5) {
+        row.getAnimations().forEach(a => a.cancel())
+        const up = was > top
+        row.style.zIndex = up ? '1' : ''
+        row.style.position = 'relative'
+        row.animate(up ? [{ translate: `0 ${was - top}px` }, { translate: '0 0' }] : [{ translate: `0 ${was - top}px`, opacity: 0.6 }, { translate: '0 0', opacity: 1 }], { duration: 180, easing: EASE })
+          .onfinish = () => { row.style.zIndex = '' }
+      }
+    }
+    last.current = now
+  })
+}
+
+/** A merged song: plays from its best source; one you own plays and adds your copy. */
+function SongRow({ s, own, h, terms }: { s: Song; own?: MusicTrack; h: TreeHandlers; terms: string[] }) {
+  const t = own ?? trackOfHit(s.best)
+  const dur = s.duration ? fmtTime(s.duration) : ''
+  const also = [...new Set(s.hits.map(x => x.source))].filter(x => x !== s.best.source).map(sourceLabel)
   return (
-    <section>
-      <h3 className="flex h-8 items-center gap-1.5 px-1.5 text-[11px] font-semibold uppercase tracking-wider text-base-content/55">
-        {title}{hint && <i className="font-normal normal-case tracking-normal not-italic text-base-content/45">{hint}</i>}
-      </h3>
-      {children}
-    </section>
+    <Row
+      depth={0}
+      icon={s.best.thumb ? <img src={s.best.thumb} alt="" loading="lazy" className="size-5 rounded object-cover" /> : <Ic name="search" size={12} />}
+      label={<><Lit text={s.title} terms={terms} />{s.video && <i className="ml-1.5 text-[11px] not-italic text-base-content/60">video</i>}</>}
+      count={<span className="flex items-center gap-1.5">
+        {own
+          ? <span title="In your library: plays your copy" className="flex items-center gap-0.5 text-success"><Ic name="check" size={11} width={3} />yours</span>
+          : <span title={`Plays from ${sourceLabel(s.best.source)}${also.length ? `, also on ${also.join(', ')}` : ''}`}
+              className="rounded bg-primary/15 px-1 text-[9.5px] font-semibold text-primary">{SHORT[s.best.source] ?? s.best.source}</span>}
+        {dur && <span className="w-8 text-right">{dur}</span>}
+      </span>}
+      onClick={() => own ? h.onTrack(own, [own]) : void playPayload([hitPayload(s.best)])}
+      onAdd={() => h.onAdd([t], s.title)}
+      addTo={h.addTo}
+      drag={dragProps(t)}
+    />
   )
 }
 
@@ -120,9 +128,10 @@ function OnlineRow({ hit, h }: { hit: OnlineHit; h: TreeHandlers }) {
     <Row
       depth={1}
       icon={hit.thumb ? <img src={hit.thumb} alt="" loading="lazy" className="size-5 rounded object-cover" /> : <Ic name="search" size={12} />}
-      label={<>{hit.title}<i className="ml-1.5 text-[11px] not-italic text-base-content/50">{[hit.artist, hit.duration ? fmtTime(hit.duration) : '', hit.kind === 'video' ? 'video' : ''].filter(Boolean).join(' · ')}</i></>}
+      label={<>{hit.title}<i className="ml-1.5 text-[11px] not-italic text-base-content/60">{[hit.artist, hit.duration ? fmtTime(hit.duration) : '', hit.kind === 'video' ? 'video' : ''].filter(Boolean).join(' · ')}</i></>}
       onClick={() => void playPayload([hitPayload(hit)])}
       onAdd={() => h.onAdd([t], hit.title)}
+      addTo={h.addTo}
       drag={dragProps(t)}
     />
   )

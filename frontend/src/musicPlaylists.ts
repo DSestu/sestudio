@@ -46,6 +46,8 @@ export interface PlaylistNode {
   shape?: string
   /** Item id -> the index it is pinned at. */
   pins?: Record<string, number>
+  /** The Music page's unsaved Queue: hidden from every list until Save as playlist. */
+  draft?: boolean
   /** The mix this blend playlist was carried over from (old `?mx=` links redirect to it). */
   from_mix?: string
 }
@@ -146,13 +148,38 @@ async function call<T>(path: string, method: string, body?: unknown): Promise<T>
 }
 
 let nodes: PlaylistNode[] = []
+let draft: PlaylistNode | undefined
 let loaded = false
 const listeners = new Set<() => void>()
 
 export async function loadPlaylists(): Promise<void> {
-  nodes = await call<PlaylistNode[]>('', 'GET')
+  const all = await call<PlaylistNode[]>('', 'GET')
+  nodes = all.filter(n => !n.draft)
+  draft = all.find(n => n.draft)
   loaded = true
   listeners.forEach(l => l())
+  if (!draft) void ensureDraft()
+}
+
+let asked = false
+/**
+ * One empty Queue waits on the Music page, made when the tree comes back without one: once, until
+ * the next save. A server too old to keep the draft flag would show it as a playlist: undone, no Queue.
+ */
+async function ensureDraft() {
+  if (asked) return
+  asked = true
+  try {
+    const n = await call<PlaylistNode>('', 'POST', { kind: 'playlist', name: 'Queue', draft: true })
+    if (!n.draft) { await call(`/${n.id}`, 'DELETE'); return }
+    await loadPlaylists()
+  } catch { /* no Queue this visit */ }
+}
+
+/** The Queue: the playlist being built that has no name yet. */
+export function useDraft(): PlaylistNode | undefined {
+  usePlaylists()
+  return useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => draft)
 }
 
 /** The shared tree, fetched on first use. */
@@ -176,6 +203,8 @@ export const playlistApi = {
   create: (kind: PlaylistNode['kind'], name: string, parent: string | null = null, rules?: Partial<SmartRules>) =>
     change<PlaylistNode>('', 'POST', { kind, name, parent, rules }),
   rename: (id: string, name: string) => change<PlaylistNode>(`/${id}`, 'PATCH', { name }),
+  /** The Queue becomes a named playlist in the lists; a fresh empty Queue takes its place. */
+  saveDraft: (id: string, name: string) => { asked = false; return change<PlaylistNode>(`/${id}`, 'PATCH', { name, draft: false }) },
   setRules: (id: string, rules: Partial<SmartRules>) => change<PlaylistNode>(`/${id}`, 'PATCH', { rules }),
   move: (id: string, parent: string | null, index?: number) => change<PlaylistNode[]>(`/${id}/move`, 'POST', { parent, index }),
   remove: (id: string) => change<{ ok: boolean }>(`/${id}`, 'DELETE'),

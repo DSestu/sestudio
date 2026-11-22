@@ -31,7 +31,7 @@ type Sheet = { k: 'row'; id: string } | { k: 'menu' } | { k: 'shape' } | { k: 'f
 const BTN = 'btn h-11 min-h-0 rounded-xl border-0 bg-white/8 text-sm font-medium disabled:opacity-40'
 const PLUS = <Ic name="plus" size={12} />
 
-export default function PlaylistPhone({ node, view, byId, facts, colour, secs, run, playingAt, moved, curve, added, problems, openJoin, onJoin, onPreview, onClose, onBlendBy, play, pause }: {
+export default function PlaylistPhone({ node, view, byId, facts, colour, secs, run, playingAt, moved, curve, added, problems, openJoin, onJoin, onPreview, onClose, onBlendBy, play, pause, onSave }: {
   node: PlaylistNode
   view: PlaylistView
   byId: ReadonlyMap<string, MusicTrack>
@@ -52,6 +52,8 @@ export default function PlaylistPhone({ node, view, byId, facts, colour, secs, r
   onBlendBy: () => void
   play: () => void
   pause: () => void
+  /** The Queue (a draft): Save as playlist in its header. */
+  onSave?: () => void
 }) {
   const { rows, tracks, joins } = view
   const blend = !!node.blend
@@ -84,6 +86,7 @@ export default function PlaylistPhone({ node, view, byId, facts, colour, secs, r
           <h3 className="truncate text-base font-semibold">{node.name}</h3>
           <p className="truncate text-xs text-base-content/60">{sub}</p>
         </div>
+        {onSave && <button disabled={!tracks.length} onClick={onSave} className="btn btn-sm h-11 min-h-0 shrink-0 rounded-xl">Save as playlist</button>}
         <button onClick={() => setSheet({ k: 'menu' })} aria-label={`Options for ${node.name}`} className="btn btn-ghost btn-circle size-11 min-h-0">
           <svg className="size-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
         </button>

@@ -24,7 +24,6 @@ import { addTo, removeItems, usePlaylistView } from './playlistEdit'
 import TapeBar, { type Order, type Shape } from './TapeBar'
 import type { TapeGroup } from './tapeLayout'
 import { LINK_RE, useMusicQuery } from '../../../musicQuery'
-import ExplorerSearch from './ExplorerSearch'
 import { isEmpty, matches, parseQuery } from './searchWords'
 import HoverCard from './HoverCard'
 import { useHoverCard } from './useHoverCard'
@@ -40,7 +39,7 @@ const QUICK_WORDS = ['dark', 'floating', '128', '172']
 // The Music page as one surface (SPEC-music-library §2.1): explorer · centre · right column,
 // three columns that scroll on their own on desktop; stacked on a phone, the explorer sliding in.
 
-export default function MusicSurface({ all, libraries, get, v, wide, right, openList, onCloseList, onList, onNewList, onFlow, onFlows, onAddLibrary, centreView, rightTop }: {
+export default function MusicSurface({ all, libraries, get, v, wide, right, openList: pickedList, draft, onSaveDraft, onOpenDraft, onCloseList, onList, onNewList, onFlow, onFlows, onAddLibrary, centreView, rightTop }: {
   all: MusicTrack[]
   libraries: LibraryStatus[]
   get: (id: string) => Summary | undefined
@@ -51,6 +50,11 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
   right?: ReactNode
   /** The playlist open on the board (`?pl=`), in the centre under the tape. */
   openList?: PlaylistNode
+  /** The Queue: an unsaved playlist that takes the open playlist's place when none is open. */
+  draft?: PlaylistNode
+  onSaveDraft: () => void
+  /** A phone opens the Queue as its own page. */
+  onOpenDraft: () => void
   onCloseList: () => void
   onList: (id: string) => void
   onNewList: () => void
@@ -63,6 +67,8 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
   rightTop?: ReactNode
 }) {
   const grouping = useGrouping()
+  // + and drops go to the open playlist, else to the Queue.
+  const openList = pickedList ?? draft
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `v` stands for the summaries behind `get`
   const facts = useMemo(() => factsFrom(get, byId), [get, byId, v])
@@ -94,6 +100,11 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
   const query = useMemo(() => parseQuery(LINK_RE.test(text.trim()) ? '' : text), [text])
   const searching = !isEmpty(query)
   const matched = useMemo(() => (searching ? all.filter(t => matches(t, facts, query)) : all), [all, facts, query, searching])
+  // The explorer's tree cut to the sound words; its name words narrow it in place.
+  const soundTree = useMemo(() => {
+    const sounds = { ...query, terms: [] }
+    return isEmpty(sounds) ? undefined : treeOf(all.filter(t => matches(t, facts, sounds)), grouping, facts)
+  }, [all, facts, query, grouping])
   const base = source?.all ?? all
   const inView = useMemo(() => (searching ? base.filter(t => matches(t, facts, query)) : base), [base, facts, query, searching])
   const viewTree = useMemo(() => (source || searching ? treeOf(inView, grouping, facts) : tree), [source, searching, inView, tree, grouping, facts])
@@ -118,6 +129,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
     hoverProps: t => hc.props(t),
     onFlowDoor: (n, at) => setDoor({ at, name: n.name, source: n.kind === 'genre' ? { kind: 'genre', value: n.name, rule: 'lean' } : n.kind === 'library' ? { kind: 'library', value: n.all[0]?.library ?? n.name, label: n.name, rule: 'only' } : { kind: n.kind === 'artist' ? 'artist' : 'album', value: n.name, rule: 'only' } }),
     onOpen: n => { setSourceKey(n.key); setBrowse(false) },
+    addTo: openList?.name,
     onAdd: (ts, label) => { if (openList) void addTo(openList, ts, label); else toast('Open a playlist, or start a New playlist, to add tracks') },
     onTrack: (t, list) => void playFrom(list, t),
   }
@@ -153,17 +165,23 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
   const explorer = (
     <Explorer tree={tree} total={all.length} libraries={libraries} h={h} dir={grouping.files ? source : undefined}
       onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)}
-      search={searching ? { words: text.trim(), body: <ExplorerSearch query={query} matched={matched} h={h} onOpenAs={(p, k) => { applyPreset(p); setSourceKey(k); setBrowse(false) }} onList={onList} onFlow={onFlow} /> } : undefined} />
+      query={query} soundTree={soundTree} matched={matched} />
   )
   const kindLabel = source ? (source.kind === 'folder' || source.kind === 'library' ? 'Folder' : source.kind === 'all' ? '' : DIMS[source.kind].label) : ''
   const quick = !wide && (
-    <div role="group" aria-label="Quick" className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
-      <button onClick={() => setBrowse(true)} className="btn btn-sm shrink-0 gap-1.5 rounded-full"><Ic name="folder" size={14} />Browse</button>
-      {QUICK_WORDS.map(w => <button key={w} onClick={() => setMusicQuery(w)} className="btn btn-ghost btn-sm shrink-0 rounded-full bg-white/6">“{w}”</button>)}
-    </div>
+    <>
+      {/* The phone's search bar is the explorer's box: a tap opens it with the keyboard up. */}
+      <button onClick={() => setBrowse(true)} className="input flex w-full items-center gap-2 text-left">
+        <Ic name="search" size={15} className="shrink-0 text-base-content/60" />
+        <span className={`min-w-0 flex-1 truncate ${text ? '' : 'text-base-content/60'}`}>{text || 'Search or paste a link'}</span>
+      </button>
+      <div role="group" aria-label="Quick" className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
+        {QUICK_WORDS.map(w => <button key={w} onClick={() => setMusicQuery(w)} className="btn btn-ghost btn-sm shrink-0 rounded-full bg-white/6">“{w}”</button>)}
+      </div>
+    </>
   )
   // A phone with a playlist open shows only that playlist (SPEC-blend-playlists P1); the tape and the right column are for the library.
-  const phoneList = !wide && !!openList
+  const phoneList = !wide && !!pickedList
   const [blendSignal, setBlendSignal] = useState(0)
   const centre = centreView ? (
     <>
@@ -178,7 +196,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
   ) : phoneList ? (
     <>
       <BlendBy joins={view.joins} score={view.res?.score} hasSet={view.tracks.length > 1} sheet bar={false} signal={blendSignal} noun="playlist" />
-      <PlaylistBoard node={openList} view={view} byId={byId} wide={wide} facts={facts} colour={colour} openJoin={openJoin} onJoin={k => setJoin(k ? { pl: openList.id, key: k } : null)}
+      <PlaylistBoard node={pickedList} view={view} byId={byId} wide={wide} facts={facts} colour={colour} openJoin={openJoin} onJoin={k => setJoin(k ? { pl: pickedList.id, key: k } : null)} onSave={pickedList.draft ? onSaveDraft : undefined}
         onSelect={t => setSelectedId(t.id)} onClose={onCloseList} onBlendBy={() => setBlendSignal(n => n + 1)} />
     </>
   ) : (
@@ -204,9 +222,12 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
         joins={order === 'blend' ? blend?.joins : undefined} selectedId={selectedId} playingId={playingId}
         onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)} hoverProps={hc.props} picked={picked}
       />
-      {openList ? (
+      {openList && !wide ? (
+        // A phone keeps the Queue to one line under the tape; a tap opens it as a page.
+        <QueueLine node={openList} tracks={view.tracks} onOpen={onOpenDraft} onSave={onSaveDraft} />
+      ) : openList ? (
         <PlaylistBoard node={openList} view={view} byId={byId} wide={wide} facts={facts} colour={colour} selectedId={selectedId} openJoin={openJoin} onJoin={k => setJoin(k ? { pl: openList.id, key: k } : null)}
-          onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} onClose={onCloseList} />
+          onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} onClose={onCloseList} onSave={openList.draft ? onSaveDraft : undefined} />
       ) : (
         <p className="rounded-2xl bg-white/4 p-4 text-center text-xs text-base-content/50">Open a playlist from the explorer, or start a <button onClick={onNewList} className="underline">New playlist</button>, and drag tracks from the tape into it.</p>
       )}
@@ -237,6 +258,20 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, open
 }
 
 
+
+/** The Queue on a phone: its size, a tap to open it, and Save as playlist. */
+function QueueLine({ node, tracks, onOpen, onSave }: { node: PlaylistNode; tracks: MusicTrack[]; onOpen: () => void; onSave: () => void }) {
+  const secs = tracks.reduce((a, t) => a + t.duration, 0)
+  return (
+    <div className="flex items-center gap-2 rounded-2xl bg-white/4 p-2 pl-4">
+      <button onClick={onOpen} className="flex min-h-11 min-w-0 flex-1 items-baseline gap-2 text-left">
+        <b className="text-sm">{node.name}</b>
+        <span className="truncate text-xs text-base-content/60">{tracks.length ? `${tracks.length} ${tracks.length === 1 ? 'track' : 'tracks'} · ${Math.round(secs / 60)} min` : 'Empty · tap + on a track'}</span>
+      </button>
+      {node.draft && <button disabled={!tracks.length} onClick={onSave} className="btn btn-sm h-11 shrink-0 rounded-xl">Save as playlist</button>}
+    </div>
+  )
+}
 
 /** The leaves of the tree as tape groups: with 2+ levels the parent is the large head. */
 function tapeGroupsOf(tree: GroupNode[], g: Grouping): TapeGroup[] {

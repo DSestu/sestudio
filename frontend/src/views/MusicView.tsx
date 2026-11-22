@@ -12,7 +12,7 @@ import { post, resolveLink, useMusicQueue, type OnlineLink } from '../musicQueue
 import { addTracks, nextIndex } from '../components/music/adding'
 import { playPayload } from '../components/music/player'
 import { useSummaries } from '../musicMeta'
-import { LINK_RE, setMusicQuery, useMusicQuery } from '../musicQuery'
+import { LINK_RE, useMusicQuery } from '../musicQuery'
 import FitsNext from '../components/music/FitsNext'
 import { closeFits, useFitsFor } from '../musicFits'
 import { useModalBack } from '../useModalBack'
@@ -23,9 +23,8 @@ import { useFlows } from '../musicFlows'
 import Sources, { type SourceTab } from '../components/music/edit/Sources'
 import { refOf, resetFocus, setSheet as setEditSheet, songKey, useFocus } from '../components/music/edit/focus'
 import { toast } from '../components/music/toast'
-import { createWithTracks, freshName, isSet, itemsOf, playlistApi, usePlaylists } from '../musicPlaylists'
+import { createWithTracks, freshName, isSet, itemsOf, playlistApi, useDraft, usePlaylists } from '../musicPlaylists'
 import MusicSurface from '../components/music/library/MusicSurface'
-import QueryChips from '../components/music/library/QueryChips'
 
 const run = (p: Promise<void>) => { p.catch(() => {}) }
 
@@ -91,7 +90,14 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
   const [pickFor, setPickFor] = useState<MusicTrack>()
   useModalBack(adding, () => setAdding(false))
   const playlists = usePlaylists()
-  const node = playlists.find(n => n.id === nodeId)
+  // The Queue (an unsaved draft) is hidden from the lists, but a phone opens it as a page like any playlist.
+  const draft = useDraft()
+  const node = playlists.find(n => n.id === nodeId) ?? (draft && draft.id === nodeId ? draft : undefined)
+  const saveDraft = () => {
+    if (!draft) return
+    const name = window.prompt('Save as playlist', freshName(playlists.map(n => n.name)))?.trim()
+    if (name) playlistApi.saveDraft(draft.id, name).then(() => toast(`Saved as ${name}`), (e: Error) => toast(e.message))
+  }
   // An old `?mx=<id>` link opens the playlist its mix became (SPEC-blend-playlists §5); no match: the board.
   const mixLink = params.get('mx') ?? ''
   const migrated = mixLink ? playlists.find(n => n.from_mix === mixLink) : undefined
@@ -170,6 +176,7 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
     <MusicSurface
       all={all} libraries={libraries} get={get} v={v} wide={wide} right={fitsPanel || undefined}
       openList={onBoard ? node : undefined} onCloseList={() => go({})}
+      draft={draft} onSaveDraft={saveDraft} onOpenDraft={() => { if (draft) go({ pl: draft.id }) }}
       onList={id => go({ pl: id })} onNewList={() => newPlaylist()} onFlow={id => go({ fl: id })} onFlows={() => openCentre('flows')} onAddLibrary={() => setAdding(true)}
       rightTop={node && !onBoard ? <div data-fits ref={setFitsEl} className="h-full empty:hidden" /> : undefined}
       centreView={node && !onBoard ? {
@@ -201,19 +208,6 @@ export default function MusicView({ params, navigate }: { params: URLSearchParam
       )}
       <div className="flex gap-6 items-start">
         <div className="flex-1 min-w-0 flex flex-col gap-4">
-          {!page && !phoneList && !node && (
-            <label className="input input-bordered flex w-full items-center gap-1 md:hidden">
-              <QueryChips />
-              <input
-                type="search"
-                value={query}
-                onChange={e => setMusicQuery(e.target.value)}
-                placeholder="Search names or sounds, or paste a link"
-                aria-label="Search your libraries"
-                className="min-w-0 grow"
-              />
-            </label>
-          )}
           {!page && LINK_RE.test(query.trim()) && <LinkCard url={query.trim()} />}
           {editing && !wide && (
             <div role="group" aria-label="Add and fits" className="sticky top-2 z-20 grid grid-cols-3 gap-1.5 rounded-2xl bg-base-300/90 p-1.5 backdrop-blur">

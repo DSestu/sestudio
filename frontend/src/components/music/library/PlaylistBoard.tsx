@@ -30,7 +30,7 @@ import type { Colour } from './sigil'
 // row selected here shows its panel in the right column (`JoinFix`, `SwapFor`).
 
 
-export default function PlaylistBoard({ node, view, byId, wide, facts, colour, selectedId, openJoin, onJoin, onSelect, hoverProps, onClose, onBlendBy }: {
+export default function PlaylistBoard({ node, view, byId, wide, facts, colour, selectedId, openJoin, onJoin, onSelect, hoverProps, onClose, onBlendBy, onSave }: {
   node: PlaylistNode
   byId: ReadonlyMap<string, MusicTrack>
   wide: boolean
@@ -46,6 +46,8 @@ export default function PlaylistBoard({ node, view, byId, wide, facts, colour, s
   onClose: () => void
   /** A phone: the options sheet opens the Blend by sheet. */
   onBlendBy?: () => void
+  /** The Queue (a draft): Save as playlist, in place of Close. */
+  onSave?: () => void
 }) {
   const { rows, tracks, res, joins } = view
   const kept = useKept()
@@ -100,7 +102,7 @@ export default function PlaylistBoard({ node, view, byId, wide, facts, colour, s
 
   if (!wide) {
     return <PlaylistPhone node={node} view={view} byId={byId} facts={facts} colour={colour} secs={secs} run={run} playingAt={playingAt} moved={moved} curve={curve} added={added}
-      problems={problems} openJoin={openJoin} onJoin={onJoin} onPreview={setPreview} onClose={onClose} onBlendBy={onBlendBy ?? (() => {})} play={() => void play()} pause={pause} />
+      problems={problems} openJoin={openJoin} onJoin={onJoin} onPreview={setPreview} onClose={onClose} onBlendBy={onBlendBy ?? (() => {})} play={() => void play()} pause={pause} onSave={onSave} />
   }
 
   return (
@@ -115,7 +117,8 @@ export default function PlaylistBoard({ node, view, byId, wide, facts, colour, s
         <button disabled={!tracks.length} onClick={run ? pause : () => void play()} className="btn btn-primary btn-xs sm:btn-sm shrink-0 gap-1 rounded-xl">
           <svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d={run?.playing ? 'M6 5h4v14H6zM14 5h4v14h-4z' : 'M8 5v14l11-7z'} /></svg>{run?.playing ? 'Pause' : 'Play'}
         </button>
-        <Menu node={node} onClose={onClose} />
+        {onSave && <button disabled={!tracks.length} onClick={onSave} className="btn btn-ghost btn-xs sm:btn-sm shrink-0 rounded-xl">Save as playlist</button>}
+        <Menu node={node} onClose={onSave ? undefined : onClose} />
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Seg label="Order" options={[['blend', 'Blend'], ['hand', 'Hand order']] as const} value={blend ? 'blend' : 'hand'} onPick={v => { if ((v === 'blend') !== blend) void setBlend(node, v === 'blend') }} />
@@ -167,7 +170,7 @@ export default function PlaylistBoard({ node, view, byId, wide, facts, colour, s
 }
 
 /** ⋯: Re-blend all (ignores the stay-put cost once) and Close. */
-function Menu({ node, onClose }: { node: PlaylistNode; onClose: () => void }) {
+function Menu({ node, onClose }: { node: PlaylistNode; onClose?: () => void }) {
   const done = (fn: () => void) => () => { (document.activeElement as HTMLElement | null)?.blur(); fn() }
   return (
     <div className="dropdown dropdown-end shrink-0">
@@ -178,7 +181,7 @@ function Menu({ node, onClose }: { node: PlaylistNode; onClose: () => void }) {
         {node.blend && <li><button onClick={done(() => void reblend(node, true))}>Re-blend all</button></li>}
         <li className="menu-title pt-2 text-[11px]">Auto-order</li>
         {ORDERS.map(([mode, name]) => <li key={mode}><button onClick={done(() => void autoOrderBy(node, mode))}>{name}</button></li>)}
-        <li><button onClick={done(onClose)}>Close playlist</button></li>
+        {onClose && <li><button onClick={done(onClose)}>Close playlist</button></li>}
       </ul>
     </div>
   )
