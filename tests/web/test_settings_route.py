@@ -156,3 +156,18 @@ def test_harmony_settings_persist_and_reject_unknown_values(client):
     assert {k: saved[k] for k in body} == body
     bad = {"music_theory_level": "x"}
     assert client.put("/api/settings", json=bad).status_code == 422
+
+
+def test_twitch_token_is_write_only_and_unlocks_failed_lookups(client):
+    """The token is a password in all but name; saving it retries locked VODs."""
+    twitch = client.app.state.sites["twitch"]
+    twitch._failed["https://www.twitch.tv/videos/1"] = (0.0, "Subscribers only")
+    assert client.get("/api/settings").json()["twitch_configured"] is False
+
+    data = client.put("/api/settings", json={"twitch_auth_token": ' "abc" '}).json()
+
+    assert data["twitch_configured"] is True and "twitch_auth_token" not in data
+    assert twitch._failed == {}
+    from sestudio.config import load_config
+
+    assert load_config().twitch_auth_token == "abc"

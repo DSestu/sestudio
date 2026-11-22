@@ -111,6 +111,9 @@ class AppConfig:
     # A Netscape cookies.txt of a signed-in YouTube session, for the YouTube
     # Music account library; empty means not signed in.
     ytmusic_cookies: str = ""
+    # The `auth-token` cookie of a signed-in Twitch session: lets yt-dlp play
+    # the VODs the account's subscriptions unlock. Empty means no account.
+    twitch_auth_token: str = ""
     # The station's picture (SPEC-music §7): frames per second (20 is what a
     # machine without a GPU sustains; 30 where the page keeps up), and the
     # browser that draws it: a path or a channel (chrome, msedge); empty finds one.
@@ -210,6 +213,7 @@ def load_config() -> AppConfig:
                 if isinstance(d, dict)
             ],
             ytmusic_cookies=str(data.get("ytmusic_cookies", "")),
+            twitch_auth_token=str(data.get("twitch_auth_token", "")),
             station_fps=min(30, max(10, int(data.get("station_fps", 20)))),
             station_browser=str(data.get("station_browser", "")),
             music_genre_model=bool(data.get("music_genre_model", True)),

@@ -1,4 +1,5 @@
-"""YouTube and Twitch, read through yt-dlp: no account and no API key.
+"""YouTube and Twitch, read through yt-dlp: no API key, and no account
+except an optional Twitch token for subscriber-only VODs.
 
 A video is a one-episode title (season 0), and yt-dlp resolves it on demand.
 A channel lists its latest videos: YouTube's through yt-dlp, dated by the
@@ -7,6 +8,7 @@ channel's RSS feed; Twitch's from its public web GraphQL endpoint.
 
 from __future__ import annotations
 
+import http.cookiejar
 import re
 import threading
 import time
@@ -21,6 +23,7 @@ from urllib.parse import urlencode, urlsplit
 import yt_dlp
 
 from sestudio.catalogs import TtlCache
+from sestudio.config import load_config
 from sestudio.downloader import js_runtime_args
 from sestudio.http_client import BROWSER_UA, new_client
 from sestudio.models import Episode, SeasonCard, StreamSource
@@ -90,16 +93,40 @@ def ytdlp_json(*args: str) -> dict[str, Any]:
             raise
 
 
+def _twitch_token(url: str) -> str:
+    """The saved Twitch session token, for a Twitch URL only."""
+    host = urlsplit(url).hostname or ""
+    if host != "twitch.tv" and not host.endswith(".twitch.tv"):
+        return ""
+    return load_config().twitch_auth_token
+
+
+def _auth_cookie(token: str) -> http.cookiejar.Cookie:
+    # yt-dlp's Twitch extractor turns this cookie into its `OAuth` header.
+    return http.cookiejar.Cookie(
+        0, "auth-token", token, None, False, ".twitch.tv", True, True,
+        "/", False, True, None, False, None, None, {},
+    )  # fmt: skip
+
+
 def _extract(ydl_opts: dict[str, Any], url: str) -> dict[str, Any]:
+    token = _twitch_token(url)
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            if token:
+                ydl.cookiejar.set_cookie(_auth_cookie(token))
             return ydl.sanitize_info(ydl.extract_info(url, download=False)) or {}
     except yt_dlp.utils.YoutubeDLError as exc:
         message = str(exc).removeprefix("ERROR: ")
         if "subscriber-only" in message:
-            # No account here, so no subscription: say so rather than relay
-            # yt-dlp's advice about passing cookies.
-            message = "Subscribers only: Twitch keeps this broadcast for the channel's subscribers"
+            # Say what to do here rather than relay yt-dlp's advice about cookies.
+            message = (
+                "Subscribers only: your Twitch account isn't subscribed to this "
+                "channel, or its token in Settings has expired"
+                if token
+                else "Subscribers only: add your Twitch token in Settings › "
+                "Sources to watch it with your subscription"
+            )
         raise SiteError(message) from exc
 
 
