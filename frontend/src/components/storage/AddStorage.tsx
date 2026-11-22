@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { storagesApi, type FolderCheck, type NewStorage } from '../../api'
+import { storagesApi, type FolderCheck, type NearbyRow, type NewStorage } from '../../api'
+import { useStorages } from '../../storageChoice'
+import Nearby from './Nearby'
 import { fmtSize } from '../../downloadedLibrary'
 import FolderPicker from '../music/crates/FolderPicker'
 import ResponsiveModal from '../ResponsiveModal'
@@ -9,6 +11,7 @@ const KINDS = [
   { id: 'server', label: 'Server' },
   { id: 'remote_sestudio', label: 'Another sestudio' },
   { id: 'ytmusic_account', label: 'YouTube Music' },
+  { id: 'nearby', label: 'Nearby' },
 ] as const
 
 /** Read in the app, over their own protocol (SPEC-storage §9). */
@@ -18,7 +21,7 @@ const PROTOCOLS = [
   { id: 'ftp', label: 'FTP', port: 21, hint: 'Seedboxes, old NAS' },
 ] as const
 type Protocol = (typeof PROTOCOLS)[number]['id']
-type Kind = (typeof KINDS)[number]['id']
+export type Kind = (typeof KINDS)[number]['id']
 
 const HOLDS = [
   { id: 'video', label: 'Video', roles: ['video'] },
@@ -34,8 +37,15 @@ const RCLONE_MOUNT = 'https://rclone.org/commands/rclone_mount/'
  * one of the music-only sources, another sestudio or a YouTube Music account.
  * What a folder holds is asked, with no default (Q2).
  */
-export default function AddStorage({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [kind, setKind] = useState<Kind>('folder')
+export default function AddStorage({ onClose, onAdded, initial }: {
+  onClose: () => void
+  onAdded: () => void
+  /** Where it opens: a phone card's Look around opens Nearby from that phone. */
+  initial?: { kind?: Kind; from?: string }
+}) {
+  const [kind, setKind] = useState<Kind>(initial?.kind ?? 'folder')
+  const [from, setFrom] = useState(initial?.from ?? '')
+  const bridges = useStorages().filter(s => s.bridge)
   const [path, setPath] = useState('')
   const [browsing, setBrowsing] = useState(false)
   const [label, setLabel] = useState('')
@@ -78,6 +88,16 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
   }, [kind, path])
   const checked = check && check.path === path.trim() ? check : undefined
 
+  /** Open from Nearby: the Server tab, filled in with what was found. */
+  function openFound(row: NearbyRow) {
+    if (row.kind === 'media') return
+    setKind('server')
+    setProtocol(row.kind)
+    setHost(row.host)
+    setPort(row.port && row.port !== PROTOCOLS.find(p => p.id === row.kind)?.port ? String(row.port) : '')
+    setLabel(row.name !== row.host ? row.name : '')
+  }
+
   const roles = HOLDS.find(h => h.id === holds)?.roles
   const server: NewStorage = {
     kind: protocol, roles: [...(roles ?? ['video'])], label, host: host.trim(),
@@ -115,7 +135,7 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
         : kind === 'server' ? server
           : kind === 'remote_sestudio'
             ? { kind, url, token, label, roles: bridge ? ['video'] : ['music'], bridge }
-            : { kind, roles: ['music'] }
+            : { kind: 'ytmusic_account', roles: ['music'] }
       await storagesApi.add(body)
       onAdded()
       onClose()
@@ -127,11 +147,21 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
 
   const field = 'input input-bordered w-full'
   return (
-    <ResponsiveModal onClose={onClose}>
+    <ResponsiveModal onClose={onClose} boxClassName="sm:max-w-xl">
       <h3 className="font-semibold text-lg">Add a storage</h3>
-      <div role="tablist" className="tabs tabs-box my-3">
+      <div role="tablist" className="tabs tabs-box my-3 flex-nowrap overflow-x-auto">
         {KINDS.map(k => (
-          <button key={k.id} role="tab" aria-selected={kind === k.id} onClick={() => setKind(k.id)} className={`tab flex-1 ${kind === k.id ? 'tab-active' : ''}`}>{k.label}</button>
+          <button
+            key={k.id}
+            role="tab"
+            aria-selected={kind === k.id}
+            onClick={() => setKind(k.id)}
+            // The row scrolls on a phone: the open tab stays in sight.
+            ref={el => { if (el && kind === k.id) el.scrollIntoView({ inline: 'nearest', block: 'nearest' }) }}
+            className={`tab flex-1 whitespace-nowrap ${kind === k.id ? 'tab-active' : ''}`}
+          >
+            {k.label}
+          </button>
         ))}
       </div>
       <form onSubmit={e => { e.preventDefault(); if (ready && !busy) void submit() }} className="flex flex-col gap-3">
@@ -292,6 +322,18 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
             </label>
           </>
         )}
+        {kind === 'nearby' && (
+          <Nearby
+            from={from}
+            onFrom={setFrom}
+            bridges={bridges}
+            onOpen={(row, through) => {
+              if (through) { setError('Opening through a bridge comes in the next update.'); return }
+              setError('')
+              openFound(row)
+            }}
+          />
+        )}
         {kind === 'ytmusic_account' && (
           <label className="block">
             <span className="text-sm text-base-content/60">Cookies file of a signed-in YouTube session (optional here)</span>
@@ -302,7 +344,7 @@ export default function AddStorage({ onClose, onAdded }: { onClose: () => void; 
         {error && <p role="alert" className="text-sm text-error">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className="btn btn-ghost">Cancel</button>
-          <button type="submit" disabled={!ready || busy} className="btn btn-primary">Add storage</button>
+          {kind !== 'nearby' && <button type="submit" disabled={!ready || busy} className="btn btn-primary">Add storage</button>}
         </div>
       </form>
     </ResponsiveModal>

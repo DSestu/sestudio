@@ -106,3 +106,56 @@ def test_a_bridge_storage_shows_where_it_is(phone):
 def test_only_another_sestudio_is_a_bridge(phone):
     c, _, _ = phone
     assert c.patch("/api/storages/local", json={"bridge": True}).status_code == 400
+
+
+# --- looking around (PR 19) ------------------------------------------------------
+
+
+def test_one_row_per_address_and_kind_with_the_announced_name():
+    from sestudio import nearby
+
+    rows = nearby.merge([
+        {"name": "192.168.1.254", "kind": "smb", "host": "192.168.1.254", "port": 445},
+        {"name": "Freebox Server", "kind": "media", "host": "192.168.1.254", "port": None},
+        {"name": "192.168.1.254", "kind": "smb", "host": "192.168.1.254", "port": 445},
+        {"name": "192.168.1.254", "kind": "ftp", "host": "192.168.1.254", "port": 21},
+    ])  # fmt: skip
+    assert [(r["name"], r["kind"]) for r in rows] == [
+        ("Freebox Server", "smb"), ("Freebox Server", "ftp"), ("Freebox Server", "media"),
+    ]  # fmt: skip
+
+
+def test_the_box_is_looked_for_and_tailscale_left_out(monkeypatch):
+    from sestudio import dlna, nearby
+
+    monkeypatch.setattr(dlna, "_local_ipv4s", lambda: ["192.168.1.20", "100.101.7.22"])
+    assert nearby._lan_ipv4s() == ["192.168.1.20"]
+    assert nearby._boxes(["192.168.1.20"]) == ["192.168.1.1", "192.168.1.254"]
+
+
+def test_a_port_that_answers_is_found():
+    from sestudio import nearby
+
+    with socket.socket() as srv:
+        srv.bind(("127.0.0.1", 0))
+        srv.listen()
+        port = srv.getsockname()[1]
+        assert nearby._open("127.0.0.1", port)
+    with socket.socket() as quiet:  # bound, not listening: refused
+        quiet.bind(("127.0.0.1", 0))
+        assert not nearby._open("127.0.0.1", quiet.getsockname()[1])
+
+
+def test_home_asks_the_bridge_to_look_around(phone, monkeypatch):
+    from sestudio import nearby
+
+    found = {"found": [{"name": "Freebox Server", "kind": "smb", "host": "192.168.1.254", "port": 445}],
+             "seconds": 4.1}  # fmt: skip
+    monkeypatch.setattr(nearby, "scan", lambda: found)
+    c, url, token = phone
+    plain = c.post("/api/storages", json={"kind": "remote_sestudio", "roles": ["video"],
+                   "url": url, "token": token}).json()  # fmt: skip
+    assert c.get(f"/api/storages/{plain['id']}/nearby").status_code == 400
+    c.patch(f"/api/storages/{plain['id']}", json={"bridge": True})
+    assert c.get(f"/api/storages/{plain['id']}/nearby").json() == found
+    assert c.get("/api/nearby").json() == found

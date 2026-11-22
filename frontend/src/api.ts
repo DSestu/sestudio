@@ -1126,6 +1126,19 @@ async function storageCall<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T
 }
 
+/** One place that holds files, found by looking around (SPEC-storage §10, B3–B5). */
+export interface NearbyRow {
+  name: string
+  kind: 'smb' | 'ftp' | 'sftp' | 'media'
+  host: string
+  port: number | null
+}
+
+export interface NearbyScan {
+  found: NearbyRow[]
+  seconds: number
+}
+
 export interface NewStorage {
   kind: 'folder' | 'remote_sestudio' | 'ytmusic_account' | 'ftp' | 'sftp' | 'smb'
   roles: ('video' | 'music')[]
@@ -1154,6 +1167,13 @@ export const storagesApi = {
     storageCall<StorageInfo>(`/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   remove: (id: string) => storageCall<{ ok: boolean }>(`/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   check: (path: string) => storageCall<FolderCheck>(`/check?path=${encodeURIComponent(path)}`),
+  /** What holds files on this server's network, or on a bridge's (SPEC-storage §10). */
+  nearby: (from?: string): Promise<NearbyScan> => from
+    ? storageCall<NearbyScan>(`/${encodeURIComponent(from)}/nearby`)
+    : fetch(`${BASE}/nearby`).then(r => {
+      if (!r.ok) throw new Error(`Looking around failed (${r.status})`)
+      return r.json()
+    }),
   /** Connect to a server and list its folder, without adding it. */
   test: (body: NewStorage) => storageCall<{ folders: number }>('/test', { method: 'POST', body: JSON.stringify(body) }),
 }

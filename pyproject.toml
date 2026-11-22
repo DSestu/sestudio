@@ -50,6 +50,7 @@ dependencies = [
     "fsspec>=2024.6",
     "smbprotocol>=1.13",
     "paramiko>=3.4",
+    "zeroconf>=0.136",
 ]
 
 [project.urls]
