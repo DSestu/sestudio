@@ -278,6 +278,26 @@ export function onQueueEvent(fn: (ev: QueueEvent, before: QueueState, after: Que
 export const getQueue = () => state
 export const stationClock = () => station
 
+// The playlist whose tracks the queue is playing (SPEC-blend-playlists §3.1 D3): set when a playlist
+// is played, it holds while the queue still starts with that run's first item. The playlist is
+// "locked" then: its edits keep the played prefix and the queue follows the rest.
+let run: { playlist: string; first: string } | null = null
+const runListeners = new Set<() => void>()
+export function rememberRun(playlist: string, played: Pick<QueueState, 'items'>) {
+  run = played.items[0] ? { playlist, first: played.items[0].item_id } : null
+  runListeners.forEach(l => l())
+}
+export interface PlaylistRun { playlist: string; playing: boolean; trackId: string }
+export const playlistRunOf = (q: QueueState): PlaylistRun | null =>
+  run && q.current >= 0 && q.items[0]?.item_id === run.first ? { playlist: run.playlist, playing: q.playing, trackId: q.items[q.current].track_id } : null
+/** The run of `playlist` the queue is on, or null. */
+export function usePlaylistRun(playlist: string): PlaylistRun | null {
+  const q = useMusicQueue()
+  useSyncExternalStore(l => { runListeners.add(l); return () => { runListeners.delete(l) } }, () => run)
+  const r = playlistRunOf(q)
+  return r?.playlist === playlist ? r : null
+}
+
 /** The TV's volume and how many changes of it have been pushed: the page opened mid-cast shows no pill. */
 export function useTvVolume(): { volume: TvVolume | null; changes: number } {
   useEffect(connect, [])

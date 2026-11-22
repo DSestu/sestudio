@@ -205,6 +205,28 @@ def _leans(points: list[list[float]]) -> list[dict[str, Any]]:
     return out
 
 
+#: What a Lift (or Ease) over a whole flow adds (or takes) on the 0..100 energy scale.
+LEAN_SPAN: Final = 60.0
+
+
+def shape_curve(chunks: list[dict[str, Any]], points: int = 12) -> list[float]:
+    """The energy (0..100) a flow aims at, *points* samples along it: its start, then each lean's rise or fall."""
+    sp = spans(upgrade_chunks(chunks))
+    start = ((sp[0][2].get("layers") or {}).get("start") or {}).get("energy")
+    level = 50.0 if start is None else 100 * start
+    out = [level]
+    for k in range(1, points):
+        f = k / (points - 1)
+        a, b, c = next((s for s in sp if s[0] <= f < s[1]), sp[-1])
+        lean = (block(c["layers"].get("energy"), (f - a) / ((b - a) or 1)) or {}).get(
+            "lean", "hold"
+        )
+        level += {"lift": 1, "ease": -1}.get(lean, 0) * LEAN_SPAN / (points - 1)
+        level = max(0.0, min(100.0, level))
+        out.append(level)
+    return out
+
+
 def _is_curve(v: Any) -> bool:
     return isinstance(v, list) and bool(v) and isinstance(v[0], list)
 

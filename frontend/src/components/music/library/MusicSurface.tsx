@@ -7,9 +7,8 @@ import { useMusicQueue } from '../../../musicQueue'
 import type { Summary } from '../../../musicMeta'
 import { currentParams, patchParams } from '../../../nav'
 import { useModalBack } from '../../../useModalBack'
-import { removeFromSet, useSet } from '../../../musicSet'
-import { addTracksToSet } from './setQueue'
-import SetLane from './SetLane'
+import { itemsOf, type PlaylistNode } from '../../../musicPlaylists'
+import { toast } from '../toast'
 import { clearSelection, idsIn, useSelection } from './selection'
 import { playFrom } from '../player'
 import Explorer from './Explorer'
@@ -18,9 +17,10 @@ import { factsFrom } from './facts'
 import { DIMS, findNode, treeOf, type GroupNode, type Grouping } from './grouping'
 import { Ic } from './icons'
 import Tape from './Tape'
-import { BLEND_CAP, useBlendOrder, useSetOrder } from './blendOrder'
-import SetList from './SetList'
+import { BLEND_CAP, useBlendOrder } from './blendOrder'
 import BlendBy from './BlendBy'
+import PlaylistBoard, { JoinFix, SwapFor } from './PlaylistBoard'
+import { addTo, removeItems, usePlaylistView } from './playlistEdit'
 import TapeBar, { type Order, type Shape } from './TapeBar'
 import type { TapeGroup } from './tapeLayout'
 import { LINK_RE, useMusicQuery } from '../../../musicQuery'
@@ -40,7 +40,7 @@ const QUICK_WORDS = ['dark', 'floating', '128', '172']
 // The Music page as one surface (SPEC-music-library §2.1): explorer · centre · right column,
 // three columns that scroll on their own on desktop; stacked on a phone, the explorer sliding in.
 
-export default function MusicSurface({ all, libraries, get, v, wide, right, onList, onNewList, onFlow, onFlows, onMix, onMixes, onAddLibrary, centreView }: {
+export default function MusicSurface({ all, libraries, get, v, wide, right, openList, onCloseList, onList, onNewList, onFlow, onFlows, onAddLibrary, centreView, rightTop }: {
   all: MusicTrack[]
   libraries: LibraryStatus[]
   get: (id: string) => Summary | undefined
@@ -49,15 +49,18 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
   wide: boolean
   /** The Fits panel when one is open, else the track info. */
   right?: ReactNode
+  /** The playlist open on the board (`?pl=`), in the centre under the tape. */
+  openList?: PlaylistNode
+  onCloseList: () => void
   onList: (id: string) => void
   onNewList: () => void
   onFlow: (id: string) => void
   onFlows: () => void
-  onMix: (id: string) => void
-  onMixes: () => void
   onAddLibrary: () => void
-  /** Flows or Mixes, opened from the explorer, in place of the tape and the set. */
+  /** Flows or Mixes, opened from the explorer, in place of the tape and the playlist. */
   centreView?: { label: string; node: ReactNode; onClose: () => void }
+  /** Above the track info in the right column; while it has content (a list's Fits) the track info hides. */
+  rightTop?: ReactNode
 }) {
   const grouping = useGrouping()
   const byId = useMemo(() => new Map(all.map(t => [t.id, t])), [all])
@@ -115,29 +118,41 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
     hoverProps: t => hc.props(t),
     onFlowDoor: (n, at) => setDoor({ at, name: n.name, source: n.kind === 'genre' ? { kind: 'genre', value: n.name, rule: 'lean' } : n.kind === 'library' ? { kind: 'library', value: n.all[0]?.library ?? n.name, label: n.name, rule: 'only' } : { kind: n.kind === 'artist' ? 'artist' : 'album', value: n.name, rule: 'only' } }),
     onOpen: n => { setSourceKey(n.key); setBrowse(false) },
-    onAdd: (ts, label) => { addTracksToSet(ts, label) },
+    onAdd: (ts, label) => { if (openList) void addTo(openList, ts, label); else toast('Open a playlist, or start a New playlist, to add tracks') },
     onTrack: (t, list) => void playFrom(list, t),
   }
   const hc = useHoverCard()
   const focusTrack = (selectedId && byId.get(selectedId)) || (playingId && byId.get(playingId)) || undefined
-  const set = useSet()
-  const setView = useSetOrder(set)
-  const inSet = useMemo(() => new Set(set.tracks.map(t => t.id)), [set.tracks])
-  // + on a track: in the set, or out of it again.
-  const toggleOne = (t: MusicTrack) => (inSet.has(t.id) ? removeFromSet([t.id]) : h.onAdd([t], t.title))
-  const rightColumn = focusTrack ? (
+  const view = usePlaylistView(openList, byId)
+  const inSet = useMemo(() => new Set(openList ? itemsOf(openList).map(i => i.track_id) : []), [openList])
+  // + on a track: in the open playlist, or out of it again.
+  const toggleOne = (t: MusicTrack) => {
+    const item = openList && itemsOf(openList).find(i => i.track_id === t.id)
+    if (openList && item) void removeItems(openList, [item.item_id])
+    else h.onAdd([t], t.title)
+  }
+  // A join of the playlist asked for its Fix panel; it belongs to that playlist only.
+  const [join, setJoin] = useState<{ pl: string; key: string } | null>(null)
+  const openJoin = openList && join?.pl === openList.id ? join.key : null
+  const sel = useSelection()
+  const rowSelected = !!(openList && selectedId && idsIn(sel, 'set').has(selectedId) && view.rows.some(r => r.track.id === selectedId))
+  const rightColumn = openList && openJoin ? (
+    <JoinFix node={openList} view={view} openJoin={openJoin} facts={facts} colour={colour} byId={byId} onClose={() => setJoin(null)} />
+  ) : focusTrack ? (
     <>
       <TrackInfo
         track={focusTrack} selected={!!selectedId} facts={facts} colour={colour} libraries={libraries}
         onClear={() => setSelectedId(undefined)} onPlay={() => void playFrom(inView.some(t => t.id === focusTrack.id) ? inView : [focusTrack], focusTrack)}
-        action={{ label: inSet.has(focusTrack.id) ? 'Remove from set' : 'Add to set', onClick: () => toggleOne(focusTrack) }}
+        action={{ label: inSet.has(focusTrack.id) ? 'Remove from playlist' : 'Add to playlist', onClick: () => toggleOne(focusTrack), remove: inSet.has(focusTrack.id) }}
       />
-      <Orbit focus={focusTrack} all={all} facts={facts} get={get} colour={colour} inSet={inSet} onFocus={t => setSelectedId(t.id)} onAdd={toggleOne} />
+      {rowSelected && openList
+        ? <SwapFor node={openList} view={view} trackId={focusTrack.id} library={all} facts={facts} onDone={() => setSelectedId(undefined)} />
+        : <Orbit focus={focusTrack} all={all} facts={facts} get={get} colour={colour} inSet={inSet} onFocus={t => setSelectedId(t.id)} onAdd={toggleOne} />}
     </>
   ) : <p className="p-4 text-xs text-base-content/45">Select a track to see its details here.</p>
   const explorer = (
     <Explorer tree={tree} total={all.length} libraries={libraries} h={h} dir={grouping.files ? source : undefined}
-      onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onMix={onMix} onMixes={onMixes} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)}
+      onList={onList} onNewList={onNewList} onFlow={onFlow} onFlows={onFlows} onAddLibrary={onAddLibrary} onClose={wide ? undefined : () => setBrowse(false)}
       search={searching ? { words: text.trim(), body: <ExplorerSearch query={query} matched={matched} h={h} onOpenAs={(p, k) => { applyPreset(p); setSourceKey(k); setBrowse(false) }} onList={onList} onFlow={onFlow} /> } : undefined} />
   )
   const kindLabel = source ? (source.kind === 'folder' || source.kind === 'library' ? 'Folder' : source.kind === 'all' ? '' : DIMS[source.kind].label) : ''
@@ -147,6 +162,9 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
       {QUICK_WORDS.map(w => <button key={w} onClick={() => setMusicQuery(w)} className="btn btn-ghost btn-sm shrink-0 rounded-full bg-white/6">“{w}”</button>)}
     </div>
   )
+  // A phone with a playlist open shows only that playlist (SPEC-blend-playlists P1); the tape and the right column are for the library.
+  const phoneList = !wide && !!openList
+  const [blendSignal, setBlendSignal] = useState(0)
   const centre = centreView ? (
     <>
       {quick}
@@ -157,10 +175,16 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
       </div>
       {centreView.node}
     </>
+  ) : phoneList ? (
+    <>
+      <BlendBy joins={view.joins} score={view.res?.score} hasSet={view.tracks.length > 1} sheet bar={false} signal={blendSignal} noun="playlist" />
+      <PlaylistBoard node={openList} view={view} byId={byId} wide={wide} facts={facts} colour={colour} openJoin={openJoin} onJoin={k => setJoin(k ? { pl: openList.id, key: k } : null)}
+        onSelect={t => setSelectedId(t.id)} onClose={onCloseList} onBlendBy={() => setBlendSignal(n => n + 1)} />
+    </>
   ) : (
     <>
       {quick}
-      {(set.mode === 'blend' || order === 'blend') && <BlendBy joins={setView.joins} score={setView.res?.score} hasSet={set.tracks.length > 1} sheet={!wide} />}
+      {(openList?.blend || order === 'blend') && <BlendBy joins={openList ? view.joins : blend?.joins} score={openList ? view.res?.score : blend?.score} hasSet={openList ? view.tracks.length > 1 : !!blend} sheet={!wide} noun={openList ? 'playlist' : 'list'} />}
       <TapeBar
         source={source ? { kind: kindLabel, name: source.name } : undefined} onClearSource={() => setSourceKey('')}
         tracks={inView} grouping={grouping} order={order} onOrder={setOrder} shape={shape} onShape={setShape} colour={colour} facts={facts}
@@ -170,7 +194,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
         {picked.size > 1 && (
           <span className="flex h-8 items-center gap-1 rounded-[10px] bg-primary/15 pl-3 pr-1 text-xs text-primary">
             <b>{picked.size}</b> selected · drag them, or
-            <button onClick={() => { h.onAdd(inView.filter(t => picked.has(t.id)), `${picked.size} tracks`); clearSelection() }} className="btn btn-xs rounded-lg">Add to set</button>
+            <button onClick={() => { h.onAdd(inView.filter(t => picked.has(t.id)), `${picked.size} tracks`); clearSelection() }} className="btn btn-xs rounded-lg">Add to playlist</button>
             <button onClick={clearSelection} className="btn btn-ghost btn-xs rounded-lg">Clear</button>
           </span>
         )}
@@ -180,8 +204,12 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
         joins={order === 'blend' ? blend?.joins : undefined} selectedId={selectedId} playingId={playingId}
         onSelect={t => setSelectedId(t.id)} onPlay={t => void playFrom(order === 'blend' && blend ? blend.tracks : inView, t)} hoverProps={hc.props} picked={picked}
       />
-      <SetLane order={setView} facts={facts} colour={colour} get={get} wide={wide} sourceName={source?.kind === 'album' ? source.name : undefined} selectedId={selectedId} onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} />
-      <SetList order={setView} facts={facts} colour={colour} byId={byId} selectedId={selectedId} onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} />
+      {openList ? (
+        <PlaylistBoard node={openList} view={view} byId={byId} wide={wide} facts={facts} colour={colour} selectedId={selectedId} openJoin={openJoin} onJoin={k => setJoin(k ? { pl: openList.id, key: k } : null)}
+          onSelect={t => setSelectedId(t.id)} hoverProps={hc.props} onClose={onCloseList} />
+      ) : (
+        <p className="rounded-2xl bg-white/4 p-4 text-center text-xs text-base-content/50">Open a playlist from the explorer, or start a <button onClick={onNewList} className="underline">New playlist</button>, and drag tracks from the tape into it.</p>
+      )}
       {hc.hover && <HoverCard hover={hc.hover} facts={facts} colour={colour} />}
     </>
   )
@@ -190,7 +218,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
     return (
       <div className="flex flex-col gap-3">
         {centre}
-        {rightColumn}
+        {!phoneList && rightColumn}
         {doorPop}
         {browse && <ResponsiveModal onClose={() => setBrowse(false)} boxClassName="flex h-[82vh] flex-col p-0">{explorer}</ResponsiveModal>}
       </div>
@@ -201,7 +229,7 @@ export default function MusicSurface({ all, libraries, get, v, wide, right, onLi
       <aside className="w-80 shrink-0 overflow-hidden rounded-2xl bg-white/5">{explorer}</aside>
       <div className="scroll-thin flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-2xl">{centre}</div>
       <aside className="scroll-thin w-85 shrink-0 overflow-y-auto rounded-2xl bg-white/5">
-        {right ?? rightColumn}
+        {right ?? <>{rightTop}<div className="[[data-fits]:not(:empty)~&]:hidden">{rightColumn}</div></>}
       </aside>
       {doorPop}
     </div>

@@ -110,7 +110,7 @@ export default function Tape({ groups, facts, colour, joins, selectedId, playing
             return (
               <div key={h.key} className="contents">
                 <span className="absolute w-px bg-white/15" style={{ left: h.x - 12, top: 48, height: 128 }} />
-              <div {...carryProps(h.tracks, h.name || h.head)} className={`absolute cursor-grab ${pinned ? 'z-10 rounded-lg bg-base-100/85 pr-2 backdrop-blur-sm' : ''}`} style={{ left, top: 12, maxWidth: end - left + 10 }} title="Drag the group into your set">
+              <div {...carryProps(h.tracks, h.name || h.head)} className={`absolute cursor-grab ${pinned ? 'z-10 rounded-lg bg-base-100/85 pr-2 backdrop-blur-sm' : ''}`} style={{ left, top: 12, maxWidth: end - left + 10 }} title="Drag the group into the open playlist">
                 <span className="block h-7 truncate text-[22px] font-light leading-7 text-base-content/40">{showHead ? h.head : ''}</span>
                 <b className="block truncate text-[13px] font-semibold">{h.name}</b>
                 <small className="block truncate text-[11px] text-base-content/50">{headLine(h.tracks, facts)}</small>

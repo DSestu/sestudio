@@ -16,7 +16,7 @@ import uuid
 from typing import Any
 
 from sestudio import library
-from sestudio.music import genres, store
+from sestudio.music import builder, genres, mixes, store
 
 KINDS = ("folder", "playlist", "smart")
 DAY = 86400
@@ -58,13 +58,16 @@ def clean_rules(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _node(row: Any) -> dict[str, Any]:
+    data = json.loads(row["data"])
+    if row["kind"] == "playlist":  # older nodes read as Hand order
+        data = {"blend": False, "shape": "Lift", "pins": {}, **data}
     return {
         "id": row["id"],
         "parent": row["parent"],
         "kind": row["kind"],
         "name": row["name"],
         "position": row["position"],
-        **json.loads(row["data"]),
+        **data,
     }
 
 
@@ -164,6 +167,8 @@ def update(
     node_id: str,
     name: str | None = None,
     rules: dict[str, Any] | None = None,
+    blend: bool | None = None,
+    shape: str | None = None,
 ) -> dict[str, Any]:
     with library._lock:
         conn = library._connect()
@@ -174,6 +179,15 @@ def update(
             if node["kind"] != "smart":
                 raise Invalid("only a smart list has rules")
             node["rules"] = clean_rules(rules)
+        if blend is not None or shape is not None:
+            if node["kind"] != "playlist":
+                raise Invalid("only a playlist blends")
+            if shape is not None:
+                if shape not in builder.SHAPES and not shape.startswith("flow:"):
+                    raise Invalid("unknown shape")
+                node["shape"] = shape
+            if blend is not None:
+                node["blend"] = blend
         _save(conn, node)
         conn.commit()
         return node
@@ -244,11 +258,51 @@ def _locate(node: dict[str, Any], item_id: str) -> list[dict[str, Any]]:
     raise Invalid(f"unknown item {item_id}")
 
 
+def _buckets(node: dict[str, Any]) -> list[list[dict[str, Any]]]:
+    return [node["items"], *(p["items"] for p in node["parts"])]
+
+
+def _anchor(node: dict[str, Any]) -> None:
+    """Pins follow their items: each at its item's index in its list, none for gone items."""
+    node["pins"] = {
+        i["item_id"]: k
+        for items in _buckets(node)
+        for k, i in enumerate(items)
+        if i["item_id"] in node["pins"]
+    }
+
+
+def moved_ids(before: list[str], after: list[str]) -> list[str]:
+    """The ids of *after* outside the longest common subsequence with *before*: the rows that moved."""
+    n, m = len(before), len(after)
+    lcs = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        for j in range(m - 1, -1, -1):
+            lcs[i][j] = (
+                lcs[i + 1][j + 1] + 1
+                if before[i] == after[j]
+                else max(lcs[i + 1][j], lcs[i][j + 1])
+            )
+    kept: set[str] = set()
+    i = j = 0
+    while i < n and j < m:
+        if before[i] == after[j]:
+            kept.add(after[j])
+            i += 1
+            j += 1
+        elif lcs[i + 1][j] >= lcs[i][j + 1]:
+            i += 1
+        else:
+            j += 1
+    return [x for x in after if x not in kept]
+
+
 def _mutate(node_id: str, change: Any) -> dict[str, Any]:
     with library._lock:
         conn = library._connect()
         node = _playlist(conn, node_id)
         change(node)
+        _anchor(node)  # a blend playlist's new pins are placeholders until here
         _save(conn, node)
         conn.commit()
         return node
@@ -271,6 +325,8 @@ def add_items(
             node["next"] += 1
         at = len(items) if index is None else max(0, min(index, len(items)))
         items[at:at] = new
+        if node["blend"] and index is not None:  # dropped where it lands: pinned there
+            node["pins"].update({i["item_id"]: 0 for i in new})
 
     return _mutate(node_id, change)
 
@@ -295,17 +351,24 @@ def move_item(
         src.remove(item)
         at = max(0, min(index, len(dest)))
         dest.insert(at, item)
+        if node["blend"]:
+            node["pins"][item_id] = 0
 
     return _mutate(node_id, change)
 
 
 def reorder(
-    node_id: str, order: list[str], part: str | None = None, whole: bool = False
+    node_id: str,
+    order: list[str],
+    part: str | None = None,
+    whole: bool = False,
+    pin_moved: bool = True,
 ) -> dict[str, Any]:
     """Put the items of *part* (default: the loose list) in the order of *order*, a permutation of their ids.
 
     With *whole*, *order* covers every item of the playlist and is dealt back
-    into the loose list and the parts, each keeping its size.
+    into the loose list and the parts, each keeping its size. On a blend playlist
+    the items that moved are pinned (a hand move) unless *pin_moved* is off.
     """
 
     def change(node: dict[str, Any]) -> None:
@@ -317,6 +380,9 @@ def reorder(
         by_id = {i["item_id"]: i for b in buckets for i in b}
         if len(order) != len(by_id) or set(order) != set(by_id):
             raise Invalid("order must list exactly the items it covers")
+        if pin_moved and node["blend"]:
+            before = [i["item_id"] for b in buckets for i in b]
+            node["pins"].update({i: 0 for i in moved_ids(before, order)})
         at = 0
         for b in buckets:
             b[:] = [by_id[i] for i in order[at : at + len(b)]]
@@ -337,6 +403,31 @@ def add_part(node_id: str, name: str) -> dict[str, Any]:
             node["items"] = []
         node["parts"].append({"id": f"s{node['next']}", "name": name, "items": []})
         node["next"] += 1
+
+    return _mutate(node_id, change)
+
+
+def restore(
+    node_id: str,
+    items: list[dict[str, Any]],
+    parts: list[dict[str, Any]],
+    pins: dict[str, int],
+    blend: bool,
+    shape: str,
+) -> dict[str, Any]:
+    """Put a playlist back as an earlier response showed it (Undo): items, parts, pins, mode and shape.
+
+    The id counter only ever grows, so the ids of an earlier state stay below it.
+    """
+
+    def change(node: dict[str, Any]) -> None:
+        every = [*items, *(i for p in parts for i in p.get("items", []))]
+        if any("item_id" not in i or "track_id" not in i for i in every) or len(
+            {i["item_id"] for i in every}
+        ) != len(every):
+            raise Invalid("duplicate items")
+        node["items"], node["parts"], node["blend"] = items, parts, blend
+        node["shape"], node["pins"] = shape, pins
 
     return _mutate(node_id, change)
 
@@ -386,6 +477,78 @@ def flat_items(node: dict[str, Any], part: str | None = None) -> list[dict[str, 
     if part is not None:
         return [*_bucket(node, part)]
     return [*node["items"], *(i for p in node["parts"] for i in p["items"])]
+
+
+# --- mixes become blend playlists (SPEC-blend-playlists §4.3) ---------------
+
+
+def _mix_playlist(folder: str, mix: dict[str, Any], pool: list[dict[str, Any]]) -> bool:
+    """One mix as a blend playlist in *folder*: its rendered tracks, pins and flow. False when it has none."""
+    rendered = mixes.render_mix(mix, pool)["mix"]
+    where = {t["id"]: t["library"] for t in pool}
+    refs = [
+        {"library": where.get(m["track_id"], "local"), "track_id": m["track_id"]}
+        for m in rendered
+    ]
+    if not refs:
+        return False
+    node = create("playlist", mix["name"], folder)
+
+    def change(n: dict[str, Any]) -> None:
+        n["items"] = [{**r, "item_id": f"p{k + 1}"} for k, r in enumerate(refs)]
+        n["next"] = len(refs) + 1
+        n["blend"], n["from_mix"] = True, mix["id"]
+        n["shape"] = f"flow:{mix['flow']}" if mix.get("flow") else "Lift"
+        n["pins"] = {
+            f"p{int(k) + 1}": int(k)
+            for k, tid in (mix.get("pins") or {}).items()
+            if int(k) < len(refs) and refs[int(k)]["track_id"] == tid
+        }
+
+    _mutate(node["id"], change)
+    return True
+
+
+def _mixes_folder() -> str:
+    """The "Mixes" folder, made when there is none."""
+    return (
+        next(
+            (n["id"] for n in tree() if n["kind"] == "folder" and n["name"] == "Mixes"),
+            None,
+        )
+        or create("folder", "Mixes")["id"]
+    )
+
+
+def save_mix(mix: dict[str, Any], pool: list[dict[str, Any]]) -> None:
+    """A mix saved from a playing flow lands as a blend playlist in "Mixes" (the Mixes list is gone)."""
+    _mix_playlist(_mixes_folder(), mix, pool)
+
+
+def migrate_mixes(pool: list[dict[str, Any]]) -> int:
+    """Turn each ``music_mixes`` row into a blend playlist in a "Mixes" folder, once.
+
+    A mix already carried over (``from_mix``) is skipped, and a flag keeps a deleted
+    playlist from coming back. A live mix needs the analysed *pool*: with none, the
+    run waits for the next start. Returns how many playlists it made.
+    """
+    old = mixes.mixes_list()
+    if library.get_pref("mixes_migrated") or not old:
+        return 0
+    if not pool and any(m.get("frozen") is None for m in old):
+        return 0
+    done = {n.get("from_mix") for n in tree()}
+    folder = _mixes_folder()
+    made = 0
+    for mix in reversed(old):  # oldest first
+        if mix["id"] in done:
+            continue
+        try:
+            made += _mix_playlist(folder, mix, pool)
+        except mixes.Invalid:  # its flow is gone: nothing to render
+            continue
+    library.set_pref("mixes_migrated", True)
+    return made
 
 
 # --- smart lists ------------------------------------------------------------

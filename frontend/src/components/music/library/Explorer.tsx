@@ -28,18 +28,16 @@ export interface ExplorerProps {
   onNewList: () => void
   onFlow: (id: string) => void
   onFlows: () => void
-  onMix: (id: string) => void
-  onMixes: () => void
   onAddLibrary: () => void
   onClose?: () => void
   /** Search mode: the flat results replace the rail and the sections. */
   search?: { words: string; body: React.ReactNode }
 }
 
-export default function Explorer({ tree, total, libraries, h, dir, onList, onNewList, onFlow, onFlows, onMix, onMixes, onAddLibrary, onClose, search }: ExplorerProps) {
+export default function Explorer({ tree, total, libraries, h, dir, onList, onNewList, onFlow, onFlows, onAddLibrary, onClose, search }: ExplorerProps) {
   const g = useGrouping()
   const preset = presetOf(g)
-  const { flows, mixes } = useFlows()
+  const { flows } = useFlows()
   const blur = () => (document.activeElement as HTMLElement | null)?.blur()
   // The filter (§2.2): narrows this tree in place; the header search stays the one that goes online.
   const [text, setText] = useState('')
@@ -106,21 +104,17 @@ export default function Explorer({ tree, total, libraries, h, dir, onList, onNew
           <Section title="Lists">
             <div className="-mt-4"><PlaylistTree active="" onPick={onList} onNew={onNewList} match={match} /></div>
           </Section>
-          <Section title="Flows" action={<button onClick={onFlows} className="btn btn-ghost btn-xs">All</button>}>
+          <Section title="Flows" hint="fill a playlist" action={<button onClick={onFlows} className="btn btn-ghost btn-xs">All</button>}>
             {flows.filter(f => !match || match(f.name)).map(f => (
               <Row key={f.id} depth={0} icon={<Shape flow={f} w={22} h={14} dots={false} />} label={<Lit text={f.name} terms={words} />} onClick={() => onFlow(f.id)} />
             ))}
-          </Section>
-          <Section title="Mixes" action={<button onClick={onMixes} className="btn btn-ghost btn-xs">All</button>}>
-            {mixes.filter(m => !match || match(m.name)).map(m => <Row key={m.id} depth={0} icon={<Ic name="list" size={13} />} label={<Lit text={m.name} terms={words} />} onClick={() => onMix(m.id)} />)}
-            {!mixes.length && <p className="px-3 py-1 text-xs text-base-content/45">Play a flow, then save what it made as a mix.</p>}
           </Section>
           {!cut && <Section title="Online">
             {ONLINE.map(s => <Row key={s} depth={0} icon={<Ic name="search" size={13} />} label={<>{s} <i className="ml-1 text-[11px] not-italic text-base-content/45">type to search</i></>} dim />)}
           </Section>}
         </div>
       </div>}
-      <p className="border-t border-white/8 px-3 py-1.5 text-[11px] leading-snug text-base-content/45">Click opens it on the tape. Drag a track into your set. Double-click plays.</p>
+      <p className="border-t border-white/8 px-3 py-1.5 text-[11px] leading-snug text-base-content/45">Click opens it on the tape. Drag a track into the open playlist. Double-click plays.</p>
     </div>
   )
 }

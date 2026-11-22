@@ -55,7 +55,7 @@ export default function TapeBar({ source, onClearSource, tracks, grouping, order
         {order === 'grouped' && <span className="hidden text-xs text-base-content/45 lg:inline" title="Change grouping and sorting in the explorer">{groupingLabel(grouping)} · {sortLabel(grouping)}</span>}
         <Seg label="Colour tracks by" options={[['mood', 'Mood'], ['energy', 'Energy'], ['genre', 'Genre']] as const} value={colour} onPick={setColour} />
         {children}
-        <button onClick={onAddAll} className="btn btn-sm gap-1 rounded-xl"><Ic name="plus" size={14} width={2.2} />Add all to set</button>
+        <button onClick={onAddAll} className="btn btn-sm gap-1 rounded-xl"><Ic name="plus" size={14} width={2.2} />Add all to playlist</button>
       </div>
       <Legend tracks={tracks} colour={colour} facts={facts} />
     </div>

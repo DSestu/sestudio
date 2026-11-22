@@ -37,7 +37,7 @@ export default function HoverCard({ hover, facts, colour, place }: { hover: Hove
       </div>
       {place && <p className="text-[11px] text-base-content/60">{place}</p>}
       {lists.length > 0 && <p className="text-[11px] text-base-content/60">In {lists.join(', ')}</p>}
-      <p className="text-[11px] text-base-content/40">Click to select · double-click to play · drag into your set</p>
+      <p className="text-[11px] text-base-content/40">Click to select · double-click to play · drag into the open playlist</p>
     </div>,
     document.body,
   )

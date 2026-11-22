@@ -120,6 +120,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     capture_logs()
     libraries.sync_defaults()
     runner.kick(load_config().output_root)
+    try:
+        await asyncio.to_thread(music_playlists.migrate_mixes)
+    except Exception:  # the old mixes stay in their table and are retried next start
+        logger.exception("Carrying the mixes over to playlists failed")
     await _refresh_sites(app)
     tasks = [asyncio.create_task(_refresh_loop(app))]
     if watchers_enabled():

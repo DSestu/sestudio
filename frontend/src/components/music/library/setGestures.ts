@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MusicTrack } from '../../../musicLibrary'
-import { moveBlock, removeFromSet } from '../../../musicSet'
 import { endDrag } from '../edit/focus'
-import { toast } from '../toast'
 import { carriedNow, carryProps, endCarry } from './carry'
 import { clearSelection, getSelection } from './selection'
-import { addTracksToSet } from './setQueue'
 
-// The set's gestures, shared by the lane (a row of items) and the list (a column)
-// (SPEC-music-library §2.6, §2.8): drops land between two items, a selected item carries
+// The playlist's gestures (SPEC-blend-playlists §5): drops land between two items, a selected item carries
 // the selection as a block, and an item let go far enough off the container is removed.
 
 export type Axis = 'x' | 'y'
+
+/** What the gestures do to the playlist they sit on. */
+export interface SetActions {
+  move: (ids: string[], to: number, shown: MusicTrack[]) => void
+  /** `to` is undefined when the list is empty. */
+  add: (tracks: MusicTrack[], label: string, to: number | undefined, shown: MusicTrack[]) => void
+  remove: (ids: string[]) => void
+}
 
 /** The slot under the pointer among the container's `[data-set-item]` children. */
 function slotAt(box: HTMLElement | null, p: number, axis: Axis): number {
@@ -20,8 +24,8 @@ function slotAt(box: HTMLElement | null, p: number, axis: Axis): number {
   return i < 0 ? items.length : i
 }
 
-/** Drag over and drop: a move inside the set (switching to Your order) or tracks coming in. */
-export function useSetDrop(box: React.RefObject<HTMLElement | null>, shown: MusicTrack[], axis: Axis, blend: boolean) {
+/** Drag over and drop: a move inside the playlist or tracks coming in. */
+export function useSetDrop(box: React.RefObject<HTMLElement | null>, shown: MusicTrack[], axis: Axis, on: SetActions) {
   const [slot, setSlot] = useState<number | null>(null)
   const at = (e: React.DragEvent) => slotAt(box.current, axis === 'x' ? e.clientX : e.clientY, axis)
   return {
@@ -39,28 +43,27 @@ export function useSetDrop(box: React.RefObject<HTMLElement | null>, shown: Musi
       e.preventDefault()
       const to = shown.length ? at(e) : undefined
       if (c.from === 'set') {
-        moveBlock(c.tracks.map(t => t.id), to ?? 0, shown)
-        if (blend) toast('Your order now. Best blend puts it back, keeping pins.')
-      } else addTracksToSet(c.tracks, c.label, to, shown)
+        on.move(c.tracks.map(t => t.id), to ?? 0, shown)
+      } else on.add(c.tracks, c.label, to, shown)
       endCarry()
       endDrag()
     },
   }
 }
 
-/** Delete removes the selected tracks of the set. */
-export function useDeleteKey() {
+/** Delete removes the selected tracks of the playlist. */
+export function useDeleteKey(remove: SetActions['remove']) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Delete' || (e.target as HTMLElement | null)?.closest('input, textarea, [contenteditable]')) return
       const sel = getSelection()
       if (sel.scope !== 'set' || !sel.ids.size) return
-      removeFromSet([...sel.ids])
+      remove([...sel.ids])
       clearSelection()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [remove])
 }
 
 /** How far off the container a dragged item is let go to remove it: above or below the lane, beside the list. */
@@ -70,7 +73,7 @@ const OFF_PX: Record<Axis, number> = { x: 36, y: 50 }
  * Moves inside the set: a selected item carries the whole selection as a block; dragged far
  * enough off the container, a red label says release removes them, and it does.
  */
-export function useDragOff(box: React.RefObject<HTMLElement | null>, shown: MusicTrack[], picked: ReadonlySet<string>, axis: Axis) {
+export function useDragOff(box: React.RefObject<HTMLElement | null>, shown: MusicTrack[], picked: ReadonlySet<string>, axis: Axis, remove: SetActions['remove']) {
   const [off, setOff] = useState<number | null>(null)
   const moving = useRef<string[]>([])
   const isOff = useRef(false)
@@ -98,7 +101,7 @@ export function useDragOff(box: React.RefObject<HTMLElement | null>, shown: Musi
         cp.onDragEnd()
         document.removeEventListener('dragover', onOver.current)
         if (isOff.current) {
-          removeFromSet(moving.current)
+          remove(moving.current)
           clearSelection()
         }
         isOff.current = false

@@ -26,8 +26,8 @@ export default function TrackInfo({ track, selected, facts, colour, libraries, o
   libraries: LibraryStatus[]
   onClear: () => void
   onPlay: () => void
-  /** The set action: label and handler (Add to / Remove from set). */
-  action: { label: string; onClick: () => void }
+  /** The set action: label and handler (Add to / Remove from playlist). */
+  action: { label: string; onClick: () => void; /** Takes the track out: a × and the destructive colour, not a +. */ remove?: boolean }
 }) {
   const [folded, setFolded] = useState(false)
   const f = facts(track.id)
@@ -87,7 +87,7 @@ export default function TrackInfo({ track, selected, facts, colour, libraries, o
       </>}
       <div className="flex gap-2">
         <button onClick={onPlay} className="btn btn-primary btn-sm rounded-xl gap-1"><svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Play</button>
-        <button onClick={action.onClick} className="btn btn-sm rounded-xl gap-1"><Ic name="plus" size={13} width={2.2} />{action.label}</button>
+        <button onClick={action.onClick} className={`btn btn-sm rounded-xl gap-1 ${action.remove ? 'text-error' : ''}`}><Ic name={action.remove ? 'close' : 'plus'} size={13} width={2.2} />{action.label}</button>
       </div>
     </section>
   )

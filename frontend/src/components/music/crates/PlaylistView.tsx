@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { formatDuration, type MusicTrack } from '../../../musicLibrary'
 import {
   isSet, itemsOf, locate, playlistApi, statsOf,
@@ -195,7 +196,7 @@ function Row({ item, track, meta, chips, join, onGenre, onPlay, parts, here, las
 }
 
 /** A playlist's tracks (grouped by part for a set) or a smart list's matches. */
-export default function PlaylistView({ node, byId, onPlaylist, edit = false, onEdit, onSource }: {
+export default function PlaylistView({ node, byId, onPlaylist, edit = false, onEdit, onSource, fitsInto }: {
   node: PlaylistNode
   byId: ReadonlyMap<string, MusicTrack>
   onPlaylist: (t: MusicTrack) => void
@@ -205,6 +206,8 @@ export default function PlaylistView({ node, byId, onPlaylist, edit = false, onE
   onEdit?: () => void
   /** Open an Add from sheet (phones, from the empty editor). */
   onSource?: (tab: SourceTab) => void
+  /** The board's right column: on wide screens Fits goes there instead of beside the list. */
+  fitsInto?: HTMLElement | null
 }) {
   const [matches, setMatches] = useState<{ id: string; list: PlaylistItem[] }>()
   const [editing, setEditing] = useState(false)
@@ -658,7 +661,8 @@ export default function PlaylistView({ node, byId, onPlaylist, edit = false, onE
         </ResponsiveModal>
       )}
     </div>
-    {panel && fitsShown && wide && <aside aria-label="Fits" className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{panel}</aside>}
+    {panel && fitsShown && wide && fitsInto && createPortal(<div aria-label="Fits" className="flex h-full min-h-0 flex-col">{panel}</div>, fitsInto)}
+    {panel && fitsShown && wide && !fitsInto && <aside aria-label="Fits" className="sticky top-4 flex h-[calc(100vh-8rem)] w-96 shrink-0 flex-col overflow-hidden rounded-2xl bg-white/5">{panel}</aside>}
     {panel && fitsShown && !wide && (
       <ResponsiveModal onClose={closeFits} boxClassName="flex h-[60vh] flex-col p-0">
         {panel}

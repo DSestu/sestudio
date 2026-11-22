@@ -3,7 +3,6 @@ import { useFlows } from '../../../musicFlows'
 import type { MusicTrack } from '../../../musicLibrary'
 import { usePlaylists } from '../../../musicPlaylists'
 import { hitPayload, sourceLabel, useMusicSearch, type OnlineHit } from '../../../musicSearch'
-import { addTracksToSet } from './setQueue'
 import { dragProps } from '../edit/focus'
 import { trackOfHit } from '../edit/onlineAnalysis'
 import { fmtTime } from '../format'
@@ -74,7 +73,7 @@ export default function ExplorerSearch({ query, matched, h, onOpenAs, onList, on
             return (
               <div key={s}>
                 <Row depth={0} icon={<Ic name="search" size={13} />} label={sourceLabel(s)} count={pending ? <span className="loading loading-spinner loading-xs" /> : mine.length} dim={!pending && !mine.length} />
-                {shown.map(x => <OnlineRow key={x.track_id} hit={x} />)}
+                {shown.map(x => <OnlineRow key={x.track_id} hit={x} h={h} />)}
                 {mine.length > shown.length && <Row depth={1} icon={null} label={`${mine.length - shown.length} more on ${sourceLabel(s)}`} onClick={() => grow(s)} dim />}
               </div>
             )
@@ -115,7 +114,7 @@ function Group({ title, hint, children }: { title: string; hint?: string; childr
 }
 
 /** An online result: click plays it, + queues it, drag carries it like a library track. */
-function OnlineRow({ hit }: { hit: OnlineHit }) {
+function OnlineRow({ hit, h }: { hit: OnlineHit; h: TreeHandlers }) {
   const t = trackOfHit(hit)
   return (
     <Row
@@ -123,7 +122,7 @@ function OnlineRow({ hit }: { hit: OnlineHit }) {
       icon={hit.thumb ? <img src={hit.thumb} alt="" loading="lazy" className="size-5 rounded object-cover" /> : <Ic name="search" size={12} />}
       label={<>{hit.title}<i className="ml-1.5 text-[11px] not-italic text-base-content/50">{[hit.artist, hit.duration ? fmtTime(hit.duration) : '', hit.kind === 'video' ? 'video' : ''].filter(Boolean).join(' · ')}</i></>}
       onClick={() => void playPayload([hitPayload(hit)])}
-      onAdd={() => { addTracksToSet([t], hit.title) }}
+      onAdd={() => h.onAdd([t], hit.title)}
       drag={dragProps(t)}
     />
   )

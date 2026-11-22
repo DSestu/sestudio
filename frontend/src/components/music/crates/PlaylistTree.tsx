@@ -172,7 +172,8 @@ export default function PlaylistTree({ active, onPick, onNew, match }: { active:
             n.id === active ? 'bg-primary/20 font-semibold' : 'hover:bg-white/5 text-base-content/80'
           }`}
         >
-          <span className="truncate">{n.name}</span>
+          {n.kind === 'playlist' && <i title={n.blend ? 'Blend: kept in order around your pins' : 'Hand order'} className={`size-2.5 shrink-0 rounded-full ${n.blend ? 'bg-linear-to-br from-primary to-secondary' : 'border border-base-content/50'}`} />}
+          <span className="min-w-0 flex-1 truncate">{n.name}</span>
           <span className="shrink-0 text-xs text-base-content/50">{label}</span>
         </button>
       )}

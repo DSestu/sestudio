@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import type { AddPayload } from './musicQueue'
+import { rememberRun, type AddPayload, type QueueState } from './musicQueue'
 
 // The playlist tree (SPEC-music §13.2): folders, playlists (a playlist with
 // parts is a set) and smart lists, kept on the server. This module is the API
@@ -40,6 +40,28 @@ export interface PlaylistNode {
   items?: PlaylistItem[]
   parts?: Part[]
   rules?: SmartRules
+  /** Blend playlists keep themselves in Blend order around their pins (SPEC-blend-playlists); absent on older servers. */
+  blend?: boolean
+  /** Hold | Lift | Ease | Arc | flow:<id>. */
+  shape?: string
+  /** Item id -> the index it is pinned at. */
+  pins?: Record<string, number>
+  /** The mix this blend playlist was carried over from (old `?mx=` links redirect to it). */
+  from_mix?: string
+}
+/** What a blend playlist's edits answer: the node, and the item ids the re-order moved. */
+export type Edited = PlaylistNode & { moved?: string[]; added?: string[] }
+/** Blend by, as every edit of a blend playlist sends it; `start` locks the first rows. */
+export interface BlendOpts {
+  weights?: Record<string, number>
+  harmony?: Record<string, number>
+  start?: number
+}
+export interface FillOpts {
+  flow: string
+  minutes: number
+  /** Also take the flow's energy curve as the shape. */
+  use_shape: boolean
 }
 export interface TreeNode extends PlaylistNode {
   children: TreeNode[]
@@ -157,17 +179,34 @@ export const playlistApi = {
   setRules: (id: string, rules: Partial<SmartRules>) => change<PlaylistNode>(`/${id}`, 'PATCH', { rules }),
   move: (id: string, parent: string | null, index?: number) => change<PlaylistNode[]>(`/${id}/move`, 'POST', { parent, index }),
   remove: (id: string) => change<{ ok: boolean }>(`/${id}`, 'DELETE'),
-  add: (id: string, tracks: AddPayload['tracks'], part?: string, index?: number) =>
-    change<PlaylistNode>(`/${id}/items`, 'POST', { tracks, part, index }),
-  removeItem: (id: string, itemId: string) => change<PlaylistNode>(`/${id}/items/${itemId}`, 'DELETE'),
-  moveItem: (id: string, itemId: string, index: number, part?: string) =>
-    change<PlaylistNode>(`/${id}/items/move`, 'POST', { item_id: itemId, index, part }),
-  reorder: (id: string, order: string[], part?: string, whole = false) =>
-    change<PlaylistNode>(`/${id}/items/reorder`, 'POST', { order, part, whole }),
+  add: (id: string, tracks: AddPayload['tracks'], part?: string, index?: number, o: BlendOpts = {}) =>
+    change<Edited>(`/${id}/items`, 'POST', { tracks, part, index, ...o }),
+  removeItem: (id: string, itemId: string, o: BlendOpts = {}) => change<Edited>(`/${id}/items/${itemId}`, 'DELETE', o),
+  moveItem: (id: string, itemId: string, index: number, part?: string, o: BlendOpts = {}) =>
+    change<Edited>(`/${id}/items/move`, 'POST', { item_id: itemId, index, part, ...o }),
+  reorder: (id: string, order: string[], part?: string, whole = false, o: BlendOpts = {}) =>
+    change<Edited>(`/${id}/items/reorder`, 'POST', { order, part, whole, ...o }),
+  /** Blend on or off, the shape; a change on a blend playlist re-orders it. */
+  patch: (id: string, fields: { blend?: boolean; shape?: string } & BlendOpts) => change<Edited>(`/${id}`, 'PATCH', fields),
+  /** Re-order by Blend now; `full` ignores the stay-put cost (Re-blend all). */
+  blend: (id: string, o: BlendOpts & { full?: boolean } = {}) => change<Edited>(`/${id}/blend`, 'POST', o),
+  /** Undo: the playlist as an earlier response showed it, nothing re-ordered. */
+  restore: (n: PlaylistNode) =>
+    change<Edited>(`/${n.id}/restore`, 'POST', { items: n.items ?? [], parts: n.parts ?? [], pins: n.pins ?? {}, blend: !!n.blend, shape: n.shape ?? 'Lift' }),
   addPart: (id: string, name: string) => change<PlaylistNode>(`/${id}/parts`, 'POST', { name }),
   renamePart: (id: string, part: string, name: string) => change<PlaylistNode>(`/${id}/parts/${part}`, 'PATCH', { name }),
   removePart: (id: string, part: string) => change<PlaylistNode>(`/${id}/parts/${part}`, 'DELETE'),
-  play: (id: string, part?: string) => call(`/${id}/play`, 'POST', { part }),
+  play: async (id: string, part?: string) => {
+    const q = await call<QueueState>(`/${id}/play`, 'POST', { part })
+    if (!part) rememberRun(id, q)
+    return q
+  },
+  /** Add about `minutes` of a flow's tracks and re-order; `added` names the new items. */
+  fill: (id: string, o: FillOpts & BlendOpts) => change<Edited>(`/${id}/fill`, 'POST', o),
+  /** The track ids a fill would add, nothing saved (the preview). */
+  fillPreview: (id: string, o: FillOpts) => call<{ candidates: string[] }>(`/${id}/fill`, 'POST', { ...o, dry_run: true }),
+  /** How many tracks each flow could add (by flow id), for the Fill popover. */
+  fillFits: (id: string) => call<Record<string, number>>(`/${id}/fill/fits`, 'GET'),
   smartTracks: (id: string) => call<{ library: string; track_id: string }[]>(`/${id}/tracks`, 'GET'),
 }
 
