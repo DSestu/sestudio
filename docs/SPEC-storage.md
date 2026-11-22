@@ -369,3 +369,36 @@ Without the phone (were N1 and N3, wanted)
   guest session only).
 - Not done: music through a bridge (O's Music is shown, off); a media server found by Nearby is
   listed but not opened (its box's SMB or FTP share is).
+
+## 11. Modern boxes (asked 2026-11-22: all four)
+
+### 11.1 Stories
+
+- **M1. French boxes.** Nearby finds a current Freebox (Pop, Delta, Ultra, Revolution), Livebox,
+  Bbox or SFR box and names it as such ("Freebox", not "192.168.1.254"): by what it announces
+  (mDNS, UPnP) and by its usual name on its own network (`mafreebox.freebox.fr`,
+  `gestionbbox.lan`, `livebox.home`). Its SMB3 share and its FTP open.
+- **M2. Windows PCs and modern NAS.** Nearby finds machines that only announce themselves the
+  Windows way (WS-Discovery): Windows 10/11, and NAS boxes with SMB1 and NetBIOS off.
+- **M3. Encrypted SMB3.** A share that requires SMB3 encryption or signing opens with a login, and
+  Nearby says so ("needs a login: it encrypts") instead of failing on a guest attempt.
+- **M4. The box's own API.** A Freebox is paired once, from Nearby: sestudio asks, I press the
+  button on the box's screen (or approve in Freebox OS), and from then on it lists the box's disks
+  and shares through Freebox OS, and can turn its file sharing on, after asking me. Its token is
+  kept like a password (home `secrets.json`, sent to the bridge when it is used).
+
+### 11.2 Build plan
+
+26. M1 + M2: WS-Discovery in the scan; boxes named by brand; their usual host names looked up.
+27. M3: logins tried with SMB3 encryption and signing; the probe says why a guest is refused.
+28. M4: screens first (pairing, disks and shares, turning sharing on), then the Freebox OS client.
+
+### 11.3 Progress
+
+- 26: WS-Discovery (Probe to 239.255.255.250:3702 from each LAN address, then each machine's
+  metadata for its name); the gateway's UPnP name; `mafreebox.freebox.fr`, `gestionbbox.lan`,
+  `livebox.home` looked up; a Freebox recognised by `/api_version` whatever its DNS name, and named
+  by generation (v6 Revolution, v7 Delta, v8 Pop, v9 Ultra). A name labels an address that answers
+  on a file port; it adds no row by itself. Checked on a real Freebox Pop (v8, API 16.1): named
+  "Freebox Pop"; as guest it shares nothing without a USB disk. WS-Discovery is tested with a fake
+  responder (multicast could not be tested in WSL without announcing on the home network).
