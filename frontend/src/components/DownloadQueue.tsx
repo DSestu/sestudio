@@ -1,17 +1,20 @@
-import type { DownloadJob } from '../api'
+import type { DownloadJob, TransferJob } from '../api'
+import TransferRow from './storage/TransferRow'
 import { jobFileUrl } from '../api'
 import type { DeviceDownload } from '../deviceDownloads'
 
 interface Props {
   jobs: DownloadJob[]
   deviceDownloads: DeviceDownload[]
+  /** Copies and moves between storages, in the same list (SPEC-storage §9, X2). */
+  transfers?: TransferJob[]
   onCancel: (id: string) => void
   onClearHistory: () => void
 }
 
 /** The download list. Job state is owned by useDownloadJobs, so the shell can
  * badge the nav without duplicating the SSE subscriptions. */
-export default function DownloadQueue({ jobs, deviceDownloads, onCancel, onClearHistory }: Props) {
+export default function DownloadQueue({ jobs, deviceDownloads, transfers = [], onCancel, onClearHistory }: Props) {
   const hasTerminal = jobs.some(j => j.status !== 'queued' && j.status !== 'downloading')
     || deviceDownloads.some(d => d.status !== 'resolving')
 
@@ -24,6 +27,7 @@ export default function DownloadQueue({ jobs, deviceDownloads, onCancel, onClear
         )}
       </div>
       <div className="divide-y divide-base-300">
+        {transfers.map(t => <TransferRow key={t.id} job={t} />)}
         {/* Device downloads — the browser owns the byte transfer, so we report
             the phase we control and point at the browser's download manager. */}
         {deviceDownloads.map(d => (

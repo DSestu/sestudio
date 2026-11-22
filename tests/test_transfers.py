@@ -144,3 +144,27 @@ def test_the_api(two):
         "failed": 0,
     }
     assert c.post(f"/api/transfers/{job['id']}/explode").status_code == 404
+
+
+def test_each_file_can_land_where_it_is_told(two):
+    out, nas, dest = two
+    job = _wait(
+        transfers.create([REL], dest, "copy", dests=["Series/Show/S01E01.mkv"]).id
+    )
+    assert job["status"] == "done" and (nas / "Series/Show/S01E01.mkv").exists()
+    with pytest.raises(transfers.Invalid):
+        transfers.create([REL], dest, "copy", dests=["../escape.mkv"])
+    with pytest.raises(transfers.Invalid):
+        transfers.create([REL], dest, "copy", dests=[])
+
+
+def test_folders_lists_what_a_destination_holds(two):
+    out, nas, dest = two
+    (nas / "Series" / "B").mkdir(parents=True)
+    (nas / "Series" / "a").mkdir()
+    (nas / "Series" / ".hidden").mkdir()
+    (nas / "Series" / "file.mkv").write_bytes(b"x")
+    assert transfers.folders(dest, "Series") == ["a", "B"]
+    assert transfers.folders(dest, "Series/new") == []
+    with pytest.raises(transfers.Invalid):
+        transfers.folders(dest, "../x")

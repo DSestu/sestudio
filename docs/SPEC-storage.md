@@ -210,6 +210,11 @@ phase 1 background scan, depth 6, kept on disk.
 ### 9.4 Progress (2026-11-21)
 
 - Shipped: 7 (#577), 8–10 as one (#578, end-to-end test: a real ffmpeg reads through the relay), 11 (#580), 12 (#581), 13–14 as one (#582, end-to-end test over a real HTTP server).
-- 16: the transfer engine and API ship first (`/api/transfers`); the screens wait on the mockup picks (`docs/proto/storage/mockups-round2.html`).
+- 16: the transfer engine and API shipped first (#584, `/api/transfers`). The screens follow the round-2 picks (`docs/proto/storage/mockups-round2.html`):
+  - title's files list: A + B, a ⋯ per file with Copy all / Move all, plus Select mode with per-season ticks and a bottom bar;
+  - Tree and Browse: T1 + T2, a ⋯ on every folder, file and card, plus Select mode with a bottom bar (no drag and drop);
+  - picker P2: a full modal (a full page on a phone) with the other storages and their room, a folder chooser inside the one picked ("Same place as now" or another folder, New folder), and Skip / Replace / Keep both;
+  - Queue Q: copies and moves sit beside downloads, with progress, Pause, Cancel, and Replace them / Keep both for skipped files.
+  "Pick another folder" keeps what is under the item picked: a folder lands as itself, a title keeps its own folder and seasons, a lone file lands by its name (`dests` on `POST /api/transfers`, folders from `GET /api/storages/{id}/folders`).
 - 17: the new dependencies resolve to binary wheels on `aarch64` (`uv pip compile --only-binary :all:`), so `uvx sestudio` installs them on the phone; not yet run on a phone build.
 - Not done: a sidecar subtitle beside another sestudio's film is not listed (embedded tracks play); a TV burning a sidecar subtitle of a file on a server is not tried.
