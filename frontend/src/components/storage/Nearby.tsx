@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { storagesApi, type NearbyRow, type StorageInfo } from '../../api'
+import { storagesApi, type NearbyAccess, type NearbyRow, type StorageInfo } from '../../api'
 import { StorageGlyph } from '../downloaded/StorageSwitcher'
 import { parseAddress } from '../../storageChoice'
 
@@ -33,6 +33,12 @@ export default function Nearby({ from, onFrom, bridges, onOpen }: {
   const [round, setRound] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [typed, setTyped] = useState('')
+  // Typed addresses are checked like found places, above them.
+  const [typedRows, setTypedRows] = useState<NearbyRow[]>([])
+  const addTyped = (row: NearbyRow) => {
+    setTypedRows(rows => [row, ...rows.filter(r => r.host !== row.host || r.kind !== row.kind)])
+    setTyped('')
+  }
   const key = `${from}:${round}`
   const current = scan?.key === key ? scan : undefined
   const looking = !current
@@ -90,28 +96,10 @@ export default function Nearby({ from, onFrom, bridges, onOpen }: {
         </div>
       </div>
 
-      {current?.rows && current.rows.length > 0 && (
+      {(typedRows.length > 0 || (current?.rows?.length ?? 0) > 0) && (
         <ul className="flex flex-col divide-y divide-base-300 -my-1">
-          {current.rows.map(r => (
-            <li key={`${r.host}:${r.kind}`} className="flex items-center gap-3 py-2.5">
-              <svg className="w-5 h-5 shrink-0 text-base-content/55" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICON[r.kind]} /></svg>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold truncate">{r.name}</p>
-                <p className="text-xs text-base-content/55">{KIND_LINE[r.kind]}</p>
-                {(r.name !== r.host || (r.port && ![445, 21, 22].includes(r.port))) && (
-                  <p className="font-mono text-xs text-base-content/45">{r.host}{r.port && ![445, 21, 22].includes(r.port) ? `:${r.port}` : ''}</p>
-                )}
-              </div>
-              <button
-                type="button"
-                disabled={r.kind === 'media'}
-                title={r.kind === 'media' ? 'A media server is not opened yet: open the same box’s SMB or FTP share' : undefined}
-                onClick={() => onOpen(r, from)}
-                className="btn btn-sm btn-outline"
-              >
-                Open
-              </button>
-            </li>
+          {[...typedRows, ...(current?.rows ?? [])].map(r => (
+            <FoundPlace key={`${r.host}:${r.kind}:${r.port ?? ''}`} row={r} from={from} onOpen={row => onOpen(row, from)} />
           ))}
         </ul>
       )}
@@ -122,16 +110,132 @@ export default function Nearby({ from, onFrom, bridges, onOpen }: {
           <input
             value={typed}
             onChange={e => setTyped(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && typedRow) { e.preventDefault(); onOpen(typedRow, from) } }}
+            onKeyDown={e => { if (e.key === 'Enter' && typedRow) { e.preventDefault(); addTyped(typedRow) } }}
             className="input join-item flex-1 min-w-0 font-mono text-sm"
             placeholder="smb://, ftp:// or an address"
             spellCheck={false}
             aria-label="Address"
           />
-          <button type="button" disabled={!typedRow} onClick={() => typedRow && onOpen(typedRow, from)} className="btn join-item">Open</button>
+          <button type="button" disabled={!typedRow} onClick={() => typedRow && addTyped(typedRow)} className="btn join-item">Check</button>
         </div>
         <p className="text-xs text-base-content/50 mt-1.5">TVs, speakers and printers are left out.</p>
       </div>
     </div>
+  )
+}
+
+
+/**
+ * One found place: checked by itself with no login (anonymous, then guest), then
+ * its shares, each with what it allows. Asks for a login only when none got in.
+ */
+function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpen: (row: NearbyRow) => void }) {
+  const [access, setAccess] = useState<NearbyAccess | null>(null)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [checking, setChecking] = useState(row.kind !== 'media')
+  const media = row.kind === 'media'
+
+  function check(user = '', pass = '') {
+    setChecking(true)
+    storagesApi.probe(from, { kind: row.kind, host: row.host, port: row.port, username: user, password: pass }).then(
+      a => setAccess(a),
+      e => setAccess({ error: (e as Error).message }),
+    ).finally(() => setChecking(false))
+  }
+  // Checked once, as soon as it is listed: what it lets in is the first question.
+  useEffect(() => {
+    if (media) return
+    let live = true
+    storagesApi.probe(from, { kind: row.kind, host: row.host, port: row.port }).then(
+      a => { if (live) setAccess(a) },
+      e => { if (live) setAccess({ error: (e as Error).message }) },
+    ).finally(() => { if (live) setChecking(false) })
+    return () => { live = false }
+  }, [from, row.kind, row.host, row.port, media])
+
+  const who = access?.login === 'given' ? `as ${access.user}` : access?.user === 'anonymous' ? 'anonymous' : access?.user ? 'as guest' : 'with no login'
+  const showAddress = row.name !== row.host || (row.port && ![445, 21, 22].includes(row.port))
+
+  return (
+    <li className="py-2.5 flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <svg className="w-5 h-5 shrink-0 text-base-content/55" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICON[row.kind]} /></svg>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold truncate">{row.name}</p>
+          <p className="text-xs text-base-content/55">
+            {KIND_LINE[row.kind]}
+            {checking && ' · checking access…'}
+            {!checking && access?.login && access.login !== 'needed' && ` · open ${who}`}
+            {!checking && access?.login === 'needed' && <span className="text-warning"> · asks for a login</span>}
+          </p>
+          {showAddress && <p className="font-mono text-xs text-base-content/45">{row.host}{row.port && ![445, 21, 22].includes(row.port) ? `:${row.port}` : ''}</p>}
+        </div>
+        {(media || access?.error) && (
+          <button
+            type="button"
+            disabled={media}
+            title={media ? 'A media server is not opened yet: open the same box’s SMB or FTP share' : undefined}
+            onClick={() => onOpen(row)}
+            className="btn btn-sm btn-outline"
+          >
+            Open
+          </button>
+        )}
+      </div>
+
+      {access?.error && <p className="text-xs text-error ml-8">{access.error}</p>}
+
+      {access?.shares && access.shares.length > 0 && (
+        <ul className="ml-8 flex flex-col gap-1.5">
+          {access.shares.map(sh => (
+            <li key={sh.name} className="flex items-center gap-2.5 rounded-box bg-base-200 px-2.5 py-1.5">
+              <span className="min-w-0 flex-1">
+                <span className="block font-mono text-sm truncate">{row.kind === 'smb' ? sh.name : 'Top folder'}</span>
+                <span className={`block text-xs ${!sh.read ? 'text-error' : sh.write ? 'text-success' : 'text-base-content/60'}`}>
+                  {!sh.read ? 'No access' : sh.write ? 'Read & write' : 'Read only'}
+                </span>
+              </span>
+              <button
+                type="button"
+                disabled={!sh.read}
+                onClick={() => onOpen({
+                  ...row,
+                  share: row.kind === 'smb' ? sh.name : undefined,
+                  username: access.user ?? '',
+                  password: access.login === 'given' ? password : '',
+                })}
+                className="btn btn-xs btn-outline"
+              >
+                Open
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {access?.shares && access.shares.length === 0 && access.login !== 'needed' && (
+        <p className="ml-8 text-xs text-base-content/55">Lets {who} in, but shares nothing.</p>
+      )}
+
+      {access?.login === 'needed' && (
+        // Not a <form>: Nearby sits inside Add a storage's own form, and a form in a form submits the outer one.
+        <div
+          role="group"
+          aria-label={`Login for ${row.name}`}
+          className="ml-8 flex flex-wrap items-end gap-2"
+          onKeyDown={e => { if (e.key === 'Enter' && username) { e.preventDefault(); check(username, password) } }}
+        >
+          <label className="flex-1 min-w-28">
+            <span className="block text-xs text-base-content/60">User</span>
+            <input value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" spellCheck={false} className="input input-sm w-full" />
+          </label>
+          <label className="flex-1 min-w-28">
+            <span className="block text-xs text-base-content/60">Password</span>
+            <input value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete="new-password" className="input input-sm w-full" />
+          </label>
+          <button type="button" onClick={() => check(username, password)} disabled={checking || !username} className="btn btn-sm">{checking ? '…' : 'Check'}</button>
+        </div>
+      )}
+    </li>
   )
 }

@@ -498,3 +498,55 @@ def held_move(body: HeldMove) -> dict[str, bool]:
         dst.unlink()
     src.fs.mv(str(src), str(dst))
     return {"ok": True}
+
+
+# --- what a found place lets in ---------------------------------------------------
+
+
+class Probe(BaseModel):
+    kind: str
+    host: str
+    port: int | None = None
+    #: Empty: anonymous, then guest, are tried.
+    username: str = ""
+    password: str = ""
+
+
+def _probe(body: Probe) -> dict[str, Any]:
+    return nearby.probe(
+        body.kind, body.host.strip(), body.port, body.username, body.password
+    )
+
+
+@bridge_share.post("/probe")
+async def bridge_probe(body: Probe) -> dict[str, Any]:
+    """On a bridge: who gets into a place on its network, and its shares."""
+    return await asyncio.to_thread(_probe, body)
+
+
+@router.post("/nearby/probe")
+async def probe_here(body: Probe) -> dict[str, Any]:
+    """Who gets into a place on this server's network, and what each share allows."""
+    return await asyncio.to_thread(_probe, body)
+
+
+@router.post("/storages/{storage_id}/nearby/probe")
+async def probe_through(storage_id: str, body: Probe) -> dict[str, Any]:
+    """The same, asked of a bridge on its own network."""
+    s = _run(storage.get, storage_id)
+    if not s.get("bridge"):
+        raise HTTPException(400, "Only a bridge looks around its network")
+    try:
+        async with httpx.AsyncClient(timeout=NEARBY_SECONDS) as client:
+            r = await client.post(
+                f"{s['url']}/api/share/bridge/probe",
+                headers=storage._bearer(s),
+                json=body.model_dump(),
+            )
+    except httpx.HTTPError:
+        raise HTTPException(503, f"{s['label']} did not answer") from None
+    if r.status_code == 404:
+        raise HTTPException(409, f"{s['label']} runs an older sestudio: update it")
+    if r.status_code != 200:
+        raise HTTPException(502, f"{s['label']} could not check it ({r.status_code})")
+    return r.json()

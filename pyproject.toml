@@ -51,6 +51,7 @@ dependencies = [
     "smbprotocol>=1.13",
     "paramiko>=3.4",
     "zeroconf>=0.136",
+    "pysmb>=1.2.15",
 ]
 
 [project.urls]

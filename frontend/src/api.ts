@@ -1141,6 +1141,19 @@ export interface NearbyRow {
   kind: 'smb' | 'ftp' | 'sftp' | 'media'
   host: string
   port: number | null
+  /** Set when a share was picked from what the check found, with the login that got in. */
+  share?: string
+  username?: string
+  password?: string
+}
+
+/** What a found place lets in (SPEC-storage §10): tried with no login first. */
+export interface NearbyAccess {
+  /** `none`: anonymous or guest got in; `given`: the login typed; `needed`: neither. */
+  login?: 'none' | 'given' | 'needed'
+  user?: string
+  shares?: { name: string; read: boolean; write: boolean }[]
+  error?: string
 }
 
 export interface NearbyScan {
@@ -1187,6 +1200,9 @@ export const storagesApi = {
       if (!r.ok) throw new Error(`Looking around failed (${r.status})`)
       return r.json()
     }),
+  /** Who gets into a found place, and what each of its shares allows. */
+  probe: (from: string, body: { kind: string; host: string; port: number | null; username?: string; password?: string }) =>
+    storageCall<NearbyAccess>(from ? `/${encodeURIComponent(from)}/nearby/probe` : '/../nearby/probe', { method: 'POST', body: JSON.stringify(body) }),
   /** Connect to a server and list its folder, without adding it. */
   test: (body: NewStorage) => storageCall<{ folders: number }>('/test', { method: 'POST', body: JSON.stringify(body) }),
 }
