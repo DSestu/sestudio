@@ -1264,3 +1264,33 @@ def test_a_check_that_hangs_counts_as_offline(monkeypatch):
     assert storage.state(s)["state"] == "offline"
     assert time.monotonic() - started < 1
     gate.set()
+
+
+def test_a_local_disk_waking_up_stays_online_until_it_answers(monkeypatch):
+    import threading
+    import time
+
+    from sestudio import storage
+
+    gate, answer = threading.Event(), [True]
+
+    class Sleepy:
+        def __init__(self, _p):
+            pass
+
+        def is_dir(self):
+            gate.wait(5)
+            return answer[0]
+
+    monkeypatch.setattr(storage, "Path", Sleepy)
+    monkeypatch.setattr(storage, "CHECK_TIMEOUT", 0.2)
+    s = {"id": "fsleepy", "kind": "folder", "path": "R:\\Video"}
+    assert storage.state(s)["state"] == "online"  # a sleeping drive is not "away"
+    answer[0] = False  # the disk was really unplugged: its late answer counts
+    gate.set()
+    for _ in range(50):
+        if storage._state["fsleepy"]["state"] == "offline":
+            break
+        time.sleep(0.02)
+    assert storage._state["fsleepy"]["state"] == "offline"
+    assert storage._state["fsleepy"]["since"]

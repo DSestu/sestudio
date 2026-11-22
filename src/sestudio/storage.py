@@ -546,15 +546,31 @@ def _probe(
 ) -> tuple[bool, threading.Thread | None]:
     """Whether *s* answers, decided within its timeout; a check still running
     from before is not doubled, and counts as offline."""
-    if previous and previous.get("probe") and previous["probe"].is_alive():
-        return False, previous["probe"]
-    found: list[bool] = []
-    probe = threading.Thread(
-        target=lambda: found.append(_reachable(s)), daemon=True, name="storage-probe"
+    # A local disk that is slow to answer is waking up (a sleeping drive takes 20 s),
+    # not gone: it keeps its last state, online at first. A share that hangs is away.
+    slow = s["kind"] == FOLDER and (
+        previous["state"] == "online" if previous else not _is_share(s["path"])
     )
+    if previous and previous.get("probe") and previous["probe"].is_alive():
+        return slow, previous["probe"]
+    found: list[bool] = []
+
+    def check() -> None:
+        found.append(_reachable(s))
+        with _lock:  # a late answer counts as soon as it comes
+            known = _state.get(s["id"])
+            if known and known.get("probe") is threading.current_thread():
+                known.update(state="online" if found[0] else "offline", probe=None,
+                             since=None if found[0] else known["since"] or time.time())  # fmt: skip
+
+    probe = threading.Thread(target=check, daemon=True, name="storage-probe")
     probe.start()
     probe.join(CHECK_TIMEOUT if s["kind"] == FOLDER else NET_CHECK_TIMEOUT)
-    return (bool(found and found[0]), None if found else probe)
+    return (bool(found[0]) if found else slow, None if found else probe)
+
+
+def _is_share(path: str) -> bool:
+    return path.startswith(("\\\\", "//"))
 
 
 def _where(s: dict[str, Any]) -> tuple:
