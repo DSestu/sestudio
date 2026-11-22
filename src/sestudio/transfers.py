@@ -158,15 +158,20 @@ def create(
     on_conflict: str = "skip",
     folder: str | None = None,
     label: str = "",
+    dests: list[str] | None = None,
 ) -> Transfer:
-    """Plan a transfer and queue it. *folder*, when given, is where the files land
-    in the destination (each keeps its name); otherwise each keeps its path."""
+    """Plan a transfer and queue it. *dests*, when given, is where each file lands
+    in the destination, in the order of *keys*; *folder*, where they all land
+    (each keeps its name); otherwise each keeps its path."""
     if mode not in MODES:
         raise Invalid("Copy or move")
     if on_conflict not in ON_CONFLICT:
         raise Invalid("Skip, replace or keep both")
     if not keys:
         raise Invalid("Nothing to copy")
+    if dests is not None and len(dests) != len(keys):
+        raise Invalid("One destination per file")
+    where = dict(zip(keys, dests)) if dests is not None else {}
     dest = storage.get(to)
     if dest["kind"] not in (storage.FOLDER, *storage.NETWORK):
         raise Invalid(f"Files cannot be written to {dest['label']}")
@@ -185,7 +190,11 @@ def create(
         source = _opener(src, rel)
         size = source.stat().st_size
         name = PurePosixPath(rel).name
-        if folder is None:
+        if key in where:
+            dest_rel = "/".join(p for p in where[key].split("/") if p not in ("", "."))
+            if not dest_rel or ".." in dest_rel.split("/"):
+                raise Invalid("Path outside the storage")
+        elif folder is None:
             dest_rel = rel  # the same place it has where it is
         else:
             dest_rel = f"{folder.strip('/')}/{name}".lstrip("/")
@@ -207,6 +216,29 @@ def create(
         _start_worker()
         _wake.notify_all()
     return job
+
+
+def folders(storage_id: str, rel: str = "") -> list[str]:
+    """The folders directly inside *rel* on a storage, for choosing where files go."""
+    s = storage.get(storage_id)
+    if not storage.online(s):
+        raise Invalid(f"{s['label']} is offline")
+    parts = [p for p in rel.split("/") if p not in ("", ".")]
+    if ".." in parts:
+        raise Invalid("Path outside the storage")
+    if s["kind"] == storage.FOLDER:
+        here = downloaded.resolve(s["path"], "/".join(parts))
+    elif s["kind"] in storage.NETWORK:
+        here = remotefs.top(s).joinpath(*parts)
+    else:
+        raise Invalid(f"Files cannot be written to {s['label']}")
+    try:
+        names = [c.name for c in here.iterdir() if c.is_dir()]
+    except FileNotFoundError:
+        return []  # a folder still to be made
+    except OSError as exc:
+        raise Invalid(f"That folder cannot be read: {exc}") from None
+    return sorted((n for n in names if not n.startswith(".")), key=str.lower)
 
 
 def all_jobs() -> list[dict[str, Any]]:

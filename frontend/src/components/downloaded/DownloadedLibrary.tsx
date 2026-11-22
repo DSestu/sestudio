@@ -21,6 +21,8 @@ import PosterGrid from '../PosterGrid'
 import SortSelect from '../SortSelect'
 import ToolbarToggle from '../ToolbarToggle'
 import DownloadedFilesModal from './DownloadedFilesModal'
+import TransferPicker from '../storage/TransferPicker'
+import { canSendFrom, type TransferRequest } from '../../transfers'
 import { currentParams, patchParams } from '../../nav'
 import {
   ALL_STORAGES, offlineIds, onStorage, setStorageChoice, sinceLabel, useStorageChoice, useStorages, videoStorages,
@@ -141,6 +143,9 @@ export default function DownloadedLibrary({
     patchParams({ q: next || undefined })
   }
   const [confirming, setConfirming] = useState<{ title: DownloadedTitle; file: DownloadedFile } | null>(null)
+  // Copy or move to another storage (SPEC-storage §9, X2): what the picker is open for.
+  const [sending, setSending] = useState<TransferRequest | null>(null)
+  const canSend = (file: DownloadedFile) => canSendFrom(storageList, file.storage ?? 'local')
   // No delete control at all unless Settings allows it; the server refuses too.
   const onDelete = settings.allow_file_deletion
     ? (title: DownloadedTitle, file: DownloadedFile) => setConfirming({ title, file })
@@ -441,6 +446,8 @@ export default function DownloadedLibrary({
           onPlay={(title, file) => onOpenTitle(title, file)}
           onDelete={onDelete}
           storages={everywhere ? video : undefined}
+          onTransfer={setSending}
+          canSend={canSend}
         />
       ) : layout === 'tree' ? (
         <DownloadedTree
@@ -449,6 +456,8 @@ export default function DownloadedLibrary({
           onPlay={(title, file) => onOpenTitle(title, file)}
           onDelete={onDelete}
           storages={everywhere ? video : undefined}
+          onTransfer={setSending}
+          canSend={canSend}
         />
       ) : sorted.length === 0 && unmatchedTitles.length === 0 ? (
         <EmptyState
@@ -498,6 +507,8 @@ export default function DownloadedLibrary({
                 onPlay={(title, file) => onOpenTitle(title, file)}
                 onDelete={onDelete}
                 storages={everywhere ? video : undefined}
+                onTransfer={setSending}
+                canSend={canSend}
               />
             </section>
           )}
@@ -540,6 +551,7 @@ export default function DownloadedLibrary({
           onClose={() => setManaging(null)}
           canDelete={settings.allow_file_deletion === true}
           storageLabel={several ? labelOf : undefined}
+          onTransfer={setSending}
           onPlay={(title, file) => {
             setManaging(null)
             // Same destination as the card: the watch view, deep-linked to the
@@ -548,6 +560,8 @@ export default function DownloadedLibrary({
           }}
         />
       )}
+
+      {sending && <TransferPicker request={sending} onClose={() => setSending(null)} />}
     </div>
   )
 }

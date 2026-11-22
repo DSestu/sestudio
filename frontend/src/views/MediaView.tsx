@@ -6,6 +6,7 @@ import EmptyState from '../components/EmptyState'
 import PageHeader from '../components/PageHeader'
 import { clearDeviceDownloads, useDeviceDownloads } from '../deviceDownloads'
 import { currentParams, patchParams, type View } from '../nav'
+import { useTransfers } from '../transfers'
 
 const TABS = [
   { id: 'collection', label: 'Collection' },
@@ -29,6 +30,7 @@ export default function MediaView({
   jobs, activeCount, onCancel, onClearHistory, onNavigate, downloadedLibrary,
 }: Props) {
   const deviceDownloads = useDeviceDownloads()
+  const transfers = useTransfers()
   // Kept in the URL, so browser-back from a title reopens the tab it left.
   // Without one, a running download is the likelier reason to come here.
   const [tab, setTab] = useState<MediaTab>(
@@ -57,7 +59,7 @@ export default function MediaView({
       <div role="tabpanel" id={`media-panel-${tab}`} aria-label={TABS.find(t => t.id === tab)?.label}>
         {tab === 'collection' ? (
           downloadedLibrary
-        ) : !jobs.length && !deviceDownloads.length ? (
+        ) : !jobs.length && !deviceDownloads.length && !transfers.length ? (
           <EmptyState
             title="No downloads yet"
             message="Pick a season or episode and choose “Download” — progress shows up here, whether it lands on the server or on this device."
@@ -67,6 +69,7 @@ export default function MediaView({
           <DownloadQueue
             jobs={jobs}
             deviceDownloads={deviceDownloads}
+            transfers={transfers}
             onCancel={onCancel}
             onClearHistory={() => { onClearHistory(); clearDeviceDownloads() }}
           />

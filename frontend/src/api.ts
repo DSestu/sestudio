@@ -1718,3 +1718,66 @@ export async function setActiveServer(id: string | null): Promise<void> {
   })
   if (!res.ok) throw new Error(await errorDetail(res))
 }
+
+/** A copy or move between storages, run by the server (SPEC-storage §9, X2). */
+export interface TransferItem {
+  /** The listing's key for the file it came from. */
+  source: string
+  /** Where it lands inside the destination. */
+  dest: string
+  size: number
+  status: 'waiting' | 'done' | 'skipped' | 'failed'
+  error: string
+}
+
+export interface TransferJob {
+  id: string
+  mode: 'copy' | 'move'
+  to: string
+  to_label: string
+  label: string
+  on_conflict: OnConflict
+  items: TransferItem[]
+  total_bytes: number
+  done_bytes: number
+  status: 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
+  started: number
+  finished: number
+  created: number
+  counts: { done: number; skipped: number; failed: number }
+  bytes_per_second: number
+}
+
+export type OnConflict = 'skip' | 'replace' | 'keep_both'
+
+export interface NewTransfer {
+  files: string[]
+  to: string
+  mode: 'copy' | 'move'
+  on_conflict: OnConflict
+  /** Where each file lands, in the order of `files`; left out, each keeps its path. */
+  dests?: string[]
+  label?: string
+}
+
+async function transferCall<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${url}`, {
+    ...init,
+    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail ?? `Failed (${res.status})`)
+  }
+  return res.json()
+}
+
+export const transfersApi = {
+  list: () => transferCall<TransferJob[]>('/transfers'),
+  start: (body: NewTransfer) => transferCall<TransferJob>('/transfers', { method: 'POST', body: JSON.stringify(body) }),
+  control: (id: string, action: 'pause' | 'resume' | 'cancel' | 'clear') =>
+    transferCall<TransferJob>(`/transfers/${encodeURIComponent(id)}/${action}`, { method: 'POST' }),
+  /** The folders inside `path` on a storage, for choosing where files go. */
+  folders: (storage: string, path: string) =>
+    transferCall<{ folders: string[] }>(`/storages/${encodeURIComponent(storage)}/folders?path=${encodeURIComponent(path)}`),
+}

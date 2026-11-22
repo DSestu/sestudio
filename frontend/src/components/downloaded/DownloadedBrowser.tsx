@@ -6,6 +6,9 @@ import { buildFolders, folderAt, sortedChildren, type FolderNode } from '../../d
 import { currentParams, patchParams } from '../../nav'
 import EmptyState from '../EmptyState'
 import PosterGrid from '../PosterGrid'
+import { folderEntries, leaves, parentOf, pickedEntries, relOf, tickState, type OnTransfer } from '../../transfers'
+import TransferMenu from '../storage/TransferMenu'
+import TransferBar, { SelectStrip } from '../storage/TransferBar'
 
 /** The first file anywhere under a folder, for the folder's cover. */
 function firstFile(node: FolderNode): DownloadedFile | null {
@@ -26,6 +29,9 @@ interface Props {
   onDelete?: (title: DownloadedTitle, file: DownloadedFile) => void
   /** With every storage shown at once, each is a top folder (SPEC-storage §8.1). */
   storages?: StorageInfo[]
+  /** Copy or move to another storage (SPEC-storage §9, X2); `canSend` says which files can go. */
+  onTransfer?: OnTransfer
+  canSend?: (file: DownloadedFile) => boolean
 }
 
 /**
@@ -38,7 +44,14 @@ interface Props {
  * still lifted from each file is the only picture there is. The tree view says
  * the same thing as an outline; this one is for looking rather than scanning.
  */
-export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelete, storages }: Props) {
+export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelete, storages, onTransfer, canSend = () => true }: Props) {
+  // Ticks are files, so a ticked folder stays ticked while you look elsewhere.
+  const [picked, setPicked] = useState<Set<string> | null>(null)
+  const toggle = (files: DownloadedFile[], on: boolean) => setPicked(prev => {
+    const next = new Set(prev)
+    for (const f of files) if (on) next.add(f.path); else next.delete(f.path)
+    return next
+  })
   // Kept in the URL, so coming back from playing a file (browser back) lands in
   // the folder it was opened from rather than at the top of the tree again.
   const [path, setPathState] = useState<string[]>(
@@ -63,9 +76,17 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
   // Crumbs name each level; a storage's top folder is keyed by its id.
   const names = here.map((part, i) => folderAt(root, here.slice(0, i + 1))?.name ?? part)
 
+  const byStorage = Boolean(storages)
+  const send = onTransfer && leaves(root).some(canSend) ? onTransfer : undefined
+  const menu = (name: string, go: (mode: 'copy' | 'move') => void) =>
+    send && <TransferMenu name={name} onPick={go} />
+  const filesOf = new Map<string, DownloadedFile[]>()
+
   const items = [
     ...folders.map(child => {
       const cover = firstFile(child)
+      const mine = leaves(child).filter(canSend)
+      filesOf.set(`dir:${child.path}`, mine)
       return {
         key: `dir:${child.path}`,
         title: child.name,
@@ -79,17 +100,28 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
           </svg>
         ),
         onClick: () => setPath([...here, child.path.split('/').pop() ?? child.name]),
+        actions: mine.length > 0 && menu(child.name, mode => send?.({
+          mode, name: child.name, entries: folderEntries(child, byStorage).filter(e => canSend(e.file)),
+        })),
       }
     }),
-    ...files.map(({ file, title }) => ({
+    ...files.map(({ file, title }) => {
+      if (canSend(file)) filesOf.set(`file:${file.path}`, [file])
+      return {
       key: `file:${file.path}`,
       title: file.path.split('/').pop() ?? file.title,
       subtitle: fmtSize(file.size),
       poster_url: downloadedThumbUrl(file.path),
       onClick: () => onPlay(title, file),
       onRemove: onDelete && (() => onDelete(title, file)),
-    })),
+      actions: canSend(file) && menu(file.title, mode => send?.({
+        mode, name: relOf(file).split('/').pop() ?? file.title, entries: [{ file, base: parentOf(relOf(file)) }],
+      })),
+      }
+    }),
   ]
+  const inView = [...filesOf.values()].flat()
+  const chosen = picked && pickedEntries(root, picked, byStorage, canSend)
 
   return (
     <div className="flex flex-col gap-3">
@@ -137,6 +169,17 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
         </span>
       </div>
 
+      {send && items.length > 0 && (
+        <SelectStrip
+          picking={picked !== null}
+          count={picked?.size ?? 0}
+          all={tickState(inView, picked ?? new Set())}
+          onStart={() => setPicked(new Set())}
+          onAll={on => toggle(inView, on)}
+          onCancel={() => setPicked(null)}
+        />
+      )}
+
       {items.length === 0 ? (
         <EmptyState
           title={needle ? 'Nothing matches here' : 'This folder is empty'}
@@ -147,7 +190,29 @@ export default function DownloadedBrowser({ titles, filter = '', onPlay, onDelet
           }
         />
       ) : (
-        <PosterGrid items={items} />
+        <div className={picked ? 'mb-20' : undefined}>
+          <PosterGrid
+            items={items}
+            selection={picked ? {
+              keys: new Set([...filesOf].filter(([, f]) => f.length && f.every(x => picked.has(x.path))).map(([k]) => k)),
+              onToggle: key => {
+                const f = filesOf.get(key) ?? []
+                if (f.length) toggle(f, !f.every(x => picked.has(x.path)))
+              },
+            } : undefined}
+          />
+        </div>
+      )}
+      {send && chosen && (
+        <TransferBar
+          names={chosen.names}
+          entries={chosen.entries}
+          onSend={mode => send({
+            mode,
+            name: chosen.names.length === 1 ? chosen.names[0] : `${chosen.entries.length} files`,
+            entries: chosen.entries,
+          })}
+        />
       )}
     </div>
   )

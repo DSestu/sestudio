@@ -257,6 +257,8 @@ class NewTransfer(BaseModel):
     on_conflict: str = "skip"
     #: Where they land on the destination; omitted, each keeps its path.
     folder: str | None = None
+    #: Where each file lands, in the order of *files*; overrides *folder*.
+    dests: list[str] | None = None
     label: str = ""
 
 
@@ -277,8 +279,19 @@ def start_transfer(body: NewTransfer) -> dict[str, Any]:
         body.on_conflict,
         body.folder,
         body.label,
+        body.dests,
     )
     return job.public()
+
+
+@router.get("/storages/{storage_id}/folders")
+async def list_folders(storage_id: str, path: str = "") -> dict[str, Any]:
+    """The folders inside *path* on a storage: the copy picker's folder chooser."""
+    return {
+        "folders": await asyncio.to_thread(
+            _transfer, transfers.folders, storage_id, path
+        )
+    }
 
 
 @router.get("/transfers")
