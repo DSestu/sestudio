@@ -84,3 +84,13 @@ it('treats servers as video storages and shows where they are', async () => {
   expect(whereOf({ kind: 'smb', host: 'nas', share: 'films', path: '/' })).toBe('smb://nas/films')
   expect(storageIcon(ftp)).toBe('share')
 })
+
+it('a typed address becomes something to open', async () => {
+  const { parseAddress } = await import('./storageChoice')
+  expect(parseAddress('smb://192.168.1.254/Disque dur')).toMatchObject({ kind: 'smb', host: '192.168.1.254', port: null })
+  expect(parseAddress('ftp://seedbox:2121')).toMatchObject({ kind: 'ftp', host: 'seedbox', port: 2121 })
+  expect(parseAddress('\\\\nas\\films')).toMatchObject({ kind: 'smb', host: 'nas' })
+  expect(parseAddress('192.168.1.31')).toMatchObject({ kind: 'smb', host: '192.168.1.31' })
+  expect(parseAddress('  ')).toBeNull()
+  expect(parseAddress('not an address!')).toBeNull()
+})

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { storagesApi, type StorageInfo } from '../../api'
-import AddStorage from '../../components/storage/AddStorage'
+import AddStorage, { type Kind } from '../../components/storage/AddStorage'
 import { StorageGlyph } from '../../components/downloaded/StorageSwitcher'
 import { fmtSize, refreshDownloadedLibrary, useDownloadedLibrary } from '../../downloadedLibrary'
 import { librariesApi, reloadLibraries, useLibraries } from '../../musicLibraries'
@@ -15,7 +15,7 @@ async function refreshAll() {
   await Promise.all([refreshStorages(), refreshDownloadedLibrary(), reloadLibraries().catch(() => {})])
 }
 
-function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; tracks?: number }) {
+function DiskCard({ s, titles, tracks, onLookAround }: { s: StorageInfo; titles: number; tracks?: number; onLookAround: () => void }) {
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(s.label)
   const [removing, setRemoving] = useState(false)
@@ -79,7 +79,15 @@ function DiskCard({ s, titles, tracks }: { s: StorageInfo; titles: number; track
         </details>
       </div>
 
-      {s.bridge && !away && <BridgeNetworkLine s={s} />}
+      {s.bridge && !away && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex-1 min-w-48"><BridgeNetworkLine s={s} /></div>
+          <button type="button" onClick={onLookAround} className="btn btn-sm btn-primary gap-1.5 max-sm:w-full">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+            Look around
+          </button>
+        </div>
+      )}
       <div className="font-mono text-xs text-base-content/55 break-all">{KIND_LINE[s.kind] ?? whereOf(s)}</div>
 
       {folder && (
@@ -165,23 +173,23 @@ export default function Storage() {
   const list = useStorages()
   const counts = titleCounts(useDownloadedLibrary())
   const tracks = new Map(useLibraries().map(l => [l.id, l.count]))
-  const [adding, setAdding] = useState(false)
+  const [adding, setAdding] = useState<{ kind?: Kind; from?: string } | null>(null)
 
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {list.map(s => (
-          <DiskCard key={`${s.id}:${s.label}`} s={s} titles={counts.get(s.id) ?? 0} tracks={tracks.get(s.id)} />
+          <DiskCard key={`${s.id}:${s.label}`} s={s} titles={counts.get(s.id) ?? 0} tracks={tracks.get(s.id)} onLookAround={() => setAdding({ kind: 'nearby', from: s.id })} />
         ))}
       </div>
       <button
-        onClick={() => setAdding(true)}
+        onClick={() => setAdding({})}
         className="self-start flex items-center gap-2 min-h-12 px-1.5 text-[15px] font-medium text-primary"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
         Add a storage
       </button>
-      {adding && <AddStorage onClose={() => setAdding(false)} onAdded={() => void refreshAll()} />}
+      {adding && <AddStorage initial={adding} onClose={() => setAdding(null)} onAdded={() => void refreshAll()} />}
     </>
   )
 }
