@@ -193,7 +193,7 @@ function FoundPlace({ row, from, onOpen }: { row: NearbyRow; from: string; onOpe
               <span className="min-w-0 flex-1">
                 <span className="block font-mono text-sm truncate">{row.kind === 'smb' ? sh.name : 'Top folder'}</span>
                 <span className={`block text-xs ${!sh.read ? 'text-error' : sh.write ? 'text-success' : 'text-base-content/60'}`}>
-                  {!sh.read ? 'No access' : sh.write ? 'Read & write' : 'Read only'}
+                  {!sh.read ? 'No access' : sh.write ? 'Read & write' : sh.write === null ? 'Can read · writing not checked' : 'Read only'}
                 </span>
               </span>
               <button

@@ -75,6 +75,10 @@ _lock = threading.Lock()
 _wake = threading.Condition(_lock)
 _jobs: dict[str, Transfer] = {}
 _worker: threading.Thread | None = None
+#: Temporary files that could not be removed yet (their storage went away):
+#: removed as soon as it is back, even after their transfer is cleared, so no
+#: ``.part`` is left on a share.
+_leftovers: list[Any] = []
 
 
 # --- reading and writing any storage --------------------------------------------
@@ -307,6 +311,7 @@ def _run() -> None:
                 job = _next()
         if job is None:
             _resume_waiting()  # outside the lock: a check can take seconds
+            _sweep()
             continue
         with _wake:
             if job.status not in ("queued", "running"):
@@ -331,25 +336,50 @@ def _copy_one(job: Transfer, source: Any, target: Any) -> bool:
     _mkdirs(target)
     tmp = target.with_name(f".{target.name}.{job.id}.part")
     expected = source.stat().st_size
-    with source.open("rb") as src, tmp.open("wb") as out:
-        while chunk := src.read(CHUNK):
-            if _halted(job):
-                out.close()
-                tmp.unlink(missing_ok=True)
-                return False
-            out.write(chunk)
-            with _lock:
-                job.done_bytes += len(chunk)
-    written = (
-        tmp.stat().st_size
-        if not isinstance(tmp, remotefs.RemoteFile)
-        else (tmp.fs.info(str(tmp)).get("size"))
-    )
-    if written != expected:
-        tmp.unlink(missing_ok=True)
-        raise OSError(f"copy came out {written} bytes, the original is {expected}")
-    _rename(tmp, target)
+    try:
+        with source.open("rb") as src, tmp.open("wb") as out:
+            while chunk := src.read(CHUNK):
+                if _halted(job):
+                    out.close()
+                    _drop(job, tmp)
+                    return False
+                out.write(chunk)
+                with _lock:
+                    job.done_bytes += len(chunk)
+        written = (
+            tmp.stat().st_size
+            if not isinstance(tmp, remotefs.RemoteFile)
+            else (tmp.fs.info(str(tmp)).get("size"))
+        )
+        if written != expected:
+            raise OSError(f"copy came out {written} bytes, the original is {expected}")
+        _rename(tmp, target)
+    except BaseException:
+        _drop(job, tmp)  # nothing half-written stays behind
+        raise
     return True
+
+
+def _drop(job: Transfer, tmp: Any) -> None:
+    """Remove a temporary file; when its storage is away, remember it for later."""
+    try:
+        tmp.unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001 - away: retried by _sweep
+        with _lock:
+            _leftovers.append(tmp)
+
+
+def _sweep() -> None:
+    """Remove the temporary files left on storages that were away."""
+    with _lock:
+        pending = list(_leftovers)
+    for tmp in pending:
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001 - still away
+            continue
+        with _lock:
+            _leftovers.remove(tmp)
 
 
 def _run_job(job: Transfer) -> None:

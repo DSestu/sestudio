@@ -358,10 +358,14 @@ Without the phone (were N1 and N3, wanted)
   back from home. From the home UI in a browser over Tailscale, a TV on their network is not reachable.
 - 22: the move confirmation says "it can take a while" but gives no time: nothing measures the link
   through the phone before the move starts.
-- 25 (asked 2026-11-22): each place Nearby finds is checked at once with no login (SMB: empty
-  login, then "guest"; FTP: "anonymous"), or with one typed in its row when none gets in. Its
-  shares are listed (SMB share names through pysmb, which also speaks SMB1) with what each allows:
-  read (its top folder lists) and write (a hidden `.sestudio-check-…` folder is made and removed at
-  once). Open on a share fills in the share and the login that got in.
+- 25 (asked 2026-11-22): each place Nearby finds is checked at once with no login (SMB as
+  "guest", FTP as "anonymous"), or with one typed in its row when none gets in. Its shares are
+  listed (SMB: asked of the box's share service over SMB2/3) with what each allows.
+- No sestudio artifact on a share (asked 2026-11-22): nothing is written to find out what a share
+  allows. SMB is asked: the share's top folder is opened requesting the right to list, then to add
+  files, and closed. FTP and SFTP have no such question: writing shows "not checked". A copy's
+  `.part` file is removed when the copy fails or is cancelled, and when its storage was away, as
+  soon as it is back. Guest SMB shares open too (signing and the negotiation check are off for a
+  guest session only).
 - Not done: music through a bridge (O's Music is shown, off); a media server found by Nearby is
   listed but not opened (its box's SMB or FTP share is).
