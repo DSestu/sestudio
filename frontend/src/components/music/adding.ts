@@ -39,3 +39,18 @@ export function removeItem(item: QueueItem, title: string) {
   void queueActions.remove(item.item_id)
   toast(`Removed ${title}`, () => { void post({ tracks: [refOf(item)], ...(at >= 0 && { index: at }) }) })
 }
+
+/** Empty the queue but for the playing track; Undo puts the rest back around it. */
+export function clearQueue() {
+  const { items, current } = getQueue()
+  const before = items.slice(0, Math.max(current, 0)).map(refOf)
+  const after = items.slice(current + 1).map(refOf)
+  void queueActions.clear()
+  const n = before.length + after.length
+  toast(`Cleared ${n} ${n === 1 ? 'track' : 'tracks'}`, () => {
+    void (async () => {
+      if (before.length) await post({ tracks: before, index: 0 })
+      if (after.length) await post({ tracks: after })
+    })()
+  })
+}
