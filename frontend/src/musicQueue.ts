@@ -148,6 +148,11 @@ export function applyEvent(s: QueueState, ev: QueueEvent, serverNow: number): Qu
       next.current = keep(items)
       return next
     }
+    case 'clr': {
+      // Every row but the playing one goes; it plays on.
+      const items = s.items.filter(i => i.item_id === ev.item_id)
+      return Object.assign(next, { items, source: null, current: items.length ? 0 : -1, playing: items.length > 0 && s.playing })
+    }
     case 'mv': {
       const items = [...s.items]
       items.splice(ev.to as number, 0, ...items.splice(ev.from as number, 1))
@@ -334,6 +339,8 @@ export const queueActions = {
   move: (itemId: string, to: number) => send('POST', '/move', { item_id: itemId, to }),
   /** The whole queue in this order, as one change. */
   order: (itemIds: string[]) => send('POST', '/order', { item_ids: itemIds }),
+  /** Every row but the playing one. */
+  clear: () => send('POST', '/clear'),
   transport: (
     action: 'play' | 'pause' | 'seek' | 'next' | 'prev' | 'repeat',
     extra: { position?: number; repeat?: boolean } = {},

@@ -339,6 +339,17 @@ def order(item_ids: list[str], if_rev: int | None = None) -> dict[str, Any]:
     return _mutate("ord", if_rev, change)
 
 
+def clear(if_rev: int | None = None) -> dict[str, Any]:
+    """Empty the queue but for the playing item, which plays on undisturbed."""
+
+    def change(doc: dict[str, Any]) -> dict[str, Any]:
+        doc["items"] = [i for i in doc["items"] if i["item_id"] == doc["current_item"]]
+        doc["source"] = None
+        return {"item_id": doc["current_item"] if doc["items"] else None}
+
+    return _mutate("clr", if_rev, change)
+
+
 def play(
     item_id: str, position: float | None = None, if_rev: int | None = None
 ) -> dict[str, Any]:

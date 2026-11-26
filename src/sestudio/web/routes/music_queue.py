@@ -183,6 +183,14 @@ def order_items(
     return _run(lambda: queue.order(body.item_ids, _rev(if_match, rev)))
 
 
+@router.post("/clear")
+def clear_queue(
+    if_match: str | None = Header(default=None),
+    rev: int | None = Query(default=None),
+) -> Any:
+    return _run(lambda: queue.clear(_rev(if_match, rev)))
+
+
 @router.post("/play")
 def play_item(
     body: PlayBody,

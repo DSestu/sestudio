@@ -5,6 +5,7 @@ import ResponsiveModal from '../ResponsiveModal'
 import { useModalBack } from '../../useModalBack'
 import { autoOrder, countJoins, ORDERS, type OrderMode } from './crates/setBuilder'
 import { setTrackOf } from './mix/analysis'
+import { clearQueue } from './adding'
 import { saveAsPlaylist } from './saveList'
 import { toast } from './toast'
 
@@ -69,6 +70,12 @@ export default function QueueActions({ info }: { info: (id: string) => TrackInfo
             <span className="flex flex-col">
               <span className="font-medium">Save as playlist</span>
               <span className="text-xs text-base-content/60">All {q.items.length} tracks, in this order.</span>
+            </span>
+          </button>
+          <button disabled={q.items.length < 2} onClick={() => { setOpen(false); clearQueue() }} className={btn}>
+            <span className="flex flex-col">
+              <span className="font-medium text-error">Clear the queue</span>
+              <span className="text-xs text-base-content/60">Every track but the playing one. Undo for 4 s.</span>
             </span>
           </button>
           <button onClick={() => setOpen(false)} className="btn btn-ghost min-h-11">Close</button>

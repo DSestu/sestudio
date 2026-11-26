@@ -127,6 +127,17 @@ def test_order(client):
     assert order(client.get("/api/music/queue").json()) == [C, B, A]
 
 
+def test_clear(client):
+    s = add(client, A, B, C)
+    ids = [i["item_id"] for i in s["items"]]
+    client.post("/api/music/queue/play", json={"item_id": ids[1]})
+    s = client.post("/api/music/queue/clear").json()
+    assert order(s) == [B] and (s["current"], s["playing"]) == (0, True)
+    # an empty queue clears to empty
+    client.delete(f"/api/music/queue/{ids[1]}")
+    assert client.post("/api/music/queue/clear").json()["items"] == []
+
+
 def test_transport(client):
     add(client, A, B)
     t = client.post
