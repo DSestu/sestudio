@@ -1,5 +1,110 @@
 # Changelog
 
+## [1.13.0](https://github.com/DSestu/sestudio/compare/v1.12.0...v1.13.0) (2026-11-26)
+
+
+### New features
+
+* a box's media server opens as a read-only storage, here or through a phone: its films list, play and copy home, live TV left out ([#601](https://github.com/DSestu/sestudio/issues/601)) ([b7cced9](https://github.com/DSestu/sestudio/commit/b7cced9d43fdff9b1473d2282d529489095e2a2a))
+* a downloaded file can be played, cast and deleted from any storage, not only the download folder ([#572](https://github.com/DSestu/sestudio/issues/572)) ([55ebfa2](https://github.com/DSestu/sestudio/commit/55ebfa2da8b82506e28bf1859628dddfcf0b8705))
+* a Filter field in the music explorer narrows the tree in place, keeping the folders and groups around each match ([#568](https://github.com/DSestu/sestudio/issues/568)) ([183938a](https://github.com/DSestu/sestudio/commit/183938a41ec170c2292457235c1ac92f52e09e30))
+* a flow can play from a library, artist, album or genre, each Only or Lean on it ([#531](https://github.com/DSestu/sestudio/issues/531)) ([a00f5de](https://github.com/DSestu/sestudio/commit/a00f5dee333c60f29b60bcdeea12535b1183a607))
+* a folder, album, artist or genre opens the tape in Best blend; the whole library stays Grouped ([#589](https://github.com/DSestu/sestudio/issues/589)) ([c3daddd](https://github.com/DSestu/sestudio/commit/c3dadddabd1959954cce8fc1fb9152a9d29838db))
+* a Freebox pairs from Nearby through Freebox OS: its disks are listed, and its file sharing turns on only after asking ([#602](https://github.com/DSestu/sestudio/issues/602)) ([74f999a](https://github.com/DSestu/sestudio/commit/74f999a2d93309070db26bb3331b8102e5a57013))
+* a mix is a playlist in Blend mode, built in the board: drops pin where they land, re-orders keep rows in place, and the order locks on Play ([#586](https://github.com/DSestu/sestudio/issues/586)) ([5cdc3ae](https://github.com/DSestu/sestudio/commit/5cdc3ae3bada1001800a8aa19ffcb465013bb746))
+* a new playlist opens empty in the editor, with numbered slots to drag into (phones: Library and Online buttons) ([#527](https://github.com/DSestu/sestudio/issues/527)) ([d58ce6e](https://github.com/DSestu/sestudio/commit/d58ce6ed98ac6c05fadbffa427929b6d39fab06b))
+* a phone connected to home offers itself as the bridge from Nearby, asked once on the phone, with nothing to do on the desktop; Stop takes it back ([#605](https://github.com/DSestu/sestudio/issues/605)) ([38c7cf9](https://github.com/DSestu/sestudio/commit/38c7cf92054399be7b000dc5feda88d183f4b912))
+* a share found through a bridge opens there, in memory only, and shows here inside the bridge's card, with Disconnect keeping its login ([#592](https://github.com/DSestu/sestudio/issues/592)) ([336f5f8](https://github.com/DSestu/sestudio/commit/336f5f8bd355d1c5ade9a0f114aace36d31ff84c))
+* a share opens by itself when its bridge is back on the same Wi-Fi; away, Media says which Wi-Fi brings it back and copies wait for it ([#595](https://github.com/DSestu/sestudio/issues/595)) ([8d7c29a](https://github.com/DSestu/sestudio/commit/8d7c29a4bc2158bd7ad7836da67eb7bd8bf2a3d4))
+* a storage that is switched off no longer stalls the app: its titles stay, greyed, with when it went away, and it comes back by itself ([#574](https://github.com/DSestu/sestudio/issues/574)) ([0487d40](https://github.com/DSestu/sestudio/commit/0487d400cba02f3dc453a0b8d7d8eeda6c8f1fa6))
+* Add a storage › Nearby looks for shares on this server's network or a bridge's, by mDNS, SSDP and the box's ports ([#591](https://github.com/DSestu/sestudio/issues/591)) ([7c2ede3](https://github.com/DSestu/sestudio/commit/7c2ede3b3fae56e364cc2e99efc4c1f5bd879a6b))
+* Add a storage › Server says how to reach another home's box without a phone there ([#596](https://github.com/DSestu/sestudio/issues/596)) ([8b8ab98](https://github.com/DSestu/sestudio/commit/8b8ab98f0fe983765e681c70fe2ca67e05c6e51c))
+* Add a storage takes an SMB, SFTP or FTP server directly, with a Test button, and its card shows where it is ([#580](https://github.com/DSestu/sestudio/issues/580)) ([2e0b173](https://github.com/DSestu/sestudio/commit/2e0b17352f809bc02b65c70c76567557a8e1f340))
+* album and artist pages get Play as a flow, beside Play and Shuffle ([#534](https://github.com/DSestu/sestudio/issues/534)) ([4d9fe1a](https://github.com/DSestu/sestudio/commit/4d9fe1a8589890b6be0ff122310a57befda1f0b6))
+* an FTP, SFTP or SMB server can be added as a storage, its password kept apart in secrets.json ([#577](https://github.com/DSestu/sestudio/issues/577)) ([ec99545](https://github.com/DSestu/sestudio/commit/ec99545610b52ead8500b86b07f60cb3f519315f))
+* an FTP, SFTP or SMB storage that holds music is a music library: listed, played and analysed through the relay ([#581](https://github.com/DSestu/sestudio/issues/581)) ([fe9198d](https://github.com/DSestu/sestudio/commit/fe9198dbdc394c60077d5d6225d94a2ea5fc5b99))
+* another sestudio can be a bridge: its card says which Wi-Fi it is on, read on Android with a one-time location question ([#588](https://github.com/DSestu/sestudio/issues/588)) ([4a1cc3b](https://github.com/DSestu/sestudio/commit/4a1cc3bfc2964f215cf02797e09c83841f1e4bbf))
+* another sestudio's films can be a storage here: listed beside yours and played through this server with its share token ([#583](https://github.com/DSestu/sestudio/issues/583)) ([e2726e4](https://github.com/DSestu/sestudio/commit/e2726e47235efe7935c8614240c46c6bf2515407))
+* Best blend orders any set, weighted by Blend by and the harmony moves; tracks carry their file path ([#551](https://github.com/DSestu/sestudio/issues/551)) ([a8acc88](https://github.com/DSestu/sestudio/commit/a8acc8858ae7be3575ea155ad04cc3327ecd1422))
+* Best blend tries a few openers and weighs clashes more when harmony leads, so no Blend by preset leaves a clash on a crowded set ([#564](https://github.com/DSestu/sestudio/issues/564)) ([d91cc9c](https://github.com/DSestu/sestudio/commit/d91cc9c4fc02ba2609df52c1f35be05159916899))
+* Blend by sets what Best blend cares about, harmony, mood, energy or genre, on a radar with presets, and how welcome each key move is ([#560](https://github.com/DSestu/sestudio/issues/560)) ([2eb886e](https://github.com/DSestu/sestudio/commit/2eb886e5102e283eda3472fd5ac2f48cfe4fe180))
+* Blend, one soft score for how well a track follows another, the same on server and app ([#539](https://github.com/DSestu/sestudio/issues/539)) ([8252869](https://github.com/DSestu/sestudio/commit/8252869d7b5a78e032b1701eeda6f5fa38636437))
+* downloads are saved on the storage picked for them, and refused at once with the reason when it is offline or full ([#576](https://github.com/DSestu/sestudio/issues/576)) ([ba2544d](https://github.com/DSestu/sestudio/commit/ba2544d2774fcdfce0c3bbde8304708ca7f9446d))
+* energy is a level on a fixed scale, shown as a bar and a number instead of four words ([#538](https://github.com/DSestu/sestudio/issues/538)) ([eaf90e8](https://github.com/DSestu/sestudio/commit/eaf90e8ea4cb2bfff90780599aa7804cd44ceebb))
+* every join shows how well it blends, a ring that opens what each layer gave ([#544](https://github.com/DSestu/sestudio/issues/544)) ([0711c2e](https://github.com/DSestu/sestudio/commit/0711c2e45023aff80cc8f04810b5bae55a68a221))
+* every track plays and draws at -14 LUFS ([#536](https://github.com/DSestu/sestudio/issues/536)) ([40844fc](https://github.com/DSestu/sestudio/commit/40844fcd5c64ce64bd9f94e3ae043c376aaef649))
+* files can be copied or moved between storages by the server: checked before any original is deleted, with progress, pause and cancel ([#584](https://github.com/DSestu/sestudio/issues/584)) ([50936c8](https://github.com/DSestu/sestudio/commit/50936c8cf80083567f2edba1aa41f9bc38cc056c))
+* files can be copied or moved to another storage from a title's files, the Tree and Browse, with a folder chooser and progress in the Queue ([#585](https://github.com/DSestu/sestudio/issues/585)) ([51a37dc](https://github.com/DSestu/sestudio/commit/51a37dc05877bc40e29d1dd0d42b373f6032ff1f))
+* films copy both ways through a bridge, and a move to or from their share asks first ([#594](https://github.com/DSestu/sestudio/issues/594)) ([ca8fdb3](https://github.com/DSestu/sestudio/commit/ca8fdb3f0b8d54b4977215768f4de4933c0c771d))
+* films on an FTP, SFTP or SMB storage are listed and play like files on disk, read through a relay on this server ([#578](https://github.com/DSestu/sestudio/issues/578)) ([14085ec](https://github.com/DSestu/sestudio/commit/14085ec84a41f37b08b004035f53819304235818))
+* Fits after it, the orbit and Fits next rank by the Blend under your Blend by weights and Harmony moves ([#566](https://github.com/DSestu/sestudio/issues/566)) ([5661cd4](https://github.com/DSestu/sestudio/commit/5661cd44cb6ea20b3a7c4f22feb573e8292a2507))
+* Fits next and the queue rank by Blend, and an energy lean ranks instead of filtering ([#543](https://github.com/DSestu/sestudio/issues/543)) ([1f50175](https://github.com/DSestu/sestudio/commit/1f50175cb58075f43f100035684055676d9739f6))
+* Flows and Mixes open from the Music explorer instead of tabs, groups play as a flow from their row, and the page fits a phone ([#561](https://github.com/DSestu/sestudio/issues/561)) ([dc78016](https://github.com/DSestu/sestudio/commit/dc780160b836d2b734043178aa9afcbb7ba1e1b6))
+* flows pick each track by how well it blends with the last, leaning up, level or down ([#540](https://github.com/DSestu/sestudio/issues/540)) ([deb6efa](https://github.com/DSestu/sestudio/commit/deb6efa860fd0d4356ee517e61bbd341f7b26bfd))
+* library rows and genre chips open Play as a flow too ([#535](https://github.com/DSestu/sestudio/issues/535)) ([ad4b06b](https://github.com/DSestu/sestudio/commit/ad4b06b847a1f92d6d0c713c54921a82494fefce))
+* Media shows one storage at a time, with a switcher in its header to change storage or see them all ([#573](https://github.com/DSestu/sestudio/issues/573)) ([72a05d1](https://github.com/DSestu/sestudio/commit/72a05d1ae1b283ac75a5a76341a32971fe56cce1))
+* Nearby checks each place it finds with no login first, lists its shares and whether each can be read and written, and Open fills in the share and login ([#597](https://github.com/DSestu/sestudio/issues/597)) ([49c2113](https://github.com/DSestu/sestudio/commit/49c21130e74cd2fb9394d6e784f579f352cf4417))
+* Nearby finds Windows PCs and modern NAS by WS-Discovery, and names boxes: Freebox by generation, Livebox, Bbox ([#599](https://github.com/DSestu/sestudio/issues/599)) ([0b467e1](https://github.com/DSestu/sestudio/commit/0b467e15c996a28029526babd36e13d9f38dce89))
+* Nearby says when an SMB share needs a login or encrypts, with Log in on that share ([#600](https://github.com/DSestu/sestudio/issues/600)) ([508ccbe](https://github.com/DSestu/sestudio/commit/508ccbec52fb90191cd177c5725a55f8541ea624))
+* one Music search box for names and sounds: mood words and a tempo become chips, the tape narrows live and the explorer lists online results first ([#556](https://github.com/DSestu/sestudio/issues/556)) ([2d9410a](https://github.com/DSestu/sestudio/commit/2d9410a6669fc5632343d67555cad75363df50a7))
+* Right now starts at a level and holds, and each flow row says its moves over the shape it really plays ([#542](https://github.com/DSestu/sestudio/issues/542)) ([c75a830](https://github.com/DSestu/sestudio/commit/c75a830f6284506d32de62752ff9e8713f62cd28))
+* select tracks on the Music tape and in the set by click, Ctrl, Shift or a box, then drag, add or remove them together ([#558](https://github.com/DSestu/sestudio/issues/558)) ([b11f86f](https://github.com/DSestu/sestudio/commit/b11f86f820b58ad59abd25e45a1811dca10e39ec))
+* Settings › Storage lists every storage as a disk card, to add a folder, share or mount, say what it holds and pick where downloads go ([#575](https://github.com/DSestu/sestudio/issues/575)) ([45fb167](https://github.com/DSestu/sestudio/commit/45fb1670abfb7715451e5fb0a4fe86a0b536f421))
+* switched to home, the phone serves a film of a share it holds itself, so a TV next to it plays it without the round trip home ([#593](https://github.com/DSestu/sestudio/issues/593)) ([4dfcd92](https://github.com/DSestu/sestudio/commit/4dfcd926a0fbe41c3ddca1dea22f020caa0c05a3))
+* the flow editor leans Lift, Hold or Ease, sets each lane Must, Prefer or Ignore, and shows what it would play ([#541](https://github.com/DSestu/sestudio/issues/541)) ([20560a4](https://github.com/DSestu/sestudio/commit/20560a4c3efbf86ba1b14344ef915bf4904c5526))
+* the Flows tab as one column of flows that say what they do and what they play ([#532](https://github.com/DSestu/sestudio/issues/532)) ([01f1436](https://github.com/DSestu/sestudio/commit/01f14362bb1979cd9bdb53368e3638159103cbea))
+* the Flows tab plays from the sources in its From bar, each Only or Lean on it ([#533](https://github.com/DSestu/sestudio/issues/533)) ([2dd5148](https://github.com/DSestu/sestudio/commit/2dd514822f8eceba955ce61d436601b3b73ba65a))
+* the music explorer is the page's one search, merges online results, and a Queue waits in the centre ([#604](https://github.com/DSestu/sestudio/issues/604)) ([eabd68a](https://github.com/DSestu/sestudio/commit/eabd68ae9e4f07a8b6cc14f0c0be5d2dfcf224ad))
+* the Music page has a set under the tape: drop or add anything into it, pin tracks in place, Best blend the rest, then play, queue, save or play it as a flow ([#557](https://github.com/DSestu/sestudio/issues/557)) ([d28454e](https://github.com/DSestu/sestudio/commit/d28454ee42996903a45eb491c663308bd8a11c31))
+* the Music page is one surface: an explorer with an icon rail, groupings and a file-explorer mode beside a grouped list ([#552](https://github.com/DSestu/sestudio/issues/552)) ([ee26a38](https://github.com/DSestu/sestudio/commit/ee26a382a5ea31317135593e0d9d100f15e635c8))
+* the Music page's centre is a tape: every track a sigil sized by its length, grouped like the explorer, with Best blend, colour and a minimap ([#554](https://github.com/DSestu/sestudio/issues/554)) ([bfb2d22](https://github.com/DSestu/sestudio/commit/bfb2d22e9a2309dc693503ebfefdc4b06e97c4de))
+* the Music page's right column shows the selected track: its facts, energy and sections, spectrum, balance and harmony, an orbit of the library around it and what fits after it; a hover card on every track ([#555](https://github.com/DSestu/sestudio/issues/555)) ([b32ec8c](https://github.com/DSestu/sestudio/commit/b32ec8c6176f6fb2c74ffd8fb121d252af636853))
+* the music queue can be cleared from its menu, keeping the playing track, with an Undo ([#609](https://github.com/DSestu/sestudio/issues/609)) ([edcbd1d](https://github.com/DSestu/sestudio/commit/edcbd1d06dc2f6f049f4be20ed218483b744c659))
+* the Music set lists its tracks under the lane with every join, flags clashes and jumps, and fixes them with a bridge, a better spot or Fix all ([#559](https://github.com/DSestu/sestudio/issues/559)) ([72e4001](https://github.com/DSestu/sestudio/commit/72e40012a9d724a25c02e03af11834182a4c5f69))
+* the playlist timeline speaks the flow editor's language: Energy, Genre and Harmony lanes ([#530](https://github.com/DSestu/sestudio/issues/530)) ([ed376ed](https://github.com/DSestu/sestudio/commit/ed376ed5db86a2c4aa9b186fea3342efa5d61d05))
+* the server keeps one list of storages (download folder, music folders, other servers), the start of several storage locations ([#571](https://github.com/DSestu/sestudio/issues/571)) ([d03ac00](https://github.com/DSestu/sestudio/commit/d03ac009fe9b4a8de53415fa2da7c7198b3d69b3))
+* the set builder starts at a level and leans, and the smart-list energy rule is a level slider ([#545](https://github.com/DSestu/sestudio/issues/545)) ([67ab3ea](https://github.com/DSestu/sestudio/commit/67ab3eaff63997a8d619956899e2d42846634d50))
+* tune Blend so lifts climb and eases fall in small steps, values set on the real library ([#546](https://github.com/DSestu/sestudio/issues/546)) ([eb70fe1](https://github.com/DSestu/sestudio/commit/eb70fe1edc4b17e2bbf5b5f96172504fb21f64f7))
+* watchers check on a per-source default, set in Settings ([#504](https://github.com/DSestu/sestudio/issues/504)) ([74a626c](https://github.com/DSestu/sestudio/commit/74a626cd9926b5ed90a5b394cb7c5ff6034152fe))
+* wav files are music: listed, analysed, played and cast ([#547](https://github.com/DSestu/sestudio/issues/547)) ([78223be](https://github.com/DSestu/sestudio/commit/78223bed250b205ecb4a58eae25c5c7a3c847651))
+
+
+### Bug fixes
+
+* a film with no similar titles beside it plays across the full width of the watch page, not in a narrow centred column ([#607](https://github.com/DSestu/sestudio/issues/607)) ([89d387f](https://github.com/DSestu/sestudio/commit/89d387fbd7312a4140a64f18ef1a5ba03aaded94))
+* a local disk waking from sleep stays online instead of showing offline, and a check that answers late counts at once ([#603](https://github.com/DSestu/sestudio/issues/603)) ([863d87f](https://github.com/DSestu/sestudio/commit/863d87f65882d26d3fbd3cc1ef6368d0eab1809a))
+* a transposition is a last resort, ranked after every shared-notes move and just ahead of a clash ([#529](https://github.com/DSestu/sestudio/issues/529)) ([b8b4e6c](https://github.com/DSestu/sestudio/commit/b8b4e6c88c226dee704eec6b42a075be7bb5ab6c))
+* nothing of sestudio is written on a share: access is asked, not tried, and a cut copy's .part is removed; guest SMB shares open ([#598](https://github.com/DSestu/sestudio/issues/598)) ([5715e0b](https://github.com/DSestu/sestudio/commit/5715e0bf6a58a08b69b48520b0567a24b013aeca))
+* on phones, Home widgets are as tall as their content, without a blank strip under the posters ([#579](https://github.com/DSestu/sestudio/issues/579)) ([f364ddf](https://github.com/DSestu/sestudio/commit/f364ddf2127ae30a6e4509ba40eda716ecee617b))
+* the music no longer speeds up and slows down when the player opens, at random times or during beat-synced blends ([#569](https://github.com/DSestu/sestudio/issues/569)) ([7522cad](https://github.com/DSestu/sestudio/commit/7522cad870dfade6824a64cf15096bacd05d70ef))
+* the Music page works from the keyboard: arrows walk the tape, set items and explorer tools take focus, and closing a panel returns focus to its opener ([#562](https://github.com/DSestu/sestudio/issues/562)) ([7cdc322](https://github.com/DSestu/sestudio/commit/7cdc322b4e9eed9481493f0cccb06ab58118e7bb))
+* the Music page's columns reach the player bar, rail menus are no longer clipped, group headers stay in view and scrollbars are thin ([#567](https://github.com/DSestu/sestudio/issues/567)) ([e1775e0](https://github.com/DSestu/sestudio/commit/e1775e0522c5d1d950b2eeaae49f5835e06f0216))
+* the video mini-player joins onto the music bar as one dock instead of covering it, and a video that can't play shows a compact Can't play state ([#570](https://github.com/DSestu/sestudio/issues/570)) ([ac457a2](https://github.com/DSestu/sestudio/commit/ac457a2912e3bd4166f7ed95f6cbf028d1183bfc))
+* the Windows build works again: the hover-card hook no longer shares its file name with HoverCard.tsx ([#565](https://github.com/DSestu/sestudio/issues/565)) ([efed3bd](https://github.com/DSestu/sestudio/commit/efed3bd40e9a329bba93ecda223b45dfa5296a97))
+* through another server, "Source" quality becomes Auto so a 4K file starts over the tunnel ([#523](https://github.com/DSestu/sestudio/issues/523)) ([f09b1d7](https://github.com/DSestu/sestudio/commit/f09b1d7429573e90ff0e244e72683591ed9b4174))
+
+
+### Miscellaneous Chores
+
+* the live preview also prints its Tailscale URL, for working remotely ([#525](https://github.com/DSestu/sestudio/issues/525)) ([aa3f0f5](https://github.com/DSestu/sestudio/commit/aa3f0f5d7f1660788dea5640a3db25536a74fe8f))
+* the live preview answers on its Tailscale name, so a remote PC can open it by name ([#526](https://github.com/DSestu/sestudio/issues/526)) ([0417ae1](https://github.com/DSestu/sestudio/commit/0417ae1e5e0a7f723dbb880677a2c38a7ce78e75))
+
+
+### Documentation
+
+* Blend spec, one soft score for what comes next, with its mockup board ([#537](https://github.com/DSestu/sestudio/issues/537)) ([42204b6](https://github.com/DSestu/sestudio/commit/42204b60ae038d57742e724483c6590d4378485c))
+* spec for the Flows tab redesign and flows from a source ([#528](https://github.com/DSestu/sestudio/issues/528)) ([9e9cbf9](https://github.com/DSestu/sestudio/commit/9e9cbf9781e5026603afa2b99072ef077b231053))
+* storage phase 3, a phone as a bridge to another home's network: stories, answers, picked screens and build plan ([#587](https://github.com/DSestu/sestudio/issues/587)) ([9d90e19](https://github.com/DSestu/sestudio/commit/9d90e19cc787bdd1873bf41ebe73050cfa0a4f97))
+
+
+### Performance improvements
+
+* Best blend orders a 46-track set in under 100 ms and moves tracks off clashes it used to leave at the end ([#563](https://github.com/DSestu/sestudio/issues/563)) ([dd4bb33](https://github.com/DSestu/sestudio/commit/dd4bb33c8db480c459c187fb9cc17467c7a8e7ae))
+* opening the music player no longer waits on the GPU or lays out every queue row ([#548](https://github.com/DSestu/sestudio/issues/548)) ([b11c777](https://github.com/DSestu/sestudio/commit/b11c777a01eb37e4c66e3d3b351346621cd7df2f))
+* switching the music player between its views no longer restyles the whole queue ([#550](https://github.com/DSestu/sestudio/issues/550)) ([0af1801](https://github.com/DSestu/sestudio/commit/0af1801880fa47d0fdc8da8d079b57b7996790fd))
+* the music player stays mounted when closed, so opening it again skips the mount ([#549](https://github.com/DSestu/sestudio/issues/549)) ([44e8709](https://github.com/DSestu/sestudio/commit/44e87095cca42283e84e79280c094d002f9e6b5e))
+* the music queue renders only the rows near the view ([#553](https://github.com/DSestu/sestudio/issues/553)) ([72d70f2](https://github.com/DSestu/sestudio/commit/72d70f22eba50d909a1a1aff102e08a4de70de6f))
+
 ## [1.12.0](https://github.com/DSestu/sestudio/compare/v1.11.0...v1.12.0) (2026-11-07)
 
 
